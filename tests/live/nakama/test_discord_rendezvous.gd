@@ -91,7 +91,7 @@ func test_two_participants_rendezvous_into_one_match() -> void:
 	# Two participants in one relay match: one remote peer each, both joined.
 	for tree in [host_tree, join_tree]:
 		assert_int(tree.multiplayer.get_peers().size()).is_equal(1)
-		assert_int(tree.get_participants().size()).is_equal(2)
+		assert_int(tree.api.participants.size()).is_equal(2)
 
 	# The first participant hosts (peer 1); the second resolved the freshest record
 	# and joined, so it is never peer 1.
@@ -155,11 +155,11 @@ func _both_connected(a: MultiplayerTree, b: MultiplayerTree) -> bool:
 	# Transport-connected is not enough: player registration lands a beat after
 	# the peer connects, so wait for both joins to propagate before the
 	# assertions read get_participants().
-	return a.is_online() and b.is_online() \
+	return a.api.is_online and b.api.is_online \
 			and a.multiplayer.get_peers().size() == 1 \
 			and b.multiplayer.get_peers().size() == 1 \
-			and a.get_participants().size() == 2 \
-			and b.get_participants().size() == 2
+			and a.api.participants.size() == 2 \
+			and b.api.participants.size() == 2
 
 
 func _await(

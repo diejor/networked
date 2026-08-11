@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwQuantize" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Lossy per-value encoder assignable to a synchronizer property.
+	</brief_description>
+	<description>
+		A quantizer turns a value into a fixed number of bits and back, trading precision for size. It is the only "schema" object in the codec stack. There is no separate schema container. Assignment is per property through [method NetwScriptModel.SyncConfig.quantize]. The same resource can be shared across properties by reference. A quantizer is type-aware, so one instance handles [Vector2], [float], or [int] without nesting.
+		Each behaviour has two spellings: a virtual a subclass overrides ([method _write], [method _read], [method _supports_type], [method _bit_width], [method _max_error]) and a plain method every caller uses ([method write], [method read], [method supports_type], [method bit_width], [method max_error]). A caller must always use the plain one, because a virtual reaches a GDScript override only and would find nothing on a quantizer written in C++.
+		[codeblock]
+		# Assigned on a synchronizer's codec/&lt;prop&gt; slot, or in code:
+		Netw.configure_property(self, &amp;"position").quantize(NetwQuantizeFixed.new())
+		[/codeblock]
+		Widths come from this resource on both peers, never the wire, so the decoder reconstructs the exact layout the encoder wrote. This base is abstract: a subclass ([NetwQuantizeFixed], [NetwQuantizeBits], [NetwQuantizeAngle], [NetwQuantizeQuaternion], [NetwQuantizeTransform2D], [NetwQuantizeTransform3D]) supplies the actual layout, and a game supplies its own by overriding the five virtuals.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_bit_width" qualifiers="virtual const">
+			<return type="int" />
+			<param index="0" name="type" type="int" />
+			<description>
+				Returns the bit count this quantizer writes for a value of [param type]. Reached through [method bit_width].
+			</description>
+		</method>
+		<method name="_max_error" qualifiers="virtual const">
+			<return type="float" />
+			<param index="0" name="type" type="int" />
+			<description>
+				Returns the worst-case round-trip error for a value of [param type]. Reached through [method max_error].
+				For a [Vector2] this is the error magnitude with both axes at their bound, so it compares directly against a reconciliation deadzone ([member PredictionComponent.divergence_epsilon]). A correction threshold below this value triggers on quantization noise alone.
+			</description>
+		</method>
+		<method name="_read" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="reader" type="NetwBitBufferReader" />
+			<param index="1" name="type" type="int" />
+			<description>
+				Reads a value of [param type] back from [param reader], inverting [method _write]. Reached through [method read].
+			</description>
+		</method>
+		<method name="_supports_type" qualifiers="virtual const">
+			<return type="bool" />
+			<param index="0" name="type" type="int" />
+			<description>
+				Returns whether this quantizer can encode a value of [param type]. Reached through [method supports_type].
+			</description>
+		</method>
+		<method name="_write" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="writer" type="NetwBitBufferWriter" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				Writes [param value] into [param writer] using this quantizer's layout. Reached through [method write].
+				A subclass encodes by type: a [Vector2] writes each axis, a scalar writes one.
+			</description>
+		</method>
+		<method name="bit_width" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="type" type="int" />
+			<description>
+				Returns the bit count this quantizer writes for a value of [param type].
+			</description>
+		</method>
+		<method name="is_same_layout" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="NetwQuantize" />
+			<description>
+				Returns whether [param other] encodes the identical bit layout: the same quantizer class and script with the same stored parameters.
+				Two layout-equal quantizers read each other's bits, so a configuration re-declared per instance with fresh but identical quantizers is the same schema, not a conflict. [method NetwScriptModel.SyncConfig.quantize] warns only when a re-declaration fails this check.
+			</description>
+		</method>
+		<method name="max_error" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="type" type="int" />
+			<description>
+				Returns the worst-case round-trip error for a value of [param type].
+			</description>
+		</method>
+		<method name="read">
+			<return type="Variant" />
+			<param index="0" name="reader" type="NetwBitBufferReader" />
+			<param index="1" name="type" type="int" />
+			<description>
+				Reads a value of [param type] back from [param reader], inverting [method write].
+			</description>
+		</method>
+		<method name="supports_type" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="type" type="int" />
+			<description>
+				Returns whether this quantizer can encode a value of [param type].
+				Callers that quantize opportunistically (entity RPC arguments) ask this before handing a value to [method write], so the set of encodable types stays owned by each quantizer instead of duplicated at the call site.
+			</description>
+		</method>
+		<method name="write">
+			<return type="void" />
+			<param index="0" name="writer" type="NetwBitBufferWriter" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				Writes [param value] into [param writer] using this quantizer's layout.
+			</description>
+		</method>
+	</methods>
+</class>

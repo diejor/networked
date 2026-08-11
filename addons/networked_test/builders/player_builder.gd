@@ -76,9 +76,9 @@ func with_multiplayer_entity() -> PlayerBuilder:
 
 
 ## Declares persistence on the player archetype, baking the table into the packed
-## scene as metadata the [NetwPersistenceInterface] reads. The database is set per
+## scene as metadata the [NetwPersistenceEngine] reads. The database is set per
 ## instance after spawn through
-## [constant NetwPersistenceInterface.PersistenceEngine.META_DATABASE].
+## [constant NetwPersistenceEngine.META_DATABASE].
 func with_save(database: Resource, table: StringName) -> PlayerBuilder:
 	_has_save = true
 	_save_database = database
@@ -236,7 +236,7 @@ func _assert_root_declares(
 		"PlayerBuilder.%s requires a root script declaring the marks through "
 		% verb + "Netw.configure_property().",
 	)
-	var set := NetwSyncSet.from_script(script, record)
+	var set := NetwPropertySet.from_script(script, record)
 	assert(
 		set != null,
 		"PlayerBuilder.%s: the root script declares no matching set." % verb,
@@ -319,7 +319,7 @@ func build() -> Node:
 		# scriptless path. Only value-typed table and columns bake in; the live
 		# database is set on the spawned instance after spawn.
 		root.set_meta(
-			NetwPersistenceInterface.PersistenceEngine.META_TABLE,
+			NetwPersistenceEngine.META_TABLE,
 			_save_table,
 		)
 		var columns: Array = []
@@ -331,7 +331,7 @@ func build() -> Node:
 				},
 			)
 		root.set_meta(
-			NetwPersistenceInterface.PersistenceEngine.META_COLUMNS,
+			NetwPersistenceEngine.META_COLUMNS,
 			columns,
 		)
 
@@ -353,7 +353,7 @@ func build() -> Node:
 	if _has_state:
 		_assert_root_declares(
 			root,
-			NetwSyncSet.Record.RECORD_STATE,
+			NetwPropertySet.Record.RECORD_STATE,
 			_state_props,
 			"with_state",
 		)
@@ -361,7 +361,7 @@ func build() -> Node:
 	if _has_input:
 		_assert_root_declares(
 			root,
-			NetwSyncSet.Record.RECORD_INPUT,
+			NetwPropertySet.Record.RECORD_INPUT,
 			_input_props,
 			"with_input",
 		)
@@ -369,7 +369,7 @@ func build() -> Node:
 	if _has_broadcast:
 		_assert_root_declares(
 			root,
-			NetwSyncSet.Record.RECORD_BROADCAST,
+			NetwPropertySet.Record.RECORD_BROADCAST,
 			_broadcast_props,
 			"with_broadcast",
 		)

@@ -15,7 +15,7 @@ func test_query_returns_ok_with_player_count() -> void:
 	target.address = "127.0.0.1"
 	target.metadata = { "port": host.port }
 
-	var result: NetwProbeResult = await client_tree.connector.probe(target)
+	var result: NetwProbeResult = await NetwConnector.of(client_tree.api).probe(target)
 
 	assert_that(result).is_not_null()
 	assert_int(result.status).is_equal(NetwProbeResult.Status.OK)
@@ -39,7 +39,7 @@ func test_query_unreachable_port_does_not_return_ok() -> void:
 	target.address = "127.0.0.1"
 	target.metadata = { "port": dead_port }
 
-	var result: NetwProbeResult = await client_tree.connector.probe(target)
+	var result: NetwProbeResult = await NetwConnector.of(client_tree.api).probe(target)
 
 	assert_that(result).is_not_null()
 	assert_bool(result.is_ok()).is_false()

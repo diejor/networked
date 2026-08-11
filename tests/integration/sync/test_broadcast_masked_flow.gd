@@ -17,8 +17,8 @@ const TICKRATE := 30
 var harness: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: NetwClockInterface
-var client_clock: NetwClockInterface
+var server_clock: ClockCore
+var client_clock: ClockCore
 var server_root: Node2D
 var client_root: Node2D
 var _stepper: LockstepStepper
@@ -47,7 +47,7 @@ func _setup_pair() -> void:
 	client = await harness.add_client()
 	server = harness.server()
 	server_clock = await harness.add_clock(TICKRATE)
-	client_clock = client.api.clock
+	client_clock = client.api._clock
 	server_clock.manual_tick = true
 	client_clock.manual_tick = true
 
@@ -70,7 +70,7 @@ func _setup_pair() -> void:
 	await get_tree().process_frame
 
 	_stepper = LockstepStepper.new(
-		[server_clock, client_clock] as Array[NetwClockInterface],
+		[server_clock, client_clock] as Array[ClockCore],
 		[server.multiplayer, client.multiplayer] as Array[MultiplayerAPI],
 		harness.session(),
 		TICKRATE,
@@ -81,7 +81,7 @@ func _setup_pair() -> void:
 # and duplicate, all deterministic under the seed.
 func _impair_uplink(seed_value: int) -> void:
 	var period := 1000.0 / float(Engine.get_physics_ticks_per_second())
-	var conditions := LocalLoopbackSession.LinkConditions.new(seed_value)
+	var conditions := LocalLinkConditions.create(seed_value)
 	conditions.latency_ms = 2.0 * period
 	conditions.jitter_ms = 6.0 * period
 	conditions.reorder = 1.0
@@ -123,8 +123,8 @@ func test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss() -
 	# standalone ack promotes the author's per-recipient baseline.
 	_stepper.sync_ticks(40)
 
-	var client_snap := client.api.monitor_snapshot()
-	var server_snap := server.api.monitor_snapshot()
+	var client_snap := client.api.stats_snapshot()
+	var server_snap := server.api.stats_snapshot()
 	assert_int(int(client_snap[&"masked_frames_out"])).is_greater(0)
 	assert_int(int(server_snap[&"derived_frames_in"])).is_greater(0)
 
@@ -132,7 +132,7 @@ func test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss() -
 	# standalone echo. That echo is the only thing that advances the client's
 	# confirmed baseline seq for the server.
 	assert_int(int(server_snap[&"standalone_acks_out"])).is_greater(0)
-	assert_int(client.api.peer_state_ack(1)).is_greater_equal(0)
+	assert_int(client.api._peer_state_ack(1)).is_greater_equal(0)
 
 	# A broadcast records into no rewind timeline, the boundary as a test: the
 	# observer holds the binding but the entity never grows a timeline.

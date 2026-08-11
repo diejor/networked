@@ -198,6 +198,12 @@ def main() -> None:
         names, auto = scan_addon_for_class_names(addon_dir)
         allowed_names |= names
         allowed_auto |= auto
+
+    # Native classes have no .gd to declare a class_name; every class with
+    # authored XML in extension/doc_classes is published by definition.
+    project_root = Path(args.addon_dir[0]).resolve().parent.parent
+    for xml_path in (project_root / "extension" / "doc_classes").glob("*.xml"):
+        allowed_names.add(xml_path.stem)
     print(f"Found {len(allowed_names)} allowed class names: {sorted(allowed_names)}")
     print(f"Found {len(allowed_auto)} auto-named scripts")
 

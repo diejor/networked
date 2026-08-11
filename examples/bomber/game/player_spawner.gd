@@ -11,8 +11,8 @@ const PLAYER_SCENE := preload("res://examples/bomber/game/player.tscn")
 func _ready() -> void:
 	spawn_function = _spawn_player
 	if multiplayer.is_server():
-		var scene := MultiplayerScene.of(self)
-		scene.participant_entered.connect(_on_participant_entered)
+		var scene := NetwEntity.of(self).scene
+		scene.on_participant_entered(_on_participant_entered)
 		for participant: NetwParticipant in scene.participants:
 			_on_participant_entered(participant)
 
@@ -29,7 +29,7 @@ func spawn_participant(participant: NetwParticipant) -> void:
 	if _has_player(participant.join):
 		return
 
-	var ordered := MultiplayerScene.of(self).participants
+	var ordered := NetwEntity.of(self).scene.participants
 	ordered.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id
@@ -49,7 +49,7 @@ func _spawn_player(data: Dictionary) -> Node:
 	var spawn_index := int(data.spawn_index)
 	NetwEntity.bind(player, StringName(username), peer_id)
 
-	var world := MultiplayerScene.of(self).level
+	var world := NetwEntity.of(self).scene.level
 	var score := world.get_node("Score")
 	score.add_player(peer_id, username)
 
@@ -67,7 +67,7 @@ func _has_player(rj: ResolvedJoin) -> bool:
 
 
 func _get_spawn_position(spawn_index: int) -> Vector2:
-	var world := MultiplayerScene.of(self).level
+	var world := NetwEntity.of(self).scene.level
 
 	var spawn_points := world.get_node("SpawnPoints")
 

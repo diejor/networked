@@ -30,8 +30,10 @@ func connect_session(
 	if public_host.is_empty():
 		Netw.dbg.warn("DedicatedDiscordRendezvous: public_host unset.")
 		return ERR_UNCONFIGURED
-	tree.scheme = &"ws"
-	return await tree.join(_target_for(instance_id), payload)
+	tree.transport = NetwWebSocketParams.new()
+	return NetwConnector.error_of(
+		await NetwConnector.of(tree.api).join(_target_for(instance_id), payload),
+	)
 
 
 # Builds a connect target with the instance id carried in the query string.

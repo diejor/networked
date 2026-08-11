@@ -11,29 +11,27 @@
 class_name TestNetwInterpSelfFeedbackGuard
 extends NetwTestSuite
 
-
-
 class _Body:
 	extends RefCounted
 	var value: float = 0.0
 
 
 func _chase_runtime(self_feedback: bool) -> Dictionary:
-	var rt := NetwInterpolationInterface._Runtime.new()
-	rt.handle = NetwInterpolationInterface.Handle.new()
-	rt.playhead = NetwInterpolationInterface._Playhead.new()
-	rt.pump_mode = NetwInterpolationInterface._PUMP_CHASE
+	var rt := DisplayCore._Runtime.new()
+	rt.config = DisplayCore._Config.new()
+	rt.playhead = DisplayCore._Playhead.new()
+	rt.pump_mode = DisplayCore._PUMP_CHASE
 
 	var body := _Body.new()
 	body.value = 5.0
 
-	var state := NetwInterpolationInterface._PropertyState.new()
+	var state := DisplayCore._PropertyState.new()
 	state.name = &"value"
 	state.spec = NetwInterpolate.new().lerp().smooth(0.05)
 	state.source_obj = body
 	state.source_prop = &"value"
 	state.target_prop = &"value"
-	state.history = NetwInterpolationInterface._History.new()
+	state.history = NetwDisplayHistory.new()
 	state.history.mode = state.spec.mode
 	state.self_feedback = self_feedback
 	var writer := NetwInterpRecordingWriter.new()
@@ -45,18 +43,18 @@ func _chase_runtime(self_feedback: bool) -> Dictionary:
 
 
 func _history_runtime(self_feedback: bool, pump_mode: int) -> Dictionary:
-	var rt := NetwInterpolationInterface._Runtime.new()
-	rt.handle = NetwInterpolationInterface.Handle.new()
-	rt.playhead = NetwInterpolationInterface._Playhead.new()
+	var rt := DisplayCore._Runtime.new()
+	rt.config = DisplayCore._Config.new()
+	rt.playhead = DisplayCore._Playhead.new()
 	rt.playhead.expected_interval_ticks = 1
 	rt.pump_mode = pump_mode
 
-	var state := NetwInterpolationInterface._PropertyState.new()
+	var state := DisplayCore._PropertyState.new()
 	state.name = &"value"
 	state.spec = NetwInterpolate.new().lerp().smooth(0.05)
 	state.source_prop = &"value"
 	state.target_prop = &"value"
-	state.history = NetwInterpolationInterface._History.new()
+	state.history = NetwDisplayHistory.new()
 	state.history.mode = state.spec.mode
 	state.history.record(0, 0.0, false)
 	state.history.record(1, 1.0, false)
@@ -82,47 +80,47 @@ func _timing() -> NetwDisplayTiming:
 
 
 func test_chase_skips_a_self_feedback_channel() -> void:
-	var iface := NetwInterpolationInterface.new()
+	var iface := DisplayCore.new()
 	var scene := _chase_runtime(true)
 	iface._pump_chase(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
-		.override_failure_message("a self-feedback CHASE channel must not write") \
-		.is_empty()
+			.override_failure_message("a self-feedback CHASE channel must not write") \
+			.is_empty()
 
 
 func test_chase_writes_a_redirected_channel() -> void:
-	var iface := NetwInterpolationInterface.new()
+	var iface := DisplayCore.new()
 	var scene := _chase_runtime(false)
 	iface._pump_chase(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
-		.override_failure_message("a redirected CHASE channel must still write") \
-		.is_not_empty()
+			.override_failure_message("a redirected CHASE channel must still write") \
+			.is_not_empty()
 
 
 func test_bracketed_skips_a_self_feedback_channel() -> void:
-	var iface := NetwInterpolationInterface.new()
-	var scene := _history_runtime(true, NetwInterpolationInterface._PUMP_BRACKETED)
+	var iface := DisplayCore.new()
+	var scene := _history_runtime(true, DisplayCore._PUMP_BRACKETED)
 	iface._pump_history(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
-		.override_failure_message("a self-feedback BRACKETED (authority) channel must not write") \
-		.is_empty()
+			.override_failure_message("a self-feedback BRACKETED (authority) channel must not write") \
+			.is_empty()
 
 
 func test_bracketed_writes_a_redirected_channel() -> void:
-	var iface := NetwInterpolationInterface.new()
-	var scene := _history_runtime(false, NetwInterpolationInterface._PUMP_BRACKETED)
+	var iface := DisplayCore.new()
+	var scene := _history_runtime(false, DisplayCore._PUMP_BRACKETED)
 	iface._pump_history(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
-		.override_failure_message("a redirected BRACKETED channel must still write") \
-		.is_not_empty()
+			.override_failure_message("a redirected BRACKETED channel must still write") \
+			.is_not_empty()
 
 
 # The frozen REMOTE display legitimately writes the sampled property: there is no
 # live simulation to corrupt, so self-feedback is harmless and must not be skipped.
 func test_remote_writes_even_a_self_feedback_channel() -> void:
-	var iface := NetwInterpolationInterface.new()
-	var scene := _history_runtime(true, NetwInterpolationInterface._PUMP_REMOTE)
+	var iface := DisplayCore.new()
+	var scene := _history_runtime(true, DisplayCore._PUMP_REMOTE)
 	iface._pump_history(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
-		.override_failure_message("a REMOTE display writes the sampled property, frozen body") \
-		.is_not_empty()
+			.override_failure_message("a REMOTE display writes the sampled property, frozen body") \
+			.is_not_empty()

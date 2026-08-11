@@ -1,11 +1,10 @@
 ## Tracks the [SubViewport] that represents one participant's rendered world.
 ##
-## Host roles display the active [MultiplayerScene] viewport. Pure clients use
+## Host roles display the active scene's viewport. Pure clients use
 ## [member fallback] because their world is mounted under the participant
 ## window. Resolution reads session facts through [NetwMultiplayer], so a
 ## root-installed host with no owning [MultiplayerTree] resolves the same way a
 ## tree-scoped one does.
-class_name ParticipantDisplaySource
 extends RefCounted
 
 ## Emitted when [member current] resolves to a different [SubViewport].
@@ -31,7 +30,7 @@ var current: SubViewport:
 var _api: NetwMultiplayer = null
 var _fallback: SubViewport = null
 var _current: SubViewport = null
-var _watched_scenes: Array[MultiplayerScene] = []
+var _watched_scenes: Array[Node] = []
 var _local_player: Node = null
 
 
@@ -66,16 +65,16 @@ func refresh() -> void:
 func _resolve() -> SubViewport:
 	if not _api:
 		return null
-	if _api.role == NetwSessionInterface.Role.NONE:
+	if _api.role == NetwMultiplayer.Role.NONE:
 		return null
-	if _api.role == NetwSessionInterface.Role.CLIENT:
+	if _api.role == NetwMultiplayer.Role.CLIENT:
 		return _fallback
-	if _api.role != NetwSessionInterface.Role.LISTEN_SERVER:
+	if _api.role != NetwMultiplayer.Role.LISTEN_SERVER:
 		return null
 
 	var player := _find_local_player()
 	if is_instance_valid(player):
-		var scene := MultiplayerScene.of(player)
+		var scene := NetwEntity.of(player).scene.level_container()
 		var viewport := scene as Node as SubViewport if scene else null
 		if viewport:
 			return viewport
@@ -85,9 +84,9 @@ func _resolve() -> SubViewport:
 # With no local player entity yet (a lobby roster, a between-scenes host, a
 # spectator), presents the scene the local participant was admitted to rather
 # than an arbitrary active scene, so the host window matches
-# [member NetwSceneInterface.current_scene] instead of the first spawned world.
+# [member SceneCore.current_scene] instead of the first spawned world.
 func _local_scene_viewport() -> SubViewport:
-	var current := _api.scenes.current_scene if _api else null
+	var current := _api._scenes.current_scene if _api else null
 	var viewport := current as Node as SubViewport if current else null
 	if viewport:
 		return viewport
@@ -106,8 +105,8 @@ func _find_local_player() -> Node:
 	if not scenes:
 		return null
 	var local_id := _api.get_unique_id()
-	for scene: MultiplayerScene in scenes.scenes.values():
-		for entity: NetwEntity in scene.get_players():
+	for scene: Node in scenes.scenes.values():
+		for entity: NetwEntity in _handle(scene).players:
 			if entity != null and is_instance_valid(entity.owner):
 				var p := entity.owner
 				if entity.peer_id == local_id:
@@ -120,17 +119,18 @@ func _find_local_player() -> Node:
 
 
 func _find_active_viewport() -> SubViewport:
-	if not _api or _api.role != NetwSessionInterface.Role.LISTEN_SERVER:
+	if not _api or _api.role != NetwMultiplayer.Role.LISTEN_SERVER:
 		return null
 	var scenes := _scene_api()
 	if not scenes:
 		return null
-	for scene: MultiplayerScene in scenes.scenes.values():
+	for scene: Node in scenes.scenes.values():
 		if not is_instance_valid(scene):
 			continue
-		if not is_instance_valid(scene.level):
+		var level := _handle(scene).level
+		if not is_instance_valid(level):
 			continue
-		if scene.level.process_mode == Node.PROCESS_MODE_DISABLED:
+		if level.process_mode == Node.PROCESS_MODE_DISABLED:
 			continue
 		var viewport := scene as Node as SubViewport
 		if viewport:
@@ -174,7 +174,7 @@ func _unsubscribe_api() -> void:
 
 
 func _subscribe_scene_manager() -> void:
-	if not _api or _api.role != NetwSessionInterface.Role.LISTEN_SERVER:
+	if not _api or _api.role != NetwMultiplayer.Role.LISTEN_SERVER:
 		return
 	var scenes := _scene_api()
 	if not scenes:
@@ -185,9 +185,9 @@ func _subscribe_scene_manager() -> void:
 		scenes.scene_spawned.connect(_watch_scene)
 	if not scenes.scene_activated.is_connected(_on_scene_changed):
 		scenes.scene_activated.connect(_on_scene_changed)
-	if not scenes.startup_scenes_spawned.is_connected(_refresh_deferred):
-		scenes.startup_scenes_spawned.connect(_refresh_deferred)
-	for scene: MultiplayerScene in scenes.scenes.values():
+	if not scenes._startup_scenes_spawned.is_connected(_refresh_deferred):
+		scenes._startup_scenes_spawned.connect(_refresh_deferred)
+	for scene: Node in scenes.scenes.values():
 		_watch_scene(scene)
 
 
@@ -200,42 +200,54 @@ func _unsubscribe_scene_manager() -> void:
 			scenes.scene_spawned.disconnect(_watch_scene)
 		if scenes.scene_activated.is_connected(_on_scene_changed):
 			scenes.scene_activated.disconnect(_on_scene_changed)
-		if scenes.startup_scenes_spawned.is_connected(_refresh_deferred):
-			scenes.startup_scenes_spawned.disconnect(_refresh_deferred)
+		if scenes._startup_scenes_spawned.is_connected(_refresh_deferred):
+			scenes._startup_scenes_spawned.disconnect(_refresh_deferred)
 	for scene in _watched_scenes.duplicate():
 		_unwatch_scene(scene)
 
 
+# The scene one container stands in for.
+func _handle(scene: Node) -> NetwSceneHandle:
+	var record := NetwEntity.of(scene)
+	return record.scene if record else NetwSceneHandle.new()
+
+
 # The session's scene interface while the session stays live.
-func _scene_api() -> NetwSceneInterface:
-	return _api.scenes if _api else null
+func _scene_api() -> SceneCore:
+	return _api._scenes if _api else null
 
 
-func _watch_scene(scene: MultiplayerScene) -> void:
+func _watch_scene(scene: Node) -> void:
 	if not is_instance_valid(scene):
 		return
 	if _watched_scenes.has(scene):
 		_refresh_deferred()
 		return
 	_watched_scenes.append(scene)
-	var player_spawned := _on_scene_player_spawned.bind(scene)
-	if not scene.spawned.is_connected(player_spawned):
-		scene.spawned.connect(player_spawned)
+	if _api:
+		_api.scene_observe(
+			_api.rid_of(scene),
+			NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
+			_on_scene_population_changed,
+		)
 	var tree_exiting := _unwatch_scene.bind(scene)
 	if not scene.tree_exiting.is_connected(tree_exiting):
 		scene.tree_exiting.connect(tree_exiting)
 	_refresh_deferred()
 
 
-func _unwatch_scene(scene: MultiplayerScene) -> void:
+func _unwatch_scene(scene: Node) -> void:
 	if not _watched_scenes.has(scene):
 		return
 	_watched_scenes.erase(scene)
 	if not is_instance_valid(scene):
 		return
-	var player_spawned := _on_scene_player_spawned.bind(scene)
-	if scene.spawned.is_connected(player_spawned):
-		scene.spawned.disconnect(player_spawned)
+	if _api:
+		_api.scene_unobserve(
+			_api.rid_of(scene),
+			NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
+			_on_scene_population_changed,
+		)
 	var tree_exiting := _unwatch_scene.bind(scene)
 	if scene.tree_exiting.is_connected(tree_exiting):
 		scene.tree_exiting.disconnect(tree_exiting)
@@ -266,15 +278,15 @@ func _on_local_player_changed(player: NetwEntity) -> void:
 	_refresh_deferred()
 
 
-func _on_local_scene_changed(_from: MultiplayerScene, _to: MultiplayerScene) -> void:
+func _on_local_scene_changed(_from: NetwSceneHandle, _to: NetwSceneHandle) -> void:
 	_refresh_deferred()
 
 
-func _on_scene_player_spawned(_player: Node, _scene: MultiplayerScene) -> void:
+func _on_scene_population_changed(_present: bool, _entity: RID) -> void:
 	_refresh_deferred()
 
 
-func _on_scene_changed(_scene: MultiplayerScene) -> void:
+func _on_scene_changed(_scene: Node) -> void:
 	_refresh_deferred()
 
 

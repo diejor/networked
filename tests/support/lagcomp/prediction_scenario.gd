@@ -11,7 +11,7 @@
 ## [codeblock]
 ## var s := PredictionScenario.new()
 ## await s.setup(self)
-## var p := s.add_predicted_entity()
+## var p := await s.add_predicted_entity()
 ## s.latency_both(4)
 ## s.hold_input(p, { motion = Vector2.RIGHT })
 ## s.run(30)
@@ -28,10 +28,10 @@ const DISPLAY_OFFSET := 3
 var inner: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: NetwClockInterface
-var client_clock: NetwClockInterface
-var server_sim: NetwLagCompensationInterface
-var client_sim: NetwLagCompensationInterface
+var server_clock: ClockCore
+var client_clock: ClockCore
+var server_sim: LagCompCore
+var client_sim: LagCompCore
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -63,29 +63,31 @@ func setup(
 		tickrate: int = TICKRATE,
 		display_offset: int = DISPLAY_OFFSET,
 		managed: bool = true,
+		api_script: Script = null,
 ) -> void:
 	_suite = suite
 	_tickrate = tickrate
 	_tree = Engine.get_main_loop() as SceneTree
 	inner = suite.make_harness() if managed else suite.make_unmanaged_harness()
+	inner.api_script = api_script
 	await inner.setup()
 	client = await inner.add_client()
 	server = inner.server()
 	server_clock = await inner.add_clock(tickrate, display_offset)
-	client_clock = client.api.clock
+	client_clock = client.api._clock
 	server_clock.manual_tick = true
 	client_clock.manual_tick = true
 	_client_peer_id = client.multiplayer_peer.get_unique_id()
 
 	# The service is no longer auto-created, so mount the node on both peers.
 	server_sim = inner.add_lag_compensation()
-	client_sim = client.api.lag_compensation
+	client_sim = client.api._lagcomp
 	await _tree.process_frame
 
 	# Freeze both clocks under lockstep so every tick is driven by run(), with no
 	# stray physics-frame ticks polluting the deterministic schedule.
 	_stepper = LockstepStepper.new(
-		[server_clock, client_clock] as Array[NetwClockInterface],
+		[server_clock, client_clock] as Array[ClockCore],
 		[server.multiplayer, client.multiplayer] as Array[MultiplayerAPI],
 		inner.session(),
 		tickrate,
@@ -105,6 +107,45 @@ func add_predicted_entity(
 		PredictionComponent.MissingInput.STALL,
 		epsilon: float = 0.01,
 ) -> PredictedEntity:
+	return await _add_entity(
+		_client_peer_id,
+		state_props,
+		input_props,
+		missing_policy,
+		epsilon,
+	)
+
+
+## Composes a pair the listen-server host itself controls, which resolves
+## [constant NetwPredict.Role.HOST_LOCAL] on the server and
+## [constant NetwPredict.Role.REMOTE] on the client.
+##
+## The host authors its own commands and is authority over them at once, so this
+## pair has no command lane and no reconciliation. It is driven by stepping
+## [member server_clock] rather than by delivering frames.
+func add_host_entity(
+		state_props: Array[StringName] = [&"position"],
+		input_props: Array[StringName] = [&"motion", &"bombing"],
+		missing_policy: PredictionComponent.MissingInput = \
+		PredictionComponent.MissingInput.STALL,
+		epsilon: float = 0.01,
+) -> PredictedEntity:
+	return await _add_entity(
+		MultiplayerPeer.TARGET_PEER_SERVER,
+		state_props,
+		input_props,
+		missing_policy,
+		epsilon,
+	)
+
+
+func _add_entity(
+		controller: int,
+		state_props: Array[StringName],
+		input_props: Array[StringName],
+		missing_policy: PredictionComponent.MissingInput,
+		epsilon: float,
+) -> PredictedEntity:
 	_entity_counter += 1
 	var ename := "Predicted%d" % _entity_counter
 	var builder := PlayerBuilder.new(ename) \
@@ -117,14 +158,14 @@ func add_predicted_entity(
 	var client_root := builder.build() as LagCompSimBody
 
 	# Identity and controller pinned before tree entry so each peer resolves its
-	# role (PREDICT on the client, CONSUME on the server) in _ready. A bound
-	# entity_id declares a real entity, so the rig activates LIVE (authority
-	# application, scene registration) rather than staying an inert unbound node.
+	# role from the two axes in _ready. A bound entity_id declares a real
+	# entity, so the rig activates LIVE (authority application, scene
+	# registration) rather than staying an inert unbound node.
 	for root: LagCompSimBody in [server_root, client_root]:
 		var entity := NetwEntity.of(root)
 		entity.entity_id = StringName(ename)
-		entity.peer_id = _client_peer_id
-		entity.controller = _client_peer_id
+		entity.peer_id = controller
+		entity.controller = controller
 
 	server.add_child(server_root)
 	client.add_child(client_root)
@@ -165,6 +206,39 @@ func run(n: int, per_tick: Callable = Callable()) -> void:
 		if per_tick.is_valid():
 			per_tick.call(client_clock.tick)
 		_stepper.sync_ticks(1)
+
+
+## Emits one client frame that bought [param ticks] of simulated time.
+##
+## A FRAME-scheduled entity authors against the frame boundary rather than the
+## tick, so [param ticks] of zero is the frame the clock held: it carries the
+## command lane and opens no transition.
+func emit_client_frame(ticks: int) -> void:
+	_emit_frame(client_clock, ticks)
+
+
+## Emits one host frame that bought [param ticks] of simulated time, which is
+## how a pair from [method add_host_entity] is driven.
+func emit_host_frame(ticks: int) -> void:
+	_emit_frame(server_clock, ticks)
+
+
+func _emit_frame(clock: ClockCore, ticks: int) -> void:
+	clock.before_tick_loop.emit()
+	if ticks > 0:
+		clock.force_step(ticks)
+	clock.after_tick_loop.emit()
+
+
+## Hands [param p]'s pending client command frame to its server peer.
+##
+## The command lane is the input carrier under [constant
+## NetwPredict.Schedule.FRAME], so a server that is never handed one starves
+## rather than replays.
+func deliver_command(p: PredictedEntity) -> void:
+	var bytes: PackedByteArray = p.client_prediction._engine().build_command_frame()
+	if not bytes.is_empty():
+		p.server_prediction._engine().receive_command_frame(bytes)
 
 
 ## Runs ticks until [param predicate] (a [code]func() -> bool[/code]) is true or
@@ -208,16 +282,15 @@ func warmup(p: PredictedEntity, ticks: int = 12) -> void:
 
 ## Clears [param p]'s correction, replay, consume, and divergence counters.
 func reset_metrics(p: PredictedEntity) -> void:
-	p.client_prediction.corrections = 0
-	p.client_prediction.max_replay_depth = 0
-	p.server_prediction.consumed_count = 0
-	p.server_prediction.missing_count = 0
-	p.server_prediction.starved_count = 0
-	p.server_prediction.held_count = 0
-	p.server_prediction.resync_count = 0
-	p.server_prediction.skipped_count = 0
-	p.observer.divergence_log.clear()
-	p.observer.correction_count = 0
+	p.client_prediction.stats.corrections = 0
+	p.client_prediction.stats.max_replay_depth = 0
+	p.server_prediction.stats.consumed = 0
+	p.server_prediction.stats.missing = 0
+	p.server_prediction.stats.starved = 0
+	p.server_prediction.stats.held = 0
+	p.server_prediction.stats.resync = 0
+	p.server_prediction.stats.skipped = 0
+	p.observer.reset()
 
 
 ## Sets [param p]'s persistent scripted input.
@@ -260,7 +333,8 @@ func record_server_history(p: PredictedEntity, tick: int) -> void:
 	if record_tick < 0:
 		return
 	p.server_entity.timeline.record_state(
-		record_tick, p.server_state.snapshot_payload(),
+		record_tick,
+		p.server_state.snapshot_payload(),
 	)
 
 
@@ -358,8 +432,8 @@ func _conditions(
 		_seed: int,
 		jitter_polls: int,
 		loss: float,
-) -> LocalLoopbackSession.LinkConditions:
-	var conditions := LocalLoopbackSession.LinkConditions.new(_seed)
+) -> LocalLinkConditions:
+	var conditions := LocalLinkConditions.create(_seed)
 	var period := 1000.0 / float(Engine.get_physics_ticks_per_second())
 	conditions.latency_ms = float(delay_polls) * period
 	conditions.jitter_ms = float(jitter_polls) * period

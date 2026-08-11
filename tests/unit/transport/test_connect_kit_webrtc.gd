@@ -4,7 +4,6 @@
 class_name TestConnectKitWebRTC
 extends NetwTestSuite
 
-
 func after_test() -> void:
 	var session: WebRTCLoopbackSession = preload("uid://d2u1yyaikw2sh")
 	session.reset()
@@ -16,7 +15,7 @@ func test_tracker_transport_recognizes_webrtc_scheme() -> void:
 	target.scheme = &"webrtc"
 	assert_bool(t._can_join(target)).is_true()
 	var config := NetwHostConfig.new()
-	config.scheme = &"webrtc"
+	config.transport = NetwWebRTCParams.new()
 	assert_bool(t._can_host(config)).is_true()
 	assert_str(t._make_signaler().get_class()).is_not_empty()
 
@@ -47,20 +46,21 @@ func test_filter_ice_servers_drops_unsupported_on_native() -> void:
 
 func test_loopback_host_reaches_online() -> void:
 	var api := NetwMultiplayer.new(SceneMultiplayer.new())
-	var connector := NetwConnector.new(api)
-	connector.transports = [WebRTCLoopbackTransport.new()]
+	NetwConnector.of(api).transports = [WebRTCLoopbackTransport.new()]
 
 	var config := NetwHostConfig.new()
-	config.scheme = &"webrtc"
-	var attempt := connector.host(config)
+	config.transport = NetwWebRTCParams.new()
+	var results: Array[NetwConnectResult] = []
+	var pump := func() -> void:
+		results.append(await NetwConnector.of(api).host(null, config))
+	pump.call()
 
 	var guard := 0
-	while not attempt.is_done() and guard < 40:
-		connector.poll(0.05)
+	while api.state != SessionCore.State.ONLINE and guard < 40:
+		api.poll()
 		await get_tree().process_frame
 		guard += 1
 
-	assert_bool(attempt.is_done()).is_true()
-	assert_bool(attempt.result.is_ok()).is_true()
-	assert_int(api.state).is_equal(NetwSessionInterface.State.ONLINE)
-	api.dispose()
+	assert_bool(results[0].is_ok()).is_true()
+	assert_int(api.state).is_equal(SessionCore.State.ONLINE)
+	api.embedding.dispose()

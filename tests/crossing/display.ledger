@@ -1,0 +1,102 @@
+# family: display
+# bridge: A(value-parity)
+# regime: continuous readings agree to 6 digits, tick-domain values exact
+# instrument-first: c4f11bda
+# baseline: tests/unit/interpolation
+# baseline-count: 34
+#
+# The unit is the display data plane: the projection helper, the per value
+# interpolation spec, and the channel history that resamples one value stream.
+# What did NOT cross is DisplayCore itself, and that is a content boundary
+# rather than a deferral. Role resolution reads control, authority and the
+# authored sync channels; the writer sets Node properties and reads parent
+# transforms for global-space output; and the CHASE pump reads the live
+# predicted body every frame, which the plan of record already fixes as
+# permanent Ring 2. The file mixed two planes and this batch carved one out,
+# exactly as liveness and scenes did before it.
+#
+# THE DEPENDENCY DECIDED THE ORDER. NetwDisplayHistory names NetwInterpolate for
+# its mode and NetwProject for its tail, so both crossed first, in their own
+# slice, under the migration recipe's readiness rule. Neither had a unit suite
+# of its own except NetwProject's four cases, so the spec class arrives with
+# native laws it never had in GDScript rather than with none.
+#
+# CLASSDB FLATTENED THE ENUMS, which is the one forced API change.
+# `NetwInterpolate.Mode.LERP` has no spelling for a registered class, so every
+# call site reads `NetwInterpolate.MODE_LERP` and a `mode: NetwInterpolate.Mode`
+# parameter reads `int`. Fourteen sites. The history's last-sample flags moved
+# the same way, from members to bound getters, because `is_sleeping` cannot be
+# both a member and a getter: `history.is_sleeping` -> `history.sleeping`,
+# `last_projected` -> `has_projected()`, `last_project_age` ->
+# `get_project_age()`, `snapped` -> `has_snapped()`, `.buffer` ->
+# `get_buffer()`.
+#
+# THE PORT FOUND A LIVE DEFECT, which is the reason `get_at` exists on the
+# native class at all. `_pump_history` read a sibling channel's derivative with
+# `sibling.history.get_at(...)` and `_History` had no such method, so every
+# `project_by` channel under a FORECAST timeline called a method that was never
+# there. Nothing caught it because the branch needs forecast on, a non-empty
+# sibling, and a playhead past the newest tick all at once. GDScript let it
+# ship; the compiler would not.
+#
+# THE ARM AND ITS GOLDEN SURVIVE, unlike the interest batch's. The claim here is
+# float parity over a resampling function rather than a set of properties over
+# integers, so the 47-row trace recorded at c4f11bda is evidence a property
+# cannot restate. It was red-proven on eight independent halves: the gap
+# threshold and its strictness, the forecast age clamp, record deduplication,
+# the angle mode, the snap escape, the sleep latch, the explicit derivative, and
+# the smoothing weight. Two probes did not move a row and both were read rather
+# than ignored. The first was a real hole, a gap scenario that only ever took
+# the wide branch and so passed against any threshold below its gap, and it grew
+# the two straddling gaps that close it. The second is not a hole and no rows can
+# close it: Godot dispatches `lerp` on a Quaternion to the same spherical walk
+# `slerp` runs, so the two rotation modes are indistinguishable by observation.
+#
+# The golden's numbers are ALSO inlined into display_history_tests.cpp, so the
+# tier reads them every run rather than leaving them in a file nothing opens.
+# The arm stays runnable as the whole-trace check the per-case restatement
+# cannot be.
+#
+# THE PURITY LINT CARRIES WITH ONE REGION REMOVED. It reads display_core.gd as a
+# string and asserts forbidden tokens are absent from the pure kernels and the
+# inner classes. `class _History:` is gone, so the lint would have failed loudly
+# rather than passing vacuously, which is the right way round. Its successor for
+# the history is structural: display_history.cpp includes no engine header that
+# could reach a tree, a clock or a signal, and tools/check_sources.py holds
+# every source to compiling. `class _Playhead:` still lints and still belongs to
+# the shell, and it is the next carve.
+#
+test_netw_project.gd:test_project_advances_linear_types_by_velocity_times_age  -> project_tests.cpp:"[Networked][Display][Hosted] a linear value advances by velocity times age"
+test_netw_project.gd:test_zero_velocity_holds_the_value                        -> project_tests.cpp:"[Networked][Display][Hosted] a zero velocity holds the value"
+test_netw_project.gd:test_project_rotates_a_quaternion_by_its_angular_velocity  -> project_tests.cpp:"[Networked][Display][Hosted] a quaternion turns by its angular velocity"
+test_netw_project.gd:test_supports_names_only_the_projectable_types            -> project_tests.cpp:"[Networked][Display][Hosted] only a type carrying a derivative projects"
+test_netw_interp_history_semantics.gd:test_history_keys_and_interpolates_by_authoring_tick    -> display_history_tests.cpp:"[Networked][Display][Hosted] an authoring stream brackets by authoring ticks"
+test_netw_interp_history_semantics.gd:test_history_sleeps_when_settled_then_revives_on_new_record -> display_history_tests.cpp:"[Networked][Display][Hosted] a settled channel holds and sleeps until a distinct record"
+test_netw_interp_history_semantics.gd:test_duplicate_record_does_not_wake_a_sleeping_history  -> display_history_tests.cpp:"[Networked][Display][Hosted] a repeated value is not recorded twice"
+test_netw_interp_calculus.gd:test_p1_monotonic_display_time                        -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p2_continuity                                    -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p3_bounded_lag                                   -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p4_steadiness                                    -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p5_bounded_jerk                                  -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p5_chase_bounded_jerk                            -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p6_loss_robustness                               -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p7_chase_absorbs_a_recovery_without_a_jump       -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_chase_absorbs_a_correction_train_without_stepping -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_a_teleport_snaps_the_chase                    -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_the_chase_offset_clamps_by_magnitude          -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_forecast_error_bounded                        -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p7_forecast_leads_buffered                       -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p7_server_never_forecasts                        -> CARRY tests/unit/interpolation (role resolution stays shell-side)
+test_netw_interp_calculus.gd:test_p8_role_offsets_preserve_shortest_rotation_channels -> CARRY tests/unit/interpolation (the display offset is seeded and decayed by the shell)
+test_netw_interp_calculus.gd:test_p8_stationary_stream_sleeps                      -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p8_moving_stream_projects_to_cap_then_holds      -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p9_replay_determinism                            -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p10_schedule_independence                        -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_engine_purity.gd:test_pure_kernels_touch_no_engine_state          -> CARRY tests/unit/interpolation (it lints display_core.gd, which does not cross)
+test_netw_interp_engine_purity.gd:test_chase_kernel_reads_only_the_live_body       -> CARRY tests/unit/interpolation (it lints display_core.gd, which does not cross)
+test_netw_interp_engine_purity.gd:test_lint_is_not_vacuous                         -> CARRY tests/unit/interpolation (it lints display_core.gd, which does not cross)
+test_netw_interp_self_feedback_guard.gd:test_chase_skips_a_self_feedback_channel     -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
+test_netw_interp_self_feedback_guard.gd:test_chase_writes_a_redirected_channel       -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
+test_netw_interp_self_feedback_guard.gd:test_bracketed_skips_a_self_feedback_channel -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
+test_netw_interp_self_feedback_guard.gd:test_bracketed_writes_a_redirected_channel   -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
+test_netw_interp_self_feedback_guard.gd:test_remote_writes_even_a_self_feedback_channel -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)

@@ -38,12 +38,10 @@ func after_test() -> void:
 
 func test_public_lobby_round_trips_then_clears_on_leave() -> void:
 	var host_dir := await _make_dir("valeria")
-	var peer := await host_dir._host_lobby(
-		LobbyDirectory.HostOptions.make(
-			"Valeria's Game",
-			LobbyDirectory.Visibility.PUBLIC,
-		),
-	)
+	var config := NetwHostConfig.new()
+	config.server_name = "Valeria's Game"
+	config.visibility = LobbyDirectory.Visibility.PUBLIC
+	var peer := await host_dir._host_lobby(config)
 	assert_object(peer) \
 			.override_failure_message("PUBLIC host_lobby returned no peer.") \
 			.is_not_null()
@@ -74,12 +72,10 @@ func test_public_lobby_round_trips_then_clears_on_leave() -> void:
 
 func test_private_lobby_is_unlisted_but_joinable() -> void:
 	var host_dir := await _make_dir("valeria")
-	var peer := await host_dir._host_lobby(
-		LobbyDirectory.HostOptions.make(
-			"Secret",
-			LobbyDirectory.Visibility.PRIVATE,
-		),
-	)
+	var config := NetwHostConfig.new()
+	config.server_name = "Secret"
+	config.visibility = LobbyDirectory.Visibility.PRIVATE
+	var peer := await host_dir._host_lobby(config)
 	assert_object(peer) \
 			.override_failure_message("PRIVATE host_lobby returned no peer.") \
 			.is_not_null()

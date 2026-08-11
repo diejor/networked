@@ -276,7 +276,7 @@ func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 ##     └── column_name (StringName)
 ##         └── value (Variant)
 ## [/codeblock]
-func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
+func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
 	var table_dir := _table_dir(table)
 	if not DirAccess.dir_exists_absolute(table_dir):
 		return []

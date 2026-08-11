@@ -73,26 +73,26 @@ func session() -> LocalLoopbackSession:
 
 ## Resets the owned [LocalLoopbackSession].
 ##
-## Clears the process-global [member LocalLoopbackSession.shared] when it still
-## points at this session, so a torn-down harness leaves no shared pointer for
-## the next test to inherit.
+## Clears the process-global session when it still points at this session, so
+## a torn-down harness leaves no shared pointer for the next test to inherit.
 func reset() -> void:
 	if _session:
 		_session.reset()
-	if LocalLoopbackSession.shared == _session:
-		LocalLoopbackSession.shared = null
+	if LocalLoopbackSession.has_shared_session() \
+			and LocalLoopbackSession.get_shared_session() == _session:
+		LocalLoopbackSession.set_shared_session(null)
 
 
 ## Applies local loopback defaults and configures local scheme.
 func adopt_tree(
 		tree: MultiplayerTree,
-		role: NetwSessionInterface.Role,
+		role: NetwMultiplayer.Role,
 ) -> void:
 	tree.desired_role = role
 	tree.auto_host_headless = false
 	tree.debug_join = null
-	tree.scheme = &"local"
-	LocalLoopbackSession.shared = _session
+	tree.transport = NetwLocalParams.new()
+	LocalLoopbackSession.set_shared_session(_session)
 
 
 ## Builds a [NetwConnectTarget] for [param tree]'s local loopback backend.
@@ -116,19 +116,25 @@ func connect_tree(
 	var active_adapter := adapter if adapter else _adapter
 	match entry:
 		Entry.JOIN:
-			return await tree.join(
-				active_adapter.make_connect_target(tree),
-				payload,
+			return NetwConnector.error_of(
+				await NetwConnector.of(tree.api).join(
+					active_adapter.make_connect_target(tree),
+					payload,
+				),
 			)
 		Entry.JOIN_OR_HOST:
-			return await tree.join_or_host(
-				active_adapter.make_connect_target(tree),
-				payload,
+			return NetwConnector.error_of(
+				await NetwConnector.of(tree.api).join_or_host(
+					active_adapter.make_connect_target(tree),
+					payload,
+				),
 			)
 		Entry.HOST:
 			return await tree.host(payload)
 		Entry.OPEN_HOST:
-			return await tree._open_host()
+			return NetwConnector.error_of(
+				await NetwConnector.of(tree.api).host(null),
+			)
 		_:
 			return ERR_INVALID_PARAMETER
 
@@ -143,7 +149,7 @@ func disconnect_tree(tree: MultiplayerTree) -> int:
 
 	var peer := tree.multiplayer_peer as LocalMultiplayerPeer
 	var peer_id := tree.multiplayer_peer.get_unique_id()
-	tree.state = NetwSessionInterface.State.DISCONNECTING
+	tree.state = NetwMultiplayer.SessionState.DISCONNECTING
 	if peer:
 		_session.release_inbound_packets(peer)
 	tree.multiplayer_peer.close()
@@ -171,7 +177,7 @@ func build_join_payload(
 ## Sets inbound link conditions on [param peer].
 func set_link_conditions(
 		peer: LocalMultiplayerPeer,
-		conditions: LocalLoopbackSession.LinkConditions,
+		conditions: LocalLinkConditions,
 		sender_id: int = 0,
 ) -> void:
 	_session.set_link_conditions(peer, conditions, sender_id)
@@ -189,5 +195,5 @@ func clear_link_conditions(
 func get_link_conditions(
 		peer: LocalMultiplayerPeer,
 		sender_id: int = 0,
-) -> LocalLoopbackSession.LinkConditions:
+) -> LocalLinkConditions:
 	return _session.get_link_conditions(peer, sender_id)

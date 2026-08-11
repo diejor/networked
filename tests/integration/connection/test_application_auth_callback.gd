@@ -27,16 +27,16 @@ func test_custom_auth_connects_without_consuming_probes() -> void:
 	) -> void:
 		host_packets.append(data)
 		if data == _request:
-			host_api.send_auth(peer_id, _response)
-			host_api.complete_auth(peer_id)
+			host_api.peer_send_auth(peer_id, _response)
+			host_api.peer_complete_auth(peer_id)
 	client_api.auth_callback = func(
 			peer_id: int,
 			data: PackedByteArray,
 	) -> void:
 		if data == _response:
-			client_api.complete_auth(peer_id)
+			client_api.peer_complete_auth(peer_id)
 	var send_request := func(peer_id: int) -> void:
-		client_api.send_auth(peer_id, _request)
+		client_api.peer_send_auth(peer_id, _request)
 	client_api.peer_authenticating.connect(send_request)
 
 	var payload := JoinPayload.new()
@@ -46,12 +46,12 @@ func test_custom_auth_connects_without_consuming_probes() -> void:
 	target.address = "127.0.0.1"
 	target.metadata = { "port": host.port }
 
-	var join_err := await client_tree.join(target, payload, 2.0, true)
-	assert_int(join_err).is_equal(OK)
+	var joined := await NetwConnector.of(client_tree.api).join(target, payload, true)
+	assert_bool(joined.is_ok()).is_true()
 	assert_array(host_packets).is_equal([_request])
 	var client_id := client_api.get_unique_id()
 	@warning_ignore("redundant_await")
-	await assert_func(host_api, "get_participant", [client_id]) \
+	await assert_func(host_api, "peer_get_participant", [client_id]) \
 			.wait_until(1000) \
 			.is_not_null()
 
@@ -59,7 +59,7 @@ func test_custom_auth_connects_without_consuming_probes() -> void:
 	probe_target.scheme = &"enet"
 	probe_target.address = "127.0.0.1"
 	probe_target.metadata = { "port": host.port }
-	var probe: NetwProbeResult = await client_tree.connector.probe(probe_target)
+	var probe: NetwProbeResult = await NetwConnector.of(client_tree.api).probe(probe_target)
 	assert_int(probe.status).is_equal(NetwProbeResult.Status.OK)
 	assert_array(host_packets).is_equal([_request])
 

@@ -7,6 +7,10 @@
 class_name TestRootOverrideInstall
 extends NetwTestSuite
 
+const CALLTHROUGH := preload(
+	"res://tests/support/flat/callthrough_multiplayer_extension.gd"
+)
+
 var _original: MultiplayerAPI
 
 
@@ -17,7 +21,7 @@ func before_test() -> void:
 func after_test() -> void:
 	var installed := get_tree().get_multiplayer() as NetwMultiplayer
 	if installed != null and installed != _original:
-		installed.dispose()
+		installed.embedding.dispose()
 	get_tree().set_multiplayer(_original)
 	super.after_test()
 
@@ -34,6 +38,13 @@ func test_install_sets_the_default_and_resolves() -> void:
 	add_child(node)
 	auto_free(node)
 	assert_that(NetwMultiplayer.of(node)).is_same(api)
+
+
+## Verify the per-call construction door overrides the project setting.
+func test_install_accepts_an_explicit_extension_script() -> void:
+	var api := NetwMultiplayer.install_as_default(get_tree(), CALLTHROUGH)
+
+	assert_object(api.get_script()).is_same(CALLTHROUGH)
 
 
 func test_anchor_is_root_so_it_outlives_a_scene_change() -> void:
@@ -62,7 +73,7 @@ func test_tree_less_session_is_ready_to_arm() -> void:
 	# No MultiplayerTree: the session runs on its defaults, offline until a peer
 	# is assigned and a listen host once one connects.
 	assert_that(api.root as MultiplayerTree).is_null()
-	assert_that(api.session.state).is_equal(NetwSessionInterface.State.OFFLINE)
-	assert_that(api.session.desired_role).is_equal(
-		NetwSessionInterface.Role.LISTEN_SERVER,
+	assert_that(api.state).is_equal(SessionCore.State.OFFLINE)
+	assert_that(api._session.desired_role).is_equal(
+		SessionCore.Role.LISTEN_SERVER,
 	)

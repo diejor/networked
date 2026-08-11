@@ -1,0 +1,1098 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictionEngine" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The session's prediction engines, one pool keyed by an opaque slot.
+	</brief_description>
+	<description>
+		A predicting entity's engine has identity and memory, and there is one per predicting entity rather than one per session. The pool is the registered object and the engines are rows in it, because registering a class per entity would hand a caller something that has to dissolve into slot-keyed storage later.
+		A slot decides and never performs. It reads the facts a caller hands it, answers with a plan, and writes nothing outside itself: no node, no clock, no binding. That is what lets a transition be reproduced from its journal row alone, and it is why the caller stays responsible for reading colliders, calling a body and writing values back.
+		[codeblock]
+		slot = open(declaration)          one slot per predicting entity
+		configure(slot, ...)              refused outside what supports() admits
+		record_input / open_drive         the pass a caller performs
+		close_drive                       the row the pass produced
+		admit_ack / compare_state         what the far peer answered
+		recover / quarantine_state        the plan a caller then writes
+		close(slot)                       the entity is gone
+		[/codeblock]
+		[method supports] is the flip axis. The pool declares which CONFIGURATIONS it can drive, a caller asks before handing it a tick, and outside the declared set [method configure] refuses rather than storing. There is never a mixed engine, so no per-region hop is paid at runtime.
+		Every role is driven, because the pass a slot performs is the same one whichever peer owns the entity: a role decides whether a caller reaches the slot, never what the slot then does.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="acknowledge">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="matched" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="admit_ack">
+			<return type="NetwPredictVerdict" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="evidence" type="NetwPredictEvidence" />
+			<param index="3" name="substituted" type="bool" default="false" />
+			<description>
+			</description>
+		</method>
+		<method name="admit_post_reseed">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="basis" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="align_reseed">
+			<return type="NetwPredictWritePlan" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="payload" type="Array" />
+			<param index="3" name="ignore_through" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="apply_input">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				Writes the declared input fields [param payload] names onto the bound owner and answers whether the owner resolved.
+			</description>
+		</method>
+		<method name="apply_state">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				Writes the declared state fields [param payload] names onto the bound owner and answers whether the owner resolved. A key the declaration does not name is ignored.
+			</description>
+		</method>
+		<method name="bind_owner">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="owner" type="Object" />
+			<description>
+				Binds [param owner] as the object this slot reads declared input onto and captures declared state from, and answers whether the slot exists.
+				The slot holds an id rather than a pointer and resolves it at each property-I/O moment, because the simulate step between them is arbitrary user code and may free the object. Binding is optional: a slot driven by [method set_state] alone never binds and touches no property.
+			</description>
+		</method>
+		<method name="build_ack_frame" qualifiers="const">
+			<return type="PackedByteArray" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<param index="2" name="ack" type="int" />
+			<param index="3" name="owner_ack_floor" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="canonical_input_bytes" qualifiers="const">
+			<return type="PackedByteArray" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				The wire bytes of [param payload]'s declared input fields, in declaration order.
+			</description>
+		</method>
+		<method name="canonical_state_bytes" qualifiers="const">
+			<return type="PackedByteArray" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				The wire bytes of [param payload]'s declared state fields, in declaration order. The bytes that ship are the bytes that hash, so a fingerprint taken here and one taken by a peer decoding the frame describe the same values. Two payloads are comparable exactly when they name the same fields.
+			</description>
+		</method>
+		<method name="canonicalize_input" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				[param payload] with every declared input value round-tripped through its own codec, so both peers feed the simulation the same values.
+			</description>
+		</method>
+		<method name="canonicalize_state" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				[param payload] with every declared state value round-tripped through its own codec.
+				A predicting peer and its authority never see the same float twice, one reads a live property and the other reads what survived the wire, so the round trip is what makes the two comparable exactly rather than approximately. A field with no quantizer round-trips through its raw wire form.
+			</description>
+		</method>
+		<method name="capture_input">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The declared input fields the bound owner holds, read through the input declaration [method rewire] was given.
+			</description>
+		</method>
+		<method name="capture_state">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The declared state fields the bound owner holds. A field the owner does not answer for is absent rather than null.
+			</description>
+		</method>
+		<method name="carry_retired" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="carry_stats" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="close">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Retires [param slot] and everything it held. A key never comes back, so a caller holding a stale one reads an unopened slot rather than another entity's.
+			</description>
+		</method>
+		<method name="close_drive">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="post_fp" type="int" />
+			<param index="3" name="post_pose_fp" type="int" default="0" />
+			<param index="4" name="post_momentum_fp" type="int" default="0" />
+			<param index="5" name="post_controller_fp" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="compare_state">
+			<return type="NetwPredictVerdict" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="recv_tick" type="int" />
+			<param index="2" name="transition" type="int" />
+			<param index="3" name="predicted" type="Array" />
+			<param index="4" name="authority" type="Array" />
+			<param index="5" name="correction_tolerances" type="PackedFloat64Array" />
+			<param index="6" name="meter_tolerances" type="PackedFloat64Array" />
+			<param index="7" name="fallback_epsilon" type="float" />
+			<param index="8" name="stream_reconstructed" type="bool" default="true" />
+			<param index="9" name="ack_domain_confirmed" type="bool" default="false" />
+			<description>
+			</description>
+		</method>
+		<method name="compare_stats" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="configure">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="schedule" type="int" />
+			<param index="2" name="role" type="int" />
+			<param index="3" name="correction" type="int" />
+			<param index="4" name="restore" type="int" />
+			<param index="5" name="max_restore_ticks" type="int" default="6" />
+			<param index="6" name="island" type="int" default="0" />
+			<param index="7" name="carry" type="bool" default="false" />
+			<param index="8" name="witness" type="bool" default="false" />
+			<description>
+				Stores [param slot]'s configuration, or refuses when [method supports] answers false. Refused rather than stored, so a slot never holds an axis point its own pool declines to drive.
+			</description>
+		</method>
+		<method name="confirm_reseed_epoch">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="converge_rate_of" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="declare_skipped">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="label" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="drive_stats" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="episode" qualifiers="const">
+			<return type="NetwPredictEpisodeReport" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="epsilon_of" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="field_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="field_name" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="field_slot" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="key" type="StringName" />
+			<description>
+			</description>
+		</method>
+		<method name="finish_probation">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="corrected" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="is_angle" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="is_causal" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="is_open" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Whether [param slot] names a live engine.
+			</description>
+		</method>
+		<method name="is_pose" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="is_trigger_excluded" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="is_vote_excluded" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="is_withheld" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="island_commit">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="owner_order_key" type="int" />
+			<param index="2" name="members" type="PackedInt64Array" />
+			<param index="3" name="order_keys" type="PackedInt64Array" />
+			<param index="4" name="distance_squared" type="PackedFloat64Array" />
+			<param index="5" name="fidelities" type="PackedInt32Array" />
+			<param index="6" name="eligible" type="PackedByteArray" />
+			<param index="7" name="promotion" type="int" />
+			<param index="8" name="promotion_count" type="int" />
+			<param index="9" name="promotion_meters" type="float" />
+			<param index="10" name="frontier" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="island_member_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="island_promoted" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="member" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="joint_note_basis">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="basis" type="int" />
+			<param index="2" name="source" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="joint_pass">
+			<return type="NetwPredictJointPlan" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="present" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="joint_record">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="state" type="Array" />
+			<param index="3" name="command" type="Variant" />
+			<param index="4" name="authored" type="bool" />
+			<param index="5" name="relayed" type="bool" />
+			<param index="6" name="predictor_valid" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="joint_stats" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_aligned_error_at" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_attribution_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_basis_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_c_hash_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_clear">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_differing_family_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_domain_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_environment_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_episode_id_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_epoch" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_evidence_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_first_chain_break" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_first_unmatched" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_flags_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_kind_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_label_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_last_closed" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_operator_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_post_families_at" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_post_fp_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_pre_families_at" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_pre_fp_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_raw_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_row" qualifiers="const">
+			<return type="NetwPredictJournalRow" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_size" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_slot_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_topology_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_transition_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_transitions" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_witness_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_witness_class_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="journal_write_id_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="judge_carry">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<param index="2" name="same_type" type="bool" />
+			<param index="3" name="finite" type="bool" />
+			<param index="4" name="within_envelope" type="bool" />
+			<param index="5" name="pure" type="bool" />
+			<param index="6" name="faithful" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_aligned_error">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="error" type="float" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_attribution">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="attribution" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_chain_broken">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_differing_family">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="family" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_domain">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="domain" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_provenance">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="episode_id" type="int" />
+			<param index="3" name="write_id" type="int" />
+			<param index="4" name="operator" type="int" />
+			<param index="5" name="basis" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_solve">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="topo_fp" type="int" />
+			<param index="3" name="witness_fp" type="int" />
+			<param index="4" name="evidence_mask" type="int" />
+			<param index="5" name="witness_class_bits" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_witness_match">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="matched" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="open">
+			<return type="int" />
+			<param index="0" name="declaration" type="NetwPredictDeclaration" />
+			<description>
+				Opens a slot for one predicting entity and returns its key. The key is opaque: it is not an index, not a route and not an entity id, and nothing outside this pool may derive one.
+			</description>
+		</method>
+		<method name="open_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many engines the pool holds.
+			</description>
+		</method>
+		<method name="open_drive">
+			<return type="NetwPredictDrive" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="topology" type="Dictionary" />
+			<param index="2" name="tick" type="int" />
+			<param index="3" name="frame" type="int" />
+			<param index="4" name="ticktime" type="float" />
+			<param index="5" name="quantum" type="int" default="1" />
+			<param index="6" name="simulating" type="bool" default="true" />
+			<param index="7" name="pre_fp" type="int" default="0" />
+			<param index="8" name="pre_pose_fp" type="int" default="0" />
+			<param index="9" name="pre_momentum_fp" type="int" default="0" />
+			<param index="10" name="pre_controller_fp" type="int" default="0" />
+			<param index="11" name="raw_fp" type="int" default="0" />
+			<param index="12" name="evidence_mask" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="open_recovery_window">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="label" type="int" />
+			<param index="2" name="cooldown" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="owner_bound" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Whether [param slot] currently holds a live owner.
+			</description>
+		</method>
+		<method name="plan_consume_input" qualifiers="const">
+			<return type="NetwPredictConsumePlan" />
+			<param index="0" name="schedule" type="int" />
+			<param index="1" name="has_input" type="bool" />
+			<param index="2" name="has_later_input" type="bool" />
+			<param index="3" name="has_last_input" type="bool" />
+			<param index="4" name="missing_policy" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="probation_pending" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="projection_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="quarantine_clean_run" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="quarantine_latched" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="quarantine_state">
+			<return type="NetwPredictWritePlan" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="basis" type="int" />
+			<param index="3" name="payload" type="Array" />
+			<param index="4" name="whole" type="bool" default="true" />
+			<description>
+			</description>
+		</method>
+		<method name="quarantine_target" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="quarantine_witness">
+			<return type="NetwPredictWritePlan" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="basis" type="int" />
+			<param index="2" name="bits" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="record_evidence">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="environment_epoch" type="int" />
+			<param index="3" name="environment" type="Dictionary" />
+			<param index="4" name="topology" type="Dictionary" />
+			<param index="5" name="contact_ids" type="PackedStringArray" />
+			<param index="6" name="witness_classes" type="PackedInt32Array" />
+			<param index="7" name="realizations" type="PackedInt32Array" />
+			<param index="8" name="outside_boundary" type="PackedByteArray" />
+			<param index="9" name="sleeping" type="bool" default="false" />
+			<description>
+			</description>
+		</method>
+		<method name="record_input">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="c_hash" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="recover">
+			<return type="NetwPredictWritePlan" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="request" type="NetwPredictRecoveryRequest" />
+			<description>
+			</description>
+		</method>
+		<method name="recovery_cooldown_until" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="recovery_window_until" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="replay_drive">
+			<return type="NetwPredictDrive" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="topology" type="Dictionary" />
+			<param index="2" name="transition" type="int" />
+			<param index="3" name="label" type="int" />
+			<param index="4" name="kind" type="int" />
+			<param index="5" name="tick" type="int" />
+			<param index="6" name="frame" type="int" />
+			<param index="7" name="ticktime" type="float" />
+			<param index="8" name="quantum" type="int" default="1" />
+			<param index="9" name="pre_fp" type="int" default="0" />
+			<param index="10" name="pre_pose_fp" type="int" default="0" />
+			<param index="11" name="pre_momentum_fp" type="int" default="0" />
+			<param index="12" name="pre_controller_fp" type="int" default="0" />
+			<param index="13" name="raw_fp" type="int" default="0" />
+			<param index="14" name="evidence_mask" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="reseed_align_pending" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="reseed_epoch_confirmed" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="reseed_ignore_through" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="rewire">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="declaration" type="NetwPredictDeclaration" />
+			<param index="2" name="input" type="NetwPredictDeclaration" default="null" />
+			<description>
+				Recompiles [param slot]'s field tables from [param declaration] and its input codec from [param input]. Both declarations are read here and never retained, so a caller may reuse and refill one.
+				[param input] compiles to a codec and nothing else, because an input row is canonicalized and shipped and never recovered, so it earns no recovery tables. Rewiring without one forgets the previous input codec.
+			</description>
+		</method>
+		<method name="role_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The role [param slot] was configured with.
+			</description>
+		</method>
+		<method name="schedule_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The schedule [param slot] was configured with.
+			</description>
+		</method>
+		<method name="set_state">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="state" type="Array" />
+			<description>
+			</description>
+		</method>
+		<method name="state_at" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="state_family_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="state_has" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="supports" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="schedule" type="int" />
+			<param index="1" name="role" type="int" />
+			<param index="2" name="correction" type="int" />
+			<param index="3" name="restore" type="int" />
+			<param index="4" name="island" type="int" default="0" />
+			<param index="5" name="carry" type="bool" default="false" />
+			<param index="6" name="witness" type="bool" default="false" />
+			<description>
+				Whether the pool can drive this CONFIGURATION. Ask before handing a slot a tick: [method configure] refuses what this declines, so a caller that skips the question fails silently per entity rather than loudly.
+				Two configurations are refused for naming something no path performs. AUTO is a body-type guess and the body is what a slot cannot see. EXTRAPOLATED under REPLAY promises a projection, where REPLAY reaches the present by re-running commands over an exact restore.
+			</description>
+		</method>
+		<method name="suppress_recovery_until">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="label" type="int" />
+			<param index="2" name="cooldown" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="tape_is_fresh" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="tape_label_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="tape_reset">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="tape_size" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="teleport_of" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="tenure_begin" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="tenure_end" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="unbind_owner">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Releases [param slot]'s owner. The slot keeps deciding, it stops touching properties.
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="episode_closed">
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="report" type="NetwPredictEpisodeReport" />
+			<description>
+			</description>
+		</signal>
+		<signal name="episode_fallback">
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="report" type="NetwPredictEpisodeReport" />
+			<description>
+			</description>
+		</signal>
+		<signal name="episode_opened">
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="report" type="NetwPredictEpisodeReport" />
+			<description>
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="STAT_DRIVE_SEQ" value="0" enum="DriveStat">
+		</constant>
+		<constant name="STAT_LAST_DRIVE_LABEL" value="1" enum="DriveStat">
+		</constant>
+		<constant name="STAT_LAST_DRIVE_KIND" value="2" enum="DriveStat">
+		</constant>
+		<constant name="STAT_TAPE_EPOCH" value="3" enum="DriveStat">
+		</constant>
+		<constant name="STAT_TAPE_INDEX" value="4" enum="DriveStat">
+		</constant>
+		<constant name="STAT_ACK_AGE_TICKS" value="5" enum="DriveStat">
+		</constant>
+		<constant name="STAT_AUTHORING_CLAMPED" value="6" enum="DriveStat">
+		</constant>
+		<constant name="STAT_SPECULATION_HELD" value="7" enum="DriveStat">
+		</constant>
+		<constant name="STAT_CHAIN_BREAKS" value="8" enum="DriveStat">
+		</constant>
+		<constant name="STAT_QUANTUM_STEPS" value="9" enum="DriveStat">
+		</constant>
+		<constant name="STAT_QUANTUM_DECLARED" value="10" enum="DriveStat">
+		</constant>
+		<constant name="STAT_QUANTUM_FAULTS" value="11" enum="DriveStat">
+		</constant>
+		<constant name="STAT_COUNT" value="12" enum="DriveStat">
+		</constant>
+		<constant name="STAT_COMPARISONS_RAN" value="0" enum="CompareStat">
+		</constant>
+		<constant name="STAT_COMPARISONS_SKIPPED" value="1" enum="CompareStat">
+		</constant>
+		<constant name="STAT_FP_VERIFIED" value="2" enum="CompareStat">
+		</constant>
+		<constant name="STAT_FP_MISMATCHES" value="3" enum="CompareStat">
+		</constant>
+		<constant name="STAT_FIRST_DIVERGENT_TRANSITION" value="4" enum="CompareStat">
+		</constant>
+		<constant name="STAT_COMPARE_COUNT" value="5" enum="CompareStat">
+		</constant>
+		<constant name="ISLAND_NONE" value="0" enum="IslandMode">
+		</constant>
+		<constant name="ISLAND_DECLARED" value="1" enum="IslandMode">
+		</constant>
+		<constant name="ISLAND_JOINT" value="2" enum="IslandMode">
+		</constant>
+		<constant name="JOINT_FLOOR_ACK" value="0" enum="JointFloorSource">
+		</constant>
+		<constant name="JOINT_FLOOR_STATE" value="1" enum="JointFloorSource">
+		</constant>
+		<constant name="JOINT_FLOOR_RELAY" value="2" enum="JointFloorSource">
+		</constant>
+		<constant name="JOINT_FLOOR_EPOCH" value="3" enum="JointFloorSource">
+		</constant>
+		<constant name="STAT_JOINT_PASSES" value="0" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_MEMBERS" value="1" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_CELLS_RELAYED" value="2" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_CELLS_SUBSTITUTED" value="3" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_HEAL_SNAPS" value="4" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_LINGER_HELD" value="5" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_FLOOR" value="6" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_PRESENT" value="7" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_MAX_DEPTH" value="8" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_FLOOR_ACK_MOVES" value="9" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_FLOOR_STATE_MOVES" value="10" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_FLOOR_RELAY_MOVES" value="11" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_FLOOR_EPOCH_MOVES" value="12" enum="JointStat">
+		</constant>
+		<constant name="STAT_JOINT_COUNT" value="13" enum="JointStat">
+		</constant>
+	</constants>
+</class>

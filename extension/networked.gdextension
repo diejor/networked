@@ -1,0 +1,87 @@
+[configuration]
+
+entry_symbol = "networked_library_init"
+compatibility_minimum = "4.7"
+reloadable = true
+
+[libraries]
+
+macos.debug = "res://addons/networked/bin/libnetworked.macos.template_debug.framework"
+macos.release = "res://addons/networked/bin/libnetworked.macos.template_release.framework"
+macos.debug.double = "res://addons/networked/bin/libnetworked.macos.template_debug.double.framework"
+macos.release.double = "res://addons/networked/bin/libnetworked.macos.template_release.double.framework"
+windows.debug.x86_32 = "res://addons/networked/bin/libnetworked.windows.template_debug.x86_32.dll"
+windows.release.x86_32 = "res://addons/networked/bin/libnetworked.windows.template_release.x86_32.dll"
+windows.debug.double.x86_32 = "res://addons/networked/bin/libnetworked.windows.template_debug.double.x86_32.dll"
+windows.release.double.x86_32 = "res://addons/networked/bin/libnetworked.windows.template_release.double.x86_32.dll"
+windows.debug.x86_64 = "res://addons/networked/bin/libnetworked.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://addons/networked/bin/libnetworked.windows.template_release.x86_64.dll"
+windows.debug.double.x86_64 = "res://addons/networked/bin/libnetworked.windows.template_debug.double.x86_64.dll"
+windows.release.double.x86_64 = "res://addons/networked/bin/libnetworked.windows.template_release.double.x86_64.dll"
+windows.debug.arm64 = "res://addons/networked/bin/libnetworked.windows.template_debug.arm64.dll"
+windows.release.arm64 = "res://addons/networked/bin/libnetworked.windows.template_release.arm64.dll"
+windows.debug.double.arm64 = "res://addons/networked/bin/libnetworked.windows.template_debug.double.arm64.dll"
+windows.release.double.arm64 = "res://addons/networked/bin/libnetworked.windows.template_release.double.arm64.dll"
+linux.debug.x86_32 = "res://addons/networked/bin/libnetworked.linux.template_debug.x86_32.so"
+linux.release.x86_32 = "res://addons/networked/bin/libnetworked.linux.template_release.x86_32.so"
+linux.debug.double.x86_32 = "res://addons/networked/bin/libnetworked.linux.template_debug.double.x86_32.so"
+linux.release.double.x86_32 = "res://addons/networked/bin/libnetworked.linux.template_release.double.x86_32.so"
+linux.debug.x86_64 = "res://addons/networked/bin/libnetworked.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://addons/networked/bin/libnetworked.linux.template_release.x86_64.so"
+linux.debug.double.x86_64 = "res://addons/networked/bin/libnetworked.linux.template_debug.double.x86_64.so"
+linux.release.double.x86_64 = "res://addons/networked/bin/libnetworked.linux.template_release.double.x86_64.so"
+linux.debug.arm32 = "res://addons/networked/bin/libnetworked.linux.template_debug.arm32.so"
+linux.release.arm32 = "res://addons/networked/bin/libnetworked.linux.template_release.arm32.so"
+linux.debug.double.arm32 = "res://addons/networked/bin/libnetworked.linux.template_debug.double.arm32.so"
+linux.release.double.arm32 = "res://addons/networked/bin/libnetworked.linux.template_release.double.arm32.so"
+linux.debug.arm64 = "res://addons/networked/bin/libnetworked.linux.template_debug.arm64.so"
+linux.release.arm64 = "res://addons/networked/bin/libnetworked.linux.template_release.arm64.so"
+linux.debug.double.arm64 = "res://addons/networked/bin/libnetworked.linux.template_debug.double.arm64.so"
+linux.release.double.arm64 = "res://addons/networked/bin/libnetworked.linux.template_release.double.arm64.so"
+linux.debug.rv64 = "res://addons/networked/bin/libnetworked.linux.template_debug.rv64.so"
+linux.release.rv64 = "res://addons/networked/bin/libnetworked.linux.template_release.rv64.so"
+linux.debug.double.rv64 = "res://addons/networked/bin/libnetworked.linux.template_debug.double.rv64.so"
+linux.release.double.rv64 = "res://addons/networked/bin/libnetworked.linux.template_release.double.rv64.so"
+android.debug.x86_32 = "res://addons/networked/bin/libnetworked.android.template_debug.x86_32.so"
+android.release.x86_32 = "res://addons/networked/bin/libnetworked.android.template_release.x86_32.so"
+android.debug.double.x86_32 = "res://addons/networked/bin/libnetworked.android.template_debug.double.x86_32.so"
+android.release.double.x86_32 = "res://addons/networked/bin/libnetworked.android.template_release.double.x86_32.so"
+android.debug.x86_64 = "res://addons/networked/bin/libnetworked.android.template_debug.x86_64.so"
+android.release.x86_64 = "res://addons/networked/bin/libnetworked.android.template_release.x86_64.so"
+android.debug.double.x86_64 = "res://addons/networked/bin/libnetworked.android.template_debug.double.x86_64.so"
+android.release.double.x86_64 = "res://addons/networked/bin/libnetworked.android.template_release.double.x86_64.so"
+android.debug.arm32 = "res://addons/networked/bin/libnetworked.android.template_debug.arm32.so"
+android.release.arm32 = "res://addons/networked/bin/libnetworked.android.template_release.arm32.so"
+android.debug.double.arm32 = "res://addons/networked/bin/libnetworked.android.template_debug.double.arm32.so"
+android.release.double.arm32 = "res://addons/networked/bin/libnetworked.android.template_release.double.arm32.so"
+android.debug.arm64 = "res://addons/networked/bin/libnetworked.android.template_debug.arm64.so"
+android.release.arm64 = "res://addons/networked/bin/libnetworked.android.template_release.arm64.so"
+android.debug.double.arm64 = "res://addons/networked/bin/libnetworked.android.template_debug.double.arm64.so"
+android.release.double.arm64 = "res://addons/networked/bin/libnetworked.android.template_release.double.arm64.so"
+ios.debug = "res://addons/networked/bin/libnetworked.ios.template_debug.xcframework"
+ios.release = "res://addons/networked/bin/libnetworked.ios.template_release.xcframework"
+ios.debug.double = "res://addons/networked/bin/libnetworked.ios.template_debug.double.xcframework"
+ios.release.double = "res://addons/networked/bin/libnetworked.ios.template_release.double.xcframework"
+web.debug.threads.wasm32 = "res://addons/networked/bin/libnetworked.web.template_debug.wasm32.wasm"
+web.release.threads.wasm32 = "res://addons/networked/bin/libnetworked.web.template_release.wasm32.wasm"
+web.debug.double.threads.wasm32 = "res://addons/networked/bin/libnetworked.web.template_debug.double.wasm32.wasm"
+web.release.double.threads.wasm32 = "res://addons/networked/bin/libnetworked.web.template_release.double.wasm32.wasm"
+web.debug.wasm32 = "res://addons/networked/bin/libnetworked.web.template_debug.wasm32.nothreads.wasm"
+web.release.wasm32 = "res://addons/networked/bin/libnetworked.web.template_release.wasm32.nothreads.wasm"
+web.debug.double.wasm32 = "res://addons/networked/bin/libnetworked.web.template_debug.double.wasm32.nothreads.wasm"
+web.release.double.wasm32 = "res://addons/networked/bin/libnetworked.web.template_release.double.wasm32.nothreads.wasm"
+
+[dependencies]
+
+ios.debug = {
+    "res://addons/networked/bin/libgodot-cpp.ios.template_debug.xcframework": ""
+}
+ios.release = {
+    "res://addons/networked/bin/libgodot-cpp.ios.template_release.xcframework": ""
+}
+ios.debug.double = {
+    "res://addons/networked/bin/libgodot-cpp.ios.template_debug.double.xcframework": ""
+}
+ios.release.double = {
+    "res://addons/networked/bin/libgodot-cpp.ios.template_release.double.xcframework": ""
+}

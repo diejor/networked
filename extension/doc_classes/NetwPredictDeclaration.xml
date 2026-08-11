@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictDeclaration" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="append_field">
+			<return type="void" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="property_class" type="int" />
+			<param index="2" name="carry_channel" type="StringName" default="&amp;&quot;&quot;" />
+			<param index="3" name="converge_stiffness" type="float" default="0.0" />
+			<param index="4" name="teleport_only" type="bool" default="false" />
+			<param index="5" name="reconcile_only" type="bool" default="false" />
+			<param index="6" name="epsilon_override" type="float" default="-1.0" />
+			<param index="7" name="teleport_at" type="float" default="-1.0" />
+			<param index="8" name="angle" type="bool" default="false" />
+			<description>
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="field_at" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="field_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

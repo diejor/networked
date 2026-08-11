@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictEvidence" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="fill">
+			<return type="void" />
+			<param index="0" name="pre_fp" type="int" />
+			<param index="1" name="c_hash" type="int" />
+			<param index="2" name="e_digest" type="int" />
+			<param index="3" name="post_fp" type="int" />
+			<param index="4" name="pre_pose_fp" type="int" />
+			<param index="5" name="pre_momentum_fp" type="int" />
+			<param index="6" name="pre_controller_fp" type="int" />
+			<param index="7" name="post_pose_fp" type="int" />
+			<param index="8" name="post_momentum_fp" type="int" />
+			<param index="9" name="post_controller_fp" type="int" />
+			<param index="10" name="topo_fp" type="int" />
+			<param index="11" name="witness_fp" type="int" />
+			<param index="12" name="raw_fp" type="int" />
+			<param index="13" name="evidence_mask" type="int" />
+			<param index="14" name="complete" type="bool" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

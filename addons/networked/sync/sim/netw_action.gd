@@ -7,8 +7,8 @@
 ## it with [method NetwAction.Context.deny].
 ##
 ## [codeblock]
-## @onready var lag := Netw.of(self).lag_compensation
-## @onready var place_bomb := lag.action(_place_bomb)
+## @onready var api := Netw.of(self)
+## @onready var place_bomb := api.lagcomp_action(_place_bomb)
 ##
 ## func _ready() -> void:
 ##     place_bomb.predict = _predict_bomb
@@ -37,8 +37,8 @@ enum TimingMode {
 	##
 	## This mode is owner-anchored. It guarantees only that the action owner's
 	## recorded state is ready at the view tick. It does not gate other entities.
-	## Cross-entity validation must use [method NetwLagCompensationInterface.sample] or
-	## [method NetwLagCompensationInterface.rewind] for those targets.
+	## Cross-entity validation must use [method LagCompCore.sample] or
+	## [method LagCompCore.rewind] for those targets.
 	##
 	## Determinism is a precondition, not a toggle. The placement agrees with the
 	## client only when consuming the same input yields the same state. Resolution
@@ -78,7 +78,7 @@ var timeout_ticks: int = 0
 ## assumptions. Opt into stricter modes per action.
 var timing_mode := TimingMode.IMMEDIATE
 
-var _lag: NetwLagCompensationInterface
+var _lag: LagCompCore
 var _authority: Callable
 var _entity: NetwEntity
 var _target_path := NodePath("")
@@ -87,7 +87,7 @@ var _slot := 0
 
 
 func _init(
-		lag: NetwLagCompensationInterface,
+		lag: LagCompCore,
 		authority: Callable,
 		slot: int,
 ) -> void:
@@ -121,15 +121,18 @@ func request(view_tick: int, data: Variant = null) -> void:
 	if _target_path.is_empty():
 		return
 
-	var key := _lag.effects.key_for(_entity, view_tick, _slot)
+	var api := _lag._api()
+	if not api:
+		return
+
+	var key := api.effect_key(_entity.rid, view_tick, _slot)
 	var ghost: Node = null
 	if predict.is_valid():
 		ghost = predict.call() as Node
-	var ghost_ref := weakref(ghost) if ghost else null
 	var revert_callable := _revert_callable(ghost)
 	var confirm_callable := _confirm_callable(ghost)
-	_lag.effects.arm(key, revert_callable, timeout_ticks)
-	_lag._watch_action(
+	api.effect_arm(key, revert_callable, timeout_ticks)
+	api.effect_watch(
 		key,
 		func() -> void:
 			confirm_callable.call()
@@ -223,7 +226,7 @@ class Context extends RefCounted:
 
 
 	func _init(
-			service: NetwLagCompensationInterface,
+			service: LagCompCore,
 			p_requester: int,
 			p_view_tick: int,
 			p_requested_tick: int,
@@ -259,8 +262,8 @@ class Context extends RefCounted:
 			service._deny_action_to(requester, _key)
 
 
-	func _service() -> NetwLagCompensationInterface:
+	func _service() -> LagCompCore:
 		return (
-				_service_ref.get_ref() as NetwLagCompensationInterface
+				_service_ref.get_ref() as LagCompCore
 				if _service_ref else null
 		)

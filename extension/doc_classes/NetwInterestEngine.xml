@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterestEngine" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The interest verdict core: mask algebra from plain state to a matrix saying which peers may see which entities.
+	</brief_description>
+	<description>
+		A verdict is a function of state and of nothing else. This class reaches no [Object], reads no clock and emits no signal, so the same state always answers the same rows.
+		Entity keys are opaque positive integers minted above this class and never dereferenced by it, which is what lets one entity outlive whichever handle, route or node is standing in for it. Peer bits are likewise assigned outside and stay stable for a session.
+		[codeblock]
+		set_layer / set_membership / set_parent ...   mutations change intake state
+		recompute()  -> NetwInterestDelta             computes, changes nothing
+		commit(delta)                                 advances the read matrix
+		row_of / test / rows / explain                read the committed matrix
+		[/codeblock]
+		One entity's row is granted by the union of its layers, or by every live peer when it belongs to none, then intersected with its synchronizer intent, then with its parent's row, then with the live peers. That parent clamp is the uniform-visibility invariant: a peer never holds a child whose parent it cannot see.
+		Computing and committing are separate acts, so a caller can inspect a verdict before acting on it. A delta remembers the state it was computed against, and committing one that a later mutation has overtaken still applies, but leaves the mutation it did not see owed a further pass.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every layer, entity, committed row and counter. Session teardown.
+			</description>
+		</method>
+		<method name="commit">
+			<return type="void" />
+			<param index="0" name="delta" type="NetwInterestDelta" />
+			<description>
+				Advances the matrix that [method row_of], [method test] and [method rows] answer from, to what [param delta] computed.
+			</description>
+		</method>
+		<method name="explain" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="bit" type="int" />
+			<description>
+				Names the first term that denies [param bit] to [param key], walking that entity's own intent and layers before climbing to its parent. Derived from the state the verdict used, so it cannot disagree with the row.
+			</description>
+		</method>
+		<method name="has_entity" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="key" type="int" />
+			<description>
+				Whether intake currently holds [param key].
+			</description>
+		</method>
+		<method name="is_key" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="key" type="int" />
+			<description>
+				Whether [param key] may name an entity. Zero is what [method set_parent] spells "no parent" with, so an entity stored there could neither clamp nor be clamped, and every mutation refuses it.
+			</description>
+		</method>
+		<method name="layer_edge_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="layer_id" type="StringName" />
+			<description>
+				Committed admitted pairs attributed to [param layer_id]. Counted from the committed memberships rather than from live intake, so the tally moves when a pass commits and not when a caller happens to mutate.
+			</description>
+		</method>
+		<method name="recompute">
+			<return type="NetwInterestDelta" />
+			<description>
+				Computes the rows that would change, without touching the matrix readers see.
+			</description>
+		</method>
+		<method name="remove_entity">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<description>
+				Removes [param key]. Its last act is a hide to every peer that held it, reported by the next [method recompute]. Its children are orphaned rather than left pointing at a record that is gone.
+			</description>
+		</method>
+		<method name="remove_layer">
+			<return type="void" />
+			<param index="0" name="id" type="StringName" />
+			<description>
+				Removes [param id]. A membership naming a layer that is gone contributes nothing to the union, which is not the same as that layer admitting everyone.
+			</description>
+		</method>
+		<method name="row_after" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="delta" type="NetwInterestDelta" />
+			<description>
+				The row [param key] will hold once [param delta] commits, answered while the old matrix still answers every other question.
+			</description>
+		</method>
+		<method name="row_of" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="key" type="int" />
+			<description>
+				The committed row for [param key], as packed peer-bit words. See [NetwInterestBitSet] for the packing.
+			</description>
+		</method>
+		<method name="rows" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Every committed row, keyed by entity key.
+			</description>
+		</method>
+		<method name="set_intent">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="mask" type="PackedInt64Array" />
+			<description>
+				Replaces the synchronizer intent row for [param key], which intersects whatever its layers granted.
+			</description>
+		</method>
+		<method name="set_intent_all">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<description>
+				Makes intent admit every live peer. Not the same as an intent row that happens to hold every live bit: this one survives a peer joining.
+			</description>
+		</method>
+		<method name="set_layer">
+			<return type="void" />
+			<param index="0" name="id" type="StringName" />
+			<param index="1" name="viewers" type="PackedInt64Array" />
+			<param index="2" name="policy" type="int" enum="NetwInterestEngine.Policy" />
+			<description>
+				Replaces one layer's viewer row and its [enum Policy]. Re-writing a layer with the values it already holds is inert, so an idempotent caller costs nothing.
+			</description>
+		</method>
+		<method name="set_live_peers">
+			<return type="void" />
+			<param index="0" name="bits" type="PackedInt64Array" />
+			<description>
+				Replaces the row of currently live peer bits. Every row is intersected with it last, so a viewer bit for a peer that never joined cannot reach a committed row through any layer or intent.
+			</description>
+		</method>
+		<method name="set_membership">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="layer_ids" type="Array" />
+			<description>
+				Replaces the layer memberships for [param key]. Naming a layer nobody has configured creates it admitting nobody, so an unconfigured layer is safe rather than transparent.
+			</description>
+		</method>
+		<method name="set_order_key">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="depth" type="int" />
+			<param index="2" name="route" type="int" />
+			<description>
+				Replaces the [code](depth, route)[/code] pair transitions are ordered by. Two entities sharing one still order deterministically, broken by their keys.
+			</description>
+		</method>
+		<method name="set_parent">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="parent_key" type="int" />
+			<description>
+				Replaces the parent of [param key]. A [param parent_key] of zero means no parent, and a link that would close a cycle is refused.
+			</description>
+		</method>
+		<method name="stats" qualifiers="const">
+			<return type="NetwInterestStats" />
+			<description>
+				The counters from the last committed pass.
+			</description>
+		</method>
+		<method name="test" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="bit" type="int" />
+			<description>
+				Whether the committed row for [param key] admits [param bit].
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="HIDE_FROM_OUTSIDERS" value="0" enum="Policy">
+			The layer admits the viewers it names, and nobody else.
+		</constant>
+		<constant name="HIDE_FROM_INSIDERS" value="1" enum="Policy">
+			The layer admits every live peer it does not name. Naming nobody admits everybody.
+		</constant>
+	</constants>
+</class>

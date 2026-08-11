@@ -49,12 +49,12 @@ func test_context_erased_on_peer_disconnect() -> void:
 	var server := harness.server()
 	var client_peer_id := client0.multiplayer_peer.get_unique_id()
 
-	server.get_peer_context(client_peer_id)
-	assert_that(server.has_peer_context(client_peer_id)).is_true()
+	server.api.peer_get_context(client_peer_id)
+	assert_that(server.api.peer_has_context(client_peer_id)).is_true()
 
 	client0.multiplayer_peer.close()
 	@warning_ignore("redundant_await")
-	await assert_func(server, "has_peer_context", [client_peer_id]) \
+	await assert_func(server.api, "peer_has_context", [client_peer_id]) \
 			.wait_until(1000) \
 			.is_false()
 
@@ -67,7 +67,8 @@ func _spawn_save_player() -> void:
 	)
 
 	player.set_meta(
-		NetwPersistenceInterface.PersistenceEngine.META_DATABASE, db,
+		NetwPersistenceEngine.META_DATABASE,
+		db,
 	)
 
 	await harness.wait_for_player(client0, level_builder.scene_name)
@@ -80,11 +81,11 @@ func test_server_context_does_not_contain_client_peer_id() -> void:
 	var client_peer_id := client0.multiplayer_peer.get_unique_id()
 
 	# The server should have no context keyed by the client's peer_id.
-	assert_that(server.has_peer_context(client_peer_id)).is_false()
+	assert_that(server.api.peer_has_context(client_peer_id)).is_false()
 
 
 func test_client_context_does_not_contain_server_peer_id() -> void:
 	await _spawn_save_player()
 
 	# The client should have no context keyed by the server's peer_id (1).
-	assert_that(client0.has_peer_context(1)).is_false()
+	assert_that(client0.api.peer_has_context(1)).is_false()

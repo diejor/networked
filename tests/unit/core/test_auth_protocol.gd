@@ -2,6 +2,9 @@
 class_name TestAuthProtocol
 extends NetwTestSuite
 
+const AuthProtocol := preload("res://addons/networked/session/auth/auth_protocol.gd")
+
+
 func test_classify_packets() -> void:
 	var rows := [
 		[

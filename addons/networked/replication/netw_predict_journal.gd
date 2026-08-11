@@ -1,11 +1,9 @@
-## Packed-column ring recording every transition a prediction engine drove, the
-## instrument a deterministic kernel proves itself against.
+## Packed-column snapshot of the transitions a prediction engine drove.
 ##
-## A row opens when a transition is authored and closes when its post-solve
-## state is captured, so a closed row names one drive completely. Its evidence
-## is immutable after close while verdict flags, attribution, and domain may
-## settle later. That makes the fingerprint the acceptance test rather than a
-## tolerance.
+## Production ownership stays in the native engine.
+## [method NetwPredictionHandle.journal] materializes this tooling-cadence view
+## without changing retained native rows. A closed row names one drive
+## completely.
 ## Two peers that ran the same transition closure agree on [method post_fps] at
 ## every acked transition, and the first transition where they disagree is the
 ## one that broke, not the one where the error grew visible.
@@ -104,6 +102,8 @@ enum Operator {
 	DEMOTE,
 	## A clean momentum-only divergence was left to contract without a write.
 	DISSIPATE,
+	## A joint pass restored the whole replay group to its shared floor.
+	JOINT_REBASE,
 }
 
 ## State family that first differed inside a pre-state or closure boundary.
@@ -211,223 +211,6 @@ static func fnv1a(bytes: PackedByteArray) -> int:
 	for b in bytes:
 		h = ((h ^ b) * _FNV_PRIME) & _U32
 	return h - _U32_SPAN if h >= _I32_SIGN else h
-
-
-## Opens the row for [param transition], recording the command that is about to
-## drive it.
-##
-## [param label] is the clock label the drive carries, used only for display and
-## for flooring the input window. [param kind] is a
-## [enum NetwLagCompensationInterface.PredictionHandle.DriveKind] value naming
-## how the command was selected. [param c_hash] fingerprints the canonical
-## command bytes. [param pre_fp] fingerprints the declared state consumed by the
-## drive. [param pre_families] carries pose, momentum, then controller and latch
-## fingerprints. [param provenance] names an operator write since the preceding
-## row. The row stays open until [method close] records the produced state. A
-## retained row with the same transition is left unchanged.
-func open(
-		transition: int,
-		label: int,
-		kind: int,
-		c_hash: int,
-		pre_fp: int = 0,
-		pre_families: PackedInt32Array = PackedInt32Array(),
-		provenance: Dictionary = { },
-		topo_fp: int = 0,
-		raw_fp: int = 0,
-		evidence_mask: int = 0,
-) -> void:
-	if _slot_of(transition) >= 0:
-		return
-	var slot := _next_slot()
-	_transitions[slot] = transition
-	_labels[slot] = label
-	_c_hashes[slot] = c_hash
-	_e_digests[slot] = 0
-	_pre_fps[slot] = pre_fp
-	_topo_fps[slot] = topo_fp
-	_raw_fps[slot] = raw_fp
-	_witness_fps[slot] = 0
-	_witness_class_bits[slot] = 0
-	_aligned_errors[slot] = 0.0
-	_post_fps[slot] = 0
-	_pre_pose_fps[slot] = _family_at(pre_families, 0)
-	_pre_momentum_fps[slot] = _family_at(pre_families, 1)
-	_pre_controller_fps[slot] = _family_at(pre_families, 2)
-	_post_pose_fps[slot] = 0
-	_post_momentum_fps[slot] = 0
-	_post_controller_fps[slot] = 0
-	_episode_ids[slot] = int(provenance.get(&"episode", 0))
-	_write_ids[slot] = int(provenance.get(&"write_id", 0))
-	_operators[slot] = int(provenance.get(&"operator", Operator.NONE))
-	_bases[slot] = int(provenance.get(&"basis", -1))
-	_differing_families[slot] = StateFamily.NONE
-	_evidence_masks[slot] = evidence_mask
-	_kinds[slot] = kind
-	_domains[slot] = Domain.IN_DOMAIN
-	_attributions[slot] = Attribution.UNKNOWN
-	_flags[slot] = 0
-
-
-## Seals the execution topology and realized witness for [param transition]
-## before [method close]. [param evidence_mask] declares which optional columns
-## are present. [param detail] is debug-only witness narration retained with the
-## row and never used for equality. [param witness_class_bits] is the compact,
-## peer-invariant authority summary carried by acknowledgement records.
-func mark_solve(
-		transition: int,
-		topo_fp: int,
-		witness_fp: int,
-		evidence_mask: int,
-		detail: Dictionary = { },
-		witness_class_bits: int = 0,
-) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0 or _flags[slot] & ROW_CLOSED:
-		return
-	_topo_fps[slot] = topo_fp
-	_witness_fps[slot] = witness_fp
-	_witness_class_bits[slot] = witness_class_bits
-	_evidence_masks[slot] = evidence_mask
-	if not detail.is_empty():
-		_witness_details[transition] = detail.duplicate(true)
-
-
-## Closes the row for [param transition] with [param post_fp], the fingerprint
-## of the canonical state the drive produced. [param post_families] carries its
-## pose, momentum, then controller and latch fingerprints. Ignored when the row
-## has already closed or fallen out of the ring.
-func close(
-		transition: int,
-		post_fp: int,
-		post_families: PackedInt32Array = PackedInt32Array(),
-) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0 or _flags[slot] & ROW_CLOSED:
-		return
-	_post_fps[slot] = post_fp
-	_post_pose_fps[slot] = _family_at(post_families, 0)
-	_post_momentum_fps[slot] = _family_at(post_families, 1)
-	_post_controller_fps[slot] = _family_at(post_families, 2)
-	_flags[slot] |= ROW_CLOSED
-
-
-## Marks [param transition] as a state-chain break with no operator provenance.
-## Ignored when the row has already fallen out of the ring.
-func mark_chain_broken(transition: int) -> void:
-	var slot := _slot_of(transition)
-	if slot >= 0:
-		_flags[slot] |= ROW_CHAIN_BROKEN
-
-
-## Records authority's verdict for [param transition]: [constant ROW_ACKED]
-## always, then [constant ROW_MATCHED] or [constant ROW_DIVERGENT] from
-## [param matched]. Ignored when the row has already fallen out of the ring.
-func mark_ack(transition: int, matched: bool) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0:
-		return
-	var flags := _flags[slot] | ROW_ACKED
-	flags &= ~(ROW_MATCHED | ROW_DIVERGENT)
-	_flags[slot] = flags | (ROW_MATCHED if matched else ROW_DIVERGENT)
-
-
-## Records whether both peers supplied equal realized-transition witnesses.
-## Ignored when the row has already fallen out of the ring.
-func mark_witness_match(transition: int, matched: bool) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0:
-		return
-	_flags[slot] &= ~ROW_WITNESS_MATCHED
-	if matched:
-		_flags[slot] |= ROW_WITNESS_MATCHED
-
-
-## Marks [param transition] as one authority ran with a command the owner never
-## authored. Ignored when the row has already fallen out of the ring.
-##
-## Substitution is recorded rather than inferred, because an owner that has to
-## guess whether its command ran cannot tell a substituted transition from a
-## simulation that diverged on its own.
-func mark_substituted(transition: int) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0:
-		return
-	_flags[slot] |= ROW_SUBSTITUTED | ROW_CLOSED
-	# A transition authority ran with a command its owner never authored has an
-	# unequal antecedent by definition, so it is never entitled to exactness.
-	_domains[slot] = Domain.OUT_OF_DOMAIN
-
-
-## Marks a retained [param transition] as superseded by a later substitution.
-## Its sealed evidence remains unchanged while the verdict overlay records
-## [constant ROW_SUBSTITUTED] and [constant ROW_SUPERSEDED]. Ignored when the
-## row has already fallen out of the ring.
-func mark_superseded(transition: int) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0:
-		return
-	_flags[slot] |= ROW_SUBSTITUTED | ROW_SUPERSEDED
-	_domains[slot] = Domain.OUT_OF_DOMAIN
-
-
-## Labels [param transition] with the [enum Domain] its antecedents earn.
-## Ignored when the row has already fallen out of the ring.
-##
-## A row opens [constant Domain.IN_DOMAIN] because that is the claim whose
-## failure is loud: an in-domain transition that disagrees is a bug with an
-## address, while an out-of-domain one only ever asks for tolerance. Facts that
-## arrive after the drive, a substituted acknowledgement above all, downgrade
-## the row rather than the row having waited for them.
-func mark_domain(transition: int, domain: Domain) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0:
-		return
-	_domains[slot] = domain
-
-
-## Records the environment digest [param e_digest] for [param transition], the
-## fingerprint of the declared world facts the drive ran against. Ignored after
-## the row closes or when it has already fallen out of the ring.
-##
-## It separates [constant Attribution.ENVIRONMENT] from later causal boundaries.
-func mark_e_digest(transition: int, e_digest: int) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0 or _flags[slot] & ROW_CLOSED:
-		return
-	_e_digests[slot] = e_digest
-
-
-## Charges [param transition]'s divergence to [param attribution]. Ignored when
-## the row has already fallen out of the ring.
-##
-## The charge lives on the row rather than only on the newest verdict, so a
-## comparison that answers for an older transition still reads the charge that
-## transition earned instead of whatever the acknowledgement lane judged last.
-func mark_attribution(transition: int, attribution: Attribution) -> void:
-	var slot := _slot_of(transition)
-	if slot < 0:
-		return
-	_attributions[slot] = attribution
-
-
-## Records the aligned state error measured when [param transition] settles.
-## Ignored after ring eviction.
-func mark_aligned_error(transition: int, error: float) -> void:
-	var slot := _slot_of(transition)
-	if slot >= 0:
-		_aligned_errors[slot] = error
-
-
-## Records which state family first differed inside [param transition]'s
-## pre-state or closure boundary. Ignored after ring eviction.
-func mark_differing_family(
-		transition: int,
-		family: StateFamily,
-) -> void:
-	var slot := _slot_of(transition)
-	if slot >= 0:
-		_differing_families[slot] = family
 
 
 ## Returns the [enum Attribution] charged to [param transition], or
@@ -639,7 +422,7 @@ func post_fps() -> PackedInt32Array:
 
 
 ## Returns the retained
-## [enum NetwLagCompensationInterface.PredictionHandle.DriveKind] values,
+## [enum NetwPredict.DriveKind] values,
 ## ordered by [method transitions].
 func kinds() -> PackedByteArray:
 	var out := PackedByteArray()
@@ -733,6 +516,48 @@ func capacity() -> int:
 ## Returns the epoch [method clear] last adopted, or [code]-1[/code] before any.
 func epoch() -> int:
 	return _epoch
+
+
+# Appends one detached native row under the transition address the shell uses.
+func _append_native(
+		transition: int,
+		row: NetwPredictJournalRow,
+		detail: Dictionary,
+) -> void:
+	if not row:
+		return
+	var slot := _next_slot()
+	var pre := row.pre_families()
+	var post := row.post_families()
+	_transitions[slot] = transition
+	_labels[slot] = row.label()
+	_kinds[slot] = row.kind()
+	_c_hashes[slot] = row.c_hash()
+	_e_digests[slot] = row.e_digest()
+	_pre_fps[slot] = row.pre_fp()
+	_topo_fps[slot] = row.topo_fp()
+	_raw_fps[slot] = row.raw_fp()
+	_witness_fps[slot] = row.witness_fp()
+	_witness_class_bits[slot] = row.witness_class_bits()
+	_aligned_errors[slot] = row.aligned_error()
+	_evidence_masks[slot] = row.evidence_mask()
+	_pre_pose_fps[slot] = _family_at(pre, 0)
+	_pre_momentum_fps[slot] = _family_at(pre, 1)
+	_pre_controller_fps[slot] = _family_at(pre, 2)
+	_post_fps[slot] = row.post_fp()
+	_post_pose_fps[slot] = _family_at(post, 0)
+	_post_momentum_fps[slot] = _family_at(post, 1)
+	_post_controller_fps[slot] = _family_at(post, 2)
+	_episode_ids[slot] = row.episode_id()
+	_write_ids[slot] = row.write_id()
+	_operators[slot] = row.op()
+	_bases[slot] = row.basis()
+	_differing_families[slot] = row.differing_family()
+	_domains[slot] = row.domain()
+	_attributions[slot] = row.attribution()
+	_flags[slot] = row.flags()
+	if not detail.is_empty():
+		_witness_details[transition] = detail.duplicate(true)
 
 
 # Claims the next ring slot, evicting the oldest row once the ring is full.

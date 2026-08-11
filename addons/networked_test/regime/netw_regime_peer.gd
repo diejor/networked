@@ -42,6 +42,8 @@
 ## full-length capture of a regime it never entered.
 class_name NetwRegimePeer
 extends Node
+const Async := preload("res://addons/networked/utils/async.gd")
+
 
 const ROLE_HOST := "host"
 const ROLE_CLIENT := "client"
@@ -77,8 +79,8 @@ var await_local_ready: Callable
 var gestures: Dictionary[String, Callable] = { }
 
 ## [code]() -> Dictionary[/code] of display id to prediction handle, the
-## entities whose [method
-## NetwLagCompensationInterface.PredictionHandle.stats] the summary carries.
+## entities whose [member
+## NetwPredictionHandle.stats] the summary carries.
 var summary_handles: Callable
 
 ## Optional [code]() -> Dictionary[/code] merged into the summary's condition
@@ -172,7 +174,7 @@ func run() -> void:
 		gesture,
 		seconds,
 	])
-	if api and api.clock:
+	if api and api.clock.is_configured():
 		_cadence_baseline = api.clock.cadence()
 	_sample_cadence_loop.call_deferred()
 	await gestures[gesture].call(seconds)
@@ -222,8 +224,8 @@ func _finish(code: int, exit_kind: String) -> void:
 		return
 	_completed = true
 	_write_summary(exit_kind)
-	if api and api.lag_compensation:
-		api.lag_compensation.flush_tap()
+	if api and api._lagcomp:
+		api._lagcomp.flush_tap()
 	print("[regime] %s %s" % [role, exit_kind])
 	get_tree().quit(code)
 
@@ -245,7 +247,7 @@ func _arm_watchdog() -> void:
 func _sample_cadence_loop() -> void:
 	while not _completed:
 		await get_tree().create_timer(CADENCE_SAMPLE_SECONDS).timeout
-		if api and api.clock:
+		if api and api.clock.is_configured():
 			_cadence_samples.append(api.clock.cadence())
 		_snapshot_entities()
 
@@ -262,10 +264,31 @@ func _snapshot_entities() -> void:
 		if handle == null:
 			continue
 		_entity_snapshots[String(id)] = {
-			"stats": handle.stats(),
+			"stats": handle.stats.to_dictionary(),
 			"episode": handle.episode_digest(),
 			"last_field_divergence": handle.last_field_divergence,
+			# The divergence row says how far each field is out now; this says
+			# which fields the run's recoveries actually reached. A field that
+			# triggers and is never repaired is answered by writing another one,
+			# and neither the stats block nor a single-tick divergence can show
+			# that.
+			"field_recovery": _field_recovery_report(handle),
 		}
+
+
+func _field_recovery_report(handle: Variant) -> Dictionary:
+	var out: Dictionary = { }
+	for field: StringName in handle.field_recovery:
+		var row: Variant = handle.field_recovery[field]
+		out[String(field)] = {
+			"triggered": row.triggered,
+			"repaired": row.repaired,
+			"contracted": row.contracted,
+			"carried": row.carried,
+			"declined": row.declined,
+			"infidelity": row.infidelity,
+		}
+	return out
 
 
 func _write_summary(exit_kind: String) -> void:
@@ -303,7 +326,8 @@ func _write_summary(exit_kind: String) -> void:
 # reads first. Rates are measured from the gesture-start baseline, because a
 # whole-process mean dilutes the run with boot and asset load.
 func _condition_report() -> Dictionary:
-	var cadence: Dictionary = api.clock.cadence() if api and api.clock else { }
+	var cadence: Dictionary = api.clock.cadence() \
+	if api and api.clock.is_configured() else { }
 	var wall := float(cadence.get(&"wall_seconds", 0.0)) \
 			- float(_cadence_baseline.get(&"wall_seconds", 0.0))
 	var physics_frames := int(cadence.get(&"physics_frames", 0)) \
@@ -327,7 +351,7 @@ func _condition_report() -> Dictionary:
 
 
 func _clock_report() -> Dictionary:
-	if not api or not api.clock:
+	if not api or not api.clock.is_configured():
 		return { }
 	return {
 		"tick": api.clock.tick,
@@ -350,8 +374,8 @@ func _instrument_report() -> Dictionary:
 						FileAccess.READ,
 					).get_length()
 	return {
-		"tap": api.lag_compensation.tap_cost() \
-				if api and api.lag_compensation else { },
+		"tap": api._lagcomp.tap_cost() \
+				if api and api._lagcomp else { },
 		"netlog_bytes": netlog_bytes,
 	}
 

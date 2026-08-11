@@ -277,11 +277,11 @@ func test_player_builder_with_lag_comp() -> void:
 	assert_that(entity).is_not_null()
 
 	var script := live.get_script() as Script
-	var state_set := NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_STATE)
+	var state_set := NetwPropertySet.from_script(script, NetwPropertySet.Record.RECORD_STATE)
 	assert_that(state_set).is_not_null()
 	assert_bool(&"position" in state_set.keys()).is_true()
 
-	var input_set := NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_INPUT)
+	var input_set := NetwPropertySet.from_script(script, NetwPropertySet.Record.RECORD_INPUT)
 	assert_that(input_set).is_not_null()
 	assert_bool(&"motion" in input_set.keys()).is_true()
 	assert_bool(&"bombing" in input_set.keys()).is_true()

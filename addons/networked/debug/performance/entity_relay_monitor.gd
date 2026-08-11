@@ -3,7 +3,7 @@
 ## [MultiplayerTree].
 ##
 ## This is a presentation adapter managed by the [DebugReporter]. It pulls
-## [method NetwMultiplayer.monitor_snapshot] and turns cumulative counters into
+## [method NetwMultiplayer.stats_snapshot] and turns cumulative counters into
 ## live rates, so monitoring overhead stays out of the core simulation loop.
 ## Work runs only while a debugger is attached and is throttled.
 ##
@@ -26,9 +26,9 @@ const _RATE_KEYS: Array[StringName] = [
 ]
 
 var _trees: Array[MultiplayerTree] = []
-var _registered_ids: Dictionary[StringName, bool] = {}
-var _latest_data: Dictionary[String, Dictionary] = {}
-var _prev: Dictionary[String, Dictionary] = {}
+var _registered_ids: Dictionary[StringName, bool] = { }
+var _latest_data: Dictionary[String, Dictionary] = { }
+var _prev: Dictionary[String, Dictionary] = { }
 var _accum: float = 0.0
 
 
@@ -75,7 +75,7 @@ func _sample(elapsed: float) -> void:
 			continue
 		if not mt.api:
 			continue
-		_sample_tree(_category(mt), mt.api.monitor_snapshot(), elapsed)
+		_sample_tree(_category(mt), mt.api.stats_snapshot(), elapsed)
 
 
 func _sample_tree(
@@ -83,8 +83,8 @@ func _sample_tree(
 		metrics: Dictionary,
 		elapsed: float,
 ) -> void:
-	var prev: Dictionary = _prev.get(category, {})
-	var rates: Dictionary = {}
+	var prev: Dictionary = _prev.get(category, { })
+	var rates: Dictionary = { }
 	for key in _RATE_KEYS:
 		var cur := int(metrics.get(key, 0))
 		rates[key] = float(cur - int(prev.get(key, cur))) \
@@ -108,8 +108,10 @@ func _ensure_registered(category: String) -> void:
 		if _registered_ids.has(id):
 			continue
 		var metric_key: StringName = key
-		_reg(id, func() -> Variant:
-			return _latest_data.get(category, {}).get(metric_key, 0)
+		_reg(
+			id,
+			func() -> Variant:
+				return _latest_data.get(category, { }).get(metric_key, 0)
 		)
 
 

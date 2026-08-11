@@ -1,6 +1,14 @@
 @tool
 extends EditorProperty
 
+const DuckTypeHelper := preload("res://addons/networked/addons/scene_node_path/source/duck_type_helper.gd")
+
+const FilterConfig := preload("res://addons/networked/addons/scene_node_path/source/filter_config.gd")
+
+const ScenePathValidator := preload("res://addons/networked/addons/scene_node_path/source/scene_path_validator.gd")
+
+const CacheState := preload("res://addons/networked/addons/scene_node_path/source/cache_state.gd")
+
 const NODE_PICKER_DIALOG := preload("uid://b5gj8b5qtiard")
 const PROPERTY_PICKER_UI := preload("uid://dey3omtjsnn3s")
 

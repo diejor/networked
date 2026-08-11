@@ -45,10 +45,10 @@ var view: NetwPeerView
 ## The [NetwConnectTarget] for a join attempt, or [code]null[/code] for a host.
 var target: NetwConnectTarget
 
-## The session this attempt connects, set by its [NetwConnector].
+## The session this attempt connects, taken at construction.
 ##
 ## A transport reads it during construction to resolve session-scoped services
-## and facts (a lobby directory, the [member NetwSessionInterface.app_id]).
+## and facts (a lobby directory, the [member NetwSessionHandle.app_id]).
 var api: NetwMultiplayer:
 	get:
 		return _api_ref.get_ref() as NetwMultiplayer if _api_ref else null
@@ -61,11 +61,15 @@ var api: NetwMultiplayer:
 ## its view can adopt it, since the transport itself stays stateless.
 var context: Dictionary = { }
 
-# The owning session, assigned by NetwConnector when the attempt begins.
+# The owning session. Weakly held because the api outlives the attempt.
 var _api_ref: WeakRef
 
 # Guards a single terminal resolution across abort and completion races.
 var _finished := false
+
+
+func _init(api: NetwMultiplayer = null) -> void:
+	_api_ref = weakref(api) if api else null
 
 
 ## Returns [code]true[/code] once the attempt has resolved.
@@ -93,11 +97,10 @@ func resolve(outcome: NetwConnectResult) -> void:
 
 ## Aborts the attempt at any stage.
 ##
-## A [constant State.CONNECTING] abort assigns an [OfflineMultiplayerPeer], which
-## is the session machine's cancel edge.
+## The peer a [constant State.CONNECTING] abort leaves behind is unwound by
+## [method NetwConnector.abort], which assigns an [OfflineMultiplayerPeer] as
+## the session machine's cancel edge.
 func abort() -> void:
-	# TODO: assign OfflineMultiplayerPeer when aborting during CONNECTING once the
-	# connector drives peer assignment.
 	_finish(NetwConnectResult.aborted())
 
 

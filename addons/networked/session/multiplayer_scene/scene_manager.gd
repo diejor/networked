@@ -2,20 +2,19 @@
 @tool
 class_name MultiplayerSceneManager
 extends Node
-## Authoring node that declares a session's scenes for [NetwSceneInterface].
+## Authoring node that declares a session's scenes for [SceneCore].
 ##
 ## The manager holds no runtime state. It snapshots its exported rows into a
 ## [NetwSceneConfig] and registers that with the session through
-## [method NetwMultiplayer.object_configuration_add], so every scene verb runs
-## on [member NetwMultiplayer.scenes] whether a manager authored the rows or a
-## tree-less session built the config directly.
+## [method NetwMultiplayer.object_configuration_add], so the session reads one
+## declaration whether a manager authored the rows or a tree-less session built
+## the config directly.
 ## [codeblock]
-## # Inspector rows become a config the interface reads.
+## # Inspector rows become a config the session reads.
 ## manager.scene_paths = ["res://level/lobby.tscn"]
-## manager.concurrency = NetwSceneConfig.Concurrency.SINGLE
 ##
 ## # The session spawns and moves scenes; the manager never does.
-## api.scenes.activate(&"lobby")
+## api.scene(&"lobby").admit(participant)
 ## [/codeblock]
 
 ## Helper property to add level declarations through the inspector.
@@ -53,12 +52,12 @@ var scene_spawn_data: Dictionary[StringName, Variant] = { }
 ## Declared level resource paths.
 @export var scene_paths: Array[String] = []
 
+## Isolation the declared scenes take. See [member NetwSceneConfig.isolation].
+@export var scene_isolation: NetwMultiplayer.SceneIsolation = \
+		NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_NONE
+
 ## Scenes activated when the server session starts.
 @export var initial_scene_paths: Array[String] = []
-
-## Whether this session may keep one or several scenes active.
-@export var concurrency: NetwSceneConfig.Concurrency = \
-		NetwSceneConfig.Concurrency.SINGLE
 
 var _scene_paths: Dictionary[StringName, String] = { }
 var _netw_scene_config: NetwSceneConfig
@@ -74,7 +73,7 @@ func _enter_tree() -> void:
 		"SceneManager must be a descendant of a MultiplayerTree",
 	)
 	_netw_scene_config = _build_netw_scene_config()
-	mt.api.object_configuration_add(self, _netw_scene_config)
+	mt.api.service_install(_netw_scene_config)
 
 
 func _exit_tree() -> void:
@@ -96,7 +95,7 @@ func _exit_tree() -> void:
 # registered after the config lands still reach the interface.
 func _build_netw_scene_config() -> NetwSceneConfig:
 	var config := NetwSceneConfig.new()
-	config.concurrency = concurrency
+	config.isolation = scene_isolation
 	config.level_spawn_function = level_spawn_function
 	config.spawn_data = scene_spawn_data
 	_populate_scene_lists(config)

@@ -40,10 +40,10 @@ func test_spawn_and_start_scene_initialization_flow() -> void:
 	# registered scene resolves current_scene_path from starting_scene_path and
 	# skips the player add, which is all this path asserts.
 	var api := NetwMultiplayer.new()
-	tp.spawn(api.scenes)
+	tp.spawn(api._scenes)
 
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
-	api.dispose()
+	api.embedding.dispose()
 
 
 func test_teleport_ignores_requests_while_busy() -> void:

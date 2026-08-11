@@ -1,6 +1,6 @@
 ## Abstract key-value record for serializable networked data.
 ##
-## [NetwRecord] is the shared value object behind [NetwPersistenceInterface]
+## [NetwRecord] is the shared value object behind [NetwPersistenceEngine]
 ## persistence, [NetwDatabase] rows, and detached state samples. It stores named
 ## values without owning the scene object those values came from.
 ##

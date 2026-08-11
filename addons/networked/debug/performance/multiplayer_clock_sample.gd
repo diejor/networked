@@ -3,8 +3,9 @@
 ## Created from the raw [Dictionary] emitted by [signal MultiplayerClock.pong_received]
 ## and serialized via [method to_dict] before crossing the [EngineDebugger]
 ## boundary.
-class_name MultiplayerClockSample
 extends RefCounted
+
+const MultiplayerClockSample := preload("res://addons/networked/debug/performance/multiplayer_clock_sample.gd")
 
 var tree_name: String
 var username: String

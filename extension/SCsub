@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+
+"""The build entry the engine's own SCons runs.
+
+It compiles the translation units `SConstruct` compiles, from the same
+`sources.py`, so the two builds cannot drift into different source lists. The
+include roots and NETW_MODULE come from `config.py`.
+"""
+
+from pathlib import Path
+
+Import("env")
+Import("env_modules")
+
+import SCons.Script
+
+import sources
+
+env_networked = env_modules.Clone()
+
+sources.hold_determinism_floor(
+    env_networked,
+    lambda message: SCons.Script.Exit("networked: " + message),
+    SCons.Script.ARGUMENTS,
+)
+
+# A module shares the engine's Tracy client, so instrumentation follows the
+# engine's profiler. Scoped to this environment so changing it does not rebuild
+# every engine source.
+if env["profiler"] == "tracy":
+    env_networked.Append(CPPDEFINES=[sources.PROFILING])
+    # The engine puts Tracy's headers on core's environment alone. Accept both
+    # spellings of `profiler_path` that the engine accepts.
+    profiler_path = Path(env["profiler_path"])
+    if (profiler_path / "public" / "TracyClient.cpp").is_file():
+        profiler_path = profiler_path / "public"
+    env_networked.Append(CPPPATH=[str(profiler_path.resolve())])
+
+# Relative, because the engine resolves module sources against the module
+# directory. The mount is a symlink, so an absolute path points outside the
+# tree being built and matches nothing.
+for path in sources.source_paths():
+    env_networked.add_source_files(
+        env.modules_sources,
+        path.relative_to(sources.ROOT).as_posix(),
+    )

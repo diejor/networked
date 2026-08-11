@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSessionCore" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The session lifecycle machine: what state a session is in, what role the local peer plays in it, and which inbound joins are worth looking at.
+	</brief_description>
+	<description>
+		The machine holds no [Object] and sends nothing, which is what lets a session with no scene tree, no node and no connect verb still answer [member state] and [member role]. Opening a connection is nobody's business here and neither is authenticating one, so the peer is never reached: the interface above observes it and hands down the facts [method on_peer_assigned] needs.
+		Every path in and out converges on [method transition], so setup and teardown stay paired. A server that vanishes reuses the graceful leave's route rather than taking an edge of its own, which is why there is no direct [constant STATE_ONLINE] to [constant STATE_OFFLINE] edge and why [method edge_is_legal] is public: the refusal is a contract a caller can check.
+		[codeblock]
+		OFFLINE ─assign peer─▶ CONNECTING ─success─▶ ONLINE
+		   ▲                       │                    │
+		   └─── null / offline ────┘   leave / crash ───┤
+		   │                                            ▼
+		   └──────────────────────────────────── DISCONNECTING
+		[/codeblock]
+		The signals fire in the one order a lifecycle listener can rely on. Leaving a state announces itself before the state moves, so [signal session_ended] never fires on a connect that failed before it was ever live, and entering announces itself after, so a listener on [signal session_entered] reads the state it is in.
+		[codeblock]
+		transition(ONLINE)        state_changed(CONNECTING, ONLINE), session_entered
+		transition(DISCONNECTING) session_ended, state_changed(ONLINE, DISCONNECTING)
+		transition(ONLINE) twice  nothing; the same state is not a re-entry
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Returns the machine to [constant STATE_OFFLINE] with no role, no advertised cap, and an empty flood window. Session teardown, not an edge: nothing is announced, because there is no session left to announce it to.
+			</description>
+		</method>
+		<method name="compute_app_tag" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="value" type="StringName" />
+			<description>
+				Folds a build tag into the 32 bits an admission handshake carries. An empty [param value] answers zero, which disables the compatibility gate rather than matching a build named nothing.
+				The fold is the engine's own string hash over code points, so a tag outside ASCII folds by what it spells rather than by how it is encoded.
+			</description>
+		</method>
+		<method name="edge_is_legal" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="from" type="int" enum="NetwSessionCore.State" />
+			<param index="1" name="to" type="int" enum="NetwSessionCore.State" />
+			<description>
+				Returns whether [method transition] admits the edge from [param from] to [param to]. Reading the table is what lets a caller route around it instead of discovering the refusal at runtime.
+			</description>
+		</method>
+		<method name="is_server_role" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns whether [member role] carries server authority. Both [constant ROLE_DEDICATED_SERVER] and [constant ROLE_LISTEN_SERVER] do, and very little should ask for one of them specifically.
+			</description>
+		</method>
+		<method name="join_flooded">
+			<return type="bool" />
+			<param index="0" name="sender" type="int" />
+			<param index="1" name="now_msec" type="int" />
+			<description>
+				Returns whether [param sender]'s join frames have exceeded the flood window, counting this one. An honest peer submits one join and at most two, so the budget drops a flood without touching a legitimate burst of clients arriving together. A [param sender] of 1 is the host joining itself, which carries authority and is never limited.
+				[param now_msec] is an argument rather than a reading, which is the whole reason the window is testable: a wall clock cannot be asked to be a second past itself.
+			</description>
+		</method>
+		<method name="on_peer_assigned">
+			<return type="void" />
+			<param index="0" name="has_live_peer" type="bool" />
+			<param index="1" name="connected" type="bool" />
+			<param index="2" name="unique_id" type="int" />
+			<description>
+				Reacts to a peer the interface above just handed the session, which is the one edge every host, join, test rig and embedded-server path already crosses.
+				[param has_live_peer] is [code]false[/code] for a null or offline assignment, and that is how a cancelled connect arrives rather than through an abort verb of its own. Cancelling only collapses a session that was still [constant STATE_CONNECTING]: a null assignment while live is left alone, because a deleted tree nulls the peer that way and a leave or a crash owns that teardown instead.
+				A server peer is born live whether or not its transport says so, so a [param unique_id] of 1 reaches [constant STATE_ONLINE] here through [method resolve_online]. A client is still mid-handshake and waits.
+			</description>
+		</method>
+		<method name="resolve_online">
+			<return type="void" />
+			<param index="0" name="unique_id" type="int" />
+			<description>
+				Completes a connect with the role [param unique_id] and [member desired_role] imply, and enters [constant STATE_ONLINE].
+				Peer identity decides authority and the hint only splits it: a [param unique_id] of 1 is a server, [constant ROLE_LISTEN_SERVER] when that is what was asked for and [constant ROLE_DEDICATED_SERVER] otherwise. Anything else is a [constant ROLE_CLIENT] whatever the hint says.
+			</description>
+		</method>
+		<method name="transition">
+			<return type="void" />
+			<param index="0" name="next" type="int" enum="NetwSessionCore.State" />
+			<description>
+				Advances [member state] along a legal edge, announcing the exit before the move and the entry after it. The only entry point allowed to move [member state], so every path converges on one set of transitions instead of one per caller.
+				Moving to the state already held does nothing, which is what keeps a transport repeating its connection signal from firing a second [signal session_entered]. An edge [method edge_is_legal] refuses fails and leaves the machine where it was.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="advertised_max_players" type="int" setter="set_advertised_max_players" getter="get_advertised_max_players" default="0">
+			The player cap the live host advertises, or zero while this session is not hosting. Whatever opened the host stamps the cap it resolved, so a probe is answered with a plain session fact rather than with the configuration the host was built from.
+		</member>
+		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwSessionCore.Role" default="3">
+			The role the local peer intends to play, pushed down from the session configuration above. It is read only by [method resolve_online] and only to split a server, so a session that intends to be a client and is handed peer 1 still hosts.
+		</member>
+		<member name="role" type="int" setter="set_role" getter="get_role" enum="NetwSessionCore.Role" default="0">
+			The role the local peer plays in the current session, resolved by [method resolve_online] before [constant STATE_ONLINE] is entered.
+		</member>
+		<member name="state" type="int" setter="set_state" getter="get_state" enum="NetwSessionCore.State" default="0">
+			The current connection state of the session. Assigning it moves the value and announces the edge, and nothing else. Drive it through [method transition] so the exit and entry hooks run.
+		</member>
+	</members>
+	<signals>
+		<signal name="session_ended">
+			<description>
+				Emitted on leaving [constant STATE_ONLINE], before the state moves. Never fires on a connect that failed before it was live, which is the one guarantee that placement buys.
+			</description>
+		</signal>
+		<signal name="session_entered">
+			<description>
+				Emitted on entering [constant STATE_ONLINE], once [member role] is resolved and the state has moved.
+			</description>
+		</signal>
+		<signal name="state_changed">
+			<param index="0" name="old_state" type="int" />
+			<param index="1" name="new_state" type="int" />
+			<description>
+				Emitted whenever [member state] moves. The edge doubles as the notification that a peer was assigned, which [MultiplayerAPI] never surfaces on its own, so a consumer that wants to observe "a peer just changed" binds here.
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="STATE_OFFLINE" value="0" enum="State">
+			No active [MultiplayerPeer] is assigned.
+		</constant>
+		<constant name="STATE_CONNECTING" value="1" enum="State">
+			A peer is assigned and the connection is being established. The only state a cancellation can collapse.
+		</constant>
+		<constant name="STATE_ONLINE" value="2" enum="State">
+			The session has an active [MultiplayerPeer] and a resolved [member role].
+		</constant>
+		<constant name="STATE_DISCONNECTING" value="3" enum="State">
+			The session is closing the active peer and clearing its state. A crash passes through here rather than around it.
+		</constant>
+		<constant name="ROLE_NONE" value="0" enum="Role">
+			No session role has been assigned yet.
+		</constant>
+		<constant name="ROLE_CLIENT" value="1" enum="Role">
+			Connected to a remote server as a client.
+		</constant>
+		<constant name="ROLE_DEDICATED_SERVER" value="2" enum="Role">
+			Hosts the session without acting as a local client.
+		</constant>
+		<constant name="ROLE_LISTEN_SERVER" value="3" enum="Role">
+			Hosts the session and also represents the local player.
+		</constant>
+	</constants>
+</class>

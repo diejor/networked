@@ -87,7 +87,7 @@ func test_upsert_flush_then_cold_read_round_trips() -> void:
 	var db2 := await _make_db(&"slot_a")
 	var record: Dictionary = await db2._find_by_id(&"players", &"p1")
 	assert_int(record.get(&"hp")).is_equal(7)
-	assert_str(String(record.get(&"pname"))).is_equal("valeria")
+	assert_str(str(record.get(&"pname", ""))).is_equal("valeria")
 
 
 func test_subset_upsert_preserves_untouched_columns() -> void:
@@ -109,7 +109,7 @@ func test_subset_upsert_preserves_untouched_columns() -> void:
 	var db2 := await _make_db(&"slot_a")
 	var record: Dictionary = await db2._find_by_id(&"players", &"p2")
 	assert_int(record.get(&"hp")).is_equal(99)
-	assert_str(String(record.get(&"pname"))).is_equal("jose")
+	assert_str(str(record.get(&"pname", ""))).is_equal("jose")
 
 
 func test_delete_removes_record() -> void:

@@ -33,7 +33,6 @@
 ## before reading body state.
 ##
 ## See https://github.com/godotengine/godot/issues/14578.
-class_name AreaReparentGuard
 extends RefCounted
 
 const _UNSET: int = -1

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwHandleLedger" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Mints and validates one kind of RID for records owned by GDScript.
+	</brief_description>
+	<description>
+		One ledger owns one handle kind. A RID minted by another ledger is invalid, so field sets, interest layers, and later record kinds cannot be confused even though they share the [RID] value type.
+		The ledger stores only a monotonic integer identity. The GDScript subsystem keeps the data named by each RID and releases it with [method rid_free] or [method clear].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Frees every owned RID and restarts identity numbering for a new session.
+			</description>
+		</method>
+		<method name="id_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the number of RIDs this ledger currently owns.
+			</description>
+		</method>
+		<method name="rid_create">
+			<return type="RID" />
+			<description>
+				Mints a fresh RID whose integer identity is one greater than the previous mint.
+			</description>
+		</method>
+		<method name="rid_free">
+			<return type="bool" />
+			<param index="0" name="rid" type="RID" />
+			<description>
+				Frees [param rid] and returns [code]true[/code], or returns [code]false[/code] when this ledger does not own it.
+			</description>
+		</method>
+		<method name="rid_from_id" qualifiers="const">
+			<return type="RID" />
+			<param index="0" name="id" type="int" />
+			<description>
+				Returns the owned RID for [param id], or an invalid RID when the identity is unknown or was freed.
+			</description>
+		</method>
+		<method name="rid_is_valid" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="rid" type="RID" />
+			<description>
+				Returns [code]true[/code] only while this ledger owns [param rid].
+			</description>
+		</method>
+	</methods>
+</class>

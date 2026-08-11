@@ -54,12 +54,12 @@ func test_control_transfer_policy_flow() -> void:
 	assert_that(NetwEntity.of(client_player).controller).is_equal(peer_id)
 	assert_that(NetwEntity.of(server_player).participant) \
 			.is_equal(
-				harness.server().get_participant(
+				harness.server().api.peer_get_participant(
 					client0.multiplayer_peer.get_unique_id(),
 				),
 			)
 	assert_that(NetwEntity.of(server_player).controller_participant) \
-			.is_equal(harness.server().get_participant(peer_id))
+			.is_equal(harness.server().api.peer_get_participant(peer_id))
 
 	var late_client := await harness.add_client()
 	harness.spawn_player(late_client, player_builder.packed)
@@ -200,8 +200,9 @@ func _client_player(
 		viewer: MultiplayerTree,
 		represented: MultiplayerTree,
 ) -> Node:
-	var scene := viewer.api.scenes \
-			.scene(level_builder.scene_name) as MultiplayerScene
+	var scene := viewer.api.scene_handle(
+		viewer.api.scene_find(level_builder.scene_name),
+	)
 	return _find_player(scene, harness.player_name_for(represented))
 
 
@@ -218,8 +219,8 @@ func _wait_for_player_on(
 	return player
 
 
-func _find_player(scene: MultiplayerScene, player_name: StringName) -> Node:
-	for player: NetwEntity in scene.player_nodes():
+func _find_player(scene: NetwSceneHandle, player_name: StringName) -> Node:
+	for player: NetwEntity in scene.entities:
 		if player.owner.name == player_name:
 			return player.owner
 	return null

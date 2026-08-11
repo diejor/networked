@@ -3,55 +3,81 @@
 Pre-game connection
 ===================
 
-This page covers the gap between "I have a configured
-:ref:`BackendPeer <class_BackendPeer>`" and "I am in a session". It
-explains the four entry methods on
-:ref:`MultiplayerTree <class_MultiplayerTree>`, the :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>`
-probe used to discover live servers on cheap direct transports, the auth
-protocol that carries both probes and normal hellos, and the lifecycle
-limits that protect a host from probe storms.
+This page covers the gap between "I have a configured transport" and "I am in a
+session". It explains the entry methods on
+:ref:`NetwConnector <class_NetwConnector>`, the probe used to discover live
+servers on cheap direct transports, the auth protocol that carries both probes
+and normal hellos, and the lifecycle limits that protect a host from probe
+storms.
+
+.. note::
+
+   The probe sections below still describe the retired ``BackendPeer`` model.
+   Probing now lives on :ref:`NetwTransport <class_NetwTransport>`
+   (``_probe`` / ``_make_probe_peer``) and answers with a
+   :ref:`NetwProbeResult <class_NetwProbeResult>`.
 
 Entry methods
 -------------
 
-Picking an entry method is a question of intent. All three take a
-:ref:`JoinPayload <class_JoinPayload>` describing the player. Transport
-identity (backend, address) is supplied via a :ref:`JoinTarget <class_JoinTarget>`
-passed to the method, so the payload itself carries no transport state.
+Picking an entry method is a question of intent. All of them live on
+:ref:`NetwConnector <class_NetwConnector>`, reached as
+``NetwConnector.of(api)``, and all of them take a
+:ref:`JoinPayload <class_JoinPayload>` describing the player. Transport identity
+(scheme, address) is supplied through a
+:ref:`NetwConnectTarget <class_NetwConnectTarget>`, so the payload itself
+carries no transport state. Each returns a
+:ref:`NetwConnectResult <class_NetwConnectResult>` describing what the whole
+call did, so one verb press produces exactly one outcome even when it falls
+back internally.
 
-:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`
-    Query the address; if a live local server answers, join it as a client,
+:ref:`join_or_host() <class_NetwConnector_method_join_or_host>`
+    Probe the address; if a live local server answers, join it as a client,
     otherwise host. The zero-config path for local development and
     listen-server games.
 
-:ref:`join() <class_MultiplayerTree_method_join>`
-    Open the backend against a known address as a client. Use when the
-    caller already knows there is a server, such as when a server browser row was
-    clicked, or an invite was accepted.
+:ref:`join() <class_NetwConnector_method_join>`
+    Open the transport against a known address as a client. Use when the
+    caller already knows there is a server, such as when a server browser row
+    was clicked, or an invite was accepted.
 
-:ref:`host() <class_MultiplayerTree_method_host>`
-    Start this tree as the host. Use when the caller already knows it is
-    hosting, for example, when a "Host Game" button was clicked.
+:ref:`host() <class_NetwConnector_method_host>`
+    Start this session as the host. Use when the caller already knows it is
+    hosting, for example, when a "Host Game" button was clicked. A host whose
+    port is already taken joins whoever took it, which is what makes a second
+    launch on one machine land in the first launch's session.
 
 .. code-block:: gdscript
+
+    var api := Netw.of(self)
+    var connector := NetwConnector.of(api)
 
     var join := JoinPayload.new()
     join.username = "alice"
 
-    # Build the join target (specifying backend and address).
-    var target := JoinTarget.new()
-    target.backend = WebSocketBackend.new()
+    # Build the connect target (scheme and address).
+    var target := NetwConnectTarget.new()
+    target.scheme = &"ws"
     target.address = "localhost"
 
     # Probe first. Join if someone is hosting locally, else host.
-    await tree.join_or_host(target, join)
+    await connector.join_or_host(target, join)
 
     # Explicit join to a known remote server.
     target.address = "203.0.113.42"
-    await tree.join(target, join)
+    var result := await connector.join(target, join)
+    if not result.is_ok():
+        push_warning(result.message)
 
     # Explicit host.
-    await tree.host(join)
+    await connector.host(join)
+
+A :ref:`MultiplayerTree <class_MultiplayerTree>` still offers
+:ref:`host() <class_MultiplayerTree_method_host>` as node-level sugar: it builds
+the host configuration from the tree's exported
+:ref:`transport <class_MultiplayerTree_property_transport>` params, and a
+tree whose ``desired_role`` is ``CLIENT`` raises a dedicated server sibling and
+joins it instead of hosting in place.
 
 Discovering live servers
 ------------------------

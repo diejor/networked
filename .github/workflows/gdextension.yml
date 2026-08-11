@@ -1,0 +1,214 @@
+name: GDExtension
+
+# Builds the native library the addon's classes live in, one job per cell,
+# and packages the result. Every other workflow that needs a library calls
+# this one and downloads its artifacts, so the build recipe exists once.
+#
+# The default set is what a pull request pays for: the two desktop platforms
+# CI tests on, in both shipping targets, plus the one web cell the demo
+# deployments consume. Widening it is a matter of passing more `platforms`,
+# which is how the remaining platforms arrive.
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: Comma-separated godot-cpp platform names.
+        type: string
+        required: false
+        default: linux,windows,web
+      targets:
+        description: Comma-separated godot-cpp targets.
+        type: string
+        required: false
+        default: template_debug,template_release
+      package:
+        description: Assemble the addon zip from the built cells.
+        type: boolean
+        required: false
+        default: true
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Comma-separated godot-cpp platform names.
+        type: string
+        required: false
+        default: linux,windows,web
+      targets:
+        description: Comma-separated godot-cpp targets.
+        type: string
+        required: false
+        default: template_debug,template_release
+      package:
+        description: Assemble the addon zip from the built cells.
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The cells are a cross product, but the runner and arch for each platform
+  # are facts about the platform, so they are resolved here rather than
+  # repeated in a hand-written matrix that drifts against the inputs.
+  prepare:
+    name: "Resolve matrix"
+    runs-on: ubuntu-22.04
+    outputs:
+      cells: ${{ steps.cells.outputs.cells }}
+    steps:
+      - name: Resolve Cells
+        id: cells
+        shell: bash
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          # Platforms this pipeline is verified on. A platform absent from
+          # here is a deliberate gap, not a typo, so asking for one fails
+          # loudly instead of silently building nothing.
+          #
+          # "flags" are the scons arguments the platform always needs and
+          # "tag" distinguishes the artifact when those flags change which
+          # library gets built. "targets", where present, is the only set the
+          # platform has a consumer for and it overrides the input.
+          PLATFORMS = {
+              "linux": {"runner": "ubuntu-22.04", "arch": "x86_64"},
+              "windows": {"runner": "windows-2022", "arch": "x86_64"},
+              # The web export preset the demos use has thread support off,
+              # and a threaded library cannot load into a non-threaded
+              # export. Both demos export release, so a debug web library
+              # would have nothing to load into.
+              "web": {
+                  "runner": "ubuntu-22.04",
+                  "arch": "wasm32",
+                  "flags": "threads=no",
+                  "tag": "nothreads",
+                  "targets": ["template_release"],
+              },
+          }
+
+          platforms = os.environ["PLATFORMS"].replace(" ", "").split(",")
+          requested = os.environ["TARGETS"].replace(" ", "").split(",")
+          cells = []
+          for platform in filter(None, platforms):
+              if platform not in PLATFORMS:
+                  raise SystemExit(
+                      "unsupported platform '%s'; known: %s"
+                      % (platform, ", ".join(sorted(PLATFORMS)))
+                  )
+              spec = PLATFORMS[platform]
+              tag = spec.get("tag", "")
+              for target in spec.get("targets", list(filter(None, requested))):
+                  name = "-".join(
+                      part
+                      for part in ("native", platform, spec["arch"], tag, target)
+                      if part
+                  )
+                  cells.append(
+                      {
+                          "platform": platform,
+                          "arch": spec["arch"],
+                          "target": target,
+                          "runner": spec["runner"],
+                          "flags": spec.get("flags", ""),
+                          "name": name,
+                      }
+                  )
+          print("cells=" + json.dumps(cells))
+          PY
+
+  build:
+    name: "${{ matrix.cell.platform }} ${{ matrix.cell.arch }} ${{ matrix.cell.target }}"
+    needs: prepare
+    runs-on: ${{ matrix.cell.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.prepare.outputs.cells) }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/build-native
+        with:
+          platform: ${{ matrix.cell.platform }}
+          arch: ${{ matrix.cell.arch }}
+          target: ${{ matrix.cell.target }}
+          scons-flags: ${{ matrix.cell.flags }}
+
+      - name: Upload Native Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.cell.name }}
+          path: addons/networked/bin/
+          if-no-files-found: error
+          # Long enough that a manual demo redeploy, which takes the newest
+          # run that passed on main, still finds something to download.
+          retention-days: 7
+
+  # The zip is the shape a user installs, so it is assembled on every run
+  # rather than only at release time. Building it here is what proves the
+  # per-cell artifacts merge into one addon without colliding.
+  package:
+    name: "Addon zip"
+    needs: build
+    # A workflow_dispatch boolean arrives as the string "false", which is
+    # truthy on its own, so both spellings are compared explicitly.
+    if: ${{ inputs.package != false && inputs.package != 'false' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/fetch-native-artifact
+
+      - name: Read Addon Version
+        id: version
+        shell: bash
+        run: |
+          set -eu
+          version="$(sed -n 's/^version="\(.*\)"$/\1/p' \
+            addons/networked/plugin.cfg)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Debug symbols are for the machine that built the library, not for
+      # everyone who downloads the addon. Only the ELF objects carry any:
+      # MSVC keeps them in a separate PDB that was never copied here, and
+      # the web cell is a release build with none to begin with.
+      - name: Strip Binaries
+        shell: bash
+        run: |
+          set -eu
+          find addons/networked/bin -name '*.so' \
+            -exec strip --strip-unneeded {} +
+          ls -l addons/networked/bin
+
+      - name: Assemble Addon Zip
+        shell: bash
+        run: |
+          set -eu
+          name="networked-${{ steps.version.outputs.version }}"
+          echo "${{ steps.version.outputs.version }} ${{ github.sha }}" \
+            > addons/networked/version.txt
+          mkdir -p dist
+          zip -r "dist/$name.zip" addons/networked
+          unzip -l "dist/$name.zip" | tail -5
+
+      - name: Upload Addon Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: networked-addon
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7

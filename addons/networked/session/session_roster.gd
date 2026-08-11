@@ -1,4 +1,3 @@
-class_name SessionRoster
 extends RefCounted
 ## Manages connected peers, accepted participants, and authentication state.
 

@@ -9,13 +9,13 @@ extends NetwTestSuite
 ## appears live but not here is timing, not physics.
 ##
 ## Divergence is read at matched ticks, off
-## [signal NetwLagCompensationInterface.PredictionHandle.state_evaluated] and
-## [member NetwLagCompensationInterface.PredictionHandle.last_field_divergence],
+## [signal NetwPredictionHandle.state_evaluated] and
+## [member NetwPredictionHandle.last_field_divergence],
 ## never by differencing the two nodes where they stand. The predicted car runs
 ## ahead of the authoritative one by design, so a same-moment difference between
 ## the two bodies is that lead plus the divergence with no way to separate them,
 ## and the lead dominates. Only
-## [member NetwLagCompensationInterface.PredictionHandle.last_compare_staleness]
+## [member NetwPredictionHandle.last_compare_staleness]
 ## says whether a given sample was matched at all.
 ##
 ## This is a probe, not a gate. It prints a distribution and asserts only a very
@@ -60,7 +60,7 @@ func test_reports_same_process_divergence_at_matched_ticks() -> void:
 	var by_field: Dictionary[StringName, Array] = { }
 	var staleness: Array[float] = []
 	handle.state_evaluated.connect(
-		func(_recv_tick: int, _ack: int, _divergence: float, _corrected: bool) -> void:
+		func(_recv_tick: int, _ack: int, _divergence: float, _diverged: bool) -> void:
 			staleness.append(float(handle.last_compare_staleness))
 			for field: StringName in handle.last_field_divergence:
 				if not by_field.has(field):
@@ -96,7 +96,7 @@ func test_reports_same_process_divergence_at_matched_ticks() -> void:
 		"[probe] matched-tick samples=%d/%d  corrections=%d" % [
 			matched,
 			staleness.size(),
-			handle.corrections,
+			handle.stats.corrections,
 		],
 	)
 
@@ -150,7 +150,7 @@ func test_reports_spawn_gap_from_first_tick() -> void:
 				mirror.sphere_position.x,
 				own.sphere_position.distance_to(other_on_client.sphere_position),
 				mirror.sphere_position.distance_to(other_on_host.sphere_position),
-				own.entity.prediction.corrections,
+				own.entity.prediction.stats.corrections,
 			],
 		)
 		await game.sync_ticks(1)
@@ -273,13 +273,13 @@ func test_reports_correction_trigger_attribution() -> void:
 	var handle = own.entity.prediction
 	# Counters live in reference types: a lambda captures a local by value, so an
 	# int incremented inside the handler would only ever move a private copy.
-	var corrected_flags: Array[bool] = []
+	var diverged_flags: Array[bool] = []
 	var exceeded: Dictionary[StringName, int] = { }
 	var sole_trigger: Dictionary[StringName, int] = { }
-	var binding: NetwSyncSetBinding = own.entity.state_binding
+	var binding: NetwPropertySetBinding = own.entity.state_binding
 	handle.state_evaluated.connect(
-		func(_recv_tick: int, _ack: int, _divergence: float, corrected: bool) -> void:
-			corrected_flags.append(corrected)
+		func(_recv_tick: int, _ack: int, _divergence: float, diverged: bool) -> void:
+			diverged_flags.append(diverged)
 			var over: Array[StringName] = []
 			for field: StringName in handle.last_field_divergence:
 				if binding.reconcile_only_of(field):
@@ -301,14 +301,14 @@ func test_reports_correction_trigger_attribution() -> void:
 	client.simulate_action_release("forward")
 	client.simulate_action_release("right")
 
-	var evaluations := corrected_flags.size()
-	var corrected_count := corrected_flags.filter(func(c: bool) -> bool: return c).size()
+	var evaluations := diverged_flags.size()
+	var diverged_count := diverged_flags.filter(func(c: bool) -> bool: return c).size()
 	print("[trigger] base epsilon=%.4f" % handle.divergence_epsilon)
 	print(
-		"[trigger] evaluations=%d  corrected=%d  corrections_total=%d" % [
+		"[trigger] evaluations=%d  diverged=%d  corrections_total=%d" % [
 			evaluations,
-			corrected_count,
-			handle.corrections,
+			diverged_count,
+			handle.stats.corrections,
 		],
 	)
 	for field: StringName in handle.last_field_divergence:
@@ -352,11 +352,11 @@ func test_reports_position_recovery_across_corrections() -> void:
 		limit = handle.divergence_epsilon
 	# Reference types only: a lambda captures locals by value.
 	var divergence: Array[float] = []
-	var corrected_flags: Array[bool] = []
+	var diverged_flags: Array[bool] = []
 	handle.state_evaluated.connect(
-		func(_recv_tick: int, _ack: int, _divergence: float, corrected: bool) -> void:
+		func(_recv_tick: int, _ack: int, _divergence: float, diverged: bool) -> void:
 			divergence.append(handle.last_field_divergence.get(&"sphere_position", 0.0))
-			corrected_flags.append(corrected)
+			diverged_flags.append(diverged)
 	)
 
 	client.simulate_action_press("forward")
@@ -373,8 +373,8 @@ func test_reports_position_recovery_across_corrections() -> void:
 	const HORIZON := 6
 	for offset in range(HORIZON + 1):
 		var samples: Array[float] = []
-		for i in range(corrected_flags.size()):
-			if corrected_flags[i] and i + offset < divergence.size():
+		for i in range(diverged_flags.size()):
+			if diverged_flags[i] and i + offset < divergence.size():
 				samples.append(divergence[i + offset])
 		if not samples.is_empty():
 			var over := samples.filter(func(d: float) -> bool: return d > limit).size()
@@ -390,8 +390,8 @@ func test_reports_position_recovery_across_corrections() -> void:
 	# How many evaluations a correction actually buys before the error is back
 	# over the trigger.
 	var recross: Array[float] = []
-	for i in range(corrected_flags.size()):
-		if not corrected_flags[i]:
+	for i in range(diverged_flags.size()):
+		if not diverged_flags[i]:
 			continue
 		for d in range(1, divergence.size() - i):
 			if divergence[i + d] > limit:
@@ -461,13 +461,13 @@ func test_reports_uncorrected_simulation_drift() -> void:
 				(own.sphere_angular_velocity - mirror.sphere_angular_velocity).length(),
 				(own.sphere_linear_velocity - mirror.sphere_linear_velocity).length(),
 				own.sphere_position.distance_to(mirror.sphere_position),
-				handle.corrections,
+				handle.stats.corrections,
 			],
 		)
 	client.simulate_action_release("forward")
 	client.simulate_action_release("right")
 
-	assert_int(handle.corrections) \
+	assert_int(handle.stats.corrections) \
 			.override_failure_message("the probe must not correct") \
 			.is_equal(0)
 
@@ -490,9 +490,9 @@ func test_reports_divergence_step_response_at_schedule_faults() -> void:
 	# re-applied once the link settles.
 	_silence_triggers(handle)
 
-	var clocks: Array[NetwClockInterface] = [
-		host.tree.api.clock,
-		client.tree.api.clock,
+	var clocks: Array[ClockCore] = [
+		host.tree.api._clock,
+		client.tree.api._clock,
 	]
 	var initial_tick_delta := clocks[1].tick - clocks[0].tick
 	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
@@ -507,7 +507,7 @@ func test_reports_divergence_step_response_at_schedule_faults() -> void:
 				_recv_tick: int,
 				_ack: int,
 				_divergence: float,
-				_corrected: bool,
+				_diverged: bool,
 		) -> void:
 			evaluations.append(stepper.frame_index)
 	)
@@ -537,8 +537,8 @@ func test_reports_divergence_step_response_at_schedule_faults() -> void:
 					0.0,
 				),
 				handle.last_field_divergence.get(&"sphere_position", 0.0),
-				server_handle.held_count,
-				server_handle.consumed_count,
+				server_handle.stats.held,
+				server_handle.stats.consumed,
 			],
 		)
 	client.simulate_action_release("forward")
@@ -612,9 +612,9 @@ func _run_fault_ratio(period: int) -> Dictionary:
 	# re-applied once the link settles.
 	_silence_triggers(handle)
 
-	var clocks: Array[NetwClockInterface] = [
-		host.tree.api.clock,
-		client.tree.api.clock,
+	var clocks: Array[ClockCore] = [
+		host.tree.api._clock,
+		client.tree.api._clock,
 	]
 	var initial_tick_delta := clocks[1].tick - clocks[0].tick
 	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
@@ -797,7 +797,11 @@ const INTEGRATION_LONG_FRAMES := 630
 const GATED_RESIDUAL_CEILING := 0.40
 
 
-func test_reports_whether_the_gated_residual_stays_bounded_over_a_long_drive() -> void:
+@warning_ignore("unused_parameter")
+func test_reports_whether_the_gated_residual_stays_bounded_over_a_long_drive(
+		do_skip = OS.get_environment("NETW_MARGINAL").is_empty(),
+		skip_reason = "Load-marginal probe, not a law. It fails on an unchanged tree about one run in three. Set NETW_MARGINAL=1 to run it.",
+) -> void:
 	var gated := await _run_integration_ratio(
 		INTEGRATION_SKIP_PERIOD,
 		true,
@@ -865,9 +869,9 @@ func _run_integration_ratio(
 	# re-applied once the link settles.
 	_silence_triggers(handle)
 
-	var clocks: Array[NetwClockInterface] = [
-		host.tree.api.clock,
-		client.tree.api.clock,
+	var clocks: Array[ClockCore] = [
+		host.tree.api._clock,
+		client.tree.api._clock,
 	]
 	var initial_tick_delta := clocks[1].tick - clocks[0].tick
 	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
@@ -1093,7 +1097,7 @@ func _measure_input_codec_mode(quantized: bool) -> Dictionary:
 				_recv_tick: int,
 				_ack: int,
 				_divergence: float,
-				_corrected: bool,
+				_diverged: bool,
 		) -> void:
 			if handle.last_compare_staleness != 0:
 				return
@@ -1127,7 +1131,7 @@ func _silence_triggers(handle) -> void:
 	handle.teleport_threshold = 1.0e9
 	var engine = handle._engine()
 	if engine:
-		engine._epsilon_overrides.clear()
+		engine._wiring.epsilon_overrides.clear()
 
 
 func _gap(own_value: Variant, mirror_value: Variant) -> String:

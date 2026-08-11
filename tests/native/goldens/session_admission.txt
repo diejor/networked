@@ -1,0 +1,75 @@
+# The session family's Bridge-B trace, recorded from the GDScript
+# session machine before any of it was native. Rows are
+# scenario|kind|key=value, keys sorted, states and roles symbolic.
+#
+# Regenerate with:
+#   godot --headless --path . -s res://tests/crossing/session_arm.gd \
+#     -- --record
+# Regenerating against a candidate implementation destroys the
+# evidence this file exists to be.
+machine/offline_at_construction|state|at=constructed role=NONE state=OFFLINE
+machine/offline_at_construction|signals|order=[]
+machine/a_server_peer_is_online_at_the_edge|state|at=assigned role=LISTEN_SERVER state=ONLINE
+machine/a_server_peer_is_online_at_the_edge|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->ONLINE),session_entered]
+machine/the_listen_hint_splits_the_server_role|hint|desired=LISTEN_SERVER
+machine/the_listen_hint_splits_the_server_role|state|at=assigned role=LISTEN_SERVER state=ONLINE
+machine/the_listen_hint_splits_the_server_role|hint|desired=DEDICATED_SERVER
+machine/the_listen_hint_splits_the_server_role|state|at=assigned role=DEDICATED_SERVER state=ONLINE
+machine/the_listen_hint_splits_the_server_role|hint|desired=CLIENT
+machine/the_listen_hint_splits_the_server_role|state|at=assigned role=DEDICATED_SERVER state=ONLINE
+machine/a_client_peer_waits_in_connecting|state|at=assigned role=NONE state=CONNECTING
+machine/a_client_peer_waits_in_connecting|signals|order=[state_changed(OFFLINE->CONNECTING)]
+machine/the_connected_signal_completes_the_client|state|at=assigned role=NONE state=CONNECTING
+machine/the_connected_signal_completes_the_client|state|at=connected role=CLIENT state=ONLINE
+machine/the_connected_signal_completes_the_client|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->ONLINE),session_entered]
+machine/the_connected_signal_completes_the_client|state|at=repeated role=CLIENT state=ONLINE
+machine/the_connected_signal_completes_the_client|signals|order=[]
+machine/a_cancelled_connect_returns_offline|state|at=connecting role=NONE state=CONNECTING
+machine/a_cancelled_connect_returns_offline|state|at=cancelled role=NONE state=OFFLINE
+machine/a_cancelled_connect_returns_offline|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->OFFLINE)]
+machine/a_cancelled_connect_returns_offline|state|at=offline_peer role=NONE state=OFFLINE
+machine/a_cancelled_connect_returns_offline|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->OFFLINE)]
+machine/a_failed_handshake_never_enters_online|state|at=failed role=NONE state=OFFLINE
+machine/a_failed_handshake_never_enters_online|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->OFFLINE)]
+machine/a_server_that_vanishes_ends_the_session|state|at=online role=CLIENT state=ONLINE
+machine/a_server_that_vanishes_ends_the_session|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->ONLINE),session_entered]
+machine/a_server_that_vanishes_ends_the_session|state|at=crashed role=CLIENT state=OFFLINE
+machine/a_server_that_vanishes_ends_the_session|signals|order=[session_ended,state_changed(ONLINE->DISCONNECTING),state_changed(DISCONNECTING->OFFLINE)]
+machine/a_second_crash_never_re_tears|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->ONLINE),session_entered,session_ended,state_changed(ONLINE->DISCONNECTING),state_changed(DISCONNECTING->OFFLINE)]
+machine/a_second_crash_never_re_tears|state|at=second_crash role=CLIENT state=OFFLINE
+machine/a_second_crash_never_re_tears|signals|order=[]
+machine/a_null_assignment_while_online_is_left_alone|state|at=online role=LISTEN_SERVER state=ONLINE
+machine/a_null_assignment_while_online_is_left_alone|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->ONLINE),session_entered]
+machine/a_null_assignment_while_online_is_left_alone|state|at=nulled role=LISTEN_SERVER state=ONLINE
+machine/a_null_assignment_while_online_is_left_alone|signals|order=[]
+machine/a_disposing_api_is_not_a_crash|state|at=online role=CLIENT state=ONLINE
+machine/a_disposing_api_is_not_a_crash|state|at=disposed role=CLIENT state=ONLINE
+machine/a_disposing_api_is_not_a_crash|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->ONLINE),session_entered]
+edges/every_legal_edge_runs_its_hooks|state|at=to_CONNECTING role=NONE state=CONNECTING
+edges/every_legal_edge_runs_its_hooks|signals|order=[state_changed(OFFLINE->CONNECTING)]
+edges/every_legal_edge_runs_its_hooks|state|at=to_OFFLINE role=NONE state=OFFLINE
+edges/every_legal_edge_runs_its_hooks|signals|order=[state_changed(CONNECTING->OFFLINE)]
+edges/every_legal_edge_runs_its_hooks|state|at=to_CONNECTING role=NONE state=CONNECTING
+edges/every_legal_edge_runs_its_hooks|signals|order=[state_changed(OFFLINE->CONNECTING)]
+edges/every_legal_edge_runs_its_hooks|state|at=to_ONLINE role=NONE state=ONLINE
+edges/every_legal_edge_runs_its_hooks|signals|order=[state_changed(CONNECTING->ONLINE),session_entered]
+edges/every_legal_edge_runs_its_hooks|state|at=to_DISCONNECTING role=NONE state=DISCONNECTING
+edges/every_legal_edge_runs_its_hooks|signals|order=[session_ended,state_changed(ONLINE->DISCONNECTING)]
+edges/every_legal_edge_runs_its_hooks|state|at=to_OFFLINE role=NONE state=OFFLINE
+edges/every_legal_edge_runs_its_hooks|signals|order=[state_changed(DISCONNECTING->OFFLINE)]
+edges/every_legal_edge_runs_its_hooks|state|at=repeated role=NONE state=OFFLINE
+edges/every_legal_edge_runs_its_hooks|signals|order=[]
+flood/an_honest_peer_stays_under_the_window|submit|attempt=0 flooded=false
+flood/an_honest_peer_stays_under_the_window|submit|attempt=1 flooded=false
+flood/a_flood_trips_at_the_limit|trip|at=8
+flood/the_host_self_join_is_never_limited|host|flooded_once=false
+flood/each_peer_draws_its_own_budget|neighbour|flooded=false
+apptag/the_fold_is_the_compatibility_gate|fold|length=0 tag=0
+apptag/the_fold_is_the_compatibility_gate|fold|length=9 tag=147420842
+apptag/the_fold_is_the_compatibility_gate|fold|length=9 tag=147420843
+apptag/the_fold_is_the_compatibility_gate|fold|length=48 tag=1873437475
+apptag/the_fold_is_the_compatibility_gate|fold|length=6 tag=3370624142
+apptag/the_fold_is_the_compatibility_gate|fold|length=11 tag=3847523677
+apptag/the_fold_is_the_compatibility_gate|fold|length=2 tag=1009813573
+apptag/the_fold_is_the_compatibility_gate|fold|length=10 tag=314816269
+apptag/the_fold_is_the_compatibility_gate|fold|length=10 tag=314816498

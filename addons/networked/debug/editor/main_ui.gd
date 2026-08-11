@@ -9,6 +9,8 @@
 class_name NetworkedDebuggerUI
 extends VBoxContainer
 
+const PanelDataAdapter := preload("res://addons/networked/debug/editor/adapters/panel_data.gd")
+
 ## Injected by [NetworkedDebuggerPlugin] before the node enters the scene tree.
 var session: DebuggerSession
 
@@ -59,7 +61,7 @@ func _on_peer_registered(
 		peer_key: String,
 		display_name: String,
 		tree_name: String,
-		role: NetwSessionInterface.Role,
+		role: NetwMultiplayer.Role,
 		color: Color,
 		is_remote: bool,
 		peer_id: int,

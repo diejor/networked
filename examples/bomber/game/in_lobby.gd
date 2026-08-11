@@ -4,7 +4,7 @@ extends Control
 ##
 ## Lives inside lobby_level.tscn, so it resolves its own [NetwMultiplayer] through
 ## [method Netw.of] and is created and freed with the scene. The roster reflects
-## [member MultiplayerScene.participants]; the host-only Start button moves everyone
+## [member NetwSceneHandle.participants]; the host-only Start button moves everyone
 ## into the World scene through [BomberGamestate].
 
 @onready var _member_list: ItemList = %MemberList
@@ -15,11 +15,11 @@ extends Control
 
 
 func _ready() -> void:
-	var scene := MultiplayerScene.of(self)
-	scene.participant_entered.connect(_on_membership_changed)
-	scene.participant_left.connect(_on_membership_changed)
+	NetwEntity.of(self).scene \
+			.on_participant_entered(_on_membership_changed) \
+			.on_participant_left(_on_membership_changed)
 	_start_btn.pressed.connect(_on_start_pressed)
-	_leave_btn.pressed.connect(_ctx.leave)
+	_leave_btn.pressed.connect(_ctx.session.leave)
 	_refresh()
 
 
@@ -35,7 +35,7 @@ func _on_membership_changed(_participant: NetwParticipant) -> void:
 func _refresh() -> void:
 	_member_list.clear()
 	var local := _ctx.local_participant
-	var participants := MultiplayerScene.of(self).participants
+	var participants := NetwEntity.of(self).scene.participants
 	participants.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id
@@ -46,7 +46,7 @@ func _refresh() -> void:
 
 	# Recomputed here (not only in _ready) because on a listen-server host the
 	# role is assigned just after startup scenes spawn, so the first refresh
-	# after admission is when is_listen_server() becomes authoritative.
-	var host := _ctx.is_listen_server()
+	# after admission is when the role becomes authoritative.
+	var host := _ctx.role == NetwMultiplayer.Role.LISTEN_SERVER
 	_start_btn.visible = host
 	_start_btn.disabled = not host

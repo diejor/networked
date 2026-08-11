@@ -15,6 +15,8 @@
 class_name WebRTCPeerView
 extends NetwPeerView
 
+const WebRTCSignaler := preload("res://addons/networked/transport/webrtc/signaler/webrtc_signaler.gd")
+
 var _transport: WebRTCTransport
 var _signaler: WebRTCSignaler
 var _session: WebRTCSession
@@ -41,7 +43,7 @@ func _init(
 
 
 ## Builds the session, opens a server room, and returns its [MultiplayerPeer].
-func open_host(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+func open_host(config: NetwHostConfig) -> MultiplayerPeer:
 	_is_server = true
 	_build_session()
 	if _session.create_server() != OK:
@@ -209,18 +211,24 @@ func _on_signaling_disconnected() -> void:
 	_signaling_ready = false
 	if not _is_server and _session and not _session._connected_ids.has(1):
 		_connect_started_ms = 0
-		_fail(NetwConnectResult.unreachable(
-			&"SIGNALING_UNAVAILABLE", "Could not reach signaling.",
-		))
+		_fail(
+			NetwConnectResult.unreachable(
+				&"SIGNALING_UNAVAILABLE",
+				"Could not reach signaling.",
+			),
+		)
 
 
 func _on_signaling_unreachable() -> void:
 	_signaling_ready = false
 	if not _is_server and _session and not _session._connected_ids.has(1):
 		_connect_started_ms = 0
-		_fail(NetwConnectResult.unreachable(
-			&"SIGNALING_UNREACHABLE", "Could not reach any signaling server.",
-		))
+		_fail(
+			NetwConnectResult.unreachable(
+				&"SIGNALING_UNREACHABLE",
+				"Could not reach any signaling server.",
+			),
+		)
 
 
 func _on_session_signal_out(
@@ -245,9 +253,12 @@ func _poll_signaling_check() -> void:
 	var threshold := _transport._timeout_hint(null) - 0.1
 	if elapsed >= threshold and not _signaling_ready:
 		_connect_started_ms = 0
-		_fail(NetwConnectResult.unreachable(
-			&"SIGNALING_UNAVAILABLE", "Could not reach signaling.",
-		))
+		_fail(
+			NetwConnectResult.unreachable(
+				&"SIGNALING_UNAVAILABLE",
+				"Could not reach signaling.",
+			),
+		)
 
 
 # Records progress and forwards it to the establishing attempt.

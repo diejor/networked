@@ -29,20 +29,19 @@ func after_test() -> void:
 
 func test_server_spawns_scene_after_host() -> void:
 	# spawn_scenes() already ran synchronously inside host()
-	var scenes := harness.server().api.scenes
-	assert_that(scenes.scenes.size()).is_equal(1)
+	var api := harness.server().api
+	var instances := api.scene_instances()
+	assert_that(instances.size()).is_equal(1)
 
-	var key := String(scenes.scenes.keys()[0])
-	assert_that(key).is_equal(level_builder.scene_name)
-
-	var spawned_scene: MultiplayerScene = scenes.scenes.values()[0]
-	assert_that(spawned_scene).is_not_null()
-	assert_that(spawned_scene is MultiplayerScene).is_true()
+	var scene := instances[0]
+	assert_that(String(scene.label)).is_equal(level_builder.scene_name)
+	assert_that(scene.is_declared).is_true()
 	assert_object(
 		harness.server().api.get_service(MultiplayerSceneManager),
 	).is_same(server_mgr)
-	assert_object(scenes.scene(level_builder.scene_name)).is_same(spawned_scene)
-	assert_object(scenes.scene_of(spawned_scene.level)).is_same(spawned_scene)
+	assert_object(api.scene(level_builder.scene_name)).is_same(scene)
+	# The level inside resolves back to the scene enclosing it.
+	assert_object(NetwEntity.of(scene.level).scene).is_same(scene)
 
 
 func test_two_clients_both_connect_to_server_with_scene() -> void:
@@ -54,4 +53,4 @@ func test_two_clients_both_connect_to_server_with_scene() -> void:
 	await harness.add_client()
 
 	for client in harness.clients():
-		assert_that(client.is_online()).is_true()
+		assert_that(client.api.is_online).is_true()

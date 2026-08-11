@@ -9,11 +9,13 @@
 ## MultiplayerTree
 ## └── SteamLobbyDirectory
 ##     ├── _list_lobbies() -> lobby_list_updated
-##     ├── _host_lobby(options) -> SteamMultiplayerPeer
+##     ├── _host_lobby(config) -> SteamMultiplayerPeer
 ##     └── _join_lobby_peer(id) -> SteamMultiplayerPeer
 ## [/codeblock]
 class_name SteamLobbyDirectory
 extends LobbyDirectory
+
+const Async := preload("res://addons/networked/utils/async.gd")
 
 const STEAM_APP_ID_SETTING := "steam/initialization/app_id"
 const SPACEWAR_APP_ID := 480
@@ -281,7 +283,6 @@ func _leave_lobby() -> void:
 	_peer = null
 
 
-
 ## Steam lobbies join through the [code]&"steam"[/code] transport by lobby id.
 func _scheme() -> StringName:
 	return &"steam"
@@ -289,10 +290,10 @@ func _scheme() -> StringName:
 
 ## Creates a Steam lobby and returns a connected host peer.
 ##
-## [member LobbyDirectory.HostOptions.visibility] maps to a Steam lobby type.
-## [member LobbyDirectory.HostOptions.max_players] falls back to
+## [member NetwHostConfig.visibility] maps to a Steam lobby type.
+## [member NetwHostConfig.max_players] falls back to
 ## [member max_clients] when it is [code]0[/code].
-func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+func _host_lobby(config: NetwHostConfig) -> MultiplayerPeer:
 	if not _guard_ready("_host_lobby"):
 		return null
 	if _lobby_id != 0:
@@ -301,10 +302,10 @@ func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 			[_lobby_id],
 		)
 		return null
-	_pending_create_name = options.server_name
-	_pending_visibility = options.visibility
-	_pending_lobby_type = _map_visibility(options.visibility)
-	_pending_max = options.max_players if options.max_players > 0 else max_clients
+	_pending_create_name = config.server_name
+	_pending_visibility = config.visibility
+	_pending_lobby_type = _map_visibility(config.visibility)
+	_pending_max = config.max_players if config.max_players > 0 else max_clients
 	_wrapper.create_lobby(int(_pending_lobby_type), _pending_max)
 
 	var timer := get_tree().create_timer(10.0)
@@ -360,12 +361,12 @@ func _join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 
 
 func _bind_tree_signals(mt: MultiplayerTree) -> void:
-	if not mt.peer_connected.is_connected(_on_tree_peer_changed):
-		mt.peer_connected.connect(_on_tree_peer_changed)
-	if not mt.peer_disconnected.is_connected(_on_tree_peer_changed):
-		mt.peer_disconnected.connect(_on_tree_peer_changed)
-	if not mt.server_disconnecting.is_connected(_on_tree_server_disconnecting):
-		mt.server_disconnecting.connect(_on_tree_server_disconnecting)
+	if not mt.api.peer_connected.is_connected(_on_tree_peer_changed):
+		mt.api.peer_connected.connect(_on_tree_peer_changed)
+	if not mt.api.peer_disconnected.is_connected(_on_tree_peer_changed):
+		mt.api.peer_disconnected.connect(_on_tree_peer_changed)
+	if not mt.api.server_disconnecting.is_connected(_on_tree_server_disconnecting):
+		mt.api.server_disconnecting.connect(_on_tree_server_disconnecting)
 
 
 func _on_tree_peer_changed(_peer_id: int) -> void:

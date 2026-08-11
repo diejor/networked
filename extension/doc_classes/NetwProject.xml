@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwProject" inherits="Object" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Extrapolates a value forward by its own time derivative.
+	</brief_description>
+	<description>
+		One trajectory point plus its velocity names where the point will be a short time later. [DisplayCore] calls this every frame to project a remote display past its newest received sample, and [PredictionComponent] calls it once per correction to restore a solver-owned body to the present. Sharing the helper keeps the two extrapolations identical, so a forecasting display and a reconciled body land on the same predicted pose.
+		[codeblock]
+		var ahead := NetwProject.project(pos, velocity, age_sec)
+		if NetwProject.supports(typeof(value)):
+		    ...                            # value carries a meaningful derivative
+		[/codeblock]
+		The supported types are [float] (including angle radians), [Vector2], [Vector3], and [Quaternion]. A [Quaternion] takes a [Vector3] angular velocity in axis-scaled radians per second. Discrete and non-numeric values (integers, colors, strings) have no meaningful derivative and hold instead of projecting.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="project" qualifiers="static">
+			<return type="Variant" />
+			<param index="0" name="value" type="Variant" />
+			<param index="1" name="velocity" type="Variant" />
+			<param index="2" name="age" type="float" />
+			<description>
+				Returns [param value] advanced by [param velocity] over [param age] seconds.
+				For a [Quaternion] [param value] the [param velocity] is a [Vector3] angular velocity and the result is the orientation rotated by that rate over [param age]. Every other supported type adds [code]velocity * age[/code]. An unsupported [param value] type returns [param value] unchanged.
+			</description>
+		</method>
+		<method name="supports" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="type" type="int" />
+			<description>
+				Returns [code]true[/code] when [param type] carries a meaningful derivative the projection can advance. This is the field filter the extrapolated restore reads to decide which state fields project and which restore verbatim.
+			</description>
+		</method>
+	</methods>
+</class>

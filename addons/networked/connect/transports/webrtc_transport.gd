@@ -10,6 +10,8 @@
 class_name WebRTCTransport
 extends NetwTransport
 
+const WebRTCSignaler := preload("res://addons/networked/transport/webrtc/signaler/webrtc_signaler.gd")
+
 ## Globally cached ICE servers, shared across every transport instance.
 static var global_ice_servers: Array[Dictionary] = []
 
@@ -50,8 +52,14 @@ var filter_unsupported_turn: bool = true
 func _make_signaler() -> WebRTCSignaler
 
 
-func scheme() -> StringName:
+func _scheme() -> StringName:
 	return &"webrtc"
+
+
+func _params_from_dict(source: Dictionary) -> NetwTransportParams:
+	var params := NetwWebRTCParams.new()
+	params.from_dict(source)
+	return params
 
 
 func _can_join(target: NetwConnectTarget) -> bool:
@@ -59,11 +67,7 @@ func _can_join(target: NetwConnectTarget) -> bool:
 
 
 func _can_host(config: NetwHostConfig) -> bool:
-	return config != null and config.scheme == &"webrtc"
-
-
-func _can_view(peer: MultiplayerPeer) -> bool:
-	return peer is WebRTCMultiplayerPeer
+	return config != null and config.transport is NetwWebRTCParams
 
 
 func _host(

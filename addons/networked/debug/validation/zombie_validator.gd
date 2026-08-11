@@ -31,17 +31,16 @@ func _scan(peer_id: int, mt: MultiplayerTree, probe: TreeProbe) -> void:
 	if not is_instance_valid(mt):
 		return
 
-	var scenes := mt.api.scenes if mt.api else null
+	var scenes := mt.api._scenes if mt.api else null
 	if not scenes:
 		return
 
 	var zombies: Array[String] = []
-	for scene_name: StringName in scenes.scenes:
-		var scene: MultiplayerScene = scenes.scenes[scene_name]
-		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
+	for scene: Node in scenes.live_scenes():
+		if not is_instance_valid(scene) or not is_instance_valid(_scene_level(scene)):
 			continue
 
-		for node: Node in scene.level.find_children("*", "Node", true, false):
+		for node: Node in _scene_level(scene).find_children("*", "Node", true, false):
 			if is_instance_valid(node) and \
 					node.get_multiplayer_authority() == peer_id:
 				zombies.append(str(node.get_path()))
@@ -54,3 +53,9 @@ func _scan(peer_id: int, mt: MultiplayerTree, probe: TreeProbe) -> void:
 	m.errors = zombies
 	m.network_state["disconnected_peer_id"] = peer_id
 	probe.emit_finding(NetwFinding.new(m, "ZOMBIE_PLAYER_DETECTED"))
+
+
+# The content root of one scene container.
+func _scene_level(scene: Node) -> Node:
+	var record := NetwEntity.of(scene)
+	return record.scene.level if record else null

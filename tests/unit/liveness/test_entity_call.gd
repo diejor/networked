@@ -20,10 +20,12 @@ class TestTargetNode:
 
 
 	var last_node: Node = null
+	var last_node_value := -1
 
 
 	@rpc("any_peer", "call_remote", "reliable") func receive_node(n: Variant, value: int) -> void:
 		last_node = n
+		last_node_value = value
 
 
 	var admin_action_called := false
@@ -74,7 +76,7 @@ class TestNetwMultiplayer:
 	var fake_unique_id := -1
 
 
-	func send_packet(peer_id: int, bytes: PackedByteArray, reliable: bool) -> int:
+	func _send_packet(peer_id: int, bytes: PackedByteArray, reliable: bool) -> int:
 		_sent_packets += 1
 		_sent_bytes += bytes.size()
 		sent_packets.append(
@@ -102,7 +104,6 @@ class CaptureTree:
 
 
 var mt: MultiplayerTree
-var liveness: NetwLivenessInterface
 var api: TestNetwMultiplayer
 
 
@@ -113,7 +114,6 @@ func before_test() -> void:
 	add_child(mt)
 	auto_free(mt)
 	api = mt.api as TestNetwMultiplayer
-	liveness = mt.api.liveness
 
 
 func _bound_entity(route: int, node: Node = null) -> NetwEntity:
@@ -128,7 +128,8 @@ func _bound_entity(route: int, node: Node = null) -> NetwEntity:
 	var mock_api := SceneMultiplayer.new()
 	owner_node.set_meta(&"_multiplayer_api", mock_api)
 
-	liveness.bind_route(route, entity)
+	var rid := api.rid_of(entity.owner)
+	api.entity_bind_route(rid, route)
 	return entity
 
 
@@ -153,7 +154,7 @@ func test_node_argument_crosses_as_route() -> void:
 	var entity = _bound_entity(1, node)
 	var passenger = _bound_entity(2)
 
-	# Call to peer 2 to force it to go to wire/send_packet instead of local dispatch
+	# Call to peer 2 to force it to go to the wire instead of local dispatch
 	Netw.rpc_id(2, node.greet_node, [passenger.owner, 0])
 
 	assert_that(api.sent_packets.size()).is_equal(1)
@@ -167,7 +168,7 @@ func test_node_argument_crosses_as_route() -> void:
 	assert_that(env["channel"]).is_equal(NetwFrameEnvelope.Channel.CALL)
 
 	# Decode CALL payload: [ flag u8 | target_peer u32 | method token | per-arg stream ]
-	var r = NetwBitBuffer.Reader.new(env["payload"])
+	var r = NetwBitBufferReader.create(env["payload"])
 	var flag = r.get_aligned_u8()
 	var target_type = flag & 3
 	assert_that(target_type).is_equal(2)
@@ -198,7 +199,7 @@ func test_component_argument_crosses_as_route_comp() -> void:
 
 	assert_that(api.sent_packets.size()).is_equal(1)
 	var frames = NetwFrameEnvelope.unpack_all(api.sent_packets[0]["bytes"])
-	var r = NetwBitBuffer.Reader.new(frames[0]["payload"])
+	var r = NetwBitBufferReader.create(frames[0]["payload"])
 	var _flag = r.get_aligned_u8()
 	var _target_peer = r.get_aligned_u32()
 	var _method = NetwScriptModel.read_method_token(r)
@@ -225,9 +226,42 @@ func test_component_argument_resolves_on_receive() -> void:
 
 	var ref := NetwNodeRef.new(1, comp_id, "")
 	var call_payload := _pack_call(0, &"receive_node", [ref, 7])
-	api.replication._dispatch(1, 0, NetwFrameEnvelope.Channel.CALL, call_payload, "", 1)
+	api._drive_carrier(
+		1,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.CALL,
+			call_payload,
+		),
+		true,
+	)
 
 	assert_that(node.last_node).is_equal(child)
+
+
+func test_node_argument_outside_sender_interest_is_not_disclosed() -> void:
+	var node = TestTargetNode.new()
+	var _entity = _bound_entity(1, node)
+	var hidden = _bound_entity(2)
+	Netw.configure_rpc(node.receive_node)
+	api._interest.layer(&"hidden").add_entity(hidden)
+
+	var ref := NetwNodeRef.new(2, 0, "")
+	var call_payload := _pack_call(0, &"receive_node", [ref, 7])
+	api._drive_carrier(
+		2,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.CALL,
+			call_payload,
+		),
+		true,
+	)
+
+	assert_object(node.last_node).is_null()
+	assert_int(node.last_node_value).is_equal(-1)
 
 
 func test_entity_root_argument_crosses_as_root_ref() -> void:
@@ -239,7 +273,7 @@ func test_entity_root_argument_crosses_as_root_ref() -> void:
 	Netw.rpc_id(3, node.receive_node, [passenger.owner, 0])
 
 	var frames = NetwFrameEnvelope.unpack_all(api.sent_packets[0]["bytes"])
-	var r = NetwBitBuffer.Reader.new(frames[0]["payload"])
+	var r = NetwBitBufferReader.create(frames[0]["payload"])
 	var _flag = r.get_aligned_u8()
 	var _target_peer = r.get_aligned_u32()
 	var _method = NetwScriptModel.read_method_token(r)
@@ -249,6 +283,28 @@ func test_entity_root_argument_crosses_as_root_ref() -> void:
 	assert_that(ref is NetwNodeRef).is_true()
 	assert_that(ref.route).is_equal(2)
 	assert_that(ref.comp).is_equal(0)
+
+
+func test_call_on_addresses_an_entity_component() -> void:
+	var node = TestTargetNode.new()
+	var entity := _bound_entity(1, node)
+	Netw.configure_rpc(node.greet)
+
+	var verdict := api.entity_call(
+		entity.rid,
+		0,
+		&"greet",
+		["hello", 42],
+		2,
+	)
+
+	assert_int(verdict).is_equal(OK)
+	assert_int(api.sent_packets.size()).is_equal(1)
+	var frames := NetwFrameEnvelope.unpack_all(api.sent_packets[0]["bytes"])
+	assert_int(frames[0]["route"]).is_equal(1)
+	assert_int(frames[0]["channel"]).is_equal(
+		NetwFrameEnvelope.Channel.CALL,
+	)
 
 
 func test_request_resolves_synchronously() -> void:
@@ -278,16 +334,23 @@ func test_async_request_resolves_deferred() -> void:
 
 func test_reply_value_roundtrips_through_codec() -> void:
 	# A reply value crosses through the value codec and resolves its promise.
-	var promise = NetwPromise.new()
-	api.rpc_interface._txn_book.register(7, promise, 2, 99999)
+	var node = TestTargetNode.new()
+	_bound_entity(1, node)
+	var promise: NetwPromise = api._rpc_core.request_call(
+		2,
+		node.request_val,
+		[1],
+		99999,
+	)
+	api.sent_packets.clear()
 
 	# Reply to peer 2 so it rides the wire instead of loopback-dispatching.
-	api.rpc_interface.send_reply(2, 5, 7, "hello")
+	api._rpc_core.send_reply(2, 5, 1, "hello")
 
 	var frames = NetwFrameEnvelope.unpack_all(api.sent_packets[0]["bytes"])
 	var env = frames[0]
 	assert_that(env["channel"]).is_equal(NetwFrameEnvelope.Channel.REPLY)
-	api.replication._dispatch(env["route"], env["comp"], env["channel"], env["payload"], env["path"], 2)
+	api._drive_carrier(2, api.sent_packets[0]["bytes"], true)
 
 	assert_that(promise.is_completed).is_true()
 	assert_that(promise.result).is_equal("hello")
@@ -307,7 +370,7 @@ func test_request_timeout() -> void:
 		api.poll()
 
 	assert_that(p.is_failed).is_true()
-	assert_that(p.error).is_equal("Timeout")
+	assert_that(p.code).is_equal(ERR_TIMEOUT)
 
 
 func test_component_table_indexing() -> void:
@@ -357,11 +420,16 @@ func test_component_table_divergence_guard() -> void:
 	# default (matching NetwEntity._is_route_authority's convention).
 	var fake_peer := LocalMultiplayerPeer.new()
 	fake_peer.create_client(2)
-	mt.api.inner.multiplayer_peer = fake_peer
-	mt.role = NetwSessionInterface.Role.CLIENT
+	mt.api._set_multiplayer_peer(fake_peer)
+	mt.role = NetwMultiplayer.Role.CLIENT
+	entity._stamp_multiplayer(api)
+	assert_bool(entity.is_authority).is_false()
 
 	# Trigger client-side hydrated check
-	entity._on_identity_hydrated()
+	await assert_error(
+		func() -> void:
+			entity._on_identity_hydrated()
+	).is_push_error(GdUnitArgumentMatchers.any())
 
 	assert_that(entity.components.poisoned).is_true()
 
@@ -370,7 +438,7 @@ func test_component_table_divergence_guard() -> void:
 # configured transfer mode. Freshness for an unreliable send rides the carrier
 # datagram's sequence stamp, never the payload.
 func _serialize_prop(property: StringName, value: Variant) -> PackedByteArray:
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_token(w, property)
 	NetwScriptModel.write_values(w, [value], [], [typeof(value)])
 	return w.to_bytes()
@@ -382,18 +450,45 @@ func test_var_synchronization() -> void:
 
 	# 1. Authority write (always allowed)
 	var payload := _serialize_prop(&"health", 80)
-	api.replication._sync_pipeline._property_signal_router.handle_property_sync(entity, node, payload, 1)
+	api._drive_carrier(
+		1,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.PROPERTY_SYNC,
+			payload,
+		),
+		true,
+	)
 	assert_that(node.health).is_equal(80)
 
 	# 2. Non-authority write (default write policy is authority only)
 	node.health = 80
 	var payload2 := _serialize_prop(&"health", 50)
-	api.replication._sync_pipeline._property_signal_router.handle_property_sync(entity, node, payload2, 2)
+	api._drive_carrier(
+		2,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.PROPERTY_SYNC,
+			payload2,
+		),
+		true,
+	)
 	assert_that(node.health).is_equal(80)
 
 	# 3. Non-authority write with any_peer policy configured
 	Netw.configure_property(node, "health").any_peer().call_local()
-	api.replication._sync_pipeline._property_signal_router.handle_property_sync(entity, node, payload2, 2)
+	api._drive_carrier(
+		2,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.PROPERTY_SYNC,
+			payload2,
+		),
+		true,
+	)
 	assert_that(node.health).is_equal(50)
 
 
@@ -423,7 +518,7 @@ func test_property_sync_payload_is_token_then_value_only() -> void:
 
 	# Send as a client so the frame reaches the wire instead of loopback.
 	api.fake_unique_id = 2
-	api.replication.send_property(node, &"health")
+	api._replication.send_property(node, &"health")
 	api.fake_unique_id = -1
 
 	assert_that(api.sent_packets.size()).is_equal(1)
@@ -435,7 +530,7 @@ func test_property_sync_payload_is_token_then_value_only() -> void:
 	# send carries no freshness bytes of its own, because staleness is judged
 	# by the carrier datagram's sequence stamp.
 	var frame: Dictionary = NetwFrameEnvelope.unpack_all(sent["bytes"])[0]
-	var r := NetwBitBuffer.Reader.new(frame["payload"])
+	var r := NetwBitBufferReader.create(frame["payload"])
 	NetwScriptModel.read_token(r)
 	var values := NetwScriptModel.read_values(r, [null], [TYPE_INT])
 	assert_that(values[0]).is_equal(70)
@@ -461,9 +556,11 @@ func test_property_sync_payload_is_token_then_value_only() -> void:
 	for i in table.size():
 		assert_int(NetwScriptModel.get_property_id(script, table[i])) \
 				.is_equal(i + 1)
-		assert_str(String(
-			NetwScriptModel.get_property_name_by_id(script, i + 1),
-		)).is_equal(String(table[i]))
+		assert_str(
+			String(
+				NetwScriptModel.get_property_name_by_id(script, i + 1),
+			),
+		).is_equal(String(table[i]))
 
 
 func _prop_datagram(seq: int, route: int, property: StringName, value: Variant) -> PackedByteArray:
@@ -482,15 +579,21 @@ func _prop_datagram(seq: int, route: int, property: StringName, value: Variant) 
 
 
 func test_txn_book_disconnect_sweep() -> void:
-	var promise = NetwPromise.new()
-	api.rpc_interface._txn_book.register(42, promise, 2, 99999)
+	var node = TestTargetNode.new()
+	_bound_entity(1, node)
+	var promise: NetwPromise = api._rpc_core.request_call(
+		2,
+		node.request_val,
+		[1],
+		99999,
+	)
 
 	# Simulate peer 2 disconnecting
 	api._clear_disconnected_peer(2)
 
 	assert_that(promise.is_completed).is_false()
 	assert_that(promise.is_failed).is_true()
-	assert_that(promise.error).contains("disconnected")
+	assert_that(promise.code).is_equal(ERR_UNAVAILABLE)
 
 
 func test_path_traversal_rejected() -> void:
@@ -507,7 +610,7 @@ func test_path_traversal_rejected() -> void:
 	node.greeted.connect(func(msg: String) -> void: received.append(msg))
 
 	# Dispatch dynamic envelope
-	api.replication.receive_carrier(bytes, 0)
+	api._drive_carrier(0, bytes, true)
 
 	# Since it is traversal, it should be rejected and NOT executed (greeted is not emitted)
 	assert_that(received.size()).is_equal(0)
@@ -523,14 +626,32 @@ func test_rpc_authority_validation() -> void:
 	var call_payload := _pack_call(0, &"admin_action", [])
 
 	# 1. Authority caller (sender = 1, since 1 is the default multiplayer authority)
-	api.replication._dispatch(1, 0, NetwFrameEnvelope.Channel.CALL, call_payload, "", 1)
+	api._drive_carrier(
+		1,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.CALL,
+			call_payload,
+		),
+		true,
+	)
 	assert_that(node.admin_action_called).is_true()
 
 	# Reset flag
 	node.admin_action_called = false
 
 	# 2. Non-authority caller (sender = 2)
-	api.replication._dispatch(1, 0, NetwFrameEnvelope.Channel.CALL, call_payload, "", 2)
+	api._drive_carrier(
+		2,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.CALL,
+			call_payload,
+		),
+		true,
+	)
 	assert_that(node.admin_action_called).is_false()
 
 
@@ -542,7 +663,16 @@ func test_relay_sender_visible_to_handler() -> void:
 	Netw.configure_rpc(node.record_sender)
 
 	var call_payload := _pack_call(0, &"record_sender", [])
-	api.replication._dispatch(1, 0, NetwFrameEnvelope.Channel.CALL, call_payload, "", 7)
+	api._drive_carrier(
+		7,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.CALL,
+			call_payload,
+		),
+		true,
+	)
 
 	assert_that(node.last_sender).is_equal(7)
 
@@ -555,7 +685,16 @@ func test_relay_sender_clears_after_dispatch() -> void:
 	Netw.configure_rpc(node.record_sender)
 
 	var call_payload := _pack_call(0, &"record_sender", [])
-	api.replication._dispatch(1, 0, NetwFrameEnvelope.Channel.CALL, call_payload, "", 7)
+	api._drive_carrier(
+		7,
+		NetwFrameEnvelope.pack(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.CALL,
+			call_payload,
+		),
+		true,
+	)
 
 	assert_that(api._relay_sender).is_equal(0)
 
@@ -584,7 +723,7 @@ func test_quantized_call_body_roundtrip() -> void:
 	var arg_types := [TYPE_FLOAT, TYPE_VECTOR2, TYPE_INT]
 	var args := [90.0, Vector2(0.5, -0.5), 7]
 
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_call_body(w, 3, args, quantizers, arg_types)
 	var bytes := w.to_bytes()
 
@@ -592,7 +731,7 @@ func test_quantized_call_body_roundtrip() -> void:
 	var tagged := var_to_bytes([3, args])
 	assert_that(bytes.size()).is_less(tagged.size())
 
-	var r := NetwBitBuffer.Reader.new(bytes)
+	var r := NetwBitBufferReader.create(bytes)
 	assert_that(NetwScriptModel.read_method_token(r)).is_equal(3)
 	var decoded := NetwScriptModel.read_call_args(r, quantizers, arg_types)
 	assert_that(decoded.size()).is_equal(3)
@@ -619,7 +758,7 @@ func test_quantized_args_dispatch_through_relay() -> void:
 
 
 static func _pack_call(txn_id: int, method_val: Variant, args: Array) -> PackedByteArray:
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	NetwCodec.put_varint(w, txn_id)
 	# No quantizers or arg types: every argument rides the tagged path.
 	NetwScriptModel.write_call_body(w, method_val, args, [], [])
@@ -684,14 +823,14 @@ func test_multi_frame_unpack() -> void:
 
 
 func test_aggregation_batches_frames_into_one_packet() -> void:
-	api.clock._configured = true
-	api.replication.send_to(5, 1, NetwFrameEnvelope.Channel.PROPERTY_SYNC, var_to_bytes([&"a", 1]), false)
-	api.replication.send_to(5, 2, NetwFrameEnvelope.Channel.PROPERTY_SYNC, var_to_bytes([&"b", 2]), false)
+	api.object_configuration_add(null, NetwClockConfig.new())
+	api._replication.send_to(5, 1, NetwFrameEnvelope.Channel.PROPERTY_SYNC, var_to_bytes([&"a", 1]), false)
+	api._replication.send_to(5, 2, NetwFrameEnvelope.Channel.PROPERTY_SYNC, var_to_bytes([&"b", 2]), false)
 
 	# Buffered, nothing on the wire yet.
 	assert_that(api.sent_packets.size()).is_equal(0)
 
-	api.replication.flush_all_buffers()
+	api._replication.flush_all_buffers()
 	assert_that(api.sent_packets.size()).is_equal(1)
 
 	var frames := NetwFrameEnvelope.unpack_all(api.sent_packets[0]["bytes"])
@@ -699,12 +838,12 @@ func test_aggregation_batches_frames_into_one_packet() -> void:
 
 
 func test_aggregation_splits_at_mtu() -> void:
-	api.clock._configured = true
+	api.object_configuration_add(null, NetwClockConfig.new())
 	var big := PackedByteArray()
 	big.resize(400)
 	for i in 5:
-		api.replication.send_to(5, 1, NetwFrameEnvelope.Channel.PROPERTY_SYNC, big, false)
-	api.replication.flush_all_buffers()
+		api._replication.send_to(5, 1, NetwFrameEnvelope.Channel.PROPERTY_SYNC, big, false)
+	api._replication.flush_all_buffers()
 
 	# Five ~405-byte frames exceed the 1200-byte unreliable cap, so at least one
 	# mid-stream flush happened before the final flush.
@@ -726,3 +865,22 @@ func test_quantizer_validation() -> void:
 	var invalid_signal_config := Netw.configure_signal(node.greeted)
 	invalid_signal_config.quantizers = [NetwQuantizeBits.new().bits(8).limits(0.0, 100.0)]
 	assert_that(invalid_signal_config._validate_quantizer_support()).is_false()
+
+
+# A component address arrives off the wire and names its own comp, so an entity
+# holding no owner node is reachable from a remote peer rather than only from a
+# local mistake. Every branch of the resolver traverses from the owner, so a
+# nodeless route has to be refused before any of them run.
+func test_component_address_at_a_nodeless_route_resolves_to_nothing() -> void:
+	var nodeless := NetwEntity.new()
+	assert_object(nodeless.owner).is_null()
+
+	var replication := api._replication
+	# comp 0 is the entity root, 255 is the relative-path fallback, and anything
+	# between indexes the component table. None of the three has anywhere to look.
+	assert_object(replication.resolve_comp_node(nodeless, 0, "")).is_null()
+	assert_object(replication.resolve_comp_node(nodeless, 255, "Child")).is_null()
+	assert_object(replication.resolve_comp_node(nodeless, 3, "")).is_null()
+	# A null entity is the same answer, because the receive dispatch reaches here
+	# with whatever the route table gave it.
+	assert_object(replication.resolve_comp_node(null, 255, "Child")).is_null()

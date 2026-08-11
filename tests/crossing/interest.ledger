@@ -1,0 +1,132 @@
+# family: interest
+# bridge: B(law-restatement)
+# regime: exact (rows are packed peer bits, transitions are integers)
+# instrument-first: 75bdb091
+# baseline: tests/unit/interest, tests/integration/interest
+# baseline-count: 54
+# successor-form: matrix
+#
+# The unit is the verdict core, which is now NetwInterestEngine: the layer admit
+# masks, the per-entity desired rows in ancestry order, the XOR delta and its
+# ordering, the committed matrix, and the explainer over it.
+#
+# THE SPLIT WAS ALREADY PAID, which is what makes this batch unlike the four
+# before it. Liveness, clock, session and scenes each began by carving a
+# portable plane out of a file that mixed two. Interest did not: the core was
+# already four files holding pure mask algebra with zero Object reach, and a
+# test grepped its own source for thirteen forbidden tokens to keep it that way.
+# So this crossing is a translation, and its risk sits entirely in what the new
+# representation can do that the old one could not.
+#
+# THE KEY IS THE ONE REPRESENTATION CHANGE, AND RID WAS THE WRONG HANDLE. The
+# schedule called for re-keying entity identity onto NetwEntity.rid. That is
+# refused on measured evidence: rid is unset until liveness admits an entity and
+# is cleared again at death (liveness_shell.gd sets RID() in three places), so
+# several live entities hold an invalid one at the same time and keying on it
+# would merge them. An off-tree entity holding an admission before it has any
+# identity is the case that names it. The engine keys on an int64 slot minted by
+# InterestCore instead, exactly as that interface already mints peer bits, and
+# the slot is stable for as long as interest cares about the entity.
+#
+# TWO HAZARDS THE OLD SHAPE COULD NOT HAVE, both stated natively rather than
+# discovered later. Zero is what set_parent spells "no parent" with, so an
+# entity stored at slot zero could never clamp anybody and never be clamped, and
+# every mutation now refuses it. And two entities can share a (depth, route)
+# while the table holding them has no insertion order to fall back on, so the
+# tie is broken on the slot and the transition order is total rather than
+# usually-total.
+#
+# THE INSTRUMENT WAS RECORDED AND THEN RETIRED, and that is a deliberate choice
+# rather than an omission. tests/crossing/interest_arm.gd and a 47-row golden
+# were recorded at 75bdb091 before a line of the core was native, and red-proven
+# eight times across eight independent halves: the layer mask's live clamp, the
+# parent clamp, the hide ordering, the commit revision guard, the default layer
+# policy, membership composition, the intent flag, and removal from the matrix.
+# The first of those eight found a real hole in the arm, which then grew the
+# case that closes it.
+#
+# What the arm is NOT is a second implementation of the specification, and the
+# core's specification is already a set of properties rather than a script of
+# observations. So the native side states the properties directly. The arm and
+# its golden are deleted with the classes they drove, and the evidence they
+# produced lives at 75bdb091 rather than in a file nothing reads. A golden with
+# no reader is coverage that is always green because nobody looked.
+#
+# WHAT THE ROWS BELOW ARE CHECKED BY. The fifteen ported cases become fifteen
+# native cases in interest_engine_tests.cpp. The thirty-nine that carry are not
+# a hedge: every one of them drives a node, a handle, a signal or a live
+# session through InterestCore, and all thirty-nine now run against the native
+# engine, which is what makes the translation observable end to end rather than
+# only in the tier that owns it.
+#
+# THE PURITY LINT COULD NOT CROSS AND IS NOT PRETENDING TO. It read the engine's
+# own .gd source as a string and asserted thirteen tokens were absent. That file
+# is gone, so the case would pass by reading nothing, which is the exact failure
+# the census exists to catch. Its successor is structural: interest_engine.cpp
+# includes no engine header that could reach a tree, a clock or a signal, and
+# tools/check_sources.py holds every source to compiling.
+#
+# THE VANISHED-KEY COUNTER HAS NO PUBLIC PATH TO IT, found while writing the
+# instrument. Removing an entity takes it out of the dirty set, and nothing else
+# can leave a dirty key with no record, so the only case that ever raised that
+# counter wrote the private set directly. GDScript cannot write a native
+# private, so the case crosses to the tier where the member is reachable.
+#
+# CARRIED DEBT, named with its trigger. InterestCore holds two maps to translate
+# NetwEntity into a slot and back. They collapse to one when NetwEntity itself
+# is native and can carry its slot, which the shell swap schedules.
+#
+test_interest_engine.gd:test_l1_determinism_returns_identical_rows          -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] the same state yields the same rows"
+test_interest_engine.gd:test_l2_confluence_ignores_mutation_order           -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] mutation order does not move the matrix"
+test_interest_engine.gd:test_l2_seeded_final_states_match_permuted_replay   -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] seeded states survive a permuted replay"
+test_interest_engine.gd:test_l3_repeated_mutations_and_flush_are_idempotent -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] repeating a mutation and a flush changes nothing"
+test_interest_engine.gd:test_l4_outsider_policy_is_monotone                 -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] more viewers only ever grants more peers"
+test_interest_engine.gd:test_l4_insider_policy_is_antitone                  -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] more viewers only ever hides from more peers"
+test_interest_engine.gd:test_l5_ancestor_rows_always_clamp_descendants      -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] an ancestor row always clamps its descendants"
+test_interest_engine.gd:test_l6_entity_without_memberships_is_visible_by_intent -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] an entity in no layer is granted by intent alone"
+test_interest_engine.gd:test_l7_delta_is_exact_desired_xor_committed        -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] the delta names what changed and nothing else"
+test_interest_engine.gd:test_l8_orders_hides_deep_first_and_shows_shallow_first -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] hides run child-first and shows parent-first"
+test_interest_engine.gd:test_small_model_matches_oracle_for_every_layer_state -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] the oracle agrees on every state of the small model"
+test_interest_engine.gd:test_p11_replay_produces_identical_delta_matrix_and_stats -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] a replayed script produces an identical delta, matrix and counters"
+test_interest_engine.gd:test_p12_registration_and_forest_order_do_not_change_output -> interest_engine_tests.cpp:"[Networked][Interest][Hosted] registration and layer order do not change the output"
+test_interest_engine.gd:test_vanished_dirty_key_skip_is_counted             -> DROP the counter has no public path to it; its only case wrote the private dirty set, which GDScript cannot do to a native member
+test_interest_engine.gd:test_engine_source_obeys_purity_contract           -> DROP the source it grepped is deleted, so the case would pass by reading nothing
+test_interest_handle.gd:test_interest_handle_is_cached                                               -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_join_leave_and_tree_lifecycle                                           -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_configure_interest_dispatches_layer_callbacks                           -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_observer_callbacks_use_peer_only_surface                                -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_leave_policy_builder_and_custom_guard                                   -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_perception_builder_and_custom_guard                                     -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_wire_admission_does_not_override_host_participant_row                   -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_hide_perception_restores_visual_and_audio_state                         -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_custom_perception_receives_both_local_edges                             -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_awareness_enter_waits_for_delayed_node                                  -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_observer_awareness_resolves_route_and_rejects_paths                     -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_handle.gd:test_off_tree_entity_keeps_admission_until_driven                            -> CARRY tests/unit/interest (the handle surface, its builders and its callbacks)
+test_interest_monitor_snapshot.gd:test_layer_snapshot_counts_viewers_entities_edges_transitions      -> CARRY tests/unit/interest (the monitor's dictionary)
+test_interest_monitor_snapshot.gd:test_visible_edge_count_drops_on_forget                            -> CARRY tests/unit/interest (the monitor's dictionary)
+test_interest_monitor_snapshot.gd:test_service_snapshot_aggregates_tree_wide                         -> CARRY tests/unit/interest (the monitor's dictionary)
+test_interest_service.gd:test_synchronizer_visibility_event_updates_committed_intent                 -> CARRY tests/unit/interest (synchronizer intent and shared scope)
+test_interest_service.gd:test_shared_entities_follow_the_resolved_interest_scope                     -> CARRY tests/unit/interest (synchronizer intent and shared scope)
+test_interest_settle.gd:test_a_mutation_schedules_the_flush_rather_than_running_it                   -> CARRY tests/unit/interest (the settle queue, which is a frame concern)
+test_interest_settle.gd:test_the_flush_lands_at_the_settle_with_no_frame                             -> CARRY tests/unit/interest (the settle queue, which is a frame concern)
+test_interest_settle.gd:test_flush_now_leaves_nothing_for_the_settle                                 -> CARRY tests/unit/interest (the settle queue, which is a frame concern)
+test_netw_interest.gd:test_layer_creates_on_first_use                                                -> CARRY tests/unit/interest (the layer registry)
+test_netw_interest.gd:test_layer_returns_same_instance                                               -> CARRY tests/unit/interest (the layer registry)
+test_netw_interest.gd:test_get_layer_returns_null_for_missing_layer                                  -> CARRY tests/unit/interest (the layer registry)
+test_netw_interest.gd:test_get_layer_returns_existing                                                -> CARRY tests/unit/interest (the layer registry)
+test_netw_interest.gd:test_all_layers_lists_created_layers                                           -> CARRY tests/unit/interest (the layer registry)
+test_netw_interest_layer.gd:test_viewer_mutations_change_verdict                                     -> CARRY tests/unit/interest (layer objects and their signals)
+test_netw_interest_layer.gd:test_hide_from_insiders_inverts_verdict                                  -> CARRY tests/unit/interest (layer objects and their signals)
+test_netw_interest_layer.gd:test_server_peer_is_evaluated_as_an_ordinary_participant                 -> CARRY tests/unit/interest (layer objects and their signals)
+test_netw_interest_layer.gd:test_entity_transitions_emit_at_service_flush                            -> CARRY tests/unit/interest (layer objects and their signals)
+test_netw_interest_layer.gd:test_idempotent_mutations_do_not_duplicate_signals                       -> CARRY tests/unit/interest (layer objects and their signals)
+test_netw_interest_layer.gd:test_layer_with_service_broadcasts_through_hooks                         -> CARRY tests/unit/interest (layer objects and their signals)
+test_ancestor_interest_composition.gd:test_scene_wrapper_is_an_ordinary_layer_member                 -> CARRY tests/integration/interest (live scene composition)
+test_ancestor_interest_composition.gd:test_parent_row_blocks_child_layer_until_scene_admits          -> CARRY tests/integration/interest (live scene composition)
+test_leave_policy.gd:test_retain_freezes_and_readmission_resumes_same_node                           -> CARRY tests/integration/interest (wire despawn and retain)
+test_perception_policy.gd:test_host_and_retained_client_share_hide_applier                           -> CARRY tests/integration/interest (local presentation)
+test_scene_membership_is_ancestry.gd:test_a_child_with_no_membership_inherits_the_scene_row          -> CARRY tests/integration/interest (reparenting a live scene)
+test_scene_membership_is_ancestry.gd:test_the_child_follows_the_scene_it_is_reparented_into          -> CARRY tests/integration/interest (reparenting a live scene)
+test_scene_membership_is_ancestry.gd:test_scene_of_answers_the_containing_scene -> MATRIX declared_scene_laws.cpp:"L-MEMBER"x"seated-entity"
+test_shared_scope_on_the_owner.gd:test_the_owner_resolves_the_same_shared_scope_the_server_committed -> CARRY tests/integration/interest (the owner's projected row)

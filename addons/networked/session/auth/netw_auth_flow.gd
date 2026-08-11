@@ -1,4 +1,4 @@
-## Per-session authentication flow for [NetwSessionInterface].
+## Per-session authentication flow for [SessionCore].
 ##
 ## Registered as a factory through [method Netw.configure_auth] so every session
 ## (including a debugger-cloned tree) constructs its own flow and owns its
@@ -22,9 +22,8 @@
 class_name NetwAuthFlow
 extends RefCounted
 
-
 ## Prepares the flow before the transport opens, awaited by
-## [method NetwSessionInterface.prepare_join]. Fetch a ticket here and return a
+## [method NetwSessionHandle.prepare_join]. Fetch a ticket here and return a
 ## non-[constant OK] [enum Error] to abort the join.
 func prepare(_payload: JoinPayload) -> Error:
 	return OK
@@ -47,6 +46,6 @@ func verify(_peer_id: int, _data: PackedByteArray) -> AuthResult:
 
 ## Returns the listen-server host's own identity. Godot never runs the auth
 ## callback for the host peer, so [AuthCoordinator] calls this when a configured
-## server reaches [constant NetwSessionInterface.State.ONLINE].
+## server reaches [constant NetwMultiplayer.SessionState.ONLINE].
 func host_identity() -> NetwIdentity:
 	return null

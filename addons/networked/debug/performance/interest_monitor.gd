@@ -1,9 +1,9 @@
 @tool
-## Exposes [NetwInterestInterface] occupancy as Godot [Performance] monitors, with a
+## Exposes [InterestCore] occupancy as Godot [Performance] monitors, with a
 ## tree-wide group per [MultiplayerTree] and one group per [NetwInterestLayer].
 ##
 ## This is a presentation adapter managed by the [DebugReporter]. It pulls
-## [method NetwInterestInterface.monitor_snapshot] and
+## [method NetwMultiplayer.stats_snapshot] and
 ## [method NetwInterestLayer.monitor_snapshot], turning the cumulative transition
 ## counters into live rates. Work runs only while a debugger is attached
 ## ([method EngineDebugger.is_active]) and is throttled, and the per-layer
@@ -26,8 +26,8 @@
 ## [/codeblock]
 ##
 ## Interest is server authoritative, so a pure client tree reads near zero. Reach
-## the data source through [method NetwInterestInterface.monitor_snapshot] in non-debug
-## code, never these monitors.
+## the tree-wide data source through [method NetwMultiplayer.stats_snapshot] in
+## non-debug code, never these monitors.
 class_name InterestMonitor
 extends Node
 
@@ -59,7 +59,7 @@ func _exit_tree() -> void:
 	clear_all()
 
 
-## Tracks [param mt] so its [NetwInterestInterface] is sampled each interval.
+## Tracks [param mt] so its [InterestCore] is sampled each interval.
 func register_tree(mt: MultiplayerTree) -> void:
 	if mt not in _trees:
 		_trees.append(mt)
@@ -86,20 +86,28 @@ func _sample(elapsed: float) -> void:
 	for mt in _trees:
 		if not is_instance_valid(mt):
 			continue
-		var interest := mt.api.interest if mt.api else null
+		var interest := mt.api._interest if mt.api else null
 		if not interest:
 			continue
 		var tree_category := _tree_category(mt)
-		var snap := interest.monitor_snapshot()
+		var snap := mt.api.stats_snapshot()
 		_store(
 			tree_category,
 			{
-				&"layers": snap.get(&"layers", 0),
-				&"entities_filtered": snap.get(&"entities_filtered", 0),
-				&"visible_edges": snap.get(&"visible_edges", 0),
-				&"transitions_rate": _rate(tree_category, int(snap.get(&"transitions_total", 0)), elapsed),
-				&"dirty_entities": snap.get(&"dirty_entities", 0),
-				&"relay_backlog": snap.get(&"relay_backlog", 0),
+				&"layers": snap.get(&"interest_layers", 0),
+				&"entities_filtered": (
+						snap.get(&"interest_entities_filtered", 0)
+				),
+				&"visible_edges": snap.get(&"interest_visible_edges", 0),
+				&"transitions_rate": _rate(
+					tree_category,
+					int(snap.get(&"interest_transitions_total", 0)),
+					elapsed,
+				),
+				&"dirty_entities": (
+						snap.get(&"interest_dirty_entities", 0)
+				),
+				&"relay_backlog": snap.get(&"interest_relay_backlog", 0),
 			},
 		)
 
@@ -114,7 +122,11 @@ func _sample(elapsed: float) -> void:
 					&"viewers": lsnap.get(&"viewers", 0),
 					&"entities": lsnap.get(&"entities", 0),
 					&"visible_edges": lsnap.get(&"visible_edges", 0),
-					&"transitions_rate": _rate(layer_category, int(lsnap.get(&"transitions_total", 0)), elapsed),
+					&"transitions_rate": _rate(
+						layer_category,
+						int(lsnap.get(&"transitions_total", 0)),
+						elapsed,
+					),
 				},
 			)
 		_prune_layers(tree_category, live)

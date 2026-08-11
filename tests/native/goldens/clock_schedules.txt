@@ -1,0 +1,81 @@
+# The clock family's Bridge-B trace, recorded from the GDScript tick
+# engine before any of it was native. Rows are
+# scenario|kind|key=value, keys sorted, continuous readings at 6
+# digits, tick-domain values exact.
+#
+# Regenerate with:
+#   godot --headless --path . -s res://tests/crossing/clock_arm.gd \
+#     -- --record
+# Regenerating against a candidate implementation destroys the
+# evidence this file exists to be.
+antecedent||physics_ticks_per_second=60
+tick/accumulates_to_whole_ticks|frame|delta=0.062500 tick=0
+tick/accumulates_to_whole_ticks|signals|order=[before_tick_loop,after_tick_loop]
+tick/accumulates_to_whole_ticks|frame|delta=0.062500 tick=1
+tick/accumulates_to_whole_ticks|signals|order=[before_tick_loop,before_tick,on_tick,after_tick,after_tick_loop]
+tick/accumulates_to_whole_ticks|frame|delta=0.125000 tick=2
+tick/accumulates_to_whole_ticks|signals|order=[before_tick_loop,before_tick,on_tick,after_tick,after_tick_loop]
+tick/accumulates_to_whole_ticks|frame|delta=0.031250 tick=2
+tick/accumulates_to_whole_ticks|signals|order=[before_tick_loop,after_tick_loop]
+tick/the_ceiling_caps_a_long_frame|capped|tick=2
+tick/the_ceiling_caps_a_long_frame|signals|order=[before_tick_loop,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,after_tick_loop]
+tick/the_ceiling_caps_a_long_frame|residue|tick=4
+tick/a_stall_resets_the_accumulator|long_frame|stalled=false tick=5
+tick/a_stall_resets_the_accumulator|frame_after|stalled=false tick=6
+tick/a_stall_resets_the_accumulator|long_frame|stalled=true tick=5
+tick/a_stall_resets_the_accumulator|frame_after|stalled=true tick=5
+tick/a_stall_resets_the_accumulator|signals|order=[before_tick_loop,after_tick_loop,before_tick_loop,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,after_tick_loop,before_tick_loop,after_tick_loop]
+tick/force_step_matches_the_loop|stepped|tick=3
+tick/force_step_matches_the_loop|signals|order=[before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick]
+tick/force_step_matches_the_loop|zero|tick=3
+tick/force_step_matches_the_loop|signals|order=[]
+tick/force_step_matches_the_loop|pumped|tick=3
+tick/force_step_matches_the_loop|signals|order=[before_tick_loop,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,before_tick,on_tick,after_tick,after_tick_loop]
+gate/ungated_simulates_every_frame|frame|behind=0 simulating=true ticks=1
+gate/ungated_simulates_every_frame|frame|behind=0 simulating=true ticks=0
+gate/ungated_simulates_every_frame|frame|behind=0 simulating=true ticks=1
+gate/ungated_simulates_every_frame|frame|behind=0 simulating=true ticks=0
+gate/ungated_simulates_every_frame|frame|behind=0 simulating=true ticks=0
+gate/ungated_simulates_every_frame|frame|behind=0 simulating=true ticks=1
+gate/gated_holds_the_frames_that_run_no_tick|frame|behind=0 simulating=true ticks=1
+gate/gated_holds_the_frames_that_run_no_tick|frame|behind=0 simulating=false ticks=0
+gate/gated_holds_the_frames_that_run_no_tick|frame|behind=0 simulating=true ticks=1
+gate/gated_holds_the_frames_that_run_no_tick|frame|behind=0 simulating=true ticks=1
+gate/gated_holds_the_frames_that_run_no_tick|frame|behind=0 simulating=false ticks=0
+gate/gated_holds_the_frames_that_run_no_tick|frame|behind=0 simulating=true ticks=1
+gate/two_steps_per_tick_admits_two_frames|budget|steps_per_tick=2
+gate/two_steps_per_tick_admits_two_frames|frame|behind=0 simulating=true ticks=1
+gate/two_steps_per_tick_admits_two_frames|frame|behind=0 simulating=true ticks=0
+gate/two_steps_per_tick_admits_two_frames|frame|behind=0 simulating=true ticks=1
+gate/two_steps_per_tick_admits_two_frames|frame|behind=0 simulating=true ticks=0
+gate/two_steps_per_tick_admits_two_frames|frame|behind=0 simulating=false ticks=0
+gate/two_steps_per_tick_admits_two_frames|frame|behind=0 simulating=true ticks=1
+gate/gates_nest_and_only_the_last_release_ungates|one_released|gated=true
+gate/gates_nest_and_only_the_last_release_ungates|held|simulating=false
+gate/gates_nest_and_only_the_last_release_ungates|all_released|gated=false simulating=true
+gate/a_peer_that_cannot_keep_up_reports_it|behind|count=1 simulating=true
+gate/a_peer_that_cannot_keep_up_reports_it|ungated_never_reports|count=0
+sync/the_first_pong_synchronizes_and_seeds_the_phase|before|synchronized=false
+sync/the_first_pong_synchronizes_and_seeds_the_phase|pong|at=first diff=41 is_stable=true is_synchronized=true recommended=0 rtt_avg=0.000000 rtt_jitter=0.000000 tick=40
+sync/the_first_pong_synchronizes_and_seeds_the_phase|signals|order=[clock_synchronized]
+sync/the_first_pong_synchronizes_and_seeds_the_phase|pong|at=second diff=2 is_stable=true is_synchronized=true recommended=0 rtt_avg=0.000000 rtt_jitter=0.000000 tick=40
+sync/the_first_pong_synchronizes_and_seeds_the_phase|signals|order=[]
+sync/snap_jumps_where_stretch_crawls|snapped|tick=150
+sync/snap_jumps_where_stretch_crawls|crawled|step=0 tick=102
+sync/snap_jumps_where_stretch_crawls|crawled|step=1 tick=103
+sync/snap_jumps_where_stretch_crawls|crawled|step=2 tick=103
+sync/snap_jumps_where_stretch_crawls|crawled|step=3 tick=103
+sync/snap_jumps_where_stretch_crawls|panicked|tick=400
+sync/the_target_follows_the_server_phase|seeded|phase=0.000000 tick=101
+sync/the_target_follows_the_server_phase|schedule|phase=0.000000 ticks=[101,101,101,102]
+sync/the_target_follows_the_server_phase|seeded|phase=0.250000 tick=101
+sync/the_target_follows_the_server_phase|schedule|phase=0.250000 ticks=[101,101,102,102]
+sync/the_target_follows_the_server_phase|seeded|phase=0.500000 tick=101
+sync/the_target_follows_the_server_phase|schedule|phase=0.500000 ticks=[101,102,102,102]
+sync/the_target_follows_the_server_phase|seeded|phase=0.750000 tick=101
+sync/the_target_follows_the_server_phase|schedule|phase=0.750000 ticks=[102,102,102,102]
+sync/jitter_moves_stability_and_the_recommendation|pong|at=sample diff=101 is_stable=true is_synchronized=true recommended=1 rtt_avg=0.020000 rtt_jitter=0.000000 tick=101
+sync/jitter_moves_stability_and_the_recommendation|pong|at=sample diff=0 is_stable=true is_synchronized=true recommended=1 rtt_avg=0.020000 rtt_jitter=0.000000 tick=101
+sync/jitter_moves_stability_and_the_recommendation|pong|at=sample diff=1 is_stable=false is_synchronized=true recommended=6 rtt_avg=0.080000 rtt_jitter=0.080000 tick=101
+sync/jitter_moves_stability_and_the_recommendation|pong|at=sample diff=1 is_stable=false is_synchronized=true recommended=6 rtt_avg=0.065000 rtt_jitter=0.067500 tick=101
+sync/jitter_moves_stability_and_the_recommendation|signals|order=[clock_synchronized,stability_changed,display_offset_insufficient]

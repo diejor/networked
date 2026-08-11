@@ -39,12 +39,12 @@ static func from_mt(
 	e.source_path = str(mt.get_path()) if mt.is_inside_tree() else str(mt.name)
 	e.reporter_id = rid
 
-	if mt.multiplayer_api \
-			and mt.multiplayer_api.has_multiplayer_peer() \
+	if mt.api \
+			and mt.api.has_multiplayer_peer() \
 			and mt.multiplayer_peer != null \
 			and mt.multiplayer_peer.get_connection_status() \
 					!= MultiplayerPeer.CONNECTION_DISCONNECTED:
-		e.peer_id = mt.multiplayer_api.get_unique_id()
+		e.peer_id = mt.api.get_unique_id()
 	else:
 		e.peer_id = 0
 

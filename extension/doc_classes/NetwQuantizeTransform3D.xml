@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwQuantizeTransform3D" inherits="NetwQuantize" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		[NetwQuantize] that composes [Transform3D] from origin, rotation, and optional scale quantizers.
+	</brief_description>
+	<description>
+		[member origin_quantizer] writes [member Transform3D.origin]. [member rotation_quantizer] writes [method Basis.get_rotation_quaternion]. [member scale_quantizer] writes local [method Basis.get_scale] when present. Shear is not encoded.
+		A fresh instance already carries an origin and a rotation quantizer, so it encodes without any configuration. A transform whose parts were never declared would otherwise write nothing and decode to identity.
+		[codeblock]
+		var q := NetwQuantizeTransform3D.new()
+		q.origin_quantizer = NetwQuantizeFixed.new()
+		q.rotation_quantizer = NetwQuantizeQuaternion.new()
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="origin_quantizer" type="NetwQuantize" setter="set_origin_quantizer" getter="get_origin_quantizer">
+			Quantizer for [member Transform3D.origin]. Defaults to a [NetwQuantizeFixed].
+		</member>
+		<member name="rotation_quantizer" type="NetwQuantize" setter="set_rotation_quantizer" getter="get_rotation_quantizer">
+			Quantizer for [method Basis.get_rotation_quaternion]. Defaults to a [NetwQuantizeQuaternion].
+		</member>
+		<member name="scale_quantizer" type="NetwQuantize" setter="set_scale_quantizer" getter="get_scale_quantizer">
+			Optional quantizer for [method Basis.get_scale]. Left unset, scale is not encoded and decodes as one.
+		</member>
+	</members>
+</class>

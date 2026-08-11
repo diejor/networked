@@ -15,22 +15,22 @@
 ## # any peer, any time:
 ## chat.broadcast("gg".to_utf8_buffer())
 ## [/codeblock]
-## Pass [param batched] as [code]true[/code] to [method send] or
+## Pass [code]batched[/code] as [code]true[/code] to [method send] or
 ## [method broadcast] to aggregate payloads into the shared peer buffers
-## flushed by [method NetwReplicationInterface.flush_all_buffers].
+## flushed by [method ReplicationCore.flush_all_buffers].
 class_name NetwChannel
 extends RefCounted
 
 ## The channel identifier. Must be between 100 and 254.
 var id: int
 
-var _replication: NetwReplicationInterface
+var _replication: ReplicationCore
 
 
-func _init(p_id: int, p_replication: NetwReplicationInterface) -> void:
+func _init(p_id: int, p_replication: ReplicationCore) -> void:
 	assert(
 		p_id >= 100 and p_id <= 254,
-		"NetwChannel: ID must be between 100 and 254."
+		"NetwChannel: ID must be between 100 and 254.",
 	)
 	id = p_id
 	_replication = p_replication
@@ -39,7 +39,7 @@ func _init(p_id: int, p_replication: NetwReplicationInterface) -> void:
 ## Sends the custom channel payload to the specified [param peer_id].
 ##
 ## With [param batched] as [code]true[/code], the payload queues into the
-## peer aggregation buffers flushed by [method NetwReplicationInterface.flush_all_buffers].
+## peer aggregation buffers flushed by [method ReplicationCore.flush_all_buffers].
 func send(peer_id: int, payload: PackedByteArray, reliable: bool = true, batched: bool = false) -> void:
 	_replication.send_to(peer_id, 0, id, payload, reliable, 0, "", batched)
 

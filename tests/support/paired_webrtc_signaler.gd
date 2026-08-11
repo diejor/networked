@@ -13,6 +13,8 @@
 class_name PairedWebRTCSignaler
 extends WebRTCSignaler
 
+const WebRTCSignaler := preload("res://addons/networked/transport/webrtc/signaler/webrtc_signaler.gd")
+
 # room_id -> Array[PairedWebRTCSignaler] sharing it.
 static var _rooms: Dictionary = { }
 

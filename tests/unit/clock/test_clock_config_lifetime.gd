@@ -3,7 +3,7 @@
 ## Freeing a [MultiplayerClock] configurator must not strip the session's clock
 ## config. A scene change frees the node under [code]current_scene[/code], so
 ## the clock has to outlive its node and
-## [method NetwClockInterface.is_configured] must stay true afterward.
+## [method ClockCore.is_configured] must stay true afterward.
 class_name TestClockConfigLifetime
 extends NetwTestSuite
 
@@ -59,7 +59,7 @@ func test_poll_pumps_tick_after_node_free() -> void:
 	mt.remove_child(clock)
 	clock.free()
 
-	var engine := mt.api.clock
+	var engine := mt.api._clock
 	# The first poll only seeds the wall-clock baseline.
 	engine.poll_step()
 	assert_that(engine.tick).is_equal(0)
@@ -75,7 +75,7 @@ func test_poll_does_not_pump_while_node_drives() -> void:
 	clock.tickrate = 30
 	mt.api.object_configuration_add(clock, clock._build_config())
 
-	var engine := mt.api.clock
+	var engine := mt.api._clock
 	engine._last_physics_time_usec = Time.get_ticks_usec() - 100_000
 	engine.poll_step()
 
@@ -92,5 +92,5 @@ func test_stale_exit_does_not_clobber_newer_node() -> void:
 	mt.remove_child(first)
 	first.free()
 
-	assert_that(mt.api.clock.is_configured()).is_true()
-	assert_that(mt.api.clock._node).is_same(second)
+	assert_bool(mt.api.clock.is_configured()).is_true()
+	assert_int(mt.api.clock.tickrate).is_equal(second.tickrate)

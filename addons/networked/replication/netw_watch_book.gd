@@ -60,7 +60,7 @@ func _stream_for(key: Variant, create: bool) -> _Stream:
 ##
 ## The first poll seeds the baseline row: every readable field stamps as
 ## changed so the first recipient heals fully.
-func poll(key: Variant, values: Array, readable: Array = [ ]) -> void:
+func poll(key: Variant, values: Array, readable: Array = []) -> void:
 	var s := _stream_for(key, true)
 	if not s.inited:
 		s.change_counter = 1
@@ -91,10 +91,10 @@ func poll(key: Variant, values: Array, readable: Array = [ ]) -> void:
 func mask_for(key: Variant, peer: int) -> Array:
 	var s := _stream_for(key, false)
 	if s == null or not s.inited:
-		return [0, [ ]]
+		return [0, []]
 	var baseline := int(s.baselines.get(peer, 0))
 	var mask := 0
-	var out: Array = [ ]
+	var out: Array = []
 	for i in s.stamps.size():
 		if s.stamps[i] > baseline:
 			mask |= 1 << i
@@ -113,7 +113,7 @@ func commit(key: Variant, peer: int) -> void:
 
 
 ## Resets [param key]'s dirty-poll state, dropping its stamps and every peer
-## baseline. Called when the watched field set changes so the next poll reseeds
+## baseline. Called when the watched property set changes so the next poll reseeds
 ## and the next delta heals every recipient with the full new row.
 func reset(key: Variant) -> void:
 	_streams.erase(key)

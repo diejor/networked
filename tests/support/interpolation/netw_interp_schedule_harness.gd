@@ -30,7 +30,7 @@ var send_period := 1
 ## Pump stats summed across every lane and frame, the schedule-invariant merge.
 var run_stats := NetwPumpStats.new()
 
-var _iface: NetwInterpolationInterface
+var _iface: DisplayCore
 var _lanes: Array[Lane] = []
 var _stats := NetwPumpStats.new()
 
@@ -45,8 +45,8 @@ class Lane:
 	var display_offset := 0
 	var recommended_display_offset := 0
 
-	var rt: NetwInterpolationInterface._Runtime
-	var state: NetwInterpolationInterface._PropertyState
+	var rt: DisplayCore._Runtime
+	var state: DisplayCore._PropertyState
 	var writer: NetwInterpRecordingWriter
 	var schedule: Array[NetwInterpDelivery.Arrival] = []
 	var next_arrival := 0
@@ -74,7 +74,7 @@ func lane(index: int) -> Lane:
 ## [param order] (a permutation of lane indices). Fills each lane's
 ## [member Lane.displayed] and the shared [member run_stats].
 func run(duration_sec: float, order: PackedInt32Array) -> void:
-	_iface = NetwInterpolationInterface.new()
+	_iface = DisplayCore.new()
 	run_stats.reset()
 	var ticktime := 1.0 / tickrate
 
@@ -84,18 +84,18 @@ func run(duration_sec: float, order: PackedInt32Array) -> void:
 		lane.display_offset = ceili(latency_ticks)
 		lane.recommended_display_offset = lane.display_offset + ceili(jitter_ticks)
 
-		lane.rt = NetwInterpolationInterface._Runtime.new()
-		lane.rt.handle = NetwInterpolationInterface.Handle.new()
-		lane.rt.playhead = NetwInterpolationInterface._Playhead.new()
+		lane.rt = DisplayCore._Runtime.new()
+		lane.rt.config = DisplayCore._Config.new()
+		lane.rt.playhead = DisplayCore._Playhead.new()
 		lane.rt.playhead.expected_interval_ticks = maxi(1, send_period)
-		lane.rt.pump_mode = NetwInterpolationInterface._PUMP_REMOTE
+		lane.rt.pump_mode = DisplayCore._PUMP_REMOTE
 
-		lane.state = NetwInterpolationInterface._PropertyState.new()
+		lane.state = DisplayCore._PropertyState.new()
 		lane.state.name = &"value"
 		lane.state.spec = NetwInterpolate.new().lerp().smooth(0.05).to(&"value")
 		lane.state.source_prop = &"value"
 		lane.state.target_prop = &"value"
-		lane.state.history = NetwInterpolationInterface._History.new()
+		lane.state.history = NetwDisplayHistory.new()
 		lane.state.history.mode = lane.state.spec.mode
 		lane.writer = NetwInterpRecordingWriter.new()
 		lane.state.output = lane.writer

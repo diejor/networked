@@ -1,4 +1,4 @@
-## Integration test for [NetwInterpolationInterface] authoring tick keying.
+## Integration test for [DisplayCore] authoring tick keying.
 ##
 ## When a single stamped derived state set drives an entity, the service keys
 ## received history by the frame's authoring tick instead of the receive tick.

@@ -8,7 +8,7 @@ class_name TestObserverRelay
 extends NetwTestSuite
 
 var harness: NetwTestHarness
-var server_scene: MultiplayerScene
+var server_scene: NetwSceneHandle
 var client0: MultiplayerTree
 var client1: MultiplayerTree
 var player_builder: PlayerBuilder
@@ -56,7 +56,7 @@ func test_relay_fires_on_unbound_layer() -> void:
 	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
 	var server_tree := harness.server() as MultiplayerTree
-	var sight := server_tree.api.interest.layer(&"sight")
+	var sight := server_tree.api._interest.layer(&"sight")
 	sight.add_entity(entity)
 
 	# Resolve the owner-side entity (on client0) to listen for the
@@ -66,7 +66,7 @@ func test_relay_fires_on_unbound_layer() -> void:
 		level_builder.scene_name,
 	)
 	var owner_entity := NetwEntity.of(owner_player)
-	var client1_layer := client1.api.interest.layer(&"sight")
+	var client1_layer := client1.api._interest.layer(&"sight")
 
 	var entered: Array = []
 	var left: Array = []
@@ -117,7 +117,7 @@ func test_relay_silent_when_flag_off() -> void:
 	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
 	var server_tree := harness.server() as MultiplayerTree
-	var sight := server_tree.api.interest.layer(&"sight")
+	var sight := server_tree.api._interest.layer(&"sight")
 	sight.add_entity(entity)
 
 	var owner_player := await harness.wait_for_player(
@@ -143,7 +143,7 @@ func test_awareness_relay_is_identical_for_scene_layer() -> void:
 	var server_player := await _spawn_owner(true)
 	var entity := NetwEntity.of(server_player)
 
-	# The scene layer is gated (MultiplayerScene's gate). Use it.
+	# The scene layer is gated (Node's gate). Use it.
 	var scene_layer := server_scene.layer
 	scene_layer.add_entity(entity)
 

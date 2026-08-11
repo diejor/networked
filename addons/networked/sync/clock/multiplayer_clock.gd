@@ -1,21 +1,22 @@
 ## Synchronises simulation time between server and clients with drift and stall protection.
 ##
 ## The [MultiplayerClock] node is the authoring surface and protocol endpoint
-## holder for the tick engine that lives in [NetwClockInterface], owned by
-## [NetwMultiplayer]. Registering through
-## [method MultiplayerAPI.object_configuration_add] pushes this node's export
-## snapshot into [member NetwMultiplayer.clock] and starts the engine. The
-## engine handles RTT smoothing, clock drift correction, and frame stall
+## holder for the tick engine that lives in [ClockCore], owned by
+## [NetwMultiplayer]. [method NetwMultiplayer.service_install] pushes this
+## node's export snapshot into the session's clock core and starts the engine.
+## The engine handles RTT smoothing, clock drift correction, and frame stall
 ## detection to prevent "spiral of death" scenarios.
 ## [codeblock]
 ## # The clock registers itself automatically on the MultiplayerTree.
-## # Access the engine from any node via:
-## var clock := NetwMultiplayer.of(self).clock
+## var api := NetwMultiplayer.of(self)
 ##
 ## # Connect to the simulation loop:
-## clock.on_tick.connect(func(delta, tick):
+## api.on_tick.connect(func(delta: float, tick: int) -> void:
 ##     _simulate_physics(tick)
 ## )
+##
+## # Read what the clock is doing:
+## var behind := api.clock.tick - api.clock.display_tick
 ## [/codeblock]
 @icon("res://addons/networked/assets/MultiplayerClock.svg")
 @tool
@@ -67,11 +68,13 @@ signal pong_received(data: Dictionary)
 			_interface.use_physics_interpolation = v
 
 @export_group("Calibration")
-@export var sync_mode: NetwClockInterface.SyncMode = NetwClockInterface.SyncMode.STRETCH:
+@export var sync_mode: NetwMultiplayer.SyncMode = NetwMultiplayer.SyncMode.SYNC_MODE_STRETCH:
 	set(v):
 		sync_mode = v
 		if _interface:
-			_interface.sync_mode = v
+			# Widen to int across the seam: the engine still types this slot as
+			# its own enum, and the two are mirrored value for value.
+			_interface.sync_mode = int(v)
 
 ## The maximum allowed divergence before a hard Snap is forced.
 @export_custom(0, "suffix:ticks") var panic_snap_threshold: int = 20:
@@ -146,10 +149,10 @@ signal pong_received(data: Dictionary)
 
 #region ── Public API ──────────────────────────────────────────────────────────
 
-## The [NetwClockInterface] engine this node configures, or [code]null[/code]
-## before registration. Consumers should reach the engine through
+## The [ClockCore] engine this node configures, or [code]null[/code]
+## before registration. Consumers should read the clock through
 ## [member NetwMultiplayer.clock] rather than this node.
-var _interface: NetwClockInterface
+var _interface: ClockCore
 
 # The typed payload registered with the API on entry, snapshotting the exports.
 var _config: NetwClockConfig
@@ -171,9 +174,10 @@ func _service_type() -> Script:
 
 
 func _service_entered(api: NetwMultiplayer) -> void:
-	_interface = api.clock
+	_interface = api._clock
 	_config = _build_config()
-	api.object_configuration_add(self, _config)
+	api.service_install(_config)
+	_interface._attach_node(self)
 
 	if not api.session_entered.is_connected(_on_tree_configured):
 		api.session_entered.connect(_on_tree_configured)
@@ -181,14 +185,14 @@ func _service_entered(api: NetwMultiplayer) -> void:
 	if not api.session_entered.is_connected(configured.emit):
 		api.session_entered.connect(configured.emit)
 
-	if api.is_online():
+	if api.is_online:
 		_on_tree_configured.call_deferred()
 
 
 func _service_exiting(api: NetwMultiplayer) -> void:
 	# Detaching keeps the config registered, so freeing this node never stops
 	# the clock.
-	api.clock.detach_node(self)
+	api._clock.detach_node(self)
 
 	if api.session_entered.is_connected(_on_tree_configured):
 		api.session_entered.disconnect(_on_tree_configured)

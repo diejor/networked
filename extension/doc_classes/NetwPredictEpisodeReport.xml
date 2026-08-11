@@ -1,0 +1,482 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictEpisodeReport" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="agreement_run" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="agreement_write_id" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="aligned_transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="attribution" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="closed_transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="closure_used" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="comparison_agrees" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="comparison_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="comparison_meter" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="comparison_transition" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="comparison_write_id" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="decision_applied" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="decision_basis" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="decision_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="decision_eligibility" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="decision_eligible" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="decision_operator" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="demoted" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="dissipate_decided" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="evidence_dropped" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="evidence_free_non_contractions" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="fallback_transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_attribution" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_beyond_retention" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_c_hash" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_domain" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_e_digest" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_evidence_mask" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_flags" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_label" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_post_controller_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_post_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_post_momentum_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_post_pose_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_pre_controller_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_pre_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_pre_momentum_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_pre_pose_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_present" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_raw_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_topology_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="generator_witness_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="id" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="last_comparison_transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="last_write_id" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mixed_trigger_non_contractions" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="no_trigger_non_contractions" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="non_contraction_used" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="opened_transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="quarantine_clean_run" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="quarantine_target" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="reopen_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="reopen_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="reopened_from" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="reseed_transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="resume_ack_age" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="secondary_generator_attribution" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="secondary_generator_beyond_retention" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="secondary_generator_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="secondary_generator_domain" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="secondary_generator_flags" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="secondary_generator_label" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="secondary_generator_transition" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="state" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="taint_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="taint_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="transport_decided" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="withheld_non_contractions" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_basis" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_best_meter" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_delta_fp" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_episode" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_evidence_free" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_id" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_judged_transition" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_meter_after" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_meter_before" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_null_operator" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_operator" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_outcome" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_target" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_trigger_shape" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_verdicts" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_verify_run" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="EPISODE_OPEN" value="0" enum="State">
+		</constant>
+		<constant name="EPISODE_CLOSED" value="1" enum="State">
+		</constant>
+		<constant name="EPISODE_FALLBACK" value="2" enum="State">
+		</constant>
+	</constants>
+</class>

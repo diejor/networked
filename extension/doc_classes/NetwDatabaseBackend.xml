@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDatabaseBackend" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_commit" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="operations" type="Array" />
+			<description>
+			</description>
+		</method>
+		<method name="_delete" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<description>
+			</description>
+		</method>
+		<method name="_delete_namespace" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="slot" type="String" />
+			<description>
+			</description>
+		</method>
+		<method name="_find_all" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="filter" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="_find_by_id" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<description>
+			</description>
+		</method>
+		<method name="_initialize" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="schema" type="Dictionary" />
+			<param index="1" name="slot" type="String" />
+			<description>
+			</description>
+		</method>
+		<method name="_list_namespaces" qualifiers="virtual">
+			<return type="Variant" />
+			<description>
+			</description>
+		</method>
+		<method name="_upsert" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<param index="2" name="data" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="_warm" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="directives" type="Array" />
+			<description>
+			</description>
+		</method>
+		<method name="commit">
+			<return type="Variant" />
+			<param index="0" name="operations" type="Array" default="[]" />
+			<description>
+			</description>
+		</method>
+		<method name="delete_namespace">
+			<return type="Variant" />
+			<param index="0" name="slot" type="String" />
+			<description>
+			</description>
+		</method>
+		<method name="erase">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<description>
+			</description>
+		</method>
+		<method name="find_all">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="filter" type="Dictionary" default="{}" />
+			<description>
+			</description>
+		</method>
+		<method name="find_by_id">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<description>
+			</description>
+		</method>
+		<method name="initialize">
+			<return type="Variant" />
+			<param index="0" name="schema" type="Dictionary" />
+			<param index="1" name="slot" type="String" default="&quot;&quot;" />
+			<description>
+			</description>
+		</method>
+		<method name="list_namespaces">
+			<return type="Variant" />
+			<description>
+			</description>
+		</method>
+		<method name="upsert">
+			<return type="Variant" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<param index="2" name="data" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="warm">
+			<return type="Variant" />
+			<param index="0" name="directives" type="Array" default="[]" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

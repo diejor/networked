@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSceneCore" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The scene column's record plane: a routing table keyed by scene identity, and the one scene request in flight.
+	</brief_description>
+	<description>
+		It holds no [Node] and instantiates nothing, which is what makes a registration outlive the scene it names. A scene is identified by the entity [RID] it is keyed under rather than by whichever node is currently standing in for it, so rebuilding a scene does not silently drop everyone watching it. Everything that reaches a [Node], a [PackedScene] or a promise lives in the interface above this class.
+		[codeblock]
+		observe(scene, event, callback)   one row per (event, scene), in registration order
+		dispatch(scene, event, ...)       every live callback; the dead ones are dropped here
+		open_request()                    the next id, and it becomes the pending one
+		is_current(id)                    whether a reply names the request still in flight
+		close_request()                   nothing is pending again
+		[/codeblock]
+		A request id can only be drawn, never claimed. There is no setter for [member pending_request_id], because an id a caller could assign without opening would let it answer a request nobody made.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every registration and the request record, and restarts the id counter. Session teardown.
+			</description>
+		</method>
+		<method name="close_request">
+			<return type="void" />
+			<description>
+				Clears [member pending_request_id], so a second reply for the same request finds nothing rather than answering one that already answered.
+			</description>
+		</method>
+		<method name="dispatch">
+			<return type="int" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="event" type="int" />
+			<param index="2" name="present" type="bool" />
+			<param index="3" name="subject" type="Variant" />
+			<description>
+				Calls every live callback registered for [param scene] under [param event], in registration order, passing [param present] and [param subject]. Returns how many were called.
+				A callback whose object is gone is dropped here rather than at a sweep somebody has to remember to run, because a dispatch is the only moment the row is already being walked.
+			</description>
+		</method>
+		<method name="forget_scene">
+			<return type="void" />
+			<param index="0" name="scene" type="RID" />
+			<description>
+				Drops every registration on [param scene], across every event. A scene that is gone routes nothing.
+			</description>
+		</method>
+		<method name="is_current" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="request_id" type="int" />
+			<description>
+				Returns whether [param request_id] is the request currently in flight. A [param request_id] of zero is never current, so a settled request cannot be settled a second time.
+			</description>
+		</method>
+		<method name="observe">
+			<return type="void" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="event" type="int" />
+			<param index="2" name="callback" type="Callable" />
+			<description>
+				Registers [param callback] for [param event] on [param scene].
+				An invalid [param scene] or an unset [param callback] registers nothing, so a later [method dispatch] can never find a row nobody meant to create. Registering the same [param callback] twice stores it once, so an edge is heard once.
+			</description>
+		</method>
+		<method name="observer_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="event" type="int" />
+			<description>
+				How many callbacks one row holds, counting any whose object has died since the last [method dispatch] reached them.
+			</description>
+		</method>
+		<method name="open_request">
+			<return type="int" />
+			<description>
+				Draws the next request id, makes it the pending one, and returns it. Ids come from one counter, so a reply can name the request it answers and a stale reply can be told apart from the current one.
+			</description>
+		</method>
+		<method name="unobserve">
+			<return type="void" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="event" type="int" />
+			<param index="2" name="callback" type="Callable" />
+			<description>
+				Reverses [method observe] for one [param callback]. Removing something never registered is inert rather than an error.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="next_request_id" type="int" setter="set_next_request_id" getter="get_next_request_id" default="1">
+			The id [method open_request] will draw next.
+		</member>
+		<member name="pending_request_id" type="int" setter="" getter="get_pending_request_id" default="0">
+			The request currently in flight, or zero when none is. Read-only by construction: see [method open_request].
+		</member>
+	</members>
+</class>

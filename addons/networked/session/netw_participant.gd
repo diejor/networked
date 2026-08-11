@@ -7,13 +7,15 @@ extends RefCounted
 ## scene membership independently from any spawned player node.
 
 ## Emitted when [member current_scene] changes.
-signal scene_changed(from: MultiplayerScene, to: MultiplayerScene)
+signal scene_changed(from: NetwSceneHandle, to: NetwSceneHandle)
 
 ## Peer id represented by this participant.
 var peer_id: int
 
 var _api_ref: WeakRef
-var _current_scene: MultiplayerScene
+# The scene's entity RID rather than its handle, so membership survives the
+# container being rebuilt and never pins a freed node.
+var _current_scene := RID()
 
 
 func _init(api: NetwMultiplayer, id: int) -> void:
@@ -24,7 +26,7 @@ func _init(api: NetwMultiplayer, id: int) -> void:
 var join: ResolvedJoin:
 	get:
 		var api := _api_ref.get_ref() as NetwMultiplayer
-		return api.get_accepted_join(peer_id) if api else null
+		return api.peer_get_accepted_join(peer_id) if api else null
 
 ## Validated auth identity for [member peer_id], or [code]null[/code].
 ##
@@ -33,9 +35,9 @@ var join: ResolvedJoin:
 var identity: NetwIdentity:
 	get:
 		var api := _api_ref.get_ref() as NetwMultiplayer
-		if not api or not api.has_peer_context(peer_id):
+		if not api or not api.peer_has_context(peer_id):
 			return null
-		var bucket := api.get_peer_context(peer_id).get_bucket(
+		var bucket := api.peer_get_context(peer_id).get_bucket(
 			NetwIdentityBucket,
 		)
 		return bucket.identity
@@ -59,30 +61,45 @@ var is_debug: bool:
 		var rj := join
 		return rj.is_debug if rj else false
 
-## Primary scene membership for this participant.
-var current_scene: MultiplayerScene:
+## Primary scene membership, or [code]null[/code] outside every scene.
+##
+## A participant is admitted to one scene at a time, so this is a scalar even
+## though the mechanism underneath it is not. Assigning it records membership
+## without admitting anyone: [method move_to] is the verb that also moves the
+## admission edge.
+var current_scene: NetwSceneHandle:
 	get:
-		return _current_scene if is_instance_valid(_current_scene) else null
+		var record := _scene_record()
+		return record.scene if record else null
 	set(value):
-		var from := current_scene
-		if from == value:
+		var next := value.entity if value else RID()
+		if _current_scene == next:
 			return
-		_current_scene = value
-		scene_changed.emit(from, value)
+		var from := current_scene
+		_current_scene = next
+		scene_changed.emit(from, current_scene)
 
 
 ## Moves this participant to [param dest] without touching any player node.
 ##
 ## [br][br][b]Server Only.[/b]
-func move_to(dest: MultiplayerScene) -> void:
+func move_to(dest: NetwSceneHandle) -> void:
 	var api := _api_ref.get_ref() as NetwMultiplayer
-	if not api or not is_instance_valid(dest):
+	if not api or dest == null or not dest.is_declared:
 		return
 	assert(api.is_server(), "NetwParticipant.move_to() must be called on the server.")
 	var from := current_scene
 	if from == dest:
 		return
 	current_scene = dest
-	if is_instance_valid(from):
+	if from != null:
 		from.release(self)
 	dest.admit(self)
+
+
+# The scene entity's record while it is alive, or null.
+func _scene_record() -> NetwEntity:
+	var api := _api_ref.get_ref() as NetwMultiplayer
+	if api == null or not _current_scene.is_valid():
+		return null
+	return NetwEntity.of(api.entity_get_node(_current_scene))

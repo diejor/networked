@@ -32,7 +32,7 @@ func test_wrapped_tree_admits_a_client() -> void:
 	assert_that(client.tree).is_not_same(host.tree)
 
 	var admitted := false
-	for participant: NetwParticipant in host.tree.get_participants():
+	for participant: NetwParticipant in host.tree.api.participants:
 		if participant.peer_id == client.peer_id:
 			admitted = true
 			break

@@ -6,7 +6,6 @@ extends NetwTestSuite
 ## natural recurrence or a one-shot transported pose closes it in clear space.
 
 const MAIN := preload("res://examples/racing/main.tscn")
-const Handle := NetwLagCompensationInterface.PredictionHandle
 const HORIZON_TICKS := 8
 
 var game: NetwGameHarness
@@ -29,7 +28,7 @@ func _setup_drive(turning: bool = false, observe: bool = true) -> Array:
 	for car in [own, authority, host_car, host_authority]:
 		car.sphere.collision_mask = 1
 	if observe:
-		own.entity.prediction.recovery_policy = Handle.RecoveryPolicy.OBSERVE
+		own.entity.prediction.recovery_policy = NetwPredict.RecoveryPolicy.OBSERVE
 	await game.sync_ticks(16)
 	client.simulate_action_press("forward")
 	if turning:
@@ -294,10 +293,10 @@ func test_body_motion_query_distinguishes_clear_and_blocked_corridors() -> void:
 # Drives with corrections declined and reports where the aligned divergence
 # settles, which is the floor every epsilon on this body has to clear.
 #
-# [member NetwLagCompensationInterface.PredictionHandle.last_field_divergence] is
+# [member NetwPredictionHandle.last_field_divergence] is
 # the engine's own comparison at the acknowledged transition, so it is aligned
 # rather than a difference between two peers standing at different ticks. The
-# recovery policy is [constant Handle.RecoveryPolicy.OBSERVE], so the ladder
+# recovery policy is [constant NetwPredict.RecoveryPolicy.OBSERVE], so the ladder
 # writes nothing and what is left is what the two simulations produce on their
 # own.
 func _floor_run(turning: bool, ticks: int, observe: bool = true) -> Dictionary:
@@ -310,7 +309,7 @@ func _floor_run(turning: bool, ticks: int, observe: bool = true) -> Dictionary:
 	var seen := -1
 	for _i in ticks:
 		await game.sync_ticks(1)
-		var ran: int = handle.comparisons_ran
+		var ran: int = handle.stats.comparisons_ran
 		if ran == seen:
 			continue
 		seen = ran
@@ -324,7 +323,7 @@ func _floor_run(turning: bool, ticks: int, observe: bool = true) -> Dictionary:
 		&"angular": angular,
 		&"linear": linear,
 		&"pose": pose,
-		&"corrections": int(handle.corrections),
+		&"corrections": int(handle.stats.corrections),
 	}
 
 

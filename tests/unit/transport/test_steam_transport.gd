@@ -4,7 +4,7 @@ extends NetwTestSuite
 
 func test_recognizes_steam_scheme() -> void:
 	var transport := SteamTransport.new()
-	assert_str(transport.scheme()).is_equal("steam")
+	assert_str(transport._scheme()).is_equal("steam")
 
 
 # Steam has no web export, so availability follows the platform web feature.
@@ -23,5 +23,5 @@ func test_recognition_follows_scheme() -> void:
 	assert_bool(transport._can_join(target)).is_true()
 
 	var config := NetwHostConfig.new()
-	config.scheme = &"steam"
+	config.transport = NetwSteamParams.new()
 	assert_bool(transport._can_host(config)).is_true()

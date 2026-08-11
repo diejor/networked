@@ -1,0 +1,582 @@
+# family: predict
+# bridge: A(laws + engine shadow zero + determinism floor)
+# regime: bit-exact decisions
+# instrument-first: 2be31477
+# baseline: tests/unit/sim, tests/integration/sim, tests/unit/entity, tests/integration/lagcomp
+# baseline-count: 543
+# successor-form: matrix
+#
+# The unit is one predicting entity's engine: its tape, its journal, its
+# command and ack lanes, its comparison and its recovery ladder. Nineteen of
+# its twenty kernels are already native and certified, and that licensed
+# nothing, because a certified kernel is a certified function and every case
+# below is about an object with identity and memory.
+#
+# THE CROSSING IS AT THE SUITE, not the case. Every case of one suite names
+# the same native successor, which is the representative cell of the law file
+# that carries that suite's claims. `netw-ring0-cutover-campaign.md` section 1
+# is the decision and states what the coarser grain buys and what it gives up.
+#
+# THE CAPABILITY SET the pool declares through `supports`:
+#
+#   schedule    TICK, FRAME, STEPPED
+#   role        PREDICT, HOST_LOCAL, AUTHORITY, SIMULATE
+#   correction  SNAP, REPLAY
+#   restore     EXACT, EXTRAPOLATED
+#   island      none, declared, joint
+#   carry       none, declared
+#   witness     none, declared
+#
+# SIMULATE requires a declared or joint island. Joint requires a re-runnable
+# schedule, TICK or STEPPED. REPLAY requires EXACT restore. Carry and witness
+# do not narrow support.
+#
+# WHAT STILL CARRIES, and both reasons are about reach rather than about rings.
+# `tests/integration/lagcomp` holds the rewind, action and body-bound suites:
+# lagcomp has no native shell to cross into, and a real body and space are
+# what a pool slot cannot see. `tests/unit/core` holds the entity numbering,
+# which is keyed by node.
+#
+test_assertion_census.gd:test_the_census_matches_the_committed_record                                      -> DROP assertion golden retired with the crossing instruments
+test_assertion_census.gd:test_no_law_reads_a_wiring_member_directly                                        -> DROP assertion golden retired with the crossing instruments
+test_assertion_census.gd:test_a_private_route_to_a_public_fact_is_not_a_state_read                         -> DROP assertion golden retired with the crossing instruments
+test_canonical_recording.gd:test_recorded_value_is_the_quantizer_round_trip                                -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_a_field_without_a_quantizer_passes_through_untouched                      -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_canonicalization_is_idempotent                                            -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_canonical_bytes_are_stable_across_two_encodes                             -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_identical_payloads_fingerprint_equal_across_two_nodes                     -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_one_quantum_of_difference_changes_the_fingerprint                         -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_a_sub_quantum_difference_collapses_to_one_fingerprint                     -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_field_order_is_the_set_order_not_the_payload_order                        -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_a_derived_field_cannot_decide_the_state_fingerprint                       -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_a_cosmetic_field_cannot_decide_the_state_fingerprint                      -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_a_causal_field_still_decides_the_state_fingerprint                        -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_family_fingerprints_ignore_the_non_causal_fields                          -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_canonical_recording.gd:test_a_set_with_no_causal_field_compares_the_whole_payload                     -> prediction_tests.cpp:"[Networked][Predict] Fingerprints fold their keys in text order"
+test_divergence_rotation.gd:test_quaternion_error_is_finite_angle                                          -> prediction_tests.cpp:"[Networked][Predict] An angle field compares the short way around the circle"
+test_divergence_rotation.gd:test_basis_error_is_finite_angle                                               -> prediction_tests.cpp:"[Networked][Predict] An angle field compares the short way around the circle"
+test_divergence_rotation.gd:test_per_property_threshold_overrides_default                                  -> prediction_tests.cpp:"[Networked][Predict] An angle field compares the short way around the circle"
+test_divergence_rotation.gd:test_missing_key_forces_correction                                             -> prediction_tests.cpp:"[Networked][Predict] An angle field compares the short way around the circle"
+test_divergence_rotation.gd:test_epsilon_mark_reaches_the_derived_set                                      -> prediction_tests.cpp:"[Networked][Predict] An angle field compares the short way around the circle"
+test_extrapolated_restore.gd:test_snap_restore_defaults_to_exact                                           -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] reseed projection honors restore mode"
+test_extrapolated_restore.gd:test_extrapolated_restore_lands_ahead_of_exact                                -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] reseed projection honors restore mode"
+test_extrapolated_restore.gd:test_extrapolated_without_velocity_pair_matches_exact                         -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] reseed projection honors restore mode"
+test_golden_journal.gd:test_the_run_reproduces_the_committed_golden                                        -> DROP certification golden, deleted after native ownership cutover
+test_golden_journal.gd:test_the_run_is_deterministic                                                       -> DROP certification golden, deleted after native ownership cutover
+test_golden_journal.gd:test_the_scenario_stays_divergence_rich                                             -> DROP certification golden, deleted after native ownership cutover
+test_input_backed_rewind.gd:test_sample_matches_predicted_state_for_consumed_input                         -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_island_rollback.gd:test_joint_stores_on_the_island_declaration                                        -> DROP Ring-1 island declaration storage with no native subject
+test_island_rollback.gd:test_pacing_and_input_delay_declare_without_a_mechanism                            -> DROP Ring-1 island declaration storage with no native subject
+test_kernel_lane_queue.gd:test_a_frame_with_no_delay_lands_the_round_it_was_sent                           -> DROP the GDScript lane queue is an instrument, and ScenarioRun's Lane and LocalLinkConditions are the native one
+test_kernel_lane_queue.gd:test_a_delayed_frame_waits_the_rounds_it_was_given                               -> DROP the GDScript lane queue is an instrument, and ScenarioRun's Lane and LocalLinkConditions are the native one
+test_kernel_lane_queue.gd:test_frames_land_in_the_order_they_were_authored                                 -> DROP the GDScript lane queue is an instrument, and ScenarioRun's Lane and LocalLinkConditions are the native one
+test_kernel_lane_queue.gd:test_empty_bytes_are_not_a_frame                                                 -> DROP the GDScript lane queue is an instrument, and ScenarioRun's Lane and LocalLinkConditions are the native one
+test_kernel_lane_queue.gd:test_dropping_clears_what_is_in_flight_and_counts_it                             -> DROP the GDScript lane queue is an instrument, and ScenarioRun's Lane and LocalLinkConditions are the native one
+test_kernel_lane_queue.gd:test_the_two_lanes_hold_their_own_delays                                         -> DROP the GDScript lane queue is an instrument, and ScenarioRun's Lane and LocalLinkConditions are the native one
+test_kernel_scenario.gd:test_the_owner_predicts_with_no_session_behind_it                                  -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
+test_kernel_scenario.gd:test_authority_consumes_what_the_owner_authors                                     -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
+test_kernel_scenario.gd:test_the_axes_come_from_the_declaration_and_not_the_tree                           -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
+test_kernel_scenario.gd:test_a_command_crosses_and_authority_consumes_it                                   -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
+test_kernel_scenario.gd:test_authority_records_what_it_consumed                                            -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
+test_kernel_scenario.gd:test_an_acknowledgement_crosses_back_to_the_owner                                  -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
+test_kinematic_replay.gd:test_replay_in_one_frame_matches_n_frames_free_space                              -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_kinematic_replay.gd:test_replay_into_wall_matches_real_frames                                         -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_kinematic_replay.gd:test_floor_flag_coherent_after_replay                                             -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_kinematic_replay.gd:test_move_and_slide_uses_physics_delta_not_arg                                    -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_lag_compensation_config_lifetime.gd:test_config_and_binding_survive_node_free                         -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_lag_compensation_metrics.gd:test_metrics_exposes_monitor_keys                                         -> MATRIX declared_record_laws.cpp:"L-OCCUPANCY"x"recorded-lane"
+test_lag_compensation_metrics.gd:test_timelines_tracks_recorded_entities                                   -> MATRIX declared_record_laws.cpp:"L-OCCUPANCY"x"retired-lane"
+test_netw_action.gd:test_action_prediction_denial_and_revert_flow                                          -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_netw_action.gd:test_action_timing_modes_flow                                                          -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_netw_action.gd:test_state_ready_gate_flow                                                             -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_netw_action.gd:test_action_key_and_adoption_flow                                                      -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_predict_command_lane_delivery.gd:test_the_lane_delivers_every_frame_the_owner_writes                  -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] every frame shape replays entry for entry"
+test_predict_command_lane_delivery.gd:test_a_held_frame_still_sends_its_commands_in_its_own_frame          -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] every frame shape replays entry for entry"
+test_predict_command_lane_delivery.gd:test_the_transport_moves_a_frame_with_no_rendered_frame_in_it        -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] every frame shape replays entry for entry"
+test_predict_compare_split.gd:test_an_in_domain_mismatch_corrects_however_small_the_error                  -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_an_in_domain_match_never_corrects                                       -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_an_out_of_domain_mismatch_is_judged_by_tolerance                        -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_an_unjudged_in_domain_transition_falls_back_to_tolerance                -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_the_field_report_is_filled_on_both_branches                             -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_an_unequal_pre_state_is_charged_first                                   -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_an_unequal_command_is_charged_to_the_command                            -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_an_unequal_environment_is_charged_to_the_environment                    -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_unequal_topology_is_charged_before_solve_evidence                       -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_raw_bits_are_tested_only_when_both_peers_enable_them                    -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_unequal_realized_witness_is_charged_to_contact                          -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_equal_observed_boundaries_leave_the_closure                             -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_missing_required_evidence_is_unknown                                    -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_raw_and_fact_fingerprints_are_order_independent                         -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_compare_split.gd:test_state_family_search_returns_the_first_difference                        -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] ack evidence names the first unequal antecedent"
+test_predict_config_grammar.gd:test_a_property_is_causal_until_it_says_otherwise                           -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_each_class_verb_names_its_own_class                                    -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_the_recovery_verbs_chain_and_store                                     -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_the_declaration_reaches_the_field_spec                                 -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_a_class_survives_the_set_that_carries_no_others                        -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_converge_and_teleport_only_are_independent_of_the_class                -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_the_per_field_distances_reach_the_set_and_the_binding                  -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_the_binding_answers_for_a_property_it_never_declared                   -> DROP Ring-1 declaration grammar with no native subject
+test_predict_config_grammar.gd:test_a_node_carry_rule_refines_the_declaration_it_advances                  -> DROP Ring-1 declaration grammar with no native subject
+test_predict_consume_tiers.gd:test_consume_buffer_warms_up_then_holds_slack                                -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a declared buffer costs its depth"
+test_predict_consume_tiers.gd:test_starved_consume_tick_ships_state_that_acks_nothing                      -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a declared buffer costs its depth"
+test_predict_consume_tiers.gd:test_consume_depth_self_restores_after_a_slip                                -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a declared buffer costs its depth"
+test_predict_consume_tiers.gd:test_stranded_consume_cursor_resyncs_to_the_live_edge                        -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a declared buffer costs its depth"
+test_predict_consume_tiers.gd:test_lag_within_the_ceiling_still_walks_in_order                             -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a declared buffer costs its depth"
+test_predict_determinism_laws.gd:test_a_wired_entity_resolves_axes_that_agree_with_its_role                -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_two_entities_driven_alike_journal_alike                              -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_an_entity_journals_the_same_run_the_same_way_twice                   -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_a_frame_with_no_fresh_tick_is_clamped_before_the_journal             -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_an_unjournaled_state_write_breaks_the_next_boundary                  -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_a_declared_witness_samples_after_the_drive                           -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_a_breach_demotes_on_the_transition_that_realized_it                  -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_static_contact_stays_in_boundary_under_the_solver_default            -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_a_declared_demote_response_demotes_a_dynamic_breach                  -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_the_witness_classifies_the_declared_island_boundary                  -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_witness_identity_ignores_the_local_dynamic_realization               -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_the_witness_records_sleep_and_wake_transitions                       -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_the_raw_debug_gate_seals_exact_pre_state_bits                        -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_the_tap_drain_reads_the_journal_without_perturbing_it                -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_the_tap_exports_each_sealed_row_then_its_final_disposition           -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_determinism_laws.gd:test_the_tap_exports_an_episode_change_without_a_new_row                  -> declared_determinism_laws.cpp:"[Networked][Determinism][Declared][Law] a seeded impairment reproduces"
+test_predict_domain_labeling.gd:test_an_undisturbed_transition_claims_exactness                            -> prediction_tests.cpp:"[Networked][Predict] A declared undisturbed transition is in domain"
+test_predict_domain_labeling.gd:test_an_undeclared_entity_is_never_in_domain                               -> prediction_tests.cpp:"[Networked][Predict] An undeclared entity is out of domain whatever its label"
+test_predict_domain_labeling.gd:test_an_approximate_island_is_never_in_domain                              -> prediction_tests.cpp:"[Networked][Predict] An approximate island is out of domain whatever its label"
+test_predict_domain_labeling.gd:test_the_window_covers_exactly_the_transitions_inside_it                   -> prediction_tests.cpp:"[Networked][Predict] A label short of the window's end is out of domain, and the end itself is in"
+test_predict_domain_labeling.gd:test_a_contact_covers_its_own_transition_and_the_cooldown                  -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] A contact covers its own transition and every tick of its cooldown"
+test_predict_domain_labeling.gd:test_a_nearer_fact_cannot_shorten_an_open_window                           -> prediction_tests.cpp:"[Networked][Predict] A window covers the transition that opened it and merges rather than restarting"
+test_predict_domain_labeling.gd:test_a_later_fact_extends_an_open_window                                   -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] A later fact extends an open window"
+test_predict_domain_labeling.gd:test_a_negative_cooldown_still_covers_the_disturbed_transition             -> prediction_tests.cpp:"[Networked][Predict] A window covers the transition that opened it and merges rather than restarting"
+test_predict_domain_labeling.gd:test_the_digest_does_not_depend_on_declaration_order                       -> predict_domain_laws.cpp:"[Networked][Predict] The environment digest folds the epoch and ignores declaration order"
+test_predict_domain_labeling.gd:test_a_changed_world_version_changes_the_digest                            -> prediction_tests.cpp:"[Networked][Predict] The environment digest folds the epoch and ignores declaration order"
+test_predict_domain_labeling.gd:test_a_changed_sensor_reading_changes_the_digest                           -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] The environment digest distinguishes which sensor read what"
+test_predict_domain_labeling.gd:test_the_digest_distinguishes_which_sensor_read_what                       -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] The environment digest distinguishes which sensor read what"
+test_predict_domain_labeling.gd:test_an_undeclared_contact_is_not_treated_as_equivalent                    -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] A contact covers its own transition and every tick of its cooldown"
+test_predict_domain_labeling.gd:test_substitution_downgrades_the_row_it_marks                              -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] Substitution downgrades the row it marks"
+test_predict_domain_labeling.gd:test_a_row_records_the_environment_it_ran_against                          -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] A row records the environment it ran against"
+test_predict_domain_labeling.gd:test_a_fact_about_an_evicted_row_is_dropped                                -> predict_domain_laws.cpp:"[Networked][Predict][Hosted] A fact about an evicted row is dropped"
+test_predict_engine_shadow.gd:test_a_lost_roster_takes_the_island_group_red                                -> DROP the whole-object shadow retires with the crossing arms
+test_predict_engine_shadow.gd:test_a_dropped_frame_takes_the_intake_group_red                              -> DROP the whole-object shadow retires with the crossing arms
+test_predict_engine_shadow.gd:test_the_scenario_moves_every_observable_group                               -> DROP the whole-object shadow retires with the crossing arms
+test_predict_engine_shadow.gd:test_an_unopened_episode_takes_the_recovery_group_red                        -> DROP the whole-object shadow retires with the crossing arms
+test_predict_engine_shadow.gd:test_stock_against_stock_reads_zero_over_the_scenario                        -> DROP the whole-object shadow retires with the crossing arms
+test_predict_engine_shadow.gd:test_another_payload_takes_the_compare_group_red                             -> DROP the whole-object shadow retires with the crossing arms
+test_predict_engine_shadow.gd:test_an_unrecorded_drive_takes_the_drive_group_red                           -> DROP the whole-object shadow retires with the crossing arms
+test_predict_engine_shadow.gd:test_the_arm_compares_every_declared_observable                              -> DROP the whole-object shadow retires with the crossing arms
+test_predict_entity_config.gd:test_the_component_enums_mirror_the_leaf_by_value                            -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_the_solver_archetype_applies_its_bundle                                 -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_the_kinematic_archetype_applies_its_bundle                              -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_bomber_stays_benign_without_a_witness_declaration                       -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_demote_arrives_only_when_a_game_names_it                                -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_preset_written_later_is_the_later_word                                -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_the_preset_yields_to_declarations                                       -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_the_schedule_properties_each_write_their_own_fact                       -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_an_omitted_key_keeps_what_was_there                                     -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_the_recovery_properties_each_write_their_own_fact                       -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_policy_nobody_declared_is_derived_from_the_body                       -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_every_policy_reaches_a_mechanism                                        -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_witness_declaration_keeps_its_callable                                -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_transport_declaration_keeps_its_corridor_callable                     -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_later_write_wins_and_leaves_the_other_keys_alone                      -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_tolerance_is_not_a_claim_and_a_roster_is                              -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_each_declaration_leaves_the_other_two_alone                             -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_declaring_the_environment_does_not_declare_the_island                   -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_interest_production_forces_an_approximate_budgeted_island               -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_scene_island_default_yields_to_entity_declaration                       -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_explicit_members_can_be_promoted_observed_and_removed                   -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_simulated_member_can_declare_a_command_predictor                        -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_produced_exact_claims_are_refused_loudly                                -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_an_unobservable_causal_property_is_reported                             -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_scale_or_a_trigger_makes_a_causal_property_observable                 -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_contact_with_static_geometry_stays_equivalent                         -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_contact_with_a_displayed_member_is_not_equivalent                     -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_a_contact_with_a_simulated_member_is_equivalent                         -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_an_unobserved_contact_is_never_equivalent                               -> DROP Ring-1 component configuration with no native subject
+test_predict_entity_config.gd:test_an_undeclared_island_is_never_equivalent                                -> DROP Ring-1 component configuration with no native subject
+test_predict_episode_laws.gd:test_meter_zero_region_matches_the_domain_predicates                          -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_meter_includes_excluded_causal_fields_with_declared_epsilon              -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_topology_fingerprint_ignores_peer_local_simulation_modes                 -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_topology_fingerprint_separates_transitions_by_their_quantum              -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_forensic_mismatch_alone_does_not_open_an_episode                         -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_generator_walk_pins_the_first_contiguous_mismatch                        -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_generator_walk_stops_at_an_in_domain_bit_mismatch                        -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_one_disturbance_keeps_one_episode_and_attaches_taint                     -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_episode_report_projects_the_stable_diagnostic_sections                   -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_episode_signals_carry_the_same_stable_report                             -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_an_agreeing_pre_failure_pins_a_secondary_generator                       -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_agreement_requires_the_full_distinct_transition_run                      -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_teleport_write_preserves_episode_evidence                                -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_scope_member_write_uses_the_triggering_episode                           -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_generator_copy_survives_journal_eviction                                 -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_a_nearby_new_episode_links_to_the_closed_one                             -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_absent_witness_is_valid_and_silent                                       -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_malformed_witness_callable_reports_once                                  -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_evidence_series_stay_bounded_and_count_what_they_drop                    -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_secondary_generators_cap_and_keep_the_earliest                           -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_the_digest_reports_the_disposition_without_the_evidence                  -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_the_digest_revision_moves_only_on_evidence_mutation                      -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_a_detached_report_survives_later_evidence                                -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_the_quantum_counts_physics_steps_between_drives                          -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_a_rewire_re_anchors_the_quantum_on_the_declaration                       -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_the_quantum_saturates_rather_than_counting_a_stall                       -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_an_unpumped_engine_reports_the_declared_quantum                          -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_the_closure_run_scales_with_the_acknowledgement_age                      -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_a_standing_boundary_does_not_lengthen_the_next_hold                      -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_episode_laws.gd:test_a_topology_boundary_never_lengthens_a_hold                               -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] later causes split from taint"
+test_predict_extension_hosting.gd:test_make_selects_the_whole_prediction_host                              -> DROP the implementation-selection seam retires with the arms
+test_predict_extension_hosting.gd:test_a_running_owner_drives_through_its_selected_host                    -> DROP the implementation-selection seam retires with the arms
+test_predict_extension_hosting.gd:test_authority_consumes_through_its_selected_host                        -> DROP the implementation-selection seam retires with the arms
+test_predict_extension_hosting.gd:test_correction_judgements_cross_the_selected_host                       -> DROP the implementation-selection seam retires with the arms
+test_predict_extension_seam.gd:test_the_engine_takes_no_decision_off_the_base                              -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_extension_seam.gd:test_every_decision_dispatches_through_the_installed_engine                 -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_extension_seam.gd:test_the_shell_names_no_kernel                                              -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_extension_seam.gd:test_every_effect_is_stated_before_it_runs                                  -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_extension_seam.gd:test_a_staged_restore_rejects_an_operator_it_cannot_record                  -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_extension_seam.gd:test_a_replay_plan_rejects_an_index_that_does_not_advance                   -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_extension_seam.gd:test_the_stock_implementation_hosts_every_hook                              -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_extension_seam.gd:test_lint_is_not_vacuous                                                    -> DROP a lint over the GDScript engine's dispatch seam
+test_predict_fallback_laws.gd:test_structural_budgets_ignore_quality_knobs                                 -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_non_contraction_on_a_withheld_trigger_spends_no_budget                -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_reachable_trigger_still_charges_the_budget                            -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_non_contraction_with_no_trigger_charges_normally                      -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_withheld_write_settles_without_charging_the_budget                    -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_reachable_write_still_charges_when_its_window_closes                  -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_the_advance_span_follows_the_basis_not_the_live_ack                     -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_an_evidence_free_write_is_exempt_for_its_own_reason                     -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_the_charged_breakdown_sums_to_the_spend                                 -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_an_escalation_settles_without_claiming_the_error_closed                 -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_resumed_body_predicts_without_correcting_until_judged                 -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_dirty_probation_verdict_requarantines_and_reports_itself              -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_zero_tolerance_field_triggers_and_ranks_last                          -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_quarantine_needs_distinct_coherent_frames                               -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_quarantine_waits_for_a_valid_reseed_basis_after_its_run                 -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_matching_epoch_admits_one_evidence_free_alignment                       -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_resume_run_scales_with_ack_age_instead_of_wire_width                    -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_reopen_charged_elsewhere_doubles_the_quarantine_hold                  -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_reopen_charged_the_same_way_does_not_escalate                         -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_a_held_flap_reopen_does_not_price_the_hold                              -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_quarantine_requires_a_consecutive_clean_authority_witness_run           -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_quarantine_reseed_survives_a_stale_state_pool                           -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_quarantine_reseed_skips_a_known_dirty_snapshot                          -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_stale_pool_wait_prefers_a_fresh_seed                                    -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_epoch_admission_rekeys_the_authority_journal                            -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_state_lane_acks_wait_for_the_epoch_confirmed_ack_lane                   -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_fallback_laws.gd:test_adversarial_knobs_still_fallback_with_delayed_control                   -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] dirty probation reopens without flap pricing"
+test_predict_frames_codec.gd:test_command_roundtrips_transitions_and_their_payloads                        -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] command binds each fresh transition to a row"
+test_predict_frames_codec.gd:test_command_with_no_fresh_transition_carries_no_payload                      -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] a run with no fresh transition carries no payload"
+test_predict_frames_codec.gd:test_a_frame_needs_a_planned_input_schema                                     -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] a frame needs a planned input schema"
+test_predict_frames_codec.gd:test_command_evidence_section_is_optional                                     -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] the evidence section is optional"
+test_predict_frames_codec.gd:test_command_carries_the_unset_acknowledgement_frontier                       -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] command binds each fresh transition to a row"
+test_predict_frames_codec.gd:test_evidence_families_arrive_whole_or_not_at_all                             -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] journal exposes every retained evidence column"
+test_predict_frames_codec.gd:test_ack_roundtrips_its_columns                                               -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] ack keeps signed evidence and witness bits"
+test_predict_frames_codec.gd:test_ack_roundtrips_peer_invariant_witness_class_bits                         -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] ack keeps signed evidence and witness bits"
+test_predict_frames_codec.gd:test_ack_chunks_the_oldest_prefix_below_the_mtu_budget                        -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] ack takes the oldest MTU-safe prefix"
+test_predict_frames_codec.gd:test_ack_carries_the_antecedents_a_divergence_is_charged_to                   -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] an extreme digest survives the ack crossing unchanged"
+test_predict_frames_codec.gd:test_ack_declares_substitution_per_transition                                 -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] substitution is declared per transition"
+test_predict_frames_codec.gd:test_a_truncated_or_empty_frame_decodes_to_nothing                            -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] decoders reject truncation and residue"
+test_predict_frames_codec.gd:test_the_transition_run_is_contiguous                                         -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] a gapped transition run has no encoding"
+test_predict_joint_pass.gd:test_a_tick_of_rows_costs_one_pass                                              -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
+test_predict_joint_pass.gd:test_the_pass_steps_a_member_that_did_not_diverge                               -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
+test_predict_joint_pass.gd:test_a_member_is_not_stepped_before_its_tenure                                  -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
+test_predict_joint_pass.gd:test_a_departed_member_is_held_until_the_horizon_passes_it                      -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
+test_predict_joint_pass.gd:test_the_shell_counts_the_passes_its_groups_ran                                 -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
+test_predict_joint_pass.gd:test_the_group_reports_its_own_depth_and_floor_moves                            -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
+test_predict_joint_pass.gd:test_the_pass_publishes_the_span_it_replayed                                    -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
+test_predict_journal.gd:test_open_and_close_compose_one_row                                                -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_ring_evicts_oldest_and_keeps_columns_aligned                                  -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_columns_stay_aligned_across_a_wrap                                            -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_mark_ack_replaces_a_prior_verdict                                             -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_first_unmatched_names_the_oldest_unverified_transition                        -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_last_closed_stops_at_the_first_open_row                                       -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_a_substituted_row_is_closed_without_having_run                                -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_sealed_evidence_is_immutable_while_verdicts_settle                            -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_supersession_preserves_the_sealed_row                                         -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_chain_break_search_returns_the_first_flagged_boundary                         -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_witness_sidecar_is_evicted_with_its_row                                       -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_witness_match_is_a_revisable_verdict_overlay                                  -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_clear_adopts_the_epoch_and_drops_every_row                                    -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_close_and_mark_ack_ignore_an_evicted_transition                               -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_journal.gd:test_fnv1a_is_stable_sensitive_and_within_int32                                    -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the fingerprint is stable, sensitive and inside a signed 32 bit column"
+test_predict_journal.gd:test_a_fingerprint_survives_the_int32_column                                       -> DROP the write API this drove is withdrawn; the view materializes from retained native rows and its columns, ring and frontiers are certified against the pool in test_predict_pool_drive.gd
+test_predict_kernel_purity.gd:test_kernel_region_names_no_engine_state                                     -> DROP a lint over the GDScript kernel region
+test_predict_kernel_purity.gd:test_every_kernel_is_static                                                  -> DROP a lint over the GDScript kernel region
+test_predict_kernel_purity.gd:test_engine_resolves_no_clock                                                -> DROP a lint over the GDScript kernel region
+test_predict_kernel_purity.gd:test_joint_statics_name_no_engine_state                                      -> DROP a lint over the GDScript kernel region
+test_predict_kernel_purity.gd:test_joint_statics_are_not_vacuous                                           -> DROP a lint over the GDScript kernel region
+test_predict_kernel_purity.gd:test_lint_is_not_vacuous                                                     -> DROP a lint over the GDScript kernel region
+test_predict_kernels.gd:test_a_frame_with_newer_input_drives_it_fresh                                      -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_frame_with_no_newer_input_repeats_the_same_label                            -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_frame_before_any_input_labels_from_the_pass_timing                          -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_authority_replays_only_past_the_standing_buffer                               -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_authority_starves_only_with_nothing_queued                                    -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_warm_latch_changes_no_verdict                                             -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_latch_warms_once_the_buffer_is_exceeded                                   -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_an_agreeing_transition_does_not_correct                                       -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_transition_past_epsilon_corrects                                            -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_an_unjudged_transition_corrects_and_reports_nothing_new                       -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_replay_restores_but_reports_no_write                                          -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_snap_reports_what_it_wrote                                                    -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_an_extrapolated_snap_projects_along_declared_channels                         -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_projection_span_is_capped                                                 -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_sub_teleport_recovery_withholds_the_declared_fields                         -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_teleport_restores_the_whole_closure                                         -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_suppressed_recovery_writes_nothing                                          -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_suppression_never_outranks_the_teleport_tier                                  -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_each_pose_field_is_judged_against_its_own_declared_distance                   -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_tier_is_reached_at_its_distance_and_zero_means_always                     -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_an_unmeasurable_pose_restores_the_whole_closure                               -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_an_observing_policy_stages_nothing                                            -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_teleport_tier_never_outranks_an_observing_policy                          -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_property_without_its_velocity_restores_verbatim                             -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_no_age_projects_nothing                                                       -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_converging_field_steps_part_of_the_way                                      -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_converge_touches_only_the_fields_that_declared_it                             -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_degenerate_rates_restore_outright                                         -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_an_unsteppable_type_restores_outright                                         -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_converging_angle_steps_the_short_way                                        -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_step_leaves_nothing_outstanding                                           -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_group_floor_is_the_oldest_basis_any_member_owes                           -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_relayed_command_lowers_the_floor_below_the_bases                            -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_an_epoch_bump_floors_the_group_at_the_bump                                    -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_basis_older_than_history_heals_instead_of_replaying                         -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_a_group_with_no_basis_floors_at_the_present                                   -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_kernels.gd:test_the_cell_provenance_prefers_authorship_over_every_stand_in                    -> prediction_tests.cpp:"[Networked][Predict] A newer input label drives fresh, and a stale one repeats"
+test_predict_lanes_delivery.gd:test_the_owner_lane_carries_every_authored_transition                       -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] the lane laws hold across the corpus"
+test_predict_lanes_delivery.gd:test_redundant_sends_deduplicate_instead_of_accumulating                    -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] the lane laws hold across the corpus"
+test_predict_lanes_delivery.gd:test_a_dropped_owner_frame_heals_on_the_next_send                           -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] the lane laws hold across the corpus"
+test_predict_lanes_delivery.gd:test_authority_never_holds_a_transition_without_its_command                 -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] the lane laws hold across the corpus"
+test_predict_lanes_delivery.gd:test_a_clean_exchange_declares_no_substitution                              -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] the lane laws hold across the corpus"
+test_predict_lanes_faults.gd:test_redundancy_repairs_a_dropped_frame                                       -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] every lane law breaks against its plant"
+test_predict_lanes_faults.gd:test_a_reordered_and_repeated_delivery_changes_nothing                        -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] every lane law breaks against its plant"
+test_predict_lanes_faults.gd:test_a_frame_that_drove_nothing_confirms_nothing                              -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] every lane law breaks against its plant"
+test_predict_lanes_faults.gd:test_a_starved_authority_declares_what_it_skipped                             -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] every lane law breaks against its plant"
+test_predict_lanes_faults.gd:test_a_uniformly_late_lane_substitutes_nothing                                -> predict_lane_laws.cpp:"[Networked][Predict][Hosted][Law] every lane law breaks against its plant"
+test_predict_lanes_frame.gd:test_authority_replays_the_owner_lane_entry_for_entry                          -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_the_lane_needs_no_input_stream_to_find_its_commands                       -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_a_resync_declares_every_transition_it_skipped                             -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_a_skipped_transition_is_journaled_as_never_driven                         -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_the_ack_lane_reaches_a_verdict_with_no_state_frame                        -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_the_ack_lane_stays_dense_over_a_long_run                                  -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_a_cadence_surplus_stands_without_ever_doubling_a_solve                    -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_the_ack_lane_floors_the_command_window                                    -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_a_transition_is_judged_once                                               -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_frame.gd:test_a_clean_exchange_substitutes_nothing                                      -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a frame lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_a_tick_drive_authors_its_own_degenerate_transition                         -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_a_tick_drive_holds_at_the_structural_ack_age_ceiling                       -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_authority_replays_the_owner_lane_tick_for_tick                             -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_the_lane_needs_no_input_stream_to_find_its_commands                        -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_the_ack_lane_reaches_a_verdict_with_no_state_frame                         -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_the_ack_lane_floors_the_command_window                                     -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_a_tick_resync_declares_every_transition_it_skipped                         -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_lanes_tick.gd:test_a_clean_tick_exchange_substitutes_nothing                                  -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a tick lane closes every acked transition as authority did"
+test_predict_law_parameterization.gd:test_an_undeclared_run_certifies_the_native_implementation            -> DROP the implementation-set instrument retires with the arms
+test_predict_law_parameterization.gd:test_the_stock_implementation_is_always_first_in_the_set              -> DROP the implementation-set instrument retires with the arms
+test_predict_law_parameterization.gd:test_the_rig_decides_through_the_implementation_under_test            -> DROP the implementation-set instrument retires with the arms
+test_predict_law_parameterization.gd:test_a_candidate_displaces_the_stock_decision                         -> DROP the implementation-set instrument retires with the arms
+test_predict_law_parameterization.gd:test_every_wrapper_routes_to_the_implementation_it_is_given           -> DROP the implementation-set instrument retires with the arms
+test_predict_law_parameterization.gd:test_blame_names_the_implementation_a_failure_belongs_to              -> DROP the implementation-set instrument retires with the arms
+test_predict_mosaic_restore.gd:test_a_correction_never_consumes_a_pre_gain_edge_row                        -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] reconstruction gates comparison"
+test_predict_mosaic_restore.gd:test_a_reconstructed_row_corrects_like_a_whole_row                          -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] reconstruction gates comparison"
+test_predict_mosaic_restore.gd:test_a_state_frame_reaches_no_fingerprint_verdict                           -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] reconstruction gates comparison"
+test_predict_mosaic_restore.gd:test_a_rewire_keeps_the_stream_armed                                        -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] reconstruction gates comparison"
+test_predict_mosaic_restore.gd:test_a_skipped_comparison_is_counted_apart_from_an_agreeing_one             -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] reconstruction gates comparison"
+test_predict_native_journal_agreement.gd:test_the_pool_journals_the_tick_drives_the_shell_journals         -> DROP certification bridge, deleted with the shell journal it compares
+test_predict_native_journal_agreement.gd:test_the_pool_journals_the_frame_drives_the_shell_journals        -> DROP certification bridge, deleted with the shell journal it compares
+test_predict_native_journal_agreement.gd:test_the_pool_journals_the_host_local_drives_the_shell_journals   -> DROP certification bridge, deleted with the shell journal it compares
+test_predict_native_journal_agreement.gd:test_the_pool_journals_the_replayed_drives_the_shell_journals     -> DROP certification bridge, deleted with the shell journal it compares
+test_predict_native_journal_agreement.gd:test_the_pool_journals_the_declared_evidence_the_shell_journals   -> DROP certification bridge, deleted with the shell journal it compares
+test_predict_native_journal_agreement.gd:test_the_pool_judges_the_acknowledgements_the_shell_judges        -> DROP certification bridge, deleted with the shell journal it compares
+test_predict_native_journal_agreement.gd:test_the_pool_journals_the_skipped_transitions_the_shell_journals -> DROP certification bridge, deleted with the shell journal it compares
+test_predict_observer_cost.gd:test_the_digest_cost_does_not_grow_with_episode_age                          -> DROP a load-marginal cost measurement over the GDScript engine's private episode
+test_predict_observer_cost.gd:test_recording_evidence_does_not_grow_with_episode_age                       -> DROP a load-marginal cost measurement over the GDScript engine's private episode
+test_predict_observer_cost.gd:test_reports_the_observer_cost_curve                                         -> DROP a load-marginal cost measurement over the GDScript engine's private episode
+test_predict_quantum_budget.gd:test_reports_where_the_quantum_breaks_on_a_clean_lane                       -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_reports_where_the_quantum_breaks_under_arrival_jitter                  -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_reports_where_the_quantum_breaks_under_heavy_jitter                    -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_reports_where_the_quantum_breaks_with_owner_spare_frames               -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_reports_where_the_quantum_breaks_with_owner_double_tick_frames         -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_the_gate_closes_the_owner_spare_frame_fault                            -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_the_gate_holds_at_a_dense_spare_frame_ratio                            -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_a_batched_command_lane_no_longer_breaks_the_quantum                    -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_a_per_frame_command_lane_holds_the_quantum_on_both_peers               -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_quantum_budget.gd:test_a_deeper_standing_buffer_only_adds_latency                             -> DROP a budget exploration, and predict_sensor_laws.cpp carries the quantum law
+test_predict_recovery_laws.gd:test_a_recovery_with_no_field_rules_stages_the_rebase_exactly                -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_no_recovery_stages_a_value_further_from_authority                       -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_withheld_field_is_not_resurrected_by_a_converge_rule                  -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_teleport_honors_neither_field_rule                                    -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_an_out_of_domain_recovery_writes_the_full_closure                       -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_suppression_never_outranks_out_of_domain_closure                        -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_an_in_domain_recovery_still_honors_the_field_rules                      -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_an_unattributed_recovery_under_an_open_window_restores_all              -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_non_shrinking_sequence_escalates_by_k_plus_one                        -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_alternating_sign_deltas_escalate_by_three                               -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_direction_change_does_not_supply_a_sign_flip                          -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_shrinking_sequence_never_escalates                                    -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_diverged_channel_costs_only_its_own_field_the_projection              -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_the_projection_guard_reads_the_destinations_epsilon                     -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_projection_uses_destination_error_over_the_restore_span                 -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_declaring_sensors_alone_leaves_every_transition_out_of_domain           -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_declared_sensor_is_sampled_pre_drive_and_read_back                    -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_contact_against_a_frozen_participant_labels_out_of_domain             -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_contact_against_an_equivalent_participant_keeps_exactness             -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_closed_delay_speculates_nothing                                       -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_an_observing_policy_reports_without_repairing                           -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_escalation_restores_withheld_fields                                     -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_an_undeclared_entity_recovers_the_full_closure_at_once                  -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_reports_what_a_recovery_costs_a_field_that_already_agreed               -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_recovery_stages_a_field_that_had_no_divergence                        -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_the_ledger_separates_the_field_that_triggers_from_the_one_repaired      -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_the_report_names_a_forward_model_that_is_not_live                       -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_class_keeps_a_field_out_of_the_correction_decision                    -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_non_causal_field_alone_raises_no_correction                           -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_the_report_names_two_fields_that_share_one_tier_distance                -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_the_report_names_a_rate_that_inherits_a_distance_tolerance              -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_teleport_at_enrols_a_field_no_carry_channel_would                       -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_faithful_carry_step_advances_the_write                                -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_carry_step_that_disagrees_with_the_tape_is_refused                    -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_disagreeing_carry_step_is_retired                                     -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_solver_shared_field_retires_and_the_reason_names_the_solver           -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_recovery_laws.gd:test_a_game_authored_field_keeps_its_rule_live                               -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] guarded projection names only projected restores"
+test_predict_relay_lane.gd:test_a_relayed_window_files_one_cell_per_authored_transition                    -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] command binds each fresh transition to a row"
+test_predict_relay_lane.gd:test_the_redundancy_window_files_each_transition_once                           -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] command binds each fresh transition to a row"
+test_predict_relay_lane.gd:test_the_relayed_bytes_are_the_authored_bytes                                   -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] command binds each fresh transition to a row"
+test_predict_relay_lane.gd:test_an_undecodable_window_is_refused_rather_than_filed                         -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] command binds each fresh transition to a row"
+test_predict_relay_lane.gd:test_an_engine_handed_no_window_answers_no_command                              -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] command binds each fresh transition to a row"
+test_predict_relay_subscription.gd:test_a_peer_interest_admits_is_subscribed                               -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] the relay book admits, drops and keeps admission order"
+test_predict_relay_subscription.gd:test_a_peer_interest_does_not_admit_is_refused                          -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] the relay book admits, drops and keeps admission order"
+test_predict_relay_subscription.gd:test_dropping_a_subscription_closes_the_lane                            -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] the relay book admits, drops and keeps admission order"
+test_predict_relay_subscription.gd:test_a_subscription_to_nothing_is_refused                               -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] the relay book admits, drops and keeps admission order"
+test_predict_role_axes.gd:test_each_role_is_named_by_the_pair_that_produces_it                             -> predict_axis_laws.cpp:"[Networked][Predict][Hosted][Law] every role is driven and only an unperformable configuration is refused"
+test_predict_role_axes.gd:test_a_peer_that_simulates_nothing_is_remote_whatever_it_would_read              -> predict_axis_laws.cpp:"[Networked][Predict][Hosted][Law] every role is driven and only an unperformable configuration is refused"
+test_predict_role_axes.gd:test_only_predicted_speculation_names_a_simulated_participant                    -> predict_axis_laws.cpp:"[Networked][Predict][Hosted][Law] every role is driven and only an unperformable configuration is refused"
+test_predict_role_axes.gd:test_a_fresh_handle_simulates_nothing_until_it_wires                             -> predict_axis_laws.cpp:"[Networked][Predict][Hosted][Law] every role is driven and only an unperformable configuration is refused"
+test_predict_server_verification.gd:test_authority_judges_a_clean_run_and_finds_nothing                    -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] only causal fields judge a state"
+test_predict_server_verification.gd:test_authority_catches_an_owner_whose_step_disagrees                   -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] only causal fields judge a state"
+test_predict_server_verification.gd:test_topology_is_the_first_unequal_boundary                            -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] only causal fields judge a state"
+test_predict_server_verification.gd:test_contact_is_the_first_unequal_boundary                             -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] only causal fields judge a state"
+test_predict_shadow.gd:test_stock_against_itself_reads_zero                                                -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_a_clean_run_can_prove_it_diffed                                                -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_a_diverging_candidate_is_caught_and_named                                      -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_the_field_sink_is_diffed_as_part_of_the_decision                               -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_the_caller_receives_the_reference_answer_and_its_own_sink                      -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_a_bare_shadow_is_the_stock_run_gate                                            -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_the_diff_is_exact_rather_than_approximate                                      -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_an_installed_shadow_is_live_and_clean                                          -> DROP the decision shadow retires with the crossing arms
+test_predict_shadow.gd:test_key_order_is_not_a_divergence                                                  -> DROP the decision shadow retires with the crossing arms
+test_predict_simulated_participant.gd:test_explicit_promotion_steps_a_remote_with_predicted_commands       -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_simulated_participant.gd:test_a_joint_member_records_the_transition_it_substituted            -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_simulated_participant.gd:test_a_joint_member_files_the_command_it_was_driven_with             -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_simulated_participant.gd:test_an_independent_member_records_no_transition                     -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_simulated_participant.gd:test_coast_zeros_stale_remote_input                                  -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_simulated_participant.gd:test_each_received_state_rebases_the_simulated_body                  -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_simulated_participant.gd:test_interest_producer_promotes_only_locally_replicated_members      -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_simulated_participant.gd:test_nearest_promotion_is_hysteretic_and_defers_contact_handoff      -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] explicit promotion wins"
+test_predict_transport_laws.gd:test_transport_composes_pose_without_rewinding_newer_progress               -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_clean_agreeing_basis_admits_one_transport_candidate                    -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_clean_horizon_ignores_only_the_trailing_open_transition                -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_non_pose_fork_refuses_without_spending_episode_budget                  -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_failed_transport_verification_spends_once_then_descends                -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_clean_momentum_only_error_admits_a_null_dissipate_attempt              -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_dissipate_waits_for_witness_without_a_transport_recipe                 -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_observe_policy_records_but_does_not_run_dissipate                      -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_dissipate_waits_through_shrink_and_closes_at_zero                      -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_stalled_dissipate_spends_once_then_descends                            -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_dirty_horizon_and_blocked_corridor_each_refuse                         -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_predict_transport_laws.gd:test_real_lane_uses_transport_once_while_input_keeps_advancing              -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] transport preserves newer pose"
+test_prediction_boundary_overlay.gd:test_settled_basis_only_reads_open_episode_evidence                    -> DROP a debug overlay nothing production reads
+test_prediction_boundary_overlay.gd:test_contact_glyph_names_every_witness_class                           -> DROP a debug overlay nothing production reads
+test_prediction_boundary_overlay.gd:test_builds_four_layers_in_two_and_three_dimensions                    -> DROP a debug overlay nothing production reads
+test_prediction_boundary_overlay.gd:test_the_acknowledgement_age_is_read_against_a_structural_ceiling      -> DROP a debug overlay nothing production reads
+test_prediction_boundary_overlay.gd:test_demotion_tint_clears_when_speculation_resumes                     -> DROP a debug overlay nothing production reads
+test_prediction_boundary_overlay.gd:test_debug_gate_attaches_and_unregister_releases_overlay               -> DROP a debug overlay nothing production reads
+test_prediction_correction_tiers.gd:test_excluded_field_does_not_trigger_but_others_do                     -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_field_recovery_facts_ride_the_marks                               -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_a_scene_correction_mode_outranks_the_archetype_policy             -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_diverged_compares_angle_fields_across_the_wrap                    -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_teleport_only_restore_preserved_below_teleport_tier               -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_recovered_reports_one_write_corrections                           -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_a_divergence_is_reported_before_it_is_recovered                   -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_max_restore_ticks_default_and_push                                -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_a_recovery_past_the_threshold_teleports                           -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_collision_cooldown_pauses_the_recovery                            -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_correction_tiers.gd:test_sleeping_body_pauses_the_recovery                                 -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] windows and cooldowns key the decision"
+test_prediction_determinism.gd:test_exact_regime_outcome_is_reproducible                                   -> MATRIX declared_determinism_laws.cpp:"L-REPRODUCIBLE"x"exact-lane"
+test_prediction_determinism.gd:test_seeded_trace_is_reproducible                                           -> MATRIX declared_determinism_laws.cpp:"L-REPRODUCIBLE"x"impaired-lane"
+test_prediction_frame_schedule.gd:test_frame_tape_replays_the_same_simulation_entry_for_entry              -> MATRIX declared_prediction_laws.cpp:"L-AGREE"x"varied-frame"
+test_prediction_frame_schedule.gd:test_frame_authors_at_most_one_transition_per_network_tick               -> MATRIX declared_prediction_laws.cpp:"L-FRAME-ONCE"x"held-frame"
+test_prediction_frame_schedule.gd:test_prediction_holds_at_the_structural_ack_age_ceiling                  -> MATRIX declared_prediction_laws.cpp:"L-HORIZON"x"deaf-frame"
+test_prediction_frame_schedule.gd:test_frame_journal_fingerprints_match_at_every_acked_entry               -> MATRIX declared_prediction_laws.cpp:"L-AGREE"x"held-frame"
+test_prediction_frame_schedule.gd:test_frame_journal_command_hashes_agree_across_the_peers                 -> MATRIX declared_prediction_laws.cpp:"L-AGREE"x"clean-lane"
+test_prediction_frame_schedule.gd:test_frame_a_pass_that_drove_nothing_claims_no_transition                -> MATRIX declared_prediction_laws.cpp:"L-DRY"x"buffered-frame"
+test_prediction_frame_schedule.gd:test_frame_depth_from_an_early_arrival_covers_a_late_one                 -> MATRIX declared_prediction_laws.cpp:"L-BUFFER"x"buffered-frame"
+test_prediction_frame_schedule.gd:test_frame_one_missed_arrival_causes_exactly_one_hold                    -> MATRIX declared_prediction_laws.cpp:"L-BUFFER"x"gapped-frame"
+test_prediction_frame_schedule.gd:test_frame_a_dry_run_acks_nothing_and_strands_no_transition              -> MATRIX declared_prediction_laws.cpp:"L-DRY"x"buffered-frame"
+test_prediction_frame_schedule.gd:test_frame_resync_jumps_to_live_edge_and_client_corrects                 -> MATRIX declared_prediction_laws.cpp:"L-RESYNC"x"stranded-frame"
+test_prediction_frame_schedule.gd:test_a_frame_that_opens_no_transition_is_charged_to_the_next_one         -> MATRIX declared_prediction_laws.cpp:"L-FRAME-QUANTUM"x"held-quantum"
+test_prediction_frame_schedule.gd:test_frame_a_host_controlled_entity_authors_once_per_network_tick        -> MATRIX declared_prediction_laws.cpp:"L-FRAME-ONCE"x"hosted-frame"
+test_prediction_reconciliation.gd:test_clean_predicts_authority_with_no_corrections                        -> MATRIX declared_prediction_laws.cpp:"L-CLEAN"x"clean-lane"
+test_prediction_reconciliation.gd:test_perturbation_reconverges                                            -> MATRIX declared_prediction_laws.cpp:"L-CONV"x"perturbed-lane"
+test_prediction_reconciliation.gd:test_replay_depth_is_bounded                                             -> MATRIX declared_prediction_laws.cpp:"L-REPLAY"x"perturbed-lane"
+test_prediction_reconciliation.gd:test_fire_fires_once_despite_replays                                     -> MATRIX declared_prediction_laws.cpp:"L-FRESH"x"fresh-side-effect-lane"
+test_prediction_reconciliation.gd:test_stall_policy_skips_lost_input                                       -> MATRIX predict_drive_laws.cpp:"L-MISSING"x"stalled-input-lane"
+test_prediction_reconciliation.gd:test_repeat_last_policy_carries_input                                    -> MATRIX predict_drive_laws.cpp:"L-MISSING"x"repeat-last-input-lane"
+test_prediction_robustness.gd:test_bounded_under_jitter_no_spiral                                          -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a perturbed session reconverges"
+test_prediction_robustness.gd:test_recovers_after_heavy_loss_burst                                         -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a perturbed session reconverges"
+test_prediction_tape.gd:test_frame_authoring_clamps_zero_and_folds_double_tick_frames                      -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] tape reset restarts FRAME numbering"
+test_prediction_tape.gd:test_command_lane_deduplicates_redundancy_overlap_on_server                        -> predict_frame_laws.cpp:"[Networked][PredictWire][Hosted] tape reset restarts FRAME numbering"
+test_prediction_wiring.gd:test_authority_derives_direction                                                 -> DROP Ring-1 virtual naming with no native subject
+test_prediction_wiring.gd:test_peer_symmetric_virtual_names                                                -> DROP Ring-1 virtual naming with no native subject
+test_scene_rewind.gd:test_rewind_moves_live_node_to_history_then_restores                                  -> MATRIX declared_record_laws.cpp:"L-REWIND"x"rewound-lane"
+test_scene_rewind.gd:test_rewind_skips_entity_with_no_history                                              -> MATRIX declared_record_laws.cpp:"L-UNRETAINED"x"unretained-rewind"
+test_scene_rewind.gd:test_linger_keeps_target_rewindable_until_freed                                       -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_server_rewind.gd:test_sample_hits_rewound_misses_live                                                 -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_server_rewind.gd:test_clamps_view_tick_into_retained_window                                           -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_server_rewind.gd:test_despawn_linger_keeps_target_rewindable                                          -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_server_rewind.gd:test_sample_is_empty_off_server                                                      -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_simulation_gate_semantics.gd:test_holding_one_frame_in_three_is_a_pure_skip                           -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_simulation_gate_semantics.gd:test_holding_one_frame_in_seven_is_a_pure_skip                           -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_simulation_gate_semantics.gd:test_a_write_during_a_held_frame_survives_the_hold                       -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_simulation_gate_semantics.gd:test_a_hold_stops_a_body_that_would_have_moved                           -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_simulation_gate_semantics.gd:test_the_space_that_steps_a_body_is_the_one_the_body_names               -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_snap_correction.gd:test_auto_resolves_snap_for_rigidbody                                 -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
+test_snap_correction.gd:test_auto_resolves_replay_for_kinematic                               -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
+test_snap_correction.gd:test_auto_resolves_replay_for_plain_node                              -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
+test_snap_correction.gd:test_explicit_mode_overrides_body_type                                -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
+test_snap_correction.gd:test_kinematic_scenario_body_resolves_replay                          -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
+test_snap_correction.gd:test_snap_adopts_authority_without_replay                             -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] a snapping lane adopts authority without walking its replay window"
+test_timeline_registry.gd:test_state_sync_presence_registers_a_timeline                                    -> MATRIX declared_record_laws.cpp:"L-RECORD"x"recorded-lane"
+test_timeline_registry.gd:test_server_records_authoritative_state_each_tick                                -> MATRIX declared_record_laws.cpp:"L-RECORD"x"recorded-lane"
+test_timeline_registry.gd:test_unregister_drops_the_timeline                                               -> MATRIX declared_record_laws.cpp:"L-RETIRED"x"retired-lane"
+test_predict_journal.gd:test_the_arrival_histograms_hold_their_declared_widths                             -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the fingerprint is stable, sensitive and inside a signed 32 bit column"
+test_entity_slots.gd:test_a_slot_is_minted_once_and_read_without_minting                                   -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
+test_entity_slots.gd:test_one_holder_releasing_retires_nothing                                             -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
+test_entity_slots.gd:test_the_last_holder_releasing_retires_the_slot                                       -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
+test_entity_slots.gd:test_a_released_slot_is_never_handed_out_again                                        -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
+test_entity_slots.gd:test_re_holding_a_retired_slot_cancels_its_sweep                                      -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
+test_entity_slots.gd:test_a_new_session_is_a_new_numbering                                                 -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
+test_predict_pool_compare.gd:test_exact_comparison_matches_the_gdscript_engine                             -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] exactness outranks tolerance"
+test_predict_pool_compare.gd:test_incomplete_ack_evidence_names_no_cause                                   -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] exactness outranks tolerance"
+test_predict_pool_compare.gd:test_reconstruction_is_a_counted_refusal                                      -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] exactness outranks tolerance"
+test_predict_pool_declaration.gd:test_the_pool_mints_a_slot_per_engine_and_never_reuses_one                -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_declaration.gd:test_a_slot_refuses_a_configuration_the_pool_declines                     -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_declaration.gd:test_the_declaration_order_is_neither_alphabetical_nor_interned           -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_declaration.gd:test_the_field_table_is_the_declaration_order                             -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_declaration.gd:test_the_field_table_is_the_sealed_wire_column_order                      -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_declaration.gd:test_the_compiled_tables_answer_what_the_engine_answers                   -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_declaration.gd:test_the_corpus_reaches_every_compiled_table                              -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_declaration.gd:test_a_rewire_onto_nothing_leaves_no_table_standing                       -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the field table is the declaration order and answers both ways"
+test_predict_pool_drive.gd:test_a_tick_drive_is_its_own_transition                                         -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_drive.gd:test_a_closed_row_is_the_frontier_an_ack_may_claim                              -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_drive.gd:test_a_state_that_does_not_chain_breaks_the_chain                               -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_drive.gd:test_the_columns_answer_what_the_gdscript_journal_answers                       -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_drive.gd:test_speculation_stops_once_authority_falls_behind                              -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_drive.gd:test_an_acknowledged_lane_never_reaches_the_horizon                             -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_drive.gd:test_a_clock_that_gaps_the_lane_opens_a_new_tape_epoch                          -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_drive.gd:test_the_stat_array_is_one_row_per_declared_counter                             -> predict_drive_laws.cpp:"[Networked][Predict][Hosted][Law] the drive laws hold across the corpus"
+test_predict_pool_episode.gd:test_episode_open_and_close_publish_typed_snapshots                           -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] evidence is bounded and counted"
+test_predict_pool_episode.gd:test_two_full_closures_publish_fallback_once                                  -> predict_episode_laws.cpp:"[Networked][Predict][Hosted][Episode] evidence is bounded and counted"
+test_predict_pool_joint.gd:test_the_pool_publishes_one_ordered_total_joint_pass                            -> predict_joint_laws.cpp:"[Networked][Predict][Hosted][Joint] pass is transition then member order"
+test_predict_pool_quarantine.gd:test_quarantine_reseed_alignment_and_dirty_probation                       -> predict_quarantine_laws.cpp:"[Networked][Predict][Hosted][Quarantine] distinct coherent rows reseed"
+test_predict_pool_recovery.gd:test_the_write_plan_matches_the_gdscript_recovery                            -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] the engine publishes its effect"
+test_predict_pool_recovery.gd:test_extrapolated_recovery_is_supported_and_diffed                           -> predict_recovery_laws.cpp:"[Networked][Predict][Hosted][Recovery] the engine publishes its effect"
+test_predict_pool_sensors.gd:test_evidence_and_quantum_are_one_typed_journal_protocol                      -> predict_sensor_laws.cpp:"[Networked][Predict][Hosted] measured quantum and solve evidence share one journal row"
+test_predict_pool_sensors.gd:test_carry_retires_at_the_bounded_infidelity_limit                            -> predict_sensor_laws.cpp:"[Networked][Predict][Hosted] measured quantum and solve evidence share one journal row"

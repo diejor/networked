@@ -1,0 +1,173 @@
+# family: table
+# bridge: A(byte-parity)
+# regime: bit-exact
+# instrument-first: 2be3147787c7
+# baseline: tests/unit/table, tests/unit/schema, tests/integration/table
+# baseline-count: 96
+#
+# The unit is TableCore and SchemaCore, which cross together because
+# TableCore.declare names a SchemaRecord in its signature, and a class whose
+# signature names another cannot precede it.
+#
+# THE INSTRUMENT ALREADY EXISTED, which is what this family has that the
+# transport crossing had to invent. test_table_codec.gd and
+# test_table_frame_grammar.gd were written wire-first, before the GDScript
+# encoder existed, and they pin the frame bytes by hand. Both were run
+# UNCHANGED against the native classes before a single case was ported, and all
+# 96 cases of the family passed on the first run. A golden recorded from the arm
+# being replaced would have been strictly weaker than bytes written down before
+# either implementation existed.
+#
+# The port classification was measured rather than assumed. Only two of the ten
+# suites reach TableCore or SchemaCore directly. The other eight drive
+# NetwMultiplayer's flat verbs and the tree, so they are Bridge C and cross with
+# the shell at W6.
+#
+# Four decisions were taken at unit-open, each on measured call sites.
+#
+# TableCore.Table is ABSORBED. It has zero references outside table_core.gd in
+# the whole tree, so it is the record the store maps to and nothing reads it.
+#
+# SchemaCore.Schema and SchemaCore.Column are REGISTERED, as SchemaRecord and
+# SchemaColumn. This was forced rather than chosen: netw_property_set.gd is a W4
+# class that constructs both by hand and mutates a column's quantizer through
+# the shape it holds, so absorbing them would have broken an unported family.
+# SchemaRecord is the codebase's own word for it, since schema_core.gd's Records
+# region called every static that takes one "the record-facing half".
+#
+# EntityDecl does NOT land here. The interface doc schedules it with this batch
+# and the plan of record repeats that, but the two suites that port reach the
+# api zero times and name no entity, wrapper, or route-binding verb. Rows are
+# wrapper-less by design. Minting the flat verb that admits a NetwEntity here
+# would be public surface with no consumer, so it belongs to the first family
+# that actually declares an entity, and T8's native half waits with it.
+#
+# The container seam (decision 15) lands as extension/godot/local_vector.hpp:
+# LocalVector for the mutable per-frame books, HashMap and HashSet for the
+# route- and RID-keyed ones, and packed arrays only where the value crosses to
+# GDScript.
+#
+# Two shapes the port had to change, both because a native private cannot be
+# reached the way a GDScript member could.
+#
+# tombstones was a Dictionary read only ever as .has(route), at three sites. It
+# is now is_tombstoned(route), on the transport crossing's linked_peers
+# precedent.
+#
+# lifecycle_removals was a PackedInt64Array the shell appended to IN PLACE. A
+# bound property answers a copy, so that append would have reached nothing and
+# failed silently. It is now three verbs: queue_lifecycle_removals, the append;
+# take_lifecycle_removals, the read-and-clear the pump already did by hand; and
+# lifecycle_removals, the peek two carried suites assert on.
+#
+# The four constant arrays became accessors, forced by ClassDB rather than
+# chosen: it binds integers, and an array constant has no native spelling.
+# SchemaCore.STORAGE_TYPES and ELEMENT_TYPES are storage_type(type) and
+# element_type(type), VARIANT_TYPES is type_from_variant(variant_type) which was
+# already its only reader, and TableCore.WIRE_BITS is wire_bits(type). All four
+# answer -1 outside the enum, so a value past the end is answered rather than
+# read off the end of an array, which is what the carried declaration suite now
+# asserts in place of the two size checks it used to make.
+#
+# CARRIED DEBT, named with its trigger. apply_frame and peek_header still answer
+# fixed-key Dictionaries, which the debt rule refuses. Their consumers are
+# replication_core.gd and the carried suites, all GDScript and all unported, and
+# the ported grammar cases pin those keys as part of the conformance gate.
+# Converting them now would be churn plus a second migration, which is decision
+# 14's own reasoning. They convert when ReplicationCore ports at W4.
+test_table_frame_grammar.gd:test_the_header_grammar_is_read_in_order                 -> table_grammar_tests.cpp:"[Networked][Table][Hosted] The header grammar is read in order"
+test_table_frame_grammar.gd:test_a_hand_built_frame_decodes                          -> table_grammar_tests.cpp:"[Networked][Table][Hosted] A hand-built frame decodes"
+test_table_frame_grammar.gd:test_the_encoder_emits_the_hand_built_bytes              -> table_grammar_tests.cpp:"[Networked][Table][Hosted] The encoder emits the hand-built bytes"
+test_table_frame_grammar.gd:test_a_vector_column_is_little_endian_memcpy             -> table_grammar_tests.cpp:"[Networked][Table][Hosted] A vector column is a little-endian memcpy"
+test_table_frame_grammar.gd:test_bit_packed_and_varint_columns                       -> table_grammar_tests.cpp:"[Networked][Table][Hosted] Bit-packed and varint columns stay aligned"
+test_table_frame_grammar.gd:test_a_removal_frame_is_routes_only                      -> table_grammar_tests.cpp:"[Networked][Table][Hosted] A removal frame is routes only"
+test_table_frame_grammar.gd:test_the_lifecycle_stream_is_table_id_zero               -> table_grammar_tests.cpp:"[Networked][Table][Hosted] The lifecycle stream is table id zero"
+test_table_frame_grammar.gd:test_the_reserved_flag_bits_are_refused                  -> table_grammar_tests.cpp:"[Networked][Table][Hosted] The reserved flag bits stay reserved"
+test_table_codec.gd:test_every_column_type_round_trips                               -> table_codec_tests.cpp:"[Networked][Table][Hosted] Every column type round trips"
+test_table_codec.gd:test_wire_ids_are_name_sorted_and_order_independent              -> table_codec_tests.cpp:"[Networked][Table][Hosted] Wire ids are name-sorted and order independent"
+test_table_codec.gd:test_a_quantized_column_round_trips_within_its_step              -> table_codec_tests.cpp:"[Networked][Table][Hosted] A quantized column round trips within its step"
+test_table_codec.gd:test_frames_are_sized_to_the_budget                              -> table_codec_tests.cpp:"[Networked][Table][Hosted] Frames are sized to the budget"
+test_table_codec.gd:test_frames_apply_in_any_order                                   -> table_codec_tests.cpp:"[Networked][Table][Hosted] Frames apply in any order"
+test_table_codec.gd:test_losing_frames_never_corrupts_membership                     -> table_codec_tests.cpp:"[Networked][Table][Hosted] Losing frames never corrupts membership"
+test_table_codec.gd:test_a_removal_erases_the_row_and_leaves_a_memo                  -> table_codec_tests.cpp:"[Networked][Table][Hosted] A removal erases the row and leaves a memo"
+test_table_codec.gd:test_a_snapshot_clears_then_applies                              -> table_codec_tests.cpp:"[Networked][Table][Hosted] A snapshot clears then applies"
+test_table_codec.gd:test_only_the_first_snapshot_frame_clears                        -> table_codec_tests.cpp:"[Networked][Table][Hosted] Only the first snapshot frame clears"
+test_table_codec.gd:test_the_lifecycle_stream_retires_a_route_everywhere             -> table_codec_tests.cpp:"[Networked][Table][Hosted] The lifecycle stream retires a route everywhere"
+test_table_codec.gd:test_cohorts_describe_a_wave_not_a_frame                         -> table_codec_tests.cpp:"[Networked][Table][Hosted] Cohorts describe a wave, not a frame"
+test_table_codec.gd:test_every_malformed_frame_sorts_into_its_verdict                -> table_codec_tests.cpp:"[Networked][Table][Hosted] Every malformed frame sorts into its verdict"
+test_table_codec.gd:test_stale_frames_are_refused_whole_and_per_row                  -> table_codec_tests.cpp:"[Networked][Table][Hosted] Stale frames are refused whole and per row"
+test_table_codec.gd:test_a_zero_route_is_refused                                     -> table_codec_tests.cpp:"[Networked][Table][Hosted] A zero route is refused"
+test_table_carrier.gd:test_the_table_channel_is_seventeen                            -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_carrier.gd:test_a_carried_frame_lands_and_binds_its_routes                -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_carrier.gd:test_a_non_server_sender_is_refused                            -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_carrier.gd:test_malformed_frames_reach_their_own_counters                 -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_carrier.gd:test_the_table_stats_are_reachable_both_ways                   -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_carrier.gd:test_table_received_is_one_emission_per_wave                   -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_carrier.gd:test_the_lifecycle_stream_arrives_on_the_same_channel          -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_carrier.gd:test_a_session_with_no_tables_pays_nothing                     -> CARRY tests/unit/table (carrier intake through the shell, crosses at W6)
+test_table_declaration.gd:test_a_table_binds_the_schema_it_reflects_through          -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_the_wire_hash_is_the_shape_hash                       -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_a_param_never_enters_the_wire_hash                    -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_a_variant_schema_cannot_create_a_table                -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_an_unsealed_schema_cannot_create_a_table              -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_binding_twice_returns_the_same_handle                 -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_table_find_answers_the_schema_name                    -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_a_zero_column_table_is_a_tag                          -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_declaration.gd:test_an_unknown_handle_is_answered_rather_than_crashed     -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_identity.gd:test_claimed_routes_are_live_and_monotonic                    -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_identity.gd:test_a_claimed_row_carries_no_node                            -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_identity.gd:test_a_wave_of_rows_emits_no_per_row_signal                   -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_identity.gd:test_a_parked_when_live_callback_still_runs                   -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_identity.gd:test_releasing_tombstones_and_queues_the_lifecycle_removal    -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_identity.gd:test_a_tombstoned_route_is_never_reissued                     -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_identity.gd:test_the_degenerate_calls_answer_without_allocating           -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_identity.gd:test_session_teardown_drops_the_pending_removals              -> CARRY tests/unit/table (session-band route verbs, crosses at W6)
+test_table_publish.gd:test_a_commit_becomes_the_applied_state                        -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_a_commit_snapshots_so_the_caller_keeps_its_arrays         -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_a_read_is_a_live_view                                     -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_a_half_commit_is_refused                                  -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_a_column_refuses_the_wrong_storage_class                  -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_stride_is_how_a_fixed_capacity_array_is_expressed         -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_births_and_deaths_are_derived_from_the_wave               -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_the_row_map_answers_one_route_and_a_whole_join            -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_a_foreign_route_is_writable                               -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_a_commit_carries_the_session_tick                         -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_a_commit_marks_the_table_for_the_tick_boundary            -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_table_publish.gd:test_session_teardown_keeps_the_declaration_and_drops_the_rows -> CARRY tests/unit/table (NetwMultiplayer table verbs, crosses at W6)
+test_schema_declaration.gd:test_column_type_mirrors_the_core                         -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_declaration_order_is_the_column_address              -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_a_variant_column_is_declarable                       -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_malformed_columns_are_refused                        -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_seal_freezes_the_declaration                         -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_the_shape_hash_is_a_skew_check                       -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_the_shape_hash_covers_the_quantizer                  -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_the_shape_hash_is_the_table_wire_hash                -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_redeclaring_the_same_shape_is_idempotent             -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_redeclaring_a_different_shape_is_refused             -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_a_truncated_redeclaration_is_refused                 -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_schema_find_answers_the_declared_name                -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_a_zero_column_schema_seals                           -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_declaration.gd:test_an_unknown_handle_is_answered_rather_than_crashed    -> CARRY tests/unit/schema (NetwMultiplayer schema verbs, crosses at W6)
+test_schema_model.gd:test_the_builder_writes_pure_data                               -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_a_declaration_says_whether_it_wants_a_wire                 -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_the_builder_declares_a_variant_column                      -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_every_builder_verb_names_its_type                          -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_redeclaring_one_name_is_idempotent                         -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_redeclaring_a_column_with_a_new_shape_is_refused           -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_reliable_rides_the_declaration                             -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_adoption_order_is_name_order                               -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_register_puts_a_declaration_back                           -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_schema_model.gd:test_a_session_adopts_the_registry_at_construction              -> CARRY tests/unit/schema (NetwSchemaModel is its own class, never crosses here)
+test_table_persistence.gd:test_a_table_round_trips_through_one_record                -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_persistence.gd:test_a_whole_table_is_one_record                           -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_persistence.gd:test_a_mismatched_id_count_is_refused                      -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_persistence.gd:test_a_route_column_is_skipped_and_zero_filled             -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_persistence.gd:test_a_missing_record_is_a_first_play                      -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_a_commit_reaches_a_client_that_owns_no_nodes         -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_the_client_hears_one_emission_per_wave               -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_releasing_a_route_tombstones_it_on_the_client        -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_a_late_joiner_is_healed_by_a_snapshot                -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_a_reliable_table_survives_a_lossy_link               -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_an_unreliable_table_heals_on_the_next_commit         -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_the_host_reads_and_hears_its_own_commit              -> CARRY tests/integration/table (kit-facing, keeps GdUnit)
+test_table_session_flow.gd:test_a_component_table_joins_back_in_one_crossing         -> CARRY tests/integration/table (kit-facing, keeps GdUnit)

@@ -29,7 +29,6 @@ func _enter_tree() -> void:
 	api.object_configuration_add(self, session)
 
 	var scenes := NetwSceneConfig.new()
-	scenes.concurrency = NetwSceneConfig.Concurrency.SINGLE
 	scenes.initial_scenes = [LOBBY_LEVEL]
 	scenes.scenes = {
 		&"World": WORLD,

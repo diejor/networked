@@ -1,7 +1,7 @@
 ## Unit tests for [MultiplayerSceneManager] declaration snapshotting.
 ##
 ## The manager holds no runtime state. It only snapshots its exported rows into
-## a [NetwSceneConfig] for [NetwSceneInterface] to read.
+## a [NetwSceneConfig] for [SceneCore] to read.
 class_name TestSceneManagerConfig
 extends NetwTestSuite
 
@@ -28,14 +28,12 @@ func test_scene_uid_resolves_to_its_resource_path() -> void:
 	assert_array(mgr.get_configured_paths()).contains([path])
 
 
-func test_scene_config_snapshots_concurrency() -> void:
-	mgr.concurrency = NetwSceneConfig.Concurrency.CONCURRENT
+func test_scene_config_snapshots_isolation() -> void:
+	mgr.scene_isolation = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
 
 	var config := mgr._build_netw_scene_config()
 
-	assert_int(config.concurrency).is_equal(
-		NetwSceneConfig.Concurrency.CONCURRENT,
-	)
+	assert_int(config.isolation).is_equal(NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD)
 
 
 func test_scene_config_snapshots_initial_scenes() -> void:

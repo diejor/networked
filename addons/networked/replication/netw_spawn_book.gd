@@ -1,12 +1,14 @@
-## Per-session spawn ledger owned by [NetwReplicationInterface]: the armed
+## Per-session spawn ledger owned by [ReplicationCore]: the armed
 ## book of nodes a verb has stamped but not yet placed, the ordered spawn book
 ## the authority replays for late joiners, and the recv book of routes this
 ## peer materialized from the server.
 ##
 ## The spawn book is a [Dictionary] keyed by route on purpose. Insertion order
-## is the replay order, and parents always arm before their children under the
-## visibility cascade, so iterating the book replays parents before children.
-## Do not replace it with a set.
+## is the order the session armed its spawns, which is stable and reproducible.
+## Do not replace it with a set. Insertion order is not ancestry order: a
+## reparent can move an entity under a parent armed after it, so anything that
+## reads a parent's answer before a child's must iterate
+## [method ancestry_order] instead.
 ## [codeblock]
 ## armed    route -> SpawnRecord   verb ran, node still orphaned
 ## spawned  route -> SpawnRecord   authority-side, SPAWN issued (replay book)
@@ -51,6 +53,7 @@ var spawned: Dictionary[int, SpawnRecord] = { }
 ## Receiver-side routes materialized from the server, enrolled before
 ## [method Node.add_child] so a locally applied spawn can never re-arm.
 var recv: Dictionary[int, WeakRef] = { }
+
 
 ## One armed or issued spawn: the identity stamped by the verb plus the
 ## reconstruction recipe a receiver needs.
@@ -100,6 +103,44 @@ class SpawnRecord:
 	func spawner() -> MultiplayerSpawner:
 		var s := spawner_ref.get_ref() as MultiplayerSpawner if spawner_ref else null
 		return s if is_instance_valid(s) else null
+
+
+## Returns every issued route with each one after its
+## [member NetwSpawnBook.SpawnRecord.parent_route].
+##
+## Ancestry is the order a per-peer verdict has to be read in, because a child's
+## verdict is clamped by its parent's. [member spawned] answers arm order, and
+## the two agree only until a reparent moves an entity under a parent armed
+## later, which leaves the mover permanently unspawnable if the clamp reads a
+## parent verdict that has not been computed yet.
+## [codeblock]
+## # Level1 armed first, then the players, then Level2. Move the players
+## # into Level2 and arm order stops answering ancestry:
+## spawned          1 Level1, 2 valeria, 3 jose, 4 maria, 5 Level2
+## ancestry_order   1 Level1, 5 Level2, 2 valeria, 3 jose, 4 maria
+## [/codeblock]
+func ancestry_order() -> Array[int]:
+	var out: Array[int] = []
+	var placed: Dictionary[int, bool] = { }
+	var pending: Array[int] = []
+	pending.assign(spawned.keys())
+	while not pending.is_empty():
+		var deferred: Array[int] = []
+		for route: int in pending:
+			var parent_route := spawned[route].parent_route
+			if parent_route > 0 and spawned.has(parent_route) \
+					and not placed.has(parent_route):
+				deferred.append(route)
+				continue
+			placed[route] = true
+			out.append(route)
+		if deferred.size() == pending.size():
+			# Tree ancestry cannot cycle, so a pass that places nothing means the
+			# anchors are mid-move. Arm order is the honest fallback.
+			out.append_array(deferred)
+			break
+		pending = deferred
+	return out
 
 
 ## Arms [param record] under its route.

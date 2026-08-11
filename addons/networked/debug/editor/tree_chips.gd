@@ -19,7 +19,6 @@
 ##     ])
 ## [/codeblock]
 @tool
-class_name TreeChips
 extends RefCounted
 
 ## One pill: its [member text] and the accent [member color] used for the

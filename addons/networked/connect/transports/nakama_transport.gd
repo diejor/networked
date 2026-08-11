@@ -9,9 +9,14 @@
 class_name NakamaTransport
 extends NetwTransport
 
-
-func scheme() -> StringName:
+func _scheme() -> StringName:
 	return &"nakama"
+
+
+func _params_from_dict(source: Dictionary) -> NetwTransportParams:
+	var params := NetwNakamaParams.new()
+	params.from_dict(source)
+	return params
 
 
 func _can_join(target: NetwConnectTarget) -> bool:
@@ -19,7 +24,7 @@ func _can_join(target: NetwConnectTarget) -> bool:
 
 
 func _can_host(config: NetwHostConfig) -> bool:
-	return config != null and config.scheme == &"nakama"
+	return config != null and config.transport is NetwNakamaParams
 
 
 func _host(
@@ -28,11 +33,13 @@ func _host(
 ) -> MultiplayerPeer:
 	var dir := _resolve_dir(attempt)
 	if dir == null:
-		attempt.resolve(NetwConnectResult.error(
-			"Nakama lobby directory is not registered.",
-		))
+		attempt.resolve(
+			NetwConnectResult.error(
+				"Nakama lobby directory is not registered.",
+			),
+		)
 		return null
-	return await dir._host_lobby(_host_options(config))
+	return await dir._host_lobby(config)
 
 
 func _join(
@@ -41,9 +48,11 @@ func _join(
 ) -> MultiplayerPeer:
 	var dir := _resolve_dir(attempt)
 	if dir == null:
-		attempt.resolve(NetwConnectResult.error(
-			"Nakama lobby directory is not registered.",
-		))
+		attempt.resolve(
+			NetwConnectResult.error(
+				"Nakama lobby directory is not registered.",
+			),
+		)
 		return null
 	return await dir.join_match_peer(target.address)
 
@@ -94,9 +103,3 @@ func _resolve_dir(attempt: NetwConnectAttempt) -> NakamaLobbyDirectory:
 
 
 # Builds directory host options from the typed host config.
-func _host_options(config: NetwHostConfig) -> LobbyDirectory.HostOptions:
-	var opts := LobbyDirectory.HostOptions.new()
-	opts.server_name = config.server_name
-	opts.visibility = config.visibility
-	opts.max_players = config.max_players
-	return opts

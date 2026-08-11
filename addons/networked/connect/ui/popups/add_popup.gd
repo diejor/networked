@@ -64,7 +64,7 @@ func _populate_transport_picker() -> void:
 
 func _select_transport_for(scheme: StringName) -> void:
 	for i in _transports.size():
-		if _transports[i].scheme() == scheme:
+		if _transports[i]._scheme() == scheme:
 			_backend_picker.selected = i
 			return
 
@@ -98,7 +98,7 @@ func _on_confirm() -> void:
 	if transport == null:
 		return
 	var target: NetwConnectTarget = _editing if _editing else NetwConnectTarget.new()
-	target.scheme = transport.scheme()
+	target.scheme = transport._scheme()
 	target.address = _address_edit.text
 	var typed_name := _name_edit.text.strip_edges()
 	target.display_name = typed_name if not typed_name.is_empty() else ConnectBrowser.PLACEHOLDER_SERVER_NAME

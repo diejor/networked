@@ -14,7 +14,7 @@
 ## var last := writer.samples.back()     # the captured displayed value
 ## [/codeblock]
 class_name NetwInterpRecordingWriter
-extends NetwInterpolationInterface._Output
+extends DisplayCore._Output
 
 ## Every value written, in emission order.
 var samples: Array = []

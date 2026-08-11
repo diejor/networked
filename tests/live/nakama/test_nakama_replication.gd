@@ -8,10 +8,12 @@ const _TIMEOUT := 10.0
 var _trees: Array = []
 
 
+# Skips on an unreachable server or a scene this harness cannot drive. See
+# NakamaTestSupport.skip_reason for what makes a scene undrivable.
 @warning_ignore("unused_parameter")
 func before(
-		do_skip = NakamaTestServer.unavailable(),
-		skip_reason = NakamaTestServer.SKIP_REASON,
+		do_skip = NakamaTestSupport.skip_reason(MAIN) != "",
+		skip_reason = NakamaTestSupport.skip_reason(MAIN),
 ) -> void:
 	# The quick_start SaveComponents persist into the repo-local saves dir.
 	# Redirect the shared database resource to a gdUnit temp dir so a stale
@@ -127,7 +129,7 @@ func _player_x_greater(
 
 func _find_player(tree: MultiplayerTree, username: String) -> Node:
 	var username_id := StringName(username)
-	for player: NetwEntity in tree.get_all_players():
+	for player: NetwEntity in tree.api.players:
 		var owner := player.owner
 		if player.entity_id == username_id:
 			return owner

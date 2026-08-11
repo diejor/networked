@@ -1,0 +1,31 @@
+# The scene family's Bridge-B trace, recorded from the GDScript scene
+# record plane before any of it was native. Rows are
+# scenario|kind|key=value, keys sorted, events symbolic, scenes named
+# by relation rather than by RID.
+#
+# Regenerate with:
+#   godot --headless --path . -s res://tests/crossing/scene_arm.gd \
+#     -- --record
+# Regenerating against a candidate implementation destroys the
+# evidence this file exists to be.
+observers/a_registration_is_keyed_by_scene_and_event|dispatch|event=SCENE_EVENT_PARTICIPANT heard=0 scene=first
+observers/a_registration_is_keyed_by_scene_and_event|dispatch|event=SCENE_EVENT_PLAYER heard=1 scene=first
+observers/a_registration_is_keyed_by_scene_and_event|dispatch|event=SCENE_EVENT_ENTITY heard=0 scene=first
+observers/a_registration_is_keyed_by_scene_and_event|dispatch|event=SCENE_EVENT_PARTICIPANT heard=0 scene=second
+observers/a_registration_is_keyed_by_scene_and_event|dispatch|event=SCENE_EVENT_PLAYER heard=0 scene=second
+observers/a_registration_is_keyed_by_scene_and_event|dispatch|event=SCENE_EVENT_ENTITY heard=0 scene=second
+observers/dispatch_reaches_every_live_callback_in_order|order|heard=[first,second]
+observers/dispatch_reaches_every_live_callback_in_order|order|heard=[first,second]
+observers/dispatch_reaches_every_live_callback_in_order|args|first=[true:42,false:43] second=[true:42,false:43]
+observers/a_duplicate_registration_is_not_stored_twice|heard|count=1
+observers/unobserve_removes_one_and_leaves_the_rest|heard|dropped=0 kept=1
+observers/unobserve_removes_one_and_leaves_the_rest|heard_again|dropped=0 kept=2
+observers/an_invalid_scene_or_callback_registers_nothing|heard|count=0
+observers/a_dead_callback_is_pruned_at_dispatch|after_death|kept=1
+observers/a_dead_callback_is_pruned_at_dispatch|after_prune|kept=2
+observers/an_empty_book_dispatches_nothing|survived|events=3
+request/ids_are_allocated_in_sequence|allocated|ids=[1,2,3,4]
+request/the_deadline_settles_the_request_it_names|settled|code=Timeout settled=true
+request/a_stale_deadline_is_ignored|ignored|settled=false
+request/a_stale_deadline_is_ignored|then_honoured|settled=true
+request/a_settled_request_leaves_no_pending_id|cleared|pending=false pending_id=0

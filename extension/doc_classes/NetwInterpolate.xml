@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterpolate" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Per value interpolation spec used by [DisplayCore].
+	</brief_description>
+	<description>
+		[NetwInterpolate] names how one decoded value enters the interpolation history. [member target] names the property that receives the smoothed output. [member mode], [member smoothing], and [member snap_distance] are read by [method DisplayCore.record].
+		[codeblock]
+		Netw.configure_property(self, &amp;"position").interpolate(
+		    NetwInterpolate.new().lerp().smooth(0.05).to(&amp;"position")
+		)
+		[/codeblock]
+		The same resource shape is used by [method Netw.configure_property], [method Netw.configure_rpc], and [method Netw.configure_signal].
+		When [member NetwDisplayHandle.visual_root] is set the visual keeps inheriting the body transform and spatial values are written in global space, so a smoothed channel is not dragged by body writes. Add a second [NetwInterpolate] to also smooth [code]rotation[/code].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="angle">
+			<return type="NetwInterpolate" />
+			<description>
+				Selects [constant MODE_ANGLE].
+			</description>
+		</method>
+		<method name="hold">
+			<return type="NetwInterpolate" />
+			<description>
+				Selects [constant TAIL_HOLD] so the channel never projects past its newest sample, for discrete or flag values that must not extrapolate.
+			</description>
+		</method>
+		<method name="is_same_spec" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="NetwInterpolate" />
+			<description>
+				Returns [code]true[/code] when [param other] declares the same smoothing behavior. Compared by value, so a freshly built spec equal to a stored one is recognized as the same declaration and re-applying it is idempotent.
+			</description>
+		</method>
+		<method name="lerp">
+			<return type="NetwInterpolate" />
+			<description>
+				Selects [constant MODE_LERP].
+			</description>
+		</method>
+		<method name="none">
+			<return type="NetwInterpolate" />
+			<description>
+				Selects [constant MODE_NONE].
+			</description>
+		</method>
+		<method name="project_by">
+			<return type="NetwInterpolate" />
+			<param index="0" name="channel" type="StringName" />
+			<description>
+				Projects the forecast tail using sibling [param channel] as the derivative.
+				The named channel should replicate this value's velocity at the same authoring tick. Leaving it unset projects by finite difference instead.
+			</description>
+		</method>
+		<method name="slerp">
+			<return type="NetwInterpolate" />
+			<description>
+				Selects [constant MODE_SLERP].
+			</description>
+		</method>
+		<method name="smooth">
+			<return type="NetwInterpolate" />
+			<param index="0" name="seconds" type="float" />
+			<description>
+				Sets [member smoothing] to [param seconds].
+			</description>
+		</method>
+		<method name="snap_at">
+			<return type="NetwInterpolate" />
+			<param index="0" name="distance" type="float" />
+			<description>
+				Sets [member snap_distance] to [param distance].
+			</description>
+		</method>
+		<method name="to">
+			<return type="NetwInterpolate" />
+			<param index="0" name="property" type="StringName" />
+			<description>
+				Sets [member target] to [param property].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="forecast_tail" type="int" setter="set_forecast_tail" getter="get_forecast_tail" enum="NetwInterpolate.Tail" default="0">
+			Tail policy under a forecasting playhead. [constant TAIL_AUTO] projects, [constant TAIL_HOLD] never does. Ignored while the entity buffers.
+		</member>
+		<member name="mode" type="int" setter="set_mode" getter="get_mode" enum="NetwInterpolate.Mode" default="1">
+			Interpolation algorithm used for this value.
+		</member>
+		<member name="project_channel" type="StringName" setter="set_project_channel" getter="get_project_channel" default="&amp;&quot;&quot;">
+			Sibling channel whose sampled value is this channel's derivative.
+			Empty falls back to the finite difference of the last two samples. Set it through [method project_by] to a channel that replicates velocity at the same authoring tick, so a torn pair never manufactures a phantom trajectory.
+		</member>
+		<member name="smoothing" type="float" setter="set_smoothing" getter="get_smoothing" default="0.05">
+			Exponential smoothing time in seconds layered onto bracketed interpolation.
+		</member>
+		<member name="snap_distance" type="float" setter="set_snap_distance" getter="get_snap_distance" default="0.0">
+			Distance that snaps instead of interpolating. [code]0.0[/code] disables it.
+		</member>
+		<member name="target" type="StringName" setter="set_target" getter="get_target" default="&amp;&quot;&quot;">
+			Property receiving the smoothed output.
+			Empty means the source property name for [method Netw.configure_property]. RPC and signal arguments should set an explicit [member target].
+		</member>
+	</members>
+	<constants>
+		<constant name="MODE_NONE" value="0" enum="Mode">
+			No interpolation.
+		</constant>
+		<constant name="MODE_LERP" value="1" enum="Mode">
+			Linear interpolation through [method @GlobalScope.lerp].
+		</constant>
+		<constant name="MODE_ANGLE" value="2" enum="Mode">
+			Angular interpolation through [method @GlobalScope.lerp_angle].
+		</constant>
+		<constant name="MODE_SLERP" value="3" enum="Mode">
+			Spherical interpolation for [Quaternion] rotations.
+		</constant>
+		<constant name="TAIL_AUTO" value="0" enum="Tail">
+			Extrapolates past the newest sample by its derivative, capped by [member NetwDisplayHandle.max_forecast_ticks]. The derivative is [member project_channel] when set, otherwise the finite difference of the last two samples.
+		</constant>
+		<constant name="TAIL_HOLD" value="1" enum="Tail">
+			Holds the newest sample and never projects, for discrete or flag values.
+		</constant>
+	</constants>
+</class>

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwBitBufferReader" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Serves bits and bytes back from a [PackedByteArray] in the order [NetwBitBufferWriter] wrote them.
+	</brief_description>
+	<description>
+		The reader pulls whole bytes and hands bits back LSB-first, mirroring the writer exactly. It is a separate type rather than a second role on one object because the two carry separate cursors, and a single instance serving both would corrupt each with the other's accumulator.
+		A read past the end yields zero bytes rather than failing, so a truncated packet decodes to values the caller can reject instead of stopping the decode.
+		[codeblock]
+		var r := NetwBitBufferReader.create(bytes)
+		var tick := r.get_aligned_u32()
+		var x := r.get_bits(11)
+		var y := r.get_bits(11)
+		[/codeblock]
+		Widths come from the shared synchronizer config on both peers, never the wire, so a one-bit offset cannot drift between encoder and decoder.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="align">
+			<return type="void" />
+			<description>
+				Discards the leftover bits of the current byte so the next read is byte-aligned. The leftover is always under 8 bits, so the byte cursor is already at the next boundary.
+			</description>
+		</method>
+		<method name="create" qualifiers="static">
+			<return type="NetwBitBufferReader" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Returns a reader positioned at the start of [param bytes]. Prefer this over [code]new()[/code], which yields a reader over no bytes at all.
+			</description>
+		</method>
+		<method name="get_aligned_bytes">
+			<return type="PackedByteArray" />
+			<param index="0" name="count" type="int" />
+			<description>
+				Aligns, then reads [param count] raw bytes. A read past the end returns what remains.
+			</description>
+		</method>
+		<method name="get_aligned_u8">
+			<return type="int" />
+			<description>
+				Aligns, then reads one byte.
+			</description>
+		</method>
+		<method name="get_aligned_u16">
+			<return type="int" />
+			<description>
+				Aligns, then reads a 16-bit little-endian value.
+			</description>
+		</method>
+		<method name="get_aligned_u32">
+			<return type="int" />
+			<description>
+				Aligns, then reads a 32-bit little-endian value.
+			</description>
+		</method>
+		<method name="get_bits">
+			<return type="int" />
+			<param index="0" name="count" type="int" />
+			<description>
+				Reads [param count] bits, LSB-first. A [param count] of zero or less returns zero and consumes nothing.
+			</description>
+		</method>
+		<method name="remaining_bytes">
+			<return type="int" />
+			<description>
+				Aligns, then returns how many unread bytes remain.
+			</description>
+		</method>
+		<method name="reset">
+			<return type="void" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Points this reader at [param bytes] from the start, so one reader can decode a second packet without a fresh allocation.
+			</description>
+		</method>
+	</methods>
+</class>

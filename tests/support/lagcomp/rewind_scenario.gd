@@ -15,7 +15,7 @@
 ## var e := await r.spawn_state_entity("Target")
 ## r.move_along(e, func(i: int) -> Vector2: return Vector2(i * 8.0, 0.0), 24)
 ## var view_tick := r.clock.tick - 8
-## var past := r.server.api.lag_compensation.sample(e, view_tick).position
+## var past := r.server.api.lagcomp_sample(r.server.api.rid_of(e.owner), tick)
 ## [/codeblock]
 class_name RewindScenario
 extends RefCounted
@@ -25,8 +25,8 @@ const DISPLAY_OFFSET := 3
 
 var inner: NetwTestHarness
 var server: MultiplayerTree
-var clock: NetwClockInterface
-var sim: NetwLagCompensationInterface
+var clock: ClockCore
+var sim: LagCompCore
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -59,7 +59,7 @@ func setup(
 
 	# Freeze the clock under lockstep so every tick is driven by run() / move_along().
 	_stepper = LockstepStepper.new(
-		[clock] as Array[NetwClockInterface],
+		[clock] as Array[ClockCore],
 		[server.multiplayer] as Array[MultiplayerAPI],
 		inner.session(),
 		tickrate,

@@ -1,0 +1,26 @@
+# The formatting half of the static-checks workflow. Running
+# `pre-commit install` once means a commit is already in the shape CI expects,
+# so style is never what a pull request fails on.
+#
+# The pins here and the ones the workflow installs are the same versions on
+# purpose: a formatter that disagrees with itself across two machines turns
+# every diff into churn.
+
+exclude: ^extension/thirdparty/
+
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.8
+    hooks:
+      - id: clang-format
+        files: ^extension/(src|include|godot|tests)/.*\.(cpp|hpp|h)$|^extension/register_types\.(cpp|h)$
+
+  # Only the build scripts. The documentation tooling under docs/ carries a
+  # vendored make_rst.py that build_make_rst.py regenerates and checks, and
+  # reformatting it would fail that check.
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 26.5.1
+    hooks:
+      - id: black
+        args: [--line-length=120]
+        files: ^extension/(.*\.py|SConstruct|SCsub|config\.py)$

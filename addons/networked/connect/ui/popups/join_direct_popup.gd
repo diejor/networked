@@ -96,7 +96,7 @@ func _on_confirm() -> void:
 	if transport == null:
 		return
 	var target := NetwConnectTarget.new()
-	target.scheme = transport.scheme()
+	target.scheme = transport._scheme()
 	target.address = _address_edit.text
 	target.display_name = ConnectBrowser.format_address(target)
 

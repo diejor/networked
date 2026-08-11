@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictJournalRow" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="aligned_error" qualifiers="const">
+			<return type="float" />
+			<description>
+			</description>
+		</method>
+		<method name="attribution" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="basis" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="c_hash" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="differing_family" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="domain" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="e_digest" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="episode_id" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="evidence_mask" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="flags" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="kind" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="label" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="op" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="post_families" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="post_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="pre_families" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="pre_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="raw_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="topo_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="witness_class_bits" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="witness_fp" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_id" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

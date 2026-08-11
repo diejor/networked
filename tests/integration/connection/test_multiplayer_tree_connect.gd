@@ -35,7 +35,7 @@ func test_client_is_online_after_auto_connect_player() -> void:
 		harness.make_sceneless_payload("valeria"),
 	)
 
-	assert_that(tree.is_online()).is_true()
+	assert_that(tree.api.is_online).is_true()
 
 
 func test_host_starts_server_and_joins() -> void:
@@ -43,7 +43,7 @@ func test_host_starts_server_and_joins() -> void:
 		harness.make_sceneless_payload("valeria"),
 	)
 
-	assert_that(tree.is_online()).is_true()
+	assert_that(tree.api.is_online).is_true()
 
 	var server_node := harness.get_node_or_null("Server")
 	assert_that(server_node).is_not_null()
@@ -52,8 +52,8 @@ func test_host_starts_server_and_joins() -> void:
 
 	# Interest is no longer a mounted service node. The interface is owned by
 	# the tree's api and always present.
-	assert_that(server_tree.api.interest).is_not_null()
-	assert_that(server_tree.api.interest).is_instanceof(NetwInterestInterface)
+	assert_that(server_tree.api._interest).is_not_null()
+	assert_that(server_tree.api._interest).is_instanceof(InterestCore)
 
 
 func test_listen_server_auto_connect_player_spawns_player() -> void:
@@ -65,7 +65,7 @@ func test_listen_server_auto_connect_player_spawns_player() -> void:
 		),
 	)
 
-	assert_that(tree.role).is_equal(NetwSessionInterface.Role.LISTEN_SERVER)
+	assert_that(tree.role).is_equal(SessionCore.Role.LISTEN_SERVER)
 
 	var player := await harness.wait_for_player(tree, level_builder.scene_name)
 	assert_that(player).is_not_null()
@@ -83,9 +83,9 @@ func test_join_fail_fast_on_offline_address() -> void:
 	var payload := JoinPayload.new()
 	payload.username = "offline_client"
 
-	tree.state_changed.connect(
-		func(_old: NetwSessionInterface.State, new: NetwSessionInterface.State) -> void:
-			if new != NetwSessionInterface.State.CONNECTING:
+	tree.api.state_changed.connect(
+		func(_old: SessionCore.State, new: SessionCore.State) -> void:
+			if new != SessionCore.State.CONNECTING:
 				return
 			var trigger_failure: Callable
 			trigger_failure = func() -> void:
@@ -102,13 +102,14 @@ func test_join_fail_fast_on_offline_address() -> void:
 	)
 
 	var time_before := Time.get_ticks_msec()
-	var err := await tree.join(target, payload, 5.0, true)
+	var result := await NetwConnector.of(tree.api).join(target, payload, true)
 	var elapsed := (Time.get_ticks_msec() - time_before) / 1000.0
 
-	assert_int(err).is_equal(ERR_CANT_CONNECT)
+	assert_int(NetwConnector.error_of(result)).is_equal(ERR_CANT_CONNECT)
 	assert_bool(elapsed < 4.0).is_true()
-	assert_that(tree.last_connect_result).is_not_null()
-	assert_str(tree.last_connect_result.message) \
-			.is_equal("Could not reach the server.")
+	# The verb's own result is the outcome, so a caller never reads a
+	# last-attempt mirror to learn what happened.
+	assert_that(result).is_not_null()
+	assert_str(result.message).is_equal("Could not reach the server.")
 
 	tree.queue_free()

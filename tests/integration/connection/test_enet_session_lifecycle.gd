@@ -15,7 +15,7 @@ func test_host_join_kick_rejoin_and_leave() -> void:
 	assert_int(await _join(kicked_client, host.port, &"kicked")).is_equal(OK)
 	var kicked_id := kicked_client.api.get_unique_id()
 
-	host_tree.api.session.kick(kicked_id, "gate")
+	host_tree.api.peer_kick(kicked_id, "gate")
 
 	assert_bool(await _wait_peer_absent(host_tree.api, kicked_id)).is_true()
 	await EnetTestSupport.stop_tree(kicked_client)
@@ -31,8 +31,8 @@ func test_host_join_kick_rejoin_and_leave() -> void:
 
 	await leaving_client.api.session.leave()
 
-	assert_int(leaving_client.api.session.state) \
-			.is_equal(NetwSessionInterface.State.OFFLINE)
+	assert_int(leaving_client.api.state) \
+			.is_equal(SessionCore.State.OFFLINE)
 	assert_bool(await _wait_peer_absent(host_tree.api, leaving_id)).is_true()
 
 	await EnetTestSupport.stop_tree(leaving_client)
@@ -50,7 +50,9 @@ func _join(
 	target.metadata = { "port": port }
 	var payload := JoinPayload.new()
 	payload.username = username
-	return await tree.join(target, payload, 2.0, true)
+	return NetwConnector.error_of(
+		await NetwConnector.of(tree.api).join(target, payload, true),
+	)
 
 
 func _wait_peer_absent(api: NetwMultiplayer, peer_id: int) -> bool:

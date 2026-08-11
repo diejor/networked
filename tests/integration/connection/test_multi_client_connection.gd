@@ -12,7 +12,7 @@ func before_test() -> void:
 
 func test_clients_connect_online_with_distinct_peer_ids() -> void:
 	var connected_ids: Array[int] = []
-	harness.server().peer_connected.connect(
+	harness.server().api.peer_connected.connect(
 		func(id: int) -> void:
 			connected_ids.append(id)
 	)
@@ -21,12 +21,12 @@ func test_clients_connect_online_with_distinct_peer_ids() -> void:
 	await harness.add_client()
 	await harness.add_client()
 
-	assert_that(harness.server().is_online()).is_true()
+	assert_that(harness.server().api.is_online).is_true()
 	assert_that(connected_ids.size()).is_equal(3)
 
 	var ids: Array[int] = []
 	for client in harness.clients():
-		assert_that(client.is_online()).is_true()
+		assert_that(client.api.is_online).is_true()
 		var id := client.multiplayer_peer.get_unique_id()
 		assert_that(id).is_not_equal(1)
 		ids.append(id)

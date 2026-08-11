@@ -3,7 +3,7 @@
 ## Uses [NetwTestHarness] with a scene manager and test level scene.
 ## Players are spawned via [method NetwTestHarness.spawn_player] which
 ## bypasses the RPC chain and directly calls
-## [method MultiplayerScene.add_player], testing the server-side spawn path.
+## [method Node.add_player], testing the server-side spawn path.
 class_name TestPlayerSpawn
 extends NetwTestSuite
 
@@ -50,7 +50,7 @@ func test_spawned_player_joins_scene_with_identity() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
 	assert_that(player.name).is_equal("alice|%d" % peer_id)
 
-	assert_that(scene.connected_peers.has(peer_id)).is_true()
+	assert_that(scene.peers.has(peer_id)).is_true()
 
 
 func test_two_players_in_same_scene() -> void:
@@ -61,8 +61,8 @@ func test_two_players_in_same_scene() -> void:
 	var scene := harness.scene_on_server()
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
-	assert_that(scene.connected_peers.has(peer_id_0)).is_true()
-	assert_that(scene.connected_peers.has(peer_id_1)).is_true()
+	assert_that(scene.peers.has(peer_id_0)).is_true()
+	assert_that(scene.peers.has(peer_id_1)).is_true()
 
 
 func test_clients_admit_each_other_replicas() -> void:
@@ -83,8 +83,8 @@ func test_clients_admit_each_other_replicas() -> void:
 	)
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
-	var service0 := client0.api.interest
-	var service1 := client1.api.interest
+	var service0 := client0.api._interest
+	var service1 := client1.api._interest
 	assert_that(
 		service0.participant_sees(
 			peer_id_0,

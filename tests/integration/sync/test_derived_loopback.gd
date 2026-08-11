@@ -5,7 +5,7 @@
 ## state field rides the shared [constant NetwFrameEnvelope.Channel.SYNC] frame
 ## from the server (its authority) to every peer, and the input field rides the
 ## same frame from the controlling client to the server alone, its
-## [constant NetwSyncSet.Audience.AUDIENCE_SERVER_ONLY] reach. The ordinal split
+## [constant NetwPropertySet.Audience.AUDIENCE_SERVER_ONLY] reach. The ordinal split
 ## and the spawn-time schema descriptor let both peers resolve a bare
 ## [code](route, ordinal)[/code] to the right node and set.
 class_name TestDerivedLoopback
@@ -49,8 +49,8 @@ func test_state_flows_to_client_and_input_flows_to_server() -> void:
 	assert_float(rig.client_node.rotation - rig.server_node.rotation).is_less(0.06)
 
 	# Both peers actually applied derived frames, not merely coincident defaults.
-	assert_int(rig.client.api.monitor_snapshot()[&"derived_frames_in"]).is_greater(0)
-	assert_int(rig.inner.server().api.monitor_snapshot()[&"derived_frames_in"]).is_greater(0)
+	assert_int(rig.client.api.stats_snapshot()[&"derived_frames_in"]).is_greater(0)
+	assert_int(rig.inner.server().api.stats_snapshot()[&"derived_frames_in"]).is_greater(0)
 
 
 func test_entity_resolves_derived_set_handles() -> void:
@@ -62,8 +62,8 @@ func test_entity_resolves_derived_set_handles() -> void:
 	var entity := NetwEntity.of(rig.server_node)
 	assert_object(entity.state_binding).is_not_null()
 	assert_object(entity.input_binding).is_not_null()
-	assert_int(entity.state_binding.set.record).is_equal(NetwSyncSet.Record.RECORD_STATE)
-	assert_int(entity.input_binding.set.record).is_equal(NetwSyncSet.Record.RECORD_INPUT)
+	assert_int(entity.state_binding.set.record).is_equal(NetwPropertySet.Record.RECORD_STATE)
+	assert_int(entity.input_binding.set.record).is_equal(NetwPropertySet.Record.RECORD_INPUT)
 	assert_object(entity.state_binding.node()).is_same(rig.server_node)
 
 

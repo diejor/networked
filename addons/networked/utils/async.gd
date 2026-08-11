@@ -1,6 +1,8 @@
 ## Utility class providing async/await helpers for signal-based flow control.
-class_name Async
 extends Object
+
+const Async := preload("res://addons/networked/utils/async.gd")
+
 
 ## Awaits [param target_signal] and aborts early if [param timer] expires first.
 ##

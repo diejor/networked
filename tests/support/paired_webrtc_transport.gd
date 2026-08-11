@@ -7,7 +7,6 @@
 class_name PairedWebRTCTransport
 extends WebRTCTransport
 
-
 func _init() -> void:
 	ice_servers = []
 

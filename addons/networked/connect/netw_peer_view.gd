@@ -97,7 +97,8 @@ func describe_progress() -> Dictionary:
 
 ## Pumps view state for [param dt] seconds.
 ##
-## Pumped by [method NetwConnector.poll]. The generic view has nothing to pump.
+## Pumped by [NetwConnector] every frame. The generic view has nothing
+## to pump.
 @warning_ignore("unused_parameter")
 func poll(dt: float) -> void:
 	pass

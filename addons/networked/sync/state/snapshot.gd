@@ -4,7 +4,7 @@
 ## of state sampled from history. Mutating it never writes back to the timeline.
 ##
 ## [codeblock]
-## var past := ctx.lag_compensation.sample(entity, tick)
+## var past := api.lagcomp_sample(entity, tick)
 ## if past.has_value(&"position"):
 ##     print(past.position)
 ## [/codeblock]

@@ -1,6 +1,6 @@
 ## Fluent local loopback link control for harness tests.
 ##
-## Every setter mutates the installed [LocalLoopbackSession.LinkConditions] for
+## Every setter mutates the installed [LocalLinkConditions] for
 ## one directional path and returns this handle for chaining, so impairment is
 ## authored in one continuous expression.
 ## [codeblock]
@@ -88,7 +88,7 @@ func throttle(probability: float, ms: float = 0.0) -> NetwLink:
 
 
 ## Sets reliable retransmit delay in milliseconds. A negative value restores
-## auto derivation from [member LocalLoopbackSession.LinkConditions.latency_ms].
+## auto derivation from [member LocalLinkConditions.latency_ms].
 func retransmit_ms(ms: float) -> NetwLink:
 	var conditions := _conditions()
 	conditions.retransmit_ms = ms
@@ -120,15 +120,15 @@ func clear() -> void:
 	_session.clear_link_conditions(_peer, _sender_id)
 
 
-func _conditions() -> LocalLoopbackSession.LinkConditions:
+func _conditions() -> LocalLinkConditions:
 	var conditions := _session.get_link_conditions(_peer, _sender_id)
 	if conditions:
 		return conditions.clone()
-	return LocalLoopbackSession.LinkConditions.perfect()
+	return LocalLinkConditions.perfect()
 
 
 func _apply_conditions(
-		conditions: LocalLoopbackSession.LinkConditions,
+		conditions: LocalLinkConditions,
 ) -> NetwLink:
 	_session.set_link_conditions(_peer, conditions, _sender_id)
 	return self
@@ -136,18 +136,18 @@ func _apply_conditions(
 
 func _profile_conditions(
 		profile_id: Profile,
-) -> LocalLoopbackSession.LinkConditions:
+) -> LocalLinkConditions:
 	match profile_id:
 		Profile.WIFI:
-			return LocalLoopbackSession.LinkConditions.wifi()
+			return LocalLinkConditions.wifi()
 		Profile.MOBILE_4G:
-			return LocalLoopbackSession.LinkConditions.mobile_4g()
+			return LocalLinkConditions.mobile_4g()
 		Profile.POOR_3G:
-			return LocalLoopbackSession.LinkConditions.poor_3g()
+			return LocalLinkConditions.poor_3g()
 		Profile.SATELLITE:
-			return LocalLoopbackSession.LinkConditions.satellite()
+			return LocalLinkConditions.satellite()
 		_:
-			return LocalLoopbackSession.LinkConditions.perfect()
+			return LocalLinkConditions.perfect()
 
 
 ## Fluent control for one player's inbound, outbound, or both paths.

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictRelayBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="peer_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="entity_slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="peers" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="entity_slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="release">
+			<return type="void" />
+			<param index="0" name="entity_slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="request_bytes" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="subscribed" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="request_of" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="set_subscribed">
+			<return type="void" />
+			<param index="0" name="entity_slot" type="int" />
+			<param index="1" name="peer" type="int" />
+			<param index="2" name="subscribed" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="slot_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="subscribed" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="entity_slot" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

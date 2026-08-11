@@ -43,7 +43,7 @@ var frame_ticks := 0.0
 ## Runs on the shell, the one place the clock is touched. A null clock yields a
 ## zeroed snapshot so a pump before any clock configurator stays inert.
 static func capture(
-		clock: NetwClockInterface,
+		clock: ClockCore,
 		frame_delta: float,
 ) -> NetwDisplayTiming:
 	var timing := NetwDisplayTiming.new()

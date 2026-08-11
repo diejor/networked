@@ -3,17 +3,19 @@
 ##
 ## Use [method of] to obtain the [NetwMultiplayer] session for any node inside a
 ## multiplayer session. It is the single front door to the session surface:
-## [br]- session verbs and state: [method NetwMultiplayer.host],
-##   [method NetwMultiplayer.pause], [method NetwMultiplayer.kick],
+## [br]- session verbs and state: [method NetwConnector.host],
+##   [method NetwSessionHandle.pause], [method NetwMultiplayer.peer_kick],
 ##   [member NetwMultiplayer.role], [member NetwMultiplayer.participants].
 ## [br]- backend systems such as [member NetwMultiplayer.clock] and
-##   [member NetwMultiplayer.scenes], plus custom services you register
+##   the scene verbs, plus custom services you register
 ##   yourself through [method NetwMultiplayer.get_service].
-## [br]- [member NetwMultiplayer.connect]: pre-game connect / server browser
-##   API (host, join, target list). See [NetwConnect].
-## [br]- [member NetwMultiplayer.interest] and [member NetwMultiplayer.liveness].
+## [br]- [NetwServerBrowser]: the optional pre-game browse model (target list,
+##   probing, lobby directories). Picking a row is its job; joining one is
+##   [method NetwConnector.join]'s.
+## [br]- the layer verbs, such as [method NetwMultiplayer.layer_create], and
+## the entity verbs, such as [method NetwMultiplayer.entity_get_state].
 ## [br]For positional questions, [method NetwEntity.of] resolves the entity for a
-## node and [method MultiplayerScene.of] resolves its scene.
+## node and [member NetwEntity.scene] resolves its scene.
 ##
 ## [br][br]
 ## [b]Other Entry Points[/b]
@@ -40,14 +42,14 @@
 ##     fuel = 100.0
 ##     Netw.sync_property(self, &"fuel")                     # explicit push
 ## [/codeblock]
-## [enum NetwSyncSet.Record] compares the three per-tick kinds, and
+## [enum NetwPropertySet.Record] compares the three per-tick kinds, and
 ## [NetwScriptModel.PropertyConfig] holds the full per-field and per-set
 ## delivery surface.
 ##
 ## [br][br][b]Entity RPC[/b]
 ## [br]The [code]Netw.rpc[/code] family calls annotated methods on a networked
 ## entity, addressed by the entity's route instead of a node path, so a call never
-## errors on a node that has not spawned yet (see [NetwReplicationInterface]). Declare the
+## errors on a node that has not spawned yet (see [ReplicationCore]). Declare the
 ## method with Godot's [code]@rpc[/code], which supplies the authority mode and
 ## reliable or unreliable transport, and register it once with
 ## [method configure_rpc]. Arguments are a flat list, and a [NetwEntity] or entity
@@ -77,7 +79,7 @@
 ##
 ## [br][br]
 ## A fan-out is not a true broadcast. [method rpc] and [method request_all] reach
-## only the peers that currently see the entity through [NetwInterestInterface], so a
+## only the peers that currently see the entity through [InterestCore], so a
 ## peer the interest layer does not admit never receives the call.
 ##
 ## [br][br][b]Configure in _init[/b]
@@ -103,6 +105,8 @@
 class_name Netw
 extends Object
 
+const RpcCore := preload("res://addons/networked/replication/rpc_core.gd")
+
 ## Static entry point for all debug and logging functionality.
 static var dbg: NetwDbg = NetwDbg.new()
 
@@ -110,9 +114,8 @@ static var dbg: NetwDbg = NetwDbg.new()
 ## Resolves the [NetwMultiplayer] session enclosing [param node].
 ##
 ## Returns [code]null[/code] outside a [MultiplayerTree] branch or off-tree.
-## This is the single user-facing entry point for session state, the owned
-## interfaces ([member NetwMultiplayer.clock], [member NetwMultiplayer.liveness],
-## [member NetwMultiplayer.interest], ...), and the session verbs.
+## This is the single user-facing entry point for session state, the flat
+## entity, layer, and display verbs, and the session band.
 static func of(node: Node) -> NetwMultiplayer:
 	return NetwMultiplayer.of(node)
 
@@ -207,7 +210,7 @@ static var _join_handler_script: Script
 ## func _init() -> void:
 ##     Netw.configure_join(spawn_at)
 ##
-## func spawn_at(rj: ResolvedJoin, point: StringName, team: int) -> MultiplayerScene:
+## func spawn_at(rj: ResolvedJoin, point: StringName, team: int) -> NetwSceneHandle:
 ##     ...
 ## [/codeblock]
 ## [br][br][b]Server Only.[/b]
@@ -228,7 +231,7 @@ static func configure_join(handler: Callable) -> NetwScriptModel.ConnectConfig:
 
 
 ## Returns the project-wide join handler, or an invalid [Callable] when none was
-## registered. [NetwSessionInterface] consults it after a per-session override
+## registered. [SessionCore] consults it after a per-session override
 ## and before the built-in [NetwDefaultJoin].
 static func resolve_join_handler() -> Callable:
 	return _join_handler
@@ -271,7 +274,7 @@ static func configure_auth(factory: Callable) -> void:
 
 
 ## Returns the project-wide auth-flow factory, or an invalid [Callable] when none
-## was registered. [NetwSessionInterface] consults it after a per-session
+## was registered. [SessionCore] consults it after a per-session
 ## override to construct the session's flow.
 static func resolve_auth_factory() -> Callable:
 	return _auth_factory
@@ -281,15 +284,15 @@ static func resolve_auth_factory() -> Callable:
 ## multiplayer-correct.
 ##
 ## Server authority runs the change for the session. A client turns it into a
-## request the server policy decides. The returned [NetwScenePromise] carries the
+## request the server policy decides. The returned [NetwPromise] carries the
 ## outcome, the one thing the native call cannot. See
-## [method NetwSceneInterface.change_scene_to_file].
+## [method SceneCore.change_scene_to_file].
 ## [codeblock]
 ## var promise := Netw.change_scene_to_file(self, "res://match.tscn")
-## if await promise.completed != NetwScenePromise.Result.OK:
+## if await promise.completed != OK:
 ##     status.text = "Could not start the match."
 ## [/codeblock]
-static func change_scene_to_file(node: Node, path: String) -> NetwScenePromise:
+static func change_scene_to_file(node: Node, path: String) -> NetwPromise:
 	return _scenes_of(node).change_scene_to_file(node, path)
 
 
@@ -298,21 +301,43 @@ static func change_scene_to_file(node: Node, path: String) -> NetwScenePromise:
 static func change_scene_to_packed(
 		node: Node,
 		packed: PackedScene,
-) -> NetwScenePromise:
+) -> NetwPromise:
 	return _scenes_of(node).change_scene_to_packed(node, packed)
 
 
 ## Re-enters the scene this peer presents, mirroring
 ## [method SceneTree.reload_current_scene]. See [method change_scene_to_file].
-static func reload_current_scene(node: Node) -> NetwScenePromise:
+static func reload_current_scene(node: Node) -> NetwPromise:
 	return _scenes_of(node).reload_current_scene(node)
 
 
+## Spawns a scene and returns its [NetwSceneHandle].
+##
+## The imperative twin of [method configure_multiplayer_scene], for a world a
+## session brings up rather than one a script declares about itself. A
+## [code]null[/code] recipe builds a content-less scene, which is a pure
+## admission boundary useful for a lobby, a spectator scope, or a team channel.
+## [codeblock]
+## var arena := Netw.spawn_multiplayer_scene(self, "res://levels/arena.tscn")
+## arena.admit(participant)
+## [/codeblock]
+## [br][br][b]Server Only.[/b]
+static func spawn_multiplayer_scene(
+		node: Node,
+		recipe: Variant,
+		isolation := NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_NONE,
+) -> NetwSceneHandle:
+	var api := of(node)
+	if api == null:
+		return null
+	return api.scene_spawn(recipe, isolation)
+
+
 # Resolves the scene interface owning [param node]'s session.
-static func _scenes_of(node: Node) -> NetwSceneInterface:
+static func _scenes_of(node: Node) -> SceneCore:
 	var api := NetwMultiplayer.of(node)
 	assert(api != null, "A scene change requires an active session.")
-	return api.scenes
+	return api._scenes
 
 
 ## Marks [param scene_type]'s root script as a multiplayer scene, so
@@ -320,7 +345,7 @@ static func _scenes_of(node: Node) -> NetwSceneInterface:
 ##
 ## This is a lightweight declaration, not an authorization. It never decides
 ## whether a client may reach the scene, which a
-## [signal NetwSceneInterface.change_requested] listener always has the final say
+## [method NetwMultiplayer.scene_set_request_handler] always has the final say
 ## over. Register from the scene root's
 ## [method Object._static_init] so loading the script marks it, letting a
 ## dedicated server introspect it without instantiating. At minimum, mark every
@@ -347,27 +372,35 @@ static func is_multiplayer_scene(script: Script) -> bool:
 	return NetwScriptModel.is_scene_marked(script)
 
 
-## Opts scene instance [param node] into the native-change on-ramp and returns
-## its fluent [NetwScriptModel.SceneMarkConfig].
+## Declares scene instance [param node] a multiplayer scene and returns its
+## fluent [NetwScriptModel.SceneMarkConfig].
 ##
-## Call from the scene root's [method Object._init] so every instantiation
-## carries the detach hook. The hook rides the root's [signal Node.tree_entered],
+## Declaring writes [member NetwEntity.declares_scene], so [param node] owns an
+## admission boundary every descendant entity inherits. Call it from the scene
+## root's [method Object._init], because the fact is consumed once at
+## [method NetwEntity.arm] and has to ride the SPAWN packet. Nothing else about
+## the entity changes: a scene replicates its own properties like any other.
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_multiplayer_scene(self) \
+##             .labeled(&"Arena") \
+##             .captured()
+## [/codeblock]
+## [method NetwScriptModel.SceneMarkConfig.captured] is the separate opt-in
+## for the native-change on-ramp, and everything below describes only what that
+## knob turns on. The hook rides the root's [signal Node.tree_entered],
 ## so it fires the same whether the instance arrives through
 ## [method SceneTree.change_scene_to_file] or
 ## [method SceneTree.change_scene_to_packed]. On a native change during a live
 ## session the hook detaches the local instance and issues a
-## [method NetwSceneInterface.request_change_path]; a framework spawn is
-## recognized through [member NetwReplicationInterface.is_applying_remote_frame]
+## [method SceneCore.request_change_path]; a framework spawn is
+## recognized through [member ReplicationCore.is_applying_remote_frame]
 ## and left alone. The server still decides the request through a
-## [signal NetwSceneInterface.change_requested] listener. The instance must be
+## [method NetwMultiplayer.scene_set_request_handler]. The instance must be
 ## file-backed, since the
 ## request replicates by resource path, so an in-memory
 ## [method SceneTree.change_scene_to_packed] pushes an error rather than a
 ## silent desync.
-## [codeblock]
-## func _init() -> void:
-##     Netw.configure_multiplayer_scene(self).timeout(8.0)
-## [/codeblock]
 static func configure_multiplayer_scene(
 		node: Node,
 ) -> NetwScriptModel.SceneMarkConfig:
@@ -381,6 +414,10 @@ static func configure_multiplayer_scene(
 		config = NetwScriptModel.SceneMarkConfig.new()
 		config.context_script = script
 		NetwScriptModel._multiplayer_scene_configs[script] = config
+	NetwEntity.resolve(node).declares_scene = true
+	# The hook connects unconditionally because captured() has not run yet when
+	# this returns. _on_marked_scene_entered re-reads the config and leaves an
+	# uncaptured scene alone.
 	node.tree_entered.connect(
 		_on_marked_scene_entered.bind(node),
 		CONNECT_ONE_SHOT,
@@ -392,17 +429,20 @@ static func configure_multiplayer_scene(
 static func _on_marked_scene_entered(node: Node) -> void:
 	if not is_instance_valid(node):
 		return
+	var config := NetwScriptModel.get_scene_config(node.get_script() as Script)
+	if config == null or not config.is_captured:
+		return
 	var sessions := NetwMultiplayer.live_sessions()
 	if sessions.size() != 1:
 		# No session, or an ambiguous multi-session host (the test harness). A
 		# native run stays local until exactly one session owns the presentation.
 		return
 	var api := sessions[0]
-	if api.replication.is_applying_remote_frame:
+	if api._replication.is_applying_remote_frame:
 		return
-	if api.state != NetwSessionInterface.State.ONLINE:
+	if api.state != NetwMultiplayer.SessionState.ONLINE:
 		return
-	api.scenes._handle_native_scene_entry(node)
+	api._scenes._handle_native_scene_entry(node)
 
 
 # Resolves a scene root script from a class, a script, or a scripted instance.
@@ -590,7 +630,7 @@ static func configure_property(
 
 
 ## Declares interest layers for [param node]'s entity and returns a fluent
-## [NetwInterestInterface.InterestConfig] builder.
+## [InterestCore.InterestConfig] builder.
 ##
 ## Call from [method Object._init] so every peer constructs the same local
 ## labels and callbacks. Server authority applies the real layer membership.
@@ -600,17 +640,17 @@ static func configure_property(
 ##     Netw.configure_interest(self) \
 ##             .layer( \
 ##                 &"team:red", \
-##                 NetwInterestInterface.LeavePolicy.RETAIN, \
-##                 NetwInterestInterface.PerceptionPolicy.HIDE, \
+##                 NetwMultiplayer.LeavePolicy.RETAIN, \
+##                 NetwMultiplayer.PerceptionPolicy.HIDE, \
 ##             ) \
 ##             .layer(&"sight") \
 ##             .on_enter(_on_interest_enter)
 ## [/codeblock]
 static func configure_interest(
 		node: Node,
-) -> NetwInterestInterface.InterestConfig:
+) -> InterestCore.InterestConfig:
 	var entity := NetwEntity.ensure(node)
-	return NetwInterestInterface.InterestConfig.new(entity.interest)
+	return InterestCore.InterestConfig.new(entity.interest)
 
 
 # Registers a property-configured node's derived state and input sets with its
@@ -636,7 +676,7 @@ static func _register_derived_now(node: Node) -> void:
 		return
 	var api := NetwMultiplayer.of(node)
 	if api:
-		api.replication._sync_pipeline.register_derived(node)
+		api._replication._sync_pipeline.register_derived(node)
 
 
 # Drops a node's derived sets when it leaves its session, releasing rewind history
@@ -646,7 +686,7 @@ static func _unregister_derived_now(node: Node) -> void:
 		return
 	var api := NetwMultiplayer.of(node)
 	if api:
-		api.replication._sync_pipeline.unregister_derived(node)
+		api._replication._sync_pipeline.unregister_derived(node)
 
 
 # Schedules the double-authority lint for a property-configured node once it is in
@@ -750,7 +790,7 @@ static func configure_signal(sig: Signal) -> NetwScriptModel.SyncConfig:
 
 
 ## Calls [param callable]'s [code]@rpc[/code] method on every peer that currently
-## sees the entity through [NetwInterestInterface], with the given flat arguments.
+## sees the entity through [InterestCore], with the given flat arguments.
 ##
 ## Reliable or unreliable follows the method's [code]@rpc[/code] transfer mode. A
 ## [NetwEntity] or entity root [Node] argument crosses as its route and arrives
@@ -803,7 +843,7 @@ static func request(callable: Callable, args: Array = []) -> NetwPromise:
 
 
 ## Broadcasts a two-way request to every peer that currently sees the entity
-## through [NetwInterestInterface] and returns a [NetwGroupPromise] that aggregates
+## through [InterestCore] and returns a [NetwGroupPromise] that aggregates
 ## their replies.
 ##
 ## The awaited set is fixed at send time. See [NetwGroupPromise] for per-peer and
@@ -844,7 +884,7 @@ static func request_controller(callable: Callable, args: Array = []) -> NetwProm
 static func sync_property(node: Node, property: StringName) -> void:
 	var api := _session_api(node)
 	if api:
-		api.replication.send_property(node, property)
+		api._replication.send_property(node, property)
 
 
 ## Emits [param sig] on the same node across [param sig]'s entity on every peer.
@@ -869,7 +909,7 @@ static func emit_entity_signal(sig: Signal, args: Array = []) -> void:
 	var api := _session_api(node)
 	if not api:
 		return
-	api.replication.send_signal(node, sig.get_name(), args)
+	api._replication.send_signal(node, sig.get_name(), args)
 
 
 # Server-or-offline test. An offline rig with no peer counts as server so unit
@@ -890,7 +930,7 @@ static func _session_api(node: Node) -> NetwMultiplayer:
 	return NetwMultiplayer.of(node)
 
 
-static func _resolve_rpc_interface(callable: Callable) -> NetwRpcInterface:
+static func _resolve_rpc_interface(callable: Callable) -> RpcCore:
 	var obj := callable.get_object()
 	if not (obj is Node):
 		Netw.dbg.error("Netw RPC target object must be a Node.")
@@ -904,7 +944,7 @@ static func _resolve_rpc_interface(callable: Callable) -> NetwRpcInterface:
 	if not api:
 		Netw.dbg.error("No session found for node '%s'.", [node.name])
 		return null
-	return api.rpc_interface
+	return api._rpc_core
 
 # ---------------------------------------------------------------------------
 # Spawn verbs
@@ -970,7 +1010,7 @@ static func configure_despawn(node: Node) -> NetwScriptModel.DespawnConfig:
 
 
 ## Registers the persistence policy for [param node]'s archetype, applied by the
-## server through [NetwPersistenceInterface]. Names the database, table, snapshot
+## server through [NetwPersistenceEngine]. Names the database, table, snapshot
 ## cadence, and hydration timing shared by every field marked
 ## [method NetwScriptModel.PropertyConfig.persisted]. See
 ## [NetwScriptModel.PersistenceConfig].
@@ -1013,11 +1053,11 @@ static func configure_persistence(node: Node) -> NetwScriptModel.PersistenceConf
 ## This static resolves the sole active session through
 ## [method NetwMultiplayer.live_sessions] and errors when more than one is
 ## active. Multi-session hosts call
-## [method NetwReplicationInterface.replicate] on the session they mean.
+## [method ReplicationCore.replicate] on the session they mean.
 ## [br][br][b]Server Only.[/b]
 static func replicate(node: Node, owner: NetwParticipant = null) -> NetwEntity:
 	var api := _sole_session("replicate")
-	return api.replication.replicate(node, owner) if api else null
+	return api._replication.replicate(node, owner) if api else null
 
 
 ## Constructs a node on every peer by running the spawn function [param fn]
@@ -1042,7 +1082,7 @@ static func spawn(fn: Callable, args: Array = [], owner: NetwParticipant = null)
 			[host.name],
 		)
 		return null
-	return api.replication.spawn(fn, args, owner)
+	return api._replication.spawn(fn, args, owner)
 
 
 # Resolves the one active NetwMultiplayer for the orphan-taking statics,
@@ -1055,11 +1095,39 @@ static func _sole_session(verb: String) -> NetwMultiplayer:
 	if sessions.size() > 1:
 		Netw.dbg.error(
 			"Netw.%s: %d sessions are active; call "
-			+ "api.replication.%s on the session you mean (Netw.of(node)).",
+			+ "api._replication.%s on the session you mean (Netw.of(node)).",
 			[verb, sessions.size(), verb],
 		)
 		return null
 	return sessions[0]
+
+
+## Declares the schema named [param name] and returns its [NetwSchema] builder.
+##
+## This takes no node and reaches no session, because a schema is declared where
+## the code that uses it lives, which is usually a [code]static var[/code]
+## initializer that runs before any session exists. The declaration lands in
+## [NetwSchemaModel] and every session compiles its own RID from it, so calling
+## this twice for one name extends one declaration rather than making two.
+## [codeblock]
+## class Mobs:
+##     static var schema := Netw.configure_schema(&"Mob")
+##     static var pos    := schema.vector3(&"pos")
+##     static var hp     := schema.u16(&"hp")
+##
+## var mobs := Netw.of(self).table_find(&"Mob")   # the session's own handle
+## [/codeblock]
+## One declaration serves three consumers: the replicated table, the row-major
+## property binding, and [NetwDatabase]. Fixed-width per-row state goes in a
+## table, variable-length payloads go on a [method channel], and the route is
+## what makes the two halves name the same thing. See
+## [method NetwMultiplayer.table_commit] for the publish contract.
+static func configure_schema(name: StringName) -> NetwSchema:
+	var declaration := NetwSchemaModel.declare(name)
+	if declaration == null:
+		Netw.dbg.error("Netw.configure_schema: a schema name may not be empty.")
+		return null
+	return NetwSchema.new(declaration)
 
 
 ## Opens the raw [NetwChannel] channel [param channel_id] for the tree enclosing
@@ -1073,4 +1141,4 @@ static func channel(node: Node, channel_id: int) -> NetwChannel:
 		api != null,
 		"Netw.channel: No session found for the given node.",
 	)
-	return NetwChannel.new(channel_id, api.replication)
+	return NetwChannel.new(channel_id, api._replication)

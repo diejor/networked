@@ -76,7 +76,7 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var host_runtime = NetwEntity.of(jose_on_host).interpolation._runtime()
 	assert_int(host_runtime.pump_mode).override_failure_message(
 		"the host must sample the client player it simulates authoritatively",
-	).is_equal(NetwInterpolationInterface._PUMP_BRACKETED)
+	).is_equal(DisplayCore._PUMP_BRACKETED)
 	# And only its own: the host's player never saw the input.
 	assert_float(valeria_player.position.x).is_equal_approx(valeria_held, 1.0)
 
@@ -213,8 +213,84 @@ func test_host_lobby_ui_spawns_inside_scene_with_roster() -> void:
 
 	var browser := valeria.scene().find_child("ConnectBrowser", true, false) as Control
 	assert_bool(browser.visible).is_false()
-	assert_that(valeria.tree.local_participant.current_scene.scene_name) \
+	assert_that(valeria.tree.api.local_participant.current_scene.label) \
 			.is_equal(&"Lobby")
+
+
+# The declaration path, answered on the tick tier.
+#
+# Every finding in the prediction campaign was measured on the one solver game,
+# which runs the frame tier, declares a carry channel, and is dense in marks a
+# kinematic body has no use for. Bomber is the other path and had never been
+# asked what its declarations reach, so nothing distinguished "this tier is
+# fine" from "nobody looked". This asks, through the same public reader a game
+# would call.
+#
+# One answer is deliberately a REFUSAL. Position declares a carry_step() that is
+# legal, is accepted, and is refused on first use because this body runs the tick
+# tier, so this game is where inert_forward_model fires. That pairing is the
+# whole point of asking: a declaration that parses is not a declaration that
+# reaches, and the report is where the difference is answerable before a player
+# feels it. (A4 of the plan of record wanted this here and could not have it
+# until C1/P5 stopped a node carry rule from undeclaring the field it advances.)
+func test_the_reachability_report_answers_for_the_tick_path() -> void:
+	var valeria := await game.add_host("valeria", false)
+	await _begin_game(valeria)
+	await valeria.await_scene(&"World", 2.0)
+	var player := await valeria.await_player(&"valeria", 2.0) as Node2D
+
+	var report: Dictionary = NetwEntity.of(player).prediction.reachability()
+	assert_dict(report).override_failure_message(
+		"a predicted entity must be able to answer for its own declarations",
+	).is_not_empty()
+	var fields: Dictionary = report[&"fields"]
+
+	# A tolerance and a tier distance, both in pixels, both declared rather than
+	# inherited: the entity default is one number and cannot be right for a
+	# position and a velocity at once.
+	assert_float(float(fields[&"position"][&"tolerance"])).is_equal(4.0)
+	assert_bool(bool(fields[&"position"][&"tolerance_declared"])).is_true()
+	assert_float(float(fields[&"position"][&"teleport_at"])) \
+			.override_failure_message(
+				"position declares its tier distance in its own units, so the "
+				+ "report must not answer with the entity default",
+			).is_equal(48.0)
+	assert_bool(bool(fields[&"position"][&"triggers"])).is_true()
+
+	# The field the body recomputes from the input every tick. It is replicated
+	# for observers and must not decide that a correction is needed -- the pairing
+	# the campaign measured on the other game, declared here before anything in
+	# Phase C moves.
+	assert_str(String(fields[&"velocity"][&"class"])).is_equal("DERIVED")
+	assert_bool(bool(fields[&"velocity"][&"triggers"])).override_failure_message(
+		"velocity is recomputed from the input every tick, so it may be "
+		+ "replicated for observers but must not decide that a correction is "
+		+ "needed",
+	).is_false()
+
+	var model: Dictionary = fields[&"position"][&"forward_model"]
+	assert_str(String(model[&"kind"])).override_failure_message(
+		"the step is declared, so the report must say a step was declared",
+	).is_equal("step")
+	assert_bool(bool(model[&"live"])).override_failure_message(
+		"and must not call it live: the tick tier refuses it on first use, so "
+		+ "every recovery writes the acknowledged value as if none had been "
+		+ "declared",
+	).is_false()
+	assert_str(String(model[&"why"])).contains("prediction.schedule = FRAME")
+
+	var codes := PackedStringArray()
+	for finding: Dictionary in report[&"findings"]:
+		codes.append(String(finding[&"code"]))
+	assert_array(codes).override_failure_message(
+		"the tick path has to be able to name this pairing, which is the one "
+		+ "finding A4 asked this game to produce",
+	).contains(["inert_forward_model"])
+
+	# The step is refused, and the rest of the declaration it sits beside is
+	# untouched -- which is the fix C1/P5 landed, asserted where the game writes
+	# it rather than only in the grammar unit.
+	assert_bool(bool(fields[&"position"][&"tolerance_declared"])).is_true()
 
 
 func _begin_game(host: NetwSceneRunner) -> void:
@@ -227,12 +303,12 @@ func _begin_game(host: NetwSceneRunner) -> void:
 	gamestate.begin_game()
 
 
-func _count_bombs(world: MultiplayerScene) -> int:
+func _count_bombs(world: NetwSceneHandle) -> int:
 	var bombs := world.level.get_node_or_null("Bombs")
 	return bombs.get_child_count() if bombs else 0
 
 
-func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
+func _wait_for_bomb(world: NetwSceneHandle, ticks: int) -> bool:
 	for i in ticks:
 		await game.sync_ticks(1)
 		if _count_bombs(world) > 0:
@@ -240,7 +316,7 @@ func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
 	return false
 
 
-func _first_bomb(world: MultiplayerScene) -> Area2D:
+func _first_bomb(world: NetwSceneHandle) -> Area2D:
 	var bombs := world.level.get_node_or_null("Bombs")
 	if not bombs:
 		return null

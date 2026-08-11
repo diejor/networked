@@ -17,6 +17,8 @@
 class_name NetwNodeSnapshot
 extends RefCounted
 
+const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
+
 var node_path: String
 var node_name: String
 var is_in_tree: bool

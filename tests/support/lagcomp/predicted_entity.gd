@@ -4,7 +4,7 @@
 ## [LagCompSimBody] pair, one per peer, each declaring a derived state and input
 ## set and carrying a [PredictionComponent]. It proxies the metrics a scenario
 ## asserts on (corrections, replay depth, fire counts, divergence) off the live
-## [NetwLagCompensationInterface.PredictionHandle] pair and the
+## [NetwPredictionHandle] pair and the
 ## [PredictionObserver], so a test reads the same vocabulary the retired spike
 ## doubles exposed.
 class_name PredictedEntity
@@ -18,12 +18,12 @@ var client_root: LagCompSimBody
 var server_entity: NetwEntity
 var client_entity: NetwEntity
 
-var server_state: NetwSyncSetBinding
-var client_state: NetwSyncSetBinding
-var server_input: NetwSyncSetBinding
-var client_input: NetwSyncSetBinding
-var server_prediction: NetwLagCompensationInterface.PredictionHandle
-var client_prediction: NetwLagCompensationInterface.PredictionHandle
+var server_state: NetwPropertySetBinding
+var client_state: NetwPropertySetBinding
+var server_input: NetwPropertySetBinding
+var client_input: NetwPropertySetBinding
+var server_prediction: NetwPredictionHandle
+var client_prediction: NetwPredictionHandle
 
 ## Divergence recorder bound to the client predictor.
 var observer: PredictionObserver
@@ -57,12 +57,12 @@ var client_body: LagCompSimBody:
 ## Corrections the client applied since spawn.
 var corrections: int:
 	get:
-		return client_prediction.corrections
+		return client_prediction.stats.corrections
 
 ## Deepest replay window the client walked.
 var max_replay_depth: int:
 	get:
-		return client_prediction.max_replay_depth
+		return client_prediction.stats.max_replay_depth
 
 ## The client predictor's divergence threshold.
 var epsilon: float:
@@ -82,22 +82,22 @@ var server_fire_count: int:
 ## Inputs the server consumed into authoritative state.
 var consumed: int:
 	get:
-		return server_prediction.consumed_count
+		return server_prediction.stats.consumed
 
 ## Input ticks the server stepped over as lost.
 var missing: int:
 	get:
-		return server_prediction.missing_count
+		return server_prediction.stats.missing
 
 ## Server ticks that consumed nothing with an empty queue.
 var starved: int:
 	get:
-		return server_prediction.starved_count
+		return server_prediction.stats.starved
 
 ## Server ticks that consumed nothing while rebuilding the de-jitter depth.
 var held: int:
 	get:
-		return server_prediction.held_count
+		return server_prediction.stats.held
 
 ## Last input tick the server acknowledged to the predicting client.
 var latest_ack: int:
@@ -153,7 +153,10 @@ func server_sample_at(tick: int) -> NetwSnapshot:
 	var scenario := _scenario as PredictionScenario
 	if not scenario or not scenario.server:
 		return NetwSnapshot.new()
-	return scenario.server.api.lag_compensation.sample(server_entity, tick)
+	return scenario.server.api.lagcomp_sample(
+		scenario.server.api.rid_of(server_root),
+		tick,
+	)
 
 
 ## Runs the scenario past RTT with no input and asserts the client body

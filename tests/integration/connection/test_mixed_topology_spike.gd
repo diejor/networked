@@ -41,7 +41,7 @@ func after_test() -> void:
 		_client_tree.queue_free()
 	if _host_api != null and get_tree().get_multiplayer() == _host_api:
 		_host_api.multiplayer_peer = null
-		_host_api.dispose()
+		_host_api.embedding.dispose()
 	_host_api = null
 	get_tree().set_multiplayer(_original)
 	await drain_frames(get_tree(), 3)
@@ -55,18 +55,18 @@ func _install_and_host() -> bool:
 	var payload := JoinPayload.new()
 	payload.username = "host"
 	var config := NetwHostConfig.new()
-	config.scheme = &"local"
-	await _host_api.host(payload, config)
-	return await _pump_until(func() -> bool: return _host_api.is_online())
+	config.transport = NetwLocalParams.new()
+	await NetwConnector.of(_host_api).host(payload, config)
+	return await _pump_until(func() -> bool: return _host_api.is_online)
 
 
 # Mounts a subpath-tree client and returns its owned session api.
 func _mount_client() -> NetwMultiplayer:
 	_client_tree = MultiplayerTree.new()
 	_client_tree.name = "SpikeClient"
-	_client_tree.desired_role = NetwSessionInterface.Role.CLIENT
+	_client_tree.desired_role = NetwMultiplayer.Role.CLIENT
 	_client_tree.auto_host_headless = false
-	_client_tree.scheme = &"local"
+	_client_tree.transport = NetwLocalParams.new()
 	add_child(_client_tree)
 	return _client_tree.api
 
@@ -77,7 +77,7 @@ func _join_client() -> void:
 	payload.username = "client"
 	var target := NetwConnectTarget.new()
 	target.scheme = &"local"
-	_client_tree.join(target, payload)
+	NetwConnector.of(_client_tree.api).join(target, payload)
 
 
 # Pumps both mounts for up to [param timeout_ms], returning as soon as
@@ -89,7 +89,7 @@ func _pump_until(cond: Callable, timeout_ms: int = 3000) -> bool:
 		if cond.call():
 			return true
 		if _host_api != null:
-			_host_api.connect.poll(_DT)
+			_host_api.poll()
 			if _host_api.has_multiplayer_peer():
 				_host_api.poll()
 		await get_tree().process_frame
@@ -141,7 +141,7 @@ func test_subpath_client_is_admitted_across_the_mount_boundary() -> void:
 
 	var client_id := client_api.get_unique_id()
 	var host_sees_client := await _pump_until(
-		func() -> bool: return _host_api.get_participant(client_id) != null
+		func() -> bool: return _host_api.peer_get_participant(client_id) != null
 	)
 	assert_bool(host_sees_client).override_failure_message(
 		"root host admitted no roster row for the subpath client",

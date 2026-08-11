@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="LocalMultiplayerPeer" inherits="MultiplayerPeerExtension" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		An in-process [MultiplayerPeer] that routes packets through memory.
+	</brief_description>
+	<description>
+		No socket is opened. Peer IDs, connection status and packet queues answer exactly what [ENetMultiplayerPeer]'s do, so a [MultiplayerAPI] cannot tell which one it is holding, and a test drives a real session without a network.
+		[codeblock]
+		var server := LocalMultiplayerPeer.new()
+		var client := LocalMultiplayerPeer.new()
+		server.create_server()
+		client.create_client(42)
+		server.force_connect_peer(42, client)
+		client.force_connect_peer(1, server)
+		[/codeblock]
+		The links form a star and not a mesh: a client is linked to the server and to nobody else, so a packet addressed to another client reaches the server for relaying and costs a second poll.
+		Connection events are queued and emitted on [method MultiplayerPeer.poll], which is what makes them land at a point the caller chose.
+		Setting [member loopback_session] gives that session first refusal on every inbound packet, so [LocalLinkConditions] can hold or drop one before it is ever visible here.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="create_client">
+			<return type="int" enum="Error" />
+			<param index="0" name="client_id" type="int" />
+			<description>
+				Initializes this peer as a client with [param client_id]. The peer reports [constant MultiplayerPeer.CONNECTION_CONNECTING] until its first [method MultiplayerPeer.poll].
+			</description>
+		</method>
+		<method name="create_server">
+			<return type="int" enum="Error" />
+			<description>
+				Initializes this peer as the server, whose id is always [code]1[/code].
+			</description>
+		</method>
+		<method name="force_connect_peer">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="peer" type="LocalMultiplayerPeer" />
+			<description>
+				Records [param peer] as reachable under [param peer_id]. On the server side this also queues the [signal MultiplayerPeer.peer_connected] that the next [method MultiplayerPeer.poll] emits.
+			</description>
+		</method>
+		<method name="is_linked_to" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Returns whether [param peer_id] is currently reachable from this peer.
+			</description>
+		</method>
+		<method name="linked_peer_ids" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns every reachable peer id, in the order they were linked.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="loopback_session" type="LocalLoopbackSession" setter="set_loopback_session" getter="get_loopback_session">
+			The [LocalLoopbackSession] that conditions this peer's inbound traffic. It is held weakly, so it never keeps a session alive.
+		</member>
+	</members>
+</class>

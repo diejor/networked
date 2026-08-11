@@ -5,6 +5,8 @@
 ## It never captures a second stream or writes gameplay state.
 extends Node
 
+const DebugFeature := preload("res://addons/networked/debug/ui/debug_feature.gd")
+
 const SETTING := "debug/networked/prediction_boundary_overlay"
 const RING_NAMES: PackedStringArray = ["D", "P", "A", "B"]
 const RING_COLORS: Array[Color] = [
@@ -68,18 +70,17 @@ func _process(_delta: float) -> void:
 func _is_relevant(handle) -> bool:
 	var source: int = handle.input_source
 	var mode: int = handle.sim_mode
-	var prediction := NetwLagCompensationInterface.PredictionHandle
-	if source == prediction.InputSource.PREDICTED:
+	if source == NetwPredict.InputSource.PREDICTED:
 		return true
-	return source == prediction.InputSource.LOCAL \
-			and mode != prediction.SimMode.AUTHORITATIVE
+	return source == NetwPredict.InputSource.LOCAL \
+			and mode != NetwPredict.SimMode.AUTHORITATIVE
 
 
 # Reads the four present-time layers without retaining another history.
 func _snapshot(entity: NetwEntity) -> Dictionary:
 	var handle := entity.prediction
 	var live := entity.state_binding.snapshot_payload() \
-			if entity.state_binding else { }
+	if entity.state_binding else { }
 	# The digest, never the report: the overlay draws every frame and the report
 	# detaches one entry per comparison the episode has ever settled.
 	var episode: Dictionary = handle.episode_digest()
@@ -91,7 +92,7 @@ func _snapshot(entity: NetwEntity) -> Dictionary:
 		&"authority": authority.get(&"state", { }),
 		&"authority_tick": int(authority.get(&"tick", -1)),
 		&"basis": handle.transition_state_at(basis_transition) \
-				if basis_transition >= 0 else { },
+		if basis_transition >= 0 else { },
 		&"basis_transition": basis_transition,
 		&"episode": episode,
 	}
@@ -117,11 +118,13 @@ func _basis_transition(episode: Dictionary) -> int:
 	if episode.is_empty():
 		return -1
 	var disposition: Dictionary = episode.get(&"disposition", { })
-	var state := int(disposition.get(
-		&"state",
-		NetwLagCompensationInterface.PredictionHandle.EpisodeState.OPEN,
-	))
-	if state != NetwLagCompensationInterface.PredictionHandle.EpisodeState.OPEN:
+	var state := int(
+		disposition.get(
+			&"state",
+			NetwPredict.EpisodeState.OPEN,
+		),
+	)
+	if state != NetwPredict.EpisodeState.OPEN:
 		return -1
 	var latest := int(episode.get(&"last_comparison_transition", -1))
 	if latest >= 0:
@@ -277,7 +280,7 @@ func _state_position(state: Dictionary) -> Variant:
 		return null
 	var entity := _entity()
 	var source := entity.state_binding.node() \
-			if entity and entity.state_binding else null
+	if entity and entity.state_binding else null
 	return _world_position(source, key, state.get(key))
 
 
@@ -319,17 +322,18 @@ func _world_position(source: Node, key: StringName, value: Variant) -> Variant:
 # Formats the current journal, episode, operator, meter, and display evidence.
 func _annotation(handle, snapshot: Dictionary) -> String:
 	var entity := _entity()
-	var stats: Dictionary = handle.stats()
-	var lines := PackedStringArray([
-		"%s  D cyan  P green  A orange  B magenta" % entity.entity_id,
-		"ack %d/%d  auth %d  shown %d  display %.1f ticks" % [
-			int(stats.get(&"ack_age_ticks", 0)),
-			int(stats.get(&"ack_age_max", 0)),
-			int(snapshot.get(&"authority_tick", -1)),
-			entity.interpolation.displayed_authoring_tick(),
-			entity.interpolation.display_lag,
+	var lines := PackedStringArray(
+		[
+			"%s  D cyan  P green  A orange  B magenta" % entity.entity_id,
+			"ack %d/%d  auth %d  shown %d  display %.1f ticks" % [
+				int(handle.ack_age_ticks),
+				NetwPredict.ACK_AGE_MAX,
+				int(snapshot.get(&"authority_tick", -1)),
+				entity.interpolation.displayed_authoring_tick(),
+				entity.interpolation.display_lag,
+			],
 		],
-	])
+	)
 	var journal := handle.journal() as NetwPredictJournal
 	if journal and not journal.transitions().is_empty():
 		var transition := int(journal.transitions()[-1])
@@ -369,7 +373,7 @@ func _row_annotation(transition: int, row: Dictionary) -> String:
 func _episode_annotation(episode: Dictionary) -> String:
 	var disposition: Dictionary = episode.get(&"disposition", { })
 	var state := _enum_name(
-		NetwLagCompensationInterface.PredictionHandle.EpisodeState,
+		NetwPredict.EpisodeState,
 		int(disposition.get(&"state", 0)),
 	)
 	var generator: Dictionary = episode.get(&"generator", { })
@@ -392,7 +396,7 @@ func _last_operator_annotation(episode: Dictionary) -> String:
 	)
 	var outcome_value := int(attempt.get(&"outcome", -1))
 	var outcome := "REFUSED" if outcome_value < 0 else _enum_name(
-		NetwLagCompensationInterface.PredictionHandle.OperatorOutcome,
+		NetwPredict.OperatorOutcome,
 		outcome_value,
 	)
 	return "%s %s  basis %d  meter %d" % [
@@ -405,7 +409,7 @@ func _last_operator_annotation(episode: Dictionary) -> String:
 
 func _witness_glyph(bits: int) -> String:
 	var names := PackedStringArray()
-	var witness := NetwLagCompensationInterface.PredictionHandle.WitnessClass
+	var witness := NetwPredict.WitnessClass
 	if bits & witness.SUPPORT:
 		names.append("SUPPORT")
 	if bits & witness.STATIC:
@@ -425,7 +429,7 @@ func _annotation_color(handle, snapshot: Dictionary) -> Color:
 	var disposition: Dictionary = episode.get(&"disposition", { })
 	var demoted: bool = bool(disposition.get(&"demoted", false)) \
 			and handle.sim_mode == \
-			NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY
+					NetwPredict.SimMode.DISPLAY
 	return Color(1.0, 0.35, 0.3) if demoted else Color.WHITE
 
 

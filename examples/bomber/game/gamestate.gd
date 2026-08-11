@@ -14,13 +14,13 @@ signal game_error(what: String)
 
 @onready var ctx: NetwMultiplayer = Netw.of(self)
 
-var world: MultiplayerScene:
+var world: NetwSceneHandle:
 	get:
-		return ctx.scenes.scene(&"World") if ctx else null
+		return ctx.scene_handle(ctx.scene_find(&"World")) if ctx else null
 
-var lobby: MultiplayerScene:
+var lobby: NetwSceneHandle:
 	get:
-		return ctx.scenes.scene(&"Lobby") if ctx else null
+		return ctx.scene_handle(ctx.scene_find(&"Lobby")) if ctx else null
 
 
 func _ready() -> void:
@@ -31,15 +31,15 @@ func _on_participant_joined(participant: NetwParticipant) -> void:
 	players[participant.peer_id] = participant.username
 	player_list_changed.emit()
 	var target := _active_scene()
-	if ctx.is_server() and is_instance_valid(target):
+	if ctx.is_server() and target != null:
 		target.admit(participant)
 
 
 # The single active scene a fresh participant enters: the lobby between
 # matches, the world while one runs.
-func _active_scene() -> MultiplayerScene:
+func _active_scene() -> NetwSceneHandle:
 	var lobby_scene := lobby
-	return lobby_scene if is_instance_valid(lobby_scene) else world
+	return lobby_scene if lobby_scene != null else world
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -71,11 +71,19 @@ func get_player_list() -> Array:
 
 
 ## Starts the match through [method Netw.change_scene_to_file]. The session is
-## [constant NetwSceneConfig.Concurrency.SINGLE], so the change replaces the
+## [constant NetwMultiplayer.SceneReach.SCENE_REACH_SESSION], so a change replaces the
 ## lobby and carries every participant into [code]World[/code].
 func begin_game() -> void:
 	assert(multiplayer.is_server())
+	_ask_for_session_reach()
 	Netw.change_scene_to_file(self, WORLD_SCENE)
+
+
+# Reach is server state rather than a property of the scene, so each front door
+# states it before asking. Both of this session's changes replace the single
+# active scene and carry everyone across.
+func _ask_for_session_reach() -> void:
+	ctx.scene_set_request_reach(NetwMultiplayer.SceneReach.SCENE_REACH_SESSION)
 
 
 func end_game() -> void:
@@ -86,6 +94,7 @@ func end_game() -> void:
 	var peer_active := mp != null \
 			and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	if peer_active and multiplayer.is_server() and is_instance_valid(world):
+		_ask_for_session_reach()
 		Netw.change_scene_to_file(self, LOBBY_SCENE)
 
 	game_ended.emit()
@@ -96,18 +105,18 @@ func setup_connections() -> void:
 	ctx.participant_joined.connect(_on_participant_joined)
 	ctx.peer_disconnected.connect(_on_peer_disconnected)
 	ctx.server_disconnected.connect(_on_server_disconnected)
-	ctx.scenes.scene_spawned.connect(_on_scene_spawned)
+	ctx.scene_live.connect(_on_scene_live)
 
 
 # The listen host is accepted before the startup scene spawns, so its
 # participant_joined admission finds no scene. Admission re-runs when the scene
 # arrives, keeping join order and scene order decoupled.
-func _on_scene_spawned(scene: MultiplayerScene) -> void:
+func _on_scene_live(arrived: NetwSceneHandle) -> void:
 	if not ctx.is_server():
 		return
 	for participant: NetwParticipant in ctx.participants:
 		if participant.current_scene == null:
-			scene.admit(participant)
+			arrived.admit(participant)
 
 
 func get_player_color(p_name: String) -> Color:

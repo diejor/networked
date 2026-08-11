@@ -28,6 +28,8 @@
 class_name TrackerSignaler
 extends WebRTCSignaler
 
+const WebRTCSignaler := preload("res://addons/networked/transport/webrtc/signaler/webrtc_signaler.gd")
+
 ## Seconds to keep tracker signaling alive after the native WebRTC link is up.
 const SIGNALING_CLOSE_DELAY := 3.0
 

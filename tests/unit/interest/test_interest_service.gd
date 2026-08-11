@@ -1,9 +1,9 @@
-## Unit tests for [NetwInterestInterface] composition helpers.
+## Unit tests for [InterestCore] composition helpers.
 class_name TestInterestService
 extends NetwTestSuite
 
 var mt: MultiplayerTree
-var service: NetwInterestInterface
+var service: InterestCore
 
 
 func before_test() -> void:
@@ -11,7 +11,7 @@ func before_test() -> void:
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
-	service = mt.api.interest
+	service = mt.api._interest
 
 
 func test_synchronizer_visibility_event_updates_committed_intent() -> void:
@@ -26,7 +26,7 @@ func test_synchronizer_visibility_event_updates_committed_intent() -> void:
 	sync.root_path = ^".."
 	sync.public_visibility = false
 	root.add_child(sync)
-	mt.api.replication._sync_compat.consume(root, sync)
+	mt.api.object_configuration_add(root, sync)
 	service.flush_now()
 	assert_that(service.participant_sees(7, entity)).is_false()
 

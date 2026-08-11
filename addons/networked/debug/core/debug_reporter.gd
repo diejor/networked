@@ -7,6 +7,7 @@
 extends Node
 
 class_name DebugReporter
+const MultiplayerClockSample := preload("res://addons/networked/debug/performance/multiplayer_clock_sample.gd")
 
 ## Emitted for every [NetwTreeEvent] a [TreeProbe] dispatches.
 ##
@@ -140,9 +141,9 @@ func reset_state() -> void:
 	if _telemetry:
 		_telemetry.clear()
 
-	if LocalLoopbackSession.shared:
-		LocalLoopbackSession.shared.reset()
-		LocalLoopbackSession.shared = null
+	if LocalLoopbackSession.has_shared_session():
+		LocalLoopbackSession.get_shared_session().reset()
+		LocalLoopbackSession.set_shared_session(null)
 
 	Netw.dbg.reset()
 	_dbg.trace("Reporter: State reset (deep).")
@@ -250,7 +251,7 @@ func _exit_tree() -> void:
 ## [br][br]
 ## Offline phase of two-phase registration: creates the [TreeProbe] so the
 ## tree is observed from [code]_enter_tree[/code] at
-## [constant NetwSessionInterface.Role.NONE], and emits the first wire session
+## [constant NetwMultiplayer.Role.NONE], and emits the first wire session
 ## registration at that role so the editor's peer registry can show the tree
 ## before it connects. Registers no performance monitors yet. The online
 ## upgrade happens in [method finalize_tree].
@@ -394,21 +395,21 @@ func report_session_registered(mt: MultiplayerTree) -> void:
 	var event := NetwSessionEvent.new()
 	event.tree_name = mt.get_tree_name()
 	event.username = (
-			NetwIdentity.username_of(mt.local_player.owner)
-			if mt.local_player else ""
+			NetwIdentity.username_of(mt.api.local_player.owner)
+			if mt.api.local_player else ""
 	)
 	event.role = mt.role
 	event.is_server = (
-			mt.is_host if mt.role != NetwSessionInterface.Role.NONE else false
+			mt.is_host if mt.role != NetwMultiplayer.Role.NONE else false
 	)
 	event.backend_class = backend_class
 	event.rid = reporter_id
 	# get_unique_id() returns 1 for a default MultiplayerAPI with no peer, so an
 	# offline tree would look like "peer 1, online". Gate both on a live session.
-	var is_online := mt.state == NetwSessionInterface.State.ONLINE
+	var is_online := mt.state == NetwMultiplayer.SessionState.ONLINE
 	event.online = is_online
-	event.peer_id = mt.multiplayer_api.get_unique_id() if \
-	(is_online and mt.multiplayer_api) else 0
+	event.peer_id = mt.api.get_unique_id() if \
+	(is_online and mt.api) else 0
 	event.spawned = Netw.dbg.is_debug_tree(mt)
 	_queue("networked:session_registered", event.to_dict(), mt)
 
@@ -436,8 +437,8 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 	var event := NetwSessionEvent.new()
 	event.tree_name = tree_name
 	event.rid = reporter_id
-	event.peer_id = mt.multiplayer_api.get_unique_id() if \
-	mt.multiplayer_api else 0
+	event.peer_id = mt.api.get_unique_id() if \
+	mt.api else 0
 	_queue("networked:session_unregistered", event.to_dict(), mt)
 	_flush_now()
 
@@ -487,7 +488,6 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	_sending_manifest = false
 
 #endregion
-
 
 # Returns the [code]tree_name[/code] for the current context.
 func _active_tree_name(active_span: RefCounted = null) -> String:
@@ -556,28 +556,28 @@ func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
 # dispatch. Detection now lives in [SimplifyPathRaceValidator]; this only builds
 # the span and returns it. The probe derives the causal token and ends it.
 func _on_scene_spawned_logic(
-		scene: MultiplayerScene,
+		scene: Node,
 		mt: MultiplayerTree,
 ) -> NetwPeerSpan:
 	var tree_name := mt.get_tree_name()
 	var event := NetwSceneEvent.new()
 	event.tree_name = tree_name
 	event.event = "spawned"
-	event.scene_name = str(scene.level.name)
+	event.scene_name = str(_scene_level(scene).name)
 	_queue("networked:scene_event", event.to_dict(), mt)
 
 	if not mt.is_host:
 		return null
 
 	var peers: Array = []
-	if mt.multiplayer_api:
-		peers = mt.multiplayer_api.get_peers()
+	if mt.api:
+		peers = mt.api.get_peers()
 
 	var scene_span := Netw.dbg.peer_span(
 		mt,
 		"scene_spawn",
 		peers,
-		{ "scene_name": str(scene.level.name), "tree": tree_name },
+		{ "scene_name": str(_scene_level(scene).name), "tree": tree_name },
 	)
 	scene_span.step("spawners_registering")
 	return scene_span
@@ -598,8 +598,8 @@ func _on_player_spawned_logic(
 		return null
 
 	var peers: Array = []
-	if mt.multiplayer_api:
-		peers = Array(mt.multiplayer_api.get_peers())
+	if mt.api:
+		peers = Array(mt.api.get_peers())
 
 	var spawn_span := Netw.dbg.peer_span(
 		mt,
@@ -616,12 +616,12 @@ func _on_player_spawned_logic(
 
 
 # Called by [TreeProbe] when a scene despawns.
-func _on_scene_despawned_logic(scene: MultiplayerScene, mt: MultiplayerTree) -> void:
+func _on_scene_despawned_logic(scene: Node, mt: MultiplayerTree) -> void:
 	var tree_name := mt.get_tree_name()
 	var event := NetwSceneEvent.new()
 	event.tree_name = tree_name
 	event.event = "despawned"
-	event.scene_name = str(scene.level.name)
+	event.scene_name = str(_scene_level(scene).name)
 	_queue("networked:scene_event", event.to_dict(), mt)
 
 # --- Snapshot Protocol --------------------------------------------------------
@@ -643,26 +643,26 @@ func _emit_current_state() -> void:
 		var event := NetwSessionEvent.new()
 		event.tree_name = tree_name
 		event.username = (
-				NetwIdentity.username_of(mt.local_player.owner)
-				if mt.local_player else ""
+				NetwIdentity.username_of(mt.api.local_player.owner)
+				if mt.api.local_player else ""
 		)
 		event.role = mt.role
 		event.is_server = (
-				mt.is_host if mt.role != NetwSessionInterface.Role.NONE else false
+				mt.is_host if mt.role != NetwMultiplayer.Role.NONE else false
 		)
 		event.backend_class = backend_class
 		event.rid = reporter_id
-		event.peer_id = mt.multiplayer_api.get_unique_id() if \
-		mt.multiplayer_api else 0
+		event.peer_id = mt.api.get_unique_id() if \
+		mt.api else 0
 		_queue("networked:session_registered", event.to_dict(), mt)
 
 		var ctx := _debug_contexts.get(mt) as TreeProbe
 		if not is_instance_valid(ctx):
 			continue
 
-		if mt.role != NetwSessionInterface.Role.NONE and mt.is_host:
+		if mt.role != NetwMultiplayer.Role.NONE and mt.is_host:
 			# Server sends topology for all active players.
-			for player in mt.get_all_players():
+			for player in mt.api.players:
 				ctx.send_topology_snapshot(player.owner)
 		elif ctx.local_player != null:
 			# Client only sends its own.
@@ -830,10 +830,10 @@ func _close_spawned_window(window: Window) -> void:
 	var pw := window as ParticipantWindow
 	var mt: MultiplayerTree = pw.tree if pw else null
 	if is_instance_valid(mt):
-		if mt.state == NetwSessionInterface.State.CONNECTING:
-			mt.abort_join()
-		elif mt.state != NetwSessionInterface.State.OFFLINE:
-			await mt.leave()
+		if mt.state == NetwMultiplayer.SessionState.CONNECTING:
+			NetwConnector.of(mt.api).abort()
+		elif mt.state != NetwMultiplayer.SessionState.OFFLINE:
+			await mt.api.session.leave()
 
 	if is_instance_valid(window):
 		window.queue_free()
@@ -879,7 +879,7 @@ func _handle_inspect_node(d: Variant) -> void:
 	# If path lookup failed, try finding the player node by peer_id.
 	if not is_instance_valid(node) and pid != 0:
 		for mt in _trees:
-			for player in mt.get_all_players():
+			for player in mt.api.players:
 				if player.owner.get_multiplayer_authority() == pid:
 					node = player.owner
 					break
@@ -1107,21 +1107,21 @@ func _fill_base(
 	# Merge base keys into any manifest-specific extras a detector pre-set, so a
 	# finding can populate network_state before the pipeline fills the base.
 	m.network_state["is_server"] = (
-			mt.is_host if (is_instance_valid(mt) and mt.role != NetwSessionInterface.Role.NONE) else false
+			mt.is_host if (is_instance_valid(mt) and mt.role != NetwMultiplayer.Role.NONE) else false
 	)
 	m.network_state["role"] = \
-	mt.role if is_instance_valid(mt) else NetwSessionInterface.Role.NONE
+	mt.role if is_instance_valid(mt) else NetwMultiplayer.Role.NONE
 	m.network_state["role_name"] = _role_name(mt)
 	m.network_state["tree_name"] = mt.get_tree_name() if is_instance_valid(mt) else ""
-	m.network_state["peer_id"] = mt.multiplayer_api.get_unique_id() if \
-	is_instance_valid(mt) and mt.multiplayer_api else 0
+	m.network_state["peer_id"] = mt.api.get_unique_id() if \
+	is_instance_valid(mt) and mt.api else 0
 	m.telemetry_slice = _freeze_and_slice()
 
 
 func _role_name(mt: MultiplayerTree) -> String:
 	if not is_instance_valid(mt):
-		return NetwSessionInterface.Role.keys()[NetwSessionInterface.Role.NONE]
-	return NetwSessionInterface.Role.keys()[mt.role]
+		return NetwMultiplayer.Role.keys()[NetwMultiplayer.Role.NONE]
+	return NetwMultiplayer.Role.keys()[mt.role]
 
 
 # Pauses the engine if break is enabled.
@@ -1187,3 +1187,9 @@ static func _debug_build() -> bool:
 # True when this process has a live [EngineDebugger] connection.
 static func _has_local_session() -> bool:
 	return EngineDebugger.is_active()
+
+
+# The content root of one scene container.
+func _scene_level(scene: Node) -> Node:
+	var record := NetwEntity.of(scene)
+	return record.scene.level if record else null

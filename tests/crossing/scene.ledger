@@ -1,0 +1,187 @@
+# family: scene
+# bridge: B(record-trace)
+# regime: exact (scene identities, event keys and request ids are symbols and integers)
+# instrument-first: d1bb6941
+# baseline: tests/unit/scene, tests/integration/scene
+# baseline-count: 102
+# successor-form: matrix
+#
+# The unit is the record plane inside SceneCore, which is now NetwSceneCore:
+# the observer routing table keyed by scene identity and event, and the one
+# scene request in flight.
+#
+# THE SAME TWO-PLANE SPLIT the three batches before it took, in a fourth place:
+#
+#   record     the routing table, the id counter, the pending id. Keyed by the
+#              scene's entity RID rather than by a container, holds no Node,
+#              instantiates nothing.
+#   interface  every Node, PackedScene, NetwSceneHandle and NetwPromise verb;
+#              the admissions, which name a NetwInterestLayer and therefore
+#              cannot precede W4; the deadline timer; the frames.
+#
+# THIS LEDGER WAS WRITTEN ALL CARRY, and writing it was the point. The class
+# crossed and the specification did not, because NOT ONE of the 102 cases is
+# pointed at the record plane alone: every case that touches it also drives a
+# promise, a node or the api's own surface, which is the half that stays. The
+# liveness batch reached the same shape for the same reason and it is a
+# legitimate crossing, not a stalled one. What the record plane owes instead is
+# stated natively, in nine cases of its own.
+#
+# THE DECLARED SORT re-read all 102 against a declared world rather than against
+# the class, and moved four. It found what the paragraph above predicted: the
+# admission edge is the ONLY half of this family a world can declare without a
+# tree, so `declared_scene_laws.cpp` states membership, nesting and admission,
+# and the four rows it takes are the four that assert an admission and nothing
+# else. Every remaining row drives a handle, a participant, a promise, a
+# PackedScene or a container shape, and each is a reason rather than a pending
+# port. `test_scene_membership_is_ancestry.gd` in `interest.ledger` gave up one
+# more row for the same reason, and kept its two visibility probes.
+#
+# THREE VERBS THE DECLARED SORT FOUND UNREACHABLE, each stated where a law would
+# otherwise have read it. `scene_declare` needs a record only binding a node
+# creates and binding a node arms it, so the composed sequence its own doc
+# states answers ERR_DOES_NOT_EXIST and then ERR_UNCONFIGURED; the declared
+# world writes the facet pre-arm as `Netw.configure_multiplayer_scene` does.
+# `scene_move` resolves its destination through the registry `tree_entered`
+# fills, so a declared container is never a destination and the seat is the
+# record's own reparent. `scene_get_layer` reads the flat layer map, which the
+# boundary `scene_admit` opens through the interest service never enters, so it
+# answers an invalid RID for every scene the scene plane itself admitted to.
+#
+# WHAT FORCED WHAT, swept rather than assumed. Nothing outside scene_core.gd
+# named _observers, and the only writes to _pending_request_id were three cases
+# in test_scene_interface.gd.
+#
+# ONE API CHANGE WAS FORCED and it is the reason those three cases changed
+# rather than crossed. The record plane used to expose a settable pending id and
+# a scenario could plant one; it no longer does, and it should not, because an
+# id a caller can claim without opening lets it answer a request nobody made.
+# open_request() is the only route now. The three cases draw an id instead of
+# planting one, and so does the arm, and the rows the arm produces are the rows
+# recorded BEFORE the port. Holding those fixed across a forced API change is
+# what the golden is for.
+#
+# TWO INNER CLASSES ARE NOT TAKEN, and neither blocks this batch. _Admission is
+# private and holds a Node and a NetwInterestLayer, so it cannot precede the
+# interest port at W4. MoveOpts is PUBLIC, so ClassDB's flatness forces it to be
+# separately registered or absorbed into the verb that takes it, and that is a
+# decision on merits rather than a translation. TRIGGER: take MoveOpts when the
+# move verb itself crosses; take _Admission with the interest layer at W4.
+#
+# THE INSTRUMENT is tests/crossing/scene_arm.gd against
+# tests/native/goldens/scene_records.txt: 21 rows over 11 scenarios, recorded at
+# d1bb6941 before a line of the record plane was native, and red-proven three
+# times across three independent halves (a duplicate registration stored twice,
+# a book that ignores its event key, a settled deadline that leaves its id
+# behind). All 21 rows reproduced unchanged after the port.
+#
+# TWO HAZARDS THE PORT CREATED AND THE NATIVE CASES CLOSE, both absent from the
+# GDScript original because it dispatched through a fresh Dictionary lookup per
+# edge. A contiguous row moves when the table grows, so a callback that
+# registers another observer during its own dispatch would leave the walk
+# reading freed memory; and a pruning write-back that rolled the row back to
+# what it started with would silently swallow whatever that callback added. N8
+# and N9 state both, driven by a callable written for the purpose.
+#
+test_host_scene_view.gd:test_a_shared_world_host_adds_no_view -> CARRY tests/unit/scene
+test_host_scene_view.gd:test_an_isolated_world_host_adds_a_view -> CARRY tests/unit/scene
+test_host_scene_view.gd:test_default_camera_adoption_makes_player_camera_current -> CARRY tests/unit/scene
+test_multiplayer_entity.gd:test_identity_name_parsing -> CARRY tests/unit/scene
+test_multiplayer_entity.gd:test_bind_stamps_identity -> CARRY tests/unit/scene
+test_multiplayer_entity.gd:test_controller_lifecycle_flow -> CARRY tests/unit/scene
+test_multiplayer_entity.gd:test_entity_lookup_and_resolution_flow -> CARRY tests/unit/scene
+test_multiplayer_entity.gd:test_route_binds_before_tree_entry -> CARRY tests/unit/scene
+test_peer_context.gd:test_bucket_lifecycle_and_isolation_flow -> CARRY tests/unit/scene
+test_scene_interface.gd:test_interface_exists_without_a_tree -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_config_registration_is_api_owned -> CARRY tests/unit/scene
+test_scene_interface.gd:test_active_registry_answers_scene_lookups -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_lookup_and_entity_scene_share_one_answer -> CARRY tests/unit/scene
+test_scene_interface.gd:test_single_scene_drives_current_scene -> CARRY tests/unit/scene
+test_scene_interface.gd:test_a_second_shared_world_scene_is_allowed -> CARRY tests/unit/scene
+test_scene_interface.gd:test_a_non_isolated_scene_builds_a_plain_wrapper -> CARRY tests/unit/scene
+test_scene_interface.gd:test_an_isolated_scene_builds_a_world_owning_wrapper_on_the_host -> CARRY tests/unit/scene
+test_scene_interface.gd:test_an_isolated_scene_builds_a_plain_wrapper_on_a_viewer -> CARRY tests/unit/scene
+test_scene_interface.gd:test_native_scene_change_tripwire_names_networked_verbs -> CARRY tests/unit/scene
+test_scene_interface.gd:test_native_scene_change_tripwire_silent_when_offline -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_request_deadline_resolves_timed_out -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_request_deadline_ignores_a_stale_request_id -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_result_rejects_a_non_server_sender -> CARRY tests/unit/scene
+test_scene_interface.gd:test_mark_and_configure_register_multiplayer_scene -> CARRY tests/unit/scene
+test_scene_interface.gd:test_native_scene_change_tripwire_exempts_a_configured_scene -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_request_flood_guard_bounds_a_peer -> CARRY tests/unit/scene
+test_scene_interface.gd:test_verify_requested_path_bounds_the_scene_file -> CARRY tests/unit/scene
+test_scene_interface.gd:test_pathless_native_entry_errors_without_requesting -> CARRY tests/unit/scene
+test_scene_interface.gd:test_pending_hook_is_a_side_effect_callback -> CARRY tests/unit/scene
+test_scene_interface.gd:test_pending_hook_absent_without_on_pending -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_promise_resolves_once -> CARRY tests/unit/scene
+test_scene_interface.gd:test_scene_mark_config_knobs_are_fluent -> CARRY tests/unit/scene
+test_scene_manager_config.gd:test_scene_uid_resolves_to_its_resource_path -> CARRY tests/unit/scene
+test_scene_manager_config.gd:test_scene_config_snapshots_isolation -> CARRY tests/unit/scene
+test_scene_manager_config.gd:test_scene_config_snapshots_initial_scenes -> CARRY tests/unit/scene
+test_scene_manager_config.gd:test_scene_config_carries_the_level_spawn_function -> CARRY tests/unit/scene
+test_tp_component.gd:test_scene_path_and_name_resolution_flow -> CARRY tests/unit/scene
+test_tp_component.gd:test_spawn_and_start_scene_initialization_flow -> CARRY tests/unit/scene
+test_tp_component.gd:test_teleport_ignores_requests_while_busy -> CARRY tests/unit/scene
+test_tp_component.gd:test_parented_contributes_paths_without_node_owner -> CARRY tests/unit/scene
+test_bare_scene_adoption.gd:test_direct_level_becomes_a_single_scene_declaration -> CARRY tests/integration/scene
+test_bare_scene_adoption.gd:test_direct_level_spawns_through_a_plain_wrapper -> CARRY tests/integration/scene
+test_net_scene_context.gd:test_scene_membership_flow -> CARRY tests/integration/scene
+test_net_scene_context.gd:test_scene_rpc_controls_flow -> CARRY tests/integration/scene
+test_peer_context_lifecycle.gd:test_context_erased_on_peer_disconnect -> CARRY tests/integration/scene
+test_peer_context_lifecycle.gd:test_server_context_does_not_contain_client_peer_id -> CARRY tests/integration/scene
+test_peer_context_lifecycle.gd:test_client_context_does_not_contain_server_peer_id -> CARRY tests/integration/scene
+test_player_spawn.gd:test_spawned_player_joins_scene_with_identity -> CARRY tests/integration/scene
+test_player_spawn.gd:test_two_players_in_same_scene -> CARRY tests/integration/scene
+test_player_spawn.gd:test_clients_admit_each_other_replicas -> CARRY tests/integration/scene
+test_player_spawn.gd:test_nested_scene_late_path_binding_and_record_forwarding -> CARRY tests/integration/scene
+test_scene_capture_matrix.gd:test_server_single_active_captures_change_to -> CARRY tests/integration/scene
+test_scene_capture_matrix.gd:test_server_single_idle_captures_activate -> CARRY tests/integration/scene
+test_scene_capture_matrix.gd:test_server_concurrent_captures_activate -> CARRY tests/integration/scene
+test_scene_capture_matrix.gd:test_client_single_captures_request_and_admits_marked -> CARRY tests/integration/scene
+test_scene_capture_matrix.gd:test_client_concurrent_captures_move_me -> CARRY tests/integration/scene
+test_scene_capture_matrix.gd:test_unmarked_native_change_is_not_hijacked -> CARRY tests/integration/scene
+test_scene_capture_matrix.gd:test_capture_disabled_under_multiplexed_sessions -> CARRY tests/integration/scene
+test_scene_custom_spawn.gd:test_spawn_function_receives_data_before_scene_enters_tree -> CARRY tests/integration/scene
+test_scene_custom_spawn.gd:test_two_custom_spawns_register_independently -> CARRY tests/integration/scene
+test_scene_custom_spawn.gd:test_activate_scene_uses_spawn_data_wakes_level_and_is_idempotent -> CARRY tests/integration/scene
+test_scene_custom_spawn.gd:test_activate_scene_falls_back_to_name_when_no_spawn_data -> CARRY tests/integration/scene
+test_scene_custom_spawn.gd:test_custom_spawn_stays_active_while_initially_empty -> CARRY tests/integration/scene
+test_scene_entity_conformance.gd:test_a_scene_root_declares_itself_through_its_own_init -> CARRY tests/integration/scene
+test_scene_entity_conformance.gd:test_a_declared_scene_carries_a_value_on_its_spawn_packet -> CARRY tests/integration/scene
+test_scene_entity_conformance.gd:test_a_declared_scene_replicates_a_post_spawn_change -> CARRY tests/integration/scene
+test_scene_entity_conformance.gd:test_the_facet_and_stem_survive_the_wire -> CARRY tests/integration/scene
+test_scene_entity_conformance.gd:test_the_facet_reaches_a_peer_that_joined_after_the_spawn_flushed -> CARRY tests/integration/scene
+test_scene_entity_conformance.gd:test_declaring_a_live_entity_is_a_programmer_error -> CARRY tests/integration/scene
+test_scene_entity_conformance.gd:test_undeclaring_before_arm_leaves_an_ordinary_entity -> CARRY tests/integration/scene
+test_scene_interest_membership.gd:test_scene_layer_defaults_to_deny_until_admission -> MATRIX declared_scene_laws.cpp:"L-ADMIT"x"seated-entity"
+test_scene_interest_membership.gd:test_admission_populates_client_layer_projection -> CARRY tests/integration/scene
+test_scene_interest_membership.gd:test_state_stream_hidden_to_non_admitted_peers -> CARRY tests/integration/scene
+test_scene_isolation.gd:test_initial_visibility_and_connected_peers -> CARRY tests/integration/scene
+test_scene_isolation.gd:test_connect_peer_adds_visibility_and_connected_peer -> MATRIX declared_scene_laws.cpp:"L-ADMIT"x"admitted-scene"
+test_scene_isolation.gd:test_disconnect_peer_removes_connected_peer_and_visibility -> MATRIX declared_scene_laws.cpp:"L-ADMIT"x"released-scene"
+test_scene_join.gd:test_server_spawns_scene_after_host -> CARRY tests/integration/scene
+test_scene_join.gd:test_two_clients_both_connect_to_server_with_scene -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_scene_load_policy_flow -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_scene_activation_cache_and_removal_flow -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_api_scene_lifecycle_verbs_and_signals -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_a_departing_player_releases_its_participant -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_api_move_reparents_entity_and_updates_participant_scene -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_single_change_to_moves_session_and_destroys_source -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_request_reach_decides_who_a_request_moves -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_scene_change_requests_deny_supersede_and_allow -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_scene_change_path_request_denies_then_allows -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_a_handler_matches_a_destination_in_either_form -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_marked_path_request_admitted_without_a_policy -> CARRY tests/integration/scene
+test_scene_lifecycle.gd:test_front_door_routes_authority_and_client -> CARRY tests/integration/scene
+test_scene_per_scene_isolation.gd:test_two_scenes_in_one_session_carry_different_isolation -> CARRY tests/integration/scene
+test_scene_per_scene_isolation.gd:test_a_viewing_peer_builds_a_plain_container_for_an_isolated_scene -> CARRY tests/integration/scene
+test_scene_per_scene_isolation.gd:test_a_nested_spawn_anchors_in_both_isolation_modes -> CARRY tests/integration/scene
+test_scene_per_scene_isolation.gd:test_isolation_is_write_once_before_arm -> CARRY tests/integration/scene
+test_scene_per_scene_isolation.gd:test_two_instances_of_one_level_own_distinct_layers -> CARRY tests/integration/scene
+test_scene_per_scene_isolation.gd:test_admitting_one_instance_leaves_its_sibling_denying -> MATRIX declared_scene_laws.cpp:"L-ADMIT"x"sibling-scenes"
+test_scene_per_scene_isolation.gd:test_a_manager_less_harness_declares_and_spawns_a_scene -> CARRY tests/integration/scene
+test_sceneless_join.gd:test_default_scene_wraps_level_and_context -> CARRY tests/integration/scene
+test_sceneless_join.gd:test_player_spawns_in_level_after_join -> CARRY tests/integration/scene
+test_session_relifecycle.gd:test_rehost_on_same_tree_rebuilds_session_from_empty -> CARRY tests/integration/scene
+test_session_relifecycle.gd:test_server_crash_converges_to_offline_and_no_role -> CARRY tests/integration/scene
+test_session_relifecycle.gd:test_disconnect_then_join_different_backend_on_same_tree -> CARRY tests/integration/scene

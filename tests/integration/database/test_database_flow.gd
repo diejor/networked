@@ -100,7 +100,7 @@ func test_load_signals_flow() -> void:
 
 	var mismatch_fired := [false]
 	db.schema_mismatch.connect(func(_t, _id, _m, _u): mismatch_fired[0] = true)
-	backend._upsert(&"players", &"eve", { &"health": 40, &"old_col": 1 })
+	backend.upsert(&"players", &"eve", { &"health": 40, &"old_col": 1 })
 	db.mismatch_policy = NetwDatabase.SchemaMismatchPolicy.LOAD_PARTIAL
 	await db._find_by_id(&"players", &"eve")
 	assert_that(mismatch_fired[0]).is_true()
@@ -122,11 +122,11 @@ func test_unregistered_table_read_is_non_destructive() -> void:
 	var fetched := await db.table(&"items").fetch(&"sword")
 	assert_that(fetched).is_null()
 
-	var raw_after: Dictionary = backend._find_by_id(&"items", &"sword")
+	var raw_after: Dictionary = backend.find_by_id(&"items", &"sword")
 	assert_that(raw_after.is_empty()).is_false()
 
 	DirAccess.make_dir_recursive_absolute(test_dir.path_join("ghost_table"))
-	var err: Error = backend._initialize({ &"items": [&"damage"] })
+	var err: Error = backend.initialize({ &"items": [&"damage"] })
 	assert_that(err).is_equal(OK)
 
 
@@ -184,7 +184,7 @@ func _assert_load_partial_policy() -> void:
 	db.backend = backend
 	await _register_and_wait(&"items", [&"damage", &"rarity"])
 
-	backend._upsert(
+	backend.upsert(
 		&"items",
 		&"sword",
 		{
@@ -210,7 +210,7 @@ func _assert_fail_policy_keeps_record() -> void:
 	db.backend = backend
 	await _register_and_wait(&"gear", [&"damage"])
 
-	backend._upsert(&"gear", &"axe", { &"damage": 20, &"legacy_power": 5 })
+	backend.upsert(&"gear", &"axe", { &"damage": 20, &"legacy_power": 5 })
 
 	db.mismatch_policy = NetwDatabase.SchemaMismatchPolicy.FAIL
 
@@ -220,5 +220,5 @@ func _assert_fail_policy_keeps_record() -> void:
 	assert_that(out_err[0]).is_equal(ERR_UNCONFIGURED)
 	assert_that(record.is_empty()).is_true()
 
-	var raw: Dictionary = backend._find_by_id(&"gear", &"axe")
+	var raw: Dictionary = backend.find_by_id(&"gear", &"axe")
 	assert_that(raw.has(&"legacy_power")).is_true()

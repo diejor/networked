@@ -6,7 +6,7 @@
 ##
 ## [codeblock]
 ## var counter := SignalCounter.watch(clock.clock_synchronized)
-## clock._calibrate(1)
+## clock.handle_pong(0.0, 1, 0.0)
 ## assert_that(counter.count).is_equal(1)
 ## [/codeblock]
 class_name SignalCounter

@@ -2,7 +2,7 @@
 ## route's lifecycle churn.
 ##
 ## After the consumption flip a plain [MultiplayerSynchronizer] no longer feeds
-## [NetwInterpolationInterface] through the native
+## [DisplayCore] through the native
 ## [signal MultiplayerSynchronizer.synchronized] signal but through the
 ## pipeline's apply hook. This suite proves that feed keeps delivering samples to
 ## a spawned entity's interpolation buffer after a late join and after the entity
@@ -14,7 +14,7 @@ extends NetwTestSuite
 var harness: NetwTestHarness
 var client0: MultiplayerTree
 var probe_scene: PackedScene
-var _server_clock: NetwClockInterface
+var _server_clock: ClockCore
 
 
 func before_test() -> void:
@@ -32,7 +32,7 @@ func test_consumed_sync_feeds_interpolation_after_flap_revival() -> void:
 	var peer0 := client0.multiplayer_peer.get_unique_id()
 	var node := probe_scene.instantiate() as NetwSpawnProbe
 	node.name = "InterpProbe"
-	var entity := harness.server().api.replication.replicate(node)
+	var entity := harness.server().api._replication.replicate(node)
 	var route := entity.route
 	harness.server().get_node("Arena").add_child(node)
 
@@ -40,12 +40,12 @@ func test_consumed_sync_feeds_interpolation_after_flap_revival() -> void:
 	# has new state to deliver into the receiver's interpolation buffer.
 	_server_clock.on_tick.connect(func(_d: float, t: int) -> void: node.position = Vector2(t, -t))
 
-	var interest := harness.server().api.interest
+	var interest := harness.server().api._interest
 	var layer := interest.layer_for(&"interp_flap")
 	layer.add_entity(entity)
 	layer.add_viewer(peer0)
 	interest.flush()
-	assert_that(await _wait_state(route, NetwLivenessInterface.State.LIVE)).is_true()
+	assert_that(await _wait_state(route, NetwMultiplayer.EntityState.LIVE)).is_true()
 
 	var buffer_key := &"position"
 	var first_tick := await _wait_buffer_advance(route, buffer_key, 0)
@@ -54,11 +54,11 @@ func test_consumed_sync_feeds_interpolation_after_flap_revival() -> void:
 	# Interest loss darkens the route, then re-admission revives it.
 	layer.remove_viewer(peer0)
 	interest.flush()
-	assert_that(await _wait_state(route, NetwLivenessInterface.State.DEAD)).is_true()
+	assert_that(await _wait_state(route, NetwMultiplayer.EntityState.DEAD)).is_true()
 
 	layer.add_viewer(peer0)
 	interest.flush()
-	assert_that(await _wait_state(route, NetwLivenessInterface.State.LIVE)).is_true()
+	assert_that(await _wait_state(route, NetwMultiplayer.EntityState.LIVE)).is_true()
 
 	# The rebuilt runtime must accept fresh consumed-sync samples again.
 	var revived_tick := await _wait_buffer_advance(route, buffer_key, first_tick)
@@ -72,7 +72,7 @@ func _mount_arena(mt: MultiplayerTree) -> void:
 
 
 func _client_buffer(route: int, key: StringName) -> NetwRingBuffer:
-	var node := client0.api.liveness.node_of(route)
+	var node := client0.api.entity_get_node(client0.api.rid_from_route(route))
 	if not is_instance_valid(node):
 		return null
 	var entity := NetwEntity.of(node)
@@ -100,11 +100,11 @@ func _wait_buffer_advance(
 
 func _wait_state(
 		route: int,
-		state: NetwLivenessInterface.State,
+		state: NetwMultiplayer.EntityState,
 		frames: int = 180,
 ) -> bool:
 	for i in frames:
-		if client0.api.liveness.route_state(route) == state:
+		if client0.api.route_get_state(route) == state:
 			return true
 		await get_tree().process_frame
 	return false
@@ -121,7 +121,8 @@ func _make_probe_scene() -> PackedScene:
 	var pos := NodePath(".:position")
 	cfg.add_property(pos)
 	cfg.property_set_replication_mode(
-		pos, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		pos,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 	sync.replication_config = cfg
 	root.add_child(sync)

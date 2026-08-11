@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwQuantizeQuaternion" inherits="NetwQuantize" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		[NetwQuantize] that compresses a unit [Quaternion] with smallest-three encoding.
+	</brief_description>
+	<description>
+		The largest component is omitted and reconstructed from unit length. The other three components are quantized across [code]-1 / sqrt(2) &lt;= component &lt;= 1 / sqrt(2)[/code]. This stores any rotation in [code]2 + bit_count * 3[/code] bits.
+		[codeblock]
+		var q := NetwQuantizeQuaternion.new().bits(10)
+		[/codeblock]
+		The sign of the omitted component is normalized away before packing, so two quaternions naming the same rotation encode to the same bits.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bits">
+			<return type="NetwQuantizeQuaternion" />
+			<param index="0" name="bits" type="int" />
+			<description>
+				Builder that sets [member bit_count] and returns this quantizer.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="bit_count" type="int" setter="set_bit_count" getter="get_bit_count" default="10">
+			Bits per stored quaternion component, clamped to 1..20.
+		</member>
+	</members>
+</class>

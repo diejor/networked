@@ -6,7 +6,7 @@
 ## fresher datagram already superseded, so a receiver's applied state moves
 ## strictly forward whatever order the link delivers in. These cases drive the
 ## derived state set a marked root declares and the [method Netw.sync_property]
-## door through seeded [LocalLoopbackSession.LinkConditions] and assert exactly
+## door through seeded [LocalLinkConditions] and assert exactly
 ## that: applied ticks and values never move backward, the stream converges,
 ## and the stale-drop counter proves the gate engaged rather than the link
 ## happening to stay ordered.
@@ -19,8 +19,8 @@ const TICKRATE := 30
 var harness: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: NetwClockInterface
-var client_clock: NetwClockInterface
+var server_clock: ClockCore
+var client_clock: ClockCore
 var server_root: Node2D
 var client_root: Node2D
 var _stepper: LockstepStepper
@@ -49,7 +49,7 @@ func _setup_pair(root_type: Variant = StateSyncBody) -> void:
 	client = await harness.add_client()
 	server = harness.server()
 	server_clock = await harness.add_clock(TICKRATE)
-	client_clock = client.api.clock
+	client_clock = client.api._clock
 	server_clock.manual_tick = true
 	client_clock.manual_tick = true
 
@@ -65,7 +65,7 @@ func _setup_pair(root_type: Variant = StateSyncBody) -> void:
 	await get_tree().process_frame
 
 	_stepper = LockstepStepper.new(
-		[server_clock, client_clock] as Array[NetwClockInterface],
+		[server_clock, client_clock] as Array[ClockCore],
 		[server.multiplayer, client.multiplayer] as Array[MultiplayerAPI],
 		harness.session(),
 		TICKRATE,
@@ -77,7 +77,7 @@ func _setup_pair(root_type: Variant = StateSyncBody) -> void:
 # little loss, all deterministic under the seed.
 func _impair_downlink(seed_value: int) -> void:
 	var period := 1000.0 / float(Engine.get_physics_ticks_per_second())
-	var conditions := LocalLoopbackSession.LinkConditions.new(seed_value)
+	var conditions := LocalLinkConditions.create(seed_value)
 	conditions.latency_ms = 2.0 * period
 	conditions.jitter_ms = 6.0 * period
 	conditions.reorder = 1.0
@@ -91,7 +91,7 @@ func _impair_downlink(seed_value: int) -> void:
 
 
 func _client_stale_drops() -> int:
-	return int(client.api.monitor_snapshot().get("sync_drops_stale", 0))
+	return int(client.api.stats_snapshot().get("sync_drops_stale", 0))
 
 
 func test_state_stream_applies_strictly_forward_under_reorder() -> void:
@@ -185,7 +185,7 @@ func test_masked_state_stream_never_corrupts_under_loss_and_converges() -> void:
 
 	# The masked lane's own counters observed real sends, and some of them were
 	# full-row heals (the gain edge, or the impaired link forcing a re-heal).
-	var server_snap := server.api.monitor_snapshot()
+	var server_snap := server.api.stats_snapshot()
 	assert_int(int(server_snap[&"masked_frames_out"])).is_greater(0)
 	assert_int(int(server_snap[&"masked_frames_full"])).is_greater(0)
 
@@ -236,16 +236,16 @@ func test_property_sync_never_regresses_and_converges() -> void:
 	# shape, and the destination records that echo as the peer's confirmed
 	# baseline seq (the masked delta lane's snapshot ack).
 	var client_id := client.api.get_unique_id()
-	var server_standalone_before := int(server.api.monitor_snapshot()[&"standalone_acks_out"])
-	var client_standalone_before := int(client.api.monitor_snapshot()[&"standalone_acks_out"])
+	var server_standalone_before := int(server.api.stats_snapshot()[&"standalone_acks_out"])
+	var client_standalone_before := int(client.api.stats_snapshot()[&"standalone_acks_out"])
 	for t in range(8):
 		client_root.set(&"score", 200 + t)
 		Netw.sync_property(client_root, &"score")
 		Netw.sync_property(server_root, &"score")
 		_stepper.sync_ticks(1)
 
-	var server_snap := server.api.monitor_snapshot()
-	var client_snap := client.api.monitor_snapshot()
+	var server_snap := server.api.stats_snapshot()
+	var client_snap := client.api.stats_snapshot()
 
 	# A chatty pair carries an echo on every datagram, so neither peer ever needs
 	# a standalone ack: the piggyback always wins.
@@ -259,5 +259,5 @@ func test_property_sync_never_regresses_and_converges() -> void:
 	assert_int(int(client_snap[&"state_acks_in"])).is_greater(0)
 
 	# And each records the other's echo as a confirmed baseline seq.
-	assert_int(server.api.peer_state_ack(client_id)).is_greater_equal(0)
-	assert_int(client.api.peer_state_ack(1)).is_greater_equal(0)
+	assert_int(server.api._peer_state_ack(client_id)).is_greater_equal(0)
+	assert_int(client.api._peer_state_ack(1)).is_greater_equal(0)

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwCodec" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Compact byte codec for tick-stamped state and input payloads.
+	</brief_description>
+	<description>
+		The wire never carries property names: both peers derive the ordered key list and the per-key [NetwQuantize] from the same synchronizer config. A configured property is bit-packed by its quantizer with no type tag, an unconfigured property byte-aligns and writes a one-byte type tag plus a raw value ([code]bool[/code]/[code]int[/code]/[Vector2] packed, else [method @GlobalScope.var_to_bytes]). This is the value-encoding core shared by the windowed input lane and the state set's bundled snapshot.
+		Every method is static. A codec instance would hold nothing, since the schema lives in the arguments and the cursor lives in [NetwBitBufferWriter] and [NetwBitBufferReader].
+		[codeblock]
+		# snapshot (state blob): tick + ack header, then the bit-packed payload
+		var bytes := NetwCodec.encode_snapshot(tick, ack, payload, keys, quantizers)
+		var frame := NetwCodec.decode_snapshot(bytes, keys, quantizers, types)
+		#   frame == { tick: int, ack: int, payload: { key: value } }
+
+		# window (input redundancy): base_tick + count header, then per-sample payloads
+		var w := NetwCodec.encode_window(samples, keys, quantizers)
+		var s := NetwCodec.decode_window(w, keys, quantizers, types)
+		[/codeblock]
+		[code]quantizers[/code] is a list parallel to [code]keys[/code] (null entries fall back to raw). [code]types[/code] is the parallel [enum Variant.Type] list a decoder needs to reconstruct a quantized value, derived from the live property type.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="decode_payload" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="reader" type="NetwBitBufferReader" />
+			<param index="1" name="keys" type="Array" />
+			<param index="2" name="quantizers" type="Array" />
+			<param index="3" name="types" type="Array" />
+			<description>
+				Reads a [code]{ key: value }[/code] payload from [param reader] in [param keys] order.
+			</description>
+		</method>
+		<method name="decode_snapshot" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<param index="1" name="keys" type="Array" />
+			<param index="2" name="quantizers" type="Array" />
+			<param index="3" name="types" type="Array" />
+			<description>
+				Decodes a snapshot blob into [code]{ tick, ack, payload }[/code]. Returns an empty [Dictionary] for empty [param bytes] or for a header whose varint is corrupt.
+			</description>
+		</method>
+		<method name="decode_value" qualifiers="static">
+			<return type="Variant" />
+			<param index="0" name="reader" type="NetwBitBufferReader" />
+			<param index="1" name="type" type="int" />
+			<param index="2" name="quantizer" type="NetwQuantize" />
+			<description>
+				Reads a single value written by [method encode_value]. [param type] is the reconstructed [enum Variant.Type] a quantized value needs, ignored on the tagged path.
+			</description>
+		</method>
+		<method name="decode_window" qualifiers="static">
+			<return type="Array" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<param index="1" name="keys" type="Array" />
+			<param index="2" name="quantizers" type="Array" />
+			<param index="3" name="types" type="Array" />
+			<description>
+				Decodes a window blob back into the sample shape. Returns an empty array for empty [param bytes].
+			</description>
+		</method>
+		<method name="encode_payload" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="writer" type="NetwBitBufferWriter" />
+			<param index="1" name="payload" type="Dictionary" />
+			<param index="2" name="keys" type="Array" />
+			<param index="3" name="quantizers" type="Array" />
+			<description>
+				Writes [param payload] values into [param writer] in [param keys] order.
+			</description>
+		</method>
+		<method name="encode_snapshot" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="ack" type="int" />
+			<param index="2" name="payload" type="Dictionary" />
+			<param index="3" name="keys" type="Array" />
+			<param index="4" name="quantizers" type="Array" />
+			<description>
+				Encodes [param tick], [param ack], and [param payload] into a snapshot blob. Both header fields are zigzag varints, so an [param ack] of [code]-1[/code] costs one byte.
+			</description>
+		</method>
+		<method name="encode_value" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="writer" type="NetwBitBufferWriter" />
+			<param index="1" name="value" type="Variant" />
+			<param index="2" name="quantizer" type="NetwQuantize" />
+			<description>
+				Writes a single [param value] into [param writer], bit-packed by [param quantizer] when set, otherwise byte-aligned with a type tag. The public entry to the value-encoding core, shared by entity RPC arguments.
+			</description>
+		</method>
+		<method name="encode_window" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="samples" type="Array" />
+			<param index="1" name="keys" type="Array" />
+			<param index="2" name="quantizers" type="Array" />
+			<description>
+				Encodes a tick-ascending window of [code]{ tick, input }[/code] samples. Returns an empty array for an empty window.
+			</description>
+		</method>
+		<method name="get_safe_varint" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="reader" type="NetwBitBufferReader" />
+			<description>
+				Reads a varint from [param reader], returning [code]-1[/code] on overflow or a corrupt packet.
+			</description>
+		</method>
+		<method name="put_varint" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="writer" type="NetwBitBufferWriter" />
+			<param index="1" name="value" type="int" />
+			<description>
+				Writes [param value] as a varint into [param writer].
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="T_FALLBACK" value="0" enum="RawType">
+			Any type the packed tags do not cover, written as a length-prefixed [method @GlobalScope.var_to_bytes] blob.
+		</constant>
+		<constant name="T_BOOL" value="1" enum="RawType">
+			A [bool], written as one byte.
+		</constant>
+		<constant name="T_INT" value="2" enum="RawType">
+			An [int], written as eight little-endian bytes.
+		</constant>
+		<constant name="T_VECTOR2" value="3" enum="RawType">
+			A [Vector2], written as two 32-bit floats.
+		</constant>
+		<constant name="T_FLOAT" value="4" enum="RawType">
+			A [float], written as one 32-bit float.
+		</constant>
+		<constant name="T_VECTOR3" value="5" enum="RawType">
+			A [Vector3], written as three 32-bit floats.
+		</constant>
+	</constants>
+</class>

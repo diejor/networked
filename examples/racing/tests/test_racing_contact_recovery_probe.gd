@@ -43,7 +43,7 @@ func after_test() -> void:
 class Recording:
 	extends RefCounted
 
-	var clock: NetwClockInterface
+	var clock: ClockCore
 
 	# recovered: one row per recovery.
 	var recovery_ticks: Array[int] = []
@@ -54,7 +54,7 @@ class Recording:
 	# state_evaluated: one row per receive.
 	var eval_count: int = 0
 	var eval_lin_divergence: Array[float] = []
-	var eval_corrected: Array[bool] = []
+	var eval_diverged: Array[bool] = []
 	var converged_streak: int = 0
 
 	# divergence_detected, whether or not recovered.
@@ -73,12 +73,12 @@ class Recording:
 				recovery_attribution.append(attribution),
 		)
 		handle.state_evaluated.connect(
-			func(_recv_tick: int, _ack: int, divergence: float, corrected: bool) -> void:
+			func(_recv_tick: int, _ack: int, divergence: float, diverged: bool) -> void:
 				eval_count += 1
 				eval_lin_divergence.append(
 					handle.last_field_divergence.get(&"sphere_linear_velocity", 0.0),
 				)
-				eval_corrected.append(corrected)
+				eval_diverged.append(diverged)
 				if divergence < POSITION_EPSILON:
 					converged_streak += 1
 				else:
@@ -244,7 +244,7 @@ func _setup_collision() -> Array:
 	var target := await client.await_player(&"mario", 2.0)
 	await game.sync_ticks(12)
 	var rec := Recording.new()
-	rec.clock = client.tree.api.clock
+	rec.clock = client.tree.api._clock
 	rec.attach(own.entity.prediction)
 	return [own, target, rec]
 
@@ -255,7 +255,7 @@ func test_contact_baseline_profile() -> void:
 	var handle = own.entity.prediction
 	var engine = handle._engine()
 	print("[contact:baseline] withheld marks=%s" % [
-		engine._withheld_fields if engine else { },
+		engine._wiring.withheld if engine else { },
 	])
 	await _run_collision(own, parts[1], parts[2])
 	_report("baseline", parts[2], handle)
@@ -265,6 +265,6 @@ func test_contact_with_exact_restore() -> void:
 	var parts := await _setup_collision()
 	var own: Node = parts[0]
 	var handle = own.entity.prediction
-	handle.snap_restore = NetwLagCompensationInterface.PredictionHandle.RestoreMode.EXACT
+	handle.snap_restore = NetwPredict.RestoreMode.EXACT
 	await _run_collision(own, parts[1], parts[2])
 	_report("exact_restore", parts[2], handle)

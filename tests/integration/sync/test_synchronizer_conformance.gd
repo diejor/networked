@@ -100,8 +100,12 @@ func test_synchronized_signal_fires_on_receiver() -> void:
 	sync.synchronized.connect(func() -> void: fired[0] += 1)
 
 	node.synced_value = 5
-	await _wait_value(func() -> int: return fired[0], 1, func(v: int) -> bool:
-		return v >= 1)
+	await _wait_value(
+		func() -> int: return fired[0],
+		1,
+		func(v: int) -> bool:
+			return v >= 1
+	)
 	assert_int(fired[0]).is_greater(0)
 
 
@@ -206,8 +210,8 @@ func test_authority_change_moves_the_stream() -> void:
 	# Both peers agree the client now owns the synchronizer. A bare synchronizer
 	# has no entity arm() to apply authority, so this transfers it by hand.
 	var client_peer := client0.multiplayer_peer.get_unique_id()
-	_sync_of(node).set_multiplayer_authority(client_peer)  # SMELL(authority-pin): no arm() on a bare synchronizer
-	_sync_of(client_node).set_multiplayer_authority(client_peer)  # SMELL(authority-pin): no arm() on a bare synchronizer
+	_sync_of(node).set_multiplayer_authority(client_peer) # SMELL(authority-pin): no arm() on a bare synchronizer
+	_sync_of(client_node).set_multiplayer_authority(client_peer) # SMELL(authority-pin): no arm() on a bare synchronizer
 
 	client_node.synced_value = 44
 	var got: int = await _wait_value(func() -> int: return node.synced_value, 44)
@@ -260,7 +264,8 @@ func test_spawnerless_synchronizer_adopts_in_place() -> void:
 
 	server_manual.synced_value = 71
 	var got: int = await _wait_value(
-		func() -> int: return client_manual.synced_value, 71
+		func() -> int: return client_manual.synced_value,
+		71,
 	)
 	assert_int(got).is_equal(71)
 
@@ -275,7 +280,8 @@ func _make_manual_probe() -> StockSyncProbe:
 	var synced := NodePath(".:synced_value")
 	cfg.add_property(synced)
 	cfg.property_set_replication_mode(
-		synced, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		synced,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 	sync.replication_config = cfg
 	root.add_child(sync)
@@ -379,19 +385,22 @@ func _make_probe_scene() -> PackedScene:
 	cfg.add_property(spawn_prop)
 	cfg.property_set_spawn(spawn_prop, true)
 	cfg.property_set_replication_mode(
-		spawn_prop, SceneReplicationConfig.REPLICATION_MODE_NEVER
+		spawn_prop,
+		SceneReplicationConfig.REPLICATION_MODE_NEVER,
 	)
 
 	var sync_prop := NodePath(".:synced_value")
 	cfg.add_property(sync_prop)
 	cfg.property_set_replication_mode(
-		sync_prop, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		sync_prop,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 
 	var watch_prop := NodePath(".:watched_value")
 	cfg.add_property(watch_prop)
 	cfg.property_set_replication_mode(
-		watch_prop, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE
+		watch_prop,
+		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 	)
 
 	sync.replication_config = cfg
@@ -417,7 +426,8 @@ func _make_multi_sync_scene() -> PackedScene:
 	var first := NodePath(".:synced_value")
 	cfg.add_property(first)
 	cfg.property_set_replication_mode(
-		first, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		first,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 	sync.replication_config = cfg
 	root.add_child(sync)
@@ -430,7 +440,8 @@ func _make_multi_sync_scene() -> PackedScene:
 	var second := NodePath(".:watched_value")
 	cfg2.add_property(second)
 	cfg2.property_set_replication_mode(
-		second, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		second,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 	sync2.replication_config = cfg2
 	root.add_child(sync2)
@@ -460,7 +471,8 @@ func _make_sub_node_scene() -> PackedScene:
 	var modulate := NodePath("Visual:modulate")
 	cfg.add_property(modulate)
 	cfg.property_set_replication_mode(
-		modulate, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		modulate,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 	sync.replication_config = cfg
 	root.add_child(sync)

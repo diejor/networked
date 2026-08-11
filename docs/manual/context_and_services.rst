@@ -20,7 +20,7 @@ the kind of question:
 - **Positional questions** (what encloses this node?) are static walkers on the
   answering class. :ref:`NetwEntity.of() <class_NetwEntity_method_of>` resolves
   the entity for a node, and
-  :ref:`MultiplayerScene.of() <class_MultiplayerScene_method_of>` resolves its
+  :ref:`NetwEntity.scene <class_NetwEntity_property_scene>` resolves its
   scene. Both walk the parent chain and work on orphan nodes, which is why they
   are the only ones you can rely on inside the very early parts of a spawn
   lifecycle (during
@@ -42,26 +42,34 @@ The session surface
 for everything about the session you are in:
 
 - session verbs and state:
-  :ref:`host() <class_NetwMultiplayer_method_host>`,
-  :ref:`join() <class_NetwMultiplayer_method_join>`,
-  :ref:`pause() <class_NetwMultiplayer_method_pause>`,
-  :ref:`kick() <class_NetwMultiplayer_method_kick>`,
+  :ref:`session.pause() <class_NetwSessionHandle_method_pause>`,
+  :ref:`session.leave() <class_NetwSessionHandle_method_leave>`,
+  :ref:`peer_kick() <class_NetwMultiplayer_method_peer_kick>`,
   :ref:`role <class_NetwMultiplayer_property_role>`,
   :ref:`participants <class_NetwMultiplayer_property_participants>`,
-  :ref:`local_player <class_NetwMultiplayer_property_local_player>`.
+  :ref:`local_player <class_NetwMultiplayer_property_local_player>`. Bringing a
+  session *up* is not here: that is
+  :ref:`NetwConnector.of(api) <class_NetwConnector_method_of>`, which is a
+  client of this surface rather than part of it.
 - owned interfaces:
   :ref:`clock <class_NetwMultiplayer_property_clock>`,
+  :ref:`embedding <class_NetwMultiplayer_property_embedding>`,
+  :ref:`session <class_NetwMultiplayer_property_session>`,
   :ref:`liveness <class_NetwMultiplayer_property_liveness>`,
   :ref:`interest <class_NetwMultiplayer_property_interest>`,
   :ref:`lag_compensation <class_NetwMultiplayer_property_lag_compensation>`,
   :ref:`interpolation <class_NetwMultiplayer_property_interpolation>`. These are
   direct properties, never ``null`` once the session exists (the clock and lag
   compensation stay inert until a configurator node registers).
-- the built-in services
-  :ref:`scene_manager <class_NetwMultiplayer_property_scene_manager>` and the
-  :ref:`connect <class_NetwMultiplayer_property_connect>` browser facade, plus
-  your own through
+- the built-in
+  :ref:`scene_manager <class_NetwMultiplayer_property_scene_manager>` service,
+  plus your own through
   :ref:`get_service() <class_NetwMultiplayer_method_get_service>`.
+
+Browsing servers before a session starts is a separate, optional object:
+construct a :ref:`NetwServerBrowser <class_NetwServerBrowser>` over the session.
+It lists and probes targets but cannot start a connection, so picking a row and
+joining it stay two different objects' jobs.
 
 Registering custom services
 ---------------------------

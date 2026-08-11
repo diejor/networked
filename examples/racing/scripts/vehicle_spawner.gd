@@ -24,10 +24,10 @@ func _ready() -> void:
 
 
 func _arm_spawns() -> void:
-	var scene := MultiplayerScene.of(self)
-	if scene == null:
+	var scene := NetwEntity.of(self).scene
+	if not scene.is_declared:
 		return
-	scene.participant_entered.connect(_on_participant_entered)
+	scene.on_participant_entered(_on_participant_entered)
 	for participant: NetwParticipant in scene.participants:
 		_on_participant_entered(participant)
 
@@ -44,7 +44,7 @@ func spawn_participant(participant: NetwParticipant) -> void:
 	if _has_vehicle(participant.join):
 		return
 
-	var ordered := MultiplayerScene.of(self).participants
+	var ordered := NetwEntity.of(self).scene.participants
 	ordered.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id

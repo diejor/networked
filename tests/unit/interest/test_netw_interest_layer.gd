@@ -1,5 +1,5 @@
 ## Unit tests for [NetwInterestLayer]. Covers the canonical mutation
-## API exercised standalone (no [NetwInterestInterface]) so the data model
+## API exercised standalone (no [InterestCore]) so the data model
 ## is testable in isolation.
 class_name TestNetwInterestLayer
 extends NetwTestSuite
@@ -48,7 +48,7 @@ func test_entity_transitions_emit_at_service_flush() -> void:
 	mt.name = "TestTransitionTree"
 	add_child(mt)
 	auto_free(mt)
-	var owned := mt.api.interest.layer(&"test")
+	var owned := mt.api._interest.layer(&"test")
 	var entity := _make_entity()
 	var enters: Array = []
 	var exits: Array = []
@@ -59,12 +59,12 @@ func test_entity_transitions_emit_at_service_flush() -> void:
 
 	owned.add_entity(entity)
 	owned.add_viewer(7)
-	mt.api.interest.flush_now()
+	mt.api.interest_flush()
 
 	assert_that(enters).contains_exactly([[entity, 7]])
 
 	owned.remove_entity(entity)
-	mt.api.interest.flush_now()
+	mt.api.interest_flush()
 
 	assert_that(exits).contains_exactly([[entity, 7]])
 	owned.interest_enter.disconnect(on_enter)
@@ -92,7 +92,7 @@ func test_idempotent_mutations_do_not_duplicate_signals() -> void:
 
 
 func test_layer_with_service_broadcasts_through_hooks() -> void:
-	# When a layer is owned by a [NetwInterestInterface] (i.e., obtained
+	# When a layer is owned by a [InterestCore] (i.e., obtained
 	# from [member NetwMultiplayer.interest]), its mutators flow through the
 	# interface hooks. Without a peer the broadcast is a no-op; this just
 	# verifies the layer remains usable in that mode.
@@ -101,7 +101,7 @@ func test_layer_with_service_broadcasts_through_hooks() -> void:
 	add_child(mt)
 	auto_free(mt)
 
-	var owned := mt.api.interest.layer(&"owned")
+	var owned := mt.api._interest.layer(&"owned")
 	var entity := _make_entity("owned_ent")
 	owned.add_entity(entity)
 	owned.add_viewer(11)

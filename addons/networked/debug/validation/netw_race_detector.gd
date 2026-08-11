@@ -11,18 +11,18 @@ extends RefCounted
 
 ## Returns a list of potential races when a scene/level is spawned.
 func find_scene_races(
-		scene: MultiplayerScene,
+		scene: Node,
 		mt: MultiplayerTree,
 ) -> Array[Dictionary]:
-	if not mt.is_host or not mt.multiplayer_api:
+	if not mt.is_host or not mt.api:
 		return []
 
-	var peers := mt.multiplayer_api.get_peers()
+	var peers := mt.api.get_peers()
 	if peers.is_empty():
 		return []
 
 	var races: Array[Dictionary] = []
-	for child in scene.level.find_children(
+	for child in _scene_level(scene).find_children(
 		"*",
 		"MultiplayerSynchronizer",
 		true,
@@ -42,20 +42,19 @@ func find_connect_races(
 		peer_id: int,
 		mt: MultiplayerTree,
 ) -> Array[Dictionary]:
-	if not mt or not mt.multiplayer_api:
+	if not mt or not mt.api:
 		return []
 
-	var scenes := mt.api.scenes if mt.api else null
+	var scenes := mt.api._scenes if mt.api else null
 	if not scenes:
 		return []
 
 	var races: Array[Dictionary] = []
-	for scene_name: StringName in scenes.scenes:
-		var scene: MultiplayerScene = scenes.scenes[scene_name]
-		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
+	for scene: Node in scenes.live_scenes():
+		if not is_instance_valid(scene) or not is_instance_valid(_scene_level(scene)):
 			continue
 
-		for child in scene.level.find_children(
+		for child in _scene_level(scene).find_children(
 			"*",
 			"MultiplayerSynchronizer",
 			true,
@@ -67,7 +66,7 @@ func find_connect_races(
 					sync.get_multiplayer_authority() != 1 and \
 					_has_delta_replication(sync):
 				var r := _format_race(sync, mt)
-				r["scene"] = str(scene_name)
+				r["scene"] = str(_scene_level(scene).name)
 				races.append(r)
 	return races
 
@@ -77,10 +76,10 @@ func find_player_races(
 		player: Node,
 		mt: MultiplayerTree,
 ) -> Array[Dictionary]:
-	if not is_instance_valid(player) or not mt.multiplayer_api:
+	if not is_instance_valid(player) or not mt.api:
 		return []
 
-	var peers := mt.multiplayer_api.get_peers()
+	var peers := mt.api.get_peers()
 	if peers.is_empty():
 		return []
 
@@ -141,3 +140,9 @@ func _get_rel_path(node: Node, mt: MultiplayerTree) -> String:
 			rel = rel.substr(1)
 		return rel
 	return s_node
+
+
+# The content root of one scene container.
+func _scene_level(scene: Node) -> Node:
+	var record := NetwEntity.of(scene)
+	return record.scene.level if record else null

@@ -20,7 +20,7 @@ extends Node3D
 ## The two velocity fields declare no carry channel, so the wiring report names
 ## them: they can trigger a recovery that no sub-teleport restore may write, and
 ## the promoted closure that does write them lands the acknowledged value.
-## [member NetwLagCompensationInterface.PredictionHandle.field_recovery] counts
+## [member NetwPredictionHandle.field_recovery] counts
 ## what that costs.
 ##
 ## Display is separated from simulation. On a remote peer the interpolated
@@ -28,10 +28,9 @@ extends Node3D
 ## the simulated sphere or heading, so the smoothed display value never re-enters
 ## the control loop. On a simulating peer the visual rides the live body plus a
 ## decaying correction offset seeded from
-## [signal NetwLagCompensationInterface.PredictionHandle.recovered], so the body
+## [signal NetwPredictionHandle.recovered], so the body
 ## lands on truth while the rendered car glides onto it.
 
-const PredictionHandle := NetwLagCompensationInterface.PredictionHandle
 
 # Remote-display interpolation blend (seconds).
 const DISPLAY_SMOOTH := 0.05
@@ -53,13 +52,41 @@ const INTERP_TRACE_VAR := "NETW_RACING_INTERP_TRACE"
 # It answers one question: whether sustained contact against static geometry
 # forks the two simulations on its own, or only does so once corrections are
 # feeding back into it. Under
-# [constant PredictionHandle.RecoveryPolicy.OBSERVE] a divergence is still
+# [constant NetwPredict.RecoveryPolicy.OBSERVE] a divergence is still
 # reported and still attributed, and nothing is ever restored, so the owner
 # drifts from authority for the whole run. That drift is the price of the
 # measurement and is not itself a finding: read the RATE the divergence grows
 # at while resting on a wall against the rate while rolling, never the level.
 # TODO: delete this once the resting-contact question is answered either way.
 const OBSERVE_VAR := "NETW_RACING_OBSERVE"
+
+# Measurement-only switch that declares the forward model for the sphere's spin:
+# angular_propulsion is replicated and sphere_angular_velocity carries along it,
+# so a recovery advances the acknowledged spin by the drive term over the
+# unacknowledged span instead of writing it verbatim.
+#
+# This is Phase 1's carry_along arm, rebuilt. Phase 1 measured that it does NOT
+# repair the momentum fork -- the solver cancels 80% of the term the game
+# contributes -- so nothing here is a candidate default. It is kept because it is
+# the only configuration that exercises K8: declaring the channel enrols a rad/s
+# field in the teleport tier, and with one scalar threshold meaning metres that
+# tripled teleports (6.3 -> 19.5 per run) on FEWER triggers. It is the arm the
+# per-field teleport_at() fix has to be measured on.
+# TODO: delete this once S4's measurement is recorded either way.
+const CARRY_ANGVEL_VAR := "NETW_RACING_CARRY_ANGVEL"
+
+# Measurement-only switch, read only while the arm above is armed: the tier
+# distance sphere_angular_velocity declares for itself, in rad/s. Empty leaves it
+# inheriting the entity's 3.0, which is the number that means metres.
+#
+# 8.0 is the value the measurement uses, and it is measured rather than picked:
+# over 8645 POSE rows of the S2 gate set this sphere's own spin runs a median of
+# 8.0 rad/s (p90 18.1, max 31.5), so an 8.0 rad/s error is one whose size is the
+# whole rotation -- the point past which the predicted spin bears no relation to
+# authority's and there is nothing worth keeping. The inherited 3.0 sits inside
+# ordinary operation instead: 1.95% of measured comparisons reach it against
+# 0.54% at 8.0.
+const ANGVEL_TELEPORT_AT_VAR := "NETW_RACING_ANGVEL_TELEPORT_AT"
 
 # Nodes
 
@@ -157,6 +184,17 @@ var heading: float:
 		if is_instance_valid(vehicle_model):
 			vehicle_model.rotation.y = value
 
+# The angular acceleration the drive applies this transition, in rad/s^2: the
+# exact term _handle_input adds to the sphere's spin, published so a recovery can
+# advance an acknowledged spin across the unacknowledged span rather than writing
+# it verbatim. Recomputed every step from the replicated speed and heading and the
+# declared ground sample, so it is derived state and never triggers a correction.
+#
+# Replicated rather than re-derived on the receiving peer, because the ground
+# normal it is built from is a sensor sample rather than a synchronized field: a
+# remote cannot reconstruct authority's axis, only its own.
+var angular_propulsion: Vector3 = Vector3.ZERO
+
 
 func _init() -> void:
 	var e := NetwEntity.resolve(self)
@@ -194,9 +232,31 @@ func _init() -> void:
 	Netw.configure_property(self, &"sphere_linear_velocity").state().masked() \
 			.causal().teleport_only().epsilon(0.5) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-256.0, 256.0))
-	Netw.configure_property(self, &"sphere_angular_velocity").state().masked() \
+	var angular_velocity_config := Netw.configure_property(
+		self,
+		&"sphere_angular_velocity",
+	).state().masked() \
 			.causal().teleport_only().epsilon(0.35) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-256.0, 256.0))
+	# The measurement arm, off by default and byte-identical to the line above
+	# when it is off: no extra field on the wire, no channel, no enrolment.
+	if not OS.get_environment(CARRY_ANGVEL_VAR).is_empty():
+		angular_velocity_config.carry_along(&"angular_propulsion")
+		var tier := OS.get_environment(ANGVEL_TELEPORT_AT_VAR)
+		if not tier.is_empty():
+			angular_velocity_config.teleport_at(float(tier))
+		# derived() is what keeps publishing the drive term from demanding
+		# recoveries of its own. Without it the field inherits the entity's 0.35
+		# tolerance -- which means METRES -- and trips on every rad/s^2
+		# disagreement. Measured when the correction decision still read only the
+		# reconcile_only mark: 99 of 111 probation re-quarantines in one run had
+		# angular_propulsion as their worst field, and the arm read as 32% of
+		# frames demoted. reconcile_only() is kept alongside it because it states
+		# the same intent at the field level, and racing's other derived fields
+		# declare both marks for the same reason.
+		Netw.configure_property(self, &"angular_propulsion").state().masked() \
+				.derived().reconcile_only() \
+				.quantize(NetwQuantizeBits.new().bits(16).limits(-256.0, 256.0))
 
 	# Heading interpolates as an angle channel onto its own display target, and
 	# projects by its replicated angular_speed, its exact derivative, so a
@@ -262,12 +322,12 @@ func _ready() -> void:
 	# it has no geometry for, so remotes BUFFER and the small buffer covers the gap.
 	var handle := entity.interpolation if entity else null
 	if handle:
-		handle.timeline_mode = NetwInterpolationInterface.TimelineMode.BUFFERED
+		handle.timeline_mode = NetwDisplayHandle.TimelineMode.BUFFERED
 		# Corrections land on the solver in one write; the declared chase
 		# absorbs each one as a decaying render offset, so the visual glides
 		# onto truth instead of jumping, and tracks the live body near-exactly
 		# between corrections.
-		handle.predicted_mode = NetwInterpolationInterface.PredictedMode.CHASE
+		handle.predicted_mode = NetwDisplayHandle.PredictedMode.CHASE
 		handle.predicted_smooth_time = OWN_CHASE_SMOOTH
 		# Arms the display pump's own per-frame trace, for diagnosing a visual
 		# that sits away from the body it is supposed to follow.
@@ -283,19 +343,25 @@ func _ready() -> void:
 		# into the environment digest, and read back inside the drive, so a
 		# divergence born of a different ground contact is charged to the
 		# environment instead of staying unattributed.
-		entity.prediction.sensors().sample(&"ground", _sample_ground)
-		entity.prediction.witness().contacts(_sample_contacts)
-		entity.prediction.transport().corridor(_transport_corridor_clear)
+		# The breach response is declared here rather than inherited from the
+		# archetype, because no archetype sets it any more: it is the one recovery
+		# fact that changes sim_mode, so it arrives only when a game names it. This
+		# car wants DEMOTE -- a witnessed wall contact outside the island is
+		# exactly the case its speculation cannot reproduce -- and saying so keeps
+		# the behaviour every capture in this campaign was measured under.
+		entity.prediction.breach_response = NetwPredict.BreachResponse.DEMOTE
+		entity.prediction.sensors[&"ground"] = _sample_ground
+		entity.prediction.witness_contacts = _sample_contacts
+		entity.prediction.transport_corridor = _transport_corridor_clear
 		# The island is declared once, on the track scene, and every car inherits
 		# it. Declaring one here instead would opt this car out of the scene rule
 		# rather than refine it, and the rule carries the opt-in promotion.
 		# The legacy capture reproduces the pre-L1 per-tick schedule.
 		if not OS.get_environment(LEGACY_CAPTURE_VAR).is_empty():
-			entity.prediction.schedule().tick()
+			entity.prediction.schedule = NetwPredict.Schedule.TICK
 		if not OS.get_environment(OBSERVE_VAR).is_empty():
-			entity.prediction.recovery().policy(
-				PredictionHandle.RecoveryPolicy.OBSERVE,
-			)
+			entity.prediction.recovery_policy = \
+					NetwPredict.RecoveryPolicy.OBSERVE
 		_start_net_log()
 	display_position = sphere.position
 	display_heading = vehicle_model.rotation.y
@@ -319,7 +385,7 @@ func displayed_position() -> Vector3:
 # Samples the ground contact at the pre-drive sphere position, forced so the
 # result reflects this tick's position rather than trailing the last physics
 # step. Both peers then read the same contact at drive 0, where one had settled
-# a step and the other had not. Declared through sensors(), so the
+# a step and the other had not. Declared through prediction.sensors, so the
 # engine samples it before each drive and the drive reads it back.
 func _sample_ground() -> Dictionary:
 	raycast.position = sphere.position
@@ -444,7 +510,12 @@ func _handle_input(delta):
 	input.x = inputs.steer
 	input.z = inputs.throttle
 
-	sphere.angular_velocity += _propulsion_axis() * (linear_speed * 100) * delta
+	# Named before it is applied, in exactly the order it was applied in, so the
+	# published rate is the term this transition used rather than a restatement of
+	# it. The multiply is the same one, left to right, so this is bit-identical to
+	# the single expression it replaced.
+	angular_propulsion = _propulsion_axis() * (linear_speed * 100)
+	sphere.angular_velocity += angular_propulsion * delta
 
 
 # Builds the rolling axis from replicated yaw and the declared ground sample.
@@ -535,10 +606,10 @@ func _should_simulate() -> bool:
 	if not entity.prediction.is_registered():
 		return entity.is_controlled_locally
 	if entity.prediction.sim_mode \
-			!= NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY:
+			!= NetwPredict.SimMode.DISPLAY:
 		return true
 	return entity.prediction.input_source \
-			== NetwLagCompensationInterface.PredictionHandle.InputSource.NONE \
+			== NetwPredict.InputSource.NONE \
 			and entity.is_controlled_locally
 
 
@@ -548,7 +619,7 @@ func _should_simulate() -> bool:
 func _start_net_log() -> void:
 	if not RacingNetLog.armed():
 		return
-	var clock: NetwClockInterface = multiplayer.clock if multiplayer else null
+	var clock: ClockCore = multiplayer._clock if multiplayer else null
 	if not clock:
 		return
 	if sphere.get_script() == null:

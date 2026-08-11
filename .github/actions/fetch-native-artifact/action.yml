@@ -1,0 +1,65 @@
+name: Fetch native artifact
+description: >
+  Download built GDExtension libraries into addons/networked/bin. The
+  directory is git-ignored, so a job that needs the addon to load gets its
+  library here rather than from the checkout.
+
+inputs:
+  pattern:
+    description: Artifact name pattern. Every match is merged into bin.
+    required: false
+    default: native-*
+  run-id:
+    description: >
+      Workflow run that uploaded the artifacts. Empty means the current run,
+      which is the case whenever the build job is part of the same DAG. A
+      cross-run fetch needs `actions: read` and a token.
+    required: false
+    default: ""
+  github-token:
+    description: Token used only for a cross-run fetch.
+    required: false
+    default: ""
+  expect:
+    description: >
+      Filename glob this fetch must have produced. It matters when a job
+      fetches more than once: without it the second fetch is satisfied by
+      what the first one already left behind.
+    required: false
+    default: libnetworked*
+
+runs:
+  using: composite
+  steps:
+    - name: Download Native Library
+      if: inputs.run-id == ''
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ${{ inputs.pattern }}
+        merge-multiple: true
+        path: addons/networked/bin/
+
+    - name: Download Native Library (cross-run)
+      if: inputs.run-id != ''
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ${{ inputs.pattern }}
+        merge-multiple: true
+        path: addons/networked/bin/
+        run-id: ${{ inputs.run-id }}
+        github-token: ${{ inputs.github-token }}
+
+    # An empty download is the failure that reads as a missing class much
+    # later, in a GDScript parse error, so it fails here instead.
+    - name: Verify Fetched Library
+      shell: bash
+      run: |
+        set -eu
+        ls -l addons/networked/bin
+        count="$(find addons/networked/bin \
+          -name '${{ inputs.expect }}' -print | wc -l)"
+        if [ "$count" -eq 0 ]; then
+          echo "::error::artifact '${{ inputs.pattern }}' left no" \
+               "'${{ inputs.expect }}' in addons/networked/bin"
+          exit 1
+        fi

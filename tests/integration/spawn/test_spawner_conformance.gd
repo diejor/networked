@@ -75,10 +75,14 @@ func test_spawner_signals_fire_on_receiver() -> void:
 	var spawned_nodes: Array[Node] = []
 	var despawned_nodes: Array[Node] = []
 	var client_spawner := _spawner(client0)
-	client_spawner.spawned.connect(func(n: Node) -> void:
-		spawned_nodes.append(n))
-	client_spawner.despawned.connect(func(n: Node) -> void:
-		despawned_nodes.append(n))
+	client_spawner.spawned.connect(
+		func(n: Node) -> void:
+			spawned_nodes.append(n)
+	)
+	client_spawner.despawned.connect(
+		func(n: Node) -> void:
+			despawned_nodes.append(n)
+	)
 
 	var node := probe_scene.instantiate() as StockSpawnProbe
 	node.name = "Signaled"
@@ -145,7 +149,7 @@ func test_late_joiner_receives_stock_spawns() -> void:
 func test_verb_replicated_node_under_spawn_path_spawns_once() -> void:
 	var node := probe_scene.instantiate() as StockSpawnProbe
 	node.name = "VerbSpawned"
-	var entity := harness.server().api.replication.replicate(node)
+	var entity := harness.server().api._replication.replicate(node)
 	assert_that(entity).is_not_null()
 	_arena(harness.server()).add_child(node, true)
 

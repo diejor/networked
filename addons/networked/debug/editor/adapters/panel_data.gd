@@ -3,7 +3,6 @@
 ## Each adapter owns a ring buffer for one peer+panel combination. Subclasses
 ## override [method feed] to append entries and emit [signal data_changed].
 @tool
-class_name PanelDataAdapter
 extends RefCounted
 
 signal data_changed(key: String)

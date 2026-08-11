@@ -32,15 +32,19 @@ func test_peers_and_rosters_see_each_other() -> void:
 	_track(client_a)
 	_track(client_b)
 
-	var client_a_err: Error = await client_a.join(
-		NakamaTestSupport.make_join_target(client_a, host.room),
-		NakamaTestSupport.payload("alice"),
-		_TIMEOUT,
+	var client_a_err := NetwConnector.error_of(
+		await NetwConnector.of(client_a.api).join(
+			NakamaTestSupport.make_join_target(client_a, host.room),
+			NakamaTestSupport.payload("alice"),
+			_TIMEOUT,
+		),
 	)
-	var client_b_err: Error = await client_b.join(
-		NakamaTestSupport.make_join_target(client_b, host.room),
-		NakamaTestSupport.payload("bruno"),
-		_TIMEOUT,
+	var client_b_err := NetwConnector.error_of(
+		await NetwConnector.of(client_b.api).join(
+			NakamaTestSupport.make_join_target(client_b, host.room),
+			NakamaTestSupport.payload("bruno"),
+			_TIMEOUT,
+		),
 	)
 	assert_int(client_a_err).is_equal(OK)
 	assert_int(client_b_err).is_equal(OK)
@@ -53,7 +57,7 @@ func test_peers_and_rosters_see_each_other() -> void:
 
 	for tree in [host_tree, client_a, client_b]:
 		assert_int(tree.multiplayer.get_peers().size()).is_equal(2)
-		assert_int(tree.get_participants().size()).is_equal(3)
+		assert_int(tree.api.participants.size()).is_equal(3)
 
 
 func test_disconnect_propagates_to_remaining_peers() -> void:
@@ -66,15 +70,19 @@ func test_disconnect_propagates_to_remaining_peers() -> void:
 	_track(client_a)
 	_track(client_b)
 
-	var client_a_err: Error = await client_a.join(
-		NakamaTestSupport.make_join_target(client_a, host.room),
-		NakamaTestSupport.payload("alice"),
-		_TIMEOUT,
+	var client_a_err := NetwConnector.error_of(
+		await NetwConnector.of(client_a.api).join(
+			NakamaTestSupport.make_join_target(client_a, host.room),
+			NakamaTestSupport.payload("alice"),
+			_TIMEOUT,
+		),
 	)
-	var client_b_err: Error = await client_b.join(
-		NakamaTestSupport.make_join_target(client_b, host.room),
-		NakamaTestSupport.payload("bruno"),
-		_TIMEOUT,
+	var client_b_err := NetwConnector.error_of(
+		await NetwConnector.of(client_b.api).join(
+			NakamaTestSupport.make_join_target(client_b, host.room),
+			NakamaTestSupport.payload("bruno"),
+			_TIMEOUT,
+		),
 	)
 	assert_int(client_a_err).is_equal(OK)
 	assert_int(client_b_err).is_equal(OK)
@@ -96,7 +104,7 @@ func test_disconnect_propagates_to_remaining_peers() -> void:
 	)
 
 	var client_b_saw_server_disconnect := [false]
-	client_b.server_disconnected.connect(
+	client_b.api.server_disconnected.connect(
 		func() -> void:
 			client_b_saw_server_disconnect[0] = true,
 	)
@@ -131,7 +139,7 @@ func _await(
 
 
 func _sees_all(tree: MultiplayerTree) -> bool:
-	return tree.is_online() \
+	return tree.api.is_online \
 			and tree.multiplayer.get_peers().size() == 2 \
 			and _joined_count(tree) == 3
 
@@ -160,7 +168,7 @@ func _server_disconnect_seen(
 		client_b: MultiplayerTree,
 		client_b_saw_server_disconnect: Array,
 ) -> bool:
-	return client_b_saw_server_disconnect[0] or not client_b.is_online()
+	return client_b_saw_server_disconnect[0] or not client_b.api.is_online
 
 
 func _has_peer(tree: MultiplayerTree, peer_id: int) -> bool:
@@ -172,4 +180,4 @@ func _has_peer(tree: MultiplayerTree, peer_id: int) -> bool:
 func _joined_count(tree: MultiplayerTree) -> int:
 	if not is_instance_valid(tree):
 		return 0
-	return tree.get_participants().size()
+	return tree.api.participants.size()

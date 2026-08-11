@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictionCore" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="attribute" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="pre_equal" type="bool" />
+			<param index="1" name="command_equal" type="bool" />
+			<param index="2" name="environment_equal" type="bool" />
+			<param index="3" name="topology_equal" type="bool" />
+			<param index="4" name="raw_equal" type="bool" />
+			<param index="5" name="witness_equal" type="bool" />
+			<param index="6" name="local_evidence" type="int" />
+			<param index="7" name="peer_evidence" type="int" />
+			<param index="8" name="evidence_complete" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="calculate_joint_cell" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="authored" type="bool" />
+			<param index="1" name="relayed" type="bool" />
+			<param index="2" name="predictor_valid" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="calculate_joint_floor" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="bases" type="Dictionary" />
+			<param index="1" name="relay_floors" type="Dictionary" />
+			<param index="2" name="epoch_floor" type="int" />
+			<param index="3" name="history_floor" type="int" />
+			<param index="4" name="present" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="consume_plan" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="depth" type="int" />
+			<param index="1" name="buffer" type="int" />
+			<param index="2" name="warmed" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="compared_state" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="payload" type="Dictionary" />
+			<param index="1" name="causal" type="Dictionary" />
+			<description>
+				Narrows [param payload] to the fields named in [param causal], which are the only ones a comparison is entitled to judge. A [param causal] naming nothing keeps the whole payload, because an empty scope agrees vacuously about everything.
+			</description>
+		</method>
+		<method name="contact_count_bucket" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="count" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="converge_toward" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="restore" type="Dictionary" />
+			<param index="1" name="current" type="Dictionary" />
+			<param index="2" name="rules" type="Dictionary" />
+			<param index="3" name="angles" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="delta_direction" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="field" type="StringName" />
+			<param index="1" name="delta" type="Variant" />
+			<description>
+			</description>
+		</method>
+		<method name="differing_family" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="local" type="PackedInt32Array" />
+			<param index="1" name="peer" type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="domain_of" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="declared" type="bool" />
+			<param index="1" name="approximate" type="bool" />
+			<param index="2" name="label" type="int" />
+			<param index="3" name="window_until" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="environment_digest" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="epoch" type="int" />
+			<param index="1" name="samples" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="escalation_after" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="streak" type="int" />
+			<param index="1" name="last_sign" type="int" />
+			<param index="2" name="last_divergence" type="float" />
+			<param index="3" name="divergence" type="float" />
+			<param index="4" name="sign" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="evaluate" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="domain" type="int" />
+			<param index="1" name="verdict" type="int" />
+			<param index="2" name="predicted" type="Dictionary" />
+			<param index="3" name="payload" type="Dictionary" />
+			<param index="4" name="wiring" type="Dictionary" />
+			<param index="5" name="field_sink" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="fact_fingerprint" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="facts" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="guard_projection" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="projection" type="Dictionary" />
+			<param index="1" name="field_divergence" type="Dictionary" />
+			<param index="2" name="epsilon" type="float" />
+			<param index="3" name="epsilon_overrides" type="Dictionary" />
+			<param index="4" name="max_restore_ticks" type="int" />
+			<param index="5" name="ack_age_ticks" type="int" />
+			<param index="6" name="tick_delta" type="float" />
+			<description>
+			</description>
+		</method>
+		<method name="measure" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="field_sink" type="Dictionary" />
+			<param index="1" name="tolerances" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="pose_delta" qualifiers="static">
+			<return type="Variant" />
+			<param index="0" name="target" type="Variant" />
+			<param index="1" name="current" type="Variant" />
+			<param index="2" name="is_angle" type="bool" />
+			<description>
+				The error from [param current] to [param target], taking the shortest arc when [param is_angle]. A type with no meaningful midpoint answers [code]null[/code], and every caller restores it outright rather than stepping part of the way.
+			</description>
+		</method>
+		<method name="predict_fold" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="latest_input_tick" type="int" />
+			<param index="1" name="last_driven_input_tick" type="int" />
+			<param index="2" name="frame_tick" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="project_payload" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="payload" type="Dictionary" />
+			<param index="1" name="projection" type="Dictionary" />
+			<param index="2" name="age" type="float" />
+			<description>
+			</description>
+		</method>
+		<method name="raw_state_fingerprint" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="payload" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="recover" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="payload" type="Dictionary" />
+			<param index="1" name="policy" type="int" />
+			<param index="2" name="correction" type="int" />
+			<param index="3" name="snap_restore" type="int" />
+			<param index="4" name="projection" type="Dictionary" />
+			<param index="5" name="current" type="Dictionary" />
+			<param index="6" name="pose_errors" type="Dictionary" />
+			<param index="7" name="wiring" type="Dictionary" />
+			<param index="8" name="verdict" type="Dictionary" />
+			<param index="9" name="tick_delta" type="float" />
+			<description>
+			</description>
+		</method>
+		<method name="teleport_reached" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="pose_errors" type="Dictionary" />
+			<param index="1" name="thresholds" type="Dictionary" />
+			<param index="2" name="default_threshold" type="float" />
+			<description>
+				Whether any entry of [param pose_errors] sits at or past the distance it declared in [param thresholds], falling back to [param default_threshold]. At or past, because a tier is a distance the body has reached rather than a tolerance it has exceeded, so a declared distance of [code]0.0[/code] teleports every time.
+			</description>
+		</method>
+		<method name="transport" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="predicted" type="Dictionary" />
+			<param index="1" name="authority" type="Dictionary" />
+			<param index="2" name="current" type="Dictionary" />
+			<param index="3" name="pose_fields" type="Dictionary" />
+			<param index="4" name="angles" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="window_after" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="label" type="int" />
+			<param index="1" name="cooldown" type="int" />
+			<param index="2" name="window_until" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

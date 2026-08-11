@@ -79,7 +79,9 @@ func _on_confirm() -> void:
 	if transport == null:
 		return
 	var config := NetwHostConfig.new()
-	config.scheme = transport.scheme()
+	# The popup authors no transport inputs, so the picked transport supplies
+	# its own defaults.
+	config.transport = transport._params_from_dict({ })
 	var typed_name := _name_edit.text.strip_edges()
 	config.server_name = typed_name if not typed_name.is_empty() else ConnectBrowser.PLACEHOLDER_SERVER_NAME
 

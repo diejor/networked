@@ -5,7 +5,7 @@
 ## connected [MultiplayerPeer] for the caller to adopt.
 ##
 ## [br][br]
-## [NetwDiscovery] binds every [LobbyDirectory] service through
+## [NetwServerBrowser] binds every [LobbyDirectory] service through
 ## [method NetwMultiplayer.get_services]. [method _capabilities] tells a browser
 ## which controls the provider can honor.
 ## [codeblock]
@@ -116,41 +116,6 @@ class LobbyInfo:
 		return info
 
 
-## Inputs to [method _host_lobby].
-##
-## A directory reads only the fields its provider can honor. [member max_players]
-## of [code]0[/code] means "use the directory default".
-## [codeblock]
-## HostOptions
-## ├── server_name
-## ├── visibility
-## └── max_players
-## [/codeblock]
-class HostOptions:
-	extends Resource
-
-	## User-facing lobby name advertised to browsers.
-	@export var server_name: String = ""
-
-	## Requested [enum Visibility], mapped or downgraded by the directory.
-	@export var visibility: Visibility = Visibility.PUBLIC
-
-	## Maximum member count. [code]0[/code] keeps the directory's own default.
-	@export var max_players: int = 0
-
-
-	## Creates a [LobbyDirectory.HostOptions] for a host call.
-	static func make(
-			server_name: String,
-			visibility: Visibility = Visibility.PUBLIC,
-			max_players: int = 0,
-	) -> HostOptions:
-		var opts := HostOptions.new()
-		opts.server_name = server_name
-		opts.visibility = visibility
-		opts.max_players = max_players
-		return opts
-
 ## Emitted after [method _list_lobbies] resolves.
 ##
 ## UIs should replace their current rows with [param lobbies].
@@ -202,11 +167,11 @@ func get_local_member_name() -> String:
 	return "Player"
 
 
-
 ## Returns a pure-data [NetwConnectTarget] for [param lobby].
 ##
-## [NetwDiscovery] reads this to turn a discovered lobby into a browse row that
-## [NetwConnector] can join. The base maps [method _scheme] and
+## [NetwServerBrowser] reads this to turn a discovered lobby into a browse row
+## that [method NetwConnector.join] can take. The base maps [method _scheme]
+## and
 ## [method _lobby_address] into the target and copies the lobby metadata, so a
 ## directory whose lobbies join by numeric id needs only to override
 ## [method _scheme].
@@ -233,9 +198,14 @@ func _lobby_address(lobby: LobbyDirectory.LobbyInfo) -> String:
 
 ## Creates a lobby and returns a connected host [MultiplayerPeer].
 ##
+## A directory reads only the fields its provider can honor, and
+## [member NetwHostConfig.max_players] of [code]0[/code] means "use the
+## directory default". The same config the caller handed [method NetwConnector.host]
+## arrives here unchanged, so a policy field cannot be dropped in translation.
+##
 ## Returns [code]null[/code] on failure.
 @abstract
-func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer
+func _host_lobby(config: NetwHostConfig) -> MultiplayerPeer
 
 
 ## Joins an existing lobby and returns a connected [MultiplayerPeer].

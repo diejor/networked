@@ -19,15 +19,227 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The addon's classes live in the native library, so the tests cannot run
+  # without one. The whole default matrix builds here rather than only the
+  # cell the tests need: a pull request that breaks the Windows or release
+  # build should fail on the pull request, and the two demo deployments
+  # trigger off this workflow and fetch its web artifact.
+  native:
+    name: "Native"
+    uses: ./.github/workflows/gdextension.yml
+
+  # The suite compiled into the library and run through a stock Godot, so the
+  # cases can reach `res://` and the registered classes at once. `module.yml`
+  # runs the same cases against the engine's own headers and is path-gated
+  # because it builds a whole engine. This one is cheap enough to ride every
+  # run.
+  #
+  # It builds its own library rather than fetching the `native` artifact,
+  # because `netw_tests=yes` produces a different library and the addon zip
+  # must not ship the test cases.
+  native-test:
+    name: "Embedded Suite"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Read Dependency Pins
+        id: pins
+        shell: bash
+        run: cat extension/deps.env >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/build-native
+        with:
+          platform: linux
+          arch: x86_64
+          target: template_debug
+          scons-flags: netw_tests=yes
+
+      - name: Install Godot
+        shell: bash
+        env:
+          GODOT_REF: ${{ steps.pins.outputs.GODOT_REF }}
+        run: |
+          set -eu
+          version="${GODOT_REF%-*}"
+          channel="${GODOT_REF#*-}"
+          name="Godot_v${version}-${channel}_linux.x86_64"
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${version}-${channel}/${name}.zip"
+          unzip -q godot.zip
+          mv "$name" godot
+          chmod +x godot
+          ./godot --version
+
+      # A first headless open imports the project. Without it the run reports
+      # missing resources rather than the state of the cases.
+      - name: Import The Project
+        shell: bash
+        run: timeout 300 ./godot --headless --import || true
+
+      - name: Run The Embedded Suite
+        shell: bash
+        run: ./godot --headless --path . -s res://tests/native/run_native_tests.gd
+
+      # The whole point of reading the XML. Four shapes that a run reporting
+      # zero failures can still be in, and every one of them reads as green
+      # from the exit code alone.
+      - name: Read The Report
+        shell: bash
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("reports/native/results.xml").getroot()
+          suites = list(root.iter("testsuite"))
+          claimed = sum(int(s.attrib.get("tests", 0)) for s in suites)
+          failures = sum(int(s.attrib.get("failures", 0)) for s in suites)
+          errors = sum(int(s.attrib.get("errors", 0)) for s in suites)
+          cases = [c for s in suites for c in s.iter("testcase")]
+          rows = len(cases)
+
+          # The floor the corpus was last counted at. A case file the recursive
+          # glob missed reads as "fewer cases", never as an error.
+          floor = 0
+          with open("tests/crossing/baseline.census") as handle:
+              for line in handle:
+                  parts = line.split()
+                  if len(parts) == 3 and parts[0] == "hosted" and parts[1] == "all":
+                      floor = int(parts[2])
+
+          print("tests=%d rows=%d fail=%d err=%d floor=%d"
+                % (claimed, rows, failures, errors, floor))
+
+          refused = []
+          for case in cases:
+              for kind in ("failure", "error"):
+                  for node in case.findall(kind):
+                      body = (node.get("message") or "") + (node.text or "")
+                      refused.append("%s %s\n%s"
+                                     % (kind.upper(), case.get("name"), body.strip()))
+          if refused:
+              print("\n\n".join(refused))
+              sys.exit("cases failed")
+          # A case that segfaults ends the run, so the rows stop where it died.
+          if rows < claimed:
+              sys.exit("truncated: %d of %d cases wrote a row" % (rows, claimed))
+          # A filter matching nothing still exits zero.
+          if claimed == 0:
+              sys.exit("no case ran")
+          if claimed < floor:
+              sys.exit("corpus shrank: %d cases ran, %d in the census" % (claimed, floor))
+          PY
+
+  # `doc_classes/*.xml` is generated from what `_bind_methods` registers and
+  # then hand-written into, so it is a file nobody regenerates by habit. A
+  # renamed or dropped binding leaves the old member described, the editor's
+  # help shows something that no longer exists, and every build stays green
+  # because the XML still compiles.
+  #
+  # Regenerate and diff. That is the whole check, and it is only possible
+  # because the generator is deterministic: doctool reads the registry rather
+  # than the source.
+  doc-drift:
+    name: "Doc Drift"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Read Dependency Pins
+        id: pins
+        shell: bash
+        run: cat extension/deps.env >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/build-native
+        with:
+          platform: linux
+          arch: x86_64
+          target: template_debug
+
+      - name: Install Godot
+        shell: bash
+        env:
+          GODOT_REF: ${{ steps.pins.outputs.GODOT_REF }}
+        run: |
+          set -eu
+          version="${GODOT_REF%-*}"
+          channel="${GODOT_REF#*-}"
+          name="Godot_v${version}-${channel}_linux.x86_64"
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${version}-${channel}/${name}.zip"
+          unzip -q godot.zip
+          mv "$name" godot
+          chmod +x godot
+          ./godot --version
+
+      # Resolves UIDs so doctool does not abort before it reaches the registry.
+      - name: Import The Project
+        shell: bash
+        run: timeout 300 ./godot --headless --import || true
+
+      # Regenerated IN PLACE, which is load-bearing: doctool merges the
+      # hand-written prose back into the skeleton it emits, and generating into
+      # an empty directory instead would silently return every description to
+      # blank.
+      #
+      # `--gdextension-docs` emits the classes of EVERY extension the project
+      # loads, not just this one, so the others are dropped afterward. They
+      # belong to their own repositories. Which ones are ours is read from the
+      # registry rather than assumed from a name prefix: not every class this
+      # extension registers is called Netw-something.
+      #
+      # The library above is built without `netw_tests`, and that is what makes
+      # the set deterministic: the committed reference is the SHIPPING set, and
+      # a test build would add `NetwNativeTests` to it.
+      - name: Regenerate The Class Reference
+        shell: bash
+        run: |
+          set -eu
+          ./godot --doctool extension --gdextension-docs \
+            --headless --path . --quit
+          sed -n 's/.*GDREGISTER_[A-Z_]*CLASS(netw::\([A-Za-z0-9_]*\)).*/\1.xml/p' \
+            extension/register_types.cpp | sort > /tmp/netw-registered.txt
+          ls extension/doc_classes | sort > /tmp/netw-emitted.txt
+          comm -13 /tmp/netw-registered.txt /tmp/netw-emitted.txt \
+            | while read -r name; do rm -f "extension/doc_classes/$name"; done
+
+      - name: Refuse A Stale Reference
+        shell: bash
+        run: |
+          set -eu
+          # `git status`, not `git diff`: a class that gained a binding arrives
+          # as an untracked file, and a diff would not see it at all.
+          drift="$(git status --porcelain -- extension/doc_classes)"
+          if [ -n "$drift" ]; then
+            printf '%s\n' "$drift"
+            git diff -- extension/doc_classes
+            echo "::error::extension/doc_classes is stale. Regenerate with:"
+            echo "::error::  godot --doctool extension --gdextension-docs --headless --path . --quit"
+            echo "::error::then drop the other extensions' files, which are not ours to carry."
+            echo "::error::Regenerate from a build WITHOUT netw_tests: that flag registers"
+            echo "::error::NetwNativeTests, which is not part of the shipping reference."
+            exit 1
+          fi
+          # A registry that answered with nothing would also read clean.
+          test "$(ls extension/doc_classes/Netw*.xml | wc -l)" -gt 0
+
   unit-test:
     name: "GdUnit4 Tests (${{ matrix.godot-version }})"
     runs-on: 'ubuntu-22.04'
     timeout-minutes: 15
-    continue-on-error: ${{ matrix.godot-version != '4.7' }}
+    needs: native
     strategy:
       fail-fast: false
       matrix:
-        godot-version: ['4.6', '4.7']
+        godot-version: ['4.7']
     permissions:
       actions: write
       checks: write
@@ -40,6 +252,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+
+      # addons/networked/bin is git-ignored, so the manifest and the library
+      # both arrive here rather than from the checkout. The editor loads the
+      # debug target, and extension/deps.env pins GODOT_CPP_API_VERSION to the
+      # oldest engine supported, so one library serves every newer one.
+      - uses: ./.github/actions/fetch-native-artifact
+        with:
+          pattern: native-linux-x86_64-template_debug
 
       - name: Run GdUnit4 Tests
         uses: MikeSchulze/gdUnit4-action@v1.0.2

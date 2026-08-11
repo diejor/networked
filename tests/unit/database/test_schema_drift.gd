@@ -47,7 +47,7 @@ func test_diff_record_classifies_schema_state() -> void:
 func test_purge_policy_flow() -> void:
 	var db := _make_db(NetwDatabase.SchemaMismatchPolicy.PURGE)
 	var backend := db.backend as TestMemoryBackend
-	backend._upsert(&"rocks", &"r1", { &"gold": 5 })
+	backend.upsert(&"rocks", &"r1", { &"gold": 5 })
 
 	var record := { &"gold": 5 }
 	var diff := db._diff_record(&"rocks", &"r1", record)
@@ -71,7 +71,7 @@ func test_purge_policy_flow() -> void:
 func test_load_partial_policy_flow() -> void:
 	var db := _make_db(NetwDatabase.SchemaMismatchPolicy.LOAD_PARTIAL)
 	var backend := db.backend as TestMemoryBackend
-	backend._upsert(&"rocks", &"r1", { &"health": 50, &"gold": 5 })
+	backend.upsert(&"rocks", &"r1", { &"health": 50, &"gold": 5 })
 
 	var record := { &"health": 50, &"position": Vector2.ZERO, &"gold": 5 }
 	var diff := db._diff_record(&"rocks", &"r1", record)

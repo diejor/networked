@@ -3,7 +3,7 @@
 ##
 ## Pins the I1/I2 invariants (identity and spawn state valid at
 ## [method Node._enter_tree] on every peer), the spawn-function round trip,
-## implicit despawn into [NetwLivenessInterface], and duplicate-SPAWN
+## implicit despawn into [LivenessShell], and duplicate-SPAWN
 ## idempotence.
 class_name TestNetwSpawnVerbs
 extends NetwTestSuite
@@ -50,6 +50,22 @@ func test_replicate_stamps_identity_before_tree_on_every_peer() -> void:
 	assert_str(String(client_node.name)).is_equal(String(node.name))
 
 
+func test_flat_replicate_returns_the_entity_rid() -> void:
+	var node := probe_scene.instantiate() as NetwSpawnProbe
+	var api := harness.server().api
+	var entity := api.replicate(node)
+
+	assert_bool(entity.is_valid()).is_true()
+	assert_object(api.entity_get_node(entity)).is_same(node)
+	var route := api.entity_get_route(entity)
+	assert_int(route).is_greater(0)
+	_server_arena().add_child(node)
+
+	var client_node := await _wait_live(client0, route) as NetwSpawnProbe
+	assert_object(client_node).is_not_null()
+	assert_int(NetwEntity.of(client_node).route).is_equal(route)
+
+
 func test_on_spawn_value_applies_before_enter_tree_on_client() -> void:
 	var node := probe_scene.instantiate() as NetwSpawnProbe
 	node.marker = "before-add"
@@ -70,7 +86,7 @@ func test_on_spawn_value_applies_before_enter_tree_on_client() -> void:
 # on the client, with no pending-spawn window.
 func test_owner_stamp_drives_authority_inside_enter_tree() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
-	var owner := harness.server().get_participant(peer_id)
+	var owner := harness.server().api.peer_get_participant(peer_id)
 	assert_that(owner).is_not_null()
 
 	var node := probe_scene.instantiate() as NetwSpawnProbe
@@ -110,12 +126,14 @@ func test_fn_registry_recipe_round_trips_host_less() -> void:
 	# carries the id alone with no node anchor.
 	for mt: MultiplayerTree in [harness.server(), client0]:
 		var host := mt.get_node("FnHost") as NetwSpawnFnHost
-		mt.api.replication._spawn_pipeline.register_spawn_constructor(
-			&"probe", host._spawn_probe
+		mt.api.spawn_register_constructor(
+			&"probe",
+			host._spawn_probe,
 		)
 
 	var node := _replication()._spawn_pipeline.spawn_registered(
-		&"probe", ["regmark", 5]
+		&"probe",
+		["regmark", 5],
 	) as NetwSpawnProbe
 	assert_that(node).is_not_null()
 	assert_int(node.fn_tier).is_equal(5)
@@ -144,16 +162,16 @@ func test_despawn_reaches_liveness_and_receiver_hook() -> void:
 	var dead := false
 	for i in 60:
 		await get_tree().process_frame
-		if client0.api.liveness.route_state(route) \
-				== NetwLivenessInterface.State.DEAD:
+		if client0.api.route_get_state(route) \
+				== NetwMultiplayer.EntityState.DEAD:
 			dead = true
 			break
 
 	assert_bool(dead).is_true()
-	assert_that(harness.server().api.liveness.route_state(route)) \
-			.is_equal(NetwLivenessInterface.State.DEAD)
+	assert_that(harness.server().api.route_get_state(route)) \
+			.is_equal(NetwMultiplayer.EntityState.DEAD)
 	assert_int(NetwSpawnProbe.last_despawn_hook_route).is_equal(route)
-	assert_that(client0.api.liveness.node_of(route)).is_null()
+	assert_that(client0.api.entity_get_node(client0.api.rid_from_route(route))).is_null()
 
 
 func test_duplicate_spawn_frame_is_idempotent() -> void:
@@ -167,9 +185,9 @@ func test_duplicate_spawn_frame_is_idempotent() -> void:
 			_replication()._spawn_pipeline._spawn_book.spawned[entity.route]
 	)
 	var payload := _replication()._spawn_pipeline._encode_spawn_frame(record, node)
-	var client_replication := client0.api.replication
+	var client_replication := client0.api._replication
 	var before := int(
-		client_replication.counters()[&"drops_spawn_duplicate"]
+		client_replication.counters()[&"drops_spawn_duplicate"],
 	)
 	client_replication._spawn_pipeline._handle_spawn_frame(payload, 1)
 
@@ -194,18 +212,20 @@ func test_double_replicate_warns_and_returns_existing_entity() -> void:
 # later entry in the frame still applies. This drives a hand-built frame whose
 # first entry is unresolvable and whose second carries the real root marker.
 func test_unresolvable_spawn_state_entry_keeps_later_entries_intact() -> void:
-	var pipeline := client0.api.replication._spawn_pipeline
+	var pipeline := NetwSpawnPipeline.new(client0.api)
 	var route := 99001
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	# SMELL(fault-injection): hand-built SPAWN header, coupled to the private
 	# codec. route, entity_id, peer_id, controller, action_spawn_tick,
-	# action_requester, netw_table_hash, node_name.
+	# action_requester, netw_table_hash, declares_scene, node_name.
 	NetwCodec.put_varint(w, route)
 	pipeline._put_str(w, "probe@%d" % route)
 	NetwCodec.put_varint(w, 0)
 	NetwCodec.put_varint(w, 0)
 	NetwCodec.put_varint(w, -1)
 	NetwCodec.put_varint(w, 0)
+	NetwCodec.put_varint(w, 0)
+	# Not a scene, so no stem follows.
 	NetwCodec.put_varint(w, 0)
 	pipeline._put_str(w, "")
 	# Parent anchor: scene structure, the client's Arena node.
@@ -225,7 +245,7 @@ func test_unresolvable_spawn_state_entry_keeps_later_entries_intact() -> void:
 	# Real entry: the root marker, which must survive the skip.
 	w.put_aligned_u8(0)
 	NetwScriptModel.write_token(w, &"marker")
-	var vw := NetwBitBuffer.Writer.new()
+	var vw := NetwBitBufferWriter.new()
 	NetwScriptModel.write_values(vw, ["recovered"], [null], [TYPE_STRING])
 	var vbytes := vw.to_bytes()
 	NetwCodec.put_varint(w, vbytes.size())
@@ -234,7 +254,7 @@ func test_unresolvable_spawn_state_entry_keeps_later_entries_intact() -> void:
 	pipeline._handle_spawn_frame(w.to_bytes(), 1)
 	await drain_frames(get_tree(), 2)
 
-	var node := client0.api.liveness.node_of(route) as NetwSpawnProbe
+	var node := client0.api.entity_get_node(client0.api.rid_from_route(route)) as NetwSpawnProbe
 	assert_that(node).is_not_null()
 	assert_str(node.marker).is_equal("recovered")
 
@@ -263,15 +283,15 @@ func test_late_join_replay_hydrates_a_new_peer() -> void:
 	var dead := false
 	for i in 90:
 		await get_tree().process_frame
-		if client1.api.liveness.route_state(route) \
-				== NetwLivenessInterface.State.DEAD:
+		if client1.api.route_get_state(route) \
+				== NetwMultiplayer.EntityState.DEAD:
 			dead = true
 			break
 	assert_bool(dead).is_true()
 
 
-func _replication() -> NetwReplicationInterface:
-	return harness.server().api.replication
+func _replication() -> ReplicationCore:
+	return harness.server().api._replication
 
 
 func _server_arena() -> Node:
@@ -280,9 +300,9 @@ func _server_arena() -> Node:
 
 func _wait_live(mt: MultiplayerTree, route: int, frames: int = 120) -> Node:
 	for i in frames:
-		if mt.api.liveness.route_state(route) \
-				== NetwLivenessInterface.State.LIVE:
-			return mt.api.liveness.node_of(route)
+		if mt.api.route_get_state(route) \
+				== NetwMultiplayer.EntityState.LIVE:
+			return mt.api.entity_get_node(mt.api.rid_from_route(route))
 		await get_tree().process_frame
 	return null
 

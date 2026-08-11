@@ -11,6 +11,15 @@ extends Node
 const TRACK := preload("res://examples/racing/scenes/track.tscn")
 const SIMULATE_NEAREST_VAR := "NETW_RACING_SIMULATE_NEAREST"
 
+# Capture-only switch that drops the island's exactness claim, so the A/B runs
+# from one build instead of two. The claim is the sole gate on IN_DOMAIN, and
+# therefore on whether the withheld-field machinery does anything at all: an
+# out-of-domain divergence restores the whole closure, teleport_only() marks
+# included. Under .approximate() the wall case takes that escape hatch, which
+# is the antecedent the momentum-demote brief could not rule out.
+# TODO: delete this once the island A/B is settled either way.
+const ISLAND_APPROXIMATE_VAR := "NETW_RACING_ISLAND_APPROXIMATE"
+
 ## Simulates the nearest replicated opponent inside each local car's island.
 @export var simulate_nearest_opponent := false
 
@@ -27,7 +36,6 @@ func _enter_tree() -> void:
 	api.object_configuration_add(self, session)
 
 	var scenes := NetwSceneConfig.new()
-	scenes.concurrency = NetwSceneConfig.Concurrency.SINGLE
 	scenes.initial_scenes = [TRACK]
 	scenes.scenes = { &"Track": TRACK }
 	api.object_configuration_add(self, scenes)
@@ -35,7 +43,7 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	api.participant_joined.connect(_on_participant_joined)
-	api.scenes.scene_spawned.connect(_on_scene_spawned)
+	api.scene_live.connect(_on_scene_live)
 	api.local_scene_changed.connect(_on_local_scene_changed)
 	api.session_ended.connect(_show_browser)
 	api.server_disconnected.connect(_show_browser)
@@ -51,23 +59,23 @@ func _run_regime() -> void:
 
 
 func _on_participant_joined(participant: NetwParticipant) -> void:
-	var track: MultiplayerScene = api.scenes.scene(&"Track")
-	if api.is_server() and is_instance_valid(track):
+	var track := api.scene_handle(api.scene_find(&"Track"))
+	if api.is_server() and track != null:
 		track.admit(participant)
 
 
 # The listen host is accepted before the startup scene spawns, so its join
 # admission finds no scene. Admission re-runs when the scene arrives, keeping
 # join order and scene order decoupled.
-func _on_scene_spawned(scene: MultiplayerScene) -> void:
-	scene.player_entered.connect(_on_car_entered.bind(scene))
-	scene.player_left.connect(_on_car_left.bind(scene))
-	_declare_islands(scene)
+func _on_scene_live(track: NetwSceneHandle) -> void:
+	track.on_player_entered(_on_car_entered.bind(track))
+	track.on_player_left(_on_car_left.bind(track))
+	_declare_islands(track)
 	if not api.is_server():
 		return
 	for participant: NetwParticipant in api.participants:
 		if participant.current_scene == null:
-			scene.admit(participant)
+			track.admit(participant)
 
 
 # Names every other car on the track as a participant in this car's island, and
@@ -78,15 +86,20 @@ func _on_scene_spawned(scene: MultiplayerScene) -> void:
 # is not a fact both of them can claim, and an island that cannot claim it is
 # compared by tolerance forever. Naming the cars is the game asserting what the
 # engine is not entitled to assume, which is what
-# [method PredictionHandle.IslandConfig.exact] means.
+# [member NetwPredictIsland.exact_claim] means.
 #
 # Contact is unaffected by the claim. Touching another car still opens an
 # out-of-domain window, because a car this peer only displays is a stale stand-in
 # its solver cannot reproduce.
-func _declare_islands(scene: MultiplayerScene) -> void:
-	var cars := scene.get_players()
+func _declare_islands(scene: NetwSceneHandle) -> void:
+	var approximate := not OS.get_environment(ISLAND_APPROXIMATE_VAR).is_empty()
+	var cars := scene.players
 	for car: NetwEntity in cars:
-		var island := car.prediction.island().exact()
+		var island := car.prediction.island
+		if approximate:
+			island.approximate = true
+		else:
+			island.exact_claim = true
 		for other: NetwEntity in cars:
 			if other != car:
 				island.add(other)
@@ -96,14 +109,14 @@ func _declare_islands(scene: MultiplayerScene) -> void:
 
 # A join changes an antecedent every car's fingerprint carries, so every roster
 # is rebuilt rather than only the newcomer's.
-func _on_car_entered(_car: NetwEntity, scene: MultiplayerScene) -> void:
+func _on_car_entered(_car: NetwEntity, scene: NetwSceneHandle) -> void:
 	_declare_islands(scene)
 
 
-func _on_car_left(car: NetwEntity, scene: MultiplayerScene) -> void:
-	for other: NetwEntity in scene.get_players():
+func _on_car_left(car: NetwEntity, scene: NetwSceneHandle) -> void:
+	for other: NetwEntity in scene.players:
 		if other != car:
-			other.prediction.island().remove(car)
+			other.prediction.island.remove(car)
 
 
 func _simulates_nearest() -> bool:
@@ -113,7 +126,7 @@ func _simulates_nearest() -> bool:
 
 # The browser steps aside once the local participant is racing and returns when
 # the session ends.
-func _on_local_scene_changed(_from: MultiplayerScene, to: MultiplayerScene) -> void:
+func _on_local_scene_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
 	_browser.visible = to == null
 
 

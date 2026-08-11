@@ -12,6 +12,7 @@ const DEBUGGER_PLUGIN_PATH = "res://addons/networked/debug/editor/plugin.gd"
 const INSTALL_AUTOLOAD_PATH = "res://addons/networked/session/netw_default_install.gd"
 const INSTALL_AUTOLOAD_NAME = "NetworkedSession"
 const INSTALL_SETTING = "networked/install_as_default"
+const MULTIPLAYER_SCRIPT_SETTING = "networked/multiplayer_script"
 
 ## Reference to the SceneNodePath editor plugin instance.
 var scene_node_path_plugin: EditorPlugin
@@ -108,6 +109,20 @@ func _register_settings() -> void:
 			"name": install_setting,
 			"type": TYPE_BOOL,
 			"hint": PROPERTY_HINT_NONE,
+		},
+	)
+
+	var multiplayer_script_setting := MULTIPLAYER_SCRIPT_SETTING
+	if not ProjectSettings.has_setting(multiplayer_script_setting):
+		ProjectSettings.set_setting(multiplayer_script_setting, null)
+
+	ProjectSettings.set_initial_value(multiplayer_script_setting, null)
+	ProjectSettings.add_property_info(
+		{
+			"name": multiplayer_script_setting,
+			"type": TYPE_OBJECT,
+			"hint": PROPERTY_HINT_RESOURCE_TYPE,
+			"hint_string": "Script",
 		},
 	)
 

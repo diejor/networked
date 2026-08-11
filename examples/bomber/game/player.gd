@@ -20,10 +20,8 @@ var current_anim: String = ""
 @onready var label: Label = %label
 
 @onready var ctx := Netw.of(self)
-@onready var clock := ctx.clock
-@onready var lag := ctx.lag_compensation
 @onready var entity := NetwEntity.of(self)
-@onready var bomb_action := lag.action(_place_bomb)
+@onready var bomb_action := ctx.lagcomp_action(_place_bomb)
 @onready var gamestate: BomberGamestate = \
 		ctx.get_service(BomberGamestate)
 
@@ -31,6 +29,12 @@ var current_anim: String = ""
 # Declares the server-authored state set off this script: position on a fixed
 # world-grid step and velocity bit-packed to its speed envelope, the same
 # quantization the wire carried when a synchronizer node owned the stream.
+#
+# The recovery marks say what each field means to a correction, in that field's
+# own units. A game on the tick tier had never been declared this densely -- every
+# finding in the prediction campaign came from the one solver game -- so this is
+# also the second path the reachability report is answered on, and
+# [TestBomberGameHarness] asserts its answers.
 func _init() -> void:
 	var entity := NetwEntity.resolve(self)
 	entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
@@ -40,13 +44,47 @@ func _init() -> void:
 	position_quantizer.resolution_step = 5.0
 	position_quantizer.min_limit = -500.0
 	position_quantizer.max_limit = 1500.0
+	# A tolerance in pixels and a tier distance in pixels: four is under a
+	# quantizer step of slack, one tile is the distance past which the predicted
+	# body is somewhere else entirely and easing it back would only be slower.
+	#
+	# The carry_step() is deliberately INERT and deliberately here. A forward
+	# model needs the frame tier -- the tick tier re-anchors its own state record
+	# to authority on every correction, so too little of the record is the
+	# owner's own to replay a rule against -- and this body runs the tick tier.
+	# Declaring one anyway is legal, is accepted, and is refused on first use,
+	# which is exactly the pairing the reachability report exists to name before
+	# a player feels it. This game is where inert_forward_model fires, and the
+	# harness asks the report for it.
 	Netw.configure_property(self, &"position").state().masked().on_spawn() \
-			.quantize(position_quantizer).epsilon(4.0)
+			.quantize(position_quantizer).epsilon(4.0) \
+			.teleport_at(TILE_SIZE) \
+			.carry_step(_advance_position)
 	var velocity_quantizer := NetwQuantizeBits.new()
 	velocity_quantizer.min_limit = -90.0
 	velocity_quantizer.max_limit = 90.0
+	# The body recomputes velocity from the input every tick, so it is derived,
+	# and a field the next step overwrites has no business deciding that a
+	# correction is needed. The class is what says so, and it carries no
+	# epsilon() because nothing compares the field for a tolerance to bound.
 	Netw.configure_property(self, &"velocity").state().masked() \
-			.quantize(velocity_quantizer).epsilon(1.5)
+			.quantize(velocity_quantizer) \
+			.derived().reconcile_only()
+
+
+# The forward model for position, declared under the tick tier where the engine
+# refuses it. It is written to be correct rather than to be a stub: were this
+# body on the frame tier, advancing an acknowledged position by the velocity the
+# same record carries is what a recovery would need. It reads ctx.state rather
+# than this node's velocity for the reason the engine enforces -- a rule is a
+# function of the recorded transition alone, and reading the live world makes it
+# disagree with the history it is replayed against.
+func _advance_position(
+		value: Vector2,
+		ctx: NetwPredictionHandle.CarryContext,
+) -> Vector2:
+	return value + (ctx.state.get(&"velocity", Vector2.ZERO) as Vector2) \
+			* ctx.delta
 
 
 func _ready() -> void:
@@ -78,9 +116,9 @@ func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	else:
 		velocity = inputs.motion * MOTION_SPEED
 
-	velocity *= clock.physics_factor
+	velocity *= ctx.clock.physics_factor
 	move_and_slide()
-	velocity /= clock.physics_factor
+	velocity /= ctx.clock.physics_factor
 
 
 # Validates and spawns a bomb on the server.
@@ -90,7 +128,7 @@ func _place_bomb(action_context: NetwAction.Context, pos: Vector2) -> void:
 	if last_bomb_time < BOMB_RATE:
 		action_context.deny()
 		return
-	var past := lag.sample(entity, action_context.view_tick)
+	var past := ctx.lagcomp_sample(entity.rid, action_context.view_tick)
 	if not past.has_value(&"position"):
 		action_context.deny()
 		return
@@ -103,7 +141,7 @@ func _place_bomb(action_context: NetwAction.Context, pos: Vector2) -> void:
 	real.position = pos
 	real.from_player = entity.peer_id
 	action_context.bind(real)
-	MultiplayerScene.of(self).level.get_node(^"Bombs").add_child(real)
+	NetwEntity.of(self).scene.level.get_node(^"Bombs").add_child(real)
 
 
 func _process(_delta: float) -> void:

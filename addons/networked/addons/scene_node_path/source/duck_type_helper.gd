@@ -1,5 +1,4 @@
 ## Utility for safe property access and method calls across different object types.
-class_name DuckTypeHelper
 extends Object
 
 static func get_duck(obj: Object, prop: String, default: Variant = null) -> Variant:

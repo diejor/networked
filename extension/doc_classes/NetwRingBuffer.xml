@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwRingBuffer" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Pre-allocated ring buffer that stores values keyed by tick number.
+	</brief_description>
+	<description>
+		[NetwRingBuffer] rounds its capacity up to a power of two so [method record], [method get_at], and [method bracketing_ticks] can stay cheap in interpolation and rollback hot paths.
+		[codeblock]
+		var history := NetwRingBuffer.create(32)
+		history.record(tick, snapshot)
+		var exact := history.get_at(tick)
+		var pair := history.bracketing_ticks(render_tick)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bracketing_ticks" qualifiers="const">
+			<return type="Vector2i" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns the [code](prev, next)[/code] ticks bracketing [param tick].
+				[code]x[/code] is the greatest recorded tick less than or equal to [param tick] or [code]-1[/code] if none exists. [code]y[/code] is the smallest recorded tick strictly greater than [param tick] or [code]-1[/code] if none exists.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Drops every recorded entry, keeping the allocated capacity.
+			</description>
+		</method>
+		<method name="create" qualifiers="static">
+			<return type="NetwRingBuffer" />
+			<param index="0" name="capacity" type="int" default="16" />
+			<description>
+				Returns a buffer holding at least [param capacity] entries, rounded up to a power of two. Calling [code]new()[/code] instead gives the default capacity.
+			</description>
+		</method>
+		<method name="get_at" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns the value recorded at exactly [param tick], or [code]null[/code] when that tick was never recorded or has since been evicted.
+			</description>
+		</method>
+		<method name="has_tick_after" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns [code]true[/code] when at least one entry is recorded strictly after [param tick].
+			</description>
+		</method>
+		<method name="is_empty" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] when nothing is recorded.
+			</description>
+		</method>
+		<method name="newest_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the most recently recorded tick, or [code]-1[/code] when the buffer is empty.
+			</description>
+		</method>
+		<method name="oldest_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the oldest tick still held, or [code]-1[/code] when the buffer is empty.
+			</description>
+		</method>
+		<method name="record">
+			<return type="void" />
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				Records [param value] at [param tick]. Recording past capacity evicts the oldest entry.
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns how many entries are recorded.
+			</description>
+		</method>
+	</methods>
+</class>

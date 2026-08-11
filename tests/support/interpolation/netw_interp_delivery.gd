@@ -14,7 +14,7 @@
 class_name NetwInterpDelivery
 extends RefCounted
 
-## A numeric twin of one [code]LocalLoopbackSession.LinkConditions[/code] profile.
+## A numeric twin of one [code]LocalLinkConditions[/code] profile.
 ##
 ## Latency and jitter are milliseconds, loss and reorder are ratios, matching the
 ## presets the transport ships so a calculus cell names the same conditions a
@@ -127,7 +127,8 @@ func build(
 		a.value = oracle.value_at(float(tick) * ticktime)
 		out.append(a)
 		tick += period
-	out.sort_custom(func(x: Arrival, y: Arrival) -> bool:
-		return x.arrival_sec < y.arrival_sec
+	out.sort_custom(
+		func(x: Arrival, y: Arrival) -> bool:
+			return x.arrival_sec < y.arrival_sec
 	)
 	return out

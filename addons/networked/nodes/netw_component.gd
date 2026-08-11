@@ -7,7 +7,6 @@
 class_name NetwComponent
 extends Node
 
-
 ## Returns the [MultiplayerTree] that owns this component's multiplayer session.
 func get_multiplayer_tree() -> MultiplayerTree:
 	return MultiplayerTree.resolve(self)
@@ -20,10 +19,10 @@ func get_scene_manager() -> MultiplayerSceneManager:
 	return api.get_service(MultiplayerSceneManager) as MultiplayerSceneManager if api else null
 
 
-## Returns the [NetwSceneInterface] for this session.
-func get_scenes() -> NetwSceneInterface:
+## Returns the [SceneCore] for this session.
+func get_scenes() -> SceneCore:
 	var api := Netw.of(self)
-	return api.scenes if api else null
+	return api._scenes if api else null
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local
@@ -38,12 +37,12 @@ func get_tp_layer() -> TPLayerAPI:
 	return api.get_service(TPLayerAPI) as TPLayerAPI
 
 
-## Returns the [NetwClockInterface] for this session.
-func get_multiplayer_clock() -> NetwClockInterface:
+## Returns the [ClockCore] for this session.
+func get_multiplayer_clock() -> ClockCore:
 	var api := Netw.of(self)
 	if not api or not api.clock.is_configured():
 		return null
-	return api.clock
+	return api._clock
 
 
 ## Returns the session service registered for [param type], or
@@ -58,7 +57,7 @@ func get_peer_context() -> NetwPeerContext:
 	var api := Netw.of(self)
 	if not api:
 		return null
-	return api.get_peer_context(self.multiplayer.get_unique_id())
+	return api.peer_get_context(self.multiplayer.get_unique_id())
 
 
 ## Returns the typed bucket for [param bucket_type] from the local peer's

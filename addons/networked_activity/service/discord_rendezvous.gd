@@ -23,7 +23,7 @@ func bind(_tree: MultiplayerTree) -> void:
 ## Connects [param tree] into the session keyed by [param instance_id].
 ##
 ## Implementations call [method MultiplayerTree.host_player] or
-## [method MultiplayerTree.join]. Returns [constant OK] after the tree is online.
+## [method NetwConnector.join]. Returns [constant OK] after the tree is online.
 @abstract
 func connect_session(
 		instance_id: String,

@@ -36,10 +36,12 @@ func _latencies(delay_polls: int, warmup: int, measure: int) -> Array:
 	var captures: Array[Dictionary] = []
 	NetwEntity.of(rig.client_node).state_binding.on_applied = (
 			func(header: Dictionary) -> void:
-				captures.append({
-					&"tick": int(header.get("tick", -1)),
-					&"recv_tick": rig.client_clock.tick,
-				})
+				captures.append(
+					{
+						&"tick": int(header.get("tick", -1)),
+						&"recv_tick": rig.client_clock.tick,
+					},
+				)
 	)
 
 	rig.delay_server_to_client(delay_polls)

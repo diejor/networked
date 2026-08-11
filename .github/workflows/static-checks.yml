@@ -1,0 +1,102 @@
+name: Static Checks
+
+# The checks that need no compiler: formatting, the seam's leak budget, and
+# the source manifest. They run against the native tree only, since the
+# GDScript side has its own workflow in gdscript-style.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extension/**"
+      - ".clang-format"
+      - ".pre-commit-config.yaml"
+      - ".github/workflows/static-checks.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "extension/**"
+      - ".clang-format"
+      - ".pre-commit-config.yaml"
+      - ".github/workflows/static-checks.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: static-checks-${{ github.event.number || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    name: "Format check"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Same hooks and same pins a contributor gets from `pre-commit install`,
+      # so this can only fail on a commit that skipped them.
+      - uses: pre-commit/action@v3.0.1
+
+  seam:
+    name: "Seam leak budget"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # The dual-target seam holds because engine and godot_cpp headers are
+      # included in extension/godot/ and nowhere else. Every occurrence
+      # outside it is a place the module build would have to be repaired by
+      # hand, so the count is bounded rather than merely discouraged.
+      - name: Count Engine Includes Outside The Seam
+        run: |
+          set -eu
+          budget=30
+          hits="$(grep -rn -E \
+            '^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"](godot_cpp|core|scene|servers|modules)/' \
+            extension/src extension/include extension/tests \
+            extension/register_types.cpp extension/register_types.h || true)"
+          count="$(printf '%s' "$hits" | grep -c . || true)"
+          printf '%s\n' "$hits"
+          echo "$count occurrences, budget $budget"
+          if [ "$count" -ge "$budget" ]; then
+            echo "::error::seam leak budget exceeded ($count >= $budget)"
+            exit 1
+          fi
+
+  sources:
+    name: "Source manifest"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check Every Source Is Compiled
+        run: python extension/tools/check_sources.py
+
+      # A `[Hosted]` case claims to run in both tiers, and the module tier
+      # reaches one only through `test_networked_hosted.h`. Leaving a file out
+      # of that header is invisible: the library tier reports the cases green
+      # and the module tier does not have them at all.
+      - name: Check Every Hosted Case Reaches Both Tiers
+        run: python extension/tools/check_hosted_registry.py
+
+      - name: Prove The Registry Check Refuses
+        run: python extension/tools/check_hosted_registry.py --self-test
+
+      - name: Check Diagnostic Seams
+        run: python extension/tools/check_diagnostics.py
+
+      - name: Prove The Diagnostic Check Refuses
+        run: python extension/tools/check_diagnostics.py --self-test

@@ -4,7 +4,7 @@
 ## subclass is a plain typed payload: it carries authoring facts to the one
 ## interface that consumes it and holds no behavior of its own. Register a
 ## configuration through [method MultiplayerAPI.object_configuration_add] while
-## the session is [constant NetwMultiplayer.Phase.DECLARING]. The consuming
+## the session is [constant NetwEmbeddingHandle.Phase.DECLARING]. The consuming
 ## interface owns the registered values for the session lifetime, so a
 ## registrar node that frees afterwards drops nothing.
 ## [codeblock]

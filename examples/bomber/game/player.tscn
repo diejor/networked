@@ -6,7 +6,6 @@
 [ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
 [ext_resource type="Script" uid="uid://crm8bn0yry6g8" path="res://addons/networked/sync/sim/prediction_component.gd" id="8_pred"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="9_3dwf2"]
-[ext_resource type="Script" uid="uid://bb1hp6ofxhwj8" path="res://addons/networked/sync/state/interpolate.gd" id="13_hhvn4"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_spawn"]
 properties/0/path = NodePath("sprite/label:text")
@@ -154,8 +153,7 @@ _data = {
 &"walk_up": SubResource("7")
 }
 
-[sub_resource type="Resource" id="Resource_8jgcb"]
-script = ExtResource("13_hhvn4")
+[sub_resource type="NetwInterpolate" id="Resource_8jgcb"]
 
 [node name="player" type="CharacterBody2D" unique_id=1262329161]
 z_index = 10

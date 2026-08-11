@@ -3,6 +3,8 @@
 class_name CrashAdapter
 extends PanelDataAdapter
 
+const PanelDataAdapter := preload("res://addons/networked/debug/editor/adapters/panel_data.gd")
+
 var alias_map: Dictionary = { }
 
 

@@ -145,7 +145,6 @@ func test_the_symptom_gesture_drives_and_settles() -> void:
 
 	_print_consume_record("symptom", _authority_car(host), client)
 
-
 # --- the arm runner ---
 
 
@@ -170,22 +169,28 @@ func _run_arm(
 	# the client's session mid-window, freezing its clock and its entities.
 	var host_run := { "regime-seconds": str(_seconds() + STARTUP_LEAD + 4.0) }
 	host_run.merge(host_args, true)
-	var host_pid := rig.spawn(SCENE, _peer_args(
-		"host",
-		port,
-		host_dir,
-		host_run,
-	))
+	var host_pid := rig.spawn(
+		SCENE,
+		_peer_args(
+			"host",
+			port,
+			host_dir,
+			host_run,
+		),
+	)
 	assert_int(host_pid).override_failure_message(
 		"the host process failed to spawn",
 	).is_greater(0)
 	await get_tree().create_timer(STARTUP_LEAD).timeout
-	var client_pid := rig.spawn(SCENE, _peer_args(
-		"client",
-		port,
-		client_dir,
-		client_args,
-	))
+	var client_pid := rig.spawn(
+		SCENE,
+		_peer_args(
+			"client",
+			port,
+			client_dir,
+			client_args,
+		),
+	)
 	assert_int(client_pid).override_failure_message(
 		"the client process failed to spawn",
 	).is_greater(0)
@@ -228,7 +233,6 @@ func _arm_dir(arm: String, role: String) -> String:
 	return ProjectSettings.globalize_path(
 		"res://tmp/regime/%s/%s" % [arm, role],
 	)
-
 
 # --- reading a summary ---
 

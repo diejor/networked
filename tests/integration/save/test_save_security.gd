@@ -18,7 +18,7 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	db = auto_free(NetwDatabase.new())
-	db.backend = NetwDatabaseBackend.Dict.new()
+	db.backend = NetwDatabaseBackendDict.new()
 
 	var player_path := NetwPathNamespace.next_path("player", "SecurityPlayer")
 	var level_path := NetwPathNamespace.next_path("level", "SecurityLevel")
@@ -60,7 +60,8 @@ func _spawn_player() -> Node2D:
 		SPAWNER_PATH,
 	) as Node2D
 	player.set_meta(
-		NetwPersistenceInterface.PersistenceEngine.META_DATABASE, db,
+		NetwPersistenceEngine.META_DATABASE,
+		db,
 	)
 	await get_tree().process_frame
 	return player
@@ -72,9 +73,10 @@ func test_server_read_snapshot_persists_live_value() -> void:
 	# The server holds the authoritative position and its engine reads it live.
 	server_player.position = Vector2(10, 20)
 	var engine := NetwEntity.of(server_player).persistence
-	await engine.flush()
+	var api := harness.server().api
+	await api.persist_flush(api.rid_of(server_player))
 
-	var raw: Dictionary = db.backend._find_by_id(&"security", engine._record_id())
+	var raw: Dictionary = db.backend.find_by_id(&"security", engine._record_id())
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 

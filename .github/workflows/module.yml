@@ -1,0 +1,145 @@
+name: Module
+
+# Builds the engine with this addon mounted as a built-in module and runs the
+# module's tests inside it. The GDExtension pipeline proves the library loads
+# into a stock engine; this proves the same sources compile against the
+# engine's own headers, which nothing else in CI covers.
+
+on:
+  # Path-gated rather than part of the CI DAG: this builds a whole engine, and
+  # only a change under extension/ can break the module build.
+  push:
+    branches: [main]
+    paths:
+      - 'extension/**'
+      - '.github/workflows/module.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'extension/**'
+      - '.github/workflows/module.yml'
+  workflow_call:
+    inputs:
+      profiler:
+        description: Engine profiler backend, `tracy` or `none`.
+        type: string
+        required: false
+        default: tracy
+  workflow_dispatch:
+    inputs:
+      profiler:
+        description: Engine profiler backend, `tracy` or `none`.
+        type: string
+        required: false
+        default: tracy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: module-${{ github.event.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  # One cell, the instrumented one: it compiles everything `profiler=none`
+  # does plus the module's instrumented paths.
+  test:
+    name: "Engine module (profiler=${{ inputs.profiler || 'tracy' }})"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Read Dependency Pins
+        id: pins
+        shell: bash
+        run: cat extension/deps.env >> "$GITHUB_OUTPUT"
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install SCons
+        shell: bash
+        run: pip install "scons==${{ steps.pins.outputs.SCONS_VERSION }}"
+
+      - name: Install Engine Build Dependencies
+        shell: bash
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libx11-dev libxcursor-dev \
+            libxinerama-dev libgl1-mesa-dev libglu-dev libasound2-dev \
+            libpulse-dev libudev-dev libxi-dev libxrandr-dev libwayland-dev
+
+      - name: Checkout And Mount Engine
+        shell: bash
+        run: extension/tools/setup_godot.sh
+
+      # The engine compiles the Tracy client itself, from the checkout deps.env
+      # already pins. One pin, one client, in either build.
+      - name: Checkout Tracy
+        if: ${{ (inputs.profiler || 'tracy') == 'tracy' }}
+        shell: bash
+        run: |
+          set -eu
+          git clone --depth 1 \
+            --branch "${{ steps.pins.outputs.TRACY_REF }}" \
+            https://github.com/wolfpld/tracy.git \
+            extension/thirdparty/tracy
+
+      - name: Cache SCons Objects
+        uses: actions/cache@v4
+        with:
+          path: .scons_cache
+          key: >-
+            module-scons-${{ runner.os }}-${{ inputs.profiler || 'tracy' }}-${{
+              hashFiles('extension/deps.env') }}-${{ github.sha }}
+          restore-keys: >-
+            module-scons-${{ runner.os }}-${{ inputs.profiler || 'tracy' }}-${{
+              hashFiles('extension/deps.env') }}-
+
+      - name: Build Engine With The Module
+        shell: bash
+        env:
+          SCONS_CACHE: ${{ github.workspace }}/.scons_cache
+        run: |
+          set -eu
+          jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
+          args="target=editor tests=yes progress=no"
+          if [ "${{ inputs.profiler || 'tracy' }}" = "tracy" ]; then
+            args="$args profiler=tracy"
+            args="$args profiler_path=$PWD/extension/thirdparty/tracy"
+          fi
+          echo "scons -C extension/thirdparty/godot -j$jobs $args"
+          # shellcheck disable=SC2086
+          scons -C extension/thirdparty/godot -j"$jobs" $args
+
+      # A module the engine failed to detect builds nothing and still links, so
+      # check the generated headers rather than trusting a green compile.
+      - name: Verify The Module Was Built In
+        shell: bash
+        run: |
+          set -eu
+          grep -q 'MODULE_NETWORKED_ENABLED' \
+            extension/thirdparty/godot/modules/modules_enabled.gen.h
+          grep -q 'test_networked_module.h' \
+            extension/thirdparty/godot/modules/modules_tests.gen.h
+
+      - name: Run The Module Tests
+        shell: bash
+        run: |
+          set -eu
+          binary="$(find extension/thirdparty/godot/bin -maxdepth 1 \
+            -name 'godot.linuxbsd.editor.*' -type f -executable -print -quit)"
+          test -n "$binary"
+          # A filter matching no cases still exits zero, so the list is checked
+          # before the run rather than trusted after it.
+          "$binary" --headless --test --test-case='*[Networked]*' \
+            --list-test-cases | tee cases.txt
+          grep -q '\[Networked\]' cases.txt
+          "$binary" --headless --test --test-case='*[Networked]*' --success

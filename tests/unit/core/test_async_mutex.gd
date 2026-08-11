@@ -2,6 +2,8 @@
 class_name TestAsyncMutex
 extends NetwTestSuite
 
+const AsyncMutex := preload("res://addons/networked/utils/async_mutex.gd")
+
 var mutex: AsyncMutex
 
 

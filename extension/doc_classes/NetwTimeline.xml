@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwTimeline" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Per-entity, tick-keyed record of whole-entity state and input snapshots.
+	</brief_description>
+	<description>
+		State snapshots carry forward so a missing tick reads as unchanged, while input snapshots are exact so a missing tick reads as no action. Each side has exactly one writer (state: the server, input: the owning peer), so there is never a merge and no authority flags are needed.
+		One timeline per entity serves both planes: the prediction engine reads its own state and input off it while the server's history recorder writes state into it. A second store for either plane would be a second history that agrees only by accident.
+		[codeblock]
+		# Reconciliation on the owning client:
+		var predicted := timeline.latest_state_at_or_before(ack + 1)
+		if diverged(predicted, authoritative):
+		    for entry in timeline.inputs_in_range(ack + 1, now):
+		        _network_tick(entry.input, delta, entry.tick, false)
+		timeline.trim_before(ack)
+		[/codeblock]
+		Snapshots are whole-entity [Dictionary] values keyed by a tick number, with each entry mapping a state or input field key to its value. Two ring buffers back the store, one for state and one for input, so a restore is a single atomic [method state_at] read rather than a per-property walk.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="create" qualifiers="static">
+			<return type="NetwTimeline" />
+			<param index="0" name="limit" type="int" default="64" />
+			<description>
+				Returns a timeline retaining [param limit] ticks per ring. [method NetwTimeline.new] uses [constant DEFAULT_LIMIT].
+			</description>
+		</method>
+		<method name="floor" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the trim watermark [method trim_before] last moved to. Every read treats an entry recorded strictly before it as absent.
+			</description>
+		</method>
+		<method name="has_input_at" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns [code]true[/code] when an input snapshot is recorded at [param tick].
+			</description>
+		</method>
+		<method name="input_at" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns the exact input snapshot at [param tick], or an empty [Dictionary].
+				Input never carries forward: a missing tick is a deliberate "no action", not a stale repeat. Use [method record_input]'s exact key, never a bracketed read.
+			</description>
+		</method>
+		<method name="inputs_in_range" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="from" type="int" />
+			<param index="1" name="to" type="int" />
+			<description>
+				Returns recorded input snapshots for the inclusive tick range, tick-ascending.
+				This is the reconciliation replay window: each element is [code]{tick: int, input: Dictionary}[/code] for the ticks that actually carry input, skipping gaps. The low bound is clamped to [method floor].
+			</description>
+		</method>
+		<method name="latest_state_at_or_before" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns the newest state snapshot at or before [param tick] (carry-forward), or an empty [Dictionary] when nothing at or before it survives [method floor].
+			</description>
+		</method>
+		<method name="latest_state_tick_at_or_before" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns the tick [method latest_state_at_or_before] would read for [param tick], or [code]-1[/code] when it would read nothing.
+				Carry-forward means a read keyed at one tick can answer with a snapshot recorded at an older one, so a caller comparing two peers at "the same tick" is only truly matched when this returns the tick it asked for. Read it to tell a matched comparison from one carried forward across a gap.
+				[codeblock]
+				var predicted := timeline.latest_state_at_or_before(ack + 1)
+				var staleness := ack + 1 - timeline.latest_state_tick_at_or_before(ack + 1)
+				# staleness == 0: the compare is matched-tick
+				[/codeblock]
+			</description>
+		</method>
+		<method name="newest_input_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the newest recorded input tick, or [code]-1[/code] when empty.
+				The server consume step reads this to tell a lost input tick (a later one has arrived) from one that simply has not arrived yet.
+			</description>
+		</method>
+		<method name="record_input">
+			<return type="void" />
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="snapshot" type="Dictionary" />
+			<description>
+				Records an input [param snapshot] at [param tick].
+			</description>
+		</method>
+		<method name="record_state">
+			<return type="void" />
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="snapshot" type="Dictionary" />
+			<description>
+				Records an authoritative whole-entity state [param snapshot] at [param tick].
+			</description>
+		</method>
+		<method name="state_at" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Returns the exact state snapshot at [param tick], or an empty [Dictionary].
+			</description>
+		</method>
+		<method name="trim_before">
+			<return type="void" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Advances the GC watermark so entries before [param tick] read as absent.
+				Memory is already bounded by the ring capacity, so this is a logical trim: it moves [method floor] monotonically and never rewinds it.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="DEFAULT_LIMIT" value="64">
+			Default ring capacity, roughly one second of ticks at 60 Hz. Reconciliation only ever replays an input window of order RTT ticks, so this is sized for the server rewind retention window, not the replay depth.
+		</constant>
+	</constants>
+</class>

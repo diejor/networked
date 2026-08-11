@@ -10,8 +10,14 @@ const DEFAULT_PORT := 21253
 const OUTBOUND_BUFFER := 1048576
 
 
-func scheme() -> StringName:
+func _scheme() -> StringName:
 	return &"ws"
+
+
+func _params_from_dict(source: Dictionary) -> NetwTransportParams:
+	var params := NetwWebSocketParams.new()
+	params.from_dict(source)
+	return params
 
 
 func _can_join(target: NetwConnectTarget) -> bool:
@@ -19,11 +25,7 @@ func _can_join(target: NetwConnectTarget) -> bool:
 
 
 func _can_host(config: NetwHostConfig) -> bool:
-	return config != null and config.scheme == &"ws"
-
-
-func _can_view(peer: MultiplayerPeer) -> bool:
-	return peer is WebSocketMultiplayerPeer
+	return config != null and config.transport is NetwWebSocketParams
 
 
 func _make_view(
@@ -40,7 +42,8 @@ func _host(
 		attempt: NetwConnectAttempt,
 		config: NetwHostConfig,
 ) -> MultiplayerPeer:
-	var port := int(config.params.get("port", DEFAULT_PORT))
+	var params := config.transport as NetwWebSocketParams
+	var port := params.port if params else DEFAULT_PORT
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(OUTBOUND_BUFFER)
 	var err := peer.create_server(port)

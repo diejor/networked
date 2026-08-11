@@ -160,8 +160,8 @@ func test_host_scene_request_keeps_camera_current() -> void:
 	var promise := await _request_level_2(valeria)
 	var level_2 := await valeria.await_scene(&"Level2", 2.0)
 
-	assert_that(promise.is_completed).is_true()
-	assert_that(promise.result).is_equal(NetwScenePromise.Result.OK)
+	assert_that(promise.is_settled).is_true()
+	assert_that(promise.code).is_equal(OK)
 	assert_that(level_2).is_not_null()
 	assert_that(player.get_viewport().get_camera_2d()).is_equal(camera)
 
@@ -189,7 +189,7 @@ func test_clients_still_see_each_other_after_scene_change() -> void:
 	# see each other again in the destination scene.
 	for requester in [valeria, jose, maria]:
 		var promise := await _request_level_2(requester)
-		assert_that(promise.result).is_equal(NetwScenePromise.Result.OK)
+		assert_that(promise.code).is_equal(OK)
 	for runner in [valeria, jose, maria]:
 		assert_that(await runner.await_scene(&"Level2", 2.0)).is_not_null()
 
@@ -241,7 +241,7 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 	assert_that(jose_local) \
 			.override_failure_message("jose has no local player after return") \
 			.is_not_null()
-	var jose_scene := MultiplayerScene.of(jose_local)
+	var jose_scene := NetwEntity.of(jose_local).scene
 	assert_that(jose_scene) \
 			.override_failure_message("jose's player belongs to no scene") \
 			.is_not_null()
@@ -285,14 +285,19 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 
 
 func _teleport(participant: NetwSceneRunner, scene_uid: String) -> void:
-	var player := participant.local_player
-	var tp := player.get_node("%TPComponent") as TPComponent
+	# A teleport respawns the local player, so the component is re-resolved every
+	# iteration rather than captured. A round trip frees the first one.
 	# The player walks between teleporters seconds apart, well past the settle
 	# window. Wait it out so the request is a real teleport, not an ignored one.
+	var tp := _tp_of(participant)
 	for _i in 240:
-		if not tp.is_settling() and not tp._tp_mutex.is_locked():
+		tp = _tp_of(participant)
+		if tp and not tp.is_settling() and not tp._tp_mutex.is_locked():
 			break
 		await game.sync_ticks(1)
+	assert_that(tp) \
+			.override_failure_message("%s has no TPComponent to teleport with" % participant.username) \
+			.is_not_null()
 	var promise := tp.teleport(_tp_target(scene_uid))
 	for _i in 300:
 		if promise.is_completed:
@@ -303,6 +308,14 @@ func _teleport(participant: NetwSceneRunner, scene_uid: String) -> void:
 			.is_true()
 
 
+# The local player's teleport component, or null while it is being respawned.
+func _tp_of(participant: NetwSceneRunner) -> TPComponent:
+	var player := participant.local_player
+	if not is_instance_valid(player):
+		return null
+	return player.get_node_or_null("%TPComponent") as TPComponent
+
+
 func _tp_target(scene_uid: String) -> SceneNodePath:
 	var target := SceneNodePath.new()
 	target.scene_path = scene_uid
@@ -310,13 +323,13 @@ func _tp_target(scene_uid: String) -> SceneNodePath:
 	return target
 
 
-func _request_level_2(participant: NetwSceneRunner) -> NetwScenePromise:
-	var promise := participant.tree.api.scenes.request_change(&"Level2")
+func _request_level_2(participant: NetwSceneRunner) -> NetwPromise:
+	var promise := participant.tree.api.scene_request(&"Level2")
 	for _i in 180:
-		if promise.is_completed:
+		if promise.is_settled:
 			break
 		await game.sync_ticks(1)
-	assert_that(promise.is_completed).is_true()
+	assert_that(promise.is_settled).is_true()
 	return promise
 
 

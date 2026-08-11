@@ -49,9 +49,6 @@ func test_client_join_uses_passed_room_code() -> void:
 	assert_str(signaler._info_hash).is_equal(expected_hash)
 
 
-
-
-
 func test_webtorrent_directory_propagates_properties() -> void:
 	var dir: WebTorrentDirectory = auto_free(WebTorrentDirectory.new())
 

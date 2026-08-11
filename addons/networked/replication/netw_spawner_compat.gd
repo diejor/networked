@@ -45,7 +45,7 @@ class_name NetwSpawnerCompat
 extends RefCounted
 
 # The owning NetwMultiplayer. A weakref because the owner holds this adapter
-# strongly through NetwReplicationInterface and both are reference counted.
+# strongly through ReplicationCore and both are reference counted.
 var _api_ref: WeakRef
 
 # node instance id -> captured custom spawn data, written by the spawn_function
@@ -85,7 +85,7 @@ func _api() -> NetwMultiplayer:
 
 func _pipeline() -> NetwSpawnPipeline:
 	var api := _api()
-	return api.replication._spawn_pipeline if api else null
+	return api._replication._spawn_pipeline if api else null
 
 
 ## Consumes a spawner registration for [param node]. Returns [constant OK] so
@@ -217,7 +217,8 @@ func instantiate(
 		var packed := load(spawner.get_spawnable_scene(scene_index)) as PackedScene
 		return packed.instantiate() if packed else null
 	var original: Callable = _originals.get(
-			spawner.get_instance_id(), spawner.spawn_function
+		spawner.get_instance_id(),
+		spawner.spawn_function,
 	)
 	if not original.is_valid():
 		return null
@@ -380,7 +381,7 @@ func _clear_session_state() -> void:
 
 
 ## Returns this adapter's contribution to
-## [method NetwReplicationInterface.counters].
+## [method ReplicationCore.counters].
 func counters() -> Dictionary:
 	return {
 		&"drops_uncaptured_custom": _drops_uncaptured_custom,

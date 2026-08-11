@@ -89,7 +89,7 @@ and reattach when the entity enters another session.
 Scene admission and ancestry
 ----------------------------
 
-Each :ref:`MultiplayerScene <class_MultiplayerScene>` wrapper is an ordinary
+Each scene's container is an ordinary
 entity in its ``scene:<name>`` layer. Every descendant entity joins that scene
 layer when the spawn pipeline captures its parent anchor. Reparenting updates
 the old and new scene memberships automatically.

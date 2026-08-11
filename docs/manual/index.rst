@@ -19,11 +19,18 @@ your scene.
    :name: toc-manual
 
    multiplayer_tree
+   identity_and_altitudes
+   authority_models
    sessions_and_peers
    pre_game_connection
    scenes_and_players
+   replication_model
+   replicated_tables
    interest_management
+   display_model
+   prediction_model
    prediction_boundaries
    transport_backends
    context_and_services
+   extending
    testing

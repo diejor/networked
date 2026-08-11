@@ -11,7 +11,7 @@ extends CharacterBody2D
 const SPEED := 90.0
 
 ## Per-tick motion request, written by the framework via
-## [method NetwSyncSetBinding.apply_payload] before each simulation step.
+## [method NetwPropertySetBinding.apply_payload] before each simulation step.
 var motion: Vector2 = Vector2.ZERO
 
 var _half: Vector2

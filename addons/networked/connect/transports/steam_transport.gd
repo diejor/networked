@@ -8,9 +8,14 @@
 class_name SteamTransport
 extends NetwTransport
 
-
-func scheme() -> StringName:
+func _scheme() -> StringName:
 	return &"steam"
+
+
+func _params_from_dict(source: Dictionary) -> NetwTransportParams:
+	var params := NetwSteamParams.new()
+	params.from_dict(source)
+	return params
 
 
 func _can_join(target: NetwConnectTarget) -> bool:
@@ -18,7 +23,7 @@ func _can_join(target: NetwConnectTarget) -> bool:
 
 
 func _can_host(config: NetwHostConfig) -> bool:
-	return config != null and config.scheme == &"steam"
+	return config != null and config.transport is NetwSteamParams
 
 
 func _host(
@@ -27,12 +32,14 @@ func _host(
 ) -> MultiplayerPeer:
 	var dir := _resolve_dir(attempt)
 	if dir == null:
-		attempt.resolve(NetwConnectResult.error(
-			"Steam lobby directory is not registered.",
-		))
+		attempt.resolve(
+			NetwConnectResult.error(
+				"Steam lobby directory is not registered.",
+			),
+		)
 		return null
 	_route_p2p_failure(dir, attempt)
-	return await dir._host_lobby(_host_options(config))
+	return await dir._host_lobby(config)
 
 
 func _join(
@@ -41,9 +48,11 @@ func _join(
 ) -> MultiplayerPeer:
 	var dir := _resolve_dir(attempt)
 	if dir == null:
-		attempt.resolve(NetwConnectResult.error(
-			"Steam lobby directory is not registered.",
-		))
+		attempt.resolve(
+			NetwConnectResult.error(
+				"Steam lobby directory is not registered.",
+			),
+		)
 		return null
 	_route_p2p_failure(dir, attempt)
 	return await dir._join_lobby_peer(int(target.address))
@@ -79,12 +88,6 @@ func _resolve_dir(attempt: NetwConnectAttempt) -> SteamLobbyDirectory:
 
 
 # Builds directory host options from the typed host config.
-func _host_options(config: NetwHostConfig) -> LobbyDirectory.HostOptions:
-	var opts := LobbyDirectory.HostOptions.new()
-	opts.server_name = config.server_name
-	opts.visibility = config.visibility
-	opts.max_players = config.max_players
-	return opts
 
 
 # Resolves the attempt on a Steam P2P failure while it is establishing. The
@@ -96,9 +99,12 @@ func _route_p2p_failure(
 ) -> void:
 	var handler := func(_reason: String) -> void:
 		if not attempt.is_done():
-			attempt.resolve(NetwConnectResult.unreachable(
-				&"STEAM_P2P_FAILED", "Steam peer connection failed.",
-			))
+			attempt.resolve(
+				NetwConnectResult.unreachable(
+					&"STEAM_P2P_FAILED",
+					"Steam peer connection failed.",
+				),
+			)
 	dir.peer_connect_failed.connect(handler)
 	attempt.finished.connect(
 		func(_r: NetwConnectResult) -> void:

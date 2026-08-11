@@ -25,7 +25,7 @@ var _netw_managed_game_harness: NetwGameHarness
 static func create_scene_manager() -> MultiplayerSceneManager:
 	var mgr := MultiplayerSceneManager.new()
 	mgr.name = &"SceneManager"
-	mgr.concurrency = NetwSceneConfig.Concurrency.CONCURRENT
+	mgr.scene_isolation = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
 	return mgr
 
 

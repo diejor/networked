@@ -169,6 +169,8 @@ func _set_enabled(enabled: bool) -> void:
 
 ## Returns [code]true[/code] when [param level] is active for [param path].
 func is_level_active(level: int, path: String = "") -> bool:
+	if level == NetwLog.Level.ERROR:
+		return true
 	if path.is_empty():
 		NetwLog._ensure_initialized()
 		return level >= NetwLog._effective_min_level
@@ -287,7 +289,8 @@ func _log(
 		arg4: Variant,
 ) -> void:
 	NetwLog._ensure_initialized()
-	if level < NetwLog._effective_min_level:
+	if level != NetwLog.Level.ERROR \
+			and level < NetwLog._effective_min_level:
 		return
 
 	var context: Object = null
@@ -316,12 +319,14 @@ func _log(
 
 	if context:
 		var script := context.get_script() as Script
-		if script and not NetwLog.is_level_active(level, script.resource_path):
+		if level != NetwLog.Level.ERROR and script \
+				and not NetwLog.is_level_active(level, script.resource_path):
 			return
-		elif not script and not NetwLog.is_level_active_for_module(
-			level,
-			context.get_class(),
-		):
+		if level != NetwLog.Level.ERROR and not script \
+				and not NetwLog.is_level_active_for_module(
+					level,
+					context.get_class(),
+				):
 			return
 
 		var component := context as Node

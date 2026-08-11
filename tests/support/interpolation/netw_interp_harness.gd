@@ -2,7 +2,7 @@
 ##
 ## The engine's display math is a pure function of recorded snapshots, a per-pump
 ## timing snapshot, and a spec. This harness supplies all three by hand: it feeds
-## a delivery schedule into a real [code]_History[/code], hands the real
+## a delivery schedule into a real [NetwDisplayHistory], hands the real
 ## [code]_pump_history[/code] a synthesized [NetwDisplayTiming] every frame, and
 ## captures the output through a [NetwInterpRecordingWriter]. It calls the same
 ## kernel methods the live pump calls, so what it certifies is the shipping
@@ -52,23 +52,23 @@ var display_offset := 0
 var recommended_display_offset := 0
 
 ## Timeline mode the display runs under. FORECAST projects past the newest sample.
-var timeline_mode: NetwInterpolationInterface.TimelineMode = \
-		NetwInterpolationInterface.TimelineMode.BUFFERED
+var timeline_mode: NetwDisplayHandle.TimelineMode = \
+		NetwDisplayHandle.TimelineMode.BUFFERED
 
 ## Tick budget the forecast tail projects past the newest sample.
 var max_forecast_ticks := 6
 
 ## Pump mode the runtime resolves to. BRACKETED is the authored and server path,
 ## which never forecasts however the handle is set.
-var pump_mode := NetwInterpolationInterface._PUMP_REMOTE
+var pump_mode := DisplayCore._PUMP_REMOTE
 
 ## Wall time after which the stream stops delivering, for the sleep and
 ## project-to-cap families. Records scheduled past it are dropped.
 var record_cutoff_sec := INF
 
-var _iface: NetwInterpolationInterface
-var _rt: NetwInterpolationInterface._Runtime
-var _state: NetwInterpolationInterface._PropertyState
+var _iface: DisplayCore
+var _rt: DisplayCore._Runtime
+var _state: DisplayCore._PropertyState
 var _writer: NetwInterpRecordingWriter
 var _stats := NetwPumpStats.new()
 var _body: _ChaseBody
@@ -97,22 +97,22 @@ func writer() -> NetwInterpRecordingWriter:
 ## displayed value at [param initial].
 func configure(spec: NetwInterpolate, initial: Variant) -> void:
 	frame_dt_sec = 1.0 / fps
-	_iface = NetwInterpolationInterface.new()
+	_iface = DisplayCore.new()
 
-	_rt = NetwInterpolationInterface._Runtime.new()
-	_rt.handle = NetwInterpolationInterface.Handle.new()
-	_rt.handle.timeline_mode = timeline_mode
-	_rt.handle.max_forecast_ticks = max_forecast_ticks
-	_rt.playhead = NetwInterpolationInterface._Playhead.new()
+	_rt = DisplayCore._Runtime.new()
+	_rt.config = DisplayCore._Config.new()
+	_rt.config.timeline_mode = timeline_mode
+	_rt.config.max_forecast_ticks = max_forecast_ticks
+	_rt.playhead = DisplayCore._Playhead.new()
 	_rt.playhead.expected_interval_ticks = maxi(1, send_period)
 	_rt.pump_mode = pump_mode
 
-	_state = NetwInterpolationInterface._PropertyState.new()
+	_state = DisplayCore._PropertyState.new()
 	_state.name = &"value"
 	_state.spec = spec
 	_state.source_prop = &"value"
 	_state.target_prop = &"value"
-	_state.history = NetwInterpolationInterface._History.new()
+	_state.history = NetwDisplayHistory.new()
 	_state.history.mode = spec.mode
 	_state.history.snap_distance = spec.snap_distance
 	_writer = NetwInterpRecordingWriter.new()
@@ -127,24 +127,24 @@ func configure(spec: NetwInterpolate, initial: Variant) -> void:
 ## with exponential [param smooth_time], starting the display at [param initial].
 func configure_chase(spec: NetwInterpolate, smooth_time: float, initial: Variant) -> void:
 	frame_dt_sec = 1.0 / fps
-	_iface = NetwInterpolationInterface.new()
+	_iface = DisplayCore.new()
 
-	_rt = NetwInterpolationInterface._Runtime.new()
-	_rt.handle = NetwInterpolationInterface.Handle.new()
-	_rt.handle.predicted_smooth_time = smooth_time
-	_rt.playhead = NetwInterpolationInterface._Playhead.new()
-	_rt.pump_mode = NetwInterpolationInterface._PUMP_CHASE
+	_rt = DisplayCore._Runtime.new()
+	_rt.config = DisplayCore._Config.new()
+	_rt.config.predicted_smooth_time = smooth_time
+	_rt.playhead = DisplayCore._Playhead.new()
+	_rt.pump_mode = DisplayCore._PUMP_CHASE
 
 	_body = _ChaseBody.new()
 	_body.value = initial
 
-	_state = NetwInterpolationInterface._PropertyState.new()
+	_state = DisplayCore._PropertyState.new()
 	_state.name = &"value"
 	_state.spec = spec
 	_state.source_obj = _body
 	_state.source_prop = &"value"
 	_state.target_prop = &"value"
-	_state.history = NetwInterpolationInterface._History.new()
+	_state.history = NetwDisplayHistory.new()
 	_state.history.mode = spec.mode
 	_writer = NetwInterpRecordingWriter.new()
 	_state.output = _writer
@@ -262,7 +262,7 @@ func run(
 		displayed.append(_state.last_written)
 		playhead_time.append(
 			float(timing.display_tick) + timing.tick_factor
-			- _rt.playhead.display_lag
+			- _rt.playhead.display_lag,
 		)
 		if _stats.starving > 0:
 			starving_frames += 1

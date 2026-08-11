@@ -50,3 +50,20 @@ func test_join_player_spawns_with_authority_and_replicates_to_client() -> void:
 
 	var client_player := await harness.wait_for_player(valeria, level_builder.scene_name)
 	assert_that(client_player).is_not_null()
+
+
+# A level path the server never registered leaves the harness with no scene
+# handle to look a player up in. The join reports the missing scene and answers
+# null, rather than dereferencing the handle it did not get: a crash inside the
+# wait predicate reads as an engine error and hides which scene was missing.
+func test_join_player_answers_null_when_the_server_has_no_such_scene() -> void:
+	var player: Node = null
+	await assert_error(
+		func() -> void:
+			player = await harness.join_player(
+				valeria,
+				"res://tests/support/scene/never_registered_level.tscn",
+				_SPAWNER_NODE_PATH,
+			)
+	).is_push_error(GdUnitArgumentMatchers.any())
+	assert_that(player).is_null()

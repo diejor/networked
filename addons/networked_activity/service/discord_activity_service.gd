@@ -188,7 +188,7 @@ func _service_entered(api: NetwMultiplayer) -> void:
 		# The rendezvous owns its transport, so it installs whatever core seams
 		# that backend needs. The service never reaches into a backend itself.
 		rendezvous.bind(mt)
-	var nakama_auth := mt.api.session.auth_flow as NakamaAuth
+	var nakama_auth := mt.api._session.auth_flow as NakamaAuth
 	if nakama_auth != null:
 		# get_nakama_session() add_childs the session node, which fails if the
 		# tree is still setting up its children when this service registers.
@@ -200,11 +200,11 @@ func _service_entered(api: NetwMultiplayer) -> void:
 	# transition a game hangs its rematch policy on. server_disconnected fires only
 	# on an involuntary drop, never on a graceful local leave, so it is
 	# the precise loss signal; server_disconnecting carries the announced reason.
-	mt.server_disconnecting.connect(
+	mt.api.server_disconnecting.connect(
 		func(reason: String) -> void:
 			_disconnect_reason = reason
 	)
-	mt.server_disconnected.connect(_on_session_dropped)
+	mt.api.server_disconnected.connect(_on_session_dropped)
 	# The SDK is parented in start(), not here: add_child during service setup
 	# fails ("parent busy"), and the SDK's _ready() must run (it sets up the JS
 	# bridge) before start() calls init(), or init() no-ops and ready() hangs.

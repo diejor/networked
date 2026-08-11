@@ -151,7 +151,8 @@ func _begin_game(host: NetwSceneRunner) -> void:
 	gamestate.begin_game()
 
 
-func _get_world(runner: NetwSceneRunner) -> MultiplayerScene:
+func _get_world(runner: NetwSceneRunner) -> NetwSceneHandle:
 	if not runner or not runner.tree or not runner.tree.api:
 		return null
-	return runner.tree.api.scenes.scene(&"World")
+	var api := runner.tree.api
+	return api.scene_handle(api.scene_find(&"World"))

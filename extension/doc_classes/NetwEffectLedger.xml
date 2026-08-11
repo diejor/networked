@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwEffectLedger" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Keyed ledger of optimistic acts, each a revert parked against a deadline tick.
+	</brief_description>
+	<description>
+		[method adopt] keeps the act and drops its revert. [method discard] and a timeout run it, so a timeout is a denial rather than a third outcome.
+		The ledger never reads a clock. A deadline is measured against the tick [method sweep] is handed, which is what keeps the span testable and what makes the session, not the ledger, the owner of the default timeout.
+		A watcher is refused unless its key is armed, so an observer can never outlive the act it observes.
+		[NetwMultiplayer] owns the session's ledger and publishes it as the [code]effect_*[/code] verbs. Reach for those rather than for this class.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="adopt">
+			<return type="void" />
+			<param index="0" name="key" type="StringName" />
+			<description>
+				Resolves [param key] as kept. The pending revert is dropped unrun and a watcher's confirmed callback fires.
+			</description>
+		</method>
+		<method name="arm">
+			<return type="void" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="revert" type="Callable" />
+			<param index="2" name="deadline_tick" type="int" />
+			<description>
+				Registers [param key] with [param revert] until it is resolved or [param deadline_tick] passes. Re-arming an armed key replaces it silently. An empty [param key] arms nothing.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every armed act and every watcher. No revert runs.
+			</description>
+		</method>
+		<method name="count" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns how many acts are armed and unresolved.
+			</description>
+		</method>
+		<method name="discard">
+			<return type="void" />
+			<param index="0" name="key" type="StringName" />
+			<description>
+				Resolves [param key] as reverted. The pending revert runs immediately and a watcher's denied callback fires after it.
+			</description>
+		</method>
+		<method name="pending" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="key" type="StringName" />
+			<description>
+				Returns [code]true[/code] while [param key] is armed and unresolved.
+			</description>
+		</method>
+		<method name="sweep">
+			<return type="void" />
+			<param index="0" name="tick" type="int" />
+			<description>
+				Discards every act whose deadline is at or before [param tick]. The expired set is collected before the first revert runs, so an act armed by a revert during the sweep is kept rather than swept.
+			</description>
+		</method>
+		<method name="watch">
+			<return type="bool" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="confirmed" type="Callable" />
+			<param index="2" name="denied" type="Callable" />
+			<description>
+				Observes [param key]'s resolution and returns [code]true[/code]. Returns [code]false[/code] without registering when [param key] is not armed.
+			</description>
+		</method>
+	</methods>
+</class>

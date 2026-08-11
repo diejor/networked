@@ -3,10 +3,11 @@
 ## [MultiplayerTree].
 ##
 ## This is a presentation adapter managed by the [DebugReporter]. It pulls
-## [method LagCompensation.metrics] and turns the cumulative counters into live
-## rates, so monitoring overhead stays out of the core simulation loop. Work runs
-## only while a debugger is attached ([method EngineDebugger.is_active]) and is
-## throttled, so an unobserved build pays nothing.
+## [method NetwMultiplayer.stats_snapshot] and turns cumulative counters into
+## live rates, so monitoring overhead stays out of the core simulation loop.
+## Work runs only while a debugger is attached
+## ([method EngineDebugger.is_active]) and is throttled, so an unobserved build
+## pays nothing.
 ##
 ## [codeblock]
 ## Netw LagComp <tree>/
@@ -23,7 +24,8 @@
 ##
 ## The server populates the recording and consumption counters, so a pure client
 ## tree reads zero for those. Reach the data source through
-## [method LagCompensation.metrics], never these monitors, in non-debug code.
+## [method NetwMultiplayer.stats_snapshot], never these monitors, in non-debug
+## code.
 class_name LagCompensationMonitor
 extends Node
 
@@ -33,10 +35,10 @@ const _SAMPLE_INTERVAL := 0.25
 
 # Cumulative counters delta-d into per-second rates.
 const _RATE_KEYS: Array[StringName] = [
-	&"corrections",
-	&"consumed",
-	&"missing",
-	&"gate_fallbacks",
+	&"predict_corrections",
+	&"predict_consumed",
+	&"predict_missing",
+	&"predict_gate_fallbacks",
 ]
 
 var _trees: Array[MultiplayerTree] = []
@@ -89,9 +91,9 @@ func _sample(elapsed: float) -> void:
 	for mt in _trees:
 		if not is_instance_valid(mt):
 			continue
-		if not mt.api or not mt.api.lag_compensation.is_configured():
+		if not mt.api or not mt.api._lagcomp.is_configured():
 			continue
-		_sample_tree(_category(mt), mt.api.lag_compensation.metrics(), elapsed)
+		_sample_tree(_category(mt), mt.api.stats_snapshot(), elapsed)
 
 
 func _sample_tree(category: String, metrics: Dictionary, elapsed: float) -> void:
@@ -103,20 +105,20 @@ func _sample_tree(category: String, metrics: Dictionary, elapsed: float) -> void
 		prev[key] = cur
 	_prev[category] = prev
 
-	var consumed_rate: float = rates[&"consumed"]
-	var missing_rate: float = rates[&"missing"]
+	var consumed_rate: float = rates[&"predict_consumed"]
+	var missing_rate: float = rates[&"predict_missing"]
 	var total_rate := consumed_rate + missing_rate
 
 	_latest_data[category] = {
-		&"entities": metrics.get(&"entities", 0),
-		&"timelines": metrics.get(&"timelines", 0),
-		&"corrections_rate": rates[&"corrections"],
-		&"replay_depth_max": metrics.get(&"max_replay_depth", 0),
+		&"entities": metrics.get(&"predict_entities", 0),
+		&"timelines": metrics.get(&"predict_timelines", 0),
+		&"corrections_rate": rates[&"predict_corrections"],
+		&"replay_depth_max": metrics.get(&"predict_max_replay_depth", 0),
 		&"consumed_rate": consumed_rate,
 		&"input_loss_pct": (missing_rate / total_rate * 100.0) if total_rate > 0.0 else 0.0,
-		&"pending_actions": metrics.get(&"pending_actions", 0),
-		&"fallbacks_rate": rates[&"gate_fallbacks"],
-		&"effects_armed": metrics.get(&"effects_armed", 0),
+		&"pending_actions": metrics.get(&"predict_pending_actions", 0),
+		&"fallbacks_rate": rates[&"predict_gate_fallbacks"],
+		&"effects_armed": metrics.get(&"predict_effects_armed", 0),
 	}
 	_ensure_registered(category)
 

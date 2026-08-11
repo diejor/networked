@@ -17,9 +17,16 @@ func _ready() -> void:
 
 
 ## Displays the connecting screen and updates details from [param target].
+##
+## A [code]null[/code] [param target] is a host bring-up, which has no address
+## to render and is otherwise the same wait with the same cancel.
 func open_connecting(target: NetwConnectTarget) -> void:
 	_cancel_button.text = "Cancel"
 	_progress.visible = false
+	if target == null:
+		_title.text = "Starting server..."
+		popup_centered()
+		return
 	var scheme_name := ConnectBrowser.format_scheme_label(target.scheme)
 	var display_addr := target.address.strip_edges()
 	if display_addr.is_empty():

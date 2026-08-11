@@ -10,6 +10,8 @@
 class_name PanelGrid
 extends ScrollContainer
 
+const PanelDataAdapter := preload("res://addons/networked/debug/editor/adapters/panel_data.gd")
+
 ## Emitted when a wrapper's header status icon is clicked.
 signal status_detail_requested(title: String, level: int, summary: String)
 

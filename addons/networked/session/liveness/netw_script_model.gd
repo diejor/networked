@@ -199,18 +199,66 @@ static func configure_node_property(
 	return opt
 
 
-## Returns the property configs for [param node], the overlay merged over any
-## script-declared configs. Overlay entries win on key collision.
+## Returns the property configs for [param node], the node overlay REFINING any
+## script-declared config for the same field rather than replacing it.
+##
+## An overlay exists because some facts belong to one body rather than to every
+## instance of its script -- today exactly one, the forward-model rule
+## [method NetwScriptModel.PropertyConfig.carry_step] binds. Everything else
+## about a field is a fact about the script, so an overlay entry answers only
+## for [constant NODE_SCOPED_PROPERTY_KEYS] and the script declaration answers
+## for the rest. A field the script never declared is answered by the overlay
+## whole, which is the scriptless path.
 static func get_node_property_configs(node: Node) -> Dictionary:
 	var merged: Dictionary = { }
 	var script := node.get_script() as Script
-	if script:
-		for property: StringName in get_property_configs(script):
-			merged[property] = get_property_configs(script)[property]
+	var declared: Dictionary = get_property_configs(script) if script else { }
+	for property: StringName in declared:
+		merged[property] = declared[property]
 	var overlay := _overlay_for(node, false)
 	if overlay:
 		for property: StringName in overlay.configs:
-			merged[property] = overlay.configs[property]
+			var over := overlay.configs[property] as PropertyConfig
+			var base := declared.get(property) as PropertyConfig
+			merged[property] = _instance_property_config(base, over) if base \
+			else over
+	return merged
+
+## The facts a node overlay is entitled to answer for. Every other field of a
+## [NetwScriptModel.PropertyConfig] is a statement about the script.
+const NODE_SCOPED_PROPERTY_KEYS: Array[StringName] = [
+	&"carry_rule",
+	&"context_node_ref",
+]
+
+
+# The script declaration with the overlay's instance facts written over it.
+#
+# The overlay entry is created bare, so reading it as the whole config -- which
+# is what a whole-key merge did -- undeclared everything the script had said
+# about the field: its record, its quantizer, its tolerance, its tier distance,
+# its mask. Declaring a forward model silently stopped the field from being
+# state at all, and a field that was its entity's only state field left the set
+# empty and the body stopped replicating. The merge answers per fact instead.
+static func _instance_property_config(
+		base: PropertyConfig,
+		over: PropertyConfig,
+) -> PropertyConfig:
+	var merged := PropertyConfig.new()
+	var pristine := PropertyConfig.new()
+	# Reflected rather than listed, so a field added to PropertyConfig is
+	# carried across by existing, not by somebody remembering to add it here.
+	# The read order is declaration order, which puts each re-declaration guard
+	# after the value it guards, so copying never trips its own warning.
+	for entry: Dictionary in base.get_property_list():
+		if not (int(entry[&"usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+			continue
+		merged.set(entry[&"name"], base.get(entry[&"name"]))
+	for key: StringName in NODE_SCOPED_PROPERTY_KEYS:
+		if over.get(key) != pristine.get(key):
+			merged.set(key, over.get(key))
+	# The merged config describes one instance, whatever the script said.
+	merged.context_type = 1
 	return merged
 
 
@@ -464,7 +512,7 @@ static func _get_sorted_methods(script: Script) -> Array:
 ## is bit-packed by its quantizer and 0 when it rides NetwCodec's tagged
 ## fallback.
 static func write_values(
-		w: NetwBitBuffer.Writer,
+		w: NetwBitBufferWriter,
 		values: Array,
 		quantizers: Array,
 		types: Array,
@@ -479,8 +527,8 @@ static func write_values(
 			continue
 		var q: NetwQuantize = quantizers[i] if i < quantizers.size() else null
 		var t: int = types[i] if i < types.size() else TYPE_NIL
-		var quantized := q != null and q._supports_type(t) \
-				and q._supports_type(typeof(values[i]) as Variant.Type)
+		var quantized := q != null and q.supports_type(t) \
+				and q.supports_type(typeof(values[i]) as Variant.Type)
 		if quantized:
 			w.put_aligned_u8(1)
 			NetwCodec.encode_value(w, values[i], q)
@@ -491,7 +539,7 @@ static func write_values(
 
 ## Reads a list of values written by [method write_values].
 static func read_values(
-		r: NetwBitBuffer.Reader,
+		r: NetwBitBufferReader,
 		quantizers: Array,
 		types: Array,
 ) -> Array:
@@ -512,7 +560,7 @@ static func read_values(
 
 # Writes a node reference: route varint, component byte, and a path string only
 # when the component byte is the 255 path fallback.
-static func _write_node_ref(w: NetwBitBuffer.Writer, ref: NetwNodeRef) -> void:
+static func _write_node_ref(w: NetwBitBufferWriter, ref: NetwNodeRef) -> void:
 	NetwCodec.put_varint(w, ref.route)
 	w.put_aligned_u8(ref.comp)
 	if ref.comp == 255:
@@ -522,7 +570,7 @@ static func _write_node_ref(w: NetwBitBuffer.Writer, ref: NetwNodeRef) -> void:
 
 
 # Reads a node reference written by _write_node_ref.
-static func _read_node_ref(r: NetwBitBuffer.Reader) -> NetwNodeRef:
+static func _read_node_ref(r: NetwBitBufferReader) -> NetwNodeRef:
 	var route := NetwCodec.get_safe_varint(r)
 	var comp := r.get_aligned_u8()
 	var path := ""
@@ -533,7 +581,7 @@ static func _read_node_ref(r: NetwBitBuffer.Reader) -> NetwNodeRef:
 
 
 ## Writes a token (1-byte ID or StringName).
-static func write_token(w: NetwBitBuffer.Writer, token: Variant) -> void:
+static func write_token(w: NetwBitBufferWriter, token: Variant) -> void:
 	if token is int:
 		w.put_aligned_u8(1)
 		w.put_aligned_u8(int(token))
@@ -545,7 +593,7 @@ static func write_token(w: NetwBitBuffer.Writer, token: Variant) -> void:
 
 
 ## Reads a token written by [method write_token].
-static func read_token(r: NetwBitBuffer.Reader) -> Variant:
+static func read_token(r: NetwBitBufferReader) -> Variant:
 	var flag := r.get_aligned_u8()
 	if flag == 1:
 		return r.get_aligned_u8()
@@ -555,7 +603,7 @@ static func read_token(r: NetwBitBuffer.Reader) -> Variant:
 
 ## Writes a CALL body: method token, then a length-tagged, per-argument stream.
 static func write_call_body(
-		w: NetwBitBuffer.Writer,
+		w: NetwBitBufferWriter,
 		method_val: Variant,
 		encoded_args: Array,
 		quantizers: Array,
@@ -567,7 +615,7 @@ static func write_call_body(
 
 ## Reads the method token written by [method write_call_body], returning the
 ## 1-byte id as an int or the method name as a StringName.
-static func read_method_token(r: NetwBitBuffer.Reader) -> Variant:
+static func read_method_token(r: NetwBitBufferReader) -> Variant:
 	var flag := r.get_aligned_u8()
 	if flag == 1:
 		return r.get_aligned_u8()
@@ -580,7 +628,7 @@ static func read_method_token(r: NetwBitBuffer.Reader) -> Variant:
 ## identical to [method write_values] output, so this delegates to
 ## [method read_values].
 static func read_call_args(
-		r: NetwBitBuffer.Reader,
+		r: NetwBitBufferReader,
 		quantizers: Array,
 		arg_types: Array,
 ) -> Array:
@@ -605,7 +653,7 @@ static func validate_quantizers(
 		if q == null:
 			continue
 		var t: int = types[i] if i < types.size() else TYPE_NIL
-		if t != TYPE_NIL and not q._supports_type(t):
+		if t != TYPE_NIL and not q.supports_type(t):
 			Netw.dbg.warn(
 				"SyncConfig.quantize: Quantizer of type '%s' "
 				+ "does not support the declared type '%s' for "
@@ -993,7 +1041,7 @@ class SyncConfig:
 ##     # no send call: the next pump tick ships every marked change
 ## [/codeblock]
 ## Pick the kind by answering who owns the value, who sees it, and whether the
-## server polices it. [enum NetwSyncSet.Record] holds the comparison table. A
+## server polices it. [enum NetwPropertySet.Record] holds the comparison table. A
 ## field with no kind mark rides no per-tick set and syncs only when
 ## [method Netw.sync_property] pushes it explicitly.
 ##
@@ -1001,7 +1049,7 @@ class SyncConfig:
 ## [method volatile], [method retained], [method epsilon], and
 ## [method persisted] refine one property. [method every_tick],
 ## [method on_change], [method heartbeat], [method windowed], [method audience],
-## and [method masked] write through to the script's whole [NetwSyncSet] from
+## and [method masked] write through to the script's whole [NetwPropertySet] from
 ## any member, so the last member to name a knob owns it.
 class PropertyConfig:
 	extends SyncConfig
@@ -1019,9 +1067,9 @@ class PropertyConfig:
 	## receiving peer before the node enters the tree. Set by [method on_spawn].
 	var is_spawn_state: bool = false
 
-	## The field's delivery lane: [constant NetwSyncSet.Lane.VOLATILE] freshest
-	## wins, [constant NetwSyncSet.Lane.RETAINED] reliable on change.
-	var lane: NetwSyncSet.Lane = NetwSyncSet.Lane.VOLATILE
+	## The field's delivery lane: [constant NetwPropertySet.Lane.VOLATILE] freshest
+	## wins, [constant NetwPropertySet.Lane.RETAINED] reliable on change.
+	var lane: NetwPropertySet.Lane = NetwPropertySet.Lane.VOLATILE
 
 	## True once [method state] marks this property into its script's state set.
 	var in_state_set: bool = false
@@ -1038,7 +1086,12 @@ class PropertyConfig:
 	## [method epsilon].
 	var epsilon_override: float = -1.0
 
-	## The script set's [member NetwSyncSet.trigger], or [constant UNSET]. Written
+	## The field's own teleport-tier distance, or a negative value to inherit the
+	## entity's [member PredictionComponent.teleport_threshold]. Set by
+	## [method teleport_at].
+	var teleport_at_override: float = -1.0
+
+	## The script set's [member NetwPropertySet.trigger], or [constant UNSET]. Written
 	## by [method every_tick] and [method on_change].
 	var set_trigger: int = UNSET
 
@@ -1050,19 +1103,19 @@ class PropertyConfig:
 	## by [method heartbeat].
 	var set_heartbeat_ticks: int = UNSET
 
-	## The script set's [member NetwSyncSet.window], or [constant UNSET]. Written
+	## The script set's [member NetwPropertySet.window], or [constant UNSET]. Written
 	## by [method windowed].
 	var set_window: int = UNSET
 
-	## The script set's [member NetwSyncSet.audience]. Written by
+	## The script set's [member NetwPropertySet.audience]. Written by
 	## [method audience] and the [method input] preset.
-	var set_audience: NetwSyncSet.Audience = NetwSyncSet.Audience.AUDIENCE_PUBLIC
+	var set_audience: NetwPropertySet.Audience = NetwPropertySet.Audience.AUDIENCE_PUBLIC
 
-	## The script set's [member NetwSyncSet.masked]. Written by [method masked].
+	## The script set's [member NetwPropertySet.masked]. Written by [method masked].
 	var set_masked: bool = false
 
 	## True once [method persisted] marks this field a persistence column. The
-	## field becomes a schema column [NetwPersistenceInterface] snapshots and
+	## field becomes a schema column [NetwPersistenceEngine] snapshots and
 	## hydrates, independent of whether it also syncs.
 	var is_persisted: bool = false
 
@@ -1073,7 +1126,7 @@ class PropertyConfig:
 	## What the value does in the simulation, which decides whether a
 	## reconciliation compares and restores it. Set by [method causal],
 	## [method derived], and [method cosmetic].
-	var property_class: NetwSyncSet.PropertyClass = NetwSyncSet.PropertyClass.CAUSAL
+	var property_class: NetwPropertySet.PropertyClass = NetwPropertySet.PropertyClass.CAUSAL
 
 	## How firmly a recovery pulls this value toward the authoritative one rather
 	## than writing it outright, or [code]0.0[/code] to write it. Set by
@@ -1090,7 +1143,6 @@ class PropertyConfig:
 	## rather than the script-shared one, because it is bound to that body.
 	var carry_rule: Callable = Callable()
 
-
 	## True once [method teleport_only] restricts the field to teleport-tier
 	## recoveries.
 	var explicit_teleport_only: bool = false
@@ -1102,7 +1154,7 @@ class PropertyConfig:
 
 	## The server owns this value, every observer sees it, and hit detection can
 	## rewind it. The authoritative kind, the body pose the whole game agrees on.
-	## See [enum NetwSyncSet.Record] to compare kinds.
+	## See [enum NetwPropertySet.Record] to compare kinds.
 	## [codeblock]
 	## func _init() -> void:
 	##     Netw.configure_property(self, &"position").state().quantize(pos_q)
@@ -1117,14 +1169,14 @@ class PropertyConfig:
 	## [method epsilon] grants.
 	func state() -> PropertyConfig:
 		in_state_set = true
-		lane = NetwSyncSet.Lane.VOLATILE
-		set_trigger = NetwSyncSet.Trigger.TRIGGER_ON_CHANGE
+		lane = NetwPropertySet.Lane.VOLATILE
+		set_trigger = NetwPropertySet.Trigger.TRIGGER_ON_CHANGE
 		return self
 
 
 	## The controller owns this value, only the server sees it, and the server
 	## re-runs it to verify. The controls kind, the command stream a client is
-	## trusted to author but never to resolve. See [enum NetwSyncSet.Record] to
+	## trusted to author but never to resolve. See [enum NetwPropertySet.Record] to
 	## compare kinds.
 	## [codeblock]
 	## func _init() -> void:
@@ -1140,16 +1192,16 @@ class PropertyConfig:
 	## sample instead of a retransmit. [method windowed] resizes that window.
 	func input() -> PropertyConfig:
 		in_input_set = true
-		lane = NetwSyncSet.Lane.VOLATILE
-		set_trigger = NetwSyncSet.Trigger.TRIGGER_ON_CHANGE
-		set_audience = NetwSyncSet.Audience.AUDIENCE_SERVER_ONLY
+		lane = NetwPropertySet.Lane.VOLATILE
+		set_trigger = NetwPropertySet.Trigger.TRIGGER_ON_CHANGE
+		set_audience = NetwPropertySet.Audience.AUDIENCE_SERVER_ONLY
 		return self
 
 
 	## The controller owns this value, every observer sees it, and nobody checks
 	## it. The display kind, for cosmetic streams like an aim arrow or a look
 	## direction where being wrong costs nothing, so the server keeps no history
-	## and never rewinds it. See [enum NetwSyncSet.Record] to compare kinds.
+	## and never rewinds it. See [enum NetwPropertySet.Record] to compare kinds.
 	## [codeblock]
 	## func _init() -> void:
 	##     Netw.configure_property(self, &"aim_dir").broadcast()
@@ -1163,20 +1215,20 @@ class PropertyConfig:
 	## receives only the fields that changed for them.
 	func broadcast() -> PropertyConfig:
 		in_broadcast_set = true
-		lane = NetwSyncSet.Lane.VOLATILE
-		set_trigger = NetwSyncSet.Trigger.TRIGGER_ON_CHANGE
+		lane = NetwPropertySet.Lane.VOLATILE
+		set_trigger = NetwPropertySet.Trigger.TRIGGER_ON_CHANGE
 		return self
 
 
-	## Routes the field onto the [constant NetwSyncSet.Lane.VOLATILE]
+	## Routes the field onto the [constant NetwPropertySet.Lane.VOLATILE]
 	## freshest-wins lane, right for a value that changes continuously, where a
 	## lost sample is superseded by the next tick anyway. The default lane.
 	func volatile() -> PropertyConfig:
-		lane = NetwSyncSet.Lane.VOLATILE
+		lane = NetwPropertySet.Lane.VOLATILE
 		return self
 
 
-	## Routes the field onto the [constant NetwSyncSet.Lane.RETAINED]
+	## Routes the field onto the [constant NetwPropertySet.Lane.RETAINED]
 	## reliable-on-change lane, right for a discrete value that changes rarely and
 	## must never miss a change.
 	## [codeblock]
@@ -1184,7 +1236,7 @@ class PropertyConfig:
 	## Netw.configure_property(self, &"stunned").state().retained()
 	## [/codeblock]
 	func retained() -> PropertyConfig:
-		lane = NetwSyncSet.Lane.RETAINED
+		lane = NetwPropertySet.Lane.RETAINED
 		return self
 
 
@@ -1195,34 +1247,43 @@ class PropertyConfig:
 	## # rebase the position and then immediately drift away from it again
 	## Netw.configure_property(self, &"velocity").state().causal()
 	## [/codeblock]
-	## See [enum NetwSyncSet.PropertyClass] to compare classes.
+	## See [enum NetwPropertySet.PropertyClass] to compare classes.
 	func causal() -> PropertyConfig:
-		property_class = NetwSyncSet.PropertyClass.CAUSAL
+		property_class = NetwPropertySet.PropertyClass.CAUSAL
 		return self
 
 
-	## Marks the value one the body recomputes from causal fields each step, so a
-	## reconciliation replicates it for observers but never restores it. Writing
-	## it back would set a value the next step overwrites anyway.
+	## Marks the value one the body recomputes from causal fields each step, so no
+	## reconciliation compares it and none is raised on its account.
+	##
+	## A recovery still writes it. Restoration is not gated on the class, and a
+	## value the next step recomputes is harmless to write and worth having for
+	## observers in the meantime. What the class buys is the vote. A field the
+	## body recomputes cannot demand a recovery for a disagreement that only
+	## restates one the causal fields already carry.
 	## [codeblock]
-	## # recomputed from velocity every tick, so restoring it decides nothing
+	## # recomputed from velocity every tick, so it decides no correction
 	## Netw.configure_property(self, &"speed").state().derived()
 	## [/codeblock]
-	## See [enum NetwSyncSet.PropertyClass] to compare classes.
+	## See [enum NetwPropertySet.PropertyClass] to compare classes.
 	func derived() -> PropertyConfig:
-		property_class = NetwSyncSet.PropertyClass.DERIVED
+		property_class = NetwPropertySet.PropertyClass.DERIVED
 		return self
 
 
-	## Marks the value display-only, so no reconciliation compares it and none
-	## restores it. A cosmetic field that disagreed would otherwise correct a
-	## simulation over a value no simulation reads.
+	## Marks the value display-only, so no reconciliation compares it, exactly as
+	## [method derived] does and for the same reason. A cosmetic field that
+	## disagreed would otherwise correct a simulation over a value no simulation
+	## reads. A recovery still writes it, so observers see the authoritative
+	## value. The two classes differ in what they tell a reader rather than in
+	## what the kernel does. [method derived] says the body recomputes the value,
+	## [method cosmetic] says nothing simulated reads it at all.
 	## [codeblock]
 	## Netw.configure_property(self, &"skid_intensity").state().cosmetic()
 	## [/codeblock]
-	## See [enum NetwSyncSet.PropertyClass] to compare classes.
+	## See [enum NetwPropertySet.PropertyClass] to compare classes.
 	func cosmetic() -> PropertyConfig:
-		property_class = NetwSyncSet.PropertyClass.COSMETIC
+		property_class = NetwPropertySet.PropertyClass.COSMETIC
 		return self
 
 
@@ -1242,7 +1303,7 @@ class PropertyConfig:
 	##
 	## A restore carries authority's value for the transition it acknowledged,
 	## which is already
-	## [member NetwLagCompensationInterface.PredictionHandle.ack_age_ticks] old by
+	## [member NetwPredictionHandle.ack_age_ticks] old by
 	## the time it lands, so a field still moving is written behind where it is.
 	## The channel is what closes that gap, at one constant rate, which is exact
 	## only while that rate holds still across the window. A field that declares
@@ -1254,7 +1315,7 @@ class PropertyConfig:
 	## [param channel] must name another [method state] property of the same
 	## entity, and declaring the pair is also what sorts the two: this field joins
 	## the pose
-	## [member NetwLagCompensationInterface.PredictionHandle.teleport_threshold]
+	## [member NetwPredictionHandle.teleport_threshold]
 	## is measured over, and [param channel] joins the momentum family. A value
 	## whose rate turns, decays, or jumps inside the window wants
 	## [method carry_step] instead.
@@ -1271,10 +1332,30 @@ class PropertyConfig:
 	##
 	## Where [method carry_along] extrapolates one rate, this re-runs the part of
 	## the simulation that moves this one field, so a rate that turns, decays or
-	## jumps inside the window is followed rather than averaged. It is that field's
-	## share of the step, never the whole step: nothing else is re-simulated and
-	## the physics server is never stepped, which is what keeps it available to a
-	## body whose solver cannot be re-run.
+	## jumps inside the window is followed rather than averaged. Nothing else is
+	## re-simulated and the physics server is never stepped.
+	##
+	## **The rule must reproduce the whole change the transition made to this
+	## field**, and that is what the engine checks it against. So the verb is for a
+	## field whose change the game authors ENTIRELY. A field the solver also moves
+	## cannot be advanced this way, however correct the rule is about the game's
+	## own share: the recovery needs the value the body actually reached, and the
+	## solver's contribution is neither authored here nor re-runnable — a physics
+	## server that could be re-stepped would not need this verb at all. Such a rule
+	## is refused and retired, and the retirement says so.
+	## [codeblock]
+	## # yes -- a scripted value the solver never touches
+	## Netw.configure_property(self, &"charge").state().carry_step(_carry_charge)
+	##
+	## # no -- the solver moves this too, so its whole change is not yours to
+	## # restate. Measured on a rolling sphere: the game's own term was 1.667 rad/s
+	## # per transition against a realized 0.329, and the rule was RIGHT about the
+	## # 1.667.
+	## Netw.configure_property(self, &"angular_velocity").state() \
+	##         .carry_step(_carry_spin)
+	## [/codeblock]
+	## [method NetwPredictionHandle.reachability] reports
+	## whether a declared rule is live, and why when it is not.
 	## [codeblock]
 	## func _init() -> void:
 	##     Netw.configure_property(self, &"spin").state().carry_step(_carry_spin)
@@ -1287,7 +1368,7 @@ class PropertyConfig:
 	## is replayed against transitions the owner already recorded and retired once
 	## it stops reproducing them, and a refused carry writes the acknowledged value
 	## exactly as an undeclared field does.
-	## [member NetwLagCompensationInterface.PredictionHandle.field_recovery] counts
+	## [member NetwPredictionHandle.field_recovery] counts
 	## both.
 	## [br][br]The rule is stored per node rather than per script, because a
 	## [Callable] is bound to one body while a property declaration is shared by
@@ -1339,8 +1420,40 @@ class PropertyConfig:
 	## [codeblock]
 	## Netw.configure_property(self, &"velocity").state().epsilon(0.05)
 	## [/codeblock]
+	## The threshold is the largest error the field is allowed to HOLD, so
+	## [code]0.0[/code] means any error at all triggers a correction. That is how an
+	## exact field is declared, and it costs a recovery on every quantization step,
+	## so declare it only for a value whose grid the two peers truly share.
+	## A field that should never trigger is [method reconcile_only], not
+	## [code]epsilon(INF)[/code].
 	func epsilon(threshold: float) -> PropertyConfig:
 		epsilon_override = threshold
+		return self
+
+
+	## Sets this field's own teleport-tier [param distance]: the error at which a
+	## recovery stops repairing partially and restores the whole closure verbatim.
+	## A field without one inherits the entity's
+	## [member PredictionComponent.teleport_threshold].
+	##
+	## Same argument as [method epsilon], and the same units problem: the tier is
+	## measured over the fields that can be advanced to the present, which on a 3D
+	## body span metres, radians and radians per second. One scalar across them
+	## compares a rotation rate against a distance, so a field enrolled in that
+	## measurement declares the tier in its own units or inherits a number that
+	## means nothing for it.
+	## [codeblock]
+	## Netw.configure_property(self, &"position").state() \
+	##         .carry_along(&"velocity").teleport_at(3.0)      # metres
+	## Netw.configure_property(self, &"heading").state() \
+	##         .carry_along(&"angular_speed").teleport_at(1.0)  # radians
+	## [/codeblock]
+	## Declaring it also enrols the field in the tier measurement, so a field with
+	## no [method carry_along] channel can still name the distance past which its
+	## own error means the body holds nothing worth keeping. [code]0.0[/code]
+	## therefore means every recovery this field triggers is a teleport.
+	func teleport_at(distance: float) -> PropertyConfig:
+		teleport_at_override = distance
 		return self
 
 
@@ -1348,6 +1461,10 @@ class PropertyConfig:
 	## another field triggers still restores it. Right for a value whose own
 	## drift is tolerable but that must land with the rest of the closure when
 	## one lands.
+	##
+	## This is the mark a [method causal] field needs to say that. No class but
+	## causal votes in the first place, so adding it to a [method derived] or
+	## [method cosmetic] field states an intent the class already carries.
 	## [codeblock]
 	## Netw.configure_property(self, &"heading").state().reconcile_only()
 	## [/codeblock]
@@ -1358,23 +1475,23 @@ class PropertyConfig:
 
 	## Sends the whole set every eligible tick whether or not a field changed,
 	## throttled to at most one send per [param interval] seconds. Writes
-	## [member NetwSyncSet.trigger] for every field in the set.
+	## [member NetwPropertySet.trigger] for every field in the set.
 	## [codeblock]
 	## # position changes every tick anyway, change detection is pure overhead
 	## Netw.configure_property(self, &"position").state().every_tick()
 	## [/codeblock]
 	func every_tick(interval: float = 0.0) -> PropertyConfig:
 		_warn_double_set(set_trigger != UNSET, "trigger")
-		set_trigger = NetwSyncSet.Trigger.TRIGGER_TICK
+		set_trigger = NetwPropertySet.Trigger.TRIGGER_TICK
 		set_every_tick_interval = interval
 		return self
 
 
 	## Sends the set only when a field changed since the last send. The default
-	## [member NetwSyncSet.trigger] of every kind mark.
+	## [member NetwPropertySet.trigger] of every kind mark.
 	func on_change() -> PropertyConfig:
 		_warn_double_set(set_trigger != UNSET, "trigger")
-		set_trigger = NetwSyncSet.Trigger.TRIGGER_ON_CHANGE
+		set_trigger = NetwPropertySet.Trigger.TRIGGER_ON_CHANGE
 		return self
 
 
@@ -1392,7 +1509,7 @@ class PropertyConfig:
 
 	## Carries the last [param samples] ticks of values in every volatile send, so
 	## a lost datagram heals from the next one's redundancy instead of a
-	## retransmit round trip. Writes [member NetwSyncSet.window] for the whole set.
+	## retransmit round trip. Writes [member NetwPropertySet.window] for the whole set.
 	## [codeblock]
 	## # input() already windows at 2; 3 survives two consecutive lost datagrams
 	## Netw.configure_property(self, &"motion").input().windowed(3)
@@ -1404,18 +1521,18 @@ class PropertyConfig:
 
 
 	## Narrows the set to the server only, or back to every recipient. Writes
-	## [member NetwSyncSet.audience] for the whole set. The [method input] preset
+	## [member NetwPropertySet.audience] for the whole set. The [method input] preset
 	## already narrows its set to the server.
 	func audience(server_only: bool = true) -> PropertyConfig:
 		set_audience = (
-				NetwSyncSet.Audience.AUDIENCE_SERVER_ONLY if server_only
-				else NetwSyncSet.Audience.AUDIENCE_PUBLIC
+				NetwPropertySet.Audience.AUDIENCE_SERVER_ONLY if server_only
+				else NetwPropertySet.Audience.AUDIENCE_PUBLIC
 		)
 		return self
 
 
 	## Sends each viewer only the fields that changed since they last confirmed,
-	## instead of one shared row to everyone. Writes [member NetwSyncSet.masked]
+	## instead of one shared row to everyone. Writes [member NetwPropertySet.masked]
 	## for the whole set. The same values arrive, in fewer bytes.
 	## [codeblock]
 	## # 50 spectators, each gets only what changed for them
@@ -1426,7 +1543,7 @@ class PropertyConfig:
 		return self
 
 
-	## Marks this field a column [NetwPersistenceInterface] snapshots and
+	## Marks this field a column [NetwPersistenceEngine] snapshots and
 	## hydrates, independent of whether it also syncs.
 	##
 	## The database only ever sees the value the server sees.
@@ -1587,7 +1704,7 @@ class DespawnConfig:
 	var hook_method: StringName = &""
 
 	## Seconds the node stays in the tree as
-	## [constant NetwLivenessInterface.State.LINGERING] before it is freed.
+	## [constant LivenessShell.State.LINGERING] before it is freed.
 	## [code]0.0[/code] frees immediately.
 	var linger_seconds: float = 0.0
 
@@ -1601,7 +1718,7 @@ class DespawnConfig:
 
 
 	## Keeps the despawned node in the tree for [param seconds] while its
-	## route reports [constant NetwLivenessInterface.State.LINGERING].
+	## route reports [constant LivenessShell.State.LINGERING].
 	func linger(seconds: float) -> DespawnConfig:
 		linger_seconds = seconds
 		return self
@@ -1610,10 +1727,10 @@ class DespawnConfig:
 ## Client-side on-ramp config for one scene root script, registered through
 ## [method Netw.configure_multiplayer_scene]. It carries the presentation knobs
 ## the detach hook reads when a native [method SceneTree.change_scene_to_file]
-## converts into a [method NetwSceneInterface.request_change_path].
+## converts into a [method SceneCore.request_change_path].
 ##
 ## This config is not an authorization record. Whether a client may reach a
-## scene is decided server side by a [signal NetwSceneInterface.change_requested]
+## scene is decided server side by the handler installed through
 ## listener, never by the presence of this mark. The mark only makes a raw path
 ## request reachable by default and gives a listener something to read through
 ## [method Netw.is_multiplayer_scene].
@@ -1635,13 +1752,13 @@ class SceneMarkConfig:
 	var pending_method: StringName = &""
 
 	## Seconds the client request waits before resolving
-	## [constant NetwScenePromise.Result.TIMED_OUT]. [code]0.0[/code] uses
-	## [constant NetwSceneInterface.DEFAULT_REQUEST_DEADLINE].
+	## [constant ERR_TIMEOUT]. [code]0.0[/code] uses
+	## [constant SceneCore.DEFAULT_REQUEST_DEADLINE].
 	var deadline: float = 0.0
 
 	## When [code]true[/code], a request for this scene is deny-default, so a
-	## [signal NetwSceneInterface.change_requested] listener must
-	## [method SceneChangeRequest.allow] it. Set through [method gated].
+	## [method NetwMultiplayer.scene_set_request_handler] must admit it.
+	## Set through [method gated].
 	var is_gated: bool = false
 
 	## When [code]true[/code], an admitted request for this scene replaces the
@@ -1649,10 +1766,25 @@ class SceneMarkConfig:
 	## [method session_wide].
 	var is_session_wide: bool = false
 
+	## Non-unique stem every instance of this script declares itself under,
+	## consumed once at [method NetwEntity.arm] into
+	## [member NetwEntity.scene_label]. Set through [method labeled].
+	var label: StringName = &""
+
+	## When [code]true[/code], a native [method SceneTree.change_scene_to_file]
+	## on this scene root is captured and converted into a server request. Set
+	## through [method captured].
+	var is_captured: bool = false
+
+	## The [enum NetwMultiplayer.SceneIsolation] instances of this script
+	## declare, consumed once at [method NetwEntity.arm] into
+	## [member NetwEntity.scene_isolation]. Set through [method isolated].
+	var isolation: int = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_NONE
+
 
 	## Names a side-effect method the detach hook calls while a captured native
 	## change is pending, such as one that shows a loading screen. The game
-	## undoes it on [signal NetwSceneInterface.native_change_settled]. Stored by
+	## undoes it on [signal SceneCore.native_change_settled]. Stored by
 	## name so the callable only names the method on the scene root.
 	func on_pending(callable: Callable) -> SceneMarkConfig:
 		pending_method = callable.get_method()
@@ -1660,15 +1792,15 @@ class SceneMarkConfig:
 
 
 	## Sets the request deadline in [param seconds] before the promise resolves
-	## [constant NetwScenePromise.Result.TIMED_OUT].
+	## [constant ERR_TIMEOUT].
 	func timeout(seconds: float) -> SceneMarkConfig:
 		deadline = seconds
 		return self
 
 
 	## Opts this scene into deny-default, so a
-	## [signal NetwSceneInterface.change_requested] listener must
-	## [method SceneChangeRequest.allow] every request for it. Without this, a
+	## [method NetwMultiplayer.scene_set_request_handler] must admit it.
+	## Without this, a
 	## declared or marked scene admits requests by default.
 	func gated() -> SceneMarkConfig:
 		is_gated = true
@@ -1676,12 +1808,37 @@ class SceneMarkConfig:
 
 
 	## Declares that an admitted request for this scene replaces the whole
-	## session ([method NetwSceneInterface.change_to]) rather than moving the one
+	## session ([method SceneCore.change_to]) rather than moving the one
 	## requester. Session-wide requests stay deny-default, so a
-	## [signal NetwSceneInterface.change_requested] listener must
-	## [method SceneChangeRequest.allow] them.
+	## [method NetwMultiplayer.scene_set_request_handler] must admit it.
+	## admit them.
 	func session_wide() -> SceneMarkConfig:
 		is_session_wide = true
+		return self
+
+
+	## Names the non-unique stem instances of this script declare themselves
+	## under, readable through [method NetwMultiplayer.scene_find]. Stems collide
+	## freely, because identity is the entity RID.
+	func labeled(stem: StringName) -> SceneMarkConfig:
+		label = stem
+		return self
+
+
+	## Opts this scene into the native-change on-ramp, so a
+	## [method SceneTree.change_scene_to_file] on it detaches the local instance
+	## and issues a server request instead of swapping the tree out from under
+	## the session. Without this, declaring a scene only declares it.
+	func captured() -> SceneMarkConfig:
+		is_captured = true
+		return self
+
+
+	## Declares that instances of this script host their own world, so two live
+	## scenes never share a physics space. The container becomes a
+	## [SubViewport] on a hosting peer and stays a plain [Node] elsewhere.
+	func isolated() -> SceneMarkConfig:
+		isolation = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
 		return self
 
 
@@ -1691,8 +1848,8 @@ class SceneMarkConfig:
 ## [method NetwScriptModel.PropertyConfig.persisted].
 ##
 ## Database routing is not a property of a property, so it lives here and not on
-## [NetwScriptModel.PropertyConfig]. [NetwPersistenceInterface] reads this config to build one
-## [NetwPersistenceInterface.PersistenceEngine] per spawned entity.
+## [NetwScriptModel.PropertyConfig]. [NetwPersistenceEngine] reads this config to build one
+## [NetwPersistenceEngine] per spawned entity.
 ## [codeblock]
 ## func _init() -> void:
 ##     Netw.configure_persistence(self) \

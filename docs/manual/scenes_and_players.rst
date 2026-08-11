@@ -3,67 +3,171 @@
 Scenes and players
 ==================
 
-Networked separates the "world" from the "players in it". The
-:ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` decides which
-levels exist on which peer and when, while :ref:`NetwEntity <class_NetwEntity>`
-decides which actors enter those levels and on whose authority. This page
-works through both, with the
-:ref:`MultiplayerScene <class_MultiplayerScene>` container in the middle as
-the glue.
+Networked separates the "world" from the "players in it". A *scene* owns an
+admission boundary and decides which peers may see what is inside it, while
+:ref:`NetwEntity <class_NetwEntity>` decides which actors enter and on whose
+authority. This page works through both.
 
-Levels, scenes, and the scene manager
--------------------------------------
+Levels, scenes, and declarations
+--------------------------------
 
-A *level* is a normal Godot :godot:`PackedScene <PackedScene>`: a tree of
-nodes saved on disk. A *scene*, in Networked terminology, is one running
-instance of a level inside a session, wrapped in a
-:ref:`MultiplayerScene <class_MultiplayerScene>` so its lifetime, visibility
-filters, and spawn signals are controlled centrally. The
-:ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` keeps the
-running scenes in its :ref:`active_scenes <class_MultiplayerSceneManager_property_active_scenes>` dictionary, keyed by node name, and
-owns the :godot:`MultiplayerSpawner <MultiplayerSpawner>` that replicates
-new scenes to clients.
+A *level* is a normal Godot :godot:`PackedScene <PackedScene>`: a tree of nodes
+saved on disk. A *scene* is one running instance of a level inside a session.
 
-The manager supports two complementary controls per level:
+A scene is not a special node class. It is an ordinary entity that carries one
+extra fact -- it declares itself a scene -- and everything inside its subtree
+belongs to it by ancestry alone. Nothing enrolls, and nothing has to be told
+when an entity moves:
 
-- **Load mode**: :ref:`ON_STARTUP <class_MultiplayerSceneManager_constant_ON_STARTUP>` spawns the level the moment the server
-  finishes hosting. :ref:`ON_DEMAND <class_MultiplayerSceneManager_constant_ON_DEMAND>` waits until a player explicitly asks for
-  the level via :ref:`activate_scene() <class_MultiplayerSceneManager_method_activate_scene>`.
-- **Empty action**: when the last player leaves a scene, the manager can
-  :ref:`KEEP_ACTIVE <class_MultiplayerSceneManager_constant_KEEP_ACTIVE>` (the default for lobbies), :ref:`FREEZE <class_MultiplayerSceneManager_constant_FREEZE>` (pause the level so
-  it stops processing but stays cheap to wake up), or :ref:`DESTROY <class_MultiplayerSceneManager_constant_DESTROY>` (free the
-  scene so memory is reclaimed). The right choice depends on whether you
-  want late joiners to find the level instantly or whether the level is
-  expensive to keep alive.
+.. tabs::
+ .. code-tab:: gdscript GDScript
 
-A single-scene project still needs an explicit
-:ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` child under the
-tree, configured with the level as its only spawnable scene in
-:ref:`ON_STARTUP <class_MultiplayerSceneManager_constant_ON_STARTUP>` mode.
-The first time you need a second level (a lobby plus a match, say) you add
-its scene config alongside the first.
+    # On the level root, before it goes live.
+    func _init() -> void:
+        Netw.configure_multiplayer_scene(self).labeled(&"Arena")
 
-The MultiplayerScene container
-------------------------------
+Because membership is ancestry, reparenting a node into a scene's subtree
+*is* joining that scene. The one thing parenting does not carry is admission,
+which is why moving a player across a boundary goes through a verb.
 
-When a level spawns, the manager wraps it in a
-:ref:`MultiplayerScene <class_MultiplayerScene>` and parents the actual
-level node underneath. The container does three useful things:
+The stem is not an identity. Two live instances of one arena share the stem
+``&"Arena"`` and own two separate admission boundaries, so identity is always
+the scene's entity RID. :ref:`scene_find() <class_NetwMultiplayer_method_scene_find>`
+answers "an instance of this stem";
+:ref:`scene_find_all() <class_NetwMultiplayer_method_scene_find_all>` answers
+"every instance".
 
-1. It enrolls the wrapper and descendant entity roots in the scene's
-   :ref:`NetwInterestLayer <class_NetwInterestLayer>`. The wrapper row clamps
-   the subtree, so per-peer visibility applies automatically.
-2. It tracks the players currently inside the scene, emitting signals
-   as they arrive or leave.
-3. It provides readiness gates (via
-   :ref:`MultiplayerScene.create_readiness_gate() <class_MultiplayerScene_method_create_readiness_gate>`)
-   so the game only starts once every player has finished loading.
+A session always owns its scene registry, so declaring a scene never requires a
+:ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` node. That node is
+inspector sugar over the same declaration rows a tree-less session builds
+directly.
 
-You do not instantiate :ref:`MultiplayerScene <class_MultiplayerScene>`
-yourself. The scene manager creates them, and the wrapper does its work
-through the synchronizer and the
-:godot:`MultiplayerSpawner <MultiplayerSpawner>` you already configured
-on the level.
+Reaching a scene
+----------------
+
+Every entity resolves the scene it is in through
+:ref:`NetwEntity.scene <class_NetwEntity_property_scene>`, which answers a
+:ref:`NetwSceneHandle <class_NetwSceneHandle>`. The handle is a view over the
+scene's entity, never ``null``, and one scene has exactly one handle -- so
+``==`` answers "the same scene":
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    var scene := NetwEntity.of(self).scene
+    if scene.is_declared:
+        scene.admit(participant)
+        for player in scene.players:
+            greet(player)
+
+    if NetwEntity.of(shooter).scene == NetwEntity.of(target).scene:
+        apply_damage()
+
+The handle reports the scene's edges as callbacks rather than signals, because
+a callback names the scene rather than whichever node currently stands in for
+it. Registrations chain:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    NetwEntity.of(self).scene \
+        .on_participant_entered(_greet) \
+        .on_participant_left(_farewell) \
+        .on_player_entered(_seat_car)
+
+:ref:`players <class_NetwSceneHandle_property_players>` and
+:ref:`entities <class_NetwSceneHandle_property_entities>` are derived from the
+subtree rather than from a roster, so they cannot drift out of step with the
+tree. A player is simply an entity that carries a peer.
+
+The container node
+------------------
+
+A scene mounts under a container node, which the spawn recipe builds on every
+peer. The container carries no script: which node class it is follows from the
+scene's declared :ref:`SceneIsolation <enum_NetwMultiplayer_SceneIsolation>`.
+
+.. code-block::
+
+    SCENE_ISOLATION_NONE        every peer builds a plain Node
+    SCENE_ISOLATION_OWN_WORLD   a hosting peer builds a SubViewport with its
+                                own world, so two live scenes never share a
+                                physics space; a peer that only views the
+                                scene still builds a plain Node, because only
+                                the host simulates
+
+Isolation is settled before the entity arms, because the recipe runs on every
+peer and a peer that built the wrong kind of container cannot anchor the
+scene's children. Reach the container's content root as
+:ref:`level <class_NetwSceneHandle_property_level>`; a scene with no content is
+a pure admission boundary, which is useful for a lobby, a spectator scope, or a
+team channel.
+
+Match state on the scene itself
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A scene is an ordinary networked entity, so anything a match needs to
+agree on — a countdown, a ready roster, a vote — is a replicated property
+on the scene, not a bespoke API. This is the recipe to reach for, and it
+generalizes: what works for a countdown works for map voting or vote-kick.
+
+A countdown is one replicated integer. Store the *target tick* rather than
+the seconds remaining, so late joiners get the truth on the spawn packet
+instead of a number that was already stale when it was sent:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    var countdown_target := 0
+
+    func _init() -> void:
+        Netw.configure_property(self, &"countdown_target").on_spawn()
+
+    var seconds_left: float:
+        get:
+            if countdown_target == 0:
+                return 0.0
+            var api := Netw.of(self)
+            return maxf(0.0, float(countdown_target - api.tick) / api.tickrate)
+
+    # Server only. Clients read seconds_left and display it.
+    func start_countdown(seconds: int) -> void:
+        var api := Netw.of(self)
+        countdown_target = api.tick + seconds * api.tickrate
+
+Only the server needs the "countdown finished" edge, and the server does
+not need a network mechanism to learn its own timer expired — it compares
+:ref:`tick <class_NetwMultiplayer>` against the target in its own process
+loop. Clients need a number to display, which is exactly what the property
+gives them.
+
+Readiness is the same shape with a dictionary. The client asks, the server
+decides and writes, and every peer reads the result:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    var ready_peers: Dictionary[int, bool] = { }
+
+    func _init() -> void:
+        Netw.configure_property(self, &"ready_peers").on_spawn()
+        Netw.configure_rpc(request_ready)
+
+    # Player request.
+    func request_ready(is_ready: bool) -> void:
+        var peer_id := multiplayer.get_remote_sender_id()
+        ready_peers[peer_id] = is_ready
+        ready_peers = ready_peers  # re-assign so the property replicates
+
+    func everyone_ready() -> bool:
+        return not ready_peers.is_empty() and not ready_peers.values().has(false)
+
+The subtlety worth knowing: when a not-ready player leaves, the remaining
+players may now all be ready. Erase the departing peer's row in your
+:ref:`on_participant_left() <class_NetwSceneHandle_method_on_participant_left>`
+callback and re-check, or
+the match never starts. Whether that should start the match is game policy,
+which is why it lives in your code rather than in the addon.
 
 The entity record
 ------------------
@@ -164,8 +268,9 @@ Spawning and despawning
 Most spawns happen inside the addon: a client connects, the server
 accepts their :ref:`NetwParticipant <class_NetwParticipant>`, and
 :ref:`NetwEntity.instantiate_player() <class_NetwEntity>` drops a
-copy of the template into the target
-:ref:`MultiplayerScene <class_MultiplayerScene>`. For everything else (NPCs, projectiles, loot) there are two helpers:
+copy of the template into the target scene through
+:ref:`NetwSceneHandle.add_player() <class_NetwSceneHandle_method_add_player>`.
+For everything else (NPCs, projectiles, loot) there are two helpers:
 
 - :ref:`NetwEntity.spawn_under() <class_NetwEntity>`: the
   simple case: clone the template under a parent and give it an entity id.

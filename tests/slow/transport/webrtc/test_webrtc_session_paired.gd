@@ -7,6 +7,9 @@
 class_name TestWebRTCSessionPaired
 extends NetwTestSuite
 
+const WebRTCSignaler := preload("res://addons/networked/transport/webrtc/signaler/webrtc_signaler.gd")
+
+
 func _payload(username: String) -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username
@@ -20,13 +23,14 @@ func test_paired_signaler_reaches_native_connection() -> void:
 	var client := WebRTCTestSupport.make_client_tree(self, "_join")
 	var target := WebRTCTestSupport.make_join_target(client, host.room)
 
-	var err: Error = await client.join(target, _payload("valeria"))
+	var result := await NetwConnector.of(client.api).join(target, _payload("valeria"))
+	var err := NetwConnector.error_of(result)
 
 	assert_int(err).is_equal(OK)
-	assert_bool(client.is_online()).is_true()
-	assert_int(client.role).is_equal(NetwSessionInterface.Role.CLIENT)
+	assert_bool(client.api.is_online).is_true()
+	assert_int(client.role).is_equal(SessionCore.Role.CLIENT)
 
-	var res := client.last_connect_result
+	var res := result
 	assert_that(res).is_not_null()
 	assert_bool(res.is_ok()).is_true()
 	var diags := res.diagnostics
@@ -36,10 +40,8 @@ func test_paired_signaler_reaches_native_connection() -> void:
 	var deadline := get_tree().create_timer(1.5)
 	while int(stats.get("host", 0)) == 0 and deadline.time_left > 0.0:
 		await get_tree().process_frame
-		res = client.last_connect_result
-		if res:
-			diags = res.diagnostics
-			stats = diags.get("candidates", { })
+		diags = res.diagnostics
+		stats = diags.get("candidates", { })
 
 	assert_int(int(stats.get("host", 0))).is_greater(0)
 

@@ -34,6 +34,16 @@ runs:
       working-directory: docs
       run: python tools/build_make_rst.py --check
 
+    # The addon's own classes live in the native library, and the GDScript that
+    # types against them will not parse without it, so doctool would emit an
+    # empty class reference. addons/networked/bin is git-ignored, so the library
+    # has to be built here rather than checked out. It builds on the same
+    # interpreter Sphinx runs on, so this cannot switch python out from under
+    # the requirements installed above.
+    - uses: ./.github/actions/build-native
+      with:
+        python-version: ${{ inputs.python-version }}
+
     - name: Cache Godot binary
       id: cache-godot
       uses: actions/cache@v4

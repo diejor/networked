@@ -27,12 +27,21 @@ const DEFAULT_TIMEOUT := 1.0
 ## reporter or assign their own.
 var reporter: Callable = _default_reporter
 
+## Optional [NetwMultiplayer] implementation script installed on every harness peer.
+##
+## Assign before [method setup]. The harness forwards it through
+## [member MultiplayerTree.api_script] before the tree enters the scene tree.
+var api_script: Script
+
 var _session: LocalLoopbackSession
 var _loopback: NetwHarnessSession
 var _server: MultiplayerTree
 var _clients: Array[MultiplayerTree] = []
 var _scene_manager_factory: Callable = Callable()
 var _scene_manager_scene: PackedScene = null
+# The declaration this harness authors when no manager node does, held so later
+# rows edit the same resource the session already reads.
+var _scene_config: NetwSceneConfig = null
 var _world_scene: PackedScene
 var _waiter: NetwWaiter
 var _extra_sessions: Array[LocalLoopbackSession] = []
@@ -104,6 +113,7 @@ func teardown() -> void:
 
 	_clients.clear()
 	_server = null
+	_scene_config = null
 
 	if tree:
 		await NetwTestSuite.drain_frames(tree, 1)
@@ -116,8 +126,9 @@ func teardown() -> void:
 	for extra_session in _extra_sessions:
 		if extra_session:
 			extra_session.reset()
-			if LocalLoopbackSession.shared == extra_session:
-				LocalLoopbackSession.shared = null
+			if LocalLoopbackSession.has_shared_session() \
+					and LocalLoopbackSession.get_shared_session() == extra_session:
+				LocalLoopbackSession.set_shared_session(null)
 	_extra_sessions.clear()
 	_scene_manager_factory = Callable()
 	_scene_manager_scene = null
@@ -143,7 +154,7 @@ func teardown() -> void:
 ## [method register_spawnable_scene] has had a chance to configure scenes.
 ## [codeblock]
 ## var client := await harness.add_client()
-## assert_bool(client.is_online()).is_true()
+## assert_bool(client.api.is_online).is_true()
 ## [/codeblock]
 func add_client(username: String = "") -> MultiplayerTree:
 	await _ensure_server_hosted()
@@ -153,7 +164,7 @@ func add_client(username: String = "") -> MultiplayerTree:
 		username = "test_player_%d" % index
 
 	var client := _make_service_tree(
-		NetwSessionInterface.Role.CLIENT,
+		NetwMultiplayer.Role.CLIENT,
 		"HarnessClient%d" % index,
 	)
 	client.set_meta(&"_harness_username", username)
@@ -172,7 +183,7 @@ func add_client(username: String = "") -> MultiplayerTree:
 	)
 
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	var server_api := _server.multiplayer_api
+	var server_api := _server.api
 	await _wait_until(
 		func() -> bool: return peer_id in server_api.get_peers(),
 		"server to register peer %d" % peer_id,
@@ -213,15 +224,15 @@ func server_scene_manager() -> MultiplayerSceneManager:
 
 
 ## Creates a [MultiplayerClock] on [method server] and every client, returning
-## the server's [NetwClockInterface] tick engine.
+## the server's [ClockCore] tick engine.
 ##
 ## Clients created after this call receive the same clock before joining.
-## Existing clients are awaited until [signal NetwClockInterface.clock_synchronized]
+## Existing clients are awaited until [signal ClockCore.clock_synchronized]
 ## fires.
 func add_clock(
 		tickrate: int = 30,
 		display_offset: int = 3,
-) -> NetwClockInterface:
+) -> ClockCore:
 	_clock_enabled = true
 	_clock_tickrate = tickrate
 	_clock_display_offset = display_offset
@@ -238,11 +249,11 @@ func add_clock(
 
 
 ## Mounts a [LagCompensation] node on [method server] and every client,
-## returning the server's [NetwLagCompensationInterface] engine.
+## returning the server's [LagCompCore] engine.
 ##
 ## The node is no longer auto-created, so a rewind or prediction test must mount it
 ## explicitly. Clients created after this call receive one before joining.
-func add_lag_compensation() -> NetwLagCompensationInterface:
+func add_lag_compensation() -> LagCompCore:
 	_lag_comp_enabled = true
 	var server_iface := _ensure_lag_compensation(_server)
 	for client in _clients:
@@ -309,7 +320,7 @@ func disconnect_client(client: MultiplayerTree) -> void:
 		return
 
 	var peer_id := _loopback.disconnect_tree(client)
-	var server_api := _server.multiplayer_api
+	var server_api := _server.api
 	await _wait_until(
 		func() -> bool: return not peer_id in server_api.get_peers(),
 		"server to unregister peer %d" % peer_id,
@@ -317,8 +328,8 @@ func disconnect_client(client: MultiplayerTree) -> void:
 
 	if client.api and client.api.has_multiplayer_peer():
 		client.api.multiplayer_peer = null
-	client.state = NetwSessionInterface.State.OFFLINE
-	client.role = NetwSessionInterface.Role.NONE
+	client.state = NetwMultiplayer.SessionState.OFFLINE
+	client.role = NetwMultiplayer.Role.NONE
 	await get_tree().process_frame
 
 
@@ -340,7 +351,7 @@ func reconnect_client(client: MultiplayerTree) -> void:
 	)
 
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	var server_api := _server.multiplayer_api
+	var server_api := _server.api
 	await _wait_until(
 		func() -> bool: return peer_id in server_api.get_peers(),
 		"server to register reconnected peer %d" % peer_id,
@@ -352,23 +363,22 @@ func reconnect_client(client: MultiplayerTree) -> void:
 
 ## Admits [param client] to [param scene_name] without spawning a player.
 ##
-## Calls [method MultiplayerScene.connect_peer] on [method server] and waits
-## for [param client] to activate the scene.
+## Calls [method NetwSceneHandle.admit] on [method server] and waits for
+## [param client] to activate the scene.
 func admit_client_to_scene(
 		client: MultiplayerTree,
 		scene_name: StringName,
-) -> MultiplayerScene:
+) -> NetwSceneHandle:
 	var s := scene_on_server(scene_name)
 	assert(
 		s,
 		"admit_client_to_scene: scene '%s' not active on server." % scene_name,
 	)
-	var peer_id := client.multiplayer_peer.get_unique_id()
-	s.connect_peer(peer_id)
+	s.admit(client.multiplayer_peer.get_unique_id())
 	return await wait_for_scene(client, scene_name)
 
 
-## Sends [method MultiplayerTree.submit_join] from [param client].
+## Sends [method NetwSessionHandle.submit_join] from [param client].
 ##
 ## [param level_scene_path] must be registered with
 ## [method register_spawnable_scene]. [param spawner_node_path] is relative to
@@ -395,21 +405,33 @@ func join_player(
 	join_payload.username = username
 	join_payload.arg_values = NetwDefaultJoin.args_from_scene_node_path(entity_path)
 
-	client.submit_join(join_payload)
-
 	var scene_name: StringName = entity_path.get_scene_name()
 	var scene := scene_on_server(scene_name)
 	var player_name := player_name_for(client)
 	var player_path := NodePath(String(player_name))
 
+	# The scene has to be on the server before a player can join into it, so a
+	# missing handle is answered here rather than by asking the server to spawn
+	# into a scene it does not have. Submitting first would provoke the spawn's
+	# own failure cascade and leave the caller dereferencing a handle it never
+	# got, where the crash reads as an engine error instead of as the missing
+	# scene it is.
+	if scene == null:
+		push_error("join_player: the server has no scene '%s'" % scene_name)
+		return null
+
+	client.api.session.submit_join(join_payload)
+
 	var timed_out := await _wait_until(
-		func() -> bool: return scene.level.get_node_or_null(player_path) != null,
+		func() -> bool: return scene.level != null \
+				and scene.level.get_node_or_null(player_path) != null,
 		"player '%s' in scene '%s'" % [player_name, scene_name],
 	)
 	if timed_out:
 		return null
 
-	return scene.level.get_node_or_null(player_path)
+	var level := scene.level
+	return level.get_node_or_null(player_path) if level != null else null
 
 
 ## Builds a [JoinPayload] that accepts a player without spawning a node.
@@ -450,7 +472,7 @@ func add_listen_server(
 		auth_flow: NetwAuthFlow = null,
 ) -> MultiplayerTree:
 	var tree := _make_service_tree(
-		NetwSessionInterface.Role.LISTEN_SERVER,
+		NetwMultiplayer.Role.LISTEN_SERVER,
 		"HarnessListenServer",
 		false,
 	)
@@ -469,7 +491,7 @@ func add_listen_server(
 
 
 ## Creates a client tree that joins the harness server through
-## [method MultiplayerTree.join_or_host].
+## [method NetwConnector.join_or_host].
 func add_connect_player(
 		join_payload: JoinPayload,
 		auth_flow: NetwAuthFlow = null,
@@ -497,7 +519,7 @@ func create_connect_player_tree(
 ) -> MultiplayerTree:
 	await _ensure_server_hosted()
 	var tree := _make_service_tree(
-		NetwSessionInterface.Role.CLIENT,
+		NetwMultiplayer.Role.CLIENT,
 		tree_name,
 		true,
 	)
@@ -513,7 +535,7 @@ func add_host(
 		auth_flow: NetwAuthFlow = null,
 ) -> MultiplayerTree:
 	var tree := _make_service_tree(
-		NetwSessionInterface.Role.CLIENT,
+		NetwMultiplayer.Role.CLIENT,
 		"HarnessHostPlayer",
 		false,
 	)
@@ -609,41 +631,79 @@ func player_name_for(client: MultiplayerTree) -> StringName:
 ## [/codeblock]
 func register_spawnable_scene(scene: PackedScene, initial: bool = true) -> void:
 	var path := scene.resource_path
-
+	# A manager is optional: a session reads whichever [NetwSceneConfig] was
+	# registered, so a manager-less harness authors one itself. When a manager
+	# exists it stays the declaring node, so its inspector rows and these stay
+	# one list.
 	var sm := server_scene_manager()
-	assert(sm, "register_spawnable_scene: server has no MultiplayerSceneManager.")
+	if sm == null:
+		_declare_without_manager(scene, initial)
+		return
 	if initial:
 		sm.register_initial_scene_path(path)
 	else:
 		sm.register_scene_path(path)
 
+
+# Authors the session's declaration the way [MultiplayerSceneManager] does:
+# register one config, then edit its rows in place, which the session reads back
+# because it holds this same resource rather than a copy.
+func _declare_without_manager(scene: PackedScene, initial: bool) -> void:
+	var state := scene.get_state()
+	if state.get_node_count() == 0:
+		return
+	if _scene_config == null:
+		_scene_config = NetwSceneConfig.new()
+		server().api.object_configuration_add(self, _scene_config)
+	_scene_config.scenes[StringName(state.get_node_name(0))] = scene
+	if initial and not _scene_config.initial_scenes.has(scene):
+		_scene_config.initial_scenes.append(scene)
+
 #endregion
 
 #region Scene waits
 
-## Returns an active [MultiplayerScene] from [method server_scene_manager].
+## Returns an active scene on [method server], as a [NetwSceneHandle].
 ##
 ## Empty [param scene_name] returns the first active scene.
-func scene_on_server(scene_name: StringName = "") -> MultiplayerScene:
-	var scenes := server().api.scenes
+func scene_on_server(scene_name: StringName = "") -> NetwSceneHandle:
+	var api := server().api
 	if scene_name.is_empty():
-		return scenes.scenes.values()[0]
-	return scenes.scene(scene_name)
+		var live := api.scene_list()
+		return api.scene_handle(live[0]) if not live.is_empty() else null
+	return api.scene_handle(api.scene_find(scene_name))
 
 
 ## Waits for [param scene_name] to become active on [param client].
 func wait_for_scene(
 		client: MultiplayerTree,
 		scene_name: StringName,
-) -> MultiplayerScene:
-	var scenes := client.api.scenes
+) -> NetwSceneHandle:
+	var api := client.api
 	var timed_out := await _wait_until(
-		func() -> bool: return scenes.scene(scene_name) != null,
+		func() -> bool: return api.scene_find(scene_name).is_valid(),
 		"scene '%s' on client" % scene_name,
 	)
 	if timed_out:
 		return null
-	return scenes.scene(scene_name)
+	return api.scene_handle(api.scene_find(scene_name))
+
+
+## Suspends until [param scene] holds at least [param count] players.
+func wait_for_players(scene: NetwSceneHandle, count: int) -> bool:
+	return await _wait_until(
+		func() -> bool: return scene != null and scene.players.size() >= count,
+		"%d players in scene" % count,
+	)
+
+
+## Suspends until [param scene] admits at least [param count] participants.
+func wait_for_participants(scene: NetwSceneHandle, count: int) -> bool:
+	return await _wait_until(
+		func() -> bool: return scene != null \
+				and scene.participants.size() >= count,
+		"%d participants in scene" % count,
+	)
 
 
 ## Waits for a player in [param scene_name] on [param client].
@@ -660,7 +720,7 @@ func wait_for_player(
 
 	var find_player := func() -> Node:
 		if player_name.is_empty():
-			var players := scene.player_nodes()
+			var players := scene.players
 			return players[0].owner if players.size() > 0 else null
 		return _find_scene_player(scene, player_name)
 
@@ -716,18 +776,18 @@ func _default_reporter(label: String, timeout: float) -> void:
 
 
 func _ensure_server_hosted() -> void:
-	if _server.is_online():
+	if _server.api.is_online:
 		return
 	# The server host is deferred, so another live harness (or an isolated
 	# tree from add_listen_server) may have repointed the process-global
 	# session between setup and this call. Rebind it to this harness's own
 	# session so the server binds where its clients will look for it.
-	LocalLoopbackSession.shared = _session
+	LocalLoopbackSession.set_shared_session(_session)
 	var host_err: Error = await _loopback.connect_tree(
 		_server,
 		NetwHarnessSession.Entry.OPEN_HOST,
 	)
-	assert(host_err == OK, "Server _open_host() failed: %s" % error_string(host_err))
+	assert(host_err == OK, "Server host(null) failed: %s" % error_string(host_err))
 
 
 func _instantiate_scene_manager() -> MultiplayerSceneManager:
@@ -752,13 +812,14 @@ func _configure_client_scene_manager(sm: MultiplayerSceneManager) -> void:
 
 
 func _make_service_tree(
-		role: NetwSessionInterface.Role,
+		role: NetwMultiplayer.Role,
 		tree_name: String,
 		use_shared_session: bool = true,
 ) -> MultiplayerTree:
 	var tree := MultiplayerTree.new()
 	tree.name = tree_name
 	tree.desired_role = role
+	tree.api_script = api_script
 
 	if _world_scene:
 		tree.add_child(_world_scene.instantiate())
@@ -769,15 +830,15 @@ func _make_service_tree(
 		_loopback.adopt_tree(tree, role)
 	else:
 		tree.auto_host_headless = false
-		tree.scheme = &"local"
+		tree.transport = NetwLocalParams.new()
 		var isolated := LocalLoopbackSession.new()
 		_extra_sessions.append(isolated)
-		LocalLoopbackSession.shared = isolated
+		LocalLoopbackSession.set_shared_session(isolated)
 
 	if _scene_manager_scene != null or not _scene_manager_factory.is_null():
 		var sm := _instantiate_scene_manager()
 		if sm:
-			if role != NetwSessionInterface.Role.DEDICATED_SERVER:
+			if role != NetwMultiplayer.Role.DEDICATED_SERVER:
 				_configure_client_scene_manager(sm)
 			tree.add_child(sm)
 
@@ -790,11 +851,11 @@ func _make_service_tree(
 	return tree
 
 
-func _ensure_clock(mt: MultiplayerTree) -> NetwClockInterface:
+func _ensure_clock(mt: MultiplayerTree) -> ClockCore:
 	var existing := mt.get_service(MultiplayerClock) as MultiplayerClock
 	if not existing:
 		_add_clock_node(mt)
-	return mt.api.clock
+	return mt.api._clock
 
 
 func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
@@ -806,13 +867,13 @@ func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
 	return clock
 
 
-func _ensure_lag_compensation(mt: MultiplayerTree) -> NetwLagCompensationInterface:
+func _ensure_lag_compensation(mt: MultiplayerTree) -> LagCompCore:
 	var existing := mt.get_service(LagCompensation) as LagCompensation
 	if not existing:
 		existing = mt.find_service_node(LagCompensation) as LagCompensation
 	if not existing:
 		_add_lag_comp_node(mt)
-	return mt.api.lag_compensation
+	return mt.api._lagcomp
 
 
 func _add_lag_comp_node(mt: MultiplayerTree) -> LagCompensation:
@@ -824,18 +885,18 @@ func _add_lag_comp_node(mt: MultiplayerTree) -> LagCompensation:
 
 func _setup_server() -> void:
 	_server = _make_service_tree(
-		NetwSessionInterface.Role.DEDICATED_SERVER,
+		NetwMultiplayer.Role.DEDICATED_SERVER,
 		"HarnessServer",
 	)
 
 
 func _find_scene_player(
-		scene: MultiplayerScene,
+		scene: NetwSceneHandle,
 		player_name: StringName,
 ) -> Node:
 	if not scene:
 		return null
-	for player: NetwEntity in scene.player_nodes():
+	for player: NetwEntity in scene.players:
 		if player != null and is_instance_valid(player.owner):
 			if player.owner.name == player_name:
 				return player.owner

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictRecoveryRequest" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="fill">
+			<return type="void" />
+			<param index="0" name="predicted" type="Array" />
+			<param index="1" name="authority" type="Array" />
+			<param index="2" name="current" type="Array" />
+			<param index="3" name="field_errors" type="PackedFloat64Array" />
+			<param index="4" name="basis" type="int" />
+			<param index="5" name="current_label" type="int" />
+			<param index="6" name="policy" type="int" />
+			<param index="7" name="fallback_epsilon" type="float" />
+			<param index="8" name="fallback_teleport" type="float" />
+			<param index="9" name="max_restore_ticks" type="int" />
+			<param index="10" name="ack_age_ticks" type="int" />
+			<param index="11" name="collision_cooldown_ticks" type="int" />
+			<param index="12" name="tick_delta" type="float" />
+			<param index="13" name="domain" type="int" />
+			<param index="14" name="attribution" type="int" />
+			<param index="15" name="contact_window" type="bool" />
+			<param index="16" name="suppressed" type="bool" />
+			<param index="17" name="pose_unmeasured" type="bool" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

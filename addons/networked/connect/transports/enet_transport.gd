@@ -1,9 +1,8 @@
 ## A [NetwTransport] over [ENetMultiplayerPeer] for LAN and direct IP.
 ##
-## Recognizes the [code]&"enet"[/code] scheme and reads the port from
-## [member NetwHostConfig.params] or the [code]host:port[/code] form of
-## [member NetwConnectTarget.address]. ENet has no web export, so
-## [method _is_available] is false there.
+## Recognizes [NetwENetParams] and reads the port from it when hosting, or from
+## the [code]host:port[/code] form of [member NetwConnectTarget.address] when
+## joining. ENet has no web export, so [method _is_available] is false there.
 class_name ENetTransport
 extends NetwTransport
 
@@ -11,8 +10,14 @@ const DEFAULT_PORT := 21253
 const DEFAULT_MAX_CLIENTS := 32
 
 
-func scheme() -> StringName:
+func _scheme() -> StringName:
 	return &"enet"
+
+
+func _params_from_dict(source: Dictionary) -> NetwTransportParams:
+	var params := NetwENetParams.new()
+	params.from_dict(source)
+	return params
 
 
 func _can_join(target: NetwConnectTarget) -> bool:
@@ -20,11 +25,7 @@ func _can_join(target: NetwConnectTarget) -> bool:
 
 
 func _can_host(config: NetwHostConfig) -> bool:
-	return config != null and config.scheme == &"enet"
-
-
-func _can_view(peer: MultiplayerPeer) -> bool:
-	return peer is ENetMultiplayerPeer
+	return config != null and config.transport is NetwENetParams
 
 
 func _make_view(
@@ -38,8 +39,9 @@ func _host(
 		_attempt: NetwConnectAttempt,
 		config: NetwHostConfig,
 ) -> MultiplayerPeer:
-	var port := int(config.params.get("port", DEFAULT_PORT))
-	var max_clients := int(config.params.get("max_clients", DEFAULT_MAX_CLIENTS))
+	var params := config.transport as NetwENetParams
+	var port := params.port if params else DEFAULT_PORT
+	var max_clients := params.max_clients if params else DEFAULT_MAX_CLIENTS
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_clients)
 	if err != OK:
@@ -49,9 +51,10 @@ func _host(
 			func(m): push_warning(m),
 		)
 		return null
-	# Record the resolved cap on the config so the probe reply reports the
+	# Record the resolved cap on the params so the probe reply reports the
 	# effective maximum, not the authored absence of one.
-	config.params["max_clients"] = max_clients
+	if params:
+		params.max_clients = max_clients
 	return peer
 
 

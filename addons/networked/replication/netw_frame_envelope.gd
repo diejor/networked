@@ -23,8 +23,8 @@
 ## whether a racing [constant Channel.CALL] defers or drops.
 ##
 ## [br][br]An unreliable datagram carries one [code]u16[/code] sequence stamp
-## for all its frames, counted per destination peer by
-## [method NetwMultiplayer.send_packet]. A receiver applies an unreliable
+## for all its frames, counted per destination peer by the session's carrier.
+## A receiver applies an unreliable
 ## entity frame only when its stamp is fresher than the last it accepted for
 ## that sender, route, and channel, judged by
 ## [method NetwSyncPipeline.accept_unreliable], so a reordered datagram loses
@@ -32,30 +32,22 @@
 class_name NetwFrameEnvelope
 extends RefCounted
 
-# Frame codec shared by [NetwReplicationInterface] and [NetwRpcInterface], so
+const RpcCore := preload("res://addons/networked/replication/rpc_core.gd")
+
+# Frame codec shared by [ReplicationCore] and [RpcCore], so
 # the wire format has exactly one implementation. Named
 # [code]NetwFrameEnvelope[/code], not [code]NetwEnvelope[/code], because
 # [code]NetwEnvelope[/code] already names the debug telemetry identity wrapper
 # in [code]debug/telemetry/netw_envelope.gd[/code].
 
-## First datagram byte marking Networked framing sent reliable. Applications
-## sharing [method SceneMultiplayer.send_bytes] with the addon must not start
-## their own packets with this byte or [constant CARRIER_MAGIC_UNRELIABLE].
-const CARRIER_MAGIC_RELIABLE := 0x4E
+## First datagram byte marking Networked V9 framing sent reliable.
+const CARRIER_MAGIC_RELIABLE := 0x56
 
-## First datagram byte marking Networked framing sent unreliable. See
-## [constant CARRIER_MAGIC_RELIABLE] for the reservation contract.
-const CARRIER_MAGIC_UNRELIABLE := 0x6E
+## First datagram byte marking Networked V9 framing sent unreliable.
+const CARRIER_MAGIC_UNRELIABLE := 0x76
 
-## First datagram byte marking an unreliable Networked datagram that also echoes
-## the freshest inbound sequence back to its sender. The header carries the
-## freshness [code]u16[/code] then the echo [code]u16[/code] before the frames,
-## so the leading magic names the datagram shape and landed shapes never re-cut.
-## The echo is the receiver-to-sender state-ack, distinct from the
-## server-to-client reconciliation ack the [constant SYNC_FLAG_ACKED] bit
-## carries. A sender reads it to learn the freshest datagram each peer holds, the
-## baseline a per-peer delta picks its diff against.
-const CARRIER_MAGIC_UNRELIABLE_ACKED := 0x8E
+## First datagram byte marking an unreliable Networked V9 datagram that echoes sequence.
+const CARRIER_MAGIC_UNRELIABLE_ACKED := 0x96
 
 ## The SYNC frame flags [code]u8[/code] bit layout, the extension point that
 ## keeps a plain (flags [code]0[/code]) frame byte-identical while stamped,
@@ -80,7 +72,7 @@ const SYNC_FLAG_MASKED := 1 << 4
 ##
 ## [constant Channel.SYNC] and [constant Channel.SYNC_DELTA] are the per-tick
 ## sync carriers, pumped together every
-## [signal NetwClockInterface.after_tick]. [constant Channel.CALL] and
+## [signal ClockCore.after_tick]. [constant Channel.CALL] and
 ## [constant Channel.REPLY] carry entity RPCs and their transaction replies.
 ## [constant Channel.SIGNAL] and [constant Channel.PROPERTY_SYNC] carry
 ## on-demand variable and signal replication. [constant Channel.ACTION]
@@ -88,6 +80,8 @@ const SYNC_FLAG_MASKED := 1 << 4
 ## [constant Channel.CLOCK_PONG] carry the tick clock's calibration protocol,
 ## and [constant Channel.LAGCOMP_DENY] carries lag-compensation action
 ## denials, all peer-scoped on route [code]0[/code].
+## [constant Channel.TABLE] carries replicated table rows and the route
+## lifecycle stream, also peer-scoped on route [code]0[/code].
 ## [constant Channel.SPAWN] and [constant Channel.DESPAWN] carry the
 ## replicator's entity spawn edges. [constant Channel.CONTROL_REQUEST] and
 ## [constant Channel.CONTROL_APPLY] carry control transfer, dispatched the
@@ -129,7 +123,7 @@ enum Channel {
 	## Lag-compensation action denial, server to the requesting peer. Reliable,
 	## route [code]0[/code].
 	LAGCOMP_DENY = 13,
-	## Entity spawn issued by [NetwReplicationInterface] for the
+	## Entity spawn issued by [ReplicationCore] for the
 	## [method Netw.replicate] and [method Netw.spawn] verbs. Carries the route,
 	## identity, reconstruction recipe, and spawn state. Reliable, route
 	## [code]0[/code], server to client.
@@ -141,10 +135,18 @@ enum Channel {
 	## [constant SPAWN], carrying the new parent anchor. Reliable, route
 	## [code]0[/code], server to client.
 	REPARENT = 16,
+	## Rows of one replicated table, or the route lifecycle stream when the
+	## payload's table id is [code]0[/code]. Route [code]0[/code], server to
+	## client, and the only carrier whose freshness is judged in the decoder
+	## rather than by the datagram book, because a route-0 frame never reaches
+	## that book. Data frames ride unreliable by default, while removals,
+	## tombstones, and snapshots ride reliable. See [TableCore] for the payload
+	## grammar.
+	TABLE = 17,
 	## Per-tick full state of one consumed [MultiplayerSynchronizer] sync set
-	## or one derived [NetwSyncSetBinding] volatile row, sent through the sync
-	## pump. Unreliable, freshest-wins per stream, entity-routed. Ids
-	## [code]17[/code] and [code]18[/code] are reserved and must not be claimed.
+	## or one derived [NetwPropertySetBinding] volatile row, sent through the sync
+	## pump. Unreliable, freshest-wins per stream, entity-routed. Id
+	## [code]18[/code] is reserved and must not be claimed.
 	SYNC = 19,
 	## Reliable on-change delta of one sync set's watched or retained fields,
 	## carrying a bitmask over the set's field order. Entity-routed.
@@ -189,7 +191,7 @@ enum Channel {
 	SESSION_SCENE_REQUEST = 29,
 	## The server-authored outcome of one scene request, server to the
 	## requesting peer. Reliable, route [code]0[/code]. Carries the request id
-	## and the [enum NetwScenePromise.Result].
+	## and the [enum Error].
 	SESSION_SCENE_RESULT = 30,
 	## Server graceful-shutdown notice, server to every peer. Reliable, route
 	## [code]0[/code]. The notice rides the carrier rather than a node
@@ -199,7 +201,7 @@ enum Channel {
 	SESSION_SHUTDOWN = 31,
 	## Server notice that a participant's scene membership was released, server to
 	## the released peer. Reliable, route [code]0[/code]. Carries the released
-	## [method MultiplayerScene.scene_layer_id]. The recipient clears its local
+	## the scene's framework-derived layer id. The recipient clears its local
 	## participant's [member NetwParticipant.current_scene] when it still matches.
 	SESSION_SCENE_RELEASED = 32,
 	## A player's request to kick a peer, client to server. Reliable, route
@@ -230,11 +232,29 @@ enum Channel {
 	## so an owner learns that its command was substituted instead of inferring
 	## it from a state it cannot explain.
 	PREDICT_ACK = 36,
+	## One owner's prediction commands relayed to a subscribed observer, server
+	## to client. Unreliable, entity-routed, window-redundant.
+	##
+	## The frame is the authored [constant PREDICT_COMMAND] re-emitted byte for
+	## byte, because a subscriber that decoded a re-cut frame would be reading a
+	## command the author never wrote. The entity route already names the
+	## subject, so the relay needs no origin field and the layout is the
+	## author's.
+	PREDICT_RELAY = 37,
+	## A relay subscription request, client to server. Reliable, entity-routed,
+	## payload is one byte that is non-zero to subscribe and zero to drop.
+	##
+	## Reliable although the lane it opens is not, because a lost subscribe
+	## presents as an entity that never relays, which a subscriber cannot tell
+	## from one nobody is authoring for. The server answers it against
+	## [method NetwMultiplayer.interest_admits], so a peer can only ever
+	## subscribe to what it may already see.
+	PREDICT_RELAY_REQUEST = 38,
 }
 
 
 static func pack(route: int, comp: int, channel: Channel, payload: PackedByteArray, path: String = "") -> PackedByteArray:
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	NetwCodec.put_varint(w, route)
 	w.put_aligned_u8(comp)
 	w.put_aligned_u8(channel)
@@ -242,7 +262,7 @@ static func pack(route: int, comp: int, channel: Channel, payload: PackedByteArr
 	var final_payload := payload
 	if comp == 255:
 		var path_bytes := path.to_utf8_buffer()
-		var pw := NetwBitBuffer.Writer.new()
+		var pw := NetwBitBufferWriter.new()
 		NetwCodec.put_varint(pw, path_bytes.size())
 		pw.put_aligned_bytes(path_bytes)
 		pw.put_aligned_bytes(payload)
@@ -253,7 +273,7 @@ static func pack(route: int, comp: int, channel: Channel, payload: PackedByteArr
 	return w.to_bytes()
 
 
-static func unpack_next(r: NetwBitBuffer.Reader) -> Dictionary:
+static func unpack_next(r: NetwBitBufferReader) -> Dictionary:
 	var route := NetwCodec.get_safe_varint(r)
 	if route < 0:
 		return { }
@@ -267,7 +287,7 @@ static func unpack_next(r: NetwBitBuffer.Reader) -> Dictionary:
 	var path := ""
 	var actual_payload := payload_bytes
 	if comp == 255:
-		var pr := NetwBitBuffer.Reader.new(payload_bytes)
+		var pr := NetwBitBufferReader.create(payload_bytes)
 		var path_len := NetwCodec.get_safe_varint(pr)
 		if path_len >= 0:
 			var path_bytes := pr.get_aligned_bytes(path_len)
@@ -287,7 +307,7 @@ static func unpack_all(framed_bytes: PackedByteArray) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if framed_bytes.is_empty():
 		return out
-	var r := NetwBitBuffer.Reader.new(framed_bytes)
+	var r := NetwBitBufferReader.create(framed_bytes)
 	while r.remaining_bytes() > 0:
 		var frame := unpack_next(r)
 		if frame.is_empty():
@@ -327,7 +347,7 @@ static func encode_sync_frame(frame: Dictionary) -> PackedByteArray:
 	var flags: int = frame.get("flags", 0)
 	var quantizers: Array = frame.get("quantizers", [])
 	var types: Array = frame.get("types", [])
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	NetwCodec.put_varint(w, int(frame.get("ordinal", 0)))
 	w.put_aligned_u8(flags)
 	if flags & SYNC_FLAG_STAMPED:
@@ -374,7 +394,7 @@ static func decode_sync_frame(
 		quantizers: Array,
 		types: Array,
 ) -> Dictionary:
-	var r := NetwBitBuffer.Reader.new(payload)
+	var r := NetwBitBufferReader.create(payload)
 	var out := {
 		"ordinal": NetwCodec.get_safe_varint(r),
 		"flags": r.get_aligned_u8(),
@@ -422,7 +442,7 @@ static func decode_sync_frame(
 
 # Writes a contiguous entry window after the ordinary SYNC payload.
 static func _encode_tape(
-		w: NetwBitBuffer.Writer,
+		w: NetwBitBufferWriter,
 		tape: Dictionary,
 ) -> void:
 	var entries: Array = tape.get("entries", [])
@@ -448,7 +468,7 @@ static func _encode_tape(
 
 # Reads the contiguous entry window written by [_encode_tape].
 static func _decode_tape(
-		r: NetwBitBuffer.Reader,
+		r: NetwBitBufferReader,
 		out: Dictionary,
 ) -> void:
 	var epoch := r.get_aligned_u8()

@@ -9,7 +9,7 @@ var api: NetwMultiplayer:
 
 func _enter_tree() -> void:
 	var config := NetwSceneConfig.new()
-	config.concurrency = NetwSceneConfig.Concurrency.CONCURRENT
+	config.isolation = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
 	config.initial_scenes = [LEVEL_1]
 	config.scenes = {
 		&"Level1": LEVEL_1,

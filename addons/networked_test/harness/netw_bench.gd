@@ -3,7 +3,7 @@
 ## A scenario often needs a matched entity that already exists at the same tree
 ## location on every peer to share one route, the state the spawn pipeline
 ## reaches by issuing a frame. The bench mints that route through the same
-## [NetwLivenessInterface] seam the pipeline uses, so a rig expresses its
+## [LivenessShell] seam the pipeline uses, so a rig expresses its
 ## scenario instead of copy-pasting route plumbing.
 ## [codeblock]
 ## server.add_child(server_root)
@@ -30,8 +30,8 @@ static func bind_shared_route(authored: Node, mirrors: Array[Node]) -> int:
 		authored_session != null,
 		"NetwBench: the authored entity has no session. Add it to a tree first.",
 	)
-	var route := authored_session.liveness.allocate_route(authored_entity)
-	authored_session.liveness.bind_route(route, authored_entity)
+	var route := authored_session._liveness.allocate_route(authored_entity)
+	authored_session._liveness.bind_route(route, authored_entity)
 	for mirror in mirrors:
 		var mirror_entity := NetwEntity.of(mirror)
 		assert(mirror_entity != null, "NetwBench: a mirror node has no NetwEntity.")
@@ -39,5 +39,5 @@ static func bind_shared_route(authored: Node, mirrors: Array[Node]) -> int:
 			mirror_entity.multiplayer != null,
 			"NetwBench: a mirror entity has no session. Add it to a tree first.",
 		)
-		mirror_entity.multiplayer.liveness.bind_route(route, mirror_entity)
+		mirror_entity.multiplayer._liveness.bind_route(route, mirror_entity)
 	return route

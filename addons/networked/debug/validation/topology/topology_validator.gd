@@ -9,6 +9,9 @@
 class_name TopologyValidator
 extends RefCounted
 
+const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
+
+
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
 ## The addon requires no native synchronizer of its own. Replication is

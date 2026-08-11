@@ -3,8 +3,9 @@
 ## Tree traversals are expensive. Results are stored on the target node's
 ## metadata under [code]"cached_synchronizers"[/code] and reused until
 ## explicitly invalidated.
-class_name SynchronizersCache
 extends RefCounted
+
+const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 const META_KEY := &"cached_synchronizers"
 

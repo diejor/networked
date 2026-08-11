@@ -1,15 +1,13 @@
-## Typed registration payload for the [NetwClockInterface] tick engine.
+## Typed registration payload for the [ClockCore] tick engine.
 ##
-## A [MultiplayerClock] node snapshots its exports into one of these and hands it
-## to [method MultiplayerAPI.object_configuration_add]. The core dispatches on
-## the resource type rather than the node class, so the tick engine is
-## configured the same way whether a GDScript node, a test rig, or a future
-## native caller supplies the values.
+## A [MultiplayerClock] node snapshots its exports into one of these and hands
+## it to [method NetwMultiplayer.service_install]. The session dispatches on the
+## resource type rather than the node class, so nodes and code-first callers
+## configure the same tick engine.
 ## [codeblock]
 ## var config := NetwClockConfig.new()
 ## config.tickrate = 60
-## api.object_configuration_add(clock_node, config)
-## # core routes it to NetwClockInterface.configure(clock_node, config)
+## api.service_install(config)
 ## [/codeblock]
 class_name NetwClockConfig
 extends NetwObjectConfig
@@ -28,15 +26,15 @@ extends NetwObjectConfig
 @export var use_physics_interpolation: bool = true
 
 ## Strategy used to align the local clock with the server, one of
-## [enum NetwClockInterface.SyncMode].
-@export var sync_mode: NetwClockInterface.SyncMode = NetwClockInterface.SyncMode.STRETCH
+## [enum NetwMultiplayer.SyncMode].
+@export var sync_mode: NetwMultiplayer.SyncMode = NetwMultiplayer.SyncMode.SYNC_MODE_STRETCH
 
 ## The maximum allowed divergence before a hard
-## [constant NetwClockInterface.SyncMode.SNAP] is forced.
+## [constant NetwMultiplayer.SyncMode.SYNC_MODE_SNAP] is forced.
 @export_custom(0, "suffix:ticks") var panic_snap_threshold: int = 20
 
 ## Fraction of the remaining divergence the
-## [constant NetwClockInterface.SyncMode.STRETCH] clock closes each frame.
+## [constant NetwMultiplayer.SyncMode.SYNC_MODE_STRETCH] clock closes each frame.
 @export_range(0.01, 0.5) var stretch_nudge_factor: float = 0.05
 
 ## How often the client pings the server to refresh RTT and recalibrate.

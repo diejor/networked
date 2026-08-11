@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://cw1r8sk3vamtb"]
+
+[ext_resource type="Script" uid="uid://jmcudh004bub" path="res://examples/swarm/swarm_session.gd" id="1_session"]
+[ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="2_clock"]
+[ext_resource type="Script" uid="uid://ct3klbdop4glc" path="res://examples/swarm/swarm_server.gd" id="3_server"]
+[ext_resource type="Script" uid="uid://bk3n73nykbr0d" path="res://examples/swarm/swarm_view.gd" id="4_view"]
+[ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="5_browser"]
+
+[node name="Main" type="Node3D" unique_id=205171593]
+script = ExtResource("1_session")
+
+[node name="MultiplayerClock" type="Node" parent="." unique_id=732749221]
+script = ExtResource("2_clock")
+metadata/_custom_type_script = "uid://domi8t23qrsdh"
+
+[node name="SwarmServer" type="Node" parent="." unique_id=928600347]
+unique_name_in_owner = true
+script = ExtResource("3_server")
+wave_size = 2000
+metadata/_custom_type_script = "uid://ct3klbdop4glc"
+
+[node name="SwarmView" type="Node3D" parent="." unique_id=1974022062]
+unique_name_in_owner = true
+script = ExtResource("4_view")
+metadata/_custom_type_script = "uid://bk3n73nykbr0d"
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=415270215]
+transform = Transform3D(1, 0, 0, 0, 0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 0, 40, 40)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=728200628]
+transform = Transform3D(1, 0, 0, 0, 0.5, 0.8660254, 0, -0.8660254, 0.5, 0, 20, 10)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1207409508]
+
+[node name="ConnectBrowser" parent="CanvasLayer" unique_id=1124766485 instance=ExtResource("5_browser")]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -442.0
+offset_top = -247.0
+offset_right = 442.0
+offset_bottom = 247.0
+server_list_path = "user://swarm/servers.tres"

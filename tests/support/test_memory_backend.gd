@@ -36,7 +36,7 @@ func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 	return (_store[table].get(id, { }) as Dictionary).duplicate()
 
 
-func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
+func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
 	if not _store.has(table):
 		return []
 	var results: Array[Dictionary] = []

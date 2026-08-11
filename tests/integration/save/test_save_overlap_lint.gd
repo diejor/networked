@@ -9,6 +9,10 @@
 class_name TestSaveOverlapLint
 extends NetwTestSuite
 
+const AreaReparentGuard := preload("res://addons/networked/utils/area_reparent_guard.gd")
+
+const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
+
 const SPAWNER_PATH := "OverlapPlayer"
 
 var harness: NetwTestHarness
@@ -23,7 +27,7 @@ func before_test() -> void:
 	db = auto_free(NetwDatabase.new())
 	# Dict backend: no FileSystemDatabase path-registry collision when the packed
 	# scene embeds (duplicates) the database resource.
-	db.backend = NetwDatabaseBackend.Dict.new()
+	db.backend = NetwDatabaseBackendDict.new()
 
 	var player_path := NetwPathNamespace.next_path("player", "OverlapPlayer")
 	var level_path := NetwPathNamespace.next_path("level", "TestLevel")
@@ -131,8 +135,9 @@ func test_overlap_survives_teleport_reparent() -> void:
 	await assert_signal(promise).wait_until(1000).is_emitted("completed")
 
 	# Server reparented the same node.
-	var scene2: MultiplayerScene = harness.server().api.scenes \
-			.scene(level_2_builder.scene_name)
+	var scene2 := harness.server().api.scene(
+		level_2_builder.scene_name,
+	)
 	assert_object(server_player.get_parent()).is_same(scene2.level)
 	await get_tree().process_frame
 

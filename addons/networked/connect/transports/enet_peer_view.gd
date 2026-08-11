@@ -11,7 +11,6 @@
 class_name ENetPeerView
 extends NetwPeerView
 
-
 func display_name() -> String:
 	return "ENet"
 

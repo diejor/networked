@@ -1,8 +1,8 @@
 ## Serializable in-game join data describing a player entering a session.
 ##
-## Pass a populated instance to [method MultiplayerTree.join],
+## Pass a populated instance to [method NetwConnector.join],
 ## [method MultiplayerTree.host_player], or
-## [method MultiplayerTree.join_or_host]. Transport identity is supplied
+## [method NetwConnector.join_or_host]. Transport identity is supplied
 ## separately by a [NetwConnectTarget] and is not part of this payload.
 class_name JoinPayload
 extends Serde

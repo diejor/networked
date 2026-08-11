@@ -1,8 +1,7 @@
 ## Drive checks for the simple connect kit transports ([ENetTransport],
-## [WebSocketTransport], [LocalTransport]) through [NetwConnector].
+## [WebSocketTransport], [LocalTransport]) through [NetwSessionHandle].
 class_name TestConnectKitTransports
 extends NetwTestSuite
-
 
 func after_test() -> void:
 	LocalLoopbackSession.get_shared_session().reset()
@@ -35,62 +34,63 @@ func test_websocket_url_normalization() -> void:
 func test_host_via_local_transport_reaches_online() -> void:
 	LocalLoopbackSession.get_shared_session().reset()
 	var api := NetwMultiplayer.new(SceneMultiplayer.new())
-	var connector := NetwConnector.new(api)
-	connector.transports = [LocalTransport.new()]
+	NetwConnector.of(api).transports = [LocalTransport.new()]
 
 	var config := NetwHostConfig.new()
-	config.scheme = &"local"
-	var attempt := connector.host(config)
+	config.transport = NetwLocalParams.new()
+	var results: Array[NetwConnectResult] = []
+	var pump := func() -> void:
+		results.append(await NetwConnector.of(api).host(null, config))
+	pump.call()
 
 	var guard := 0
-	while not attempt.is_done() and guard < 40:
-		connector.poll(0.05)
+	while api.state != SessionCore.State.ONLINE and guard < 40:
+		api.poll()
 		await get_tree().process_frame
 		guard += 1
 
-	assert_bool(attempt.is_done()).is_true()
-	assert_bool(attempt.result.is_ok()).is_true()
-	assert_int(api.state).is_equal(NetwSessionInterface.State.ONLINE)
-	assert_object(connector.peer_view).is_not_null()
-	api.dispose()
+	assert_bool(results[0].is_ok()).is_true()
+	assert_int(api.state).is_equal(SessionCore.State.ONLINE)
+	assert_object(NetwConnector.of(api).peer_view).is_not_null()
+	api.embedding.dispose()
 
 
 func test_host_with_payload_admits_the_host_player() -> void:
 	LocalLoopbackSession.get_shared_session().reset()
 	var api := NetwMultiplayer.new(SceneMultiplayer.new())
-	var connector := NetwConnector.new(api)
-	connector.transports = [LocalTransport.new()]
+	NetwConnector.of(api).transports = [LocalTransport.new()]
 
 	var config := NetwHostConfig.new()
-	config.scheme = &"local"
+	config.transport = NetwLocalParams.new()
 	var payload := JoinPayload.new()
 	payload.username = &"host"
 
-	var attempt := connector.host(config, payload)
+	var pump := func() -> void:
+		await NetwConnector.of(api).host(payload, config)
+	pump.call()
 
 	var guard := 0
-	while (api.get_accepted_join(1) == null or not attempt.is_done()) and guard < 60:
-		connector.poll(0.05)
+	while api.peer_get_accepted_join(1) == null and guard < 60:
+		api.poll()
 		await get_tree().process_frame
 		guard += 1
 
-	assert_int(api.state).is_equal(NetwSessionInterface.State.ONLINE)
+	assert_int(api.state).is_equal(SessionCore.State.ONLINE)
 	# The host submitted its own join, so a roster row with an accepted join
 	# exists for peer 1 without any client connecting.
-	assert_object(api.get_accepted_join(1)).is_not_null()
-	api.dispose()
+	assert_object(api.peer_get_accepted_join(1)).is_not_null()
+	api.embedding.dispose()
 
 
 func test_join_with_no_matching_transport_errors() -> void:
 	var api := NetwMultiplayer.new(SceneMultiplayer.new())
-	var connector := NetwConnector.new(api)
-	connector.transports = [LocalTransport.new()]
+	NetwConnector.of(api).transports = [LocalTransport.new()]
 
 	var target := NetwConnectTarget.new()
 	target.scheme = &"enet"
-	var attempt := connector.join(target)
-	if not attempt.is_done():
-		await attempt.finished
+	var result := await NetwConnector.of(api).join(target, null, true)
 
-	assert_int(attempt.result.status).is_equal(NetwConnectResult.Status.ERROR)
-	api.dispose()
+	assert_int(NetwConnector.error_of(result)).is_equal(ERR_CANT_CONNECT)
+	assert_int(NetwConnector.of(api).current_attempt.result.status) \
+			.is_equal(NetwConnectResult.Status.ERROR)
+	api.embedding.dispose()

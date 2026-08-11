@@ -8,9 +8,14 @@
 class_name LocalTransport
 extends NetwTransport
 
-
-func scheme() -> StringName:
+func _scheme() -> StringName:
 	return &"local"
+
+
+func _params_from_dict(source: Dictionary) -> NetwTransportParams:
+	var params := NetwLocalParams.new()
+	params.from_dict(source)
+	return params
 
 
 func _can_join(target: NetwConnectTarget) -> bool:
@@ -18,11 +23,7 @@ func _can_join(target: NetwConnectTarget) -> bool:
 
 
 func _can_host(config: NetwHostConfig) -> bool:
-	return config != null and config.scheme == &"local"
-
-
-func _can_view(peer: MultiplayerPeer) -> bool:
-	return peer is LocalMultiplayerPeer
+	return config != null and config.transport is NetwLocalParams
 
 
 func _host(

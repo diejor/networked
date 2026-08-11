@@ -22,7 +22,6 @@
 ## [br]- [b]Dedicated WebSocket[/b]: Production path via a standalone server.
 ## [br]- [b]Direct WebSocket[/b]: Used for local testing and dedicated hosts.
 @abstract
-class_name WebRTCSignaler
 extends RefCounted
 
 ## Emitted with inbound SDP or ICE. [param kind] is [code]"offer"[/code],

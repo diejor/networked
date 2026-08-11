@@ -45,24 +45,26 @@
 ## [signal MultiplayerSynchronizer.delta_synchronized] fire on the receiving
 ## node at apply. The pipeline then exceeds the native contract in one place:
 ## recipients come from the [NetwSpawnBook] book clamped by
-## [NetwInterestInterface] admission, so a peer is never sent state for a node
+## [InterestCore] admission, so a peer is never sent state for a node
 ## it was never sent, and a stream stops the moment its route stops being
-## [constant NetwLivenessInterface.State.LIVE] instead of trailing the despawn.
+## [constant NetwMultiplayer.EntityState.LIVE] instead of trailing the despawn.
 ## Watch lists are capped at 64 properties, asserted loudly at consumption
 ## where native silently corrupts its bitmask.
 class_name NetwSyncCompat
 extends RefCounted
+
+const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 ## Watched properties per consumed synchronizer ride a 64-bit delta mask, the
 ## same ceiling the native replicator has, enforced loudly at consumption.
 const WATCH_LIMIT := 64
 
 # The owning NetwMultiplayer. A weakref because the owner holds this adapter
-# strongly through NetwReplicationInterface and both are reference counted.
+# strongly through ReplicationCore and both are reference counted.
 var _api_ref: WeakRef
 
-# Consumed bindings in registration order. Wire ordinals are not positions in
-# this list: they are derived structurally per route in _route_group.
+# Consumed bindings in registration order. Wire ordinals come from the cached
+# declaration model rather than positions in this list.
 var _consumed: Array[_Consumed] = []
 
 # The shared dirty-poll engine for every binding's watched fields, keyed by the
@@ -94,6 +96,8 @@ var _drops_sync_unknown_flag: int = 0
 
 func _init(api: NetwMultiplayer) -> void:
 	_api_ref = weakref(api) if api else null
+	if api:
+		api._connect_once(api.entity_live, _on_entity_live)
 
 
 func _api() -> NetwMultiplayer:
@@ -107,11 +111,16 @@ class _Consumed:
 
 	var sync_ref: WeakRef
 	var root_ref: WeakRef
+	var config_ref: WeakRef
+	var config_changed: Callable
+	var config_dirty := true
+	var entity: RID
+	var route: int
+	var comp: int
+	var order_key: StringName
 	# Config property paths in config order: the SYNC row and the SYNC_DELTA
-	# watch order. The order is the wire contract both peers derive from the
-	# same SceneReplicationConfig. Re-derived from the live config each use,
-	# because a synchronizer may keep growing its config in place after
-	# registration and the native contract reads it live.
+	# watch order. The config's changed signal invalidates this registration
+	# snapshot so a later pump rebuilds it before gathering values.
 	var sync_paths: Array[NodePath] = []
 	var watch_paths: Array[NodePath] = []
 	var intent_by_peer: Dictionary[int, bool] = { }
@@ -168,6 +177,7 @@ func consume(root: Node, sync: MultiplayerSynchronizer) -> Error:
 	binding.root_ref = weakref(root)
 	_refresh_binding(binding)
 	_consumed.append(binding)
+	_capture_declaration(binding)
 	_refresh_binding_intent(binding)
 	_refresh_interest_intent(root)
 	return OK
@@ -184,6 +194,8 @@ func consume_remove(root: Node, sync: MultiplayerSynchronizer) -> Error:
 		sync.visibility_changed.disconnect(visibility_handler)
 	for i in range(_consumed.size() - 1, -1, -1):
 		if _consumed[i].sync() == sync:
+			_drop_declaration(_consumed[i])
+			_disconnect_config(_consumed[i])
 			_watch_book.reset(_consumed[i])
 			_consumed.remove_at(i)
 	_refresh_interest_intent(root)
@@ -195,10 +207,10 @@ func _on_sync_visibility_changed(_for_peer: int, root: Node) -> void:
 	if api:
 		_refresh_binding_intents_for_root(root)
 		_refresh_interest_intent(root)
-		api.replication._spawn_pipeline.schedule_visibility_sweep()
+		api._replication._spawn_pipeline.schedule_visibility_sweep()
 
 
-## Refreshes every event-fed [InterestEngine] synchronizer intent row.
+## Refreshes every event-fed [NetwInterestEngine] synchronizer intent row.
 func refresh_interest_intents() -> void:
 	var roots: Dictionary[Node, bool] = { }
 	for binding in _consumed:
@@ -221,10 +233,10 @@ func _refresh_interest_intent(root: Node) -> void:
 	if not is_instance_valid(entity_root):
 		return
 	var admitted: Array[int] = []
-	for peer_id in api.interest._known_peer_ids():
+	for peer_id in api._interest._known_peer_ids():
 		if synchronizer_verdict(peer_id, entity_root):
 			admitted.append(peer_id)
-	api.interest._set_entity_intent(entity, admitted)
+	api._interest._set_entity_intent(entity, admitted)
 
 
 func _refresh_binding_intents_for_root(root: Node) -> void:
@@ -240,7 +252,7 @@ func _refresh_binding_intent(binding: _Consumed) -> void:
 		return
 	var peer_ids: Array[int] = []
 	if api.is_server():
-		peer_ids = api.interest._known_peer_ids()
+		peer_ids = api._interest._known_peer_ids()
 	elif api.has_multiplayer_peer():
 		peer_ids.assign(api.get_peers())
 	binding.intent_by_peer.clear()
@@ -255,12 +267,21 @@ func _binding_of(sync: MultiplayerSynchronizer) -> _Consumed:
 	return null
 
 
-# Re-derives the binding's field lists from the live config. A synchronizer
-# that grows its config in place after registration is followed here, and a change to the watch
-# row resets the watchers so the next delta heals every recipient.
+# Snapshots the binding field lists after registration or a config change.
 func _refresh_binding(binding: _Consumed) -> void:
 	var sync := binding.sync()
 	var cfg := sync.replication_config if is_instance_valid(sync) else null
+	var previous := binding.config_ref.get_ref() as SceneReplicationConfig \
+	if binding.config_ref else null
+	if cfg == previous and not binding.config_dirty:
+		return
+	_disconnect_config(binding)
+	if cfg:
+		binding.config_ref = weakref(cfg)
+		binding.config_changed = _on_config_changed.bind(binding)
+		if not cfg.changed.is_connected(binding.config_changed):
+			cfg.changed.connect(binding.config_changed)
+	binding.config_dirty = false
 	binding.sync_paths.clear()
 	var watch: Array[NodePath] = []
 	if cfg:
@@ -285,6 +306,23 @@ func _refresh_binding(binding: _Consumed) -> void:
 		binding.watch_paths = watch
 		_watch_book.reset(binding)
 	binding.schema_hash = _schema_hash(binding)
+	_declare_model_row(binding)
+
+
+# Marks one config snapshot dirty and rebuilds it between pump passes.
+func _on_config_changed(binding: _Consumed) -> void:
+	binding.config_dirty = true
+
+
+# Disconnects one SceneReplicationConfig change hook.
+func _disconnect_config(binding: _Consumed) -> void:
+	var cfg := binding.config_ref.get_ref() as SceneReplicationConfig \
+	if binding.config_ref else null
+	if cfg and binding.config_changed.is_valid() \
+			and cfg.changed.is_connected(binding.config_changed):
+		cfg.changed.disconnect(binding.config_changed)
+	binding.config_ref = null
+	binding.config_changed = Callable()
 
 
 # The 16-bit schema fingerprint of a translated set: field paths in wire
@@ -304,15 +342,15 @@ static func _schema_hash(binding: _Consumed) -> int:
 ## [constant NetwFrameEnvelope.Channel.SYNC] row to the binding's current
 ## recipients and the per-recipient masked
 ## [constant NetwFrameEnvelope.Channel.SYNC_DELTA]. Driven by
-## [method NetwReplicationInterface.on_clock_tick], or once per
+## [method ReplicationCore.on_clock_tick], or once per
 ## [method MultiplayerAPI.poll] when no [MultiplayerClock] is configured, the
 ## native per-network-process cadence.
 func pump() -> void:
 	var api := _api()
 	if not api or not api.inner.multiplayer_peer:
 		return
-	var liveness := api.liveness
-	var repl := api.replication
+	var liveness := api._liveness
+	var repl := api._replication
 	var now := Time.get_ticks_usec()
 
 	_prune()
@@ -320,7 +358,7 @@ func pump() -> void:
 	# A clock can tick before the session assigns a role, and with no role there
 	# are no live routes to gather for, so the pump has nothing to do and must
 	# not read the role-dependent host flag yet.
-	if api.role == NetwSessionInterface.Role.NONE:
+	if api.role == SessionCore.Role.NONE:
 		return
 	var host := api.is_host
 
@@ -341,7 +379,7 @@ func pump() -> void:
 			# sends through the relay pump (its consumed config is all suppressed)
 			# still earns the route the relay addresses it by.
 			binding.adopt_attempted = true
-			api.replication.adopt_in_place(root)
+			api._replication.adopt_in_place(root)
 			continue
 		if not entity:
 			continue
@@ -351,7 +389,9 @@ func pump() -> void:
 			continue
 		if not sync.is_multiplayer_authority():
 			continue
-		var route := liveness.route_of(entity)
+		if binding.route <= 0:
+			_capture_declaration(binding)
+		var route := binding.route
 		if route <= 0:
 			continue
 		var recipients := _recipients_for(binding, entity, route, root)
@@ -360,10 +400,13 @@ func pump() -> void:
 
 		if not binding.sync_paths.is_empty() \
 				and _throttle_elapsed(binding.last_sync_usec, sync.replication_interval, now):
-			var payload := _encode_sync_frame(binding, route, liveness)
-			if not payload.is_empty():
+			var stock_payload := _encode_sync_frame(binding, route, liveness)
+			if not stock_payload.is_empty():
 				binding.last_sync_usec = now
 				for peer_id in recipients:
+					var payload := _run_encode_stage(peer_id, stock_payload)
+					if payload.is_empty():
+						continue
 					repl.send_to(
 						peer_id,
 						route,
@@ -390,6 +433,8 @@ func pump() -> void:
 func _prune() -> void:
 	for i in range(_consumed.size() - 1, -1, -1):
 		if not is_instance_valid(_consumed[i].sync()):
+			_drop_declaration(_consumed[i])
+			_disconnect_config(_consumed[i])
 			_watch_book.reset(_consumed[i])
 			_consumed.remove_at(i)
 
@@ -419,23 +464,24 @@ func _recipients_for(
 		return out
 	var local_id := api.get_unique_id()
 	if api.is_host:
-		var pipeline := api.replication._spawn_pipeline
+		var pipeline := api._replication._spawn_pipeline
 		if pipeline._spawn_book.armed.has(route):
 			# The SPAWN has not flushed yet, so no peer can have the node.
 			return out
 		var base: Array[int] = []
 		var record: NetwSpawnBook.SpawnRecord = pipeline._spawn_book.spawned.get(route)
 		if record:
-			if api.liveness.route_state(route) != NetwLivenessInterface.State.LIVE:
+			if api.route_get_state(route) != NetwMultiplayer.EntityState.LIVE:
 				return out
 			base.assign(record.recipients)
 		else:
-			base = api.liveness.live_peers(entity)
+			base = api._replication.live_peers(entity)
+		# The filter verdict is entity-wide, so resolve it once outside the loop.
+		var filtered := api.interest_is_filtered(api.rid_of(entity.owner))
 		for peer_id in base:
 			if peer_id == local_id:
 				continue
-			if api.interest.has_filter(entity) \
-					and not api.interest.wire_admits(peer_id, entity):
+			if filtered and not api._interest.wire_admits(peer_id, entity):
 				continue
 			if not binding.intent_by_peer.get(peer_id, false):
 				continue
@@ -457,7 +503,7 @@ func _recipients_for(
 ## visible. [NetwSpawnPipeline] consults this for spawn fate and the pump
 ## consults it for stream fate, so both edges always agree. Filter callables
 ## are not script-readable, so interest-installed filters are composed by the
-## callers through [NetwInterestInterface] directly.
+## callers through [InterestCore] directly.
 func synchronizer_verdict(peer_id: int, node: Node) -> bool:
 	var api := _api()
 	var local_id := api.get_unique_id() if api and api.inner.multiplayer_peer else 1
@@ -483,24 +529,22 @@ func synchronizer_verdict(peer_id: int, node: Node) -> bool:
 func _encode_sync_frame(
 		binding: _Consumed,
 		route: int,
-		liveness: NetwLivenessInterface,
+		liveness: LivenessShell,
 ) -> PackedByteArray:
-	var root := binding.root()
-	var values: Array = []
+	var values := _gather_paths(binding, binding.sync_paths)
+	if values.size() != binding.sync_paths.size():
+		return PackedByteArray()
 	var types: Array = []
-	for path in binding.sync_paths:
-		var read := _read_path(root, path)
-		if not read[0]:
-			return PackedByteArray()
-		values.append(read[1])
-		types.append(typeof(read[1]))
-	return NetwFrameEnvelope.encode_sync_frame(
-		{
-			"flags": 0,
-			"ordinal": _ordinal_of(binding, route, liveness),
-			"values": values,
-			"types": types,
-		},
+	for value: Variant in values:
+		types.append(typeof(value))
+	return NetwSyncKernel.encode_volatile(
+		_ordinal_of(binding, route, liveness),
+		0,
+		values,
+		[],
+		types,
+		-1,
+		-1,
 	)
 
 
@@ -508,13 +552,13 @@ func _encode_sync_frame(
 # book, which stamps the changed fields. The book owns the compare and stamp,
 # the compat owns the node addressing.
 func _poll_watchers(binding: _Consumed) -> void:
-	var root := binding.root()
-	var values: Array = []
 	var readable: Array = []
-	for path in binding.watch_paths:
-		var read := _read_path(root, path)
-		readable.append(read[0])
-		values.append(read[1] if read[0] else null)
+	var values := _gather_paths(
+		binding,
+		binding.watch_paths,
+		true,
+		readable,
+	)
 	_watch_book.poll(binding, values, readable)
 
 
@@ -525,8 +569,8 @@ func _send_deltas(
 		binding: _Consumed,
 		route: int,
 		recipients: Array[int],
-		liveness: NetwLivenessInterface,
-		repl: NetwReplicationInterface,
+		liveness: LivenessShell,
+		repl: ReplicationCore,
 ) -> void:
 	if not _watch_book.is_inited(binding):
 		return
@@ -541,21 +585,41 @@ func _send_deltas(
 		var types: Array = []
 		for v in values:
 			types.append(typeof(v))
-		var w := NetwBitBuffer.Writer.new()
-		NetwCodec.put_varint(w, ordinal)
-		NetwCodec.put_varint(w, mask)
-		NetwScriptModel.write_values(w, values, [], types)
+		var stock_bytes := NetwSyncKernel.encode_retained(
+			ordinal,
+			mask,
+			values,
+			[],
+			types,
+		)
+		var bytes := _run_encode_stage(peer_id, stock_bytes)
+		if bytes.is_empty():
+			continue
 		repl.send_to(
 			peer_id,
 			route,
 			NetwFrameEnvelope.Channel.SYNC_DELTA,
-			w.to_bytes(),
+			bytes,
 			true,
 			0,
 			"",
 			true,
 		)
 		_delta_frames_out += 1
+
+
+# Routes consumed bytes through the installed independent encode stage.
+func _run_encode_stage(peer: int, stock: PackedByteArray) -> PackedByteArray:
+	var api := _api()
+	if not api:
+		return stock
+	api._sync_encoder = func(_peer: int, _tick: int) -> PackedByteArray:
+		return stock
+	api._sync_encode_meta = { }
+	var tick := api.clock.tick if api.clock.is_configured() else 0
+	var bytes := api._sync_encode(peer, tick)
+	api._sync_encoder = Callable()
+	return bytes
 
 #endregion
 
@@ -564,22 +628,22 @@ func _send_deltas(
 ## Applies one [constant NetwFrameEnvelope.Channel.SYNC] payload to the
 ## consumed binding it addresses, then emits
 ## [signal MultiplayerSynchronizer.synchronized] on the stock node and feeds
-## the applied values to [NetwInterpolationInterface]. The sender must be the
+## the applied values to [DisplayCore]. The sender must be the
 ## target synchronizer's authority. Called from the receive dispatch after
 ## datagram freshness gating.
 func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> void:
 	var api := _api()
 	if not api:
 		return
-	var route := api.liveness.route_of(entity)
-	var r := NetwBitBuffer.Reader.new(payload)
+	var route := api._liveness.route_of(entity)
+	var r := NetwBitBufferReader.create(payload)
 	var ordinal := NetwCodec.get_safe_varint(r)
 	var binding := _binding_by_ordinal(route, ordinal)
 	if not binding:
 		_drops_sync_no_set += 1
 		return
 	_refresh_binding(binding)
-	_validate_schema(binding, route, api.liveness)
+	_validate_schema(binding, route, api._liveness)
 	if binding.poisoned:
 		_drops_sync_poisoned += 1
 		return
@@ -598,14 +662,33 @@ func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> v
 			+ "frame dropped. Peers must run the same Networked version.",
 		)
 		return
-	var values := NetwScriptModel.read_values(r, [], [])
-	if values.size() != binding.sync_paths.size():
+	var keys: Array[StringName] = []
+	for path: NodePath in binding.sync_paths:
+		keys.append(StringName(path))
+	var decoded: Array[NetwStagedWrites] = [null]
+	var verdict := _run_decode_stage(
+		entity.rid,
+		binding.comp,
+		flags,
+		-1,
+		payload,
+		func() -> Error:
+			decoded[0] = NetwSyncKernel.decode_volatile(
+				payload,
+				keys,
+				[],
+				[],
+			)
+			return OK if decoded[0] else ERR_INVALID_DATA,
+	)
+	var staged := decoded[0]
+	if verdict != OK or staged == null \
+			or staged.values.size() != binding.sync_paths.size():
 		_drops_sync_poisoned += 1
 		_poison(binding, route, "SYNC row size mismatch")
 		return
-	var root := binding.root()
-	for i in binding.sync_paths.size():
-		_write_path(root, binding.sync_paths[i], values[i])
+	if _apply_paths(binding, binding.sync_paths, staged.values) != OK:
+		return
 	_sync_frames_in += 1
 	sync.synchronized.emit()
 	_feed_interpolation(binding)
@@ -619,15 +702,15 @@ func handle_sync_delta(entity: NetwEntity, payload: PackedByteArray, sender: int
 	var api := _api()
 	if not api:
 		return
-	var route := api.liveness.route_of(entity)
-	var r := NetwBitBuffer.Reader.new(payload)
+	var route := api._liveness.route_of(entity)
+	var r := NetwBitBufferReader.create(payload)
 	var ordinal := NetwCodec.get_safe_varint(r)
 	var binding := _binding_by_ordinal(route, ordinal)
 	if not binding:
 		_drops_sync_no_set += 1
 		return
 	_refresh_binding(binding)
-	_validate_schema(binding, route, api.liveness)
+	_validate_schema(binding, route, api._liveness)
 	if binding.poisoned:
 		_drops_sync_poisoned += 1
 		return
@@ -636,21 +719,61 @@ func handle_sync_delta(entity: NetwEntity, payload: PackedByteArray, sender: int
 		_drops_sync_bad_sender += 1
 		return
 	var mask := NetwCodec.get_safe_varint(r)
-	var values := NetwScriptModel.read_values(r, [], [])
 	var indexes: Array[int] = []
 	for i in binding.watch_paths.size():
 		if mask & (1 << i):
 			indexes.append(i)
-	if values.size() != indexes.size():
+	var keys: Array[StringName] = []
+	for path: NodePath in binding.watch_paths:
+		keys.append(StringName(path))
+	var decoded: Array[NetwStagedWrites] = [null]
+	var verdict := _run_decode_stage(
+		entity.rid,
+		binding.comp,
+		0,
+		-1,
+		payload,
+		func() -> Error:
+			decoded[0] = NetwSyncKernel.decode_retained(
+				payload,
+				keys,
+				[],
+				[],
+			)
+			return OK if decoded[0] else ERR_INVALID_DATA,
+	)
+	var staged := decoded[0]
+	if verdict != OK or staged == null \
+			or staged.values.size() != indexes.size():
 		_drops_sync_poisoned += 1
 		_poison(binding, route, "SYNC_DELTA mask and value count disagree")
 		return
-	var root := binding.root()
-	for i in indexes.size():
-		_write_path(root, binding.watch_paths[indexes[i]], values[i])
+	var paths: Array[NodePath] = []
+	for index: int in indexes:
+		paths.append(binding.watch_paths[index])
+	if _apply_paths(binding, paths, staged.values) != OK:
+		return
 	_delta_frames_in += 1
 	sync.delta_synchronized.emit()
 	_feed_interpolation(binding)
+
+
+# Routes consumed decode through the installed independent virtual stage.
+func _run_decode_stage(
+		entity: RID,
+		comp: int,
+		flags: int,
+		tick: int,
+		payload: PackedByteArray,
+		decoder: Callable,
+) -> Error:
+	var api := _api()
+	if not api:
+		return decoder.call()
+	api._sync_decoder = decoder
+	var verdict := api._sync_decode(entity, comp, flags, tick, payload)
+	api._sync_decoder = Callable()
+	return verdict
 
 
 # Feeds the interpolation engine a consumed native sync's just-applied values.
@@ -661,7 +784,7 @@ func handle_sync_delta(entity: NetwEntity, payload: PackedByteArray, sender: int
 # stream never writes a display buffer.
 func _feed_interpolation(binding: _Consumed) -> void:
 	var api := _api()
-	var iface := api.interpolation if api else null
+	var iface := api._display if api else null
 	if not iface:
 		return
 	var sync := binding.sync()
@@ -710,14 +833,19 @@ func _display_paths_for(
 ## sync-set descriptor section for [param route]: a count, then one
 ## [code][ordinal varint | schema hash u16][/code] per consumed set, so the
 ## receiver validates its translated sets against the sender's at spawn time.
-func encode_descriptors(w: NetwBitBuffer.Writer, route: int) -> void:
+func encode_descriptors(w: NetwBitBufferWriter, route: int) -> void:
 	var api := _api()
-	var group: Array[_Consumed] = _route_group(route, api.liveness) if api else []
-	NetwCodec.put_varint(w, group.size())
-	for i in group.size():
-		_refresh_binding(group[i])
-		NetwCodec.put_varint(w, i)
-		w.put_aligned_u16(group[i].schema_hash)
+	var rows: Array[NetwSyncModel.SetRow] = []
+	if api:
+		for row: NetwSyncModel.SetRow in api._replication.sync_model.route_rows(
+			route,
+		):
+			if row.kind == NetwSyncModel.Kind.CONSUMED:
+				rows.append(row)
+	NetwCodec.put_varint(w, rows.size())
+	for row: NetwSyncModel.SetRow in rows:
+		NetwCodec.put_varint(w, row.ordinal)
+		w.put_aligned_u16(row.schema_hash)
 
 
 ## Records the descriptor section decoded from a
@@ -733,7 +861,7 @@ func note_schema(route: int, descriptors: Dictionary) -> void:
 func _validate_schema(
 		binding: _Consumed,
 		route: int,
-		liveness: NetwLivenessInterface,
+		liveness: LivenessShell,
 ) -> void:
 	if binding.schema_checked:
 		return
@@ -766,32 +894,31 @@ func _poison(binding: _Consumed, route: int, reason: String) -> void:
 
 #region Ordinals
 
-# A route's consumed bindings in wire-ordinal order: ascending path from the
-# entity root to the synchronizer. Structural rather than historical, so late
-# joiners and reparent re-registrations derive the same ordinals as peers that
-# watched every registration happen.
-func _route_group(route: int, liveness: NetwLivenessInterface) -> Array[_Consumed]:
-	var keyed: Array = []
-	for binding in _consumed:
-		var sync := binding.sync()
-		var root := binding.root()
-		if not is_instance_valid(sync) or not is_instance_valid(root):
-			continue
-		var entity := NetwEntity.of(root)
-		if not entity or liveness.route_of(entity) != route:
-			continue
-		if not is_instance_valid(entity.owner):
-			continue
-		keyed.append([String(entity.owner.get_path_to(sync)), binding])
-	keyed.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+# A route's consumed bindings in captured wire-ordinal order.
+func _route_group(route: int, _liveness: LivenessShell = null) \
+-> Array[_Consumed]:
 	var out: Array[_Consumed] = []
-	for pair: Array in keyed:
-		out.append(pair[1])
+	var api := _api()
+	if not api:
+		return out
+	for row: NetwSyncModel.SetRow in api._replication.sync_model.route_rows(route):
+		if row.kind != NetwSyncModel.Kind.CONSUMED:
+			continue
+		for binding: _Consumed in _consumed:
+			if binding.route == route and binding.order_key == row.key:
+				out.append(binding)
+				break
 	return out
 
 
-func _ordinal_of(binding: _Consumed, route: int, liveness: NetwLivenessInterface) -> int:
-	return _route_group(route, liveness).find(binding)
+func _ordinal_of(binding: _Consumed, route: int, liveness: LivenessShell) -> int:
+	var api := _api()
+	var row := api._replication.sync_model.row_for(
+		route,
+		NetwSyncModel.Kind.CONSUMED,
+		binding.order_key,
+	) if api else null
+	return row.ordinal if row else -1
 
 
 ## Returns the count of consumed sets on [param route], the base [code]K[/code] a
@@ -802,21 +929,130 @@ func _ordinal_of(binding: _Consumed, route: int, liveness: NetwLivenessInterface
 ## is deterministic.
 func route_set_count(route: int) -> int:
 	var api := _api()
-	return _route_group(route, api.liveness).size() if api else 0
+	return api._replication.sync_model.consumed_count(route) if api else 0
 
 
 func _binding_by_ordinal(route: int, ordinal: int) -> _Consumed:
 	var api := _api()
 	if not api or ordinal < 0:
 		return null
-	var group := _route_group(route, api.liveness)
-	if ordinal >= group.size():
+	var row := api._replication.sync_model.row(route, ordinal)
+	if row == null or row.kind != NetwSyncModel.Kind.CONSUMED:
 		return null
-	return group[ordinal]
+	for binding: _Consumed in _consumed:
+		if binding.route == route and binding.order_key == row.key:
+			return binding
+	return null
+
+
+# Captures one synchronizer's route, component, and order key once.
+func _capture_declaration(binding: _Consumed) -> void:
+	var root := binding.root()
+	var sync := binding.sync()
+	var entity := NetwEntity.of(root) if is_instance_valid(root) else null
+	var api := _api()
+	if not entity or not api or not is_instance_valid(sync) \
+			or not is_instance_valid(entity.owner):
+		return
+	binding.route = api.entity_get_route(entity.rid)
+	binding.entity = entity.rid
+	binding.order_key = StringName(entity.owner.get_path_to(sync))
+	var target := api._replication._resolve_comp(entity, root)
+	binding.comp = int(target.get("comp", 0))
+	_declare_model_row(binding)
+
+
+# Writes a captured consumed declaration into the value model.
+func _declare_model_row(binding: _Consumed) -> void:
+	var api := _api()
+	if not api or binding.route <= 0 or binding.order_key.is_empty():
+		return
+	api._replication.sync_model.declare(
+		binding.route,
+		NetwSyncModel.Kind.CONSUMED,
+		binding.order_key,
+		binding.comp,
+		RID(),
+		0,
+		binding.schema_hash,
+	)
+
+
+# Removes one consumed declaration row.
+func _drop_declaration(binding: _Consumed) -> void:
+	var api := _api()
+	if api and binding.route > 0 and not binding.order_key.is_empty():
+		api._replication.sync_model.drop(
+			binding.route,
+			NetwSyncModel.Kind.CONSUMED,
+			binding.order_key,
+		)
+	binding.route = 0
+
+
+# Binds synchronizers that registered before their entity route went live.
+func _on_entity_live(route: int, entity: NetwEntity) -> void:
+	for binding: _Consumed in _consumed:
+		var root := binding.root()
+		if is_instance_valid(root) and NetwEntity.of(root) == entity:
+			binding.route = route
+			_capture_declaration(binding)
 
 #endregion
 
 #region Field access
+
+# Gathers path values through the installed value-only reader stage.
+func _gather_paths(
+		binding: _Consumed,
+		paths: Array[NodePath],
+		allow_missing: bool = false,
+		readable: Array = [],
+) -> Array:
+	var root := binding.root()
+	var gatherer := func() -> Array:
+		var values: Array = []
+		for path: NodePath in paths:
+			var read := _read_path(root, path)
+			readable.append(bool(read[0]))
+			if not read[0] and not allow_missing:
+				return []
+			values.append(read[1] if read[0] else null)
+		return values
+	var api := _api()
+	var values: Array = api._run_gather_set(
+		binding.entity,
+		binding.comp,
+		gatherer,
+	) if api else gatherer.call()
+	if readable.size() != paths.size() and values.size() == paths.size():
+		readable.clear()
+		for _path in paths:
+			readable.append(true)
+	return values
+
+
+# Applies path values through the installed value-only writer stage.
+func _apply_paths(
+		binding: _Consumed,
+		paths: Array[NodePath],
+		values: Array,
+) -> Error:
+	var root := binding.root()
+	var applier := func(staged: Array) -> Error:
+		if staged.size() != paths.size():
+			return ERR_INVALID_DATA
+		for index: int in paths.size():
+			_write_path(root, paths[index], staged[index])
+		return OK
+	var api := _api()
+	return api._run_apply_set(
+		binding.entity,
+		binding.comp,
+		values,
+		applier,
+	) if api else applier.call(values)
+
 
 # Resolves a config property path against [param root] the way native
 # get_state does: names select the sub-node, subnames the property chain.
@@ -853,12 +1089,16 @@ func clear_session() -> void:
 		binding.poisoned = false
 		binding.last_sync_usec = -1
 		binding.last_watch_usec = -1
+		binding.route = 0
 
 
 ## Drops [param route]'s pending schema descriptors when its [NetwEntity]
 ## despawns.
 func clear_route(route: int) -> void:
 	_pending_schema.erase(route)
+	for binding: _Consumed in _consumed:
+		if binding.route == route:
+			binding.route = 0
 
 
 ## Drops the delta baselines held against [param peer_id], so a reconnecting
@@ -867,8 +1107,17 @@ func clear_peer(peer_id: int) -> void:
 	_watch_book.clear_peer(peer_id)
 
 
+## Releases declaration and config signal bindings.
+func dispose() -> void:
+	var api := _api()
+	if api and api.entity_live.is_connected(_on_entity_live):
+		api.entity_live.disconnect(_on_entity_live)
+	for binding: _Consumed in _consumed:
+		_disconnect_config(binding)
+
+
 ## Returns this adapter's contribution to
-## [method NetwReplicationInterface.counters].
+## [method ReplicationCore.counters].
 func counters() -> Dictionary:
 	return {
 		&"sync_frames_out": _sync_frames_out,

@@ -16,7 +16,7 @@ const _PORT_RANGE_SIZE := 100
 ##
 ## [param parent] receives the tree as a child. [param info_provider] is
 ## optionally installed as the hosted session's per-session probe reply through
-## [method NetwSessionInterface.set_server_info_provider]. [param auth_timeout]
+## [method NetwSessionHandle.set_server_info_provider]. [param auth_timeout]
 ## overrides the host API auth cleanup timeout when greater than [code]0.0[/code].
 ##
 ## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]),
@@ -31,11 +31,14 @@ static func start_host(
 		var tree := MultiplayerTree.new()
 		tree.name = "EnetHost_%d" % candidate
 		tree.auto_host_headless = false
-		tree.scheme = &"enet"
-		tree.params = { "port": candidate }
+		var params := NetwENetParams.new()
+		params.port = candidate
+		tree.transport = params
 		parent.add_child(tree)
 
-		var err: Error = await tree._open_host(true)
+		var err := NetwConnector.error_of(
+			await NetwConnector.of(tree.api).host(null),
+		)
 		if err == OK:
 			if info_provider.is_valid():
 				Netw.of(tree).session.set_server_info_provider(info_provider)
@@ -66,8 +69,9 @@ static func make_client_tree(
 	var tree := MultiplayerTree.new()
 	tree.name = "EnetClient%s" % name_suffix
 	tree.auto_host_headless = false
-	tree.scheme = &"enet"
-	tree.params = { "port": port }
+	var params := NetwENetParams.new()
+	params.port = port
+	tree.transport = params
 	parent.add_child(tree)
 	return tree
 

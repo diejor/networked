@@ -142,11 +142,13 @@ func test_p1_monotonic_display_time() -> void:
 		var h := _run(cell)
 		var m := NetwInterpMetrics.analyze(h, cell.oracle, h.warmup_hint())
 		assert_bool(m.playhead_monotonic) \
-			.override_failure_message(
-				"P1 %s/%s: playhead ran backward by %.4f ticks" % [
-					cell.label, cell.preset.name, m.max_playhead_backstep,
-				],
-			).is_true()
+				.override_failure_message(
+					"P1 %s/%s: playhead ran backward by %.4f ticks" % [
+						cell.label,
+						cell.preset.name,
+						m.max_playhead_backstep,
+					],
+				).is_true()
 		assert_int(m.samples).is_greater(0)
 
 
@@ -157,11 +159,14 @@ func test_p2_continuity() -> void:
 		var m := NetwInterpMetrics.analyze(h, cell.oracle, h.warmup_hint())
 		var bound := cell.oracle.speed_max() * h.frame_dt() * _STEP_SLACK
 		assert_float(m.max_step) \
-			.override_failure_message(
-				"P2 %s/%s: max step %.3f exceeds bound %.3f" % [
-					cell.label, cell.preset.name, m.max_step, bound,
-				],
-			).is_less_equal(bound)
+				.override_failure_message(
+					"P2 %s/%s: max step %.3f exceeds bound %.3f" % [
+						cell.label,
+						cell.preset.name,
+						m.max_step,
+						bound,
+					],
+				).is_less_equal(bound)
 
 
 # P3 Bounded lag. The display trails the truth by a bounded, non-negative delay.
@@ -171,17 +176,22 @@ func test_p3_bounded_lag() -> void:
 		var m := NetwInterpMetrics.analyze(h, cell.oracle, h.warmup_hint())
 		var lag_max := _lag_max_sec(h)
 		assert_bool(m.led_truth) \
-			.override_failure_message(
-				"P3 %s/%s: display led the truth (min lag %.3f s)" % [
-					cell.label, cell.preset.name, m.min_lag_sec,
-				],
-			).is_false()
+				.override_failure_message(
+					"P3 %s/%s: display led the truth (min lag %.3f s)" % [
+						cell.label,
+						cell.preset.name,
+						m.min_lag_sec,
+					],
+				).is_false()
 		assert_float(m.max_lag_sec) \
-			.override_failure_message(
-				"P3 %s/%s: lag %.3f s exceeds max %.3f s" % [
-					cell.label, cell.preset.name, m.max_lag_sec, lag_max,
-				],
-			).is_less_equal(lag_max)
+				.override_failure_message(
+					"P3 %s/%s: lag %.3f s exceeds max %.3f s" % [
+						cell.label,
+						cell.preset.name,
+						m.max_lag_sec,
+						lag_max,
+					],
+				).is_less_equal(lag_max)
 		assert_float(m.min_lag_sec).is_greater_equal(-0.01)
 
 
@@ -192,27 +202,34 @@ func test_p4_steadiness() -> void:
 		var h := _run(cell)
 		var m := NetwInterpMetrics.analyze(h, cell.oracle, h.warmup_hint())
 		assert_int(m.regressions) \
-			.override_failure_message(
-				"P4 %s/%s: %d backward frames after warmup" % [
-					cell.label, cell.preset.name, m.regressions,
-				],
-			).is_equal(0)
+				.override_failure_message(
+					"P4 %s/%s: %d backward frames after warmup" % [
+						cell.label,
+						cell.preset.name,
+						m.regressions,
+					],
+				).is_equal(0)
 		assert_int(m.stalls) \
-			.override_failure_message(
-				"P4 %s/%s: %d stalled frames while truth moved" % [
-					cell.label, cell.preset.name, m.stalls,
-				],
-			).is_equal(0)
+				.override_failure_message(
+					"P4 %s/%s: %d stalled frames while truth moved" % [
+						cell.label,
+						cell.preset.name,
+						m.stalls,
+					],
+				).is_equal(0)
 		assert_int(m.moved).is_greater(0)
 		var speed_err := absf(m.mean_speed - cell.oracle.speed_max()) \
 				/ cell.oracle.speed_max()
 		assert_float(speed_err) \
-			.override_failure_message(
-				"P4 %s/%s: mean speed %.2f vs truth %.2f (%.1f%% off)" % [
-					cell.label, cell.preset.name, m.mean_speed,
-					cell.oracle.speed_max(), speed_err * 100.0,
-				],
-			).is_less(0.05)
+				.override_failure_message(
+					"P4 %s/%s: mean speed %.2f vs truth %.2f (%.1f%% off)" % [
+						cell.label,
+						cell.preset.name,
+						m.mean_speed,
+						cell.oracle.speed_max(),
+						speed_err * 100.0,
+					],
+				).is_less(0.05)
 
 
 # P5 Bounded jerk. The second difference of the displayed sequence stays under a
@@ -223,11 +240,14 @@ func test_p5_bounded_jerk() -> void:
 		var m := NetwInterpMetrics.analyze(h, cell.oracle, h.warmup_hint())
 		var bound := _jerk_bound(h, cell.oracle)
 		assert_float(m.max_jerk) \
-			.override_failure_message(
-				"P5 %s/%s: jerk %.3f exceeds bound %.3f" % [
-					cell.label, cell.preset.name, m.max_jerk, bound,
-				],
-			).is_less_equal(bound)
+				.override_failure_message(
+					"P5 %s/%s: jerk %.3f exceeds bound %.3f" % [
+						cell.label,
+						cell.preset.name,
+						m.max_jerk,
+						bound,
+					],
+				).is_less_equal(bound)
 
 
 # P5 for the predicted CHASE path. The chase filter must smooth a body that
@@ -240,17 +260,20 @@ func test_p5_chase_bounded_jerk() -> void:
 		var bound := _jerk_bound(h, oracle)
 		assert_bool(m.playhead_monotonic).is_true()
 		assert_int(m.regressions) \
-			.override_failure_message(
-				"P5 chase/%s: %d backward frames" % [
-					oracle.kind, m.regressions,
-				],
-			).is_equal(0)
+				.override_failure_message(
+					"P5 chase/%s: %d backward frames" % [
+						oracle.kind,
+						m.regressions,
+					],
+				).is_equal(0)
 		assert_float(m.max_jerk) \
-			.override_failure_message(
-				"P5 chase/%s: jerk %.3f exceeds bound %.3f" % [
-					oracle.kind, m.max_jerk, bound,
-				],
-			).is_less_equal(bound)
+				.override_failure_message(
+					"P5 chase/%s: jerk %.3f exceeds bound %.3f" % [
+						oracle.kind,
+						m.max_jerk,
+						bound,
+					],
+				).is_less_equal(bound)
 
 
 # A chase harness settled at zero with near-exact tracking, the rig every
@@ -345,34 +368,34 @@ func test_p7_a_teleport_snaps_the_chase() -> void:
 # a huge correction can never wind the visual further from the body than a
 # teleport would have moved it.
 func test_p7_the_chase_offset_clamps_by_magnitude() -> void:
-	var clamped: Vector3 = NetwInterpolationInterface._clamp_delta(
+	var clamped: Vector3 = DisplayCore._clamp_delta(
 		Vector3(10.0, 0.0, 0.0),
 		2.0,
 	)
 	assert_float(clamped.length()).is_equal_approx(2.0, 0.0001)
 	assert_float(clamped.x).is_greater(0.0)
-	assert_float(float(NetwInterpolationInterface._clamp_delta(-9.0, 2.0))) \
+	assert_float(float(DisplayCore._clamp_delta(-9.0, 2.0))) \
 			.is_equal_approx(-2.0, 0.0001)
 
 
 func test_p8_role_offsets_preserve_shortest_rotation_channels() -> void:
 	var displayed_angle := deg_to_rad(179.0)
 	var target_angle := deg_to_rad(-179.0)
-	var angle_offset: float = NetwInterpolationInterface._role_offset(
+	var angle_offset: float = DisplayCore._role_offset(
 		displayed_angle,
 		target_angle,
-		NetwInterpolate.Mode.ANGLE,
+		NetwInterpolate.MODE_ANGLE,
 	)
 	assert_float(absf(angle_offset)).is_equal_approx(deg_to_rad(2.0), 0.0001)
 
 	var displayed := Quaternion(Vector3.UP, deg_to_rad(170.0))
 	var target := Quaternion(Vector3.UP, deg_to_rad(-170.0))
-	var offset: Quaternion = NetwInterpolationInterface._role_offset(
+	var offset: Quaternion = DisplayCore._role_offset(
 		displayed,
 		target,
-		NetwInterpolate.Mode.SLERP,
+		NetwInterpolate.MODE_SLERP,
 	)
-	var recomposed: Quaternion = NetwInterpolationInterface._add_delta(
+	var recomposed: Quaternion = DisplayCore._add_delta(
 		target,
 		offset,
 	)
@@ -388,29 +411,38 @@ func test_p6_loss_robustness() -> void:
 		var m := NetwInterpMetrics.analyze(h, cell.oracle, h.warmup_hint())
 		var bound := cell.oracle.speed_max() * h.frame_dt() * _STEP_SLACK_DEGRADED
 		assert_bool(m.playhead_monotonic) \
-			.override_failure_message(
-				"P6 %s/%s: playhead ran backward by %.4f" % [
-					cell.label, cell.preset.name, m.max_playhead_backstep,
-				],
-			).is_true()
+				.override_failure_message(
+					"P6 %s/%s: playhead ran backward by %.4f" % [
+						cell.label,
+						cell.preset.name,
+						m.max_playhead_backstep,
+					],
+				).is_true()
 		assert_int(m.regressions) \
-			.override_failure_message(
-				"P6 %s/%s: %d backward frames under loss" % [
-					cell.label, cell.preset.name, m.regressions,
-				],
-			).is_equal(0)
+				.override_failure_message(
+					"P6 %s/%s: %d backward frames under loss" % [
+						cell.label,
+						cell.preset.name,
+						m.regressions,
+					],
+				).is_equal(0)
 		assert_int(m.stalls) \
-			.override_failure_message(
-				"P6 %s/%s: %d stalled frames under loss" % [
-					cell.label, cell.preset.name, m.stalls,
-				],
-			).is_equal(0)
+				.override_failure_message(
+					"P6 %s/%s: %d stalled frames under loss" % [
+						cell.label,
+						cell.preset.name,
+						m.stalls,
+					],
+				).is_equal(0)
 		assert_float(m.max_step) \
-			.override_failure_message(
-				"P6 %s/%s: max step %.3f exceeds bound %.3f" % [
-					cell.label, cell.preset.name, m.max_step, bound,
-				],
-			).is_less_equal(bound)
+				.override_failure_message(
+					"P6 %s/%s: max step %.3f exceeds bound %.3f" % [
+						cell.label,
+						cell.preset.name,
+						m.max_step,
+						bound,
+					],
+				).is_less_equal(bound)
 
 
 func _first_diff(a: Array, b: Array) -> int:
@@ -441,13 +473,13 @@ func test_p9_replay_determinism() -> void:
 	var b := _run(cell)
 	var diff := _first_diff(a.displayed, b.displayed)
 	assert_int(diff) \
-		.override_failure_message(
-			"P9: displayed sequences diverge at frame %d" % diff,
-		).is_equal(-1)
+			.override_failure_message(
+				"P9: displayed sequences diverge at frame %d" % diff,
+			).is_equal(-1)
 	assert_int(_first_diff(a.writer().samples, b.writer().samples)).is_equal(-1)
 	assert_bool(_stats_equal(a.run_stats, b.run_stats)) \
-		.override_failure_message("P9: pump stats differ between runs") \
-		.is_true()
+			.override_failure_message("P9: pump stats differ between runs") \
+			.is_true()
 
 
 # P10 Schedule independence. Two engines fed identical streams but pumping their
@@ -460,22 +492,23 @@ func test_p10_schedule_independence() -> void:
 		[_circle(), NetwInterpDelivery.poor_3g(), 22],
 		[_linear(), NetwInterpDelivery.mobile_4g(), 33],
 	]
-	var forward := _schedule(lanes, PackedInt32Array([0, 1, 2]))
-	var permuted := _schedule(lanes, PackedInt32Array([2, 0, 1]))
+	var forward := schedule(lanes, PackedInt32Array([0, 1, 2]))
+	var permuted := schedule(lanes, PackedInt32Array([2, 0, 1]))
 	for i in lanes.size():
 		var diff := _first_diff(forward.lane(i).displayed, permuted.lane(i).displayed)
 		assert_int(diff) \
-			.override_failure_message(
-				"P10: lane %d diverges under permuted pump order at frame %d" % [
-					i, diff,
-				],
-			).is_equal(-1)
+				.override_failure_message(
+					"P10: lane %d diverges under permuted pump order at frame %d" % [
+						i,
+						diff,
+					],
+				).is_equal(-1)
 	assert_bool(_stats_equal(forward.run_stats, permuted.run_stats)) \
-		.override_failure_message("P10: merged stats depend on pump order") \
-		.is_true()
+			.override_failure_message("P10: merged stats depend on pump order") \
+			.is_true()
 
 
-func _schedule(lanes: Array, order: PackedInt32Array) -> NetwInterpScheduleHarness:
+func schedule(lanes: Array, order: PackedInt32Array) -> NetwInterpScheduleHarness:
 	var s := NetwInterpScheduleHarness.new()
 	s.tickrate = 60.0
 	s.fps = 60.0
@@ -495,7 +528,7 @@ func _run_forecast(oracle: NetwInterpOracle, smoothing: float) -> NetwInterpHarn
 	h.tickrate = 60.0
 	h.fps = 60.0
 	h.send_period = _FORECAST_SEND_PERIOD
-	h.timeline_mode = NetwInterpolationInterface.TimelineMode.FORECAST
+	h.timeline_mode = NetwDisplayHandle.TimelineMode.FORECAST
 	h.configure(
 		NetwInterpolate.new().lerp().smooth(smoothing).to(&"value"),
 		oracle.value_at(0.0),
@@ -554,15 +587,17 @@ func test_p7_forecast_error_bounded() -> void:
 	for oracle: NetwInterpOracle in [_linear(), _circle()]:
 		var h := _run_forecast(oracle, 0.0)
 		assert_int(h.run_stats.projecting) \
-			.override_failure_message(
-				"P7 %s: forecast never projected" % oracle.kind,
-			).is_greater(0)
+				.override_failure_message(
+					"P7 %s: forecast never projected" % oracle.kind,
+				).is_greater(0)
 		assert_float(h.run_stats.max_forecast_age) \
-			.override_failure_message(
-				"P7 %s: projected %.2f ticks past the %d-tick cap" % [
-					oracle.kind, h.run_stats.max_forecast_age, h.max_forecast_ticks,
-				],
-			).is_less_equal(float(h.max_forecast_ticks) + 0.001)
+				.override_failure_message(
+					"P7 %s: projected %.2f ticks past the %d-tick cap" % [
+						oracle.kind,
+						h.run_stats.max_forecast_age,
+						h.max_forecast_ticks,
+					],
+				).is_less_equal(float(h.max_forecast_ticks) + 0.001)
 
 		var age_sec := h.run_stats.max_forecast_age / h.tickrate
 		var span_sec := float(h.send_period) / h.tickrate
@@ -570,11 +605,13 @@ func test_p7_forecast_error_bounded() -> void:
 				* _FORECAST_SLACK + _FORECAST_EPS
 		var err := _max_error_at_playhead(h, oracle)
 		assert_float(err) \
-			.override_failure_message(
-				"P7 %s: projection error %.3f exceeds bound %.3f" % [
-					oracle.kind, err, bound,
-				],
-			).is_less_equal(bound)
+				.override_failure_message(
+					"P7 %s: projection error %.3f exceeds bound %.3f" % [
+						oracle.kind,
+						err,
+						bound,
+					],
+				).is_less_equal(bound)
 
 
 # P7 Forecast leads the buffer. The same stream displayed under FORECAST tracks
@@ -587,24 +624,28 @@ func test_p7_forecast_leads_buffered() -> void:
 		var f_err := _mean_error_vs_live(f, oracle)
 		var b_err := _mean_error_vs_live(b, oracle)
 		assert_float(f_err) \
-			.override_failure_message(
-				"P7 %s: forecast error %.3f not below buffered %.3f" % [
-					oracle.kind, f_err, b_err,
-				],
-			).is_less(b_err)
+				.override_failure_message(
+					"P7 %s: forecast error %.3f not below buffered %.3f" % [
+						oracle.kind,
+						f_err,
+						b_err,
+					],
+				).is_less(b_err)
 		var m := NetwInterpMetrics.analyze(f, oracle, f.warmup_hint())
 		assert_bool(m.playhead_monotonic) \
-			.override_failure_message(
-				"P7 %s: forecast playhead ran backward by %.4f" % [
-					oracle.kind, m.max_playhead_backstep,
-				],
-			).is_true()
+				.override_failure_message(
+					"P7 %s: forecast playhead ran backward by %.4f" % [
+						oracle.kind,
+						m.max_playhead_backstep,
+					],
+				).is_true()
 		assert_int(m.regressions) \
-			.override_failure_message(
-				"P7 %s: %d backward frames under forecast" % [
-					oracle.kind, m.regressions,
-				],
-			).is_equal(0)
+				.override_failure_message(
+					"P7 %s: %d backward frames under forecast" % [
+						oracle.kind,
+						m.regressions,
+					],
+				).is_equal(0)
 
 
 # The server never forecasts. A BRACKETED runtime, the authored and server path,
@@ -615,16 +656,16 @@ func test_p7_server_never_forecasts() -> void:
 	h.tickrate = 60.0
 	h.fps = 60.0
 	h.send_period = _FORECAST_SEND_PERIOD
-	h.timeline_mode = NetwInterpolationInterface.TimelineMode.FORECAST
-	h.pump_mode = NetwInterpolationInterface._PUMP_BRACKETED
+	h.timeline_mode = NetwDisplayHandle.TimelineMode.FORECAST
+	h.pump_mode = DisplayCore._PUMP_BRACKETED
 	h.configure(
 		NetwInterpolate.new().lerp().smooth(0.0).to(&"value"),
 		_linear().value_at(0.0),
 	)
 	h.run(_linear(), NetwInterpDelivery.perfect(), _DURATION, _SEED)
 	assert_int(h.run_stats.projecting) \
-		.override_failure_message("P7: a bracketed server runtime projected") \
-		.is_equal(0)
+			.override_failure_message("P7: a bracketed server runtime projected") \
+			.is_equal(0)
 
 
 # P8 Sleep correctness. A stream that stops while truth is stationary sleeps and
@@ -634,19 +675,19 @@ func test_p8_stationary_stream_sleeps() -> void:
 	var oracle := NetwInterpOracle.stationary(Vector2(10.0, 5.0))
 	var h := _run_forecast(oracle, 0.0)
 	assert_int(h.run_stats.sleeping) \
-		.override_failure_message("P8: a stopped stationary stream never slept") \
-		.is_greater(0)
+			.override_failure_message("P8: a stopped stationary stream never slept") \
+			.is_greater(0)
 	assert_int(h.run_stats.projecting) \
-		.override_failure_message("P8: a stationary stream projected a still value") \
-		.is_equal(0)
+			.override_failure_message("P8: a stationary stream projected a still value") \
+			.is_equal(0)
 	var warm := h.warmup_hint()
 	for i in h.frames.size():
 		if h.frames[i] < warm:
 			continue
 		var disp: Vector2 = h.displayed[i]
 		assert_float(disp.distance_to(oracle.origin)) \
-			.override_failure_message("P8: a stationary display drifted") \
-			.is_less(0.001)
+				.override_failure_message("P8: a stationary display drifted") \
+				.is_less(0.001)
 
 
 func test_p8_moving_stream_projects_to_cap_then_holds() -> void:
@@ -655,7 +696,7 @@ func test_p8_moving_stream_projects_to_cap_then_holds() -> void:
 	h.tickrate = 60.0
 	h.fps = 60.0
 	h.send_period = 1
-	h.timeline_mode = NetwInterpolationInterface.TimelineMode.FORECAST
+	h.timeline_mode = NetwDisplayHandle.TimelineMode.FORECAST
 	# The stream falls silent after one second while the truth keeps moving.
 	h.record_cutoff_sec = 1.0
 	h.configure(
@@ -665,22 +706,23 @@ func test_p8_moving_stream_projects_to_cap_then_holds() -> void:
 	h.run(oracle, NetwInterpDelivery.perfect(), 3.0, _SEED)
 
 	assert_int(h.run_stats.projecting) \
-		.override_failure_message("P8: a stalled moving stream never projected") \
-		.is_greater(0)
+			.override_failure_message("P8: a stalled moving stream never projected") \
+			.is_greater(0)
 	# The projection ran out to the cap once the stream stopped feeding.
 	assert_float(h.run_stats.max_forecast_age) \
-		.override_failure_message(
-			"P8: projected only %.2f ticks, never reached the %d-tick cap" % [
-				h.run_stats.max_forecast_age, h.max_forecast_ticks,
-			],
-		).is_greater_equal(float(h.max_forecast_ticks) - 1.0)
+			.override_failure_message(
+				"P8: projected only %.2f ticks, never reached the %d-tick cap" % [
+					h.run_stats.max_forecast_age,
+					h.max_forecast_ticks,
+				],
+			).is_greater_equal(float(h.max_forecast_ticks) - 1.0)
 	assert_float(h.run_stats.max_forecast_age) \
-		.is_less_equal(float(h.max_forecast_ticks) + 0.001)
+			.is_less_equal(float(h.max_forecast_ticks) + 0.001)
 
 	# Past the cap the display holds: the last two frames sit on the same point.
 	var n := h.displayed.size()
 	var last: Vector2 = h.displayed[n - 1]
 	var prev: Vector2 = h.displayed[n - 2]
 	assert_float(last.distance_to(prev)) \
-		.override_failure_message("P8: the display kept drifting past the cap") \
-		.is_less(0.01)
+			.override_failure_message("P8: the display kept drifting past the cap") \
+			.is_less(0.01)

@@ -7,7 +7,7 @@
 class_name TPLayerAPI
 extends CanvasLayer
 
-## Forwarded from [signal NetwSessionInterface.session_entered]. Frees this node
+## Forwarded from [signal NetwMultiplayer.session_entered]. Frees this node
 ## on the server.
 signal configured
 
@@ -29,8 +29,8 @@ func _enter_tree() -> void:
 
 	NetwService.register(self, TPLayerAPI)
 	var api := Netw.of(self)
-	if api and not api.session.session_entered.is_connected(configured.emit):
-		api.session.session_entered.connect(configured.emit)
+	if api and not api.session_entered.is_connected(configured.emit):
+		api.session_entered.connect(configured.emit)
 
 
 func _ready() -> void:
@@ -42,8 +42,8 @@ func _exit_tree() -> void:
 		return
 
 	var api := Netw.of(self)
-	if api and api.session.session_entered.is_connected(configured.emit):
-		api.session.session_entered.disconnect(configured.emit)
+	if api and api.session_entered.is_connected(configured.emit):
+		api.session_entered.disconnect(configured.emit)
 
 	NetwService.unregister(self, TPLayerAPI)
 
@@ -65,7 +65,7 @@ func _on_multiplayer_configured() -> void:
 	var api := Netw.of(self)
 	if api == null:
 		return
-	if api.role == NetwSessionInterface.Role.DEDICATED_SERVER:
+	if api.role == NetwMultiplayer.Role.DEDICATED_SERVER:
 		queue_free()
 		return
 	if not api.local_participant_joined.is_connected(_on_local_participant_joined):

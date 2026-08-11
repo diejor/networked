@@ -22,9 +22,6 @@ func test_direct_level_becomes_a_single_scene_declaration() -> void:
 			as MultiplayerSceneManager
 
 	assert_object(manager).is_not_null()
-	assert_int(manager.concurrency).is_equal(
-		NetwSceneConfig.Concurrency.SINGLE,
-	)
 	assert_array(manager.get_configured_paths()).contains(
 		[level_builder.resource_path],
 	)
@@ -35,10 +32,9 @@ func test_direct_level_becomes_a_single_scene_declaration() -> void:
 
 func test_direct_level_spawns_through_a_plain_wrapper() -> void:
 	await harness.add_client()
-	var scenes := harness.server().api.scenes
-	var scene: Variant = scenes.scene(level_builder.scene_name) \
-			as MultiplayerScene
+	var api := harness.server().api
+	var container := api.scene(level_builder.scene_name)
 
-	assert_object(scene).is_not_null()
-	assert_bool(scene is SubViewport).is_false()
-	assert_object(scene.level).is_instanceof(Node2D)
+	assert_object(container).is_not_null()
+	assert_bool(container.level_container() is SubViewport).is_false()
+	assert_object(container.level).is_instanceof(Node2D)

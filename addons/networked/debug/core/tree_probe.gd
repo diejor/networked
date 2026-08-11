@@ -9,6 +9,8 @@
 class_name TreeProbe
 extends Node
 
+const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
+
 ## Emitted when the tree has finished initial debug wiring.
 signal tree_ready
 
@@ -21,7 +23,7 @@ const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
 var local_player: NetwEntity:
 	get:
 		var mt := _mt_ref.get_ref() as MultiplayerTree
-		return mt.local_player if mt else null
+		return mt.api.local_player if mt else null
 
 var _mt_ref: WeakRef
 var _reporter_ref: WeakRef
@@ -41,7 +43,7 @@ var _visualizers: Dictionary = { }
 # used for causal linking.
 var _scene_tokens: Dictionary = { }
 
-# Scene -> [Callable] connected to [signal MultiplayerScene.spawned], for
+# Scene -> [Callable] registered as a scene population observer, for
 # disconnect-on-cleanup.
 var _hooked_scenes: Dictionary = { }
 
@@ -108,7 +110,7 @@ func apply_command(d: Dictionary) -> void:
 ## [br][br]
 ## Prefers the span's explicit target node (if set via [method NetwSpan.with_node]).
 ## Falls back to a "Session Snapshot" of the tree root, enriched with high-level
-## state from the [MultiplayerSceneManager].
+## state from the scene declaration.
 func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -121,20 +123,20 @@ func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 
 	# Priority 2: Session fallback (Tree Root)
 	var snap := NetwNodeSnapshot.from_node(mt)
-	var scenes := mt.api.scenes if mt.api else null
+	var scenes := mt.api._scenes if mt.api else null
 
 	# Manually enrich the tree root's snapshot with service-level data.
 	# This keeps the MultiplayerTree core clean while providing rich context.
 	var session_state: Dictionary = {
-		"is_server": mt.role == NetwSessionInterface.Role.DEDICATED_SERVER or mt.role == NetwSessionInterface.Role.LISTEN_SERVER,
+		"is_server": mt.role == NetwMultiplayer.Role.DEDICATED_SERVER or mt.role == NetwMultiplayer.Role.LISTEN_SERVER,
 		"role": mt.role,
-		"role_name": NetwSessionInterface.Role.keys()[mt.role],
+		"role_name": NetwMultiplayer.Role.keys()[mt.role],
 		"peer_id": \
-		mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
+		mt.api.get_unique_id() if mt.api else 0,
 		"connected_peers": \
-		mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
+		mt.api.get_peers() if mt.api else [],
 		"active_scenes": \
-		scenes.scenes.keys() if scenes else [],
+		_live_scene_labels(scenes),
 		"backend": String(mt.scheme),
 		"active_scene": get_active_scene_path(),
 	}
@@ -144,6 +146,18 @@ func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 		snap.debug_state[k] = session_state[k]
 
 	return snap
+
+
+# One label per live scene, not per stem. Several instances of one level share
+# a stem, so reading the keyed map would report a session of five arenas as one.
+func _live_scene_labels(scenes: SceneCore) -> Array:
+	var out: Array = []
+	if scenes == null:
+		return out
+	for scene: Node in scenes.live_scenes():
+		if is_instance_valid(scene) and is_instance_valid(_scene_level(scene)):
+			out.append(StringName(_scene_level(scene).name))
+	return out
 
 
 ## Robustly identifies the active scene file path for this tree or a specific
@@ -469,7 +483,7 @@ func _dispatch(
 
 func _find_players(mt: MultiplayerTree) -> Array[Node]:
 	var nodes: Array[Node] = []
-	for player in mt.get_all_players():
+	for player in mt.api.players:
 		if player != null and is_instance_valid(player.owner):
 			nodes.append(player.owner)
 	return nodes
@@ -483,17 +497,17 @@ func _ready() -> void:
 		return
 
 	# Peer events: notify reporter (spans, topology) and refresh decoration.
-	mt.peer_connected.connect(_on_mt_peer_connected)
-	mt.peer_disconnected.connect(_on_mt_peer_disconnected)
+	mt.api.peer_connected.connect(_on_mt_peer_connected)
+	mt.api.peer_disconnected.connect(_on_mt_peer_disconnected)
 
 	# Identity changes: notify reporter to re-emit session registration.
-	mt.local_player_changed.connect(_on_local_player_changed)
+	mt.api.local_player_changed.connect(_on_local_player_changed)
 
 	# Role transitions: observed offline so Role.NONE -> live is in the stream.
-	mt.state_changed.connect(_on_role_changed)
+	mt.api.state_changed.connect(_on_role_changed)
 
 	# Debug signal wiring for scene/clock requires a live session.
-	mt.session_entered.connect(_on_configured)
+	mt.api.session_entered.connect(_on_configured)
 	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
 	if sm:
 		_on_configured()
@@ -502,7 +516,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	_disconnect_all()
 	NetwService.unregister(self, TreeProbe)
-	for scene: MultiplayerScene in _hooked_scenes.keys():
+	for scene: Node in _hooked_scenes.keys():
 		_unhook_synchronizer(scene)
 	_hooked_scenes.clear()
 	_scene_tokens.clear()
@@ -522,22 +536,22 @@ func _disconnect_all() -> void:
 	var mt: MultiplayerTree = _mt_ref.get_ref()
 
 	if mt:
-		if mt.peer_connected.is_connected(_on_mt_peer_connected):
-			mt.peer_connected.disconnect(_on_mt_peer_connected)
-		if mt.peer_disconnected.is_connected(_on_mt_peer_disconnected):
-			mt.peer_disconnected.disconnect(_on_mt_peer_disconnected)
-		if mt.local_player_changed.is_connected(_on_local_player_changed):
-			mt.local_player_changed.disconnect(_on_local_player_changed)
-		if mt.state_changed.is_connected(_on_role_changed):
-			mt.state_changed.disconnect(_on_role_changed)
-		if mt.session_entered.is_connected(_on_configured):
-			mt.session_entered.disconnect(_on_configured)
+		if mt.api.peer_connected.is_connected(_on_mt_peer_connected):
+			mt.api.peer_connected.disconnect(_on_mt_peer_connected)
+		if mt.api.peer_disconnected.is_connected(_on_mt_peer_disconnected):
+			mt.api.peer_disconnected.disconnect(_on_mt_peer_disconnected)
+		if mt.api.local_player_changed.is_connected(_on_local_player_changed):
+			mt.api.local_player_changed.disconnect(_on_local_player_changed)
+		if mt.api.state_changed.is_connected(_on_role_changed):
+			mt.api.state_changed.disconnect(_on_role_changed)
+		if mt.api.session_entered.is_connected(_on_configured):
+			mt.api.session_entered.disconnect(_on_configured)
 
 		var clock: MultiplayerClock = mt.get_service(MultiplayerClock)
 		if clock and clock.pong_received.is_connected(_on_clock_pong):
 			clock.pong_received.disconnect(_on_clock_pong)
 
-		var scenes := mt.api.scenes if mt.api else null
+		var scenes := mt.api._scenes if mt.api else null
 		if scenes:
 			if scenes.scene_spawned.is_connected(_on_scene_spawned):
 				scenes.scene_spawned.disconnect(_on_scene_spawned)
@@ -582,25 +596,23 @@ func _on_configured() -> void:
 	if clock:
 		clock.pong_received.connect(_on_clock_pong)
 
-	var scenes := mt.api.scenes if mt.api else null
+	var scenes := mt.api._scenes if mt.api else null
 	if scenes:
 		scenes.scene_spawned.connect(_on_scene_spawned)
 		scenes.scene_despawned.connect(_on_scene_despawned)
 
 		# Retroactively hook scenes that spawned before this context was ready
 		# (e.g. ON_STARTUP).
-		for scene: MultiplayerScene in scenes.scenes.values():
+		for scene: Node in scenes.scenes.values():
 			if not is_instance_valid(scene) or _hooked_scenes.has(scene):
 				continue
 			_scene_tokens[scene] = null # no causal token
 			_hook_synchronizer(scene)
 
-		# Emit topology for players already present.
-		for player in mt.get_all_players():
-			_emit_retroactive_player_spawned(reporter, mt, player.owner)
-	else:
-		# Sceneless mode: emit topology for all current players.
-		for player in mt.get_all_players():
+	# Emit topology for players already present. A sceneless peer holds no
+	# scenes and so reports no players, which is the same answer either way.
+	if mt.api:
+		for player in mt.api.players:
 			_emit_retroactive_player_spawned(reporter, mt, player.owner)
 
 	tree_ready.emit.call_deferred()
@@ -608,7 +620,7 @@ func _on_configured() -> void:
 # Scene lifecycle.
 
 
-func _on_scene_spawned(scene: MultiplayerScene) -> void:
+func _on_scene_spawned(scene: Node) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as DebugReporter
 	if not mt or not reporter:
@@ -618,6 +630,9 @@ func _on_scene_spawned(scene: MultiplayerScene) -> void:
 	var token: CheckpointToken = span.checkpoint() if span else null
 	_scene_tokens[scene] = token
 	if is_instance_valid(scene):
+		# Meta channel: multiplayer_tree.gd reads this key back when it builds a
+		# spawn slot. A scriptless container still carries meta, so the channel
+		# survives de-scripting, but both endpoints must move together.
 		scene.set_meta(&"_net_scene_token", token)
 	_dispatch(NetwTreeEvent.Kind.SCENE_SPAWNED, scene, 0, { "span": span, "token": token })
 	if span:
@@ -625,7 +640,7 @@ func _on_scene_spawned(scene: MultiplayerScene) -> void:
 	_hook_synchronizer(scene)
 
 
-func _on_scene_despawned(scene: MultiplayerScene) -> void:
+func _on_scene_despawned(scene: Node) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as DebugReporter
 	if mt and reporter:
@@ -635,26 +650,42 @@ func _on_scene_despawned(scene: MultiplayerScene) -> void:
 	_scene_tokens.erase(scene)
 
 
-func _hook_synchronizer(scene: MultiplayerScene) -> void:
-	if not is_instance_valid(scene):
-		return
-	if _hooked_scenes.has(scene):
+func _hook_synchronizer(scene: Node) -> void:
+	var api := _api()
+	if api == null or not is_instance_valid(scene) or _hooked_scenes.has(scene):
 		return
 
-	var cb := func(node: Node): _on_player_spawned(node, scene)
-	scene.spawned.connect(cb)
+	var cb := func(present: bool, entity: RID) -> void:
+		var node := api.entity_get_node(entity)
+		if present and node != null:
+			_on_player_spawned(node, scene)
+	api.scene_observe(
+		api.rid_of(scene),
+		NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
+		cb,
+	)
 	_hooked_scenes[scene] = cb
 
 
-func _unhook_synchronizer(scene: MultiplayerScene) -> void:
+func _unhook_synchronizer(scene: Node) -> void:
 	var cb: Callable = _hooked_scenes.get(scene, Callable())
-	if cb.is_valid() and is_instance_valid(scene):
-		if scene.spawned.is_connected(cb):
-			scene.spawned.disconnect(cb)
+	var api := _api()
+	if api != null and cb.is_valid() and is_instance_valid(scene):
+		api.scene_unobserve(
+			api.rid_of(scene),
+			NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
+			cb,
+		)
 	_hooked_scenes.erase(scene)
 
 
-func _on_player_spawned(player: Node, scene: MultiplayerScene) -> void:
+# The owning session while the probe's tree stays live.
+func _api() -> NetwMultiplayer:
+	var mt := _mt_ref.get_ref() as MultiplayerTree
+	return mt.api if mt else null
+
+
+func _on_player_spawned(player: Node, scene: Node) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as DebugReporter
 	if not mt or not reporter:
@@ -697,11 +728,11 @@ func _on_local_player_changed(player: NetwEntity) -> void:
 
 
 func _on_role_changed(
-		old_state: NetwSessionInterface.State,
-		new_state: NetwSessionInterface.State,
+		old_state: NetwMultiplayer.SessionState,
+		new_state: NetwMultiplayer.SessionState,
 ) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
-	var role := mt.role if is_instance_valid(mt) else NetwSessionInterface.Role.NONE
+	var role := mt.role if is_instance_valid(mt) else NetwMultiplayer.Role.NONE
 	_dispatch(
 		NetwTreeEvent.Kind.ROLE_CHANGED,
 		null,
@@ -716,7 +747,13 @@ func _on_role_changed(
 
 func _on_clock_pong(data: Dictionary) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
-	if is_instance_valid(mt) and mt.local_player:
-		data["username"] = NetwIdentity.username_of(mt.local_player.owner)
+	if is_instance_valid(mt) and mt.api.local_player:
+		data["username"] = NetwIdentity.username_of(mt.api.local_player.owner)
 	_dispatch(NetwTreeEvent.Kind.CLOCK_PONG, null, 0, data)
 	clock_pong_captured.emit(data)
+
+
+# The content root of one scene container.
+func _scene_level(scene: Node) -> Node:
+	var record := NetwEntity.of(scene)
+	return record.scene.level if record else null

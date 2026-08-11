@@ -67,7 +67,7 @@ func add_host(
 	assert(host == null, "NetwGameHarness.add_host: host already exists.")
 	var runner := _create_runner(
 		username,
-		NetwSessionInterface.Role.LISTEN_SERVER,
+		NetwMultiplayer.Role.LISTEN_SERVER,
 	)
 	host = runner
 
@@ -96,7 +96,7 @@ func add_client(
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
 	assert(host != null, "NetwGameHarness.add_client: add host first.")
-	var runner := _create_runner(username, NetwSessionInterface.Role.CLIENT)
+	var runner := _create_runner(username, NetwMultiplayer.Role.CLIENT)
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
@@ -122,7 +122,7 @@ func disconnect_runner(runner: NetwSceneRunner) -> void:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for participant: NetwParticipant in host.tree.get_participants():
+			for participant: NetwParticipant in host.tree.api.participants:
 				if participant.peer_id == peer_id:
 					return false
 			return true,
@@ -140,13 +140,13 @@ func sync_ticks(n: int) -> void:
 		return
 	_guard_wall_clock()
 
-	var clocks: Array[NetwClockInterface] = []
+	var clocks: Array[ClockCore] = []
 	for runner in _runners:
 		if not runner or not runner.tree:
 			continue
 		var api := runner.tree.api
 		if api and api.clock.is_configured():
-			clocks.append(api.clock)
+			clocks.append(api._clock)
 
 	if clocks.is_empty():
 		for i in n:
@@ -158,7 +158,7 @@ func sync_ticks(n: int) -> void:
 
 
 ## Game ticks spanning [param game_seconds] of game time at the host clock's
-## [member NetwClockInterface.tickrate].
+## [member ClockCore.tickrate].
 ##
 ## Stepping is deterministic, so a budget can only be expressed in ticks, never
 ## in real seconds. Sizing the budget from game seconds keeps a test's intent
@@ -345,7 +345,7 @@ func teardown() -> void:
 
 func _create_runner(
 		username: String,
-		role: NetwSessionInterface.Role,
+		role: NetwMultiplayer.Role,
 ) -> NetwSceneRunner:
 	var slot := PARTICIPANT_WINDOW_SCENE.instantiate() as ParticipantWindow
 	slot.name = "Window_%s" % username
@@ -374,7 +374,7 @@ func _create_runner(
 	return runner
 
 
-func _adopt_tree(tree: MultiplayerTree, role: NetwSessionInterface.Role) -> void:
+func _adopt_tree(tree: MultiplayerTree, role: NetwMultiplayer.Role) -> void:
 	_loopback.adopt_tree(tree, role)
 
 
@@ -444,7 +444,7 @@ func _wait_for_roster(runner: NetwSceneRunner) -> void:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for participant: NetwParticipant in host.tree.get_participants():
+			for participant: NetwParticipant in host.tree.api.participants:
 				if participant.peer_id == runner.peer_id:
 					return true
 			return false,

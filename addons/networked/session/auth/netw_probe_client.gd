@@ -2,6 +2,8 @@
 class_name NetwProbeClient
 extends RefCounted
 
+const AuthProtocol := preload("res://addons/networked/session/auth/auth_protocol.gd")
+
 var _api: SceneMultiplayer
 var _peer: MultiplayerPeer
 var _result: NetwProbeResult

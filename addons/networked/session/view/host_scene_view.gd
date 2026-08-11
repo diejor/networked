@@ -1,19 +1,18 @@
 ## Draws a listen-server host's offscreen player scene edge-to-edge.
 ##
-## Only a [constant NetwSceneConfig.Concurrency.CONCURRENT] session puts the
-## host's own world in an offscreen [SubViewport], so this view exists only
-## there. It targets the [SubViewport] holding the local player's
-## [member NetwSceneInterface.current_scene] and draws it so the host sees the
-## game a pure client sees directly in the root viewport. A dedicated server
-## renders no scene, and a [constant NetwSceneConfig.Concurrency.SINGLE] host
+## Only a scene declaring
+## [constant NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD] is hosted
+## in an offscreen [SubViewport], so this view exists only for one. It targets
+## the [SubViewport] holding the local player's scene and draws it, so the host
+## sees the game a pure client sees directly in the root viewport. A dedicated
+## server renders no scene, and a host whose scene shares the session's world
 ## renders like a client, so neither builds this view.
 ##
 ## [br][br]
 ## [b]You normally do not add this node yourself.[/b] A listen-server host adds
-## one automatically when [member NetwSessionInterface.role] is
-## [constant NetwSessionInterface.Role.LISTEN_SERVER], scene concurrency is
-## [constant NetwSceneConfig.Concurrency.CONCURRENT], and no view already owns
-## the display. When no [signal NetwEntity.view_activated] listener claims the
+## one automatically when [member NetwMultiplayer.role] is
+## [constant NetwMultiplayer.Role.LISTEN_SERVER], a live scene owns its own world,
+## and no view already owns the display. When no [signal NetwEntity.view_activated] listener claims the
 ## camera, this view makes the first [Camera2D] or [Camera3D] in the player
 ## branch current. Drop one into your scene only to customize that window.
 ##
@@ -25,6 +24,8 @@
 ## [StretchLayout]. Assign [member stretch_override] to deviate per view.
 class_name HostSceneView
 extends ParticipantView
+
+const ParticipantDisplaySource := preload("res://addons/networked/session/view/participant_display_source.gd")
 
 var _api: NetwMultiplayer
 var _suppressed := false
@@ -111,21 +112,22 @@ func _announce_view(viewport: SubViewport) -> void:
 	if not viewport.is_ancestor_of(player):
 		return
 	if local_entity.view_activated.get_connections().is_empty():
-		_adopt_camera(player, MultiplayerScene.of(player))
+		_adopt_camera(player, local_entity.scene)
 	local_entity.view_activated.emit()
 
 
 # Makes the first conventional camera current when no custom view hook exists.
-func _adopt_camera(player: Node, scene: MultiplayerScene) -> void:
+func _adopt_camera(player: Node, scene: NetwSceneHandle) -> void:
+	var level := scene.level if scene else null
 	var camera_2d := _first_camera(player, "Camera2D") as Camera2D
-	if camera_2d == null and scene and is_instance_valid(scene.level):
-		camera_2d = _first_camera(scene.level, "Camera2D") as Camera2D
+	if camera_2d == null and is_instance_valid(level):
+		camera_2d = _first_camera(level, "Camera2D") as Camera2D
 	if camera_2d:
 		camera_2d.make_current()
 		return
 	var camera_3d := _first_camera(player, "Camera3D") as Camera3D
-	if camera_3d == null and scene and is_instance_valid(scene.level):
-		camera_3d = _first_camera(scene.level, "Camera3D") as Camera3D
+	if camera_3d == null and is_instance_valid(level):
+		camera_3d = _first_camera(level, "Camera3D") as Camera3D
 	if camera_3d:
 		camera_3d.make_current()
 

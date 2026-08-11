@@ -16,7 +16,7 @@ func _can_join(target: NetwConnectTarget) -> bool:
 
 
 func _can_host(config: NetwHostConfig) -> bool:
-	return config != null and config.scheme == &"webrtc"
+	return config != null and config.transport is NetwWebRTCParams
 
 
 func _host(
@@ -62,16 +62,20 @@ class LoopbackView:
 
 	var _session: WebRTCLoopbackSession
 
+
 	func _init(peer: MultiplayerPeer = null, session: WebRTCLoopbackSession = null) -> void:
 		super(peer)
 		_session = session
 
+
 	func display_name() -> String:
 		return "WebRTC (loopback)"
+
 
 	func poll(_dt: float) -> void:
 		if _session:
 			_session.poll()
+
 
 	func close() -> void:
 		_session = null

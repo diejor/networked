@@ -1,5 +1,10 @@
 class_name TPComponent
 extends NetwComponent
+
+const AsyncMutex := preload("res://addons/networked/utils/async_mutex.gd")
+
+const AreaReparentGuard := preload("res://addons/networked/utils/area_reparent_guard.gd")
+
 ## Cross-scene teleportation for a player-owned entity.
 ##
 ## [method teleport] returns a [TPComponent.TeleportPromise] that survives node
@@ -290,10 +295,11 @@ func _request_teleport(
 		return
 
 	var player := owner
-	var from_scene := MultiplayerScene.of(player)
-	if not from_scene:
-		from_scene = scenes.scene(from_scene_name)
-	if not from_scene:
+	var api := Netw.of(self)
+	var from_scene := NetwEntity.of(player).scene
+	if not from_scene.is_declared:
+		from_scene = api.scene_handle(api.scene_find(from_scene_name))
+	if not from_scene or not from_scene.is_declared:
 		_fail(
 			&"source_scene_not_found",
 			"Source scene '%s' not found.",
@@ -302,7 +308,8 @@ func _request_teleport(
 		)
 		return
 
-	if not is_instance_valid(player) or not from_scene.level.is_ancestor_of(player):
+	if not is_instance_valid(player) \
+			or not from_scene.level.is_ancestor_of(player):
 		_fail(
 			&"player_not_found",
 			"Player '%s' not found in source scene.",
@@ -339,12 +346,13 @@ func _request_teleport(
 	teleport_request_completed.emit()
 
 
-func _activate_destination(to_scene_path: String) -> MultiplayerScene:
+func _activate_destination(to_scene_path: String) -> NetwSceneHandle:
 	var scenes := get_scenes()
+	var api := Netw.of(self)
 	var to_scene_name := _resolve_scene_name(to_scene_path)
 	await scenes.activate_scene(StringName(to_scene_name))
-	var to_scene: MultiplayerScene = scenes.scene(StringName(to_scene_name))
-	if not to_scene:
+	var to_scene := api.scene_handle(api.scene_find(StringName(to_scene_name)))
+	if not to_scene or not to_scene.is_declared:
 		_fail(
 			&"dest_scene_activation_failed",
 			"Destination scene '%s' could not be activated.",
@@ -357,8 +365,8 @@ func _activate_destination(to_scene_path: String) -> MultiplayerScene:
 
 func _reparent_player(
 		player: Node,
-		_from_scene: MultiplayerScene,
-		to_scene: MultiplayerScene,
+		_from_scene: NetwSceneHandle,
+		to_scene: NetwSceneHandle,
 		tp_path: String,
 ) -> void:
 	var username := player.name
@@ -484,7 +492,7 @@ func is_settling() -> bool:
 
 ## Adds [member owner] to the active scene named by this component in
 ## [param scenes].
-func spawn(scenes: NetwSceneInterface) -> void:
+func spawn(scenes: SceneCore) -> void:
 	_dbg.trace("spawn called.")
 	ensure_current_scene_path()
 
@@ -492,7 +500,7 @@ func spawn(scenes: NetwSceneInterface) -> void:
 		_dbg.error("Does not have a scene to tp into.", func(m): push_error(m))
 		return
 
-	var scene: MultiplayerScene = scenes.scene(current_scene_name)
-	if scene:
+	var scene := scenes.scene(current_scene_name)
+	if scene and scene.is_declared:
 		_dbg.info("Spawning player into scene %s", [current_scene_name])
 		scene.add_player(NetwEntity.of(owner))

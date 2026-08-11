@@ -71,8 +71,9 @@ static func _ensure_initialized() -> void:
 		var stack := get_stack()
 		for frame: Dictionary in stack:
 			var src: String = frame.source if frame.has("source") else ""
-			if src.ends_with("netw_log.gd"):
-				_addon_root = src.get_base_dir().get_base_dir() \
+			if src.ends_with("context/debug/log.gd"):
+				_addon_root = src.get_base_dir() \
+						.get_base_dir().get_base_dir() \
 						.replace("res://", "").trim_suffix("/")
 				break
 
@@ -204,6 +205,8 @@ static func _stack_min_level() -> int:
 
 
 static func is_level_active_for_module(level: int, module_path: String) -> bool:
+	if level == Level.ERROR:
+		return true
 	_ensure_initialized()
 	if level < _effective_min_level:
 		return false
@@ -213,6 +216,8 @@ static func is_level_active_for_module(level: int, module_path: String) -> bool:
 ## Fast check to see if a level is active for a specific script path.
 ## Allows components to early-out before doing expensive string formatting.
 static func is_level_active(level: int, script_path: String) -> bool:
+	if level == Level.ERROR:
+		return true
 	_ensure_initialized()
 	if level < _effective_min_level:
 		return false
@@ -586,55 +591,19 @@ static func error(
 		link_call: Callable = Callable(),
 ) -> void:
 	_ensure_initialized()
-	if _test_buffering_enabled and not _test_logs_flushed:
-		var ctx := _get_context()
-		if typeof(msg) == TYPE_CALLABLE:
-			_test_log_buffer.append(
-				{
-					"prefix": "[ERROR]",
-					"msg": msg,
-					"args": args,
-					"level": Level.ERROR,
-					"module": ctx.module,
-					"site": ctx.site,
-					"link_call": link_call,
-					"is_callable": true,
-				},
-			)
-		else:
-			_print(
-				"[ERROR]",
-				msg,
-				args,
-				Level.ERROR,
-				ctx.module,
-				ctx.site,
-				link_call,
-			)
-		return
-	if Level.ERROR < _effective_min_level:
-		return
-	if not _is_debug:
-		if Level.ERROR >= _effective_global_level:
-			if typeof(msg) == TYPE_CALLABLE:
-				(msg as Callable).call()
-			else:
-				_print("[ERROR]", msg, args, Level.ERROR, "", "", link_call)
-		return
 	var ctx := _get_context()
-	if Level.ERROR >= get_effective_level(ctx.module):
-		if typeof(msg) == TYPE_CALLABLE:
-			(msg as Callable).call()
-		else:
-			_print(
-				"[ERROR]",
-				msg,
-				args,
-				Level.ERROR,
-				ctx.module,
-				ctx.site,
-				link_call,
-			)
+	if typeof(msg) == TYPE_CALLABLE:
+		(msg as Callable).call()
+	else:
+		_print_direct(
+			"[ERROR]",
+			msg,
+			args,
+			Level.ERROR,
+			ctx.module,
+			ctx.site,
+			link_call,
+		)
 
 
 static func _get_context() -> Dictionary:

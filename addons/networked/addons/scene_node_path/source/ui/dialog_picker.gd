@@ -1,6 +1,10 @@
 @tool
 extends ConfirmationDialog
 
+const FilterConfig := preload("res://addons/networked/addons/scene_node_path/source/filter_config.gd")
+
+const EditorIconUtils := preload("res://addons/networked/addons/scene_node_path/source/editor_icon_utils.gd.gd")
+
 signal path_selected(scene_path: String, node_path: String)
 
 var current_scene_path: String = ""

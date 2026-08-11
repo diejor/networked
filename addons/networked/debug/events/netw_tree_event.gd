@@ -17,19 +17,19 @@ extends RefCounted
 enum Kind {
 	PEER_CONNECTED, ## A remote peer joined; [member peer_id] is set, [member node] is null.
 	PEER_DISCONNECTED, ## A remote peer left; [member peer_id] is set, [member node] is null.
-	SCENE_SPAWNED, ## A [MultiplayerScene] spawned; [member node] is the scene.
-	SCENE_DESPAWNED, ## A [MultiplayerScene] despawned; [member node] is the scene.
+	SCENE_SPAWNED, ## A scene spawned; [member node] is its container.
+	SCENE_DESPAWNED, ## A scene despawned; [member node] is its container.
 	PLAYER_SPAWNED, ## A player spawned; [member node] is the player root.
 	LOCAL_PLAYER_CHANGED, ## The local authority player changed; [member node] is its owner or null.
 	CLOCK_PONG, ## A clock pong was captured; [member data] carries the pong payload.
-	ROLE_CHANGED, ## The tree's [enum NetwSessionInterface.Role] changed; [member data] carries old/new.
+	ROLE_CHANGED, ## The tree's [enum NetwMultiplayer.Role] changed; [member data] carries old/new.
 }
 
 ## The kind of observation this event carries.
 var kind: Kind
 
 ## The probe's tree. Always present, even for an offline tree at
-## [constant NetwSessionInterface.Role.NONE].
+## [constant NetwMultiplayer.Role.NONE].
 var tree: MultiplayerTree
 
 ## The primary subject node (player or scene). Null for peer and clock events,

@@ -3,9 +3,9 @@ extends RefCounted
 ## that turns a manual session into a capture.
 ##
 ## The tap touches only
-## [method NetwLagCompensationInterface.PredictionHandle.journal],
-## [method NetwLagCompensationInterface.PredictionHandle.stats], and
-## [method NetwLagCompensationInterface.PredictionHandle.episode], so a live
+## [method NetwPredictionHandle.journal],
+## [member NetwPredictionHandle.stats], and
+## [method NetwPredictionHandle.episode], so a live
 ## play session leaves the same evidence a scripted capture does. Reading is
 ## never a step, so the drain cannot move recorded state. What a drain CAN do
 ## is cost wall time, and an instrument whose cost scales with what it reports
@@ -148,7 +148,7 @@ func drain(entity_id: StringName, handle: Variant) -> void:
 		return
 	var line := JSON.stringify(
 		{
-			"stats": _stats_delta(state, handle.stats()),
+			"stats": _stats_delta(state, handle.stats.to_dictionary()),
 			"rows": rows,
 			"settles": settles,
 			"episode": handle.episode() if episode_changed else { },

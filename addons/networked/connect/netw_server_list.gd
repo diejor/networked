@@ -3,9 +3,9 @@
 ## The list is pure data. It stores [NetwConnectTarget]s, which name a
 ## destination by scheme and address and carry no transport instance or embedded
 ## script, so a saved [code].tres[/code] survives an addon reshuffle that a
-## backend-bearing list could not. [NetwDiscovery] owns the live copy and reads
-## and writes it through [method NetwDiscovery.load_server_list] and
-## [method NetwDiscovery.save_server_list].
+## backend-bearing list could not. [NetwServerBrowser] owns the live copy and
+## reads and writes it through [method NetwServerBrowser.load_server_list] and
+## [method NetwServerBrowser.save_server_list].
 ## [codeblock]
 ## var list := NetwServerList.load_or_new("user://my_servers.tres")
 ## list.targets.append(target)

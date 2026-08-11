@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictVerdict" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="attribution" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="compared" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="corrected" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="differing_family" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="divergence" qualifiers="const">
+			<return type="float" />
+			<description>
+			</description>
+		</method>
+		<method name="domain" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="evidence_complete" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="exact" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="field_errors" qualifiers="const">
+			<return type="PackedFloat64Array" />
+			<description>
+			</description>
+		</method>
+		<method name="meter" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="recv_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="settled" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="transition" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

@@ -12,7 +12,7 @@
 ## var host := await WebRTCTestSupport.start_host(self)
 ## var client := WebRTCTestSupport.make_client_tree(self)
 ## var target := WebRTCTestSupport.make_join_target(client, host.room)
-## await client.join(target, payload)
+## await NetwConnector.of(client.api).join(target, payload)
 ## [/codeblock]
 class_name WebRTCTestSupport
 extends RefCounted
@@ -25,17 +25,19 @@ static func start_host(parent: Node) -> Dictionary:
 	var tree := MultiplayerTree.new()
 	tree.name = "WebRTCHost"
 	tree.auto_host_headless = false
-	tree.scheme = &"webrtc"
+	tree.transport = NetwWebRTCParams.new()
 	parent.add_child(tree)
 	_install_paired_transport(tree)
 
-	var err: Error = await tree._open_host(true)
+	var err := NetwConnector.error_of(
+		await NetwConnector.of(tree.api).host(null),
+	)
 	if err != OK:
 		push_error("WebRTCTestSupport: host failed: %s" % error_string(err))
 		tree.queue_free()
 		return { }
 	var room := ""
-	var view := tree.connector.peer_view if tree.connector else null
+	var view := NetwConnector.of(tree.api).peer_view if tree.api else null
 	if view:
 		room = view.join_address()
 	return {
@@ -53,17 +55,17 @@ static func make_client_tree(
 	var tree := MultiplayerTree.new()
 	tree.name = "WebRTCClient%s" % name_suffix
 	tree.auto_host_headless = false
-	tree.scheme = &"webrtc"
+	tree.transport = NetwWebRTCParams.new()
 	parent.add_child(tree)
 	_install_paired_transport(tree)
 	return tree
 
 
-# Overrides tree's connector to signal through the in-process
+# Overrides the tree's session transports to signal through the in-process
 # PairedWebRTCSignaler instead of the shipped WebTorrent tracker, so the real
 # WebRTCSession handshake runs with no tracker or socket.
 static func _install_paired_transport(tree: MultiplayerTree) -> void:
-	tree.connector.transports = [PairedWebRTCTransport.new()]
+	NetwConnector.of(tree.api).transports = [PairedWebRTCTransport.new()]
 
 
 ## Builds a [NetwConnectTarget] pointing [param client] at [param room].
@@ -83,7 +85,7 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 	if not is_instance_valid(tree):
 		return
 	var scene_tree := tree.get_tree()
-	var view := tree.connector.peer_view if tree.connector else null
+	var view := NetwConnector.of(tree.api).peer_view if tree.api else null
 	if scene_tree and view:
 		# Let the join handshake's trailing reliable RPCs flush over open
 		# channels before resetting the SCTP streams.
@@ -122,20 +124,31 @@ static func dispose_session(session: WebRTCSession) -> void:
 	session.close()
 
 
-## Drops the benign native SCTP reset gdUnit would otherwise report as a
-## failure.
+## The two strings that identify the benign SCTP reset, both required.
 ##
 ## Tearing down a connected native [WebRTCSession], either when the retry path
 ## replaces a stale peer or on close, makes libdatachannel log
 ## [code]SctpTransport::sendReset ... errno=2[/code] on Linux. That is a
-## harmless [code]ENOENT[/code] on an already-gone stream, but
-## [code]report/godot/push_error[/code] turns it into a failure. Call this right
-## after WebRTC teardown to erase just that entry from the gdUnit error monitor.
+## harmless [code]ENOENT[/code] on an already-gone stream, and it is the only
+## error this helper claims is benign.
+const SCTP_RESET_MARKERS: Array[String] = [
+	"SctpTransport::sendReset",
+	"errno=2",
+]
+
+## Erases a recorded error the running framework would otherwise report as a
+## failure, as [code]func(Array[String]) -> void[/code].
+##
+## Injected the way [member NetwTestHarness.reporter] is, because reaching into
+## a framework's error monitor is the framework adapter's business and this file
+## runs under any framework or none. Left unassigned it erases nothing, which is
+## the right answer for a caller whose framework records no errors.
+static var erase_benign_error: Callable = Callable()
+
+
+## Drops the benign native SCTP reset the running framework would otherwise
+## report as a failure. Call it right after WebRTC teardown.
 static func clear_optional_sctp_reset_error() -> void:
-	var monitor := GdUnitThreadManager.get_current_context() \
-			.get_execution_context().error_monitor
-	var entries: Array[ErrorLogEntry] = await monitor.scan(true)
-	for entry: ErrorLogEntry in entries.duplicate():
-		if "SctpTransport::sendReset" in entry._message \
-				and "errno=2" in entry._message:
-			monitor.erase_log_entry(entry)
+	if not erase_benign_error.is_valid():
+		return
+	await erase_benign_error.call(SCTP_RESET_MARKERS)

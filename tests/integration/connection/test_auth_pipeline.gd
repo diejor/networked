@@ -40,12 +40,23 @@ func test_prepare_failure_aborts_connect() -> void:
 	target.scheme = client_tree.scheme
 	target.address = "localhost"
 
-	var err := await client_tree.join_or_host(
-		target,
-		_join_payload("valeria"),
-	)
-	assert_that(err).is_not_equal(OK)
-	assert_that(client_tree.is_online()).is_false()
+	var holder: Array[NetwConnectResult] = []
+	await assert_error(
+		func() -> void:
+			holder.append(
+				await NetwConnector.of(client_tree.api).join_or_host(
+					target,
+					_join_payload("valeria"),
+				),
+			)
+	).is_push_error("Auth prepare failed: Unauthorized")
+	var result := holder[0]
+
+	# The verb's own result names the stage that refused, so a caller learns the
+	# identity was rejected rather than that the server was unreachable.
+	assert_int(NetwConnector.error_of(result)).is_not_equal(OK)
+	assert_str(result.message).contains("Join preparation failed")
+	assert_bool(client_tree.api.is_online).is_false()
 
 
 func test_listen_server_host_gets_identity() -> void:
@@ -54,11 +65,11 @@ func test_listen_server_host_gets_identity() -> void:
 		DummyAuth.new(),
 	)
 
-	var bucket := tree.get_peer_context(1).get_bucket(NetwIdentityBucket)
+	var bucket := tree.api.peer_get_context(1).get_bucket(NetwIdentityBucket)
 	assert_that(bucket.identity).is_not_null()
 	assert_that(bucket.identity.username).is_equal(StringName("host"))
 	assert_that(bucket.identity.service).is_equal(&"dummy")
-	var participant := tree.get_participant(1)
+	var participant := tree.api.peer_get_participant(1)
 	assert_that(participant).is_not_null()
 	assert_that(participant.identity).is_equal(bucket.identity)
 
@@ -68,19 +79,21 @@ func test_no_auth_provider_trusts_client_username() -> void:
 	client_tree.api.session.set_auth_flow(null)
 
 	var participants: Array[NetwParticipant] = []
-	server.participant_joined.connect(func(p): participants.append(p))
+	server.api.participant_joined.connect(func(p): participants.append(p))
 	monitor_signals(server, false)
 	var target := NetwConnectTarget.new()
 	target.scheme = client_tree.scheme
 	target.address = "localhost"
 
-	var err := await client_tree.join_or_host(
-		target,
-		_join_payload("jose"),
+	var err := NetwConnector.error_of(
+		await NetwConnector.of(client_tree.api).join_or_host(
+			target,
+			_join_payload("jose"),
+		),
 	)
 	assert_that(err).is_equal(OK)
 	@warning_ignore("redundant_await")
-	await assert_signal(server) \
+	await assert_signal(server.api) \
 			.wait_until(1000) \
 			.is_emitted("participant_joined", [any()])
 

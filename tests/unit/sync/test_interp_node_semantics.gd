@@ -1,4 +1,4 @@
-## Node-truth semantics for [NetwInterpolationInterface] the display calculus
+## Node-truth semantics for [DisplayCore] the display calculus
 ## cannot see.
 ##
 ## The pure display math (smoothness, lag, dilation, determinism) is proven by
@@ -33,10 +33,10 @@ class InterpTarget:
 
 var _tree: MultiplayerTree
 var _clock_node: MultiplayerClock
-var _clock: NetwClockInterface
-var _replication: NetwReplicationInterface
-var _liveness: NetwLivenessInterface
-var _iface: NetwInterpolationInterface
+var _clock: ClockCore
+var _replication: ReplicationCore
+var _liveness: LivenessShell
+var _iface: DisplayCore
 var _player: InterpTarget
 var _visual: Node2D
 var _entity: NetwEntity
@@ -59,11 +59,11 @@ func before_test() -> void:
 	assert(api != null, "test requires NetwMultiplayer")
 	api.set_meta(&"_multiplayer_tree", _tree)
 	api.set_meta(&"_multiplayer_clock", _clock_node)
-	_clock = api.clock
+	_clock = api._clock
 
-	_replication = _tree.api.replication
-	_liveness = _tree.api.liveness
-	_iface = _tree.api.interpolation
+	_replication = _tree.api._replication
+	_liveness = _tree.api._liveness
+	_iface = _tree.api._display
 
 
 func after_test() -> void:
@@ -136,7 +136,7 @@ func test_predicted_chase_moves_visual_toward_live_source() -> void:
 	var spec := NetwInterpolate.new().lerp().smooth(0.0).to(&"position")
 	Netw.configure_property(_player, &"position").interpolate(spec)
 	_entity.interpolation.display_role = (
-			NetwInterpolationInterface.DisplayRole.PREDICTED
+			NetwDisplayHandle.DisplayRole.PREDICTED
 	)
 	_entity.interpolation.predicted_smooth_time = 0.05
 	_bind_route()
@@ -159,7 +159,7 @@ func test_display_role_switches_glide_between_remote_and_predicted() -> void:
 
 	_player.position = P1
 	_entity.interpolation.display_role = (
-		NetwInterpolationInterface.DisplayRole.REMOTE
+			NetwDisplayHandle.DisplayRole.REMOTE
 	)
 	_iface.record(_player, &"position", P1, 1)
 	_display_at(1, 0, 0.0)
@@ -176,7 +176,7 @@ func test_display_role_switches_glide_between_remote_and_predicted() -> void:
 
 	_player.position = P0
 	_entity.interpolation.display_role = (
-		NetwInterpolationInterface.DisplayRole.PREDICTED
+			NetwDisplayHandle.DisplayRole.PREDICTED
 	)
 	_render()
 	assert_float(_visual.global_position.distance_to(P1)) \
@@ -201,7 +201,7 @@ func test_display_role_switches_glide_between_remote_and_predicted() -> void:
 	).is_greater(pumped_predicted)
 
 	_entity.interpolation.display_role = (
-		NetwInterpolationInterface.DisplayRole.DISABLED
+			NetwDisplayHandle.DisplayRole.DISABLED
 	)
 	_render()
 	var pumped_disabled := _entity.interpolation.pumped_frames
@@ -236,7 +236,7 @@ func test_demote_flip_resumes_from_rows_recorded_while_predicted() -> void:
 			).is_less(0.1)
 
 	_entity.interpolation.display_role = (
-		NetwInterpolationInterface.DisplayRole.REMOTE
+			NetwDisplayHandle.DisplayRole.REMOTE
 	)
 	_display_at(2, 0, 0.0)
 	assert_float(_visual.global_position.distance_to(P0)) \
@@ -259,7 +259,7 @@ func test_demote_flip_seeds_role_offset_on_first_frame() -> void:
 
 	_iface.record(_player, &"position", P2, 1)
 	_entity.interpolation.display_role = (
-		NetwInterpolationInterface.DisplayRole.REMOTE
+			NetwDisplayHandle.DisplayRole.REMOTE
 	)
 	var runtime := _iface._runtime_for_handle(_entity.interpolation)
 	var state = runtime.states[0]
@@ -285,7 +285,7 @@ func test_promote_flip_still_clears_history() -> void:
 	_display_at(1, 1, 0.5)
 
 	_entity.interpolation.display_role = (
-		NetwInterpolationInterface.DisplayRole.PREDICTED
+			NetwDisplayHandle.DisplayRole.PREDICTED
 	)
 	var runtime := _iface._runtime_for_handle(_entity.interpolation)
 	for state in runtime.states:
@@ -300,7 +300,7 @@ func test_remote_rigidbody_freezes_and_restores_from_handle_role() -> void:
 	body.name = "RemoteBody"
 	body.freeze = false
 	body.freeze_mode = RigidBody2D.FREEZE_MODE_STATIC
-	body.set_multiplayer_authority(2)  # SMELL(authority-pin): no arm() here, which applies authority in production
+	body.set_multiplayer_authority(2) # SMELL(authority-pin): no arm() here, which applies authority in production
 	auto_free(body)
 
 	var entity := NetwEntity.ensure(body)
@@ -314,9 +314,9 @@ func test_remote_rigidbody_freezes_and_restores_from_handle_role() -> void:
 	assert_int(body.freeze_mode).is_equal(RigidBody2D.FREEZE_MODE_KINEMATIC)
 
 	entity.interpolation.display_role = (
-			NetwInterpolationInterface.DisplayRole.DISABLED
+			NetwDisplayHandle.DisplayRole.DISABLED
 	)
-	_iface._mark_runtime_dirty(entity.interpolation)
+	_iface._mark_runtime_dirty(entity.rid)
 	await get_tree().process_frame
 
 	assert_bool(body.freeze).is_false()
@@ -327,7 +327,7 @@ func test_scriptless_node_via_overlay_interpolates() -> void:
 	var node := Node2D.new()
 	node.name = "OverlayPlayer"
 	node.position = P0
-	node.set_multiplayer_authority(2)  # SMELL(authority-pin): no arm() here, which applies authority in production
+	node.set_multiplayer_authority(2) # SMELL(authority-pin): no arm() here, which applies authority in production
 	var entity := NetwEntity.ensure(node)
 	entity.interpolation.enable_smart_dilation = false
 	Netw.configure_property(node, &"position").interpolate(
@@ -350,7 +350,7 @@ func test_scriptless_node_via_overlay_interpolates() -> void:
 func test_unconfigured_record_is_a_noop() -> void:
 	var node := Node2D.new()
 	node.name = "BarePlayer"
-	node.set_multiplayer_authority(2)  # SMELL(authority-pin): no arm() here, which applies authority in production
+	node.set_multiplayer_authority(2) # SMELL(authority-pin): no arm() here, which applies authority in production
 	var entity := NetwEntity.ensure(node)
 	_tree.add_child(node)
 	auto_free(node)
@@ -364,7 +364,7 @@ func test_unconfigured_record_is_a_noop() -> void:
 func test_two_nodes_interpolating_position_do_not_collide() -> void:
 	var player := Node2D.new()
 	player.name = "TwoNodePlayer"
-	player.set_multiplayer_authority(2)  # SMELL(authority-pin): no arm() here, which applies authority in production
+	player.set_multiplayer_authority(2) # SMELL(authority-pin): no arm() here, which applies authority in production
 	var a := Node2D.new()
 	a.name = "A"
 	player.add_child(a)
@@ -400,7 +400,7 @@ func test_two_nodes_interpolating_position_do_not_collide() -> void:
 func test_slerp_interpolates_quaternion_rotation() -> void:
 	var node := Node3D.new()
 	node.name = "RotPlayer"
-	node.set_multiplayer_authority(2)  # SMELL(authority-pin): no arm() here, which applies authority in production
+	node.set_multiplayer_authority(2) # SMELL(authority-pin): no arm() here, which applies authority in production
 	var entity := NetwEntity.ensure(node)
 	entity.interpolation.enable_smart_dilation = false
 	Netw.configure_property(node, &"quaternion").interpolate(
@@ -426,7 +426,7 @@ func test_runtime_rebuild_preserves_interpolation() -> void:
 	)
 	_bind_route()
 
-	_iface._mark_runtime_dirty(_entity.interpolation)
+	_iface._mark_runtime_dirty(_entity.rid)
 	await get_tree().process_frame
 
 	_iface.record(_player, &"position", P0, 0)
@@ -486,14 +486,16 @@ func test_predicted_auto_smooth_time_tracks_clock_ticktime() -> void:
 	_clock.tickrate = 15
 	assert_float(
 		_iface._predicted_effective_smooth_time(
-			runtime, NetwDisplayTiming.capture(_clock, 0.0),
+			runtime,
+			NetwDisplayTiming.capture(_clock, 0.0),
 		),
 	).is_equal_approx(_clock.ticktime * 0.85, 0.0001)
 
 	_clock.tickrate = 60
 	assert_float(
 		_iface._predicted_effective_smooth_time(
-			runtime, NetwDisplayTiming.capture(_clock, 0.0),
+			runtime,
+			NetwDisplayTiming.capture(_clock, 0.0),
 		),
 	).is_equal_approx(_clock.ticktime * 0.85, 0.0001)
 
@@ -546,10 +548,10 @@ func test_bracketed_predicted_equals_remote_pipeline_fed_locally() -> void:
 		NetwInterpolate.new().lerp().smooth(0.0).to(&"position"),
 	)
 	_entity.interpolation.display_role = (
-			NetwInterpolationInterface.DisplayRole.PREDICTED
+			NetwDisplayHandle.DisplayRole.PREDICTED
 	)
 	_entity.interpolation.predicted_mode = (
-			NetwInterpolationInterface.PredictedMode.BRACKETED
+			NetwDisplayHandle.PredictedMode.BRACKETED
 	)
 	_bind_route()
 
@@ -573,7 +575,7 @@ func _spawn_predicted() -> void:
 		NetwInterpolate.new().lerp().smooth(0.0).to(&"position"),
 	)
 	_entity.interpolation.display_role = (
-			NetwInterpolationInterface.DisplayRole.PREDICTED
+			NetwDisplayHandle.DisplayRole.PREDICTED
 	)
 	_entity.interpolation.predicted_smooth_time = 0.05
 	_bind_route()
@@ -582,7 +584,7 @@ func _spawn_predicted() -> void:
 func _spawn_target(use_visual: bool) -> void:
 	_player = InterpTarget.new()
 	_player.name = "RemotePlayer"
-	_player.set_multiplayer_authority(2)  # SMELL(authority-pin): no arm() here, which applies authority in production
+	_player.set_multiplayer_authority(2) # SMELL(authority-pin): no arm() here, which applies authority in production
 	_entity = NetwEntity.ensure(_player)
 	_entity.interpolation.enable_smart_dilation = false
 	if use_visual:
@@ -613,7 +615,7 @@ func _display_at(tick: int, display_offset: int, factor: float) -> void:
 
 
 func _dispatch_property(property: StringName, value: Variant) -> void:
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_token(w, property)
 	NetwScriptModel.write_values(w, [value], [null], [typeof(value)])
 	_replication._dispatch(
@@ -628,7 +630,7 @@ func _dispatch_property(property: StringName, value: Variant) -> void:
 
 
 func _dispatch_rpc(method: StringName, args: Array) -> void:
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	w.put_aligned_u8(0)
 	NetwScriptModel.write_call_body(
 		w,
@@ -649,7 +651,7 @@ func _dispatch_rpc(method: StringName, args: Array) -> void:
 
 
 func _dispatch_signal(signal_name: StringName, args: Array) -> void:
-	var w := NetwBitBuffer.Writer.new()
+	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_token(w, signal_name)
 	NetwScriptModel.write_values(
 		w,

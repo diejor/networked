@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictWritePlan" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="basis" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="escalated" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="operator_kind" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="replay_from" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="replay_through" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="restore_at" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="restore_has" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="skip" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="teleport" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="write_at" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="write_has" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

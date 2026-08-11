@@ -6,7 +6,6 @@
 class_name StockSyncWorld
 extends Node
 
-
 func _ready() -> void:
 	var spawner := $StockSyncSpawner as MultiplayerSpawner
 	if not StockSyncProbe.packed_scene_path.is_empty():

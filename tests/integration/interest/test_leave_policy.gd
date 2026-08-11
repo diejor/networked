@@ -1,4 +1,4 @@
-## Live three-participant coverage for [NetwInterestInterface.LeavePolicy].
+## Live three-participant coverage for [NetwMultiplayer.LeavePolicy].
 class_name TestLeavePolicy
 extends NetwTestSuite
 
@@ -35,7 +35,7 @@ func test_retain_freezes_and_readmission_resumes_same_node() -> void:
 
 	var server_probe := probe_scene.instantiate() as NetwSpawnProbe
 	server_probe.marker = "before"
-	var entity := host.tree.api.replication.replicate(server_probe)
+	var entity := host.tree.api._replication.replicate(server_probe)
 	host.tree.get_node("Arena").add_child(server_probe)
 	var remote_probe := await _wait_probe(observer, entity.route)
 	var actor_probe := await _wait_probe(actor, entity.route)
@@ -56,9 +56,9 @@ func test_retain_freezes_and_readmission_resumes_same_node() -> void:
 			left.append([layer_id, peer_id])
 	)
 
-	var interest := host.tree.api.interest
+	var interest := host.tree.api._interest
 	var layer := interest.layer(&"stealth")
-	layer.default_leave_policy = NetwInterestInterface.LeavePolicy.RETAIN
+	layer.default_leave_policy = NetwMultiplayer.LeavePolicy.RETAIN
 	layer.add_viewer(observer.peer_id)
 	layer.add_viewer(actor.peer_id)
 	layer.add_entity(entity)
@@ -104,7 +104,7 @@ func _wait_probe(
 		route: int,
 ) -> NetwSpawnProbe:
 	for _i in 120:
-		var node := runner.tree.api.liveness.node_of(route) as NetwSpawnProbe
+		var node := runner.tree.api._liveness.node_of(route) as NetwSpawnProbe
 		if node:
 			return node
 		await game.sync_ticks(1)

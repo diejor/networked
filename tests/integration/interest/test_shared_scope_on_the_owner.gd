@@ -1,4 +1,4 @@
-## Live coverage for [method NetwInterestInterface.shared_entities] off the
+## Live coverage for [method InterestCore.shared_entities] off the
 ## server.
 class_name TestSharedScopeOnTheOwner
 extends NetwTestSuite
@@ -57,11 +57,11 @@ func test_the_owner_resolves_the_same_shared_scope_the_server_committed() -> voi
 			var local := NetwEntity.of(runner.find_player(username))
 			if local:
 				local.interest.join(&"arena")
-	host.tree.api.interest.flush()
+	host.tree.api.interest_flush()
 	await game.sync_ticks(8)
 
 	# The server's own view, which is the roster being matched against.
-	var server_scope := host.tree.api.interest.shared_entities(
+	var server_scope := host.tree.api._interest.shared_entities(
 		client_car,
 		&"arena",
 	)
@@ -70,7 +70,7 @@ func test_the_owner_resolves_the_same_shared_scope_the_server_committed() -> voi
 	# the rosters compare by entity id.
 	var owner_car := _local_entity(client)
 	assert_that(owner_car).is_not_null()
-	var owner_scope := client.tree.api.interest.shared_entities(
+	var owner_scope := client.tree.api._interest.shared_entities(
 		owner_car,
 		&"arena",
 	)
@@ -88,7 +88,7 @@ func test_the_owner_resolves_the_same_shared_scope_the_server_committed() -> voi
 
 	# The budget the derivation must not exceed: it names only entities this
 	# peer already holds a live route for.
-	var live := client.tree.api.liveness.live_entities()
+	var live := client.tree.api._liveness.live_entities()
 	for member: NetwEntity in owner_scope:
 		assert_bool(member in live).override_failure_message(
 			"the owner named %s, which it holds no live route for, so the "

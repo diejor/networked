@@ -3,17 +3,20 @@
 ##
 ## Drop this scene into your lobby, point it at your [MultiplayerTree], and
 ## players can browse saved servers, watch live status, host a new game, or
-## join one with no glue code. Under the hood it drives the session's
-## [NetwConnect] (a [NetwConnector] plus a [NetwDiscovery]) for you, pumping it
-## each frame so view-pumped transports and eased progress advance.
+## join one with no glue code.
 ##
 ## [br][br]
+## It binds exactly two objects, and the split is the whole design: a
+## [NetwServerBrowser] answers what is out there, and a [NetwMultiplayer]
+## answers what happens when a row is picked. Neither can do the other's job.
+## [codeblock]
+## browser.bind(Netw.of(tree), NetwServerBrowser.new(Netw.of(tree)))
+## [/codeblock]
 ## The browser finds its session in three steps, first wins: an explicit
 ## [method bind], then the [member tree] export, then its own ancestry. Drop it
-## under the tree for zero config, or hand a parent owned facade through
-## [method bind] when it lives elsewhere in the scene. Transports come from the
-## [NetwConnector] registry and lobby directories from the session's service
-## registry, so there is no per browser wiring here.
+## under the tree for zero config. Transports come from
+## [method NetwTransport.registered] and lobby directories from the session's
+## service registry, so there is no per browser wiring here.
 class_name ConnectBrowser
 extends Control
 
@@ -49,7 +52,7 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 ## Default server name used when none is provided.
 const PLACEHOLDER_SERVER_NAME := "My Server"
 
-## The [MultiplayerTree] whose canonical [NetwConnect] this browser drives.
+## The [MultiplayerTree] whose session this browser drives.
 ##
 ## Resolution order is [method bind] first, then this export, then the
 ## browser's own ancestry. Leave it unset when the browser is a descendant of
@@ -64,8 +67,8 @@ const PLACEHOLDER_SERVER_NAME := "My Server"
 var spawner_options: Array[SceneNodePath] = []
 
 ## When [code]true[/code], hides this browser on
-## [signal NetwConnect.connected] and shows it again on
-## [signal NetwConnect.disconnected].
+## [signal NetwMultiplayer.session_entered] and shows it again on
+## [signal NetwMultiplayer.session_ended].
 @export var hide_when_session_active: bool = true
 
 ## Path used to load and persist saved targets shown by this browser.
@@ -82,9 +85,13 @@ var _rows: Dictionary = { } # NetwConnectTarget -> ConnectBrowserRow
 var _selected_row: ConnectBrowserRow
 var _last_username: String = "Player"
 var _last_join_payload: JoinPayload = null
+# The target of the bring-up in flight, null while hosting. A failure is
+# reported against what the player picked, not against whichever attempt lost.
+var _last_connect_target: NetwConnectTarget = null
 
-# Facade supplied by bind(); takes priority over export/ancestry resolution.
-var _bound_connect: NetwConnect
+# Objects supplied by bind(); take priority over export/ancestry resolution.
+var _bound_api: NetwMultiplayer
+var _bound_model: NetwServerBrowser
 # Guards _setup_session against running twice (bind() then the deferred path).
 var _session_ready: bool = false
 
@@ -106,7 +113,8 @@ var _session_ready: bool = false
 @onready var _details_remove_button: Button = %DetailsRemoveButton
 @onready var _details_join_button: Button = %DetailsJoinButton
 
-var _connect: NetwConnect
+var _api: NetwMultiplayer
+var _model: NetwServerBrowser
 
 
 func _ready() -> void:
@@ -158,107 +166,137 @@ func _exit_tree() -> void:
 	_unbind_session_signals()
 
 
-func _process(delta: float) -> void:
-	# The facade owner pumps the connector so a view-pumped transport (WebRTC
-	# signaling) and eased progress advance while an attempt is in flight. A
-	# tree-scoped session shares its one connector with the tree, whose own
-	# _process already pumps it, so the browser self-pumps only when no tree does.
-	if _connect == null or not _connect.is_valid():
-		return
-	var a := _connect.api()
-	if a != null and (a.root as MultiplayerTree) != null:
-		return
-	_connect.poll(delta)
-
-
-## Drives this browser from [param connect], the resolved [NetwConnect] for the
-## target tree. Prefer this over the [member tree] export when the browser does
-## not sit under the [MultiplayerTree]. A parent typically calls
-## [code]browser.bind(Netw.of(tree).connect)[/code].
-func bind(connect: NetwConnect) -> void:
-	_bound_connect = connect
+## Drives this browser from [param api] and [param model].
+##
+## Prefer this over the [member tree] export when the browser does not sit under
+## the [MultiplayerTree]. Passing a [code]null[/code] [param model] builds one
+## over [param api], which is what a caller that only wants the default browse
+## behavior does.
+func bind(api: NetwMultiplayer, model: NetwServerBrowser = null) -> void:
+	_bound_api = api
+	_bound_model = model if model else (NetwServerBrowser.new(api) if api else null)
 	if is_inside_tree():
 		_setup_session()
 
 
-# Resolves the facade (bind > tree export > ancestry), wires session signals,
-# and pulls the first list. Runs at most once.
+# Resolves the session (bind > tree export > ancestry), wires its signals, and
+# pulls the first list. Runs at most once.
 func _setup_session() -> void:
 	if _session_ready:
 		return
-	if _bound_connect != null and _bound_connect.is_valid():
-		_connect = _bound_connect
+	if _bound_api != null:
+		_api = _bound_api
+		_model = _bound_model
 	else:
-		_connect = Netw.of(tree if tree != null else self).connect
-	if _connect == null:
+		_api = Netw.of(tree if tree != null else self)
+		_model = NetwServerBrowser.new(_api) if _api else null
+	if _api == null or _model == null:
 		return
 	_session_ready = true
-	_connect.load_server_list(server_list_path)
+	_model.load_server_list(server_list_path)
 	_bind_session_signals()
 	_rebuild_from_session()
-	_connect.refresh()
+	_model.refresh()
 	# Catch up when the tree entered before this browser bound, e.g. a debug
-	# auto-connect: connected already fired, so apply its effect now.
-	if _connect.is_session_active():
+	# auto-connect: the session is already online, so apply its effect now.
+	if _api.is_online:
 		_on_session_entered()
 
 
 func _bind_session_signals() -> void:
-	if _connect == null:
+	if _model == null or _api == null:
 		return
-	if not _connect.target_added.is_connected(_on_target_added):
-		_connect.target_added.connect(_on_target_added)
-	if not _connect.target_removed.is_connected(_on_target_removed):
-		_connect.target_removed.connect(_on_target_removed)
-	if not _connect.target_updated.is_connected(_on_target_updated):
-		_connect.target_updated.connect(_on_target_updated)
-	if not _connect.connected.is_connected(_on_session_entered):
-		_connect.connected.connect(_on_session_entered)
-	if not _connect.disconnected.is_connected(_on_session_left):
-		_connect.disconnected.connect(_on_session_left)
-	if not _connect.host_failed.is_connected(_show_banner):
-		_connect.host_failed.connect(_show_banner)
-	if not _connect.join_failed.is_connected(_on_join_failed):
-		_connect.join_failed.connect(_on_join_failed)
-	if not _connect.join_progress.is_connected(_on_join_progress):
-		_connect.join_progress.connect(_on_join_progress)
-	if not _connect.directory_unavailable.is_connected(
-		_on_directory_unavailable,
-	):
-		_connect.directory_unavailable.connect(_on_directory_unavailable)
+	if not _model.target_added.is_connected(_on_target_added):
+		_model.target_added.connect(_on_target_added)
+	if not _model.target_removed.is_connected(_on_target_removed):
+		_model.target_removed.connect(_on_target_removed)
+	if not _model.target_updated.is_connected(_on_target_updated):
+		_model.target_updated.connect(_on_target_updated)
+	if not _model.directory_unavailable.is_connected(_on_directory_unavailable):
+		_model.directory_unavailable.connect(_on_directory_unavailable)
+	if not _api.session_entered.is_connected(_on_session_entered):
+		_api.session_entered.connect(_on_session_entered)
+	if not _api.session_ended.is_connected(_on_session_left):
+		_api.session_ended.connect(_on_session_left)
+	# Progress is per attempt and an outcome is per verb call, so the two are
+	# bound separately: one bring-up can raise more than one attempt.
+	var connector := NetwConnector.of(_api)
+	if not connector.attempt_started.is_connected(_on_attempt_started):
+		connector.attempt_started.connect(_on_attempt_started)
+	if not connector.finished.is_connected(_on_connect_finished):
+		connector.finished.connect(_on_connect_finished)
 
 
 func _unbind_session_signals() -> void:
-	if _connect == null:
+	if _model != null:
+		if _model.target_added.is_connected(_on_target_added):
+			_model.target_added.disconnect(_on_target_added)
+		if _model.target_removed.is_connected(_on_target_removed):
+			_model.target_removed.disconnect(_on_target_removed)
+		if _model.target_updated.is_connected(_on_target_updated):
+			_model.target_updated.disconnect(_on_target_updated)
+		if _model.directory_unavailable.is_connected(_on_directory_unavailable):
+			_model.directory_unavailable.disconnect(_on_directory_unavailable)
+	if _api == null:
 		return
-	if _connect.target_added.is_connected(_on_target_added):
-		_connect.target_added.disconnect(_on_target_added)
-	if _connect.target_removed.is_connected(_on_target_removed):
-		_connect.target_removed.disconnect(_on_target_removed)
-	if _connect.target_updated.is_connected(_on_target_updated):
-		_connect.target_updated.disconnect(_on_target_updated)
-	if _connect.connected.is_connected(_on_session_entered):
-		_connect.connected.disconnect(_on_session_entered)
-	if _connect.disconnected.is_connected(_on_session_left):
-		_connect.disconnected.disconnect(_on_session_left)
-	if _connect.host_failed.is_connected(_show_banner):
-		_connect.host_failed.disconnect(_show_banner)
-	if _connect.join_failed.is_connected(_on_join_failed):
-		_connect.join_failed.disconnect(_on_join_failed)
-	if _connect.join_progress.is_connected(_on_join_progress):
-		_connect.join_progress.disconnect(_on_join_progress)
-	if _connect.directory_unavailable.is_connected(_on_directory_unavailable):
-		_connect.directory_unavailable.disconnect(_on_directory_unavailable)
+	if _api.session_entered.is_connected(_on_session_entered):
+		_api.session_entered.disconnect(_on_session_entered)
+	if _api.session_ended.is_connected(_on_session_left):
+		_api.session_ended.disconnect(_on_session_left)
+	var connector := NetwConnector.of(_api)
+	if connector.attempt_started.is_connected(_on_attempt_started):
+		connector.attempt_started.disconnect(_on_attempt_started)
+	if connector.finished.is_connected(_on_connect_finished):
+		connector.finished.disconnect(_on_connect_finished)
+
+
+# Feeds the connecting overlay from one attempt's progress. Nothing terminal is
+# read here: a host that finds the port taken raises a second attempt and lands
+# in the session, and the failure of the first is not something a player did.
+func _on_attempt_started(attempt: NetwConnectAttempt) -> void:
+	var target := attempt.target
+	var progress_cb := func(step: StringName, message: String, ratio: float) -> void:
+		_on_join_progress(target, step, message, ratio)
+	attempt.progress.connect(progress_cb)
+	attempt.finished.connect(
+		func(_result: NetwConnectResult) -> void:
+			if attempt.progress.is_connected(progress_cb):
+				attempt.progress.disconnect(progress_cb),
+		CONNECT_ONE_SHOT,
+	)
+
+
+# Reports the outcome of a whole bring-up. This is the only place a banner is
+# raised, so what the player sees is what the verb they pressed did.
+func _on_connect_finished(result: NetwConnectResult) -> void:
+	if result == null or result.is_ok():
+		return
+	if result.status == NetwConnectResult.Status.ABORTED:
+		_hide_connecting_overlay()
+		return
+	var target := _last_connect_target
+	if target == null:
+		_show_banner(_reason(result))
+		_connecting_popup.show_failed(_reason(result), "")
+	else:
+		_on_join_failed(target, result)
+
+
+# The message of a failed result, or a generic fallback.
+func _reason(result: NetwConnectResult) -> String:
+	if result == null or result.message.is_empty():
+		return "Connection failed."
+	return result.message
 
 
 func _rebuild_from_session() -> void:
 	for child in _list_box.get_children():
 		child.queue_free()
 	_rows.clear()
-	if _connect == null:
+	if _model == null:
 		_update_counter()
 		return
-	for target in _connect.targets:
+	for target in _model.targets:
 		_add_row(target)
 	_update_counter()
 
@@ -267,7 +305,7 @@ func _add_row(target: NetwConnectTarget) -> void:
 	var row := _ROW_SCENE.instantiate() as ConnectBrowserRow
 	_list_box.add_child(row)
 	row.bind_target(target)
-	var existing := _connect.get_result(target)
+	var existing := _model.get_result(target)
 	if existing != null:
 		row.set_result(existing)
 	row.selected.connect(_on_row_selected.bind(row))
@@ -334,8 +372,8 @@ func _update_details() -> void:
 
 	var t := _selected_row.target
 	var r := _selected_row.result
-	var is_saved := _connect.saved_targets.has(t)
-	var unavailable := not _connect.is_target_available(t)
+	var is_saved := _model.saved_targets.has(t)
+	var unavailable := not _model.is_target_available(t)
 
 	# Update the Header elements
 	_details_header.visible = true
@@ -394,7 +432,7 @@ func _on_row_context_requested(
 	_on_row_selected(row.target, row)
 	row.button_pressed = true
 
-	var is_saved := _connect.saved_targets.has(row.target)
+	var is_saved := _model.saved_targets.has(row.target)
 	_row_menu.show_for_target(is_saved, screen_position)
 
 
@@ -417,28 +455,28 @@ func _on_row_activated(_target: NetwConnectTarget, row: ConnectBrowserRow) -> vo
 
 
 func _on_add_pressed() -> void:
-	_add_popup.set_transports(_connect.available_transports())
+	_add_popup.set_transports(_model.available_transports())
 	_add_popup.open_add()
 
 
 func _on_join_direct_pressed() -> void:
 	_join_direct_popup.open_join_direct(
-		_connect.available_transports(),
+		_model.available_transports(),
 		spawner_options,
 		_last_username,
 	)
 
 
 func _on_refresh_pressed() -> void:
-	if _connect != null:
-		_connect.refresh()
+	if _model != null:
+		_model.refresh()
 
 
 func _on_host_pressed() -> void:
-	if _connect == null:
+	if _model == null or _api == null:
 		return
 	_host_popup.open_host(
-		_connect.hostable_transports(),
+		_model.hostable_transports(),
 		spawner_options,
 		_last_username,
 	)
@@ -453,28 +491,28 @@ func _open_join_for_selected() -> void:
 func _open_edit_for_selected() -> void:
 	if _selected_row == null:
 		return
-	var is_saved := _connect.saved_targets.has(
+	var is_saved := _model.saved_targets.has(
 		_selected_row.target,
 	)
 	if not is_saved:
 		return
-	_add_popup.set_transports(_connect.available_transports())
+	_add_popup.set_transports(_model.available_transports())
 	_add_popup.open_edit(_selected_row.target)
 
 
 func _remove_selected() -> void:
-	if _selected_row == null or not _connect.saved_targets.has(_selected_row.target):
+	if _selected_row == null or not _model.saved_targets.has(_selected_row.target):
 		return
-	_connect.remove_target(_selected_row.target, true)
+	_model.remove_target(_selected_row.target, true)
 
 
 func _on_target_submitted(target: NetwConnectTarget) -> void:
-	if not _connect.saved_targets.has(target):
-		_connect.add_target(target, true)
+	if not _model.saved_targets.has(target):
+		_model.add_target(target, true)
 	else:
-		_connect.save_server_list(server_list_path)
+		_model.save_server_list(server_list_path)
 	_clear_selection()
-	_connect.refresh()
+	_model.refresh()
 
 
 func _on_host_submitted(
@@ -483,7 +521,9 @@ func _on_host_submitted(
 ) -> void:
 	_hide_banner()
 	_last_username = String(payload.username)
-	await _connect.host(config, payload)
+	_last_connect_target = null
+	_show_connecting_overlay(null)
+	await NetwConnector.of(_api).host(payload, config)
 
 
 func _on_join_submitted(payload: JoinPayload) -> void:
@@ -545,7 +585,7 @@ func _hide_connecting_overlay() -> void:
 
 
 func _on_popup_cancelled() -> void:
-	_connect.abort_join()
+	NetwConnector.of(_api).abort()
 
 
 func _join_with_preflight(
@@ -555,18 +595,19 @@ func _join_with_preflight(
 	_hide_banner()
 	_last_join_payload = payload
 	_last_username = String(payload.username)
-	if not _connect.is_target_available(target):
+	if not _model.is_target_available(target):
 		_show_banner("This transport is not available on this platform.")
 		return
-	var result := _connect.get_result(target)
+	var result := _model.get_result(target)
 	if result != null and result.status == NetwProbeResult.Status.INCOMPATIBLE:
 		_show_banner(
 			"Incompatible game build; this server runs a different version.",
 		)
 		return
+	_last_connect_target = target
 	_show_connecting_overlay(target)
-	var err := await _connect.join(target, payload)
-	if err == OK:
+	var joined := await NetwConnector.of(_api).join(target, payload, true)
+	if joined.is_ok():
 		_hide_connecting_overlay()
 
 
@@ -646,8 +687,8 @@ static func format_address(target: NetwConnectTarget) -> String:
 	var address := target.address.strip_edges()
 	if not address.is_empty():
 		return address
-	for transport in NetwConnector.get_transports():
-		if transport.scheme() != target.scheme:
+	for transport in NetwTransport.registered():
+		if transport._scheme() != target.scheme:
 			continue
 		var hint := transport._address_hint()
 		if hint and hint.accepts_empty and not hint.placeholder.is_empty():

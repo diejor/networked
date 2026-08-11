@@ -15,21 +15,23 @@ func _make_payload(username: String) -> JoinPayload:
 
 func test_no_listener_falls_through_to_host() -> void:
 	var tree := EnetTestSupport.make_client_tree(self, 29100, "_solo")
-	tree.desired_role = NetwSessionInterface.Role.LISTEN_SERVER
+	tree.desired_role = NetwMultiplayer.Role.LISTEN_SERVER
 
 	var target := NetwConnectTarget.new()
 	target.scheme = &"enet"
 	target.address = "127.0.0.1"
 	target.metadata = { "port": 29100 }
 
-	var err: Error = await tree.join_or_host(
-		target,
-		_make_payload("valeria"),
+	var err := NetwConnector.error_of(
+		await NetwConnector.of(tree.api).join_or_host(
+			target,
+			_make_payload("valeria"),
+		),
 	)
 
 	assert_int(err).is_equal(OK)
-	assert_int(tree.role).is_equal(NetwSessionInterface.Role.LISTEN_SERVER)
-	assert_bool(tree.is_online()).is_true()
+	assert_int(tree.role).is_equal(NetwMultiplayer.Role.LISTEN_SERVER)
+	assert_bool(tree.api.is_online).is_true()
 
 	await EnetTestSupport.stop_tree(tree)
 
@@ -44,14 +46,16 @@ func test_live_listener_joins_as_client() -> void:
 	target.address = "127.0.0.1"
 	target.metadata = { "port": host.port }
 
-	var err: Error = await client.join_or_host(
-		target,
-		_make_payload("jose"),
+	var err := NetwConnector.error_of(
+		await NetwConnector.of(client.api).join_or_host(
+			target,
+			_make_payload("jose"),
+		),
 	)
 
 	assert_int(err).is_equal(OK)
-	assert_int(client.role).is_equal(NetwSessionInterface.Role.CLIENT)
-	assert_bool(client.is_online()).is_true()
+	assert_int(client.role).is_equal(NetwMultiplayer.Role.CLIENT)
+	assert_bool(client.api.is_online).is_true()
 
 	await EnetTestSupport.stop_tree(client)
 	await EnetTestSupport.stop_tree(host.tree)

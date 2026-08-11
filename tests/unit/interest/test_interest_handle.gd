@@ -1,4 +1,4 @@
-## Unit tests for [NetwInterestInterface.InterestHandle].
+## Unit tests for [NetwInterestHandle].
 ##
 ## Covers cached identity, declarative and runtime membership, lifecycle
 ## reattachment, callbacks, local label snapshots, and delayed relay delivery.
@@ -20,11 +20,11 @@ func _make_entity(entity_name: String = "Ent") -> Node:
 
 
 func _layer(layer_id: StringName) -> NetwInterestLayer:
-	return mt.api.interest.layer(layer_id)
+	return mt.api._interest.layer(layer_id)
 
 
-func _service() -> NetwInterestInterface:
-	return mt.api.interest
+func _service() -> InterestCore:
+	return mt.api._interest
 
 
 func test_interest_handle_is_cached() -> void:
@@ -108,23 +108,23 @@ func test_leave_policy_builder_and_custom_guard() -> void:
 	var entity := NetwEntity.of(root)
 	Netw.configure_interest(root).layer(
 		&"stealth",
-		NetwInterestInterface.LeavePolicy.RETAIN,
+		NetwMultiplayer.LeavePolicy.RETAIN,
 	)
 
 	assert_int(
 		entity.interest._leave_policy_for(
 			&"stealth",
-			NetwInterestInterface.LeavePolicy.DESPAWN,
+			NetwMultiplayer.LeavePolicy.DESPAWN,
 		),
-	).is_equal(NetwInterestInterface.LeavePolicy.RETAIN)
+	).is_equal(NetwMultiplayer.LeavePolicy.RETAIN)
 	await assert_error(
 		func() -> void:
 			entity.interest.on_leave_policy(
 				&"stealth",
-				NetwInterestInterface.LeavePolicy.CUSTOM,
+				NetwMultiplayer.LeavePolicy.CUSTOM,
 			)
 	).is_runtime_error(
-		"Assertion failed: InterestHandle.on_leave_policy: "
+		"Assertion failed: NetwInterestHandle.on_leave_policy: "
 		+ "CUSTOM requires a callback",
 	)
 
@@ -134,30 +134,30 @@ func test_perception_builder_and_custom_guard() -> void:
 	var entity := NetwEntity.of(root)
 	Netw.configure_interest(root).layer(
 		&"stealth",
-		NetwInterestInterface.LeavePolicy.RETAIN,
-		NetwInterestInterface.PerceptionPolicy.SHOW,
+		NetwMultiplayer.LeavePolicy.RETAIN,
+		NetwMultiplayer.PerceptionPolicy.SHOW,
 	)
 
 	assert_int(
 		entity.interest._perception_policy_for(
 			&"stealth",
-			NetwInterestInterface.PerceptionPolicy.HIDE,
+			NetwMultiplayer.PerceptionPolicy.HIDE,
 		),
-	).is_equal(NetwInterestInterface.PerceptionPolicy.SHOW)
+	).is_equal(NetwMultiplayer.PerceptionPolicy.SHOW)
 	await assert_error(
 		func() -> void:
 			entity.interest.on_perception_policy(
 				&"stealth",
-				NetwInterestInterface.PerceptionPolicy.CUSTOM,
+				NetwMultiplayer.PerceptionPolicy.CUSTOM,
 			)
 	).is_runtime_error(
-		"Assertion failed: InterestHandle.on_perception_policy: "
+		"Assertion failed: NetwInterestHandle.on_perception_policy: "
 		+ "CUSTOM requires a callback",
 	)
 
 
 func test_wire_admission_does_not_override_host_participant_row() -> void:
-	mt.api.session.role = NetwSessionInterface.Role.LISTEN_SERVER
+	mt.api._session.role = SessionCore.Role.LISTEN_SERVER
 	var entity := NetwEntity.of(_make_entity())
 	var layer := _layer(&"stealth")
 	layer.add_entity(entity)
@@ -172,7 +172,7 @@ func test_wire_admission_does_not_override_host_participant_row() -> void:
 
 
 func test_hide_perception_restores_visual_and_audio_state() -> void:
-	mt.api.session.role = NetwSessionInterface.Role.LISTEN_SERVER
+	mt.api._session.role = SessionCore.Role.LISTEN_SERVER
 	var root := Node2D.new()
 	root.name = "PerceptionRoot"
 	var audio := AudioStreamPlayer.new()
@@ -199,7 +199,7 @@ func test_hide_perception_restores_visual_and_audio_state() -> void:
 
 
 func test_custom_perception_receives_both_local_edges() -> void:
-	mt.api.session.role = NetwSessionInterface.Role.LISTEN_SERVER
+	mt.api._session.role = SessionCore.Role.LISTEN_SERVER
 	var root := Node2D.new()
 	root.name = "CustomPerceptionRoot"
 	mt.add_child(root)
@@ -207,7 +207,7 @@ func test_custom_perception_receives_both_local_edges() -> void:
 	var events: Array = []
 	entity.interest.on_perception_policy(
 		&"stealth",
-		NetwInterestInterface.PerceptionPolicy.CUSTOM,
+		NetwMultiplayer.PerceptionPolicy.CUSTOM,
 		func(visible: bool, peer_id: int, layer_id: StringName):
 			events.append([visible, peer_id, layer_id]),
 	)
@@ -238,11 +238,11 @@ func test_awareness_enter_waits_for_delayed_node() -> void:
 		var_to_bytes(
 			[
 				[
-					NetwInterestInterface.AwarenessType.LAYER,
+					InterestCore.AwarenessType.LAYER,
 					route,
 					&"sight",
 					0,
-					NetwInterestInterface.Kind.ENTER,
+					InterestCore.Kind.ENTER,
 				],
 			],
 		),
@@ -259,7 +259,7 @@ func test_awareness_enter_waits_for_delayed_node() -> void:
 		func(layer_id: StringName, peer_id: int):
 			entered.append([layer_id, peer_id])
 	)
-	mt.api.liveness.bind_route(route, entity)
+	mt.api._liveness.bind_route(route, entity)
 	await drain_frames(get_tree(), 2)
 
 	assert_array(visible).contains_exactly([entity])
@@ -272,7 +272,7 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 	var root := _make_entity("Observed")
 	var entity := NetwEntity.of(root)
 	var route := 43
-	mt.api.liveness.bind_route(route, entity)
+	mt.api._liveness.bind_route(route, entity)
 	var entered: Array = []
 	var left: Array = []
 	entity.observer_entered.connect(
@@ -288,18 +288,18 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 		var_to_bytes(
 			[
 				[
-					NetwInterestInterface.AwarenessType.OBSERVER,
+					InterestCore.AwarenessType.OBSERVER,
 					route,
 					&"sight",
 					7,
-					NetwInterestInterface.Kind.ENTER,
+					InterestCore.Kind.ENTER,
 				],
 				[
-					NetwInterestInterface.AwarenessType.OBSERVER,
+					InterestCore.AwarenessType.OBSERVER,
 					^"Observed",
 					&"sight",
 					9,
-					NetwInterestInterface.Kind.ENTER,
+					InterestCore.Kind.ENTER,
 				],
 			],
 		),
@@ -312,11 +312,11 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 		var_to_bytes(
 			[
 				[
-					NetwInterestInterface.AwarenessType.OBSERVER,
+					InterestCore.AwarenessType.OBSERVER,
 					route,
 					&"sight",
 					7,
-					NetwInterestInterface.Kind.EXIT,
+					InterestCore.Kind.EXIT,
 				],
 			],
 		),

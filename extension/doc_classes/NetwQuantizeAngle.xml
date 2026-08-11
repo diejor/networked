@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwQuantizeAngle" inherits="NetwQuantize" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		[NetwQuantize] that wraps an angle in radians onto an exact bit count.
+	</brief_description>
+	<description>
+		The value is taken modulo [constant @GDScript.TAU] and mapped to [member bit_count] bits, so every angle has a code and the wrap costs nothing: two peers a hair either side of the boundary encode to neighbouring codes rather than to opposite ends of a range. Applies to a [float] angle.
+		Which half-open range it decodes into is a declaration, because the field it writes back into has one. A Godot Euler component carries [code]-PI &lt; angle &lt;= PI[/code], so restoring [code]0 &lt;= angle &lt; TAU[/code] into it would leave the game reading a value outside the range it stores angles in, even though the two name the same rotation.
+		[codeblock]
+		var q := NetwQuantizeAngle.new().bits(8)              # 0 &lt;= angle &lt; TAU
+		var e := NetwQuantizeAngle.new().bits(16).centered()  # -PI &lt; angle &lt;= PI
+		[/codeblock]
+		Exactly PI stays positive, so the centered range is half-open the same way a Godot Euler component is and both peers agree on the boundary code.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bits">
+			<return type="NetwQuantizeAngle" />
+			<param index="0" name="bits" type="int" />
+			<description>
+				Builder that sets [member bit_count] and returns this quantizer.
+			</description>
+		</method>
+		<method name="centered">
+			<return type="NetwQuantizeAngle" />
+			<description>
+				Builder that sets [member centered_on_zero] and returns this quantizer, matching the convention a Godot Euler component stores its angles in.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="bit_count" type="int" setter="set_bit_count" getter="get_bit_count" default="8">
+			Bits for the angle, clamped to 1..32.
+		</member>
+		<member name="centered_on_zero" type="bool" setter="set_centered_on_zero" getter="get_centered_on_zero" default="false">
+			Whether the decoded range is centered on zero ([code]-PI &lt; angle &lt;= PI[/code]) rather than starting there ([code]0 &lt;= angle &lt; TAU[/code]). The encoding is identical either way.
+		</member>
+	</members>
+</class>

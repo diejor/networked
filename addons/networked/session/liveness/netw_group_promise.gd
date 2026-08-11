@@ -13,9 +13,10 @@
 ##         start_when_all_ready(votes)
 ##     )
 ## [/codeblock]
-## On timeout the group settles through [method catch_error], and whatever
-## responses arrived first remain readable on [member results]. See [NetwPromise]
-## for the one-to-one form.
+## On timeout the group settles through [method catch_error] with
+## [constant @GlobalScope.ERR_TIMEOUT], and whatever responses arrived first
+## remain readable on [member results]. It shares the settle vocabulary of
+## [NetwPromise], which is also the one-to-one form.
 class_name NetwGroupPromise
 extends RefCounted
 
@@ -27,8 +28,8 @@ signal completed(results: Dictionary)
 signal completed_single(peer_id: int, value: Variant)
 
 ## Emitted when the group promise is rejected due to a timeout or failure.
-## Passes the error details.
-signal failed(error: String)
+## Passes the settle [param code] and its human-readable [param detail].
+signal failed(code: Error, detail: String)
 
 ## Returns [code]true[/code] if all expected peers resolved.
 var is_completed := false
@@ -37,13 +38,18 @@ var is_completed := false
 var is_failed := false
 
 ## Map of [code]peer_id -> result[/code] for all resolved responses.
-var results: Dictionary = {}
+var results: Dictionary = { }
 
 ## List of peer IDs that we are still waiting for responses from.
 var expected_peers: Array[int] = []
 
-## The failure message description if [member is_failed] is [code]true[/code].
-var error: String = ""
+## The settle code if [member is_failed] is [code]true[/code], otherwise
+## [constant @GlobalScope.OK].
+var code: Error = OK
+
+## The human-readable reason behind [member code], empty when the code says it
+## all. Diagnostics only, never a branch condition.
+var detail: String = ""
 
 var _then_callbacks: Array[Callable] = []
 var _catch_callbacks: Array[Callable] = []
@@ -70,11 +76,11 @@ func then(cb: Callable) -> NetwGroupPromise:
 
 ## Chains a callback [param cb] to execute if the group promise fails or times out.
 ##
-## The callback receives the error message [String]. If the promise is
+## The callback receives [member code] and [member detail]. If the promise is
 ## already failed, the callback executes immediately.
 func catch_error(cb: Callable) -> NetwGroupPromise:
 	if is_failed:
-		cb.call(error)
+		cb.call(code, detail)
 	else:
 		_catch_callbacks.append(cb)
 	return self
@@ -119,18 +125,21 @@ func resolve_all() -> void:
 		cb.call(results)
 
 
-## Rejects the group promise with the failure details [param err].
+## Rejects the group promise with the settle code [param err_code] and an
+## optional human-readable [param err_detail].
 ##
 ## Triggers [signal failed] and runs all chained [method catch_error] callbacks.
-func reject(err: String) -> void:
+func reject(err_code: Error, err_detail: String = "") -> void:
 	if is_completed or is_failed:
 		return
 	is_failed = true
-	error = err
+	code = err_code
+	detail = err_detail
 	if _catch_callbacks.is_empty() and failed.get_connections().is_empty():
 		Netw.dbg.warn(
-			"NetwGroupPromise rejected with no error handler attached: %s", [err]
+			"NetwGroupPromise rejected with no error handler attached: %s %s",
+			[error_string(err_code), err_detail],
 		)
-	failed.emit(err)
+	failed.emit(err_code, err_detail)
 	for cb in _catch_callbacks:
-		cb.call(err)
+		cb.call(err_code, err_detail)

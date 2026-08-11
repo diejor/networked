@@ -21,9 +21,9 @@ extends Node
 ##
 ## Counter columns are per-frame deltas, not totals, so a row reads as "what
 ## happened in this frame". The counters come off
-## [NetwLagCompensationInterface.PredictionHandle]:
-## [member NetwLagCompensationInterface.PredictionHandle.starved_count] and
-## [member NetwLagCompensationInterface.PredictionHandle.held_count] separate a
+## [NetwPredictionHandle]:
+## [member NetwPredictStats.starved] and
+## [member NetwPredictStats.held] separate a
 ## server tick that had no input from one deliberately rebuilding the de-jitter
 ## depth. A [code]ticks_this_frame[/code] of [code]0[/code] or
 ## [code]2[/code] is the local clock stretching to meet its calibration target.
@@ -62,17 +62,43 @@ const POSE_HEADER := "kind,wall_ms,tick,body_x,body_y,body_z," \
 # never ends is a quarantine that never reseeds, so the clean run, its target,
 # and the size of the seed pool are the three numbers that separate "recovering"
 # from "stuck" without re-deriving either from the frame rows.
+#
+# The last columns say WHICH evidence an episode spent, because there are two
+# independent ways to exhaust one and a fallback alone does not say which ran
+# out. withheld_non_contractions is the count the budget declined to charge, so
+# a rising withheld beside a flat non_contraction_used is the recovery guarantee
+# holding rather than the episode surviving by luck.
+#
+# The breakdown is exhaustive and disjoint, and that is what makes it worth
+# logging: nc_no_trigger + nc_mixed_trigger must equal non_contraction_used, and
+# withheld and evidence_free account for every exemption. A capture where the sum
+# does not hold is reporting a spend nothing explains.
 const EPISODE_HEADER := "kind,wall_ms,tick,sim_mode,episode_state,clean_run," \
 		+ "target,seed_pool,reconstructed,fallback_at,reseed_at,aligned_at," \
-		+ "resume_ack_age"
+		+ "resume_ack_age," \
+		+ "non_contraction_used,withheld_non_contractions,closure_used," \
+		+ "nc_no_trigger,nc_mixed_trigger,evidence_free_non_contractions"
 const CORRECTION_HEADER := "kind,wall_ms,tick,field,magnitude,teleported"
 # staleness says whether the comparison was matched at all, and linear_speed is
 # what the drive impulse scales with, so a divergence that equals one tick of
 # drive is legible as a phase error rather than read as a physical fork.
-const EVAL_HEADER := "kind,wall_ms,tick,recv_tick,ack,divergence,corrected," \
-		+ "staleness,linear_speed,drive_impulse"
+#
+# reason is what happened to the verdict, and the verdict alone cannot say: a
+# comparison can disagree and write nothing, and NONE is the only value that
+# means the verdict reached the body. PROBATION_REQUARANTINE is the row a
+# re-quarantine is counted from, which otherwise has to be inferred from the
+# EPISODE demotion it produced.
+const EVAL_HEADER := "kind,wall_ms,tick,recv_tick,ack,divergence,diverged," \
+		+ "staleness,linear_speed,drive_impulse,reason"
 const CONTACT_HEADER := "kind,wall_ms,tick,drive_label,contact_kind,count,impulse,normal_y"
-const FIELD_HEADER := "kind,wall_ms,tick,field,error"
+# error is the divergence against the authoritative value. tier_error is what the
+# TELEPORT tier measured for this field, which is a different quantity: the tier
+# compares against that value extrapolated to now through the field's carry
+# channel, so a field whose channel overshoots reaches the tier while its
+# divergence stays small. tier_at is the distance the field declared, or the
+# entity default it inherited. Both are -1 on a comparison that measured no tier,
+# which is every comparison that staged no recovery.
+const FIELD_HEADER := "kind,wall_ms,tick,field,error,tier_error,tier_at"
 const JOURNAL_HEADER := "kind,wall_ms,transition,label,drive_kind,c_hash," \
 		+ "post_fp,domain,flags"
 const STATS_HEADER := "kind,wall_ms,consumed,missing,starved,held," \
@@ -80,9 +106,15 @@ const STATS_HEADER := "kind,wall_ms,consumed,missing,starved,held," \
 		+ "fp_mismatches,first_divergent_transition,command_queue_depth," \
 		+ "frames_dropped_invalid,substituted,ack_confirmed," \
 		+ "comparisons_ran,comparisons_skipped"
+# Per state field, how often it demanded a recovery against how often one
+# reached it. A field that triggers and is never repaired charges its
+# divergence to whichever field the recovery did write, which no other row here
+# can show: the evidence is the whole run rather than any one tick.
+const RECOVERY_HEADER := "kind,wall_ms,field,triggered,repaired,contracted," \
+		+ "carried,declined,infidelity"
 
-var _clock: NetwClockInterface
-var _handle: NetwLagCompensationInterface.PredictionHandle
+var _clock: ClockCore
+var _handle: NetwPredictionHandle
 var _body: Node
 var _inputs: Node
 var _contact_probe: RigidBody3D
@@ -115,7 +147,7 @@ static func _output_dir() -> String:
 ## [code]user://netlog_<role>_<id>.csv[/code]. A no-op when the recorder is not
 ## armed or the entity carries no prediction handle, so the caller never has to
 ## guard the call.
-func start(entity: NetwEntity, clock: NetwClockInterface) -> void:
+func start(entity: NetwEntity, clock: ClockCore) -> void:
 	if not armed() or not entity or not clock:
 		return
 	_handle = entity.prediction
@@ -150,6 +182,7 @@ func start(entity: NetwEntity, clock: NetwClockInterface) -> void:
 	_file.store_line(FIELD_HEADER)
 	_file.store_line(JOURNAL_HEADER)
 	_file.store_line(STATS_HEADER)
+	_file.store_line(RECOVERY_HEADER)
 	print("net_log recording to %s" % ProjectSettings.globalize_path(path))
 
 	_snapshot_counters()
@@ -164,6 +197,7 @@ func _exit_tree() -> void:
 		return
 	_drain_journal(0)
 	_write_stats()
+	_write_field_recovery()
 	_file.close()
 	_file = null
 
@@ -171,30 +205,47 @@ func _exit_tree() -> void:
 # One closing row carrying the run's totals, so a capture is summarized without
 # re-deriving the counters from the per-frame deltas above it.
 func _write_stats() -> void:
-	var stats := _handle.stats()
+	var stats := _handle.stats
 	_file.store_line(
 		"STATS,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 			Time.get_ticks_msec(),
-			stats[&"consumed"],
-			stats[&"missing"],
-			stats[&"starved"],
-			stats[&"held"],
-			stats[&"folded"],
-			stats[&"corrections"],
-			stats[&"resync"],
-			stats[&"skipped"],
-			stats[&"max_replay_depth"],
-			stats[&"fp_verified"],
-			stats[&"fp_mismatches"],
-			stats[&"first_divergent_transition"],
-			stats[&"command_queue_depth"],
-			stats[&"frames_dropped_invalid"],
-			stats[&"substituted"],
-			stats[&"ack_confirmed"],
-			_handle.comparisons_ran,
-			_handle.comparisons_skipped,
+			stats.consumed,
+			stats.missing,
+			stats.starved,
+			stats.held,
+			stats.folded,
+			stats.corrections,
+			stats.resync,
+			stats.skipped,
+			stats.max_replay_depth,
+			stats.fp_verified,
+			stats.fp_mismatches,
+			stats.first_divergent_transition,
+			stats.command_queue_depth,
+			stats.frames_dropped_invalid,
+			stats.substituted,
+			stats.ack_confirmed,
+			_handle.stats.comparisons_ran,
+			_handle.stats.comparisons_skipped,
 		],
 	)
+
+
+# One closing row per state field, so a capture answers which fields the run's
+# recoveries actually reached without replaying it.
+func _write_field_recovery() -> void:
+	for field: StringName in _handle.field_recovery:
+		var row = _handle.field_recovery[field]
+		_file.store_line("RECOVERY,%d,%s,%d,%d,%d,%d,%d,%d" % [
+			Time.get_ticks_msec(),
+			String(field),
+			row.triggered,
+			row.repaired,
+			row.contracted,
+			row.carried,
+			row.declined,
+			row.infidelity,
+		])
 
 
 func _on_tick(_delta: float, _tick: int) -> void:
@@ -223,14 +274,14 @@ func _on_after_tick_loop() -> void:
 			deltas["starved"],
 			deltas["held"],
 			deltas["folded"],
-			_handle.tape_queue_depth,
+			_handle.stats.tape_queue_depth,
 			deltas["resync"],
 			deltas["skipped"],
 			deltas["corrections"],
 			_contacts_this_frame,
 			1 if _grounded() else 0,
-			_handle.drive_seq,
-			_handle.last_drive_label,
+			_handle.stats.drive_seq,
+			_handle.stats.last_drive_label,
 			_drive_kind_name(),
 			_input_value(&"steer"),
 			_input_value(&"throttle"),
@@ -240,10 +291,10 @@ func _on_after_tick_loop() -> void:
 			_contact_int(&"car_contacts"),
 			_contact_int(&"ground_contacts"),
 			_contact_int(&"contact_sequence"),
-			_handle.quantum_steps,
-			_handle.quantum_declared,
-			_handle.quantum_fault_count,
-			int(_handle.stats()[&"authoring_clamped"]),
+			_handle.stats.quantum_steps,
+			_handle.stats.quantum_declared,
+			_handle.stats.quantum_faults,
+			int(_handle.stats.authoring_clamped),
 			deltas["lane_sent"],
 			deltas["lane_received"],
 		],
@@ -343,7 +394,7 @@ func _record_episode() -> void:
 		&"disposition",
 		{ },
 	)
-	var row := "EPISODE,%d,%d,%d,%d,%d,%d,%d,%s,%d,%d,%d,%d" % [
+	var row := "EPISODE,%d,%d,%d,%d,%d,%d,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 		Time.get_ticks_msec(),
 		_clock.tick,
 		_handle.sim_mode,
@@ -356,6 +407,12 @@ func _record_episode() -> void:
 		int(disposition.get(&"reseed_transition", -1)),
 		int(disposition.get(&"aligned_transition", -1)),
 		int(disposition.get(&"resume_ack_age", -1)),
+		int(disposition.get(&"non_contraction_used", -1)),
+		int(disposition.get(&"withheld_non_contractions", -1)),
+		int(disposition.get(&"closure_used", -1)),
+		int(disposition.get(&"nc_no_trigger", -1)),
+		int(disposition.get(&"nc_mixed_trigger", -1)),
+		int(disposition.get(&"evidence_free_non_contractions", -1)),
 	]
 	# The wall clock and tick move every row, so compare everything after them.
 	var key := row.substr(row.find(",", row.find(",", 8) + 1))
@@ -363,6 +420,13 @@ func _record_episode() -> void:
 		return
 	_last_episode_key = key
 	_file.store_line(row)
+
+
+# The per-field teleport distances in force, off the handle's own reader. This
+# used to reach into an engine member with an apology attached; Phase B folded
+# that member into the wiring record and gave the fact a public name instead.
+func _tier_thresholds() -> Dictionary:
+	return _handle.teleport_distances()
 
 
 # The quarantine's seed pool and stream gate are engine internals with no public
@@ -442,7 +506,7 @@ func _on_recovered(
 
 ## Records a contact at the current tick. Call it wherever the game notifies the
 ## predictor through
-## [method NetwLagCompensationInterface.PredictionHandle.notify_contact], so the
+## [method NetwPredictionHandle.notify_contact], so the
 ## log carries the collisions that open a correction-pause window. A no-op when
 ## the recorder is not running.
 func mark_contact(contact_kind: StringName = &"body_entered") -> void:
@@ -482,7 +546,7 @@ func _write_contact(
 		"CONTACT,%d,%d,%d,%s,%d,%.6f,%.6f" % [
 			Time.get_ticks_msec(),
 			_clock.tick,
-			_handle.last_drive_label,
+			_handle.stats.last_drive_label,
 			contact_kind,
 			count,
 			impulse,
@@ -499,7 +563,7 @@ func _on_state_evaluated(
 		recv_tick: int,
 		ack: int,
 		divergence: float,
-		corrected: bool,
+		diverged: bool,
 ) -> void:
 	if not _file:
 		return
@@ -511,16 +575,17 @@ func _on_state_evaluated(
 	if is_instance_valid(_body):
 		speed = float(_body.get(&"linear_speed"))
 	_file.store_line(
-		"EVAL,%d,%d,%d,%d,%.9f,%s,%d,%.4f,%.4f" % [
+		"EVAL,%d,%d,%d,%d,%.9f,%s,%d,%.4f,%.4f,%s" % [
 			now,
 			_clock.tick,
 			recv_tick,
 			ack,
 			divergence,
-			"true" if corrected else "false",
+			"true" if diverged else "false",
 			_handle.last_compare_staleness,
 			speed,
 			absf(speed) * 100.0 * _clock.ticktime,
+			_verdict_reason_name(),
 		],
 	)
 	# The scalar above is only the worst field. A set mixing meters, radians and
@@ -531,13 +596,20 @@ func _on_state_evaluated(
 	# whole-bucket disagreement on those fields as 0.0000 and reads exactly like
 	# perfect agreement. The column has to out-resolve the grids it is used to
 	# judge, or it cannot answer whether two peers landed in the same bucket.
+	var tiers := _tier_thresholds()
 	for field: StringName in _handle.last_field_divergence:
+		var tier_error := float(_handle.last_tier_errors.get(field, -1.0))
 		_file.store_line(
-			"FIELD,%d,%d,%s,%.9f" % [
+			"FIELD,%d,%d,%s,%.9f,%.9f,%.4f" % [
 				now,
 				_clock.tick,
 				field,
 				_handle.last_field_divergence[field],
+				tier_error,
+				(
+						float(tiers.get(field, _handle.teleport_threshold))
+						if tier_error >= 0.0 else -1.0
+				),
 			],
 		)
 
@@ -550,9 +622,20 @@ func _grounded() -> bool:
 	return bool(_body.get(&"colliding"))
 
 
+# Why this comparison's verdict did not reach the body, by name rather than by
+# ordinal, so a capture stays readable when the enum gains a member.
+func _verdict_reason_name() -> String:
+	var reasons := \
+			NetwPredict.VerdictReason.keys()
+	var reason := _handle.last_verdict_reason
+	if reason < 0 or reason >= reasons.size():
+		return "UNKNOWN"
+	return String(reasons[reason])
+
+
 func _drive_kind_name() -> String:
-	var kinds := NetwLagCompensationInterface.PredictionHandle.DriveKind.keys()
-	var kind := _handle.last_drive_kind
+	var kinds := NetwPredict.DriveKind.keys()
+	var kind := _handle.stats.last_drive_kind
 	if kind < 0 or kind >= kinds.size():
 		return "UNKNOWN"
 	return String(kinds[kind])
@@ -589,18 +672,18 @@ func _magnitude(delta: Variant) -> float:
 
 func _counters() -> Dictionary:
 	return {
-		"consumed": _handle.consumed_count,
-		"missing": _handle.missing_count,
-		"starved": _handle.starved_count,
-		"held": _handle.held_count,
-		"folded": _handle.folded_count,
-		"resync": _handle.resync_count,
-		"skipped": _handle.skipped_count,
-		"corrections": _handle.corrections,
+		"consumed": _handle.stats.consumed,
+		"missing": _handle.stats.missing,
+		"starved": _handle.stats.starved,
+		"held": _handle.stats.held,
+		"folded": _handle.stats.folded,
+		"resync": _handle.stats.resync,
+		"skipped": _handle.stats.skipped,
+		"corrections": _handle.stats.corrections,
 		# The two ends of the owner lane. Only one is nonzero on a given peer, so
 		# a session reads the owner's sent against authority's received.
-		"lane_sent": _handle.command_frames_sent,
-		"lane_received": _handle.command_frames_received,
+		"lane_sent": _handle.stats.command_frames_sent,
+		"lane_received": _handle.stats.command_frames_received,
 	}
 
 

@@ -1,5 +1,4 @@
 @tool
-class_name EditorIconUtils
 extends RefCounted
 
 ## Resolves the best Godot Editor icon based on a custom texture, script, and class name.

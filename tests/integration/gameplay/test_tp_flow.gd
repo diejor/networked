@@ -5,6 +5,8 @@
 class_name TestTPFlow
 extends NetwTestSuite
 
+const AreaReparentGuard := preload("res://addons/networked/utils/area_reparent_guard.gd")
+
 ## Node path from level root to the player spawn template.
 const SPAWNER_PATH := "TestPlayerFull"
 
@@ -91,7 +93,8 @@ func _spawn_tp_player(
 
 func _set_player_database(player: Node) -> void:
 	player.set_meta(
-		NetwPersistenceInterface.PersistenceEngine.META_DATABASE, db,
+		NetwPersistenceEngine.META_DATABASE,
+		db,
 	)
 
 
@@ -105,10 +108,10 @@ func _tp_target(scene_path: String, node_path: String) -> SceneNodePath:
 func test_tp_spawn_places_player_in_start_scene() -> void:
 	var player := await _spawn_tp_player(level_builder.resource_path)
 
-	var scenes := harness.server().api.scenes
-	assert_that(scenes.scenes.size()).is_equal(2)
+	var api := harness.server().api
+	assert_that(api.scene_instances().size()).is_equal(2)
 
-	var scene: MultiplayerScene = scenes.scene(level_builder.scene_name)
+	var scene := api.scene(level_builder.scene_name)
 	assert_that(player.get_parent()).is_equal(scene.level)
 
 
@@ -121,8 +124,8 @@ func test_teleport_reparents_on_server_and_snaps_client_to_marker() -> void:
 
 	_set_player_database(client_player)
 
-	var scenes := harness.server().api.scenes
-	var scene2: MultiplayerScene = scenes.scene(level_2_builder.scene_name)
+	var api := harness.server().api
+	var scene2 := api.scene(level_2_builder.scene_name)
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
 	var promise := client_tp.teleport(

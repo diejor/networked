@@ -8,6 +8,9 @@
 class_name DebugPanel
 extends VBoxContainer
 
+const PanelDataAdapter := preload("res://addons/networked/debug/editor/adapters/panel_data.gd")
+
+
 func _init() -> void:
 	add_theme_constant_override("separation", 4)
 

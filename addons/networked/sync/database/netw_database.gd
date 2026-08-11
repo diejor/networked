@@ -2,12 +2,12 @@
 ##
 ## Save this resource as a [code].tres[/code] file and name it from an archetype
 ## through [method Netw.configure_persistence] so its
-## [NetwPersistenceInterface.PersistenceEngine] persists into it.
+## [NetwPersistenceEngine] persists into it.
 ##
 ## [br][br]
 ## [b]Slots:[/b] a slot is one independent save namespace. Open a slot with
 ## [method NetwDatabase.SlotEngine.open] before the first
-## [NetwPersistenceInterface.PersistenceEngine] registers a schema. Backends
+## [NetwPersistenceEngine] registers a schema. Backends
 ## receive the selected slot during initialization and scope all table records
 ## under it.
 ## [codeblock]
@@ -93,7 +93,11 @@ enum SchemaMismatchPolicy {
 @export var backend: NetwDatabaseBackend
 
 ## What to do when a loaded record has columns absent from the current schema.
-@export var mismatch_policy: SchemaMismatchPolicy = SchemaMismatchPolicy.PURGE
+##
+## The default is the least destructive reading: a stray column is dropped and
+## the rest of the row loads, because a save file is the player's and a schema
+## that grew a column is the ordinary case rather than corruption.
+@export var mismatch_policy: SchemaMismatchPolicy = SchemaMismatchPolicy.LOAD_PARTIAL
 
 ## Save-slot selector. Choose a slot with [method NetwDatabase.SlotEngine.open]
 ## before the first schema registration locks the backend.
@@ -110,6 +114,11 @@ func _init() -> void:
 
 # table -> Array[StringName] of declared column names
 var _schema: Dictionary[StringName, Array] = { }
+
+# table -> {column: NetwMultiplayer.ColumnType}, present only for a table declared
+# from a NetwSchemaModel.Declaration. An untyped table is absent and coerces
+# nothing.
+var _column_types: Dictionary[StringName, Dictionary] = { }
 var _initialized: bool = false
 
 # table -> Script for a NetwRecord subclass
@@ -132,26 +141,63 @@ func table(table_name: StringName) -> TableRepository:
 	return TableRepository.new(self, table_name, script)
 
 
-## Declares [param table_name] with [param columns] and an optional
+## Declares [param table_name] from [param schema] with an optional
 ## [param record_script].
 ##
 ## This is the public entry point for build-time or power-user schema
 ## declaration. Tables declared here are known before any runtime query,
 ## preventing silent schema-mismatch destruction of data.
+##
+## [param schema] is a [NetwSchemaModel.Declaration], the same declaration the
+## replicated table and the property binding compile from, which is what gives
+## the database the column types it needs to reject a value of the wrong shape
+## instead of assigning it. A bare [Array] of column names is accepted as the
+## untyped form, and a table declared that way coerces nothing.
 ## [codeblock lang=gdscript]
-## db.declare_table(&"rocks", [&"health", &"position"], RockRecord)
-## var rock: RockRecord = db.table(&"rocks").fetch(&"rock_1")
+## db.declare_table(&"rocks", Netw.configure_schema(&"rocks")
+##         .replicated(false).declaration(), RockRecord)
+##
+## db.declare_table(&"rocks", [&"health", &"position"])   # untyped
 ## [/codeblock]
 func declare_table(
 		table_name: StringName,
-		columns: Array[StringName] = [],
+		schema: Variant = null,
 		record_script: Script = null,
 ) -> void:
 	if record_script:
 		_table_scripts[table_name] = record_script
 
-	if not columns.is_empty():
-		_register_schema(table_name, columns)
+	if schema is NetwSchemaModel.Declaration:
+		var declaration: NetwSchemaModel.Declaration = schema
+		var names: Array[StringName] = []
+		var types: Dictionary[StringName, int] = _column_types.get(
+			table_name,
+			{ } as Dictionary[StringName, int],
+		)
+		for column in declaration.columns:
+			names.append(column.key)
+			types[column.key] = column.type
+		_column_types[table_name] = types
+		if not names.is_empty():
+			_register_schema(table_name, names)
+		return
+
+	if schema is Array:
+		var names: Array[StringName] = []
+		for name in schema:
+			names.append(StringName(name))
+		if not names.is_empty():
+			_register_schema(table_name, names)
+
+
+## Returns the declared [enum NetwMultiplayer.ColumnType] of one column, or
+## [code]-1[/code] when the table was declared without types.
+##
+## An untyped table coerces nothing, which is what keeps the bare-names form
+## from silently changing a game's saves.
+func get_column_type(table: StringName, column: StringName) -> int:
+	var types: Dictionary = _column_types.get(table, { })
+	return int(types.get(column, -1))
 
 # ── Dynamic property proxy ────────────────────────────────────────────────────
 
@@ -230,7 +276,7 @@ func _initialize_backend() -> void:
 		)
 		return
 	@warning_ignore("redundant_await")
-	var err := await backend._initialize(_schema, String(slots.current()))
+	var err: Error = await backend.initialize(_schema, String(slots.current()))
 	if err != OK:
 		Netw.dbg.error(
 			"NetwDatabase: backend initialization failed. " +
@@ -241,7 +287,8 @@ func _initialize_backend() -> void:
 		return
 
 	@warning_ignore("redundant_await")
-	await backend._warm(_build_warm_directives())
+	await backend.warm(_build_warm_directives())
+
 
 
 ## Warms [param table] into the backend cache per [param request] at runtime.
@@ -253,7 +300,8 @@ func warm(table: StringName, request: WarmRequest) -> Error:
 	if not backend:
 		return ERR_UNCONFIGURED
 	@warning_ignore("redundant_await")
-	return await backend._warm([{ table = table, request = request }])
+	var err: Error = await backend.warm([{ table = table, request = request }])
+	return err
 
 
 # Asks the policy for one directive per registered table. Returns an empty batch
@@ -405,7 +453,7 @@ func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> 
 		return { }
 
 	@warning_ignore("redundant_await")
-	var record := await backend._find_by_id(table, id)
+	var record: Dictionary = await backend.find_by_id(table, id)
 	var hit := not record.is_empty()
 	record_loaded.emit(table, id, hit)
 
@@ -417,7 +465,50 @@ func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> 
 	if not diff.ok:
 		record = _apply_mismatch_policy(table, id, record, diff, out_error)
 
-	return record
+	return _reject_mistyped(table, id, record)
+
+
+# Drops every column whose stored value disagrees with its declared type, so
+# the live scene keeps its default instead of taking a value of the wrong
+# shape. Reject-to-default is the least destructive reading: a save written by
+# an older build is partly readable rather than wholly refused, and the one
+# column that changed shape is named in a warning.
+#
+# A table declared without types coerces nothing and is returned untouched.
+func _reject_mistyped(
+		table: StringName,
+		id: StringName,
+		record: Dictionary,
+) -> Dictionary:
+	var types: Dictionary = _column_types.get(table, { })
+	if types.is_empty() or record.is_empty():
+		return record
+	var out := record
+	for column: StringName in record:
+		var declared := int(types.get(column, -1))
+		# The self-describing tier holds whatever it holds, so judging its
+		# shape would reject every legal value.
+		if declared < 0 or declared == NetwMultiplayer.ColumnType.COLUMN_VARIANT:
+			continue
+		var wanted: int = SchemaCore.element_type(declared)
+		if typeof(record[column]) == wanted:
+			continue
+		if out == record:
+			out = record.duplicate()
+		out.erase(column)
+		Netw.dbg.warn(
+			"NetwDatabase: '%s.%s' in record '%s' is %s but the schema "
+			+ "declares %s; keeping the scene default for it.",
+			[
+				table,
+				column,
+				id,
+				type_string(typeof(record[column])),
+				type_string(wanted),
+			],
+			func(m): push_warning(m),
+		)
+	return out
 
 
 # Returns all raw records in [param table] matching [param filter].
@@ -442,7 +533,8 @@ func _find_all(table: StringName, filter: Dictionary = { }) -> Array[Dictionary]
 		)
 		return []
 	@warning_ignore("redundant_await")
-	return await backend._find_all(table, filter)
+	var rows: Array[Dictionary] = await backend.find_all(table, filter)
+	return rows
 
 
 ## Permanently removes [param id] from [param table].
@@ -460,7 +552,8 @@ func _delete_internal(table: StringName, id: StringName) -> Error:
 		)
 		return ERR_UNCONFIGURED
 	@warning_ignore("redundant_await")
-	return await backend._delete(table, id)
+	var err: Error = await backend.erase(table, id)
+	return err
 
 # ── SlotEngine ────────────────────────────────────────────────────────────────
 
@@ -519,7 +612,8 @@ class SlotEngine:
 		if not db or not db.backend:
 			return [] as Array[StringName]
 		@warning_ignore("redundant_await")
-		return await db.backend._list_namespaces()
+		var names: Array[StringName] = await db.backend.list_namespaces()
+		return names
 
 
 	## Permanently removes [param slot] and every record under it.
@@ -530,7 +624,8 @@ class SlotEngine:
 		if not db or not db.backend:
 			return ERR_UNCONFIGURED
 		@warning_ignore("redundant_await")
-		return await db.backend._delete_namespace(String(slot))
+		var err: Error = await db.backend.delete_namespace(String(slot))
+		return err
 
 
 	# Freezes the slot choice once the backend initializes.
@@ -566,7 +661,9 @@ class TransactionContext:
 	# error encountered, or OK.
 	func _commit(backend: NetwDatabaseBackend) -> Error:
 		@warning_ignore("redundant_await")
-		return await backend._commit(_queue)
+		var err: Error = await backend.commit(_queue)
+		return err
+
 
 
 ## A typed read/write interface for a single database table.

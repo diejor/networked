@@ -64,13 +64,14 @@ func _spawn_save_player() -> Node2D:
 	) as Node2D
 
 	player.set_meta(
-		NetwPersistenceInterface.PersistenceEngine.META_DATABASE, db,
+		NetwPersistenceEngine.META_DATABASE,
+		db,
 	)
 	await get_tree().process_frame
 	return player
 
 
-func _engine(player: Node) -> NetwPersistenceInterface.PersistenceEngine:
+func _engine(player: Node) -> NetwPersistenceEngine:
 	return NetwEntity.of(player).persistence
 
 
@@ -99,12 +100,14 @@ func test_database_round_trip_restores_position() -> void:
 	player.position = Vector2(10, 20)
 
 	var engine := _engine(player)
-	var err: Error = await engine.flush()
+	var api := harness.server().api
+	var entity := api.rid_of(player)
+	var err: Error = await api.persist_flush(entity)
 	assert_that(err).is_equal(OK)
 
-	var raw: Dictionary = backend._find_by_id(&"players_save", engine._record_id())
+	var raw: Dictionary = backend.find_by_id(&"players_save", engine._record_id())
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 	player.position = Vector2.ZERO
-	await engine.hydrate()
+	await api.persist_hydrate(entity)
 	assert_that(player.position).is_equal(Vector2(10, 20))

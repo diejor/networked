@@ -1,6 +1,8 @@
 ## Validates that a node path exists within a specific packed scene.
-class_name ScenePathValidator
 extends Object
+
+const CacheState := preload("res://addons/networked/addons/scene_node_path/source/cache_state.gd")
+
 
 class ValidationResult extends RefCounted:
 	var is_broken: bool = true

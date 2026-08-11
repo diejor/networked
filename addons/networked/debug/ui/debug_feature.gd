@@ -1,5 +1,4 @@
 ## Conditionally removes debug-only nodes from non-debug builds.
-class_name DebugFeature
 extends Object
 
 ## True when debug-only in-world visuals should exist for this process.

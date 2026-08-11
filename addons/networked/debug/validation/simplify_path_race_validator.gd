@@ -24,7 +24,7 @@ func inspect(event: NetwTreeEvent, report: NetwReport) -> void:
 	if not is_instance_valid(mt) or not mt.is_host:
 		return
 
-	var peers: Array = mt.multiplayer_api.get_peers() if mt.multiplayer_api else []
+	var peers: Array = mt.api.get_peers() if mt.api else []
 	var races: Array[Dictionary] = []
 	var player_name := ""
 	var in_tree := false
@@ -37,12 +37,12 @@ func inspect(event: NetwTreeEvent, report: NetwReport) -> void:
 			in_tree = true
 			extra_state = { "new_peer_id": event.peer_id }
 		NetwTreeEvent.Kind.SCENE_SPAWNED:
-			var scene := event.node as MultiplayerScene
-			if not is_instance_valid(scene) or not is_instance_valid(scene.level):
+			var scene := event.node
+			if not is_instance_valid(scene) or not is_instance_valid(_scene_level(scene)):
 				return
 			races = _detector.find_scene_races(scene, mt)
-			player_name = scene.level.name
-			in_tree = scene.level.is_inside_tree()
+			player_name = _scene_level(scene).name
+			in_tree = _scene_level(scene).is_inside_tree()
 			extra_state = { "connected_peers": peers }
 		NetwTreeEvent.Kind.PLAYER_SPAWNED:
 			var player := event.node
@@ -74,3 +74,9 @@ func _races_to_strings(races: Array[Dictionary]) -> Array[String]:
 		var p := r.get("rel_path", r.get("path", "?"))
 		out.append("simplify_path race on %s" % [p])
 	return out
+
+
+# The content root of one scene container.
+func _scene_level(scene: Node) -> Node:
+	var record := NetwEntity.of(scene)
+	return record.scene.level if record else null

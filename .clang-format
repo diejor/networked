@@ -1,0 +1,25 @@
+---
+# The native tree's formatting law. It exists so that the shape of the code is
+# never a review topic and never a CI surprise: pre-commit applies it locally
+# and the static-checks workflow enforces the same pins.
+#
+# LLVM is the base because the extension is not engine source. Where the two
+# disagree the setting below is the one that matches how this tree was already
+# written, so adopting the file was a normalization rather than a rewrite.
+Language: Cpp
+BasedOnStyle: LLVM
+AccessModifierOffset: -4
+AlignAfterOpenBracket: BlockIndent
+AlignEscapedNewlines: DontAlign
+AlignOperands: DontAlign
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortFunctionsOnASingleLine: None
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBinaryOperators: All
+ColumnLimit: 80
+ContinuationIndentWidth: 4
+IndentCaseLabels: true
+IndentWidth: 4
+PenaltyReturnTypeOnItsOwnLine: 10000

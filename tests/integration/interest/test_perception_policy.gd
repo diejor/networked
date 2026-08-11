@@ -34,7 +34,7 @@ func test_host_and_retained_client_share_hide_applier() -> void:
 	await game.sync_ticks(2)
 
 	var server_probe := probe_scene.instantiate()
-	var entity := host.tree.api.replication.replicate(server_probe)
+	var entity := host.tree.api._replication.replicate(server_probe)
 	host.tree.get_node("Arena").add_child(server_probe)
 	var observer_probe := await _wait_probe(observer, entity.route)
 	var actor_probe := await _wait_probe(actor, entity.route)
@@ -44,9 +44,9 @@ func test_host_and_retained_client_share_hide_applier() -> void:
 	var observer_visual := observer_probe.get_node("Visual") as Node2D
 	var actor_visual := actor_probe.get_node("Visual") as Node2D
 
-	var interest := host.tree.api.interest
+	var interest := host.tree.api._interest
 	var layer := interest.layer(&"stealth")
-	layer.default_leave_policy = NetwInterestInterface.LeavePolicy.RETAIN
+	layer.default_leave_policy = NetwMultiplayer.LeavePolicy.RETAIN
 	layer.add_viewer(observer.peer_id)
 	layer.add_viewer(actor.peer_id)
 	layer.add_entity(entity)
@@ -94,7 +94,7 @@ func _mount_arena(mt: MultiplayerTree) -> void:
 
 func _wait_probe(runner: NetwSceneRunner, route: int) -> Node:
 	for _i in 120:
-		var node := runner.tree.api.liveness.node_of(route)
+		var node := runner.tree.api._liveness.node_of(route)
 		if node:
 			return node
 		await game.sync_ticks(1)

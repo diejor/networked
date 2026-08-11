@@ -18,8 +18,8 @@ var player_type: Variant = PLAYER
 
 var inner: NetwTestHarness
 var client: MultiplayerTree
-var server_clock: NetwClockInterface
-var client_clock: NetwClockInterface
+var server_clock: ClockCore
+var client_clock: ClockCore
 
 var server_node: Node2D
 var client_node: Node2D
@@ -52,7 +52,7 @@ func setup(
 	await inner.setup()
 	client = await inner.add_client()
 	server_clock = await inner.add_clock(tickrate, 3)
-	client_clock = client.api.clock
+	client_clock = client.api._clock
 
 	server_node = _build_node()
 	# A bound entity_id declares a real entity, so the rig activates LIVE rather
@@ -73,7 +73,7 @@ func setup(
 
 	# Adopt on the server mints the route and issues an ADOPT spawn that binds the
 	# path-matched client nodes.
-	inner.server().api.replication.adopt_in_place(server_node)
+	inner.server().api._replication.adopt_in_place(server_node)
 	sync_ticks(3)
 
 	# The player is server-authored (node authority stays the server) and
@@ -106,7 +106,7 @@ func delay_server_to_client(
 		loss: float = 0.0,
 ) -> void:
 	var peer := client.multiplayer_peer as LocalMultiplayerPeer
-	var conditions := LocalLoopbackSession.LinkConditions.new(_seed)
+	var conditions := LocalLinkConditions.create(_seed)
 	var period := 1000.0 / float(Engine.get_physics_ticks_per_second())
 	conditions.latency_ms = float(delay_polls) * period
 	conditions.jitter_ms = float(jitter_polls) * period
@@ -117,10 +117,10 @@ func delay_server_to_client(
 ## Advances every clock by [param n] network ticks in-process, no real frames.
 func sync_ticks(n: int) -> void:
 	if _stepper == null:
-		var clocks: Array[NetwClockInterface] = [server_clock, client_clock]
+		var clocks: Array[ClockCore] = [server_clock, client_clock]
 		var apis: Array[MultiplayerAPI] = [inner.server().multiplayer, client.multiplayer]
 		if observer:
-			clocks.append(observer.api.clock)
+			clocks.append(observer.api._clock)
 			apis.append(observer.multiplayer)
 		_stepper = LockstepStepper.new(clocks, apis, inner.session(), _tickrate)
 	_stepper.sync_ticks(n)

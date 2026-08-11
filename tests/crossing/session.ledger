@@ -1,0 +1,135 @@
+# family: session
+# bridge: B(admission-trace)
+# regime: exact (states, roles and peer ids are symbols and integers)
+# instrument-first: 921cec0d
+# baseline: tests/unit/session
+# baseline-count: 38
+#
+# The unit is the lifecycle machine inside SessionCore, which is now
+# NetwSessionCore: the states and their legal edges, the role peer identity and
+# the configured hint resolve to, the join flood window, and the app-tag fold
+# that gates admission.
+#
+# THE SAME TWO-PLANE SPLIT LIVENESS AND CLOCK TOOK, in a third place.
+# SessionCore was never one class's worth of concern:
+#
+#   machine    the states, the edges, the roles, the flood window, the tag.
+#              Arithmetic over integers and identities, no Object, no send.
+#   interface  the authentication wire, the join payloads and their codec, the
+#              nine frames replication_core.gd dispatches into, the persistence
+#              flush a leave owes, and the awaits. GDScript until W4/W6.
+#
+# The MACHINE migrated completely, so the recipe's "a class migrates completely
+# or not at all" holds on the class that crossed, and nothing straddles the two
+# tiers.
+#
+# THE NAME. The native class is NetwSessionCore and the GDScript interface keeps
+# the name SessionCore, the same disposition ClockCore took and for the same
+# reason: State and Role are named from it in 413 places including the public
+# twins on NetwMultiplayer. TRIGGER: rename to SessionShell when the interface
+# crosses, where the sweep is already being paid.
+#
+# THE SCOPE IS NEW, AND THE MOVE WAS FORCED. Both suites lived in
+# tests/unit/transport until this batch, carried by 38 rows of transport.ledger
+# that already read "crosses with the session column". They had to move before
+# anything could port: crossing-gate balances every ledger claiming a scope
+# against that scope's whole census count, so a scope belongs to exactly one
+# crossing family, and a second family porting a case out of tests/unit/transport
+# would have made THAT ledger refuse however honest these rows were. The move,
+# transport.ledger's shrink to 56, and the census retake landed together at
+# fd443d0d and 8243c645, green before a line of C++ was written.
+#
+# WHAT FORCED WHAT, swept rather than assumed. Nothing outside session_core.gd
+# named _LEGAL_EDGES, _join_stamps, _JOIN_RATE_LIMIT, _JOIN_TRACKED_PEERS,
+# _on_enter_state or _on_exit_state, so the port deleted six members and swept
+# zero files. The nine _handle_* receivers replication_core.gd dispatches into
+# force NOTHING, exactly as clock's four did: each reaches api._replication, so
+# each is interface-plane and stays GDScript beside the caller.
+#
+# THE SUBCLASS HAZARD IS WHY THE INTERFACE SURVIVES rather than being replaced.
+# test_session_assignment_edge.gd declares `class _RecordingSession extends
+# SessionCore` and overrides submit_join with a super call, which no GDScript
+# subclass of a native class can do.
+#
+# THE INSTRUMENT is tests/crossing/session_arm.gd against
+# tests/native/goldens/session_admission.txt: 66 rows over 17 scenarios,
+# recorded at 921cec0d before a line of the machine was native, and red-proven
+# four times across four independent halves (a flood limit one lower, the exit
+# hook moved after the state write, a role hint ignored, a 16-bit tag mask). All
+# 66 rows reproduced unchanged after the port.
+#
+# THE ARM REACHES TWO PRIVATES, deliberately, and both are behaviour rather than
+# state. _join_flooded answers the guard's whole decision and has no public
+# caller short of a real client submitting a real frame, and _compute_app_tag is
+# the gate that decides whether two builds may talk at all. A port that folds it
+# differently locks every peer out of a session that previously admitted them,
+# which is worth more in a golden than the purity of not reaching for it.
+#
+# THE GOLDEN'S machine/ HALF IS THE ARM'S TO KEEP. session_trace_tests.cpp
+# replays edges/, flood/ and apptag/, and stops there: the machine/ scenarios
+# drive a real MultiplayerPeer through the interface, and replaying them
+# natively would mean asserting what a peer answered rather than observing it.
+# The arm keeps checking that half until the interface itself crosses.
+#
+# WHY ONLY THREE CASES PORTED, WHICH IS THE HONEST NUMBER. Almost every case in
+# this scope drives auth, a join payload, a frame or the api's mirrored surface,
+# and all of that is interface plane. The three that crossed are the three whose
+# content is now entirely the machine's, and two of them needed LoopbackRig to
+# cross at all: a fact-driven native case cannot cover the interface's own
+# reading of a real peer, so R1 and R2 drive a real session instead. The arm is
+# not run by any gate, so it is evidence and never a successor, and no row here
+# names it.
+#
+# WHAT THE PORT GAINED, named because it is the reason the batch is worth more
+# than its ported count. _join_flooded read the wall clock, so
+# test_join_flood_guard_drops_past_the_window could count a flood and could
+# never watch one expire, and the case that carried that name only ever checked
+# the count. join_flooded takes the clock as an argument now, and S3 and S4
+# prove the window expires and slides. The illegal edges gained the same:
+# GDScript asserted on them, which aborts a debug build rather than reporting,
+# so no arm could ever record the refusal, and S1 and S2 state it.
+#
+# CARRIED DEBT, named with its trigger. desired_role is pushed into the machine
+# at every edge that can resolve a role rather than held there, because the
+# configuration above is authored live and the value it carried at registration
+# is not the one that decides. It becomes a plain member when NetwSessionConfig
+# itself is native, at W6.
+#
+test_session_assignment_edge.gd:test_server_assignment_drives_online              -> session_rig_tests.cpp:"[Networked][Session] R1 a real server peer carries a real session to online at the assignment edge"
+test_session_assignment_edge.gd:test_client_completes_online_on_connected_signal  -> session_rig_tests.cpp:"[Networked][Session] R2 a real client reaches online on the transport's own signal and reads as a client"
+test_session_assignment_edge.gd:test_join_flood_guard_drops_past_the_window       -> session_core_tests.cpp:"[Networked][Session][Hosted] S3 the flood window expires, which is the half no wall clock could prove"
+test_session_assignment_edge.gd:test_service_registry_works_tree_less             -> CARRY tests/unit/session (the api's service registry)
+test_session_assignment_edge.gd:test_get_services_is_subclass_aware               -> CARRY tests/unit/session (the api's service registry)
+test_session_assignment_edge.gd:test_offline_at_construction                      -> CARRY tests/unit/session (reads the api's mirrored surface, not the machine)
+test_session_assignment_edge.gd:test_scene_multiplayer_surface_is_mirrored        -> CARRY tests/unit/session (the api's mirrored surface)
+test_session_assignment_edge.gd:test_scene_multiplayer_properties_forward_both_ways -> CARRY tests/unit/session (the api's mirrored surface)
+test_session_assignment_edge.gd:test_dedicated_hint_resolves_dedicated_role       -> CARRY tests/unit/session (configures a NetwSessionConfig, which is interface)
+test_session_assignment_edge.gd:test_auth_dispatcher_arms_tree_less               -> CARRY tests/unit/session (auth wire)
+test_session_assignment_edge.gd:test_auth_config_rearms_dispatcher_tree_less      -> CARRY tests/unit/session (auth wire)
+test_session_assignment_edge.gd:test_auth_provider_prepares_and_synthesizes_host_tree_less -> CARRY tests/unit/session (auth wire)
+test_session_assignment_edge.gd:test_application_auth_callback_is_composed_tree_less -> CARRY tests/unit/session (auth wire)
+test_session_assignment_edge.gd:test_client_assignment_waits_in_connecting        -> CARRY tests/unit/session (the interface's reading of a real peer)
+test_session_assignment_edge.gd:test_cancelled_connect_returns_offline            -> CARRY tests/unit/session (the interface's reading of a real peer)
+test_session_assignment_edge.gd:test_prepared_client_auto_submits_once_on_online  -> CARRY tests/unit/session (join payloads)
+test_session_assignment_edge.gd:test_failed_preparation_never_auto_submits        -> CARRY tests/unit/session (join payloads)
+test_session_assignment_edge.gd:test_cancelled_connect_discards_prepared_join     -> CARRY tests/unit/session (join payloads)
+test_session_assignment_edge.gd:test_reconnect_auto_submits_newly_prepared_join   -> CARRY tests/unit/session (join payloads)
+test_session_assignment_edge.gd:test_bare_client_assignment_stays_unenriched      -> CARRY tests/unit/session (the roster)
+test_session_assignment_edge.gd:test_listen_server_waits_for_explicit_join_submission -> CARRY tests/unit/session (join payloads)
+test_session_assignment_edge.gd:test_session_pause_and_unpause_work_tree_less     -> CARRY tests/unit/session (session frames)
+test_session_assignment_edge.gd:test_session_kick_disconnects_peer_tree_less      -> CARRY tests/unit/session (session frames)
+test_session_assignment_edge.gd:test_session_leave_returns_offline_tree_less      -> CARRY tests/unit/session (the persistence flush and the await)
+test_session_assignment_edge.gd:test_auth_provider_path_auto_submits              -> CARRY tests/unit/session (auth wire)
+test_session_assignment_edge.gd:test_application_auth_path_auto_submits           -> CARRY tests/unit/session (auth wire)
+test_session_assignment_edge.gd:test_server_crash_ends_session_tree_less          -> CARRY tests/unit/session (the interface's crash guard)
+test_session_assignment_edge.gd:test_connected_peer_is_a_row_before_it_joins      -> CARRY tests/unit/session (the roster)
+test_session_assignment_edge.gd:test_dispose_suppresses_crash_teardown            -> CARRY tests/unit/session (the embedding's disposal)
+test_session_assignment_edge.gd:test_join_args_round_trip_through_the_session     -> CARRY tests/unit/session (the join codec)
+test_session_assignment_edge.gd:test_join_args_schema_mismatch_rejects            -> CARRY tests/unit/session (the join codec)
+test_session_bringup.gd:test_host_announces_one_attempt                           -> CARRY tests/unit/session (NetwConnector bring-up)
+test_session_bringup.gd:test_host_reports_one_outcome_for_the_whole_verb          -> CARRY tests/unit/session (NetwConnector bring-up)
+test_session_bringup.gd:test_abort_classifies_the_losing_result_as_cancelled      -> CARRY tests/unit/session (NetwConnector bring-up)
+test_session_bringup.gd:test_a_transport_error_during_an_abort_still_reads_aborted -> CARRY tests/unit/session (NetwConnector bring-up)
+test_session_bringup.gd:test_the_connect_deadline_times_a_stalled_bring_up_out    -> CARRY tests/unit/session (NetwConnector bring-up)
+test_session_bringup.gd:test_a_self_managed_transport_never_times_out             -> CARRY tests/unit/session (NetwConnector bring-up)
+test_session_bringup.gd:test_a_timed_out_attempt_hands_the_machine_its_cancel_edge -> CARRY tests/unit/session (NetwConnector bring-up)

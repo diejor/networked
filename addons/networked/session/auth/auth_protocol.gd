@@ -17,7 +17,6 @@
 ## [br][br]
 ## Packets that match neither magic are treated as
 ## [constant Kind.UNKNOWN] and fail closed.
-class_name AuthProtocol
 extends RefCounted
 
 ## Current protocol version. Bumped when the framing changes in a way

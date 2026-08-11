@@ -1,13 +1,13 @@
 ## Drives clocked loopback peers tick by tick with no real frames.
 ##
 ## Each call to [method sync_ticks] runs a synchronous loop. Per tick it forces
-## exactly one [method NetwClockInterface.force_step] on every clock, advances the
+## exactly one [method ClockCore.force_step] on every clock, advances the
 ## loopback delay clock by one tick period, then flushes one
 ## [method MultiplayerAPI.poll] per peer. Because there is exactly one send per
 ## tick, input and state are never thinned, so reconciliation fidelity matches a
 ## real run while the wall-clock cost collapses to CPU time.
 ##
-## The stepper owns ticking: it sets [member NetwClockInterface.manual_tick] on
+## The stepper owns ticking: it sets [member ClockCore.manual_tick] on
 ## every clock so the real [code]_physics_process[/code] loop stops
 ## advancing. The session is driven through
 ## [method LocalLoopbackSession.advance_time], not real physics frames, so
@@ -25,14 +25,14 @@
 class_name LockstepStepper
 extends RefCounted
 
-var clocks: Array[NetwClockInterface] = []
+var clocks: Array[ClockCore] = []
 var apis: Array[MultiplayerAPI] = []
 var session: LocalLoopbackSession
 var tick_period_ms: float
 
 
 func _init(
-		p_clocks: Array[NetwClockInterface],
+		p_clocks: Array[ClockCore],
 		p_apis: Array[MultiplayerAPI],
 		p_session: LocalLoopbackSession,
 		p_tickrate: int,

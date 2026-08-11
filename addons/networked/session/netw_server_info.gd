@@ -14,9 +14,9 @@ extends Resource
 
 ## Builds the default probe reply from live session state on [param api].
 ##
-## Reports the live [method NetwMultiplayer.get_participants] count, the
-## [member NetwSessionInterface.app_id], and the player cap behind
-## [member NetwConnector.active_host_config], and marks
+## Reports the live [member NetwMultiplayer.participants] count, the
+## [member NetwSessionHandle.app_id], and
+## [member NetwSessionHandle.advertised_max_players], and marks
 ## [member is_local_listener] so a caller can tell a live local host from a
 ## closed port. This is the built-in provider a probe answers with when neither
 ## a per-session override nor a [method Netw.configure_server_info] registration
@@ -25,13 +25,9 @@ static func from_session(api: NetwMultiplayer) -> NetwServerInfo:
 	var info := NetwServerInfo.new()
 	info.is_local_listener = true
 	if api:
-		info.players = api.get_participants().size()
+		info.players = api.participants.size()
 		info.app_id = api.session.app_id
-		var connector := api.connect.connector() if api.connect else null
-		var config := connector.active_host_config if connector else null
-		if config:
-			info.max_players = config.max_players if config.max_players > 0 \
-					else int(config.params.get("max_clients", 0))
+		info.max_players = api._session.advertised_max_players
 	return info
 
 

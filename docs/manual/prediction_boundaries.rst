@@ -24,8 +24,14 @@ entity root and choose the archetype that matches its simulation:
 * ``KINEMATIC`` is for a callable step that can be replayed several times in
   one frame. It uses tick scheduling and rebase plus replay.
 * ``SOLVER_BODY`` is for a body integrated by the physics solver once per
-  frame. It uses frame scheduling, projected rebases, and predicts through
-  witnessed breaches by default.
+  frame. It uses frame scheduling, projected rebases, and a teleport distance
+  sized for a body that settles through contacts.
+
+No archetype chooses ``breach_response``. Every entity predicts through a
+witnessed breach until a game asks for ``DEMOTE`` itself, because that setting
+stops speculation and is the one recovery fact a player feels directly. A
+preset that picked it would change how the game feels with no game file saying
+so.
 
 An archetype is a baseline. Declare exceptional facts on the entity's stable
 ``prediction`` handle. Declare field facts on the field itself:
@@ -42,25 +48,31 @@ An archetype is a baseline. Declare exceptional facts on the entity's stable
         Netw.configure_property(self, &"linear_velocity").state() \
             .epsilon(0.5).teleport_only()
 
-        entity.prediction.archetype(
-            NetwLagCompensationInterface.PredictionHandle.Archetype.SOLVER_BODY,
-        )
-        entity.prediction.schedule().frame().hold_repeat_last()
+        # SOLVER_BODY already supplies frame scheduling and REPEAT_LAST, so
+        # only the facts it does not carry are worth spelling here.
+        entity.prediction.archetype = NetwPredict.Archetype.SOLVER_BODY
+        entity.prediction.divergence_epsilon = 0.25
 
-The fluent prediction verbs are grouped by the fact they declare:
+The declarations are grouped by the fact they carry:
 
-* ``schedule()`` selects tick or frame cadence and missing input behavior.
-* ``recovery()`` selects the recovery strategy and breach response.
-* ``sensors()`` captures world facts the simulation reads.
-* ``witness()`` captures realized contacts and other boundary evidence.
-* ``transport()`` declares when a present time pose offset may be composed.
-* ``island()`` produces participants and promotes selected members for local
+* ``schedule``, ``missing_policy``, ``replay_buffer_depth`` and
+  ``max_consume_lag_ticks`` select the drive cadence and what a missing input
+  does.
+* ``recovery_policy``, ``divergence_epsilon``, ``teleport_threshold``,
+  ``collision_cooldown_ticks``, ``snap_restore`` and ``breach_response`` select
+  the recovery strategy and what a witnessed breach does.
+* ``sensors`` captures world facts the simulation reads.
+* ``witness_contacts`` captures realized contacts and other boundary evidence.
+* ``transport_corridor`` declares when a present time pose offset may be
+  composed.
+* ``island`` produces participants and promotes selected members for local
   simulation.
-* ``archetype()`` and ``epoch()`` set the body baseline and world version.
+* ``archetype`` and ``epoch`` set the body baseline and world version.
 
-Keep one source for each fact. A value exported by ``PredictionComponent``
-must not also be declared through the handle. Networked reports the conflict
-and keeps the scene value.
+Each fact has one source. A ``PredictionComponent`` applies its ``archetype``
+first and then pushes only the exports the scene actually moved off their
+defaults, so a scene value overrides the preset it refines and an export left
+alone does not. Between the scene and code, the later write wins.
 
 The boundary model
 ------------------
@@ -82,7 +94,7 @@ The command horizon is bounded. When authority has not acknowledged progress,
 the client stops adding speculative transitions at the structural history
 limit while it continues sampling input and resending the outstanding command
 window. Read ``ack_age_max``, ``ack_age_ticks``, ``authoring_clamped``, and
-``speculation_held`` from ``prediction.stats()`` when diagnosing this state.
+``speculation_held`` from ``prediction.stats`` when diagnosing this state.
 
 How much time a transition is worth
 -----------------------------------
@@ -119,7 +131,7 @@ phase each peer keeps privately and no other declaration repairs it. Networked
 reports that configuration against the entity that drives under it.
 
 Read ``quantum_steps``, ``quantum_declared``, and ``quantum_faults`` from
-``prediction.stats()``. A nonzero fault count is the one divergence cause a
+``prediction.stats``. A nonzero fault count is the one divergence cause a
 peer detects alone, before any comparison disagrees, and a cross-peer mismatch
 is charged to ``TOPOLOGY`` rather than exhausting the attribution ladder.
 
@@ -143,24 +155,24 @@ part that remains outside it.
      - Use when
      - Cost
    * - Tolerant prediction
-     - ``archetype()`` and field ``epsilon()`` marks
+     - ``archetype`` and field ``epsilon()`` marks
      - Contact is benign and ordinary correction contracts the error.
      - Lowest CPU and no added display latency.
    * - Witnessed demotion
-     - ``witness()`` and ``recovery().on_breach(DEMOTE)``
+     - ``witness_contacts`` and ``breach_response = DEMOTE``
      - Solver contact can amplify error after the contact.
      - Contact is shown at authority display latency until a clean proof
        permits prediction to resume.
    * - Present time transport
-     - ``transport().corridor(...)``
+     - ``transport_corridor``
      - Pose offset is the error and the corridor is known to be contact clean.
      - One present time write. It cannot repair momentum or hidden solver state.
    * - Simulated participant
-     - ``island().from_interest().simulate_nearest(n)``
+     - ``island.from_interest()`` and ``island.simulate_nearest(n)``
      - A nearby remote body causes phantom contacts as a delayed proxy.
      - One extra body step per promoted member and command prediction error.
    * - Joint reconciliation
-     - ``island().reconcile(JOINT)``
+     - ``island.reconcile = JOINT``
      - Reserved. The interaction must pass the usefulness test below.
      - Joint state history and replay for every member.
 
@@ -180,12 +192,9 @@ and dynamic entities.
 
     func _init() -> void:
         var prediction := NetwEntity.ensure(self).prediction
-        prediction.sensors().sample(&"ground", sample_ground)
-        prediction.witness().contacts(sample_contacts)
-        prediction.recovery().on_breach(
-            NetwLagCompensationInterface \
-                .PredictionHandle.BreachResponse.DEMOTE,
-        )
+        prediction.sensors[&"ground"] = sample_ground
+        prediction.witness_contacts = sample_contacts
+        prediction.breach_response = NetwPredict.BreachResponse.DEMOTE
 
 A breach demotes at the witness transition. Local commands keep flowing, but
 the display follows received authority until consecutive authority witness
@@ -220,12 +229,10 @@ Promotion policies select the ``SIMULATED`` subset:
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    entity.prediction.island() \
-        .approximate() \
-        .from_interest() \
-        .simulate_nearest(1)
+    entity.prediction.island.from_interest()
+    entity.prediction.island.simulate_nearest(1)
 
-    entity.prediction.island().simulate(opponent, predict_opponent_command)
+    entity.prediction.island.simulate(opponent, predict_opponent_command)
 
 Nearest and radius policies use local distance and hysteresis. Membership and
 fidelity changes commit at transition boundaries. A fidelity change waits
@@ -252,18 +259,17 @@ command differs from the remote command.
 Scene defaults
 --------------
 
-Use ``MultiplayerScene.prediction_island()`` to apply one produced rule to
-predicted entities in a scene:
+A scene is an ordinary entity, so it declares an island the same way any entity
+does. Predicted entities inside it inherit that rule:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    scene.prediction_island() \
-        .approximate() \
-        .from_interest(&"race") \
-        .simulate_nearest(1)
+    var island := NetwEntity.of(self).scene.record.prediction.island
+    island.from_interest(&"race")
+    island.simulate_nearest(1)
 
-An entity's own ``island()`` declaration replaces the scene island rule.
+An entity's own ``island`` declaration replaces the scene island rule.
 Sensors and epoch are separate environment facts and remain intact. Produced
 islands are approximate because peers may evaluate a threshold on different
 display samples. Exact comparison is available only for explicit membership.
@@ -315,7 +321,7 @@ Diagnostics
 
 Use the stable handle surfaces instead of reading engine internals:
 
-* ``prediction.stats()`` reports resolved axes, schedule, acknowledgement age,
+* ``prediction.stats`` reports resolved axes, schedule, acknowledgement age,
   command pressure, correction counts, and produced island membership.
 * ``prediction.journal()`` returns transition evidence and operator outcomes.
 * ``prediction.episode()`` returns the current or last disturbance record.

@@ -4,14 +4,13 @@
 class_name TestConnectKitLobby
 extends NetwTestSuite
 
-
 func test_steam_recognizes_its_scheme() -> void:
 	var t := SteamTransport.new()
 	var target := NetwConnectTarget.new()
 	target.scheme = &"steam"
 	assert_bool(t._can_join(target)).is_true()
 	var config := NetwHostConfig.new()
-	config.scheme = &"steam"
+	config.transport = NetwSteamParams.new()
 	assert_bool(t._can_host(config)).is_true()
 
 
@@ -21,36 +20,34 @@ func test_nakama_recognizes_its_scheme() -> void:
 	target.scheme = &"nakama"
 	assert_bool(t._can_join(target)).is_true()
 	var config := NetwHostConfig.new()
-	config.scheme = &"nakama"
+	config.transport = NetwNakamaParams.new()
 	assert_bool(t._can_host(config)).is_true()
 
 
 func test_steam_join_without_directory_errors() -> void:
 	var api := NetwMultiplayer.new(SceneMultiplayer.new())
-	var connector := NetwConnector.new(api)
-	connector.transports = [SteamTransport.new()]
+	NetwConnector.of(api).transports = [SteamTransport.new()]
 
 	var target := NetwConnectTarget.new()
 	target.scheme = &"steam"
 	target.address = "123"
-	var attempt := connector.join(target)
-	if not attempt.is_done():
-		await attempt.finished
+	var result := await NetwConnector.of(api).join(target, null, true)
 
-	assert_int(attempt.result.status).is_equal(NetwConnectResult.Status.ERROR)
-	api.dispose()
+	assert_int(NetwConnector.error_of(result)).is_equal(ERR_CANT_CONNECT)
+	assert_int(NetwConnector.of(api).current_attempt.result.status) \
+			.is_equal(NetwConnectResult.Status.ERROR)
+	api.embedding.dispose()
 
 
 func test_nakama_host_without_directory_errors() -> void:
 	var api := NetwMultiplayer.new(SceneMultiplayer.new())
-	var connector := NetwConnector.new(api)
-	connector.transports = [NakamaTransport.new()]
+	NetwConnector.of(api).transports = [NakamaTransport.new()]
 
 	var config := NetwHostConfig.new()
-	config.scheme = &"nakama"
-	var attempt := connector.host(config)
-	if not attempt.is_done():
-		await attempt.finished
+	config.transport = NetwNakamaParams.new()
+	var result := await NetwConnector.of(api).host(null, config)
 
-	assert_int(attempt.result.status).is_equal(NetwConnectResult.Status.ERROR)
-	api.dispose()
+	assert_int(NetwConnector.error_of(result)).is_equal(ERR_CANT_CREATE)
+	assert_int(NetwConnector.of(api).current_attempt.result.status) \
+			.is_equal(NetwConnectResult.Status.ERROR)
+	api.embedding.dispose()

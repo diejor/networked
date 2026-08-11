@@ -20,10 +20,10 @@ var peer_id: int = 0
 ## Username used to join the session.
 var username: StringName = &""
 
-## Mirrors [member MultiplayerTree.local_player].
+## Mirrors [member NetwMultiplayer.local_player].
 var local_player: Node:
 	get:
-		return tree.local_player.owner if tree and tree.local_player else null
+		return tree.api.local_player.owner if tree and tree.api.local_player else null
 
 
 func _init(
@@ -72,24 +72,14 @@ func find(path: NodePath) -> Node:
 
 ## Returns the player named [param player_username] in this peer's scenes.
 func find_player(player_username: StringName) -> Node:
-	if not tree:
+	if tree == null or tree.api == null:
 		return null
 
 	var player_name := StringName(str(player_username))
-	for player: NetwEntity in tree.get_all_players():
+	for player: NetwEntity in tree.api.players:
 		if player != null and is_instance_valid(player.owner):
 			if _player_matches_username(player.owner, player_name):
 				return player.owner
-
-	var scenes := tree.api.scenes if tree.api else null
-	if not scenes:
-		return null
-
-	for active_scene: MultiplayerScene in scenes.scenes.values():
-		for player: NetwEntity in active_scene.get_players():
-			if player != null and is_instance_valid(player.owner):
-				if _player_matches_username(player.owner, player_name):
-					return player.owner
 	return null
 
 
@@ -107,11 +97,11 @@ func await_player(
 	return find_player(player_username)
 
 
-## Awaits an active [MultiplayerScene] named [param scene_name].
+## Awaits an active scene named [param scene_name], as a [NetwSceneHandle].
 func await_scene(
 		scene_name: StringName,
 		timeout: float = 1.0,
-) -> MultiplayerScene:
+) -> NetwSceneHandle:
 	await _active_waiter().until(
 		func() -> bool:
 			return _find_active_scene(scene_name) != null,
@@ -161,10 +151,10 @@ func _reset_input_to_default() -> void:
 	_last_input_event = null
 
 
-func _find_active_scene(scene_name: StringName) -> MultiplayerScene:
+func _find_active_scene(scene_name: StringName) -> NetwSceneHandle:
 	if not tree or not tree.api:
 		return null
-	return tree.api.scenes.scene(scene_name)
+	return tree.api.scene_handle(tree.api.scene_find(scene_name))
 
 
 func _active_waiter() -> NetwWaiter:

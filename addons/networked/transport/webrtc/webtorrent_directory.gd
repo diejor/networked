@@ -28,7 +28,7 @@
 ## stall during joins until the host tab is visible again.
 ## [br][br]
 ## Add as a child of [MultiplayerTree] and it binds itself as a
-## [LobbyDirectory] service that [NetwDiscovery] picks up. The directory
+## [LobbyDirectory] service that [NetwServerBrowser] picks up. The directory
 ## advertises whatever room the tree is hosting whenever it reaches
 ## [constant MultiplayerTree.ONLINE] as a host over a [WebRTCBackend], so
 ## the [WebRTCBackend] host path
@@ -230,7 +230,6 @@ func _leave_lobby() -> void:
 	_collecting = false
 
 
-
 ## WebTorrent rooms join through the [code]&"webrtc"[/code] transport by room
 ## hash. The signaling namespace rides in [member NetwConnectTarget.metadata].
 func _scheme() -> StringName:
@@ -241,34 +240,33 @@ func _lobby_address(lobby: LobbyDirectory.LobbyInfo) -> String:
 	return String(lobby.metadata.get("room_hash", ""))
 
 
-## Hosts a room per [param options]. A [constant LobbyDirectory.Visibility.PUBLIC]
+## Hosts a room per [param config]. A [constant LobbyDirectory.Visibility.PUBLIC]
 ## room is advertised on the board once the tree reaches
 ## [constant MultiplayerTree.ONLINE]. A
 ## [constant LobbyDirectory.Visibility.PRIVATE] room is hosted but never
 ## advertised, so it is reachable only by sharing its room hash.
 ## [constant LobbyDirectory.Visibility.FRIENDS_ONLY] has no identity graph here,
 ## so it warns and degrades to PRIVATE.
-func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+func _host_lobby(config: NetwHostConfig) -> MultiplayerPeer:
 	if Netw.is_test_env():
 		return null
 	var tree := MultiplayerTree.resolve(self)
 	if tree == null:
 		Netw.dbg.warn("WebTorrentDirectory: host_lobby found no MultiplayerTree.")
 		return null
-	_pending_visibility = options.visibility
+	_pending_visibility = config.visibility
 	if _pending_visibility == LobbyDirectory.Visibility.FRIENDS_ONLY:
 		Netw.dbg.warn(
 			"WebTorrentDirectory: FRIENDS_ONLY has no identity backing, " +
 			"hosting PRIVATE (unlisted).",
 		)
 		_pending_visibility = LobbyDirectory.Visibility.PRIVATE
-	_pending_max = options.max_players if options.max_players > 0 else max_clients
-	_pending_room_name = options.server_name
-	
-	tree.scheme = &"webrtc"
-	tree.params = {
-		"signaling_namespace": signaling_namespace,
-	}
+	_pending_max = config.max_players if config.max_players > 0 else max_clients
+	_pending_room_name = config.server_name
+
+	var params := NetwWebRTCParams.new()
+	params.signaling_namespace = signaling_namespace
+	tree.transport = params
 
 	var payload := JoinPayload.new()
 	payload.username = get_local_member_name()
@@ -306,7 +304,9 @@ func _join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	}
 	var payload := JoinPayload.new()
 	payload.username = get_local_member_name()
-	var err: Error = await tree.join(target, payload)
+	var err := NetwConnector.error_of(
+		await NetwConnector.of(tree.api).join(target, payload),
+	)
 	if err != OK:
 		Netw.dbg.error(
 			"WebTorrentDirectory: join failed: %s",
@@ -361,19 +361,19 @@ func stop_advertising() -> void:
 
 
 func _bind_tree_signals(mt: MultiplayerTree) -> void:
-	if not mt.state_changed.is_connected(_on_tree_state_changed):
-		mt.state_changed.connect(_on_tree_state_changed)
-	if not mt.peer_connected.is_connected(_on_tree_peer_changed):
-		mt.peer_connected.connect(_on_tree_peer_changed)
-	if not mt.peer_disconnected.is_connected(_on_tree_peer_changed):
-		mt.peer_disconnected.connect(_on_tree_peer_changed)
+	if not mt.api.state_changed.is_connected(_on_tree_state_changed):
+		mt.api.state_changed.connect(_on_tree_state_changed)
+	if not mt.api.peer_connected.is_connected(_on_tree_peer_changed):
+		mt.api.peer_connected.connect(_on_tree_peer_changed)
+	if not mt.api.peer_disconnected.is_connected(_on_tree_peer_changed):
+		mt.api.peer_disconnected.connect(_on_tree_peer_changed)
 
 
 func _on_tree_state_changed(
-		_old: NetwSessionInterface.State,
-		new_state: NetwSessionInterface.State,
+		_old: NetwMultiplayer.SessionState,
+		new_state: NetwMultiplayer.SessionState,
 ) -> void:
-	if new_state == NetwSessionInterface.State.ONLINE:
+	if new_state == NetwMultiplayer.SessionState.ONLINE:
 		var mt := MultiplayerTree.resolve(self)
 		if mt and mt.is_host:
 			# A PRIVATE host stays off the board: unlisted, join-by-hash only.
@@ -383,8 +383,8 @@ func _on_tree_state_changed(
 					room_name = "WebRTC Room"
 
 				var join_addr := ""
-				if mt.api and mt.api.connect and mt.api.connect.peer_view:
-					join_addr = mt.api.connect.peer_view.join_address()
+				if mt.api and NetwConnector.of(mt.api).peer_view:
+					join_addr = NetwConnector.of(mt.api).peer_view.join_address()
 				if join_addr.is_empty():
 					join_addr = _room_hash
 
@@ -397,7 +397,7 @@ func _on_tree_state_changed(
 			_pending_room_name = ""
 			_pending_visibility = LobbyDirectory.Visibility.PUBLIC
 			_pending_max = 0
-	elif new_state == NetwSessionInterface.State.OFFLINE:
+	elif new_state == NetwMultiplayer.SessionState.OFFLINE:
 		stop_advertising()
 
 
@@ -551,10 +551,15 @@ func _emit_collected() -> void:
 
 
 func _room_card() -> Dictionary:
-	var ns := ""
+	# The namespace is read off the tree's own typed params, which is the only
+	# place it is authored. It used to be fetched from an untyped dictionary
+	# here and written into a target's metadata thirty lines away, and the two
+	# had no way to disagree loudly.
+	var ns := signaling_namespace
 	var mt := MultiplayerTree.resolve(self)
-	if mt:
-		ns = mt.params.get("signaling_namespace", signaling_namespace)
+	var authored := mt.transport as NetwWebRTCParams if mt else null
+	if authored and not authored.signaling_namespace.is_empty():
+		ns = authored.signaling_namespace
 	return {
 		"t": "room",
 		"hash": _room_hash,
@@ -605,7 +610,6 @@ func _announce_with_card(card: Dictionary) -> Dictionary:
 		"numwant": board_fanout,
 		"offers": offers,
 	}
-
 
 
 func _generate_hash() -> String:

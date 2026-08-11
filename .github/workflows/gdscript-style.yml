@@ -43,9 +43,19 @@ jobs:
           install -Dm755 "gdf/${asset}" "$HOME/.local/bin/gdscript-formatter"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # Blocking. Run `gdscript-formatter addons/networked tests` locally to fix.
+      # Blocking. Run `scripts/gdformat` locally to fix.
+      #
+      # Two files are held out. The formatter reads a `#region` marker written
+      # at column zero inside an indented `class` body as the end of that body
+      # and re-indents everything after it to file scope, which silently lifts
+      # `_PredictionEngine`'s static kernels out of their class. The result is
+      # still valid GDScript, so `--check-only` and even the formatter's own
+      # `--safe` mode pass it, and the damage only surfaces as runtime
+      # "Nonexistent function" cascades. The markers cannot simply be indented
+      # either: tests/unit/sim/test_predict_kernel_purity.gd locates that fence
+      # at column zero to lint the kernels, so the placement is load-bearing.
       - name: Check formatting
-        run: gdscript-formatter --check addons/networked tests
+        run: scripts/gdformat --check
 
       # Advisory. private-access and signal-name conflict with Networked's
       # internal-access and private-signal conventions.

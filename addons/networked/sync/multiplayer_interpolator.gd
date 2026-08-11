@@ -1,10 +1,10 @@
 @tool
-## Editor authoring shell for [NetwInterpolationInterface].
+## Editor authoring shell for [DisplayCore].
 ##
 ## [MultiplayerInterpolator] writes entity display settings into
 ## [member NetwEntity.interpolation] and per property [NetwInterpolate]
 ## resources into [method Netw.configure_property]. Runtime interpolation is
-## owned by [NetwInterpolationInterface].
+## owned by [DisplayCore].
 ## [codeblock]
 ## # Inspector:
 ## # interp/position = NetwInterpolate.new().lerp()
@@ -18,11 +18,13 @@
 class_name MultiplayerInterpolator
 extends NetwComponent
 
+const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
+
 @export_group("Display")
 
 ## Display role written to [member NetwEntity.interpolation].
-@export var display_role: NetwInterpolationInterface.DisplayRole = (
-		NetwInterpolationInterface.DisplayRole.AUTO
+@export var display_role: NetwDisplayHandle.DisplayRole = (
+		NetwDisplayHandle.DisplayRole.AUTO
 ):
 	set(value):
 		display_role = value
@@ -53,8 +55,8 @@ extends NetwComponent
 		_apply_handle()
 
 ## Predicted display filter written to [member NetwEntity.interpolation].
-@export var predicted_mode: NetwInterpolationInterface.PredictedMode = (
-		NetwInterpolationInterface.PredictedMode.CHASE
+@export var predicted_mode: NetwDisplayHandle.PredictedMode = (
+		NetwDisplayHandle.PredictedMode.CHASE
 ):
 	set(value):
 		predicted_mode = value
@@ -137,13 +139,13 @@ func _on_reparented(_reparent: NetwEntity.ReparentOpts) -> void:
 	_apply_property_interpolators()
 
 
-func _applied_handle_ref() -> NetwInterpolationInterface.Handle:
+func _applied_handle_ref() -> NetwDisplayHandle:
 	if not _applied_handle:
 		return null
-	return _applied_handle.get_ref() as NetwInterpolationInterface.Handle
+	return _applied_handle.get_ref() as NetwDisplayHandle
 
 
-func _handle() -> NetwInterpolationInterface.Handle:
+func _handle() -> NetwDisplayHandle:
 	if not _entity:
 		_bind_entity()
 	return _entity.interpolation if _entity else null
@@ -195,9 +197,9 @@ func _apply_property_interpolators() -> void:
 		var property := source[1] as StringName
 		Netw.configure_property(node, property, false).interpolate(spec)
 	_applying = false
-	var iface := NetwInterpolationInterface.for_node(target_owner)
+	var iface := DisplayCore.for_node(target_owner)
 	if iface and _entity:
-		iface._mark_runtime_dirty(_entity.interpolation)
+		iface._mark_runtime_dirty(_entity.rid)
 
 
 func set_property_interpolator(

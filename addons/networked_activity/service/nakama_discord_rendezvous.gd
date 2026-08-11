@@ -65,7 +65,9 @@ func connect_session(
 			"NakamaDiscordRendezvous: joining match %s for instance %s.",
 			[mid, instance_id],
 		)
-		var join_err := await tree.join(_target_for(mid), payload)
+		var join_err := NetwConnector.error_of(
+			await NetwConnector.of(tree.api).join(_target_for(mid), payload),
+		)
 		if join_err == OK:
 			return OK
 		Netw.dbg.info(
@@ -103,12 +105,11 @@ func _host_and_commit(
 		payload: JoinPayload,
 		wrapper: NakamaWrapper,
 ) -> Error:
-	tree.scheme = &"nakama"
-	var opts := LobbyDirectory.HostOptions.make(
-		"Discord Activity",
-		LobbyDirectory.Visibility.PRIVATE,
-	)
-	var host_err := await tree.host(payload, opts)
+	tree.transport = NetwNakamaParams.new()
+	var config := NetwHostConfig.new()
+	config.server_name = "Discord Activity"
+	config.visibility = LobbyDirectory.Visibility.PRIVATE
+	var host_err := await tree.host(payload, config)
 	if host_err != OK:
 		return host_err
 	var winner := await _commit_host(instance_id, tree, wrapper)
@@ -118,8 +119,10 @@ func _host_and_commit(
 		"NakamaDiscordRendezvous: lost host race for instance %s. Joining %s.",
 		[instance_id, winner],
 	)
-	await tree.leave()
-	return await tree.join(_target_for(winner), payload)
+	await tree.api.session.leave()
+	return NetwConnector.error_of(
+		await NetwConnector.of(tree.api).join(_target_for(winner), payload),
+	)
 
 
 # Publishes this host's match id and returns a fresher winner if one exists.

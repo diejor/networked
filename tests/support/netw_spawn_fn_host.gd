@@ -7,7 +7,6 @@
 class_name NetwSpawnFnHost
 extends Node
 
-
 func _init() -> void:
 	Netw.configure_spawn(_spawn_probe)
 

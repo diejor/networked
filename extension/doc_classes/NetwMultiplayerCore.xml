@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwMultiplayerCore" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_multiplayer_peer" qualifiers="const">
+			<return type="MultiplayerPeer" />
+			<description>
+			</description>
+		</method>
+		<method name="get_peer_ids" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="get_unique_id" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="has_multiplayer_peer" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="is_server" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="poll">
+			<return type="int" enum="Error" />
+			<description>
+			</description>
+		</method>
+		<method name="set_multiplayer_peer">
+			<return type="void" />
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+			</description>
+		</method>
+		<method name="set_peer_ids">
+			<return type="void" />
+			<param index="0" name="peer_ids" type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

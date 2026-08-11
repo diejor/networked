@@ -11,6 +11,10 @@ extends GdUnitTestSessionHook
 static var _active_hook: NetwTestSessionHook
 static var game_harness_used_in_test: bool = false
 
+const _GdUnitErrorScrubber := preload(
+		"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
+)
+
 var _baseline_child_count: int = 0
 var _baseline_resource_count: int = 0
 var _baseline_time_scale: float = 1.0
@@ -23,6 +27,8 @@ var _session_log_scope: NetwLogScope
 var _test_log_scope: NetwLogScope
 var _test_debug_scope: NetwDbgScope
 var _test_log_overrides: Dictionary = { }
+var _multiplayer_script_before: Variant
+var _multiplayer_script_overridden := false
 
 
 func _init() -> void:
@@ -50,6 +56,9 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	_active_hook = self
 	_session = session
 	NetwLog.set_test_hook_controls_overrides(true)
+	# The harness half runs under any framework, so the one piece that reaches
+	# into this framework's error monitor is handed to it from here.
+	WebRTCTestSupport.erase_benign_error = _GdUnitErrorScrubber.get_eraser()
 
 	var log_level := "none"
 
@@ -65,6 +74,7 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	_session_log_scope = NetwLog.scoped(log_level)
 	OS.set_environment("NETW_TEST_LOG", log_level)
 	session.test_event.connect(_on_test_event)
+	_configure_law_extension()
 	_baseline_resource_count = int(
 		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 	)
@@ -84,10 +94,45 @@ func shutdown(_session: GdUnitTestSession) -> GdUnitResult:
 	_close_test_log_scope()
 	_close_session_log_scope()
 	NetwLog.set_test_hook_controls_overrides(false)
+	_restore_multiplayer_script()
 	if _active_hook == self:
 		_active_hook = null
 	_session = null
 	return GdUnitResult.success()
+
+
+# Routes the law extension to the multiplayer or prediction seam it extends.
+# The script itself comes from NetwMultiplayer, which is the one reader of the
+# environment; this decides only which seam it installs on.
+func _configure_law_extension() -> void:
+	if not NetwMultiplayer.law_extension_named():
+		return
+	var script := NetwMultiplayer.law_extension_script()
+	if script != null:
+		_multiplayer_script_before = ProjectSettings.get_setting(
+			NetwMultiplayer.MULTIPLAYER_SCRIPT_SETTING,
+			null,
+		)
+		_multiplayer_script_overridden = true
+		ProjectSettings.set_setting(
+			NetwMultiplayer.MULTIPLAYER_SCRIPT_SETTING,
+			script,
+		)
+		return
+	# Resolve prediction implementations before the resource baseline instead
+	# of charging their script to the first law that asks for it.
+	PredictionImplementations.under_test()
+
+
+# Restores the construction setting after a certification run.
+func _restore_multiplayer_script() -> void:
+	if not _multiplayer_script_overridden:
+		return
+	ProjectSettings.set_setting(
+		NetwMultiplayer.MULTIPLAYER_SCRIPT_SETTING,
+		_multiplayer_script_before,
+	)
+	_multiplayer_script_overridden = false
 
 
 func _on_test_event(event: GdUnitEvent) -> void:
@@ -131,6 +176,13 @@ func _reset_debugger() -> void:
 func _reset_global_test_state() -> void:
 	NetwPathNamespace.reset()
 
+	# Schema declarations are process-wide static data that outlives the session
+	# that adopted them, so a suite declaring one would otherwise hand every
+	# later suite a table it never asked for. A table's wire id is its
+	# name-sorted position among the bound tables, so one leaked declaration
+	# renumbers another suite's frames and the failure names the wrong cause.
+	NetwSchemaModel.clear()
+
 	# NetwGameHarness scales engine timing 10x under headless and restores it only
 	# in its own teardown. Force the clean baseline back between tests so a skipped
 	# teardown cannot leak a 10x physics rate into a later suite, where it would
@@ -144,9 +196,9 @@ func _reset_global_test_state() -> void:
 	# Sole owner of shared-session cleanup: this runs before and after every
 	# test, so each case starts from a null shared regardless of how the prior
 	# one left it.
-	if LocalLoopbackSession.shared:
-		LocalLoopbackSession.shared.reset()
-		LocalLoopbackSession.shared = null
+	if LocalLoopbackSession.has_shared_session():
+		LocalLoopbackSession.get_shared_session().reset()
+		LocalLoopbackSession.set_shared_session(null)
 
 	FileSystemDatabase._clear_path_registry()
 	WebTorrentTrackerClient.clear_shared_clients()
@@ -183,7 +235,7 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 		)
 		NetwTrace.reset()
 
-	# LocalLoopbackSession.shared is not asserted here. Unlike orphaned root
+	# The shared loopback session is not asserted here. Unlike orphaned root
 	# children or trace spans, a lingering shared pointer never crosses into the
 	# next test because _reset_global_test_state clears it before every case.
 	# A harness releases it symmetrically in its own teardown.

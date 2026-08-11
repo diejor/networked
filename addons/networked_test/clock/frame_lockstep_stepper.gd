@@ -2,15 +2,15 @@
 ## natural physics-to-tick ratio.
 ##
 ## Like [LockstepStepper] it owns ticking through
-## [member NetwClockInterface.manual_tick] and
-## [method NetwClockInterface.force_step], so the tick count is
+## [member ClockCore.manual_tick] and
+## [method ClockCore.force_step], so the tick count is
 ## exact with no dependence on wall-clock accumulation or [member Engine.
 ## time_scale]. Unlike [LockstepStepper] it runs real [signal SceneTree.
 ## physics_frame]s before each step, so frame coupled work still happens: input
 ## sampled in [code]_physics_process[/code], [method CharacterBody2D.
 ## move_and_slide], and visual interpolation in [code]_process[/code].
 ##
-## A clock at [member NetwClockInterface.tickrate] below [member Engine.
+## A clock at [member ClockCore.tickrate] below [member Engine.
 ## physics_ticks_per_second] naturally ticks once every several physics frames.
 ## The stepper honors that ratio so a stepped scene runs at the game's real
 ## cadence: per-frame work (a physics-mode [AnimationPlayer] fuse) and per-tick
@@ -40,10 +40,10 @@ class_name FrameLockstepStepper
 extends RefCounted
 
 var tree: SceneTree
-var clocks: Array[NetwClockInterface] = []
+var clocks: Array[ClockCore] = []
 
 
-func _init(p_tree: SceneTree, p_clocks: Array[NetwClockInterface]) -> void:
+func _init(p_tree: SceneTree, p_clocks: Array[ClockCore]) -> void:
 	tree = p_tree
 	clocks = p_clocks
 
@@ -52,7 +52,7 @@ func _init(p_tree: SceneTree, p_clocks: Array[NetwClockInterface]) -> void:
 ## once every [code]physics_ticks_per_second / tickrate[/code] physics frames, so
 ## a low-tickrate clock advances at its real wall-clock pace while the shared
 ## physics-frame stream keeps frame-coupled work moving.
-## [member NetwClockInterface.manual_tick] is held only for the duration of
+## [member ClockCore.manual_tick] is held only for the duration of
 ## the call, so the real tick loop resumes between calls and connection-phase
 ## resumes between calls and connection-phase handshakes keep ticking.
 func sync_ticks(ticks: int) -> void:

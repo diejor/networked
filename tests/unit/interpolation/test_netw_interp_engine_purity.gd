@@ -14,7 +14,7 @@
 class_name TestNetwInterpEnginePurity
 extends NetwTestSuite
 
-const _ENGINE := "res://addons/networked/sync/netw_interpolation_interface.gd"
+const _ENGINE := "res://addons/networked/sync/display_core.gd"
 
 # Tokens that must never appear in a pure kernel: clock resolution, tree or node
 # access, engine globals, the config registry, per-frame role and authority
@@ -22,16 +22,34 @@ const _ENGINE := "res://addons/networked/sync/netw_interpolation_interface.gd"
 # by value and its runtime by argument, and it emits through the writer and the
 # stats record.
 const _FORBIDDEN: Array[String] = [
-	"_get_clock", "_resolve_clock", "_capture_timing", "after_tick", "api.clock",
-	"get_tree(", "get_node", "find_children", "get_parent(", "add_child",
+	"_get_clock",
+	"_resolve_clock",
+	"_capture_timing",
+	"after_tick",
+	"api._clock",
+	"get_tree(",
+	"get_node",
+	"find_children",
+	"get_parent(",
+	"add_child",
 	"NetwEntity.of",
-	"Engine.", "Time.", "OS.",
-	"NetwScriptModel", "get_node_property_interpolator", "replication_config",
-	"synchronizers(", ".replication",
-	"_resolve_role", "_resolve_display_role", "_authors_display_streams",
-	"is_multiplayer_authority", "_pump_for(",
+	"Engine.",
+	"Time.",
+	"OS.",
+	"NetwScriptModel",
+	"get_node_property_interpolator",
+	"replication_config",
+	"synchronizers(",
+	"._replication",
+	"_resolve_role",
+	"_resolve_display_role",
+	"_authors_display_streams",
+	"is_multiplayer_authority",
+	"_pump_for(",
 	"_runtimes",
-	".emit(", ".connect(", ".disconnect(",
+	".emit(",
+	".connect(",
+	".disconnect(",
 ]
 
 # The pure kernels, addressed by their column-zero signature. Each runs every
@@ -43,9 +61,11 @@ const _PURE_KERNELS: Array[String] = [
 	"func _predicted_effective_smooth_time(",
 ]
 
-# The inner display classes, linted as whole blocks.
+# The inner display classes, linted as whole blocks. The channel history left
+# this file for [NetwDisplayHistory], whose purity is structural instead: its
+# translation unit includes no engine header that could reach a tree, a clock or
+# a signal, and tools/check_sources.py holds every source to compiling.
 const _PURE_CLASSES: Array[String] = [
-	"class _History:",
 	"class _Playhead:",
 ]
 
@@ -106,11 +126,12 @@ func _assert_pure(region_name: String, body: String, forbidden: Array[String]) -
 	).is_not_empty()
 	for token in forbidden:
 		assert_bool(body.contains(token)) \
-			.override_failure_message(
-				"purity: kernel '%s' references forbidden '%s'" % [
-					region_name, token,
-				],
-			).is_false()
+				.override_failure_message(
+					"purity: kernel '%s' references forbidden '%s'" % [
+						region_name,
+						token,
+					],
+				).is_false()
 
 
 func test_pure_kernels_touch_no_engine_state() -> void:
@@ -141,10 +162,10 @@ func test_lint_is_not_vacuous() -> void:
 			caught = true
 			break
 	assert_bool(caught) \
-		.override_failure_message("lint failed to catch a planted _get_clock()") \
-		.is_true()
+			.override_failure_message("lint failed to catch a planted _get_clock()") \
+			.is_true()
 
 	var lines := _source_lines()
 	assert_str(_func_body(lines, "func _pump_history(")).contains("display_lag")
 	assert_str(_func_body(lines, "func _dilate_playhead(")).contains("starvation")
-	assert_str(_class_body(lines, "class _History:")).contains("smooth_toward")
+	assert_str(_class_body(lines, "class _Playhead:")).contains("display_lag")

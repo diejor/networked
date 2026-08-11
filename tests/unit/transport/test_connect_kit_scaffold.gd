@@ -1,8 +1,7 @@
-## Scaffold checks for the connect kit types ([NetwConnector], [NetwTransport],
+## Scaffold checks for the connect kit types ([NetwTransport],
 ## [NetwPeerView], [NetwConnectAttempt], and their data types).
 class_name TestConnectKitScaffold
 extends NetwTestSuite
-
 
 # A minimal transport that only recognizes the &"fake" scheme.
 class FakeTransport:
@@ -11,8 +10,10 @@ class FakeTransport:
 	func _can_join(target: NetwConnectTarget) -> bool:
 		return target != null and target.scheme == &"fake"
 
+
 	func _can_host(config: NetwHostConfig) -> bool:
 		return config != null and config.scheme == &"fake"
+
 
 	func _display_name() -> String:
 		return "Fake"
@@ -49,7 +50,8 @@ func test_enet_view_reports_host_join_address() -> void:
 	var port := server.host.get_local_port()
 	assert_bool(address.ends_with(":%d" % port)) \
 			.override_failure_message(
-					"host join_address '%s' should carry port %d" % [address, port]) \
+				"host join_address '%s' should carry port %d" % [address, port],
+			) \
 			.is_true()
 	view.close()
 	server.close()
@@ -62,8 +64,9 @@ func test_websocket_view_reports_host_join_address() -> void:
 	var address := view.join_address()
 	assert_bool(address.begins_with("ws://") and address.ends_with(":38472")) \
 			.override_failure_message(
-					"host join_address '%s' should be a ws:// URL on port 38472"
-					% address) \
+				"host join_address '%s' should be a ws:// URL on port 38472"
+				% address,
+			) \
 			.is_true()
 	# A view with no build context has no port, so it degrades to unshareable.
 	assert_str(WebSocketPeerView.new(server, 0).join_address()).is_equal("")
@@ -82,71 +85,81 @@ func test_empty_address_renders_transport_placeholder() -> void:
 func test_probe_reply_carries_host_cap() -> void:
 	var api := NetwMultiplayer.new(SceneMultiplayer.new())
 	var config := NetwHostConfig.new()
-	config.scheme = &"enet"
-	config.params = {"max_clients": 8}
-	api.connect.connector().active_host_config = config
+	var enet := NetwENetParams.new()
+	enet.max_clients = 8
+	config.transport = enet
+	# An unset config cap advertises the transport's own resolved one, which
+	# ENet writes back into its params after create_server picks it.
+	NetwConnector.of(api)._advertise_host(config)
 	var info := NetwServerInfo.from_session(api)
 	assert_int(info.max_players).is_equal(8)
-	api.dispose()
+	api.embedding.dispose()
 
 
-func test_per_instance_transport_override_resolves_by_scheme() -> void:
-	var connector := NetwConnector.new(null)
+func test_per_session_transport_override_resolves_by_scheme() -> void:
+	var api := NetwMultiplayer.new(SceneMultiplayer.new())
 	var fake := FakeTransport.new()
-	connector.transports = [fake]
+	NetwConnector.of(api).transports = [fake]
 
 	var target := NetwConnectTarget.new()
 	target.scheme = &"fake"
-	assert_object(connector._resolve_join(target)).is_same(fake)
+	assert_object(NetwConnector.of(api)._resolve_join(target)).is_same(fake)
 
+	# The override replaces the global registry rather than extending it, so a
+	# scheme the rig did not register stays unresolvable for this session.
 	var other := NetwConnectTarget.new()
 	other.scheme = &"enet"
-	assert_object(connector._resolve_join(other)).is_null()
+	assert_object(NetwConnector.of(api)._resolve_join(other)).is_null()
+	api.embedding.dispose()
 
 
 func test_builtin_transports_resolve_from_the_global_registry() -> void:
-	# A bare connector with no per-instance override resolves the shipped schemes
-	# registered by NetwConnector._static_init.
-	var connector := NetwConnector.new(null)
+	# A session with no per-session override resolves the shipped schemes
+	# registered by NetwTransport._static_init.
+	var api := NetwMultiplayer.new(SceneMultiplayer.new())
 
 	var enet := NetwConnectTarget.new()
 	enet.scheme = &"enet"
-	assert_object(connector._resolve_join(enet)).is_not_null()
+	assert_object(NetwConnector.of(api)._resolve_join(enet)).is_not_null()
 
 	var local := NetwConnectTarget.new()
 	local.scheme = &"local"
-	assert_object(connector._resolve_join(local)).is_not_null()
+	assert_object(NetwConnector.of(api)._resolve_join(local)).is_not_null()
 
 	var webrtc := NetwConnectTarget.new()
 	webrtc.scheme = &"webrtc"
-	assert_object(connector._resolve_join(webrtc)).is_not_null()
+	assert_object(NetwConnector.of(api)._resolve_join(webrtc)).is_not_null()
 
 	var ws := NetwHostConfig.new()
-	ws.scheme = &"ws"
-	assert_object(connector._resolve_host(ws)).is_not_null()
+	ws.transport = NetwWebSocketParams.new()
+	assert_object(NetwConnector.of(api)._resolve_host(ws)).is_not_null()
+	api.embedding.dispose()
 
 
 func test_global_registry_add_and_remove() -> void:
 	var fake := FakeTransport.new()
-	NetwConnector.add_transport(fake)
-	assert_array(NetwConnector.get_transports()).contains([fake])
-	NetwConnector.remove_transport(fake)
-	assert_array(NetwConnector.get_transports()).not_contains([fake])
+	NetwTransport.register(fake)
+	assert_array(NetwTransport.registered()).contains([fake])
+	NetwTransport.unregister(fake)
+	assert_array(NetwTransport.registered()).not_contains([fake])
 
 
 func test_join_starts_an_attempt() -> void:
-	var connector := NetwConnector.new(null)
+	var api := NetwMultiplayer.new(SceneMultiplayer.new())
+	NetwConnector.of(api).transports = [FakeTransport.new()]
 	var started: Array[NetwConnectAttempt] = []
-	connector.attempt_started.connect(func(a): started.append(a))
+	NetwConnector.of(api).attempt_started.connect(func(a): started.append(a))
 
 	var target := NetwConnectTarget.new()
 	target.scheme = &"fake"
-	var attempt := connector.join(target)
+	var pump := func() -> void:
+		await NetwConnector.of(api).join(target, null, true)
+	pump.call()
 
-	assert_object(attempt).is_not_null()
-	assert_object(connector.current_attempt).is_same(attempt)
 	assert_int(started.size()).is_equal(1)
-	assert_object(attempt.target).is_same(target)
+	assert_object(NetwConnector.of(api).current_attempt).is_same(started[0])
+	assert_object(started[0].target).is_same(target)
+	api.embedding.dispose()
 
 
 func test_attempt_abort_resolves_once() -> void:

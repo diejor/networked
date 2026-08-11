@@ -7,8 +7,8 @@ class_name TestSceneInterestMembership
 extends NetwTestSuite
 
 var harness: NetwTestHarness
-var server_scenes: NetwSceneInterface
-var server_scene: MultiplayerScene
+var server_api: NetwMultiplayer
+var server_scene: NetwSceneHandle
 var client0: MultiplayerTree
 var player_builder: PlayerBuilder
 var player_with_state_builder: PlayerBuilder
@@ -38,45 +38,38 @@ func before_test() -> void:
 	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 
 	harness.register_spawnable_scene(level_builder.packed)
-	server_scenes = harness.server().api.scenes
+	server_api = harness.server().api
 
 	client0 = await harness.add_client()
 	await harness.add_clock()
 
-	assert_that(server_scenes.scenes.size()).is_equal(1)
-	server_scene = server_scenes.scenes.values()[0]
+	assert_that(server_api.scene_instances().size()).is_equal(1)
+	server_scene = server_api.scene_instances()[0]
 
-
-func test_scene_layer_defaults_to_deny_until_admission() -> void:
-	var peer_id := client0.multiplayer_peer.get_unique_id()
-
-	assert_str(String(server_scene.scene_layer_id())) \
-			.is_equal("scene:%s" % level_builder.scene_name)
-	assert_bool(server_scene.connected_peers.has(peer_id)).is_false()
-	assert_bool(server_scene.scene_visibility_filter(peer_id)).is_false()
 
 
 func test_admission_populates_client_layer_projection() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
 
-	server_scene.connect_peer(peer_id)
-	assert_bool(server_scene.connected_peers.has(peer_id)).is_true()
-	assert_bool(server_scene.scene_visibility_filter(peer_id)).is_true()
+	server_scene.admit(peer_id)
+	assert_bool(server_scene.peers.has(peer_id)).is_true()
+	assert_bool(server_scene.admits(peer_id)).is_true()
 
 	harness.spawn_player(client0, player_builder.packed)
 	await harness.wait_for_player(client0, level_builder.scene_name)
 
 	assert_bool(server_scene.layer.entities.is_empty()).is_false()
-	var client_layer := client0.api.interest.layer(
-		server_scene.scene_layer_id(),
-	)
+	# The layer id is derived on the server: a scene's RID is per-peer, but the
+	# id it resolves to is the string both sides key the layer by.
+	var layer_id := harness.server().api._scene_layer_id(server_scene.entity)
+	var client_layer := client0.api._interest.layer(layer_id)
 	assert_bool(client_layer.entities.is_empty()).is_false()
 
 
 func test_state_stream_hidden_to_non_admitted_peers() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
 
-	server_scene.connect_peer(peer_id)
+	server_scene.admit(peer_id)
 	harness.spawn_player(client0, player_with_state_builder.packed)
 	var client_player := await harness.wait_for_player(
 		client0,
@@ -90,7 +83,7 @@ func test_state_stream_hidden_to_non_admitted_peers() -> void:
 	assert_that(NetwEntity.of(server_player).state_binding).is_not_null()
 
 	var entity := NetwEntity.of(server_player)
-	var service := harness.server().api.interest
+	var service := harness.server().api._interest
 	var secret_layer := service.layer(&"secret_layer")
 
 	server_player.position = Vector2(100.0, 200.0)

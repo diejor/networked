@@ -33,33 +33,36 @@ static func args_from_scene_node_path(snp: SceneNodePath) -> Array:
 
 ## Activates [param scene_name], resolves the template at [param spawner_path],
 ## and adds the accepted player for [param rj], returning the entered
-## [MultiplayerScene].
+## [NetwSceneHandle].
 ##
 ## [br][br][b]Server Only.[/b]
 func spawn(
 		rj: ResolvedJoin,
 		scene_name: StringName,
 		spawner_path: NodePath,
-) -> MultiplayerScene:
+) -> NetwSceneHandle:
 	if scene_name.is_empty():
 		return null
 	var api := _api_ref.get_ref() as NetwMultiplayer
 	if api == null:
 		return null
-	var scene := await api.scenes.activate_scene(scene_name)
-	assert(scene, "activate_scene must guarantee scene presence")
+	var container := await api._scenes.activate_scene(scene_name)
+	assert(container, "activate_scene must guarantee scene presence")
+	var scene := NetwEntity.of(container).scene
 
-	var node := scene.level.get_node(spawner_path)
+	var node: Node = scene.level.get_node(spawner_path)
 	var entity := NetwEntity.ensure(node)
 	assert(
 		entity,
 		"join args' spawner_path didn't resolve to a template node",
 	)
-	var participant := api.participant(rj.peer_id)
+	var participant := api.peer_get_participant(rj.peer_id)
 	assert(participant, "spawn requires an accepted participant")
 	var player := entity.instantiate_player(participant)
-	var target_scene := await api.scenes.resolve_hydrated_spawn_scene(
-		player, scene,
+	var target_scene := await api._scenes.resolve_hydrated_spawn_scene(
+		player,
+		container,
 	)
-	target_scene.add_player(NetwEntity.of(player))
-	return target_scene
+	var entered := NetwEntity.of(target_scene).scene
+	entered.add_player(NetwEntity.of(player))
+	return entered

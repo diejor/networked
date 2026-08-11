@@ -108,8 +108,7 @@ func test_link_delays_inbound_rpc() -> void:
 func _wait_for_in_flight(peer: LocalMultiplayerPeer, max_ticks: int) -> bool:
 	var session := game._loopback.session()
 	for tick in range(max_ticks + 1):
-		if session._links_by_peer.has(peer) \
-				and session._links_by_peer[peer].in_flight.size() > 0:
+		if session.in_flight_count(peer) > 0:
 			return true
 		await game.sync_ticks(1)
 	return false

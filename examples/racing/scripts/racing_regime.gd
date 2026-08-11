@@ -14,6 +14,7 @@ extends RefCounted
 ## slalom     three steer legs, the original scripted turn
 ## wall       full throttle into the outer wall, no steering
 ## wall_grind sustained wall contact with steer held into it
+## wall_once  one grazing wall hit, then driving on with no further contact
 ## wall_hard  repeated square wall hits with reverse backoffs
 ## contact    closed-loop aim at the other car
 ## hold       no input for the whole horizon
@@ -34,6 +35,23 @@ const WALL_GRIND_APPROACH_SECONDS := 8.0
 # Solver contact flickers frame to frame even while a car is pinned, so a
 # reversal on the first empty frame would chatter instead of hold.
 const WALL_GRIND_REACQUIRE_FRAMES := 10
+# Seconds a wall_once gesture holds its graze before leaving. Long enough to
+# carry angular content into the contact, short enough that the run is a HIT
+# and the rest of it is the aftermath.
+const WALL_ONCE_GRAZE_SECONDS := 2.0
+# Seconds of reverse that separate the car from the wall it grazed, so the
+# divergence outlives its cause instead of being continuously re-fed.
+const WALL_ONCE_BACKOFF_SECONDS := 1.2
+# Metres the aftermath keeps from the other car, in two bands. Sized from the
+# track, not guessed: the two cars spawn 5.3 m apart and never get further than
+# 19.4 m, and the two spheres touch at about 1.0 m centre to centre.
+#
+# Steering away alone was measured insufficient at 3.0 m -- the car turned and
+# still closed to 1.00 m, because on a track this small a rolling sphere cannot
+# out-steer its own momentum. So the outer band turns away and the inner band
+# stops closing at all, by lifting the throttle and reversing.
+const WALL_ONCE_CLEARANCE := 4.5
+const WALL_ONCE_YIELD := 2.5
 # The symptom gesture's cycle, matching the reported repro: accelerate one to
 # two seconds, release, wait for the episode to close, repeat.
 const SYMPTOM_DRIVE_SECONDS := 1.5
@@ -43,6 +61,11 @@ const SYMPTOM_ROTATE_SECONDS := 2.0
 var _session: Node
 var _api: NetwMultiplayer
 var _travel := 0.0
+# Wall-contact frames inside the wall_once graze, and inside everything after
+# it. A total contact fraction cannot separate the two, and for this arm the
+# split IS the regime: the hit has to land, and then it has to be over.
+var _graze_ticks := -1
+var _after_ticks := -1
 
 
 ## True when either the generic regime contract or the legacy racing capture
@@ -71,6 +94,7 @@ static func attach(session: Node, api: NetwMultiplayer) -> NetwRegimePeer:
 		"slalom": adapter._drive_slalom,
 		"wall": adapter._drive_wall,
 		"wall_grind": adapter._drive_wall_grind,
+		"wall_once": adapter._drive_wall_once,
 		"wall_hard": adapter._drive_wall_hard,
 		"contact": adapter._drive_at_other_car,
 		"hold": adapter._hold,
@@ -109,16 +133,21 @@ func _connect_session(role: String, port: int) -> Error:
 	payload.username = &"mario" if role == NetwRegimePeer.ROLE_HOST else &"luigi"
 	if role == NetwRegimePeer.ROLE_HOST:
 		var config := NetwHostConfig.new()
-		config.scheme = &"enet"
+		var enet := NetwENetParams.new()
+		enet.port = port
+		config.transport = enet
 		config.server_name = "Racing regime"
 		config.max_players = 2
-		config.params = { "port": port }
-		return await _api.host(payload, config)
+		return NetwConnector.error_of(
+			await NetwConnector.of(_api).host(payload, config),
+		)
 	var target := NetwConnectTarget.new()
 	target.scheme = &"enet"
 	target.address = "127.0.0.1"
 	target.metadata = { "port": port }
-	return await _api.join(target, payload, 10.0)
+	return NetwConnector.error_of(
+		await NetwConnector.of(_api).join(target, payload),
+	)
 
 
 func _await_local_ready() -> bool:
@@ -163,6 +192,11 @@ func _condition_evidence() -> Dictionary:
 				float(probe.wall_contact_frames) / frames
 		out["car_contact_fraction"] = \
 				float(probe.car_contact_frames) / frames
+	# Only wall_once populates these, and only it can be gated on them.
+	if _graze_ticks >= 0:
+		out["graze_contact_ticks"] = _graze_ticks
+	if _after_ticks >= 0:
+		out["after_contact_ticks"] = _after_ticks
 	return out
 
 
@@ -368,6 +402,158 @@ func _drive_wall_grind(seconds: float) -> void:
 		car.inputs.state[car.inputs.steer_right] = steer_right
 		car.inputs.state[car.inputs.steer_left] = not steer_right
 		await _session.get_tree().process_frame
+	_clear_inputs(car)
+
+
+# One grazing wall hit, then driving on. This is the manual repro's SHAPE,
+# which no other arm here reproduces, and the shape is the whole point.
+#
+# Measured 2026-07-29, the rendered wall_grind arm against the rendered manual
+# capture it was standing in for: 4.4% of frames demoted against 74.2%, and
+# quarantine targets of 6-18 against a ladder that doubled to its 256 cap. The
+# grind is not a weaker version of the manual run. It is a different regime.
+# Sustained contact keeps the divergence ATTRIBUTED, and an attributed
+# re-breach does not escalate the flap; the manual capture's contact ended at
+# 8.9 s and the remaining 23 s of demotion were re-breaches with nothing left
+# to charge them to, which is what UNKNOWN attribution escalates on.
+#
+# So the felt spiral needs contact to END while the divergence outlives it. The
+# gesture grazes with steer held in, the way a human clips a wall mid-corner,
+# then reverses clear and drives laps for the rest of the horizon. What follows
+# the hit is not filler: it is the interval the fallback rhythm is measured on,
+# and a car parked after its hit would demote once and stop.
+func _drive_wall_once(seconds: float) -> void:
+	var car := _car()
+	if car == null:
+		return
+	var probe := car.sphere as VehicleContactProbe
+	if probe == null:
+		push_error("regime: wall_once needs the contact probe to close its loop")
+		return
+	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
+	var approach := Time.get_ticks_msec() \
+			+ int(WALL_GRIND_APPROACH_SECONDS * 1000.0)
+	car.inputs.state[car.inputs.accelerate] = true
+
+	# Arrive square before steering, for _drive_wall_grind's reason: a steer
+	# during the approach curves the car away from the wall it has not reached.
+	while (Time.get_ticks_msec() < approach
+			and Time.get_ticks_msec() < deadline
+			and is_instance_valid(car)
+			and probe.wall_contacts == 0):
+		await _session.get_tree().process_frame
+
+	# The graze itself. Steer into the wall so the contact carries angular
+	# content: a square rest produces a normal impulse with little torque, and
+	# sphere_angular_velocity cannot fork without torque (root cause §4).
+	#
+	# Closed loop, for _drive_wall_grind's reason and because an open-loop
+	# version was measured failing here specifically: holding steer_right blind
+	# for two seconds bought 9 contact ticks, because the car bounced off and
+	# spent the window driving away from a wall it had already left. The manual
+	# capture this arm reproduces pressed for 44 ticks inside ONE second, and
+	# that difference is the difference between a fork and no fork at all --
+	# every blind-graze run measured p90 divergence of 0.000 against the manual
+	# capture's 0.867. So the press is held the way the grind holds it, and only
+	# the window is bounded.
+	_graze_ticks = probe.wall_contact_frames
+	var graze := Time.get_ticks_msec() + int(WALL_ONCE_GRAZE_SECONDS * 1000.0)
+	var lost := 0
+	var into_wall := true
+	while (Time.get_ticks_msec() < graze
+			and Time.get_ticks_msec() < deadline
+			and is_instance_valid(car)):
+		if probe.wall_contacts > 0:
+			lost = 0
+		else:
+			lost += 1
+			if lost >= WALL_GRIND_REACQUIRE_FRAMES:
+				into_wall = not into_wall
+				lost = 0
+		car.inputs.state[car.inputs.steer_right] = into_wall
+		car.inputs.state[car.inputs.steer_left] = not into_wall
+		await _session.get_tree().process_frame
+	_graze_ticks = probe.wall_contact_frames - _graze_ticks
+
+	# Leave, and mean it. Reverse with the steer reversed too, so the car backs
+	# off the wall on an arc instead of sliding along it.
+	car.inputs.state[car.inputs.accelerate] = false
+	car.inputs.state[car.inputs.steer_right] = false
+	car.inputs.state[car.inputs.brake] = true
+	car.inputs.state[car.inputs.steer_left] = true
+	var backoff := Time.get_ticks_msec() \
+			+ int(WALL_ONCE_BACKOFF_SECONDS * 1000.0)
+	while (Time.get_ticks_msec() < backoff
+			and Time.get_ticks_msec() < deadline
+			and is_instance_valid(car)):
+		await _session.get_tree().process_frame
+	car.inputs.state[car.inputs.brake] = false
+	car.inputs.state[car.inputs.steer_left] = false
+
+	# Drive out the rest of the horizon on alternating steer legs, the way laps
+	# does, but keeping clear of both the wall it just left and the parked car.
+	# Neither repeller is precautionary; both answer a measured failure of the
+	# plain laps gesture here. It drove into the host at 34.3 s of a 35 s run,
+	# and this arm bars car contact outright for the reason wall_grind does -- a
+	# SINGLE tick against the other car moves a whole run's divergence. And it
+	# clipped the wall repeatedly, which put 46 and 44 contact ticks into single
+	# seconds late in a run whose entire premise is that the contact is OVER.
+	# Contact after the graze does not merely add noise: it re-attributes the
+	# divergence, and an attributed re-breach is the one thing this arm exists
+	# to keep out of the aftermath.
+	_after_ticks = probe.wall_contact_frames
+	var steer_right := true
+	var peeling := false
+	var clear_frames := 0
+	var leg_end := Time.get_ticks_msec() + int(LAPS_LEG_SECONDS * 1000.0)
+	car.inputs.state[car.inputs.accelerate] = true
+	while Time.get_ticks_msec() < deadline and is_instance_valid(car):
+		var yielded := false
+		var target := _other_vehicle(car)
+		if target:
+			var to_target: Vector3 = target.sphere_position - car.sphere_position
+			var gap := to_target.length()
+			if gap < WALL_ONCE_CLEARANCE:
+				# The inverse of _drive_at_other_car's closed loop: the same
+				# bearing, steered the other way, so the car turns off the
+				# collision course rather than onto it.
+				var want := atan2(to_target.x, to_target.z)
+				var error := angle_difference(car.heading, want)
+				car.inputs.state[car.inputs.steer_right] = error >= 0.0
+				car.inputs.state[car.inputs.steer_left] = error < 0.0
+				var closing := gap < WALL_ONCE_YIELD
+				car.inputs.state[car.inputs.accelerate] = not closing
+				car.inputs.state[car.inputs.brake] = closing
+				yielded = true
+		if not yielded:
+			car.inputs.state[car.inputs.accelerate] = true
+			car.inputs.state[car.inputs.brake] = false
+			# Peel off the wall on the RISING edge of contact and hold that
+			# direction until the car is properly clear, rather than flipping
+			# per frame. Flipping per frame was measured pinning the car
+			# against the wall for 854-1392 ticks of aftermath: a steer that
+			# reverses every frame integrates to no steer at all, so the car
+			# leant on the wall for the rest of the run. Same reason
+			# _drive_wall_grind counts frames before reversing -- solver contact
+			# flickers, and a per-frame response chatters instead of steering.
+			if probe.wall_contacts > 0:
+				if not peeling:
+					peeling = true
+					steer_right = not steer_right
+				clear_frames = 0
+			elif peeling:
+				clear_frames += 1
+				if clear_frames >= WALL_GRIND_REACQUIRE_FRAMES:
+					peeling = false
+					leg_end = Time.get_ticks_msec() \
+							+ int(LAPS_LEG_SECONDS * 1000.0)
+			if not peeling and Time.get_ticks_msec() >= leg_end:
+				steer_right = not steer_right
+				leg_end = Time.get_ticks_msec() + int(LAPS_LEG_SECONDS * 1000.0)
+			car.inputs.state[car.inputs.steer_right] = steer_right
+			car.inputs.state[car.inputs.steer_left] = not steer_right
+		await _session.get_tree().process_frame
+	_after_ticks = probe.wall_contact_frames - _after_ticks
 	_clear_inputs(car)
 
 

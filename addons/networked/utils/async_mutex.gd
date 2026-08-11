@@ -7,7 +7,6 @@
 ## # critical section
 ## mutex.unlock()
 ## [/codeblock]
-class_name AsyncMutex
 extends RefCounted
 
 signal released

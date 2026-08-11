@@ -7,6 +7,5 @@
 class_name MaskedStateSyncBody
 extends Node2D
 
-
 func _init() -> void:
 	Netw.configure_property(self, &"position").state().masked()

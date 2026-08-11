@@ -5,7 +5,7 @@
 ## and local development.
 ## [codeblock]
 ## api.session.set_auth_flow(DummyAuth.new())
-## await api.session.prepare_join(payload)
+## await api._session.prepare_join(payload)
 ## [/codeblock]
 class_name DummyAuth
 extends NetwAuthFlow

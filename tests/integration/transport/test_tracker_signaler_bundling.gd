@@ -203,5 +203,3 @@ func test_same_sdp_with_new_candidates_reports_as_topup() -> void:
 	assert_array(counts).is_equal([1, 2])
 
 	sig._close()
-
-

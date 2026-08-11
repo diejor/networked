@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterestBitSet" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Packed peer-bit rows, and the set operations [NetwInterestEngine] composes verdicts out of.
+	</brief_description>
+	<description>
+		A row is a [PackedInt64Array] using bits [code]0[/code] through [code]62[/code] of each word. The sign bit is never touched, so every row stays a positive integer on both sides of the language boundary, where GDScript has no unsigned integer to receive one in.
+		[codeblock]
+		var row := PackedInt64Array()
+		row = NetwInterestBitSet.with_bit(row, 3)
+		NetwInterestBitSet.test(row, 3)       # true
+		NetwInterestBitSet.bits(row)          # [3]
+		[/codeblock]
+		Every operation returns a new row rather than editing one in place, and a row is a bare [PackedInt64Array] rather than an object. Both are deliberate: rows are copied to worker tasks by value, and an object or a per-row wrapper is what would stop them.
+		A shorter row is read as zero past its end, so operands of different widths compose without being resized first.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bits" qualifiers="static">
+			<return type="PackedInt32Array" />
+			<param index="0" name="row" type="PackedInt64Array" />
+			<description>
+				Every set bit in [param row], ascending.
+			</description>
+		</method>
+		<method name="empty" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="bit_count" type="int" />
+			<description>
+				A row with room for [param bit_count] bits and none of them set.
+			</description>
+		</method>
+		<method name="equals" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="left" type="PackedInt64Array" />
+			<param index="1" name="right" type="PackedInt64Array" />
+			<description>
+				Whether [param left] and [param right] hold the same bits, whatever their widths.
+			</description>
+		</method>
+		<method name="full" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="bit_count" type="int" />
+			<description>
+				A row with every bit below [param bit_count] set.
+			</description>
+		</method>
+		<method name="intersect" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="left" type="PackedInt64Array" />
+			<param index="1" name="right" type="PackedInt64Array" />
+			<description>
+				The bits present in both [param left] and [param right].
+			</description>
+		</method>
+		<method name="popcount" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="row" type="PackedInt64Array" />
+			<description>
+				How many bits [param row] has set.
+			</description>
+		</method>
+		<method name="resized" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="row" type="PackedInt64Array" />
+			<param index="1" name="words" type="int" />
+			<description>
+				A copy of [param row] holding exactly [param words] words. Widening sets nothing; narrowing drops whatever was above.
+			</description>
+		</method>
+		<method name="subtract" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="left" type="PackedInt64Array" />
+			<param index="1" name="right" type="PackedInt64Array" />
+			<description>
+				The bits in [param left] that [param right] does not have.
+			</description>
+		</method>
+		<method name="symmetric_difference" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="left" type="PackedInt64Array" />
+			<param index="1" name="right" type="PackedInt64Array" />
+			<description>
+				The bits exactly one of [param left] and [param right] has.
+			</description>
+		</method>
+		<method name="test" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="row" type="PackedInt64Array" />
+			<param index="1" name="bit" type="int" />
+			<description>
+				Whether [param row] has [param bit] set. A bit past the end of the row is not set rather than an error.
+			</description>
+		</method>
+		<method name="union_of" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="left" type="PackedInt64Array" />
+			<param index="1" name="right" type="PackedInt64Array" />
+			<description>
+				The bits either [param left] or [param right] has.
+			</description>
+		</method>
+		<method name="with_bit" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="row" type="PackedInt64Array" />
+			<param index="1" name="bit" type="int" />
+			<param index="2" name="value" type="bool" default="true" />
+			<description>
+				A copy of [param row] with [param bit] set to [param value], widened if it did not reach that far.
+			</description>
+		</method>
+		<method name="word_count" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="bit_count" type="int" />
+			<description>
+				How many words [param bit_count] bits need.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="BITS_PER_WORD" value="63">
+			Usable bits per word. One short of 64, because the sign bit is left alone.
+		</constant>
+		<constant name="WORD_MASK" value="9223372036854775807">
+			Every usable bit of one word.
+		</constant>
+	</constants>
+</class>

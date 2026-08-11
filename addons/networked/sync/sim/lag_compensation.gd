@@ -8,11 +8,13 @@
 ## [LagCompensation] node cleanly opts out, so the per-entity prediction engine,
 ## the state-set timeline registration, and the [NetwAction] transport all degrade
 ## to no-ops.
-## The engine lives in [NetwLagCompensationInterface], owned by
-## [NetwMultiplayer]. Registering through
-## [method MultiplayerAPI.object_configuration_add] pushes this node's export
-## snapshot into [member NetwMultiplayer.lag_compensation] and activates it.
-## Reach the query surface through [member NetwMultiplayer.lag_compensation], never
+## The engine lives in [LagCompCore], owned by
+## [NetwMultiplayer]. [method NetwMultiplayer.service_install] pushes this
+## node's export snapshot into the session's lag-compensation core and
+## activates it.
+## Reach the query surface through [method NetwMultiplayer.lagcomp_sample],
+## [method NetwMultiplayer.lagcomp_rewind], and
+## [method NetwMultiplayer.lagcomp_action], never
 ## by node lookup.
 ##
 ## The engine keeps one authoritative [NetwTimeline] per entity as the rewind
@@ -26,28 +28,23 @@
 ## ├── MultiplayerClock
 ## └── LagCompensation              # drop this node to enable rewind + prediction
 ##
-## # per tick, driven by NetwClockInterface.on_tick:
+## # per tick, driven by ClockCore.on_tick:
 ## step every registered prediction engine    # predict or consume, per role
 ## if server: record authoritative state       # snapshot into each NetwTimeline
 ## [/codeblock]
 ##
 ## A server-authored state set registers its entity through
-## [method NetwLagCompensationInterface.register_timeline] when it registers, so
+## [method NetwMultiplayer.timeline_declare] when it registers, so
 ## an entity is rewindable by default without a [PredictionComponent].
-## [method NetwLagCompensationInterface.timeline_of] is the query seam, and
-## [method NetwLagCompensationInterface.sample] and
-## [method NetwLagCompensationInterface.rewind] read it.
+## [method LagCompCore.timeline_of] is the query seam, and
+## [method LagCompCore.sample] and
+## [method LagCompCore.rewind] read it.
 ##
 ## Registered through [NetwService] per [MultiplayerTree], like
 ## [MultiplayerClock], so several trees in one [SceneTree] each get their own
 ## loop. Mount it as a sibling of the clock under the session root.
 class_name LagCompensation
 extends NetwService
-
-# Caps the per-frame clock-bind retry so a tree that never mounts a clock stops
-# polling. The clock can register after this service, so the bind retries until it
-# appears.
-const _MAX_BIND_ATTEMPTS := 600
 
 ## Maximum number of ticks a player action may be scheduled ahead of the
 ## server clock before it is denied.
@@ -59,23 +56,20 @@ const _MAX_BIND_ATTEMPTS := 600
 
 ## Ticks a [constant NetwAction.TimingMode.TICK_ALIGNED_STATE_READY] action waits
 ## for input-backed state at its view tick before it resolves best-effort. See
-## [member NetwLagCompensationInterface.input_gate_deadline_ticks].
+## [member LagCompCore.input_gate_deadline_ticks].
 @export_custom(0, "suffix:ticks") var input_gate_deadline_ticks: int = 12:
 	set(v):
 		input_gate_deadline_ticks = v
 		if _interface:
 			_interface.input_gate_deadline_ticks = v
 
-## The [NetwLagCompensationInterface] engine this node configures, or
+## The [LagCompCore] engine this node configures, or
 ## [code]null[/code] before registration. Consumers should reach the engine
-## through [member NetwMultiplayer.lag_compensation] rather than this node.
-var _interface: NetwLagCompensationInterface
+## through [method NetwMultiplayer.lagcomp_sample] rather than this node.
+var _interface: LagCompCore
 
 # The typed payload registered with the API on entry, snapshotting the exports.
 var _config: NetwLagCompensationConfig
-
-var _clock: NetwClockInterface
-var _bind_attempts: int = 0
 
 
 func _service_type() -> Script:
@@ -83,14 +77,10 @@ func _service_type() -> Script:
 
 
 func _service_entered(api: NetwMultiplayer) -> void:
-	_interface = api.lag_compensation
+	_interface = api._lagcomp
 	_config = _build_config()
-	api.object_configuration_add(self, _config)
-	if not api.session_entered.is_connected(_on_session_entered):
-		api.session_entered.connect(_on_session_entered)
-	if api.is_online():
-		_on_session_entered.call_deferred()
-	var tree := get_tree()
+	api.service_install(_config)
+	var tree := get_tree() if is_inside_tree() else null
 	if _interface and tree \
 			and not tree.node_added.is_connected(_interface._on_node_added):
 		tree.node_added.connect(_interface._on_node_added)
@@ -108,53 +98,3 @@ func _build_config() -> NetwLagCompensationConfig:
 	config.max_future_action_ticks = max_future_action_ticks
 	config.input_gate_deadline_ticks = input_gate_deadline_ticks
 	return config
-
-
-func _on_session_entered() -> void:
-	_bind_attempts = 0
-	_try_bind_clock()
-	var api := NetwService._resolve_api(self)
-	if api and _interface:
-		api.replication.register_channel(
-			NetwFrameEnvelope.Channel.ACTION,
-			_interface._handle_action_carrier,
-		)
-		api.replication.register_channel(
-			NetwFrameEnvelope.Channel.PREDICT_COMMAND,
-			_interface._handle_predict_command_carrier,
-		)
-		api.replication.register_channel(
-			NetwFrameEnvelope.Channel.PREDICT_ACK,
-			_interface._handle_predict_ack_carrier,
-		)
-
-
-# Binds to the tick loop once the clock engine is configured. The clock can mount
-# after this service, so a miss reschedules on the next frame until the clock
-# appears or the attempt cap is reached.
-func _try_bind_clock() -> void:
-	if is_instance_valid(_clock):
-		return
-	var api := NetwService._resolve_api(self)
-	if not api:
-		return
-	var clock := api.clock if api.clock.is_configured() else null
-	if clock:
-		_clock = clock
-		# Bind the interface, not this node, so the tick loop survives a scene
-		# change that frees the node.
-		if _interface:
-			_interface._clock = clock
-			if not clock.before_tick_loop.is_connected(
-				_interface.before_frame_step,
-			):
-				clock.before_tick_loop.connect(_interface.before_frame_step)
-			if not clock.on_tick.is_connected(_interface.tick_step):
-				clock.on_tick.connect(_interface.tick_step)
-			if not clock.after_tick_loop.is_connected(_interface.frame_step):
-				clock.after_tick_loop.connect(_interface.frame_step)
-		return
-	_bind_attempts += 1
-	if _bind_attempts <= _MAX_BIND_ATTEMPTS and is_inside_tree() \
-			and not get_tree().process_frame.is_connected(_try_bind_clock):
-		get_tree().process_frame.connect(_try_bind_clock, CONNECT_ONE_SHOT)

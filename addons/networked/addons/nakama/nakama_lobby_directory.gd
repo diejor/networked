@@ -17,6 +17,8 @@
 class_name NakamaLobbyDirectory
 extends LobbyDirectory
 
+const Async := preload("res://addons/networked/utils/async.gd")
+
 ## Nakama server key, matching the server's [code]socket.server_key[/code].
 @export var server_key: String = "defaultkey"
 
@@ -52,7 +54,7 @@ extends LobbyDirectory
 @export_range(1.0, 30.0, 0.5, "suffix:s") var connect_timeout: float = 10.0
 
 ## Maximum number of simultaneous lobby members advertised on the browse card.
-## A [member LobbyDirectory.HostOptions.max_players] of [code]0[/code] falls back
+## A [member NetwHostConfig.max_players] of [code]0[/code] falls back
 ## to this.
 @export_range(1, 250, 1, "or_greater", "suffix:players") var max_clients: int = 8
 
@@ -173,21 +175,21 @@ func _service_exiting(_api: NetwMultiplayer) -> void:
 ##
 ## [constant LobbyDirectory.Visibility.PRIVATE] skips the card and stays
 ## join-by-id only.
-func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+func _host_lobby(config: NetwHostConfig) -> MultiplayerPeer:
 	if not await _ensure_connected():
 		return null
 	_wrapper.create_match()
 	var peer := await _await_match("_host_lobby")
 	if peer != null:
-		await _publish_card(options)
+		await _publish_card(config)
 	return peer
 
 
 # Writes the browse card for a freshly hosted match, downgrading FRIENDS_ONLY to
 # PRIVATE because Nakama friend gating is not wired yet. PRIVATE skips the card
 # so the match is reachable only by sharing its id.
-func _publish_card(options: LobbyDirectory.HostOptions) -> void:
-	var visibility := options.visibility
+func _publish_card(config: NetwHostConfig) -> void:
+	var visibility := config.visibility
 	if visibility == LobbyDirectory.Visibility.FRIENDS_ONLY:
 		Netw.dbg.warn(
 			"NakamaLobbyDirectory: FRIENDS_ONLY unsupported, hosting PRIVATE.",
@@ -200,11 +202,11 @@ func _publish_card(options: LobbyDirectory.HostOptions) -> void:
 		return
 	var card := LobbyCard.new()
 	card.match_id = mid
-	card.lobby_name = options.server_name
+	card.lobby_name = config.server_name
 	card.host = get_local_member_name()
 	card.app_id = _local_app_id()
 	card.uid = browser_filter_uid
-	card.max_players = options.max_players if options.max_players > 0 else max_clients
+	card.max_players = config.max_players if config.max_players > 0 else max_clients
 	card.visibility = visibility
 	_hosted_match_id = mid
 	var ok := await _wrapper.write_lobby_card(mid, card.to_dict())
@@ -284,7 +286,6 @@ func _leave_lobby() -> void:
 	_peer = null
 
 
-
 ## Nakama lobbies join through the [code]&"nakama"[/code] transport by match id.
 func _scheme() -> StringName:
 	return &"nakama"
@@ -294,7 +295,7 @@ func _lobby_address(lobby: LobbyDirectory.LobbyInfo) -> String:
 	return String(lobby.metadata.get("match_id", str(lobby.id)))
 
 
-## Returns the active relay match id for [method MultiplayerTree.join].
+## Returns the active relay match id for [method NetwConnector.join].
 func get_join_address() -> String:
 	return _wrapper.match_id() if _wrapper != null else ""
 

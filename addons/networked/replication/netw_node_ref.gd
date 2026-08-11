@@ -6,7 +6,7 @@
 ## instance anyway, so a node argument travels as its entity route plus the
 ## component addressing that locates the node under
 ## [member NetwEntity.owner]. The receiver rebinds it to its own instance
-## through [method NetwReplicationInterface.resolve_comp_node]. This is a
+## through [method ReplicationCore.resolve_comp_node]. This is a
 ## distinct codec kind rather than a sentinel dictionary, so it never collides
 ## with a user value.
 ## [codeblock]

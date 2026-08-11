@@ -77,25 +77,27 @@ signal entity_added(entity: NetwEntity)
 ## Emitted when [param entity] leaves this layer.
 signal entity_removed(entity: NetwEntity)
 
-## Stable id used by [NetwInterestInterface] to index this layer.
+## Stable id used by [InterestCore] to index this layer.
 var layer_id: StringName
 
 ## Composition policy. See [enum Policy].
 var policy: Policy = Policy.HIDE_FROM_OUTSIDERS
 
 ## Wire behavior when this layer stops admitting an entity and the entity has
-## no [method NetwInterestInterface.InterestHandle.on_leave_policy] override.
-var default_leave_policy: NetwInterestInterface.LeavePolicy = \
-		NetwInterestInterface.LeavePolicy.DESPAWN
+## no [method NetwInterestHandle.on_leave_policy] override.
+var default_leave_policy: NetwMultiplayer.LeavePolicy = \
+		NetwMultiplayer.LeavePolicy.DESPAWN
 
 ## Local presentation behavior when this layer stops admitting an entity and
 ## no per-entity override is configured.
-var default_perception_policy: NetwInterestInterface.PerceptionPolicy = \
-		NetwInterestInterface.PerceptionPolicy.HIDE:
+var default_perception_policy: NetwMultiplayer.PerceptionPolicy = \
+		NetwMultiplayer.PerceptionPolicy.HIDE:
 	set(value):
+		# Range check, so the enum's ordering is contract. Renumbering
+		# PerceptionPolicy so HIDE and CUSTOM stop bounding it breaks this.
 		assert(
-			value >= NetwInterestInterface.PerceptionPolicy.HIDE
-			and value <= NetwInterestInterface.PerceptionPolicy.CUSTOM,
+			value >= NetwMultiplayer.PerceptionPolicy.HIDE
+			and value <= NetwMultiplayer.PerceptionPolicy.CUSTOM,
 			"NetwInterestLayer: invalid default_perception_policy",
 		)
 		if default_perception_policy == value:
@@ -205,7 +207,7 @@ func add_entity(entity: NetwEntity) -> bool:
 
 ## Removes [param entity] from this layer. Server authoritative. Returns
 ## [code]false[/code] on clients. Visibility exits are emitted at the next
-## [method NetwInterestInterface.flush].
+## [method InterestCore.flush].
 ##
 ## [param entity] must be non-null; passing an unknown entity is a
 ## no-op for idempotent teardown.
@@ -378,8 +380,8 @@ func _apply_server_transition(
 		entity.interest._dispatch_leave(layer_id, peer_id)
 
 
-func _service() -> NetwInterestInterface:
-	return _service_ref.get_ref() as NetwInterestInterface if _service_ref else null
+func _service() -> InterestCore:
+	return _service_ref.get_ref() as InterestCore if _service_ref else null
 
 
 # Returns the participant id used by client-side handle callbacks.
@@ -392,7 +394,7 @@ func _local_peer_id() -> int:
 ## Stateless verdict resolver for [NetwInterestLayer].
 ##
 ## Given a [enum NetwInterestLayer.Policy] and a viewer set, returns the
-## per-peer layer verdict. The committed [InterestEngine] matrix composes these
+## per-peer layer verdict. The committed [NetwInterestEngine] matrix composes these
 ## verdicts across layer membership and entity ancestry.
 ##
 ## [method explain] returns a human-readable reason and is the first

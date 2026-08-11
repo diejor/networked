@@ -36,7 +36,7 @@ func test_probes_do_not_register_peers() -> void:
 	var client_tree := EnetTestSupport.make_client_tree(self, host.port)
 	var target := EnetTestSupport.make_connect_target(host.port)
 	for i in 5:
-		var result: NetwProbeResult = await client_tree.connector.probe(target)
+		var result: NetwProbeResult = await NetwConnector.of(client_tree.api).probe(target)
 		assert_int(result.status).is_equal(NetwProbeResult.Status.OK)
 		assert_array(host_api.get_peers()).is_empty()
 
@@ -61,7 +61,7 @@ func _run_probe(
 		results: Array,
 		state: Dictionary,
 ) -> void:
-	var r: NetwProbeResult = await client_tree.connector.probe(target)
+	var r: NetwProbeResult = await NetwConnector.of(client_tree.api).probe(target)
 	results.append(r)
 	state.pending -= 1
 

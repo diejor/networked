@@ -125,7 +125,7 @@ func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 
 ## Overrides [method NetwDatabaseBackend._find_all] to return all cached
 ## records matching [param filter].
-func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
+func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	if not _cache.has(table):
 		return results
@@ -213,7 +213,8 @@ func _delete_namespace(slot: String) -> Error:
 ##
 ## A write returns before it reaches Nakama, so a quit or a player leave would
 ## otherwise drop the last [member flush_interval] window. The
-## [NetwPersistenceInterface] shutdown path calls this so that final batch lands.
+## [method NetwMultiplayer.persist_shutdown] calls this so that final batch
+## lands.
 ## Returns [constant OK] when the queue drained or [constant ERR_TIMEOUT] when it
 ## did not within the bound.
 func drain(timeout_s: float = 5.0) -> Error:

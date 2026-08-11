@@ -1,0 +1,10 @@
+.sconsign.dblite
+*.o
+*.os
+__pycache__/
+compile_commands.json
+custom.py
+gen/
+thirdparty/godot/
+thirdparty/godot-cpp/
+thirdparty/tracy/

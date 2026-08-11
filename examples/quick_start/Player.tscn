@@ -6,15 +6,13 @@
 [ext_resource type="Script" uid="uid://cwf8sf34fk0ib" path="res://addons/networked/nodes/input/move_input_component.gd" id="9_5h0xu"]
 [ext_resource type="Texture2D" uid="uid://b8cn2fun55jsg" path="res://assets/networked.png" id="9_u2lnn"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="9_wi0c6"]
-[ext_resource type="Script" uid="uid://bb1hp6ofxhwj8" path="res://addons/networked/sync/state/interpolate.gd" id="10_interp"]
 
 [sub_resource type="Resource" id="Resource_tdg3f"]
 script = ExtResource("5_cxr5p")
 scene_path = "uid://bqi7mvxdnvgch"
 node_path = "MultiplayerSpawner"
 
-[sub_resource type="Resource" id="Resource_interp"]
-script = ExtResource("10_interp")
+[sub_resource type="NetwInterpolate" id="Resource_interp"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
 properties/0/path = NodePath(".:position")

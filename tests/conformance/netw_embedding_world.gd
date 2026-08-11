@@ -13,7 +13,7 @@
 ## var world := _make_world()          # scoped or root
 ## var host := await world.host()      # host online through the same verb
 ## var client := await world.add_client("p1")
-## assert_that(host.get_participant(client.get_unique_id())).is_not_null()
+## assert_that(host.peer_get_participant(client.get_unique_id())).is_not_null()
 ## await world.dispose()               # restore process state
 ## [/codeblock]
 ##
@@ -74,7 +74,7 @@ func provider() -> String:
 ## Replicates a probe [Node] named [param name] on the host and returns its
 ## [member NetwEntity.route], so a scenario can assert every admitted peer
 ## receives it. Concrete because it needs only the provider-agnostic
-## [method host] anchor and [member NetwMultiplayer.replication]: replicate first
+## [method host] anchor and [member NetwMultiplayer._replication]: replicate first
 ## (stamp and arm), then place under [member NetwMultiplayer.root], the one anchor
 ## that exists on every peer.
 ##
@@ -83,7 +83,7 @@ func spawn_probe(name: String) -> int:
 	var host_api := await host()
 	var node := _PROBE_SCENE.instantiate()
 	node.name = name
-	var entity := host_api.replication.replicate(node)
+	var entity := host_api._replication.replicate(node)
 	host_api.root.add_child(node)
 	return entity.route
 

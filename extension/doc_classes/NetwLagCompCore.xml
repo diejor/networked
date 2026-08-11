@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwLagCompCore" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="rewind">
+			<return type="int" />
+			<param index="0" name="slots" type="PackedInt64Array" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="body" type="Callable" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_bind_owner">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="owner" type="Object" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_close">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_history" qualifiers="const">
+			<return type="NetwTimeline" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_is_open" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_open">
+			<return type="int" />
+			<param index="0" name="history_limit" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_owner_bound" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_record">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="payload" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_sample" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="tick" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_sample_tick" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="tick" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_trim_before">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="tick" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="timeline_unbind_owner">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

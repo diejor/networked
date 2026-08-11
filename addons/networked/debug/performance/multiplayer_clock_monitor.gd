@@ -65,8 +65,8 @@ func remove_relayed_clock(envelope: NetwEnvelope) -> void:
 func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 	var username := data.get("username", "")
 	if username.is_empty():
-		if is_instance_valid(mt) and mt.local_player:
-			username = NetwIdentity.username_of(mt.local_player.owner)
+		if is_instance_valid(mt) and mt.api.local_player:
+			username = NetwIdentity.username_of(mt.api.local_player.owner)
 		else:
 			username = data.get("tree_name", "Unknown")
 

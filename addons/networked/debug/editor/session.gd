@@ -2,12 +2,14 @@
 class_name DebuggerSession
 extends RefCounted
 
+const PanelDataAdapter := preload("res://addons/networked/debug/editor/adapters/panel_data.gd")
+
 ## Emitted when a new [MultiplayerTree] peer completes registration.
 signal peer_registered(
 		peer_key: String,
 		display_name: String,
 		tree_name: String,
-		role: NetwSessionInterface.Role,
+		role: NetwMultiplayer.Role,
 		color: Color,
 		is_remote: bool,
 		peer_id: int,
@@ -43,7 +45,7 @@ var session_id: int
 #        ┠╴username (String)
 #        ┠╴tree_name (String)
 #        ┠╴display_name (String)
-#        ┠╴role ([enum NetwSessionInterface.Role])
+#        ┠╴role ([enum NetwMultiplayer.Role])
 #        ┠╴is_server (bool)
 #        ┠╴backend_class (String)
 #        ┠╴online (bool)
@@ -332,7 +334,7 @@ func _on_session_registered(envelope: NetwEnvelope, is_remote: bool = false) -> 
 			_peers[pk]["online"] = online
 			peer_status_changed.emit(pk, online)
 
-		if _peers[pk].get("role", NetwSessionInterface.Role.NONE) != role:
+		if _peers[pk].get("role", NetwMultiplayer.Role.NONE) != role:
 			_peers[pk]["role"] = role
 			_peers[pk]["is_server"] = is_server
 			_peers[pk]["display_name"] = _get_display_name(
@@ -527,9 +529,9 @@ func _assign_peer_color(peer_key: String) -> Color:
 func _get_display_name(
 		username: String,
 		tree_name: String,
-		role: NetwSessionInterface.Role,
+		role: NetwMultiplayer.Role,
 ) -> String:
-	if role == NetwSessionInterface.Role.DEDICATED_SERVER:
+	if role == NetwMultiplayer.Role.DEDICATED_SERVER:
 		return tree_name
 
 	if username.is_empty():
@@ -538,14 +540,14 @@ func _get_display_name(
 	return "%s [%s]" % [tree_name, username]
 
 
-func _role_from_payload(d: Dictionary, peer_id: int) -> NetwSessionInterface.Role:
+func _role_from_payload(d: Dictionary, peer_id: int) -> NetwMultiplayer.Role:
 	if d.has("role"):
-		return d.get("role", NetwSessionInterface.Role.NONE)
+		return d.get("role", NetwMultiplayer.Role.NONE)
 	if d.get("is_server", false) or peer_id == 1:
-		return NetwSessionInterface.Role.DEDICATED_SERVER
-	return NetwSessionInterface.Role.CLIENT
+		return NetwMultiplayer.Role.DEDICATED_SERVER
+	return NetwMultiplayer.Role.CLIENT
 
 
-func _role_is_host(role: NetwSessionInterface.Role) -> bool:
-	return role == NetwSessionInterface.Role.DEDICATED_SERVER \
-			or role == NetwSessionInterface.Role.LISTEN_SERVER
+func _role_is_host(role: NetwMultiplayer.Role) -> bool:
+	return role == NetwMultiplayer.Role.DEDICATED_SERVER \
+			or role == NetwMultiplayer.Role.LISTEN_SERVER

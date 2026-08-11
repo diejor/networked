@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterestDelta" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		What one [method NetwInterestEngine.recompute] produced: the rows that move, and the per-peer edges that opened and closed.
+	</brief_description>
+	<description>
+		A value handed out by [method NetwInterestEngine.recompute] and handed back to [method NetwInterestEngine.commit]. Between those two calls the engine's read matrix is untouched, which is what lets a caller decide what a transition means before acting on it.
+		[codeblock]
+		keys ┄ old_rows ┄ new_rows ┄ order_keys   parallel, one entry per moved row
+		shows ┄┄┄┄┄┄┄┄┄┄┄ [entity, bit]           ordered parent-first
+		hides ┄┄┄┄┄┄┄┄┄┄┄ [entity, bit]           ordered child-first
+		layer_shows/hides [layer, entity, bit]    the same edges, attributed
+		removed_keys ┄┄┄┄ entities that left      their last row is a hide
+		[/codeblock]
+		The two orderings are the point rather than a detail: hides run child before parent and shows run parent before child, so no peer ever holds a child whose parent it cannot see, in either direction.
+		[member layer_shows] and [member layer_hides] answer which layer an edge is owed to, and they diff memberships as well as rows. Joining a layer that already admitted a peer attributes that edge without the entity's own row moving at all.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="is_empty" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether no row moved. A pass over unchanged state answers [code]true[/code].
+			</description>
+		</method>
+		<method name="to_array" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every field as one array of plain values, for comparing two passes against each other.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="hides" type="Array" setter="" getter="get_hides" default="[]">
+			Ordered [code][entity_key, peer_bit][/code] pairs that stopped being admitted, child before parent.
+		</member>
+		<member name="keys" type="PackedInt64Array" setter="" getter="get_keys" default="PackedInt64Array()">
+			The entity keys whose committed rows change, parallel to [member old_rows], [member new_rows] and [member order_keys].
+		</member>
+		<member name="layer_hides" type="Array" setter="" getter="get_layer_hides" default="[]">
+			Ordered [code][layer_id, entity_key, peer_bit][/code] triples, naming which layer stopped owing each edge.
+		</member>
+		<member name="layer_shows" type="Array" setter="" getter="get_layer_shows" default="[]">
+			Ordered [code][layer_id, entity_key, peer_bit][/code] triples, naming which layer owes each edge.
+		</member>
+		<member name="new_rows" type="Array" setter="" getter="get_new_rows" default="[]">
+			The rows [member keys] will hold once this delta commits.
+		</member>
+		<member name="old_rows" type="Array" setter="" getter="get_old_rows" default="[]">
+			The rows [member keys] held before this pass.
+		</member>
+		<member name="order_keys" type="Array" setter="" getter="get_order_keys" default="[]">
+			The [code][depth, route][/code] pair each moved row was ordered by.
+		</member>
+		<member name="removed_keys" type="PackedInt64Array" setter="" getter="get_removed_keys" default="PackedInt64Array()">
+			Entities that left the matrix. They are gone from it after the commit rather than sitting in it empty.
+		</member>
+		<member name="shows" type="Array" setter="" getter="get_shows" default="[]">
+			Ordered [code][entity_key, peer_bit][/code] pairs that became admitted, parent before child.
+		</member>
+		<member name="stats" type="NetwInterestStats" setter="" getter="get_stats">
+			The counters this pass produced. They belong to the pass, so one that is computed and never committed carries its own away with it.
+		</member>
+	</members>
+</class>

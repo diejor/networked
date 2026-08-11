@@ -118,40 +118,12 @@ func test_entity_lookup_and_resolution_flow() -> void:
 	assert_that(NetwEntity.resolve(live_child)).is_null()
 
 
-func test_scene_tracking_requires_own_entity_record() -> void:
-	var scene := MultiplayerScene.new()
-	scene.name = "Arena"
-	auto_free(scene)
-
-	var parent := Node2D.new()
-	var child := Node2D.new()
-	child.name = "Projectile"
-	parent.add_child(child)
-	auto_free(parent)
-	auto_free(child)
-
-	NetwEntity.ensure(parent)
-
-	@warning_ignore("redundant_await")
-	await assert_error(
-		func() -> void:
-			scene.track_node(child)
-	).is_success()
-
-	assert_that(scene.tracked_nodes.has(child)).is_false()
-
-	NetwEntity.ensure(child)
-	scene.track_node(child)
-
-	assert_that(scene.tracked_nodes.has(child)).is_true()
-
-
 func test_route_binds_before_tree_entry() -> void:
 	var mt := MultiplayerTree.new()
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
-	var liveness := mt.api.liveness
+	var liveness := mt.api._liveness
 
 	var route := liveness.reserve_route()
 	assert_that(route).is_greater(0)

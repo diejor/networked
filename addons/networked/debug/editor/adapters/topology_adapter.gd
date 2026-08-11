@@ -3,6 +3,9 @@
 class_name TopologyAdapter
 extends PanelDataAdapter
 
+const PanelDataAdapter := preload("res://addons/networked/debug/editor/adapters/panel_data.gd")
+
+
 func _init(p_tree_name: String) -> void:
 	tree_name = p_tree_name
 	panel_type = PanelDataAdapter.PanelType.TOPOLOGY

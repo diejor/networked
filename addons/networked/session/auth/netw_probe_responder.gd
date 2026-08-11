@@ -2,6 +2,8 @@
 class_name NetwProbeResponder
 extends RefCounted
 
+const AuthProtocol := preload("res://addons/networked/session/auth/auth_protocol.gd")
+
 const PROBE_RATE_LIMIT := 10
 const MAX_ACTIVE_PROBES := 32
 

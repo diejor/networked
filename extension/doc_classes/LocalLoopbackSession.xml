@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="LocalLoopbackSession" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		An in-process session that links [LocalMultiplayerPeer] instances and simulates the link between them.
+	</brief_description>
+	<description>
+		Session time advances only when something advances it, which is what makes a delay countable in polls instead of in wall clock and a run reproducible.
+		[codeblock]
+		var session := LocalLoopbackSession.new()
+		var server := session.get_server_peer()
+		var client := session.create_client_peer()
+		session.poll()
+
+		session.set_link_conditions(server, LocalLinkConditions.wifi())
+		[/codeblock]
+		Conditions are installed on the RECEIVING peer, optionally narrowed to one sender, and they apply at receive time:
+		[codeblock]
+		put_packet
+		  ┖╴the receiving peer offers the packet to its session
+		     ┠╴no conditions      the packet queues immediately
+		     ┖╴conditions         the packet waits in flight until it is due
+		                          and a poll releases it
+		[/codeblock]
+		Peer ids are drawn rather than counted, so nothing may hardcode one. Read it back with [method MultiplayerPeer.get_unique_id].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="advance_time">
+			<return type="void" />
+			<param index="0" name="ms" type="float" />
+			<description>
+				Advances session time by [param ms] and delivers whatever came due, for steppers that drive time themselves rather than off physics frames.
+			</description>
+		</method>
+		<method name="clear_all_link_conditions">
+			<return type="void" />
+			<description>
+				Removes every installed condition and flushes every delayed packet.
+			</description>
+		</method>
+		<method name="clear_link_conditions">
+			<return type="void" />
+			<param index="0" name="peer" type="LocalMultiplayerPeer" />
+			<param index="1" name="sender_id" type="int" default="0" />
+			<description>
+				Removes the conditions installed for [param sender_id] and flushes whatever they were holding.
+			</description>
+		</method>
+		<method name="create_client_peer">
+			<return type="LocalMultiplayerPeer" />
+			<description>
+				Creates a client peer, links it to the server in both directions, and returns it.
+			</description>
+		</method>
+		<method name="get_client_peer">
+			<return type="LocalMultiplayerPeer" />
+			<description>
+				Creates a client peer and returns it.
+			</description>
+		</method>
+		<method name="get_client_peers" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Returns every client peer this session handed out, including ones that have since closed.
+			</description>
+		</method>
+		<method name="get_link_conditions" qualifiers="const">
+			<return type="LocalLinkConditions" />
+			<param index="0" name="peer" type="LocalMultiplayerPeer" />
+			<param index="1" name="sender_id" type="int" default="0" />
+			<description>
+				Returns the conditions installed on [param peer] for [param sender_id], or [code]null[/code] if there are none.
+			</description>
+		</method>
+		<method name="get_server_peer">
+			<return type="LocalMultiplayerPeer" />
+			<description>
+				Returns the server peer, creating it first if necessary.
+			</description>
+		</method>
+		<method name="get_shared_session" qualifiers="static">
+			<return type="LocalLoopbackSession" />
+			<description>
+				Returns the process-wide session, creating one on first access. Use [method has_shared_session] to ask whether one exists without creating it.
+			</description>
+		</method>
+		<method name="has_live_server" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns whether this session's server peer exists and is not disconnected.
+			</description>
+		</method>
+		<method name="has_shared_session" qualifiers="static">
+			<return type="bool" />
+			<description>
+				Returns whether a process-wide session exists.
+			</description>
+		</method>
+		<method name="hold_inbound_packets">
+			<return type="void" />
+			<param index="0" name="peer" type="LocalMultiplayerPeer" />
+			<description>
+				Holds every packet bound for [param peer], including ones already queued, until [method release_inbound_packets].
+			</description>
+		</method>
+		<method name="in_flight_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="peer" type="LocalMultiplayerPeer" />
+			<description>
+				Returns how many packets are still in flight to [param peer].
+			</description>
+		</method>
+		<method name="init_server_side">
+			<return type="void" />
+			<description>
+				Creates the server peer if there is not already a live one.
+			</description>
+		</method>
+		<method name="is_holding_inbound" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="peer" type="LocalMultiplayerPeer" />
+			<description>
+				Returns whether [param peer] is holding everything, per [method hold_inbound_packets].
+			</description>
+		</method>
+		<method name="poll">
+			<return type="void" />
+			<description>
+				Advances session time by one physics period and delivers whatever came due.
+			</description>
+		</method>
+		<method name="poll_frame_scoped">
+			<return type="void" />
+			<description>
+				Advances session time by however many physics frames have actually passed. A latency in milliseconds therefore stays that latency however many idle frames the engine ran between physics steps.
+			</description>
+		</method>
+		<method name="purge_packets_from">
+			<return type="void" />
+			<param index="0" name="sender_id" type="int" />
+			<description>
+				Drops whatever [param sender_id] still has in flight, on every receiver.
+			</description>
+		</method>
+		<method name="release_inbound_packets">
+			<return type="void" />
+			<param index="0" name="peer" type="LocalMultiplayerPeer" />
+			<description>
+				Delivers what [method hold_inbound_packets] held, ahead of anything that arrived after it.
+			</description>
+		</method>
+		<method name="reset">
+			<return type="void" />
+			<description>
+				Closes every peer and empties the session so a new server can host.
+			</description>
+		</method>
+		<method name="set_link_conditions">
+			<return type="void" />
+			<param index="0" name="peer" type="LocalMultiplayerPeer" />
+			<param index="1" name="conditions" type="LocalLinkConditions" />
+			<param index="2" name="sender_id" type="int" default="0" />
+			<description>
+				Installs [param conditions] on packets arriving at [param peer]. A [param sender_id] of [code]0[/code] conditions every sender. Packets already queued on [param peer] are pulled back into flight, so conditioning a live link leaves no hole behind it.
+				[param conditions] is cloned, so editing it afterwards changes nothing.
+			</description>
+		</method>
+		<method name="set_shared_session" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="session" type="LocalLoopbackSession" />
+			<description>
+				Installs [param session] as the process-wide one, or clears it when [param session] is [code]null[/code].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="server_app_id" type="StringName" setter="set_server_app_id" getter="get_server_app_id" default="&amp;&quot;&quot;">
+			An application tag carried alongside the session, so a client can tell whose server it reached.
+		</member>
+	</members>
+</class>

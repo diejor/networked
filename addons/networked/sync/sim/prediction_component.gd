@@ -6,9 +6,9 @@
 ## [/codeblock]
 ## The node publishes its entity-level policy through
 ## [member NetwEntity.prediction] and registers one engine record with
-## [method NetwLagCompensationInterface.register_prediction]. The predicted
+## [method NetwMultiplayer.predict_declare]. The predicted
 ## state is compared with the authority row named by
-## [member NetwSyncSetBinding.reconcile_ack], never with the newest received
+## [member NetwPropertySetBinding.reconcile_ack], never with the newest received
 ## tick. This keeps the comparison aligned without requiring equal peer clocks
 ## or deterministic physics.
 ##
@@ -17,45 +17,28 @@
 ## ([method NetwScriptModel.PropertyConfig.epsilon],
 ## [method NetwScriptModel.PropertyConfig.teleport_only],
 ## [method NetwScriptModel.PropertyConfig.reconcile_only],
-## [method NetwScriptModel.PropertyConfig.converge]). Entity-level code uses the
-## fluent declarations on [member NetwEntity.prediction]. Keep one source for
-## each fact. A non-default scene export and a code declaration for the same
-## fact is a configuration error.
+## [method NetwScriptModel.PropertyConfig.converge]). Entity-level code writes
+## the properties of [member NetwEntity.prediction] directly.
+##
+## Each fact has one source. This component applies its [member archetype]
+## first and then pushes only the exports the scene moved off their defaults,
+## so a scene value overrides the preset it refines and an export left alone
+## does not. Between the scene and code, the later write wins.
 ## [codeblock]
 ## var prediction := NetwEntity.of(self).prediction
-## prediction.sensors().sample(&"ground", sample_ground)
-## prediction.witness().contacts(sample_contacts)
-## prediction.recovery().on_breach(
-##     NetwLagCompensationInterface.PredictionHandle.BreachResponse.DEMOTE,
-## )
-## prediction.island() \
-##     .approximate() \
-##     .from_interest() \
-##     .simulate_nearest(1)
+## prediction.sensors[&"ground"] = sample_ground
+## prediction.witness_contacts = sample_contacts
+## prediction.breach_response = NetwPredict.BreachResponse.DEMOTE
+## prediction.island.from_interest()
+## prediction.island.simulate_nearest(1)
 ## [/codeblock]
-## [br][br][method NetwLagCompensationInterface.PredictionHandle.island]
-## names the local prediction boundary. A promoted remote publishes predicted
+## [br][br][NetwPredictIsland] names the local prediction boundary. A promoted remote publishes predicted
 ## input with speculative simulation, runs through the same schedule, and
 ## independently rebases on each authority row. A witnessed contact outside
 ## the boundary follows the configured
-## [enum NetwLagCompensationInterface.PredictionHandle.BreachResponse].
+## [enum NetwPredict.BreachResponse].
 class_name PredictionComponent
 extends NetwComponent
-
-## Per-entity role, resolved from authority at spawn and on control transfer.
-enum Role {
-	## A remote client controls the entity. Predicts and reconciles on ack.
-	PREDICT,
-	## The server consumes a remote peer's received input into authoritative state.
-	CONSUME,
-	## A listen-server host controls the entity. Simulates authoritatively from
-	## local input each tick, so it neither predicts nor reconciles against itself.
-	HOST_LOCAL,
-	## A remote display. Never simulates here, the interpolator shows it.
-	REMOTE,
-	## A replicated remote stepped locally with a predicted command.
-	SIMULATE,
-}
 
 ## Cadence that applies the entity's simulation drive.
 enum Schedule {
@@ -103,7 +86,7 @@ enum RestoreMode {
 }
 
 ## What kind of body the entity predicts. Mirrors
-## [enum NetwLagCompensationInterface.PredictionHandle.Archetype] by value.
+## [enum NetwPredict.Archetype] by value.
 enum Archetype {
 	## No preset. Every knob keeps its own default until declared.
 	NONE,
@@ -114,10 +97,9 @@ enum Archetype {
 }
 
 ## The one decision the schedule and recovery presets derive from, applied
-## through
-## [method NetwLagCompensationInterface.PredictionHandle.archetype]
-## on tree entry. The preset is a floor: any export below declared away from
-## its default overrides its part of the bundle.
+## through [member NetwPredictionHandle.archetype]
+## on tree entry. The preset is a floor: the bundle lands first and any export
+## below moved off its default is written over it.
 @export var archetype: Archetype = Archetype.NONE
 
 @export_group("Schedule")
@@ -132,7 +114,7 @@ enum Archetype {
 ## How many queued input ticks the server may consume in one tick when it has
 ## fallen behind. [code]1[/code] holds strict lockstep; a higher value lets the
 ## consume cursor recover from a hitch instead of ratcheting behind forever.
-## Mirrors [member NetwLagCompensationInterface.PredictionHandle.max_consume_per_tick].
+## Mirrors [member NetwPredictionHandle.max_consume_per_tick].
 @export_range(1, 8) var max_consume_per_tick: int = 1
 
 ## How far the server's consume cursor may fall behind the freshest input before
@@ -143,7 +125,7 @@ enum Archetype {
 ## running session and re-anchors its clock opens exactly such a gap, and without
 ## a ceiling its entity simulates forever without reconciling. [code]0[/code]
 ## disables the recovery. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.max_consume_lag_ticks].
+## [member NetwPredictionHandle.max_consume_lag_ticks].
 @export_range(0, 600) var max_consume_lag_ticks: int = 60
 
 ## Queued input ticks the server keeps standing as a de-jitter buffer instead of
@@ -154,13 +136,13 @@ enum Archetype {
 ## and rebuilds the slack, and a drain trims a burst back down to it.
 ## [code]1[/code] or [code]2[/code] absorbs the drift at the cost of that much
 ## input latency.
-## Mirrors [member NetwLagCompensationInterface.PredictionHandle.consume_buffer_ticks].
+## Mirrors [member NetwPredictionHandle.consume_buffer_ticks].
 @export_range(0, 8) var consume_buffer_ticks: int = 0
 
 ## [constant Schedule.FRAME] tape transitions authority leaves standing instead
 ## of replaying, a fixed latency on every command that buys no jitter absorption
 ## back. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.replay_buffer_depth],
+## [member NetwPredictionHandle.replay_buffer_depth],
 ## whose documentation states why the default is zero.
 @export_range(0, 8) var replay_buffer_depth: int = 0
 
@@ -190,29 +172,29 @@ enum Archetype {
 ## Ceiling in ticks on the age a [constant RestoreMode.EXTRAPOLATED] restore
 ## projects across, so a server input cursor that falls behind never launches the
 ## body along a huge extrapolation. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.max_restore_ticks].
+## [member NetwPredictionHandle.max_restore_ticks].
 @export var max_restore_ticks: int = 6
 
 ## Pose error above which a recovery restores the whole closure instead of
 ## withholding the fields declared
 ## [method NetwScriptModel.PropertyConfig.teleport_only], in the pose field's
 ## own units. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.teleport_threshold].
+## [member NetwPredictionHandle.teleport_threshold].
 @export var teleport_threshold: float = 2.0
 
 ## Ticks a [method notify_contact] pauses non-teleport corrections for. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.collision_cooldown_ticks].
+## [member NetwPredictionHandle.collision_cooldown_ticks].
 @export_range(0, 30) var collision_cooldown_ticks: int = 6
 
 ## The simulation step, defaulting to the entity root's
 ## [code]_network_tick(delta, tick, is_fresh)[/code]. A delegating node may
 ## set its own callable. It is a single callable, never a fan-out, so exactly one
 ## authoritative step runs per entity per tick. Pushed to
-## [member NetwLagCompensationInterface.PredictionHandle.simulate] on tree entry.
+## [member NetwPredictionHandle.simulate] on tree entry.
 var simulate: Callable = Callable()
 
 var _entity: NetwEntity
-var _iface: NetwLagCompensationInterface
+var _iface: LagCompCore
 
 
 func _init() -> void:
@@ -246,71 +228,74 @@ func _ready() -> void:
 	# through the required guard: it logs a clear error when this component sits
 	# under a MultiplayerTree with no LagCompensation node, yet stays quiet for a
 	# scene run standalone (no enclosing tree, e.g. pressing F6 to test in isolation).
-	_iface = NetwLagCompensationInterface.resolve_required(self)
+	_iface = LagCompCore.resolve_required(self)
 	if _iface:
-		_iface.register_prediction(entity)
+		var api := _iface._api()
+		if api:
+			api.predict_declare(api.rid_of(entity.owner))
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	if is_instance_valid(_iface) and _entity:
-		_iface.unregister_prediction(_entity)
+		var api := _iface._api()
+		if api:
+			api.predict_undeclare(api.rid_of(_entity.owner))
 	_iface = null
 
 
-# Pushes the node's exports into the entity's prediction handle so the engine
-# reads its config from one place, and records which verb keys the scene
-# declared away from their defaults so a code verb restating one is caught as
-# the two-source error it is.
-func _push_config(handle: NetwLagCompensationInterface.PredictionHandle) -> void:
-	handle.schedule()._scene_tier(
-		schedule as NetwLagCompensationInterface.PredictionHandle.Schedule,
-	)
-	handle.correction_mode = correction_mode
-	handle.snap_restore = snap_restore
-	handle.max_restore_ticks = max_restore_ticks
-	handle.missing_policy = missing_policy
-	handle.max_consume_per_tick = max_consume_per_tick
-	handle.consume_buffer_ticks = consume_buffer_ticks
-	handle.replay_buffer_depth = replay_buffer_depth
-	handle.max_consume_lag_ticks = max_consume_lag_ticks
-	handle.teleport_threshold = teleport_threshold
-	handle.collision_cooldown_ticks = collision_cooldown_ticks
-	handle.divergence_epsilon = divergence_epsilon
+# The exports the scene actually moved, pushed onto the entity's handle over the
+# archetype bundle they refine.
+#
+# A default export is a valid choice, not a declaration, so a key left alone
+# must not answer for the scene. This used to be settled by sending the handle a
+# scene_declared map and having the bundle skip the keys it named, which meant
+# every default was written twice -- once as the @export initializer, once as a
+# literal in the comparison beside it -- and changing one silently moved the
+# arbitration. The defaults now have one source, a pristine handle, and the
+# ordering carries what the map used to: the preset lands first, and only the
+# exports that differ are written over it.
+#
+# The arbitration is the component's, because the component is the only party
+# that knows which source spoke. Nothing about it reaches the handle any more.
+func _push_config(handle: NetwPredictionHandle) -> void:
+	if archetype != Archetype.NONE:
+		handle.archetype = archetype as NetwPredict.Archetype
+	var pristine := NetwPredictionHandle.new()
+	if schedule != pristine.schedule:
+		handle.schedule = schedule as NetwPredict.Schedule
+	if correction_mode != pristine.correction_mode:
+		# The mechanism and the strategy are one fact at two altitudes, and a
+		# preset names the strategy. A scene naming the mechanism directly has
+		# overridden that choice, so the preset's policy is un-named as well --
+		# otherwise resolved_recovery_policy() would keep answering with the
+		# strategy the scene just outranked. This is the ordering doing what the
+		# scene_declared map used to do for this pair.
+		handle.recovery_policy = -1
+		handle.correction_mode = correction_mode
+	if snap_restore != pristine.snap_restore:
+		handle.snap_restore = snap_restore
+	if max_restore_ticks != pristine.max_restore_ticks:
+		handle.max_restore_ticks = max_restore_ticks
+	if missing_policy != pristine.missing_policy:
+		handle.missing_policy = missing_policy
+	if max_consume_per_tick != pristine.max_consume_per_tick:
+		handle.max_consume_per_tick = max_consume_per_tick
+	if consume_buffer_ticks != pristine.consume_buffer_ticks:
+		handle.consume_buffer_ticks = consume_buffer_ticks
+	if replay_buffer_depth != pristine.replay_buffer_depth:
+		handle.replay_buffer_depth = replay_buffer_depth
+	if max_consume_lag_ticks != pristine.max_consume_lag_ticks:
+		handle.max_consume_lag_ticks = max_consume_lag_ticks
+	if not is_equal_approx(teleport_threshold, pristine.teleport_threshold):
+		handle.teleport_threshold = teleport_threshold
+	if collision_cooldown_ticks != pristine.collision_cooldown_ticks:
+		handle.collision_cooldown_ticks = collision_cooldown_ticks
+	if not is_equal_approx(divergence_epsilon, pristine.divergence_epsilon):
+		handle.divergence_epsilon = divergence_epsilon
 	if simulate.is_valid():
 		handle.simulate = simulate
-	# A default export is a valid choice, not a declaration, so only a value
-	# the scene moved off its default claims the key.
-	var declared: Dictionary[StringName, bool] = { }
-	if schedule != Schedule.TICK:
-		declared[&"tier"] = true
-	if missing_policy != MissingInput.STALL:
-		declared[&"hold"] = true
-	if replay_buffer_depth != 0:
-		declared[&"buffer_depth"] = true
-	if max_consume_lag_ticks != 60:
-		declared[&"resync_ceiling"] = true
-	if not is_equal_approx(divergence_epsilon, 0.01):
-		declared[&"epsilon"] = true
-	if not is_equal_approx(teleport_threshold, 2.0):
-		declared[&"teleport_threshold"] = true
-	if collision_cooldown_ticks != 6:
-		declared[&"cooldown_ticks"] = true
-	if correction_mode != CorrectionMode.AUTO:
-		declared[&"policy"] = true
-	if snap_restore != RestoreMode.EXACT:
-		declared[&"projection"] = true
-	handle.scene_declared = declared
-	# The bundle lands after the declared keys are known, so an export moved
-	# off its default keeps outranking the preset it refines. The archetype
-	# itself is claimed only afterward, so this push applies the bundle while
-	# a later code restatement is refused as the two-source error it is.
-	if archetype != Archetype.NONE:
-		handle.archetype(
-			archetype as NetwLagCompensationInterface.PredictionHandle.Archetype,
-		)
-		declared[&"archetype"] = true
 
 
 # The one reconciliation invariant that is always wrong: a deadzone below a
@@ -322,13 +307,19 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 	var set := _owner_state_set()
 	if not set:
 		return out
-	for field in set.fields:
-		if field.lane != NetwSyncSet.Lane.VOLATILE:
+	for field in set.columns:
+		if field.lane != NetwPropertySet.Lane.VOLATILE:
+			continue
+		# The warning's whole premise is that the field corrects on noise, and no
+		# class but causal can raise a correction at all. On any other class the
+		# threshold bounds nothing, so demanding it clear the codec floor would
+		# ask for a number that decides nothing.
+		if field.property_class != NetwPropertySet.PropertyClass.CAUSAL:
 			continue
 		var codec: NetwQuantize = field.quantizer
 		if not codec:
 			continue
-		var floor_error := codec._max_error(typeof(owner.get(field.key)) as Variant.Type)
+		var floor_error := codec.max_error(typeof(owner.get(field.key)) as Variant.Type)
 		var epsilon := field.epsilon_override \
 		if field.epsilon_override >= 0.0 else divergence_epsilon
 		if epsilon < floor_error:
@@ -346,21 +337,23 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 # The owner's derived state set, resolved statically from its script, so the
 # editor lint reads the same fields, quantizers, and epsilon marks the runtime
 # gathers. Null when the owner is scriptless or marks no state set.
-func _owner_state_set() -> NetwSyncSet:
+func _owner_state_set() -> NetwPropertySet:
 	if not owner:
 		return null
 	var script := owner.get_script() as Script
 	if not script:
 		return null
-	return NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_STATE)
+	return NetwPropertySet.from_script(script, NetwPropertySet.Record.RECORD_STATE)
 
 
 ## Opens a [member collision_cooldown_ticks] window pausing sub-teleport
 ## recoveries, so a contact transient is not corrected through. Call it when the
 ## predicted body registers a collision.
 func notify_contact() -> void:
-	if _entity:
-		_entity.prediction.notify_contact()
+	if _entity and is_instance_valid(_iface):
+		var api := _iface._api()
+		if api:
+			api.predict_notify_contact(api.rid_of(_entity.owner))
 
 
 ## Sets whether the authoritative body is asleep. Corrections pause while asleep so
@@ -380,7 +373,7 @@ func set_sleeping(value: bool) -> void:
 ## and tests can resolve without a wired entity. Delegates to the engine's
 ## resolver so the rule lives in one place.
 static func resolve_correction_mode_for(body: Node, mode: int) -> CorrectionMode:
-	return NetwLagCompensationInterface.PredictionHandle.resolve_correction_mode_for(
+	return NetwPredictionHandle.resolve_correction_mode_for(
 		body,
 		mode,
 	) as CorrectionMode
@@ -395,7 +388,7 @@ static func diverged(
 		epsilon: float,
 		overrides: Dictionary,
 ) -> bool:
-	return NetwLagCompensationInterface.PredictionHandle.diverged(
+	return NetwPredictionHandle.diverged(
 		predicted,
 		authoritative,
 		epsilon,
@@ -406,4 +399,4 @@ static func diverged(
 ## Returns the per-property error between two values, radians for a rotation.
 ## Delegates to the engine's reconciliation math.
 static func value_error(a: Variant, b: Variant) -> float:
-	return NetwLagCompensationInterface.PredictionHandle.value_error(a, b)
+	return NetwPredictionHandle.value_error(a, b)

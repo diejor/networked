@@ -3,6 +3,30 @@ class_name TestNetwLogScope
 extends NetwTestSuite
 
 const MODULE := "core.test_scope"
+const SILENT_PROFILE := preload(
+	"res://tests/unit/core/data/netw_log_silent.tres"
+)
+
+
+func test_profile_resource_cannot_silence_error() -> void:
+	NetwLog.push_settings(SILENT_PROFILE)
+
+	await assert_error(
+		func() -> void:
+			Netw.dbg.error(
+				"profile error floor",
+				[],
+				func(message: String) -> void: push_error(message),
+			)
+	).is_push_error("profile error floor")
+
+	NetwLog.pop_settings()
+
+
+func test_stack_scan_finds_the_addon_root_after_log_rename() -> void:
+	NetwLog._ensure_initialized()
+
+	assert_str(NetwLog._addon_root).is_equal("addons/networked")
 
 
 func test_scoped_global_level_applies_until_close() -> void:

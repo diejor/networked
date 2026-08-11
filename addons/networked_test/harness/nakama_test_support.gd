@@ -7,7 +7,7 @@
 ## var host := await NakamaTestSupport.start_host(self)
 ## var client := NakamaTestSupport.make_client_tree(self, "client")
 ## var target := NakamaTestSupport.make_join_target(client, host.room)
-## await client.join(target, NakamaTestSupport.payload("client"))
+## await NetwConnector.of(client.api).join(target, NakamaTestSupport.payload("client"))
 ## [/codeblock]
 class_name NakamaTestSupport
 extends RefCounted
@@ -15,6 +15,55 @@ extends RefCounted
 const _RUN_PREFIX_ENV := "NETW_NAKAMA_TEST_RUN"
 
 static var _prefix := ""
+
+# Cached per PackedScene so a do_skip expression can call the check without
+# instantiating the scene again on every evaluation.
+static var _drivable := { }
+
+
+## Returns why a suite driving [param packed] must skip, or an empty [String]
+## when it can run.
+##
+## Answers both halves a live suite depends on, the reachable server and the
+## drivable scene, so a suite states one condition instead of two.
+## [codeblock]
+## func before(
+##         do_skip = NakamaTestSupport.skip_reason(MAIN) != "",
+##         skip_reason = NakamaTestSupport.skip_reason(MAIN),
+## ) -> void:
+## [/codeblock]
+static func skip_reason(packed: PackedScene) -> String:
+	if NakamaTestServer.unavailable():
+		return NakamaTestServer.SKIP_REASON
+	return undrivable(packed)
+
+
+## Returns why [param packed] cannot be driven, or an empty [String] when it can.
+##
+## [method host_scene] and [method join_scene] configure a scene-owned
+## [MultiplayerTree] per peer, which is what lets one process stand up several
+## independently configured peers. A scene that installs its session at the root
+## instead has no such node, so this harness cannot drive it, and a suite that
+## says so is honest where one that dies on the resulting [code]null[/code]
+## reports four cascading errors for a single cause.
+static func undrivable(packed: PackedScene) -> String:
+	if _drivable.has(packed):
+		return _drivable[packed]
+	var scene := packed.instantiate()
+	var found := 0
+	for node in _collect_nodes(scene):
+		if node is MultiplayerTree:
+			found += 1
+	scene.free()
+	var reason := ""
+	if found != 1:
+		reason = (
+				"%s needs one scene-owned MultiplayerTree per peer and this scene "
+				+ "has %d. A root-installed session cannot be driven by this "
+				+ "harness."
+		) % [packed.resource_path, found]
+	_drivable[packed] = reason
+	return reason
 
 
 ## Builds and hosts a [MultiplayerTree] backed by [NakamaBackend].
@@ -32,8 +81,8 @@ static func start_host(
 		tree.queue_free()
 		return { }
 	var room := ""
-	if tree.connector and tree.connector.peer_view:
-		room = tree.connector.peer_view.join_address()
+	if tree.api and NetwConnector.of(tree.api).peer_view:
+		room = NetwConnector.of(tree.api).peer_view.join_address()
 	return {
 		tree = tree,
 		room = room,
@@ -92,8 +141,8 @@ static func host_scene(
 		scene.queue_free()
 		return { }
 	var room := ""
-	if tree.connector and tree.connector.peer_view:
-		room = tree.connector.peer_view.join_address()
+	if tree.api and NetwConnector.of(tree.api).peer_view:
+		room = NetwConnector.of(tree.api).peer_view.join_address()
 	return {
 		tree = tree,
 		room = room,
@@ -113,10 +162,12 @@ static func join_scene(
 	_configure_tree(tree, username)
 	parent.add_child(scene)
 
-	var err: Error = await tree.join(
-		make_join_target(tree, room),
-		payload(username, _level_1_spawn()),
-		10.0,
+	var err := NetwConnector.error_of(
+		await NetwConnector.of(tree.api).join(
+			make_join_target(tree, room),
+			payload(username, _level_1_spawn()),
+			10.0,
+		),
 	)
 	if err != OK:
 		push_error("NakamaTestSupport: join scene failed: %s" % error_string(err))
@@ -148,9 +199,9 @@ static func _make_tree(
 
 static func _configure_tree(tree: MultiplayerTree, username: String) -> void:
 	tree.auto_host_headless = false
-	tree.desired_role = NetwSessionInterface.Role.LISTEN_SERVER
+	tree.desired_role = NetwMultiplayer.Role.LISTEN_SERVER
 	_attach_directory(tree, username)
-	tree.scheme = &"nakama"
+	tree.transport = NetwNakamaParams.new()
 
 
 static func _attach_directory(tree: MultiplayerTree, username: String) -> void:

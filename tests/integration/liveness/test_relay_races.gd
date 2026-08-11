@@ -49,9 +49,9 @@ func test_spawn_edge_race() -> void:
 
 	# Send carrier on unknown route 99
 	var framed = _frame_carrier(99)
-	client_api.replication.receive_carrier(framed, 0)
+	client_api._drive_carrier(0, framed, true)
 
-	var snapshot = client_api.monitor_snapshot()
+	var snapshot = client_api.stats_snapshot()
 	assert_that(snapshot.get("drops_unknown_route", 0)).is_equal(1)
 
 	# Spawn player normally and ensure it converges
@@ -61,8 +61,8 @@ func test_spawn_edge_race() -> void:
 
 	var client_entity = NetwEntity.of(client_player)
 	var server_entity = NetwEntity.of(player)
-	var client_liveness: NetwLivenessInterface = client.api.liveness
-	var server_liveness: NetwLivenessInterface = server.api.liveness
+	var client_liveness: LivenessShell = client.api._liveness
+	var server_liveness: LivenessShell = server.api._liveness
 
 	var route = server_liveness.route_of(server_entity)
 	assert_that(route).is_greater(0)
@@ -96,26 +96,26 @@ func test_despawn_edge_race() -> void:
 	await NetwTestSuite.drain_frames(get_tree(), 1)
 
 	# Assert that route is dead on server
-	var server_liveness: NetwLivenessInterface = server.api.liveness
+	var server_liveness: LivenessShell = server.api._liveness
 	assert_that(server_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.DEAD,
+		LivenessShell.State.DEAD,
 	)
 
 	# Step client to receive the despawn packet and update route state
 	await NetwTestSuite.drain_frames(get_tree(), 5)
 
 	# Verify route is no longer live on client
-	var client_liveness: NetwLivenessInterface = client.api.liveness
+	var client_liveness: LivenessShell = client.api._liveness
 	assert_that(client_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.DEAD,
+		LivenessShell.State.DEAD,
 	)
 
 	# Verify the client carrier drops frames on a dead route under drops_not_live
 	var client_api: NetwMultiplayer = client.api
 	var framed = _frame_carrier(route)
-	client_api.replication.receive_carrier(framed, 0)
+	client_api._drive_carrier(0, framed, true)
 
-	var snapshot = client_api.monitor_snapshot()
+	var snapshot = client_api.stats_snapshot()
 	assert_that(snapshot.get("drops_not_live", 0)).is_equal(1)
 
 
@@ -146,17 +146,17 @@ func test_linger_variant() -> void:
 	me.despawn(opts)
 
 	# Server route should be LINGERING
-	var server_liveness: NetwLivenessInterface = server.api.liveness
+	var server_liveness: LivenessShell = server.api._liveness
 	assert_that(server_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.LINGERING,
+		LivenessShell.State.LINGERING,
 	)
 
 	# Frame a carrier on the lingering route and send it to the server carrier
 	var server_api: NetwMultiplayer = server.api
 	var framed = _frame_carrier(route)
-	server_api.replication.receive_carrier(framed, 0)
+	server_api._drive_carrier(0, framed, true)
 
-	var snapshot = server_api.monitor_snapshot()
+	var snapshot = server_api.stats_snapshot()
 	assert_that(snapshot.get("drops_not_live", 0)).is_equal(1)
 
 	# Step past linger window. The DEAD transition resolves at end-of-frame
@@ -167,7 +167,7 @@ func test_linger_variant() -> void:
 
 	# Route is now dead on server
 	assert_that(server_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.DEAD,
+		LivenessShell.State.DEAD,
 	)
 
 

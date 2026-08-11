@@ -2,10 +2,10 @@
 ##
 ## A [NetwTransport] recognizes a [NetwConnectTarget] or [NetwHostConfig] by its
 ## scheme, then produces the peer. It holds no per-connection state, so one
-## instance is registered process-wide on [NetwConnector] and shared safely
-## across every session, including the debugger's cloned sessions. All live
-## state a connection accumulates lives on the [NetwConnectAttempt] that builds
-## it and the [NetwPeerView] that owns it afterward.
+## instance is [method register]ed process-wide and shared safely across every
+## session, including the debugger's cloned sessions. All live state a
+## connection accumulates lives on the [NetwConnectAttempt] that builds it and
+## the [NetwPeerView] that owns it afterward.
 ## [codeblock]
 ## ┌──────────────┐  _join/_host   ┌───────────────────┐  _make_view  ┌──────────────┐
 ## │ NetwTransport│ ─────────────▶ │ NetwConnectAttempt│ ───────────▶ │ NetwPeerView │
@@ -20,7 +20,8 @@ extends RefCounted
 enum Capability {
 	## The transport answers probes through [method _make_probe_peer].
 	SUPPORTS_PROBE = 1,
-	## [method NetwConnector.join_or_host] may host directly instead of probing.
+	## [method NetwConnector.join_or_host] may host directly instead of
+	## probing.
 	LISTEN_FALLBACK = 2,
 }
 
@@ -28,13 +29,88 @@ enum Capability {
 ## timing out.
 const PROBE_TIMEOUT := 2.0
 
+# Process-global, priority-ordered registry. Transports are stateless, so global
+# registration is safe across the debugger's cloned sessions.
+static var _registry: Array[NetwTransport] = []
+
+
+## Registers [param transport] in the process-global registry.
+##
+## The first transport whose [method _can_join] or [method _can_host] answers
+## wins, so [param at_front] gives one priority over earlier registrations. A
+## session narrows this list for itself through
+## [member NetwConnector.transports].
+static func register(transport: NetwTransport, at_front := false) -> void:
+	if transport in _registry:
+		return
+	if at_front:
+		_registry.push_front(transport)
+	else:
+		_registry.push_back(transport)
+
+
+## Removes [param transport] from the process-global registry.
+static func unregister(transport: NetwTransport) -> void:
+	_registry.erase(transport)
+
+
+## Returns the process-global registry in priority order.
+static func registered() -> Array[NetwTransport]:
+	return _registry
+
+
+## Returns [param source] typed by the registered transport that claims
+## [param scheme], or [code]null[/code] when this build registers none.
+##
+## The one door from the persistence form back to the authoring form. A saved
+## [NetwConnectTarget] and a lobby directory row arrive as dictionaries for
+## schemes a given export may not carry, so the transport that recognizes the
+## scheme is the only thing that can type the row. See
+## [method _params_from_dict].
+static func params_from_dict(
+		scheme: StringName,
+		source: Dictionary,
+) -> NetwTransportParams:
+	for transport in _registry:
+		if transport._scheme() == scheme:
+			return transport._params_from_dict(source)
+	return null
+
+
+# Registers the built-in transports once, when the class first loads, so a bare
+# session resolves the shipped schemes with no setup. Transports are stateless,
+# so a single shared instance of each is correct. A game registers its own on
+# top, or narrows the list per session through NetwConnector.transports. The
+# web-only WebRTC loopback is registered by the web entry point, not here, since
+# it claims the same scheme as the tracker transport. The directory backed
+# transports hold no SDK state and resolve a clean error when their lobby
+# directory service is absent, so they register unconditionally too.
+static func _static_init() -> void:
+	register(ENetTransport.new())
+	register(WebSocketTransport.new())
+	register(LocalTransport.new())
+	register(TrackerWebRTCTransport.new())
+	register(NakamaTransport.new())
+	register(SteamTransport.new())
+
 
 ## Returns the canonical scheme this transport joins and hosts, such as
 ## [code]&"enet"[/code]. Browse UI reads it to stamp the [member
-## NetwConnectTarget.scheme] and [member NetwHostConfig.scheme] a picked
-## transport recognizes. Empty on the base.
-func scheme() -> StringName:
+## NetwConnectTarget.scheme] a picked transport recognizes. Empty on the base.
+func _scheme() -> StringName:
 	return &""
+
+
+## Returns [param source] read back into this transport's [NetwTransportParams].
+##
+## This is the persistence seam. Authoring is typed, but a saved
+## [NetwConnectTarget] and a lobby directory row are dictionaries, so the
+## transport that recognizes a row is the one that types it. Returning
+## [code]null[/code] leaves the row untyped, which is correct for a scheme this
+## build did not register.
+@warning_ignore("unused_parameter")
+func _params_from_dict(source: Dictionary) -> NetwTransportParams:
+	return null
 
 
 ## Returns [code]true[/code] when this transport recognizes [param target].
@@ -46,15 +122,6 @@ func _can_join(target: NetwConnectTarget) -> bool:
 ## Returns [code]true[/code] when this transport recognizes [param config].
 @warning_ignore("unused_parameter")
 func _can_host(config: NetwHostConfig) -> bool:
-	return false
-
-
-## Returns [code]true[/code] when [param peer] belongs to this transport.
-##
-## [NetwConnector] uses this to resolve the [NetwPeerView] for a peer it did not
-## build itself, such as one assigned directly by user code.
-@warning_ignore("unused_parameter")
-func _can_view(peer: MultiplayerPeer) -> bool:
 	return false
 
 

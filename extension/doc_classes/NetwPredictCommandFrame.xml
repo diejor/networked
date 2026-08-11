@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictCommandFrame" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="ack_of_acks" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="append_evidence">
+			<return type="bool" />
+			<param index="0" name="evidence_mask" type="int" />
+			<param index="1" name="pre_fp" type="int" />
+			<param index="2" name="post_fp" type="int" />
+			<param index="3" name="e_digest" type="int" />
+			<param index="4" name="topo_fp" type="int" />
+			<param index="5" name="witness_fp" type="int" />
+			<param index="6" name="pre_family_fps" type="PackedInt32Array" />
+			<param index="7" name="post_family_fps" type="PackedInt32Array" />
+			<param index="8" name="raw_fp" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="append_payload">
+			<return type="bool" />
+			<param index="0" name="values" type="Array" />
+			<description>
+			</description>
+		</method>
+		<method name="append_transition">
+			<return type="bool" />
+			<param index="0" name="index" type="int" />
+			<param index="1" name="label" type="int" />
+			<param index="2" name="fresh" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="create" qualifiers="static">
+			<return type="NetwPredictCommandFrame" />
+			<param index="0" name="schema" type="SchemaRecord" />
+			<description>
+			</description>
+		</method>
+		<method name="e_digests" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="epoch" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="evidence_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="evidence_masks" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="fresh_flags" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="from_bytes" qualifiers="static">
+			<return type="NetwPredictCommandFrame" />
+			<param index="0" name="schema" type="SchemaRecord" />
+			<param index="1" name="bytes" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="indices" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+			</description>
+		</method>
+		<method name="labels" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+			</description>
+		</method>
+		<method name="payload_at" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="index" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="payload_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="post_family_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="post_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="pre_family_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="pre_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="raw_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="set_ack_of_acks">
+			<return type="void" />
+			<param index="0" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="set_epoch">
+			<return type="void" />
+			<param index="0" name="epoch" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="to_bytes" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="topo_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="transition_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="witness_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>
