@@ -10,8 +10,6 @@ namespace netw {
 
 namespace {
 
-// Storage array class per ColumnType, indexed by the enum value. Wire width is
-// a separate concern, which is why the narrow integers share one storage type.
 const Variant::Type STORAGE_TYPES[SchemaCore::COLUMN_TYPE_COUNT] = {
     Variant::PACKED_FLOAT32_ARRAY,
     Variant::PACKED_FLOAT64_ARRAY,
@@ -31,9 +29,6 @@ const Variant::Type STORAGE_TYPES[SchemaCore::COLUMN_TYPE_COUNT] = {
     Variant::ARRAY,
 };
 
-// The Variant::Type one element of each ColumnType reads as, which is the type
-// a quantizer is asked to support and encode. VARIANT reads as NIL, because a
-// self-describing element has no one type to pack.
 const Variant::Type ELEMENT_TYPES[SchemaCore::COLUMN_TYPE_COUNT] = {
     Variant::FLOAT,
     Variant::FLOAT,
@@ -58,8 +53,6 @@ bool in_range(int type) {
 }
 
 } // namespace
-
-/* SchemaColumn */
 
 Ref<SchemaColumn> SchemaColumn::create(
     const StringName &key,
@@ -155,8 +148,6 @@ void SchemaColumn::_bind_methods() {
         "get_quantizer"
     );
 }
-
-/* SchemaRecord */
 
 Ref<SchemaColumn> SchemaRecord::at(int column) const {
     if (column < 0 || column >= columns.size()) {
@@ -254,8 +245,6 @@ void SchemaRecord::_bind_methods() {
     );
 }
 
-/* SchemaCore — declaration */
-
 void SchemaCore::declare(const RID &schema, const StringName &name) {
     Ref<SchemaRecord> existing = record_of(schema);
     if (existing.is_valid()) {
@@ -294,8 +283,6 @@ Error SchemaCore::seal(const RID &schema) {
     }
     return fix(record);
 }
-
-/* SchemaCore — reflection */
 
 Ref<SchemaRecord> SchemaCore::record_of(const RID &schema) const {
     const HashMap<RID, Ref<SchemaRecord>>::ConstIterator found
@@ -391,8 +378,6 @@ bool SchemaCore::has_stride(const RID &schema) const {
     }
     return false;
 }
-
-/* SchemaCore — the record-facing halves */
 
 void SchemaCore::open_redeclare(const Ref<SchemaRecord> &record) {
     if (record.is_null()) {
@@ -494,8 +479,6 @@ int SchemaCore::match_redeclared(
     return at;
 }
 
-/* SchemaCore — shape */
-
 int SchemaCore::compute_hash(const Ref<SchemaRecord> &record) {
     if (record.is_null()) {
         return 0;
@@ -512,9 +495,6 @@ int SchemaCore::compute_hash(const Ref<SchemaRecord> &record) {
             + String::num_int64(column->stride) + ":" + quantizer_tag(column)
         );
     }
-    // Through uint32_t explicitly: String::hash answers uint32_t in the engine
-    // and int64_t in godot-cpp, so letting one tier sign-extend would part the
-    // two hashes on the high bit.
     const uint32_t folded
         = static_cast<uint32_t>(String("|").join(parts).hash());
     return static_cast<int>(folded & 0xFFFFu);

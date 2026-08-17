@@ -11,9 +11,9 @@ class WarmSpyBackend extends TestMemoryBackend:
 	var warm_calls: Array = []
 
 
-	func _warm(directives: Array) -> Error:
+	func _warm(directives: Array) -> NetwPromise:
 		warm_calls.append(directives)
-		return OK
+		return NetwPromise.resolved(OK)
 
 
 # Warms only the players table, leaving every other table lazy.

@@ -101,11 +101,14 @@ func test_database_round_trip_restores_position() -> void:
 
 	var engine := _engine(player)
 	var api := harness.server().api
-	var entity := api.rid_of(player)
+	var entity := api.entity_of(player)
 	var err: Error = await api.persist_flush(entity)
 	assert_that(err).is_equal(OK)
 
-	var raw: Dictionary = backend.find_by_id(&"players_save", engine._record_id())
+	var raw: Dictionary = await NetwDatabase.settled_value(
+		backend.find_by_id(&"players_save", engine._record_id()),
+		{ },
+	)
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 	player.position = Vector2.ZERO

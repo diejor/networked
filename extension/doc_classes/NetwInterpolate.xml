@@ -68,6 +68,14 @@
 				Sets [member smoothing] to [param seconds].
 			</description>
 		</method>
+		<method name="smoothing_weight" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="frame_delta" type="float" />
+			<description>
+				How far one frame of [param frame_delta] seconds moves the display toward its sampled target, given [member smoothing].
+				Frame-rate independent by construction: two frames of half the delta compose to the same weight as one whole frame, so a display filtered here looks the same at any frame rate. A channel with no [member smoothing] takes the whole step.
+			</description>
+		</method>
 		<method name="snap_at">
 			<return type="NetwInterpolate" />
 			<param index="0" name="distance" type="float" />

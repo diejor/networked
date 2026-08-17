@@ -72,11 +72,14 @@ func test_server_read_snapshot_persists_live_value() -> void:
 
 	# The server holds the authoritative position and its engine reads it live.
 	server_player.position = Vector2(10, 20)
-	var engine := NetwEntity.of(server_player).persistence
+	var engine: NetwPersistenceEngine = NetwEntity.of(server_player).persistence
 	var api := harness.server().api
-	await api.persist_flush(api.rid_of(server_player))
+	await api.persist_flush(api.entity_of(server_player))
 
-	var raw: Dictionary = db.backend.find_by_id(&"security", engine._record_id())
+	var raw: Dictionary = await NetwDatabase.settled_value(
+		db.backend.find_by_id(&"security", engine._record_id()),
+		{ },
+	)
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 

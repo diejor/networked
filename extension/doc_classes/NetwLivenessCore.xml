@@ -18,7 +18,7 @@
 		core.set_state(entity, NetwLivenessCore.STATE_DEAD)
 		# core.route_state(route) stays STATE_DEAD for the rest of the session
 		[/codeblock]
-		[method set_state] moves forward only and returns [code]false[/code] on a backward edge, so a caller decides for itself whether a refused edge is a bug or a stale packet to drop. [method bind_route] is the one backward door, and only from [constant STATE_DEAD] to [constant STATE_LIVE], which is the re-admission a spawn frame performs when it arrives after the despawn that tombstoned its route. A re-admission binds a fresh handle, so the superseded record keeps its tombstone and never resurrects.
+		[method set_state] moves forward only and returns [code]false[/code] on a backward edge, so a caller decides for itself whether a refused edge is a bug or a stale packet to drop. [method bind_route] is the one backward door, and only from [constant STATE_DEAD] to [constant STATE_LIVE], which is the re-admission a spawn frame performs when it arrives after the despawn that tombstoned its route. A record is the entity's session-long identity row rather than one life's, so a re-admission lands on the record that wore the tombstone and spends one [method epoch_of]. A different handle asking for that route is refused.
 		A reliable event that must not be lost across the spawn window parks on its route through [method when_live] instead of retrying, and one of three things happens to it. A binding that means something to waiters answers them through [method flush_live]. A deadline passing during [method poll] expires them. A route dying drops them through [method abandon_live], because a tombstoned route can never go live and a waiter on one is waiting forever.
 		[codeblock]
 		when_live(route, cb, deadline)  ──flush_live(route)───▶  cb runs
@@ -38,13 +38,21 @@
 				Drops every caller waiting on [param route] without running any of them, neither the callback nor its timeout. This is what a route reaching [constant STATE_DEAD] does to its waiters: the route can never go live, so a wait on it would otherwise never end.
 			</description>
 		</method>
+		<method name="adopt">
+			<return type="bool" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Opens a record on a handle this store did not mint, becoming one of the handle's holders, and answers [code]false[/code] for a handle [NetwEntityIds] never issued so a forged handle cannot open a record. Idempotent, and a second call claims no second hold.
+				This is the door a wrapper comes through. A [NetwEntity] carries its handle from construction, before any session exists to number it, and a session learns the entity by adopting that handle rather than by minting one of its own.
+			</description>
+		</method>
 		<method name="bind_route">
 			<return type="bool" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="route" type="int" />
 			<description>
-				Binds [param entity] to [param route] and moves it to [constant STATE_LIVE], returning [code]false[/code] when [param route] is not positive or [param entity] names no record.
-				Re-pointing a route supersedes whatever record held it before. The superseded record keeps its own state, so a tombstone that loses its route stays dead.
+				Binds [param entity] to [param route] and moves it to [constant STATE_LIVE], returning [code]false[/code] when [param route] is not positive, when [param entity] names no record, or when another handle already holds [param route].
+				A route names one handle for the whole session and a tombstone keeps its route, so a route never renames. On the record's own handle a bind from [constant STATE_DEAD] is the re-admission: the record comes back live and [method epoch_of] counts one more life. Nothing else moves the epoch.
 				Waiters parked through [method when_live] are not answered here. Call [method flush_live] when this binding is the news they were waiting for.
 			</description>
 		</method>
@@ -54,6 +62,7 @@
 			<description>
 				Binds every route in [param routes] as a live record with no entity behind it, the identity a replicated row is, and answers whatever was waiting on each through [method flush_live].
 				A route already standing is reused rather than minted past, so a row arriving for a route an entity already holds lands on that same record. Both orderings therefore converge on one identity. A route at or below zero is skipped.
+				Nothing is emitted per route. A wave of two thousand rows carries no wrapper for a listener to reach, so the bulk doors mint identities and say nothing, and a caller that needs to know parks through [method when_live].
 			</description>
 		</method>
 		<method name="clear">
@@ -66,6 +75,14 @@
 			<return type="RID" />
 			<description>
 				Mints a record and returns its handle. A fresh record carries no route and reads [constant STATE_UNKNOWN] until [method bind_route].
+			</description>
+		</method>
+		<method name="epoch_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Returns which life of [param entity] is current, counting from [code]0[/code], or [code]-1[/code] when this store holds no such record. Every life it does hold has a number and zero is one of them, which is why the refusal is not zero.
+				The handle names the record for the whole session and the epoch names the life inside it, so the pair is what tells a frame authored before a re-admission from one authored after.
 			</description>
 		</method>
 		<method name="entity_is_valid" qualifiers="const">

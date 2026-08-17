@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwCarrierBuffers" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="append">
+			<return type="PackedByteArray" />
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="frame" type="PackedByteArray" />
+			<param index="2" name="reliable" type="bool" />
+			<param index="3" name="budget" type="int" />
+			<description>
+				Adds [param frame] to [param peer]'s run and answers the run that must go out before it, empty when none does.
+				[param budget] bounds an unreliable run and is ignored for a reliable one. A frame that alone exceeds the budget still rides: it opens an empty run, so there is nothing to hand back, and refusing it here would drop a frame the caller has no other way to send.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="peers" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<param index="0" name="reliable" type="bool" />
+			<description>
+				Every peer holding bytes on one lane, sorted, so two flushes in one frame agree about the order they went out in.
+			</description>
+		</method>
+		<method name="pending" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="reliable" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="take">
+			<return type="PackedByteArray" />
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="reliable" type="bool" />
+			<description>
+				Empties [param peer]'s run on the named lane and answers it.
+			</description>
+		</method>
+	</methods>
+</class>

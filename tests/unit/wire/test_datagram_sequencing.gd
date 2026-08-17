@@ -19,7 +19,7 @@ class SeqTargetNode:
 
 var mt: MultiplayerTree
 var api: NetwMultiplayer
-var liveness: LivenessShell
+var native_core: NetwMultiplayerCore
 
 
 func before_test() -> void:
@@ -28,14 +28,14 @@ func before_test() -> void:
 	add_child(mt)
 	auto_free(mt)
 	api = mt.api
-	liveness = api._liveness
+	native_core = api._native_core
 
 
 func _bound_entity(route: int, node: Node) -> NetwEntity:
 	var entity := NetwEntity.ensure(node)
 	mt.add_child(node)
 	auto_free(node)
-	liveness.bind_route(route, entity)
+	native_core.liveness_bind_route(route, entity)
 	return entity
 
 
@@ -44,7 +44,7 @@ func _bound_entity(route: int, node: Node) -> NetwEntity:
 func _prop_payload(property: StringName, value: Variant) -> PackedByteArray:
 	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_token(w, property)
-	NetwScriptModel.write_values(w, [value], [], [typeof(value)])
+	NetwCodec.write_values(w, [value], [], [typeof(value)])
 	return w.to_bytes()
 
 

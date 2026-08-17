@@ -18,6 +18,8 @@
 			<param index="6" name="epsilon_override" type="float" default="-1.0" />
 			<param index="7" name="teleport_at" type="float" default="-1.0" />
 			<param index="8" name="angle" type="bool" default="false" />
+			<param index="9" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="10" name="type" type="int" default="0" />
 			<description>
 			</description>
 		</method>

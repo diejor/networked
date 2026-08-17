@@ -21,7 +21,7 @@ class RecoverOnly extends NetwMultiplayer:
 			wiring: NetwPredict.Wiring,
 			verdict: NetwPredict.Verdict,
 			tick_delta: float,
-	) -> Dictionary:
+	) -> NetwPredictRecovery:
 		var plan := super(
 			payload,
 			policy,
@@ -34,8 +34,9 @@ class RecoverOnly extends NetwMultiplayer:
 			verdict,
 			tick_delta,
 		)
-		plan[&"skip"] = true
-		return plan
+		return NetwPredictRecovery.of(
+			plan.restore(), plan.write(), plan.teleport(), true
+		)
 
 
 class Deeper extends RecoverOnly:

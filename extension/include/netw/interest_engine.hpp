@@ -6,16 +6,11 @@
 #include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
+#include "godot/callable.hpp"
+#include "netw/interest_decl.hpp"
 
 namespace netw {
 
-// Packed peer-bit operations over 63-bit words. The sign bit is never touched,
-// so every row is a positive integer on both sides of the language boundary,
-// where GDScript has no unsigned int to receive it in.
-//
-// Rows are bare `PackedInt64Array` by contract rather than by convenience: they
-// cross to worker tasks by value, and an Object or a per-row wrapper is what
-// would stop them.
 class NetwInterestBitSet : public godot::RefCounted {
     GDCLASS(NetwInterestBitSet, godot::RefCounted)
 
@@ -63,9 +58,6 @@ public:
     static int popcount(const godot::PackedInt64Array &row);
 };
 
-// Plain counters describing one recompute. They belong to the pass that
-// produced them, so a pass that is computed and never committed carries its own
-// counters away with it.
 class NetwInterestStats : public godot::RefCounted {
     GDCLASS(NetwInterestStats, godot::RefCounted)
 
@@ -106,23 +98,6 @@ public:
     godot::PackedInt32Array to_array() const;
 };
 
-// What one recompute produced: the rows that move, the ordered per-peer
-// transitions, the same transitions attributed to the layer that owes them, and
-// the counters.
-//
-// It is a value handed out by `recompute` and handed back to `commit`, and
-// between those two calls the engine's read matrix is untouched, which is what
-// lets a caller decide what a transition means before acting on it. The
-// snapshots `commit` needs are carried inside it and are nobody else's
-// business, so they are not on the bound surface.
-//
-// [codeblock]
-// keys ┄ old_rows ┄ new_rows ┄ order_keys   parallel, one per moved row
-// shows ┄┄┄┄┄┄┄┄┄┄┄ [entity, bit]           ordered parent-first
-// hides ┄┄┄┄┄┄┄┄┄┄┄ [entity, bit]           ordered child-first
-// layer_shows/hides [layer, entity, bit]    the same edges, attributed
-// removed_keys ┄┄┄┄ entities that left      their last row is a hide
-// [/codeblock]
 class NetwInterestDelta : public godot::RefCounted {
     GDCLASS(NetwInterestDelta, godot::RefCounted)
 
@@ -141,11 +116,9 @@ public:
     godot::PackedInt64Array removed_keys;
     godot::Ref<NetwInterestStats> stats;
 
-    // What `commit` advances the read matrix with. Not bound: a caller reading
-    // a transition never needs the snapshot the engine will replace its own
-    // state with.
     godot::HashMap<godot::StringName, godot::PackedInt64Array> layer_rows;
     godot::HashMap<int64_t, godot::LocalVector<godot::StringName>> memberships;
+    godot::HashSet<int64_t> intents;
     int64_t commit_revision = 0;
 
     NetwInterestDelta();
@@ -188,27 +161,6 @@ public:
     godot::Array to_array() const;
 };
 
-// The interest verdict core: mask algebra from plain state to a peer-row
-// matrix.
-//
-// Entity keys are opaque `int64` slots minted above this class and never
-// dereferenced by it, which is what lets one entity outlive whichever handle,
-// route or node is standing in for it. Peer bits are likewise assigned outside
-// and stay stable for the session. Nothing here reaches an `Object`, reads a
-// clock, or emits, so a verdict is a function of state and of nothing else.
-//
-// [codeblock]
-// set_layer / set_membership / set_parent ...   mutations change intake state
-// recompute()  -> NetwInterestDelta             computes, changes nothing
-// commit(delta)                                 advances the read matrix
-// row_of / test / rows / explain                read the committed matrix
-// [/codeblock]
-//
-// A row is granted by the union of its layers (or by every live peer when it
-// has none), intersected with synchronizer intent, intersected with its
-// parent's row, intersected with the live peers. The parent clamp is the
-// uniform-visibility invariant: a peer never holds a child whose parent it
-// cannot see.
 class NetwInterestEngine : public godot::RefCounted {
     GDCLASS(NetwInterestEngine, godot::RefCounted)
 
@@ -222,6 +174,10 @@ private:
     struct Layer {
         godot::PackedInt64Array viewers;
         Policy policy = HIDE_FROM_OUTSIDERS;
+        int32_t leave_policy = 0;
+        int32_t perception_policy = 0;
+        godot::LocalVector<int64_t> members;
+        int64_t transitions = 0;
     };
 
     struct Record {
@@ -233,8 +189,6 @@ private:
         int32_t route = 0;
     };
 
-    // A (depth, route) pair. Hides run deeper-first and shows shallower-first
-    // over this order, and route breaks the tie so the order is total.
     struct Order {
         int32_t depth = 0;
         int32_t route = 0;
@@ -264,9 +218,16 @@ private:
     godot::HashMap<int64_t, godot::PackedInt64Array> committed;
     godot::HashMap<int64_t, godot::LocalVector<godot::StringName>>
         committed_memberships;
+    godot::HashSet<int64_t> committed_intents;
     godot::HashSet<godot::StringName> dirty_layers;
     godot::HashSet<int64_t> dirty_entities;
     godot::HashMap<int64_t, Order> removed;
+    godot::HashMap<int64_t, int32_t> peer_bits;
+    godot::LocalVector<int64_t> bit_peers;
+    godot::HashMap<int64_t, godot::Callable> exit_handlers;
+    godot::HashMap<int64_t, godot::StringName> scene_memberships;
+    godot::HashMap<int64_t, int32_t> fallback_routes;
+    int32_t next_fallback_route = 1;
     godot::PackedInt64Array live_peers;
     godot::Ref<NetwInterestStats> last_stats;
     int64_t revision = 0;
@@ -324,91 +285,131 @@ protected:
 public:
     NetwInterestEngine();
 
-    // Replaces one layer's viewer row and policy. Re-writing a layer with the
-    // values it already holds is inert, so an idempotent caller costs nothing.
     void set_layer(
         const godot::StringName &id,
         const godot::PackedInt64Array &viewers,
         int policy
     );
 
-    // Removes a layer. A membership naming a layer that is gone contributes
-    // nothing to the union, which is not the same as the layer admitting
-    // everyone.
     void remove_layer(const godot::StringName &id);
 
-    // Whether a slot may name an entity. Zero is the null key, so an entity
-    // registered there could never be anybody's parent, and every mutation
-    // refuses it rather than storing a record no clamp can ever reach.
+    void declare_layer(const godot::StringName &id);
+
+    bool has_layer(const godot::StringName &id) const;
+
+    bool layer_add_viewer(const godot::StringName &id, int64_t peer_id);
+    bool layer_remove_viewer(const godot::StringName &id, int64_t peer_id);
+    bool layer_has_viewer(const godot::StringName &id, int64_t peer_id) const;
+    bool layer_set_policy(const godot::StringName &id, int policy);
+    int layer_policy(const godot::StringName &id) const;
+
+    bool layer_admits(const godot::StringName &id, int64_t peer_id) const;
+    godot::String layer_explain(const godot::StringName &id, int64_t peer_id)
+        const;
+
+    bool layer_set_leave_policy(const godot::StringName &id, int policy);
+    int layer_leave_policy(const godot::StringName &id) const;
+    bool layer_set_perception_policy(const godot::StringName &id, int policy);
+    int layer_perception_policy(const godot::StringName &id) const;
+
+    godot::PackedInt64Array layer_viewers(const godot::StringName &id) const;
+
+    bool roster_add(const godot::StringName &id, int64_t key);
+    bool roster_remove(const godot::StringName &id, int64_t key);
+    bool roster_has(const godot::StringName &id, int64_t key) const;
+    godot::PackedInt64Array roster(const godot::StringName &id) const;
+
+    bool projection_admits(
+        int64_t key,
+        const godot::Ref<NetwInterestDecl> &decl
+    ) const;
+
+    void note_transition(const godot::StringName &id);
+    int64_t transitions(const godot::StringName &id) const;
+
+    int64_t transitions_total() const;
+
+    godot::PackedInt64Array co_members(
+        int64_t key,
+        const godot::Array &layer_ids
+    ) const;
+
+    godot::PackedInt64Array viewer_peers() const;
+
     static bool is_key(int64_t key) { return key > 0; }
 
-    // Replaces the layer memberships for one entity. Naming a layer nobody has
-    // configured creates it admitting nobody, so an unconfigured layer is safe
-    // rather than transparent.
     void set_membership(int64_t key, const godot::Array &layer_ids);
 
-    // Replaces the parent key. Zero means no parent, and a link that would
-    // close a cycle is refused.
+    bool membership_add(int64_t key, const godot::StringName &layer_id);
+    bool membership_remove(int64_t key, const godot::StringName &layer_id);
+
+    godot::Array memberships(int64_t key) const;
+
+    bool has_memberships(int64_t key) const;
+
+    bool has_intent(int64_t key) const;
+
+    bool had_committed_intent(int64_t key) const;
+
+    godot::PackedInt64Array intent_keys() const;
+
+    bool set_exit_handler(int64_t key, const godot::Callable &handler);
+    godot::Callable exit_handler(int64_t key) const;
+    godot::Callable take_exit_handler(int64_t key);
+
+    godot::StringName scene_membership(int64_t key) const;
+
+    bool set_scene_membership(int64_t key, const godot::StringName &id);
+
+    godot::PackedInt64Array membership_keys() const;
+
     void set_parent(int64_t key, int64_t parent_key);
 
-    // Replaces the synchronizer intent row, which intersects whatever the
-    // layers granted.
     void set_intent(int64_t key, const godot::PackedInt64Array &mask);
 
-    // Makes intent admit every live peer. Not the same as an intent row holding
-    // every live bit: this one survives a peer joining.
     void set_intent_all(int64_t key);
 
-    // Replaces the deterministic (depth, route) order key.
     void set_order_key(int64_t key, int depth, int route);
 
-    // Replaces the row of currently live peer bits. Every row is intersected
-    // with it last, so a viewer bit for a peer that never joined cannot reach a
-    // committed row through any layer or intent.
+    int order_route_for(int64_t key);
+
     void set_live_peers(const godot::PackedInt64Array &bits);
 
-    // Removes an entity and makes its previous committed row hide on the next
-    // recompute. Its children are orphaned rather than left pointing at a
-    // record that is gone.
+    int peer_bit_for(int64_t peer_id);
+
+    int peer_bit_of(int64_t peer_id) const;
+
+    int64_t peer_of_bit(int bit) const;
+
+    godot::PackedInt64Array known_peers() const;
+
     void remove_entity(int64_t key);
 
-    // Computes row changes without advancing the committed matrix.
     godot::Ref<NetwInterestDelta> recompute();
 
-    // Advances the matrix that row readers see.
-    //
-    // A delta carries the revision it was computed against, and one that a
-    // later mutation has overtaken still applies, but leaves the dirty set
-    // alone so the mutation it did not see is still owed a pass.
     void commit(const godot::Ref<NetwInterestDelta> &delta);
 
     godot::PackedInt64Array row_of(int64_t key) const;
 
-    // The row one entity will have once `delta` commits, answered while the old
-    // matrix still answers every other question.
     godot::PackedInt64Array row_after(
         int64_t key,
         const godot::Ref<NetwInterestDelta> &delta
     ) const;
 
     bool test(int64_t key, int bit) const;
+
+    int dirty_count() const;
     godot::Dictionary rows() const;
     bool has_entity(int64_t key) const;
 
-    // Committed admitted edges attributed to one layer, counted from the
-    // committed membership snapshot rather than from live intake.
     int layer_edge_count(const godot::StringName &layer_id) const;
 
-    // Names the first current term that denies one peer bit, walking intent and
-    // layers before climbing to the parent. It is derived from the state the
-    // verdict used, so it cannot disagree with the row.
     godot::String explain(int64_t key, int bit) const;
 
     godot::Ref<NetwInterestStats> stats() const {
         return last_stats;
     }
 
-    // Session teardown: intake, the committed matrix and the counters.
     void clear();
 };
 

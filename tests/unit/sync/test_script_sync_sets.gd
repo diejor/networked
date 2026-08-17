@@ -12,13 +12,14 @@
 ##
 ## The suite also covers what a derived set writes onto a live node:
 ## [method NetwSyncPipeline.register_derived]'s binding of the declared sets,
-## [method NetwPropertySetBinding.apply_volatile]'s snap and its write gate, and
+## [method NetwPropertySetBinding.apply_row_frame]'s snap and its write gate, and
 ## the plain-payload [method NetwSyncPipeline.gather_payload] and
 ## [method NetwSyncPipeline.apply_payload] (with their
 ## [method NetwPropertySetBinding.snapshot_payload] /
 ## [method NetwPropertySetBinding.apply_payload] handles) a prediction step records
-## and reconciles against. The bytes those sets frame, and the per-peer masked
-## books that fill them, are [code]tests/unit/wire/test_script_sync_wire.gd[/code].
+## and reconciles against. The shape those sets agree on, and the rows they hand
+## [NetwReplicationSend], are
+## [code]tests/unit/wire/test_script_sync_wire.gd[/code].
 class_name TestScriptSyncSets
 extends NetwTestSuite
 
@@ -281,7 +282,12 @@ func test_register_derived_ignores_a_scriptless_node() -> void:
 
 
 func test_binding_applies_a_volatile_state_row() -> void:
-	var set := NetwPropertySet.from_property_configs({ &"position": _prop().state() }, STATE)
+	# The lane grids a declared column, so the set is typed the way
+	# [method NetwPropertySet.from_script] types one off its node.
+	var set := _make_set(
+		[[&"position", NetwPropertySet.Lane.VOLATILE, SchemaCore.ColumnType.VECTOR2]],
+	)
+	set.stamp = NetwPropertySet.Stamp.STAMP_TICK_ACK
 	var src := Node2D.new()
 	add_child(src)
 	auto_free(src)
@@ -290,50 +296,39 @@ func test_binding_applies_a_volatile_state_row() -> void:
 	add_child(dst)
 	auto_free(dst)
 
-	var bytes := NetwPropertySetBinding.new(set, src).encode_volatile(3, 20, 17)
-	var header := NetwPropertySetBinding.new(set, dst).apply_volatile(bytes)
-	assert_int(header["ordinal"]).is_equal(3)
+	var send := _row_send()
+	var bytes := _row_frame(send, NetwPropertySetBinding.new(set, src), 20, 17)
+	var header := NetwPropertySetBinding.new(set, dst).apply_row_frame(send, bytes)
+	assert_int(header["tick"]).is_equal(20)
 	assert_int(header["ack"]).is_equal(17)
 	assert_that(dst.position).is_equal(Vector2(5, -6))
 
 
 func test_binding_applies_the_freshest_windowed_sample() -> void:
-	var set := _make_set([[&"position", NetwPropertySet.Lane.VOLATILE]])
+	var set := _make_set(
+		[[&"position", NetwPropertySet.Lane.VOLATILE, SchemaCore.ColumnType.VECTOR2]],
+	)
 	set.stamp = NetwPropertySet.Stamp.STAMP_TICK
 	set.window = 3
 	var src := Node2D.new()
 	add_child(src)
 	auto_free(src)
 	var src_binding := NetwPropertySetBinding.new(set, src)
+	var send := _window_send()
+
 	src.position = Vector2(1, 0)
-	src_binding.encode_volatile(0, 10, -1)
+	_window_frame(send, src_binding, 10)
 	src.position = Vector2(2, 0)
-	var bytes := src_binding.encode_volatile(0, 11, -1)
+	var bytes := _window_frame(send, src_binding, 11)
 
 	var dst := Node2D.new()
 	add_child(dst)
 	auto_free(dst)
-	var header := NetwPropertySetBinding.new(set, dst).apply_volatile(bytes)
-	# The freshest sample (age 0, tick 11) is the row displayed.
+	var header := NetwPropertySetBinding.new(set, dst).apply_window_frame(send, bytes)
+	# The freshest tick is the row displayed, and the older one it repeats does
+	# not overwrite it.
 	assert_that(dst.position).is_equal(Vector2(2, 0))
 	assert_int(header["tick"]).is_equal(11)
-
-
-func test_binding_applies_a_retained_delta() -> void:
-	var set := _make_set([[&"rotation", NetwPropertySet.Lane.RETAINED]])
-	var src := Node2D.new()
-	add_child(src)
-	auto_free(src)
-	src.rotation = 1.25
-	var src_binding := NetwPropertySetBinding.new(set, src)
-	src_binding.poll_retained()
-	var bytes := src_binding.retained_delta(0, 2)
-
-	var dst := Node2D.new()
-	add_child(dst)
-	auto_free(dst)
-	assert_bool(NetwPropertySetBinding.new(set, dst).apply_retained_delta(bytes)).is_true()
-	assert_float(dst.rotation).is_equal_approx(1.25, 0.0001)
 
 
 func test_gather_payload_reads_every_set_field() -> void:
@@ -415,13 +410,16 @@ func test_binding_payload_snapshots_and_restores_between_nodes() -> void:
 
 
 func test_binding_apply_hook_fires_with_the_decoded_payload() -> void:
-	var set := _make_set([[&"position", NetwPropertySet.Lane.VOLATILE]])
+	var set := _make_set(
+		[[&"position", NetwPropertySet.Lane.VOLATILE, SchemaCore.ColumnType.VECTOR2]],
+	)
 	set.stamp = NetwPropertySet.Stamp.STAMP_TICK_ACK
 	var src := Node2D.new()
 	add_child(src)
 	auto_free(src)
 	src.position = Vector2(4, 9)
-	var bytes := NetwPropertySetBinding.new(set, src).encode_volatile(0, 12, 7)
+	var send := _row_send()
+	var bytes := _row_frame(send, NetwPropertySetBinding.new(set, src), 12, 7)
 
 	var dst := Node2D.new()
 	add_child(dst)
@@ -429,7 +427,7 @@ func test_binding_apply_hook_fires_with_the_decoded_payload() -> void:
 	var dst_binding := NetwPropertySetBinding.new(set, dst)
 	var seen: Array = []
 	dst_binding.on_applied = func(h: Dictionary) -> void: seen.append(h)
-	dst_binding.apply_volatile(bytes)
+	dst_binding.apply_row_frame(send, bytes)
 	assert_int(seen.size()).is_equal(1)
 	var header: Dictionary = seen[0]
 	assert_int(header["tick"]).is_equal(12)
@@ -442,13 +440,16 @@ func test_binding_apply_hook_fires_with_the_decoded_payload() -> void:
 func test_binding_write_gate_suppresses_the_node_snap() -> void:
 	# The predicting client decodes the authoritative row and hands it to its
 	# reconciler without snapping the predicted body.
-	var set := _make_set([[&"position", NetwPropertySet.Lane.VOLATILE]])
+	var set := _make_set(
+		[[&"position", NetwPropertySet.Lane.VOLATILE, SchemaCore.ColumnType.VECTOR2]],
+	)
 	set.stamp = NetwPropertySet.Stamp.STAMP_TICK_ACK
 	var src := Node2D.new()
 	add_child(src)
 	auto_free(src)
 	src.position = Vector2(5, 5)
-	var bytes := NetwPropertySetBinding.new(set, src).encode_volatile(0, 3, -1)
+	var send := _row_send()
+	var bytes := _row_frame(send, NetwPropertySetBinding.new(set, src), 3, -1)
 
 	var dst := Node2D.new()
 	add_child(dst)
@@ -458,42 +459,112 @@ func test_binding_write_gate_suppresses_the_node_snap() -> void:
 	dst_binding.write_gate = false
 	var seen: Array = []
 	dst_binding.on_applied = func(h: Dictionary) -> void: seen.append(h)
-	var header := dst_binding.apply_volatile(bytes)
+	var header := dst_binding.apply_row_frame(send, bytes)
 	assert_that(dst.position).is_equal(Vector2(-1, -1))
 	assert_that((header["payload"] as Dictionary)[&"position"]).is_equal(Vector2(5, 5))
 	assert_int(seen.size()).is_equal(1)
 
 
 func test_binding_windowed_apply_returns_every_sample() -> void:
-	# A windowed input frame carries a ring of redundant samples so the input
-	# engine can record every tick and heal one the receiver missed.
-	var set := _make_set([[&"rotation", NetwPropertySet.Lane.VOLATILE]])
+	# A windowed input frame carries a ring of redundant ticks so the input
+	# engine can record every one and heal a tick the receiver missed. A
+	# receiver that took only the newest would discard exactly those.
+	var set := _make_set(
+		[[&"rotation", NetwPropertySet.Lane.VOLATILE, SchemaCore.ColumnType.F32]],
+	)
 	set.stamp = NetwPropertySet.Stamp.STAMP_TICK
 	set.window = 3
 	var src := Node2D.new()
 	add_child(src)
 	auto_free(src)
 	var src_binding := NetwPropertySetBinding.new(set, src)
+	var send := _window_send()
+
 	src.rotation = 0.1
-	src_binding.encode_volatile(0, 10, -1)
+	_window_frame(send, src_binding, 10)
 	src.rotation = 0.2
-	src_binding.encode_volatile(0, 11, -1)
+	_window_frame(send, src_binding, 11)
 	src.rotation = 0.3
-	var bytes := src_binding.encode_volatile(0, 12, -1)
+	var bytes := _window_frame(send, src_binding, 12)
 
 	var dst := Node2D.new()
 	add_child(dst)
 	auto_free(dst)
-	var header := NetwPropertySetBinding.new(set, dst).apply_volatile(bytes)
+	var header := NetwPropertySetBinding.new(set, dst).apply_window_frame(send, bytes)
 	var samples: Array = header["samples"]
 	assert_int(samples.size()).is_equal(3)
-	# Newest first: tick 12 at age 0, then 11, then 10.
-	assert_int(samples[0]["tick"]).is_equal(12)
-	assert_int(samples[2]["tick"]).is_equal(10)
-	assert_float((samples[0]["payload"] as Dictionary)[&"rotation"]).is_equal_approx(0.3, 0.0001)
-	assert_float((samples[2]["payload"] as Dictionary)[&"rotation"]).is_equal_approx(0.1, 0.0001)
+	# Oldest first, and every tick arrives absolute rather than as an age.
+	assert_int(samples[0]["tick"]).is_equal(10)
+	assert_int(samples[2]["tick"]).is_equal(12)
+	assert_float((samples[0]["payload"] as Dictionary)[&"rotation"]).is_equal_approx(0.1, 0.0001)
+	assert_float((samples[2]["payload"] as Dictionary)[&"rotation"]).is_equal_approx(0.3, 0.0001)
 	# The freshest sample snaps the display node.
 	assert_float(dst.rotation).is_equal_approx(0.3, 0.0001)
+
+
+func _row_send() -> NetwReplicationSend:
+	var send := NetwReplicationSend.new()
+	send.declare_channel(
+		NetwFrameEnvelope.Channel.SYNC_ROW,
+		&"SYNC_ROW",
+		false,
+	)
+	return send
+
+
+# One pass of the volatile lane, answering the frame the recipient is sent.
+func _row_frame(
+		send: NetwReplicationSend,
+		binding: NetwPropertySetBinding,
+		tick: int,
+		ack: int,
+) -> PackedByteArray:
+	var result: Dictionary = send.run_deferred([{
+		"route": 1,
+		"comp": 0,
+		"channel": NetwFrameEnvelope.Channel.SYNC_ROW,
+		"schema": binding.set.volatile_schema,
+		"values": binding.volatile_row(),
+		"recipients": PackedInt32Array([2]),
+		"tick": tick,
+		"ack": ack,
+		"priority": 1.0,
+	}])
+	var sends: Array = result["sends"]
+	return sends[0]["bytes"] if not sends.is_empty() else PackedByteArray()
+
+
+func _window_send() -> NetwReplicationSend:
+	var send := NetwReplicationSend.new()
+	send.declare_channel(
+		NetwFrameEnvelope.Channel.SYNC_ROW_WINDOW,
+		&"SYNC_ROW_WINDOW",
+		true,
+	)
+	return send
+
+
+# One pass of the windowed lane, answering the frame the recipient is sent.
+func _window_frame(
+		send: NetwReplicationSend,
+		binding: NetwPropertySetBinding,
+		tick: int,
+) -> PackedByteArray:
+	var result: Dictionary = send.run_deferred([{
+		"route": 1,
+		"comp": 0,
+		"channel": NetwFrameEnvelope.Channel.SYNC_ROW_WINDOW,
+		"schema": binding.set.volatile_schema,
+		"values": binding.volatile_row(),
+		"recipients": PackedInt32Array([2]),
+		"tick": tick,
+		"ack": -1,
+		"windowed": true,
+		"window": binding.set.window,
+		"priority": 1.0,
+	}])
+	var sends: Array = result["sends"]
+	return sends[0]["bytes"] if not sends.is_empty() else PackedByteArray()
 
 
 func test_masked_sugar_writes_through_and_conflicts_with_windowed() -> void:

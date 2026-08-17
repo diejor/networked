@@ -31,11 +31,12 @@
 # schedule, TICK or STEPPED. REPLAY requires EXACT restore. Carry and witness
 # do not narrow support.
 #
-# WHAT STILL CARRIES, and both reasons are about reach rather than about rings.
-# `tests/integration/lagcomp` holds the rewind, action and body-bound suites:
-# lagcomp has no native shell to cross into, and a real body and space are
-# what a pool slot cannot see. `tests/unit/core` holds the entity numbering,
-# which is keyed by node.
+# WHAT STILL CARRIES. `tests/integration/lagcomp` holds the rewind, action and
+# body-bound suites. Their old reason, "lagcomp has no native shell to cross
+# into", is FALSIFIED: NetwLagCompCore is native and ZU-5 gave it the
+# declaration filter, the armed port and the rewind verb. What is left is a
+# real body in a physics space, which the treeless rig cannot give it. `tests/unit/core` holds
+# the entity numbering, which is keyed by node.
 #
 test_assertion_census.gd:test_the_census_matches_the_committed_record                                      -> DROP assertion golden retired with the crossing instruments
 test_assertion_census.gd:test_no_law_reads_a_wiring_member_directly                                        -> DROP assertion golden retired with the crossing instruments
@@ -64,7 +65,7 @@ test_extrapolated_restore.gd:test_extrapolated_without_velocity_pair_matches_exa
 test_golden_journal.gd:test_the_run_reproduces_the_committed_golden                                        -> DROP certification golden, deleted after native ownership cutover
 test_golden_journal.gd:test_the_run_is_deterministic                                                       -> DROP certification golden, deleted after native ownership cutover
 test_golden_journal.gd:test_the_scenario_stays_divergence_rich                                             -> DROP certification golden, deleted after native ownership cutover
-test_input_backed_rewind.gd:test_sample_matches_predicted_state_for_consumed_input                         -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_input_backed_rewind.gd:test_sample_matches_predicted_state_for_consumed_input                         -> CARRY shell tests/integration/lagcomp (needs the client's predicted state and the server's sample at one tick; the rig reads only one peer per lane)
 test_island_rollback.gd:test_joint_stores_on_the_island_declaration                                        -> DROP Ring-1 island declaration storage with no native subject
 test_island_rollback.gd:test_pacing_and_input_delay_declare_without_a_mechanism                            -> DROP Ring-1 island declaration storage with no native subject
 test_kernel_lane_queue.gd:test_a_frame_with_no_delay_lands_the_round_it_was_sent                           -> DROP the GDScript lane queue is an instrument, and ScenarioRun's Lane and LocalLinkConditions are the native one
@@ -79,17 +80,17 @@ test_kernel_scenario.gd:test_the_axes_come_from_the_declaration_and_not_the_tree
 test_kernel_scenario.gd:test_a_command_crosses_and_authority_consumes_it                                   -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
 test_kernel_scenario.gd:test_authority_records_what_it_consumed                                            -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
 test_kernel_scenario.gd:test_an_acknowledgement_crosses_back_to_the_owner                                  -> DROP the GDScript kernel rig is an instrument, and ScenarioRun::kernel is the native driver
-test_kinematic_replay.gd:test_replay_in_one_frame_matches_n_frames_free_space                              -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_kinematic_replay.gd:test_replay_into_wall_matches_real_frames                                         -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_kinematic_replay.gd:test_floor_flag_coherent_after_replay                                             -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_kinematic_replay.gd:test_move_and_slide_uses_physics_delta_not_arg                                    -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_lag_compensation_config_lifetime.gd:test_config_and_binding_survive_node_free                         -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_kinematic_replay.gd:test_replay_in_one_frame_matches_n_frames_free_space                              -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_kinematic_replay.gd:test_replay_into_wall_matches_real_frames                                         -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_kinematic_replay.gd:test_floor_flag_coherent_after_replay                                             -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_kinematic_replay.gd:test_move_and_slide_uses_physics_delta_not_arg                                    -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_lag_compensation_config_lifetime.gd:test_config_and_binding_survive_node_free                         -> CARRY shell tests/integration/lagcomp (the subject is the LagCompensation configurator node's lifetime, session orchestration that crosses at W6)
 test_lag_compensation_metrics.gd:test_metrics_exposes_monitor_keys                                         -> MATRIX declared_record_laws.cpp:"L-OCCUPANCY"x"recorded-lane"
 test_lag_compensation_metrics.gd:test_timelines_tracks_recorded_entities                                   -> MATRIX declared_record_laws.cpp:"L-OCCUPANCY"x"retired-lane"
-test_netw_action.gd:test_action_prediction_denial_and_revert_flow                                          -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_netw_action.gd:test_action_timing_modes_flow                                                          -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_netw_action.gd:test_state_ready_gate_flow                                                             -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_netw_action.gd:test_action_key_and_adoption_flow                                                      -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
+test_netw_action.gd:test_action_prediction_denial_and_revert_flow                                          -> CARRY shell tests/integration/lagcomp (the action flow drives NetwMultiplayer's action verbs over a real body; NetwLagCompCore itself is native since ZU-5, so the carry is the BODY and no longer the core)
+test_netw_action.gd:test_action_timing_modes_flow                                                          -> CARRY shell tests/integration/lagcomp (the action flow drives NetwMultiplayer's action verbs over a real body; NetwLagCompCore itself is native since ZU-5, so the carry is the BODY and no longer the core)
+test_netw_action.gd:test_state_ready_gate_flow                                                             -> CARRY shell tests/integration/lagcomp (the action flow drives NetwMultiplayer's action verbs over a real body; NetwLagCompCore itself is native since ZU-5, so the carry is the BODY and no longer the core)
+test_netw_action.gd:test_action_key_and_adoption_flow                                                      -> CARRY shell tests/integration/lagcomp (the action flow drives NetwMultiplayer's action verbs over a real body; NetwLagCompCore itself is native since ZU-5, so the carry is the BODY and no longer the core)
 test_predict_command_lane_delivery.gd:test_the_lane_delivers_every_frame_the_owner_writes                  -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] every frame shape replays entry for entry"
 test_predict_command_lane_delivery.gd:test_a_held_frame_still_sends_its_commands_in_its_own_frame          -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] every frame shape replays entry for entry"
 test_predict_command_lane_delivery.gd:test_the_transport_moves_a_frame_with_no_rendered_frame_in_it        -> declared_prediction_laws.cpp:"[Networked][Predict][Declared][Law] every frame shape replays entry for entry"
@@ -527,16 +528,16 @@ test_prediction_wiring.gd:test_authority_derives_direction                      
 test_prediction_wiring.gd:test_peer_symmetric_virtual_names                                                -> DROP Ring-1 virtual naming with no native subject
 test_scene_rewind.gd:test_rewind_moves_live_node_to_history_then_restores                                  -> MATRIX declared_record_laws.cpp:"L-REWIND"x"rewound-lane"
 test_scene_rewind.gd:test_rewind_skips_entity_with_no_history                                              -> MATRIX declared_record_laws.cpp:"L-UNRETAINED"x"unretained-rewind"
-test_scene_rewind.gd:test_linger_keeps_target_rewindable_until_freed                                       -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_server_rewind.gd:test_sample_hits_rewound_misses_live                                                 -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_server_rewind.gd:test_clamps_view_tick_into_retained_window                                           -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_server_rewind.gd:test_despawn_linger_keeps_target_rewindable                                          -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_server_rewind.gd:test_sample_is_empty_off_server                                                      -> CARRY tests/integration/lagcomp (lagcomp has no native shell to cross into)
-test_simulation_gate_semantics.gd:test_holding_one_frame_in_three_is_a_pure_skip                           -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_simulation_gate_semantics.gd:test_holding_one_frame_in_seven_is_a_pure_skip                           -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_simulation_gate_semantics.gd:test_a_write_during_a_held_frame_survives_the_hold                       -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_simulation_gate_semantics.gd:test_a_hold_stops_a_body_that_would_have_moved                           -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
-test_simulation_gate_semantics.gd:test_the_space_that_steps_a_body_is_the_one_the_body_names               -> CARRY tests/integration/lagcomp (a real body and space, which a pool slot cannot see)
+test_scene_rewind.gd:test_linger_keeps_target_rewindable_until_freed                                       -> CARRY shell tests/integration/lagcomp (despawn-with-linger is a node lifetime the scenario rig cannot declare; crosses when the rig grows a despawn verb)
+test_server_rewind.gd:test_sample_hits_rewound_misses_live                                                 -> CARRY shell tests/integration/lagcomp (the hit/miss geometry is a real body in a real space; L-RECORD carries the history claim)
+test_server_rewind.gd:test_clamps_view_tick_into_retained_window                                           -> MATRIX declared_record_laws.cpp:"L-CLAMP"x"unretained-sample"
+test_server_rewind.gd:test_despawn_linger_keeps_target_rewindable                                          -> timeline_laws.cpp:"[Networked][Sync][Hosted][Timeline] a despawned entity stays answerable until the window passes the tick it died at"
+test_server_rewind.gd:test_sample_is_empty_off_server                                                      -> MATRIX declared_record_laws.cpp:"L-OFF-SERVER"x"mirrored-lane"
+test_simulation_gate_semantics.gd:test_holding_one_frame_in_three_is_a_pure_skip                           -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_simulation_gate_semantics.gd:test_holding_one_frame_in_seven_is_a_pure_skip                           -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_simulation_gate_semantics.gd:test_a_write_during_a_held_frame_survives_the_hold                       -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_simulation_gate_semantics.gd:test_a_hold_stops_a_body_that_would_have_moved                           -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
+test_simulation_gate_semantics.gd:test_the_space_that_steps_a_body_is_the_one_the_body_names               -> CARRY shell tests/integration/lagcomp (a real PhysicsBody in a physics space; the LoopbackRig is deliberately TREELESS, so a body it mints enters no space, and a native pool slot holds columns rather than a body)
 test_snap_correction.gd:test_auto_resolves_snap_for_rigidbody                                 -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
 test_snap_correction.gd:test_auto_resolves_replay_for_kinematic                               -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
 test_snap_correction.gd:test_auto_resolves_replay_for_plain_node                              -> predict_owner_laws.cpp:"[Networked][Predict][Owner] AUTO asks the bound owner, and an explicit correction asks nobody"
@@ -547,12 +548,12 @@ test_timeline_registry.gd:test_state_sync_presence_registers_a_timeline         
 test_timeline_registry.gd:test_server_records_authoritative_state_each_tick                                -> MATRIX declared_record_laws.cpp:"L-RECORD"x"recorded-lane"
 test_timeline_registry.gd:test_unregister_drops_the_timeline                                               -> MATRIX declared_record_laws.cpp:"L-RETIRED"x"retired-lane"
 test_predict_journal.gd:test_the_arrival_histograms_hold_their_declared_widths                             -> predict_declaration_laws.cpp:"[Networked][Predict][Hosted][Declaration] the fingerprint is stable, sensitive and inside a signed 32 bit column"
-test_entity_slots.gd:test_a_slot_is_minted_once_and_read_without_minting                                   -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
-test_entity_slots.gd:test_one_holder_releasing_retires_nothing                                             -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
-test_entity_slots.gd:test_the_last_holder_releasing_retires_the_slot                                       -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
-test_entity_slots.gd:test_a_released_slot_is_never_handed_out_again                                        -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
-test_entity_slots.gd:test_re_holding_a_retired_slot_cancels_its_sweep                                      -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
-test_entity_slots.gd:test_a_new_session_is_a_new_numbering                                                 -> CARRY tests/unit/entity (NetwEntitySlots is keyed by node and crosses with W6)
+test_entity_slots.gd:test_a_slot_is_minted_once_and_read_without_minting                                   -> DROP NetwEntitySlots dissolved: the grace re-homed to the liveness wrapper book and the refcount to netw::entity_ids
+test_entity_slots.gd:test_one_holder_releasing_retires_nothing                                             -> DROP NetwEntitySlots dissolved: the grace re-homed to the liveness wrapper book and the refcount to netw::entity_ids
+test_entity_slots.gd:test_the_last_holder_releasing_retires_the_slot                                       -> DROP NetwEntitySlots dissolved: the grace re-homed to the liveness wrapper book and the refcount to netw::entity_ids
+test_entity_slots.gd:test_a_released_slot_is_never_handed_out_again                                        -> DROP NetwEntitySlots dissolved: the grace re-homed to the liveness wrapper book and the refcount to netw::entity_ids
+test_entity_slots.gd:test_re_holding_a_retired_slot_cancels_its_sweep                                      -> DROP NetwEntitySlots dissolved: the grace re-homed to the liveness wrapper book and the refcount to netw::entity_ids
+test_entity_slots.gd:test_a_new_session_is_a_new_numbering                                                 -> DROP NetwEntitySlots dissolved: the grace re-homed to the liveness wrapper book and the refcount to netw::entity_ids
 test_predict_pool_compare.gd:test_exact_comparison_matches_the_gdscript_engine                             -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] exactness outranks tolerance"
 test_predict_pool_compare.gd:test_incomplete_ack_evidence_names_no_cause                                   -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] exactness outranks tolerance"
 test_predict_pool_compare.gd:test_reconstruction_is_a_counted_refusal                                      -> predict_compare_laws.cpp:"[Networked][Predict][Hosted][Compare] exactness outranks tolerance"

@@ -29,6 +29,18 @@ func before_test() -> void:
 	await harness.add_client()
 
 
+# Presentation is a local act, and a dedicated server performs none: it runs
+# every live scene and stands in none of them.
+func test_a_dedicated_server_presents_no_scene() -> void:
+	assert_int(server_api.role) \
+			.is_equal(NetwMultiplayer.Role.DEDICATED_SERVER)
+	server_core.spawn_scene(level_builder.scene_name)
+	await drain_frames(get_tree(), 2)
+
+	assert_int(server_api.scene_list().size()).is_greater(0)
+	assert_bool(server_api.scene_get_current().is_valid()).is_false()
+
+
 func test_scene_load_policy_flow() -> void:
 	assert_that(server_api.scene(level_builder.scene_name) != null).is_true()
 	assert_that(server_api.scene(level_2_builder.scene_name) != null).is_true()
@@ -166,7 +178,12 @@ func test_api_move_reparents_entity_and_updates_participant_scene() -> void:
 	)
 	var entity := NetwEntity.of(player)
 	var moved: Array[NetwEntity] = []
-	entity.reparented.connect(func(_opts): moved.append(entity))
+	var reasons: Array[StringName] = []
+	entity.reparented.connect(
+		func(opts: NetwReparentOpts):
+			moved.append(entity)
+			reasons.append(opts.reason)
+	)
 
 	var promise := destination.move_in(entity)
 	if not promise.is_settled:
@@ -176,6 +193,7 @@ func test_api_move_reparents_entity_and_updates_participant_scene() -> void:
 	assert_object(player.get_parent()).is_same(destination.level)
 	assert_object(participant.current_scene).is_same(destination)
 	assert_array(moved).contains([entity])
+	assert_array(reasons).contains([&"scene_move"])
 
 
 func test_single_change_to_moves_session_and_destroys_source() -> void:
@@ -347,6 +365,30 @@ func test_a_handler_matches_a_destination_in_either_form() -> void:
 	assert_int(by_stem.code).is_equal(OK)
 	assert_int(by_path.code).is_equal(OK)
 	assert_int(elsewhere.code).is_equal(ERR_UNAUTHORIZED)
+	await h.teardown()
+
+
+func test_a_handler_answering_no_error_code_refuses() -> void:
+	var h := make_unmanaged_harness()
+	await h.setup_factory(NetwTestSuite.create_scene_manager)
+	h.register_spawnable_scene(level_builder.packed)
+	h.register_spawnable_scene(level_2_builder.packed, false)
+	var client := await h.add_client()
+	# A scene the mark alone would admit, so what refuses it is the answer and
+	# not the destination. Anything but a number is no verdict, and a verdict
+	# nobody gave cannot be the one that admits.
+	h.server().api.scene_set_request_handler(
+		func(_p: Variant, _dest: Variant, _args: Variant) -> Variant:
+			return "sure",
+	)
+
+	var answered := client.api.scene_request(level_2_builder.scene_name)
+	await _wait_scene_promise(answered)
+
+	assert_int(answered.code).is_equal(ERR_UNAUTHORIZED)
+	assert_object(
+		h.server().api.scene(level_2_builder.scene_name),
+	).is_null()
 	await h.teardown()
 
 

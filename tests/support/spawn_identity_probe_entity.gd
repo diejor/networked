@@ -15,7 +15,7 @@ func _notification(what: int) -> void:
 	var entity := NetwEntity.resolve(self)
 	if not entity:
 		return
-	entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
+	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 	Netw.configure_property(self, &"identity_packet").on_spawn()
 	if not entity.spawning.is_connected(_on_spawning):
 		entity.spawning.connect(_on_spawning)

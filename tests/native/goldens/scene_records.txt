@@ -29,3 +29,13 @@ request/the_deadline_settles_the_request_it_names|settled|code=Timeout settled=t
 request/a_stale_deadline_is_ignored|ignored|settled=false
 request/a_stale_deadline_is_ignored|then_honoured|settled=true
 request/a_settled_request_leaves_no_pending_id|cleared|pending=false pending_id=0
+shell/a_wrapperless_record_parks_its_facet|parked|held=true reads_declared=false wrote=0
+shell/a_wrapperless_record_parks_its_facet|unknown|held=false wrote=33
+shell/a_node_backed_scene_declares_and_labels|declared|is_declared=true stem=arena
+shell/a_node_backed_scene_declares_and_labels|relabelled|stem=renamed wrote=0
+shell/a_node_backed_scene_declares_and_labels|undeclared|is_declared=false stem= wrote=0
+shell/a_node_backed_scene_declares_and_labels|unknown|stem=<null> wrote=33
+shell/membership_walks_the_parent_chain|resolved|encloses=1 loose_has_a_scene=false member_is_the_scene=true scene_is_itself=true
+shell/membership_walks_the_parent_chain|reparented|encloses=0 member_is_the_scene=true
+shell/admission_needs_a_boundary_to_land_on|empty|admits=false layer=false peers=0
+shell/admission_needs_a_boundary_to_land_on|refused|admits_seven=false seven=2 unknown=33 zero=31

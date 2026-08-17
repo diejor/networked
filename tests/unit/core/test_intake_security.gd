@@ -20,7 +20,7 @@ func before_test() -> void:
 	auto_free(owner)
 	entity = NetwEntity.ensure(owner)
 	entity.controller = 2
-	api._liveness.bind_route(7, entity)
+	api._native_core.liveness_bind_route(7, entity)
 	calls = []
 
 
@@ -108,7 +108,7 @@ func test_gate_verdicts_are_partitioned_and_counted() -> void:
 		),
 	).is_equal(1)
 
-	api._liveness.core.set_state(
+	api._native_core.liveness_core.set_state(
 		entity.rid,
 		NetwLivenessCore.STATE_DEAD,
 	)
@@ -135,7 +135,7 @@ func test_gate_verdicts_are_partitioned_and_counted() -> void:
 	mt.add_child(unavailable_owner)
 	auto_free(unavailable_owner)
 	var unavailable_entity := NetwEntity.ensure(unavailable_owner)
-	api._liveness.bind_route(8, unavailable_entity)
+	api._native_core.liveness_bind_route(8, unavailable_entity)
 	unavailable_entity.owner = null
 	assert_int(
 		_finish_gate(
@@ -195,4 +195,8 @@ func test_gate_verdicts_are_partitioned_and_counted() -> void:
 
 # Applies the same verdict sink used by the production carrier roots.
 func _finish_gate(verdict: Error, route: int) -> Error:
-	return api._finish_gate_verdict(verdict, route)
+	return api._finish_stage_verdict(
+		NetwMultiplayerCore.GATE_SYNC,
+		verdict,
+		route,
+	)

@@ -243,7 +243,7 @@ bool encode_scalar_row(
         !scalar_schema(p_schema, plan)
             || p_values.size() != p_schema->column_count(),
         false,
-        "wire",
+        sys::WIRE,
         "Value row does not match its sealed scalar schema."
     );
     Ref<NetwBitBufferWriter> writer;
@@ -257,7 +257,7 @@ bool encode_scalar_row(
                 Variant::Type(expected)
             ),
             false,
-            "wire",
+            sys::WIRE,
             "Column %d value does not match its declared type.",
             at
         );
@@ -265,7 +265,7 @@ bool encode_scalar_row(
             NETW_ERR_COND_V(
                 !column->quantizer->supports_type(expected),
                 false,
-                "wire",
+                sys::WIRE,
                 "Column %d quantizer does not support its declared type.",
                 at
             );
@@ -274,7 +274,7 @@ bool encode_scalar_row(
             NETW_ERR_COND_V(
                 !write_raw(writer, column->type, p_values[at]),
                 false,
-                "wire",
+                sys::WIRE,
                 "Column %d has no fixed value-row encoding.",
                 at
             );
@@ -284,16 +284,33 @@ bool encode_scalar_row(
     NETW_ERR_COND_V(
         !staged.valid_for(plan),
         false,
-        "wire",
+        sys::WIRE,
         "Value row encoder did not write its declared bit width."
     );
     r_row = staged;
     NETW_TRACE(
-        "wire",
+        sys::WIRE,
         "value row columns=%d bytes=%d",
         p_values.size(),
         staged.to_bytes().size()
     );
+    return true;
+}
+
+bool gather_scalar_row(
+    const Ref<SchemaRecord> &p_schema,
+    const WirePlan &p_plan,
+    const Array &p_values,
+    CodeRow &r_row
+) {
+    if (!p_plan.valid()) {
+        return false;
+    }
+    CodeRow staged = CodeRow::for_plan(p_plan);
+    if (!encode_scalar_row(p_schema, p_values, staged)) {
+        return false;
+    }
+    r_row = staged;
     return true;
 }
 

@@ -108,7 +108,7 @@ func _populate_scene_lists(config: NetwSceneConfig) -> void:
 	for path in get_configured_paths():
 		var packed := load(path) as PackedScene
 		if packed:
-			config.scenes[StringName(path.get_file().get_basename())] = packed
+			config.scenes[NetwMultiplayerCore.scene_packed_stem(packed)] = packed
 	config.initial_scenes.clear()
 	for stored_path: String in initial_scene_paths:
 		var packed := load(ResourceUID.ensure_path(stored_path)) as PackedScene

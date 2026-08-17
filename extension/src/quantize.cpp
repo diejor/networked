@@ -37,10 +37,6 @@ double vector_error(double axis, int type) {
     return axis * std::sqrt(double(component_count(type)));
 }
 
-// Whether a property carries layout: the exported parameters a quantizer reads
-// when it packs a value. Storage is the mark both a registered property and a
-// script variable share, so one comparison covers a native quantizer and a game
-// that wrote its own in GDScript.
 bool carries_layout(const Dictionary &property) {
     const int64_t usage = property.get("usage", 0);
     return (usage & PROPERTY_USAGE_STORAGE) != 0;
@@ -536,8 +532,6 @@ Variant NetwQuantizeAngle::read(
     const uint64_t level_count = uint64_t(1) << bit_count;
     double angle
         = double(reader->get_bits(bit_count)) / double(level_count) * TAU_VALUE;
-    // Exactly PI stays positive, so the centered range is half-open the same
-    // way a Godot Euler component is and the two agree on the boundary code.
     if (centered_on_zero && angle > PI_VALUE) {
         angle -= TAU_VALUE;
     }

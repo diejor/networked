@@ -88,7 +88,7 @@ func test_the_owner_resolves_the_same_shared_scope_the_server_committed() -> voi
 
 	# The budget the derivation must not exceed: it names only entities this
 	# peer already holds a live route for.
-	var live := client.tree.api._liveness.live_entities()
+	var live := client.tree.api._native_core.liveness_live_entities()
 	for member: NetwEntity in owner_scope:
 		assert_bool(member in live).override_failure_message(
 			"the owner named %s, which it holds no live route for, so the "

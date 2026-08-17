@@ -8,7 +8,7 @@
 ## the [method MultiplayerAPI.object_configuration_add] a spawner already emits
 ## and translates it into the same armed-record pipeline the
 ## [method Netw.replicate] verb uses, addressed by the [constant
-## NetwSpawnBook.Recipe.SPAWNER] recipe. A spawner registration is therefore
+## NetwSpawnBook.RECIPE_SPAWNER] recipe. A spawner registration is therefore
 ## consumed, never forwarded to [member NetwMultiplayer.inner], so the native
 ## replicator never learns the node exists and a double spawn is unrepresentable.
 ## [codeblock]
@@ -36,13 +36,15 @@
 ## native spawner cannot represent because it untracks on any tree exit and
 ## re-derives everything on re-entry. See the existence-versus-visibility
 ## contract on [NetwSpawnPipeline]. Because the consumed
-## [NetwSpawnBook.SpawnRecord] outlives moves, [method reanchor_record]
+## [NetwSpawnRecord] outlives moves, [method reanchor_record]
 ## re-derives its reconstruction recipe from the spawner watching the
 ## destination parent at each reparent edge, the same derivation native
 ## performs on re-entry, without the despawn and without losing the captured
 ## custom argument.
 class_name NetwSpawnerCompat
 extends RefCounted
+
+const _CLEAR_SESSION_KEY := &"spawner-compat-clear-session"
 
 # The owning NetwMultiplayer. A weakref because the owner holds this adapter
 # strongly through ReplicationCore and both are reference counted.
@@ -56,16 +58,12 @@ var _custom_args: Dictionary[int, Variant] = { }
 # through the unwrapped callable and a re-wrap is idempotent.
 var _originals: Dictionary[int, Callable] = { }
 
-# spawner instance id -> WeakRef(spawner): every spawner discovered in this
-# session's branch. The engine never announces a spawner as a unit (only its
-# tracked nodes reach object_configuration_add), so the adapter builds the
-# registration roster itself and reanchor_record consults it as the reverse
-# index instead of scanning the tree.
-var _spawners: Dictionary[int, WeakRef] = { }
-
-# route -> WeakRef(spawner), so a DESPAWN frame carrying only the route can still
-# emit despawned on the spawner that produced the node.
-var _recv_spawners: Dictionary[int, WeakRef] = { }
+# Every spawner discovered in this session's branch, and which of them produced
+# each route this peer materialized. The engine never announces a spawner as a
+# unit (only its tracked nodes reach object_configuration_add), so the adapter
+# builds the roster itself and reanchor_record consults it as the reverse index
+# instead of scanning the tree.
+var _roster := NetwSpawnerRoster.new()
 
 # Receiver: a custom spawn whose spawn function was never wrapped, so its
 # argument could not be captured on the authority.
@@ -148,7 +146,7 @@ func consume_remove(_node: Node, _spawner: MultiplayerSpawner) -> Error:
 func register_spawner(spawner: MultiplayerSpawner) -> void:
 	if not is_instance_valid(spawner):
 		return
-	_spawners[spawner.get_instance_id()] = weakref(spawner)
+	_roster.enrol(spawner)
 	wrap_spawner(spawner)
 
 
@@ -225,7 +223,7 @@ func instantiate(
 	return original.call(data) as Node
 
 
-## Re-anchors a [constant NetwSpawnBook.Recipe.SPAWNER] record onto the
+## Re-anchors a [constant NetwSpawnBook.RECIPE_SPAWNER] record onto the
 ## [MultiplayerSpawner] watching [param node]'s current parent.
 ##
 ## A record's reconstruction recipe is captured at consumption time, but a
@@ -246,8 +244,8 @@ func instantiate(
 ## spawner keeps the old anchor, the same nodes-outside-any-spawn-path posture
 ## native takes.
 ## [br][br][b]Server Only.[/b]
-func reanchor_record(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
-	if record.recipe != NetwSpawnBook.Recipe.SPAWNER:
+func reanchor_record(record: NetwSpawnRecord, node: Node) -> void:
+	if record.recipe != NetwSpawnBook.RECIPE_SPAWNER:
 		return
 	if not is_instance_valid(node) or not node.is_inside_tree():
 		return
@@ -259,11 +257,8 @@ func reanchor_record(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 	var root := _api().root if _api() else null
 	if not is_instance_valid(root):
 		return
-	for sid: int in _spawners.keys():
-		var spawner := _spawners[sid].get_ref() as MultiplayerSpawner
-		if not is_instance_valid(spawner):
-			_spawners.erase(sid)
-			continue
+	for candidate: Object in _roster.live():
+		var spawner := candidate as MultiplayerSpawner
 		if not spawner.is_inside_tree() or not root.is_ancestor_of(spawner):
 			continue
 		if spawner.get_node_or_null(spawner.spawn_path) != parent:
@@ -275,7 +270,7 @@ func reanchor_record(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 			record.scene_index = index
 		elif not spawner.spawn_function.is_valid():
 			continue
-		record.spawner_ref = weakref(spawner)
+		record.bind_spawner(spawner)
 		return
 	Netw.dbg.trace(
 		"NetwSpawnerCompat: route %d reparented under '%s' with no matching "
@@ -289,7 +284,7 @@ func reanchor_record(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 ## [signal MultiplayerSpawner.despawned] on the right spawner.
 func note_recv(route: int, spawner: MultiplayerSpawner) -> void:
 	if is_instance_valid(spawner):
-		_recv_spawners[route] = weakref(spawner)
+		_roster.note_producer(route, spawner)
 
 
 ## Emits [signal MultiplayerSpawner.spawned] for [param node], matching the
@@ -302,9 +297,7 @@ func emit_spawned(spawner: MultiplayerSpawner, node: Node) -> void:
 ## Emits [signal MultiplayerSpawner.despawned] for [param node] on the spawner
 ## that produced [param route], if any. A no-op for non-spawner routes.
 func emit_despawned(route: int, node: Node) -> void:
-	var ref: WeakRef = _recv_spawners.get(route)
-	_recv_spawners.erase(route)
-	var spawner := ref.get_ref() as MultiplayerSpawner if ref else null
+	var spawner := _roster.take_producer(route) as MultiplayerSpawner
 	if is_instance_valid(spawner) and is_instance_valid(node):
 		spawner.emit_signal(&"despawned", node)
 
@@ -312,11 +305,7 @@ func emit_despawned(route: int, node: Node) -> void:
 # Counts routes this peer materialized through [param spawner], the
 # receiver-side half of the native spawn_limit check.
 func _recv_count_for(spawner: MultiplayerSpawner) -> int:
-	var count := 0
-	for route: int in _recv_spawners:
-		if _recv_spawners[route].get_ref() == spawner:
-			count += 1
-	return count
+	return _roster.produced_count(spawner)
 
 
 # Reimplements MultiplayerSpawner.find_spawnable_scene_index_from_path
@@ -364,7 +353,9 @@ func _on_session_ended() -> void:
 	var scene_tree := Engine.get_main_loop() as SceneTree
 	if scene_tree and scene_tree.node_added.is_connected(_on_node_added):
 		scene_tree.node_added.disconnect(_on_node_added)
-	_clear_session_state.call_deferred()
+	var api := _api()
+	if api:
+		api._settle_schedule(_clear_session_state, _CLEAR_SESSION_KEY)
 
 
 func _clear_session_state() -> void:
@@ -376,8 +367,7 @@ func _clear_session_state() -> void:
 			spawner.spawn_function = _originals[sid]
 	_custom_args.clear()
 	_originals.clear()
-	_recv_spawners.clear()
-	_spawners.clear()
+	_roster.clear()
 
 
 ## Returns this adapter's contribution to

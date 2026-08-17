@@ -120,6 +120,71 @@ static func of(node: Node) -> NetwMultiplayer:
 	return NetwMultiplayer.of(node)
 
 
+# Each facet an entity publishes is built by the class that owns it, and the
+# record holds one of each. Registering them here rather than on any one facet
+# is what makes "one entity, one of each" a rule the record keeps: the record is
+# native and the facets are not, so it has to be told how to build them, and it
+# is told once.
+static func _static_init() -> void:
+	NetwEntityRecord.set_part_factory(
+		NetwEntityRecord.PART_SCENE, _build_scene_handle,
+	)
+	NetwEntityRecord.set_part_factory(
+		NetwEntityRecord.PART_INTEREST, _build_interest_handle,
+	)
+	NetwEntityRecord.set_part_factory(
+		NetwEntityRecord.PART_PREDICTION, _build_prediction_handle,
+	)
+	NetwEntityRecord.set_part_factory(
+		NetwEntityRecord.PART_DISPLAY, _build_display_handle,
+	)
+	NetwEntityRecord.set_part_factory(
+		NetwEntityRecord.PART_COMPONENTS, _build_component_map,
+	)
+	NetwEntityRecord.set_scene_declaration_reader(_read_scene_declaration)
+	NetwEntity.set_session_lookup(NetwMultiplayer.core_of)
+
+
+# What a script DECLARED about the scene it roots, which an instance's own
+# write outranks. The registry is keyed on Script, so the owner carries the
+# question rather than the record.
+static func _read_scene_declaration(owner: Node) -> Dictionary:
+	if not is_instance_valid(owner):
+		return { }
+	var config := NetwScriptModel.get_scene_config(owner.get_script() as Script)
+	if config == null:
+		return { }
+	return { "label": config.label, "isolation": config.isolation }
+
+
+static func _build_scene_handle(entity: NetwEntity) -> RefCounted:
+	var handle := NetwSceneHandle.new()
+	handle._bind(entity)
+	return handle
+
+
+static func _build_interest_handle(entity: NetwEntity) -> RefCounted:
+	var handle := NetwInterestHandle.new()
+	handle._bind(entity)
+	return handle
+
+
+static func _build_prediction_handle(entity: NetwEntity) -> RefCounted:
+	var handle := NetwPredictionHandle.new()
+	handle._bind(entity)
+	return handle
+
+
+static func _build_display_handle(entity: NetwEntity) -> RefCounted:
+	var handle := NetwDisplayHandle.new()
+	handle._bind(entity)
+	return handle
+
+
+static func _build_component_map(entity: NetwEntity) -> RefCounted:
+	return NetwComponentMap.new(entity)
+
+
 static var _is_test_env_cached: Variant = null
 
 
@@ -1041,9 +1106,9 @@ static func configure_persistence(node: Node) -> NetwScriptModel.PersistenceConf
 ## Identity ([member NetwEntity.route], [member NetwEntity.entity_id],
 ## [member NetwEntity.peer_id], [member NetwEntity.controller]) is valid when
 ## this returns and before the node's first [method Node._enter_tree], on
-## every peer. The spawn is snapshotted at end-of-frame of tree entry, so the
-## orphan window between this call and [method Node.add_child] is where async
-## hydration belongs.
+## every peer. The spawn is snapshotted at the first pump after tree entry, so
+## the orphan window between this call and [method Node.add_child] is where
+## async hydration belongs, and so is every property written before that pump.
 ## [codeblock]
 ## var player := PlayerScene.instantiate()
 ## var entity := Netw.replicate(player, participant)

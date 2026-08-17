@@ -45,8 +45,8 @@ class Lane:
 	var display_offset := 0
 	var recommended_display_offset := 0
 
-	var rt: DisplayCore._Runtime
-	var state: DisplayCore._PropertyState
+	var rt: NetwDisplayRuntime
+	var state: NetwDisplayChannel
 	var writer: NetwInterpRecordingWriter
 	var schedule: Array[NetwInterpDelivery.Arrival] = []
 	var next_arrival := 0
@@ -84,13 +84,13 @@ func run(duration_sec: float, order: PackedInt32Array) -> void:
 		lane.display_offset = ceili(latency_ticks)
 		lane.recommended_display_offset = lane.display_offset + ceili(jitter_ticks)
 
-		lane.rt = DisplayCore._Runtime.new()
-		lane.rt.config = DisplayCore._Config.new()
-		lane.rt.playhead = DisplayCore._Playhead.new()
+		lane.rt = NetwDisplayRuntime.new()
+		lane.rt.config = NetwDisplayDecl.new()
+		lane.rt.playhead = NetwDisplayPlayhead.new()
 		lane.rt.playhead.expected_interval_ticks = maxi(1, send_period)
 		lane.rt.pump_mode = DisplayCore._PUMP_REMOTE
 
-		lane.state = DisplayCore._PropertyState.new()
+		lane.state = NetwDisplayChannel.new()
 		lane.state.name = &"value"
 		lane.state.spec = NetwInterpolate.new().lerp().smooth(0.05).to(&"value")
 		lane.state.source_prop = &"value"
@@ -107,10 +107,11 @@ func run(duration_sec: float, order: PackedInt32Array) -> void:
 		lane.next_arrival = 0
 		lane.displayed = []
 
-		var seed_timing := _timing(lane, 0.0)
-		var floor_lag := _iface._calculate_min_lag(lane.rt, seed_timing)
-		lane.rt.playhead.smoothed_floor = floor_lag
-		lane.rt.playhead.display_lag = floor_lag
+		lane.rt.playhead.settle(
+			lane.rt.config,
+			lane.display_offset,
+			lane.recommended_display_offset,
+		)
 
 	var frame_count := int(ceil(duration_sec * fps))
 	for f in frame_count:

@@ -302,7 +302,7 @@ TEST_CASE(
     int64_t reached = 0;
     for (int index = 0; index < 64; ++index) {
         char name[32];
-        snprintf(name, sizeof(name), "networked-%d", index);
+        snprintf(name, sizeof(name), "%d-networked", index);
         const int64_t tag = NetwSessionCore::compute_app_tag(StringName(name));
         CHECK(bool(tag >= 0));
         CHECK(bool(tag <= int64_t(0xFFFFFFFF)));

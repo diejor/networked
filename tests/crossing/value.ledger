@@ -1,0 +1,163 @@
+# family: value
+# bridge: A(law-restatement)
+# regime: exact (the same rows over the same declarations, value for value)
+# instrument-first: the GDScript suite this replaces, case for case
+# baseline: tests/unit/wire, tests/integration/sync
+# baseline-count: 115
+# added-count: 9
+#
+# THE ADDED CASES are the shell-side proof of the lanes those slices wrote
+# natively: `test_the_retained_row_heals_whole_then_masks_what_moved` in
+# tests/unit/wire, and `test_a_retained_field_crosses_only_when_it_changes` and
+# `test_the_input_lane_repeats_recent_ticks_rather_than_retransmitting` in
+# tests/integration/sync. They were never in the baseline and license nothing,
+# so they carry no row. `test_the_volatile_row_bails_on_a_missing_field` is the
+# fourth, and it is a baseline case re-authored under a name that says what it
+# now reads: its old name is dropped below rather than carried, because the
+# frame it named is gone. The last five are the SYNC frame codec's laws restated
+# on `NetwSyncKernel`, which now owns that layout outright.
+#
+# The declared property set's value plane: what a set's columns become on the
+# wire, what a peer is owed of them, and what a receiver reconstructs. The
+# family opens at Z1e, when Z1d's switch left the shell's masked send and its
+# merge with no caller.
+#
+# WHY THE SCOPES ARE THESE TWO. `tests/unit/wire` is the codec and the books,
+# `tests/integration/sync` is the same plane through a live pair. Scope
+# permanence binds both to this family from here on, including the two stock
+# conformance suites they contain: those are the argued permanent set (plan of
+# record 9.1), and they read `CARRY kit` rather than leaving the scope.
+#
+# WHAT THE PORTED ROWS CLAIM. Each names the native law that now holds the
+# thing the GDScript case held. They are not translations. The masked lane's
+# decision moved from `NetwPropertySetBinding.masked_delta_for` to
+# `netw::wire::BaselineBook` under `netw::repl::RowLane`, and its
+# reconstruction from `NetwSyncKernel.decode_volatile`'s merge to
+# `netw::repl::read_row_frame`. The native laws were written first and this
+# ledger is the audit that nothing was lost when the shell halves went.
+#
+# WHAT STAYS. Everything reading `CARRY shell` is the shell codec that has not
+# moved: the freshness books, the datagram magics, and the compat path over
+# Channel.SYNC. Z2 dissolves those, and this ledger cannot close until it has.
+#
+# The three derived lanes have all left. The retained one went to
+# Channel.SYNC_ROW_DELTA, where `netw::repl::RetainedLane` holds the diff and
+# advances it on send rather than on an ack. The windowed input ring went to
+# Channel.SYNC_ROW_WINDOW, where `netw::repl::WindowRing` holds the range in
+# flight and `netw::repl::write_window_frame` carries it as ages below the
+# frame tick.
+test_acked_datagram_magic.gd:test_existing_unreliable_magic_decodes_unchanged                    -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_existing_reliable_magic_decodes_unchanged                      -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_short_unreliable_packet_discarded                              -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_acked_datagram_layout_pins_seq_then_echo_then_frame            -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_acked_ingress_applies_frame_after_the_header                   -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_acked_ingress_records_the_echo_as_the_peers_state_ack          -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_acked_ingress_gates_freshness_on_the_datagram_seq              -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_short_acked_packet_discarded                                   -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_acked_datagram_magic.gd:test_carrier_magics_are_distinct                                    -> CARRY shell tests/unit/wire (the acked datagram magic, driven through NetwMultiplayer._on_inner_peer_packet, which crosses at the swap)
+test_datagram_sequencing.gd:test_fresh_datagram_applies                                          -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_stale_datagram_drops                                            -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_first_datagram_always_accepted                                  -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_half_window_wraparound                                          -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_equal_stamp_is_stale                                            -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_same_datagram_frames_share_acceptance                           -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_same_datagram_frames_share_rejection                            -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_duplicate_datagram_drops_whole                                  -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_delayed_datagram_still_applies_untouched_streams                -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_streams_are_per_channel                                         -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_user_channel_route_traffic_gated                                -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_route0_frames_never_gated                                       -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_clear_route_resets_acceptance                                   -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_clear_peer_resets_acceptance                                    -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_reliable_datagram_never_gated                                   -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_ungated_dispatch_bypasses_books                                 -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_datagram_sequencing.gd:test_short_unreliable_packet_ignored                                 -> CARRY shell tests/unit/wire (the unreliable carrier datagram's u16 stamp, driven through NetwMultiplayer's carrier intake, which crosses at the swap)
+test_replication_wire_laws.gd:test_l1_byte_parity                                                -> DROP the frozen codec it compared the extracted encoder against is gone, and a byte-parity law with one party is the encoder agreeing with itself
+test_replication_wire_laws.gd:test_l2_round_trip                                                 -> CARRY shell tests/unit/wire (the sealed sync engine's frame laws, driven through the GDScript sync pipeline's encode, which ZU-30 has not crossed)
+test_replication_wire_laws.gd:test_l3_freshness_monotonicity                                     -> repl_freshness_book_tests.cpp:"[Networked][Repl][Hosted] freshness advances monotonically across the u16 ring"
+test_replication_wire_laws.gd:test_l4_masked_convergence                                         -> repl_row_frame_tests.cpp:"[Networked][Repl][Hosted] only the masked columns ride, and the rest are left as the receiver had them"
+test_replication_wire_laws.gd:test_l8_registration_balance                                       -> CARRY shell tests/unit/wire (the sealed sync engine's frame laws, driven through the GDScript sync pipeline's encode, which ZU-30 has not crossed)
+test_replication_wire_laws.gd:test_l10_ack_duality                                               -> repl_freshness_book_tests.cpp:"[Networked][Repl][Hosted] an equal sequence is stale"
+test_replication_wire_laws.gd:test_p13_replay_determinism                                        -> CARRY shell tests/unit/wire (the sealed sync engine's frame laws, driven through the GDScript sync pipeline's encode, which ZU-30 has not crossed)
+test_replication_wire_laws.gd:test_p14_schedule_independence                                     -> CARRY shell tests/unit/wire (the sealed sync engine's frame laws, driven through the GDScript sync pipeline's encode, which ZU-30 has not crossed)
+test_script_sync_wire.gd:test_schema_hash_is_deterministic_and_16_bit                            -> CARRY shell tests/unit/wire (the derived set's agreed shape and the rows it hands NetwReplicationSend, driven through the GDScript sync pipeline)
+test_script_sync_wire.gd:test_schema_hash_is_sensitive_to_order_membership_and_lane              -> CARRY shell tests/unit/wire (the derived set's agreed shape and the rows it hands NetwReplicationSend, driven through the GDScript sync pipeline)
+test_script_sync_wire.gd:test_the_wire_hash_catches_a_type_disagreement                          -> CARRY shell tests/unit/wire (the derived set's agreed shape and the rows it hands NetwReplicationSend, driven through the GDScript sync pipeline)
+test_script_sync_wire.gd:test_the_wire_hash_catches_a_quantizer_disagreement                     -> CARRY shell tests/unit/wire (the derived set's agreed shape and the rows it hands NetwReplicationSend, driven through the GDScript sync pipeline)
+test_script_sync_wire.gd:test_the_wire_hash_ignores_the_schema_name                              -> CARRY shell tests/unit/wire (the derived set's agreed shape and the rows it hands NetwReplicationSend, driven through the GDScript sync pipeline)
+test_script_sync_wire.gd:test_volatile_frame_round_trips_a_stamped_state_row                     -> repl_row_frame_tests.cpp:"[Networked][Repl][Hosted] a frame round trips its header"
+test_script_sync_wire.gd:test_volatile_frame_skips_the_retained_lane                             -> DROP the two lanes are disjoint schemas rather than one frame that skips columns, and test_the_retained_row_heals_whole_then_masks_what_moved reads both rows off one binding to say so
+test_script_sync_wire.gd:test_volatile_frame_bails_on_a_missing_field                            -> DROP the refusal is the gather's, not the frame's, and it is re-authored on its live subject as test_the_volatile_row_bails_on_a_missing_field
+test_script_sync_wire.gd:test_binding_encodes_a_windowed_input_ring                              -> repl_session_send_tests.cpp:"[Networked][Repl][Hosted] a windowed pass repeats every tick still in flight, up to the ring's depth"
+test_script_sync_wire.gd:test_state_frame_carries_the_reconciliation_ack                         -> DROP the same reason the input frame's ack slot went: a row frame carries tick and ack on every shape, so a stamp cannot add or withhold a slot
+test_script_sync_wire.gd:test_input_frame_carries_no_ack_slot                                    -> DROP the ack slot it locked was a SYNC frame flag combination; a row frame carries the ack as a field on every shape, so there is no slot an input frame can reserve or omit
+test_script_sync_wire.gd:test_masked_delta_heals_an_unconfirmed_peer_with_the_full_row           -> wire_baseline_book_tests.cpp:"[Networked][Wire][Hosted] a peer with no baseline is sent every column"
+test_script_sync_wire.gd:test_masked_delta_sends_nothing_once_a_peer_is_confirmed_and_unchanged  -> wire_baseline_book_tests.cpp:"[Networked][Wire][Hosted] a caught-up peer is sent nothing"
+test_script_sync_wire.gd:test_masked_delta_never_advances_a_baseline_until_the_send_is_acked     -> wire_baseline_book_tests.cpp:"[Networked][Wire][Hosted] the ack that carries a column stops it"
+test_script_sync_wire.gd:test_masked_delta_masks_only_the_changed_field                          -> wire_baseline_book_tests.cpp:"[Networked][Wire][Hosted] only the columns that moved are sent"
+test_script_sync_wire.gd:test_masked_delta_ignores_a_change_inside_one_grid_step                 -> repl_round_trip_laws.cpp:"[Networked][Repl][Hosted] a value handed to the send side arrives as the value the grid makes of it"
+test_script_sync_wire.gd:test_masked_delta_sends_a_change_that_crosses_a_grid_step               -> repl_round_trip_laws.cpp:"[Networked][Repl][Hosted] a second pass carries only what moved, and the receiver still holds the whole row"
+test_script_sync_wire.gd:test_masked_apply_merges_a_partial_frame_onto_the_last_decoded_row      -> repl_row_frame_tests.cpp:"[Networked][Repl][Hosted] only the masked columns ride, and the rest are left as the receiver had them"
+test_script_sync_wire.gd:test_masked_apply_merges_against_last_row_when_write_gate_is_off        -> DROP the merge target is no longer a decoded row a gate can divert; NetwPropertySetBinding holds the sender's CODE ROW as bytes, so the merge is against what was diffed by construction
+test_script_sync_wire.gd:test_advance_masked_ack_no_ops_on_a_peer_with_no_in_flight_rows         -> wire_baseline_book_tests.cpp:"[Networked][Wire][Hosted] an ack with nothing under it keeps the baseline"
+test_script_sync_wire.gd:test_commit_pending_masked_no_ops_when_nothing_was_staged               -> repl_session_send_tests.cpp:"[Networked][Repl][Hosted] a committed pass is committed once"
+test_script_sync_wire.gd:test_retain_masked_baselines_drops_a_peer_no_longer_a_recipient         -> repl_row_lane_tests.cpp:"[Networked][Repl][Hosted] a peer that leaves the lane is owed the whole row when it returns"
+test_script_sync_wire.gd:test_binding_retained_delta_heals_then_masks_changes                    -> repl_retained_lane_tests.cpp:"[Networked][Repl][Hosted] the send is the proof, so the next pass diffs against it with no ack"
+test_script_sync_wire.gd:test_binding_retained_delta_quantizes_configured_fields                 -> repl_round_trip_laws.cpp:"[Networked][Repl][Hosted] a value handed to the send side arrives as the value the grid makes of it"
+test_sync_decode.gd:test_sync_frame_applies_and_fires_signal                                     -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_delta_frame_applies_masked_field                                        -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_unknown_ordinal_drops                                                   -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_non_authority_sender_drops                                              -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_schema_hash_mismatch_poisons                                            -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_sync_row_size_mismatch_poisons                                          -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_delta_mask_value_disagreement_poisons                                   -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_sync_frame_routes_through_carrier_dispatch                              -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_stale_sync_datagram_drops                                               -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_decode.gd:test_over_64_watch_properties_poisons_at_consumption                         -> CARRY shell tests/unit/wire (TWO subjects, which is why it is unresolved: it stands a stock MultiplayerSynchronizer, which a treeless native tier cannot and which 9.1 already tokens kit elsewhere, and it drives NetwMultiplayer._drive_carrier, which is Ring-0 and crosses. Kept shell as the conservative token; deciding it is a judgement about which subject the law is about)
+test_sync_flags_grammar.gd:test_plain_frame_flags_zero_applies                                   -> CARRY shell tests/unit/wire (the Channel.SYNC frame's flag grammar, which NetwSyncCompat owns and 2.15 keeps as permanent kit; same two-subject question as test_sync_decode.gd)
+test_sync_flags_grammar.gd:test_unknown_flag_bit_drops_loudly                                    -> CARRY shell tests/unit/wire (the Channel.SYNC frame's flag grammar, which NetwSyncCompat owns and 2.15 keeps as permanent kit; same two-subject question as test_sync_decode.gd)
+test_sync_flags_grammar.gd:test_stamped_frame_carries_tick_after_flags                           -> DROP no sender ever set the bit: the stamped, acked, windowed and masked variants were the derived plane's, and it left for the row frames on SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW
+test_sync_flags_grammar.gd:test_acked_frame_encodes_ack_as_value_plus_one                        -> DROP no sender ever set the bit: the stamped, acked, windowed and masked variants were the derived plane's, and it left for the row frames on SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW
+test_sync_flags_grammar.gd:test_windowed_frame_carries_count_then_age_rows                       -> DROP no sender ever set the bit: the stamped, acked, windowed and masked variants were the derived plane's, and it left for the row frames on SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW
+test_sync_flags_grammar.gd:test_flag_bits_occupy_distinct_positions                              -> DROP one reserved byte has no bit positions to keep apart
+test_sync_frame_codec.gd:test_plain_stamped_and_acked_round_trip                                 -> DROP the stamp and the ack went with the flags, and what is left of it is test_volatile_row_round_trips_under_its_keys
+test_sync_frame_codec.gd:test_windowed_frame_round_trips_age_rows_newest_first                   -> DROP no sender ever set the bit: the stamped, acked, windowed and masked variants were the derived plane's, and it left for the row frames on SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW
+test_sync_frame_codec.gd:test_taped_window_round_trips_epoch_labels_and_repeat_entries           -> DROP no sender ever set the bit: the stamped, acked, windowed and masked variants were the derived plane's, and it left for the row frames on SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW
+test_sync_frame_codec.gd:test_masked_frame_selects_subset_against_full_schema                    -> DROP no sender ever set the bit: the stamped, acked, windowed and masked variants were the derived plane's, and it left for the row frames on SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW
+test_sync_frame_codec.gd:test_encoded_bytes_match_the_pinned_hand_built_layout                   -> CARRY shell tests/unit/wire (the Channel.SYNC frame round trip, which NetwSyncCompat owns; same two-subject question as test_sync_decode.gd)
+test_sync_frame_codec.gd:test_plain_frame_is_byte_identical_to_a_bare_positional_payload         -> DROP the bare positional payload is now the only frame, so the claim is test_encoded_bytes_match_the_pinned_hand_built_layout and nothing else
+test_broadcast_masked_flow.gd:test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss -> CARRY shell tests/integration/sync (a client-authored masked broadcast over a clocked pair, driven through the GDScript sync pipeline into DisplayCore)
+test_consumed_interpolation_revival.gd:test_consumed_sync_feeds_interpolation_after_flap_revival -> CARRY shell tests/integration/sync (the CONSUMED synchronizer's interpolation feed across a revival, which NetwSyncCompat owns; same two-subject question as test_sync_decode.gd)
+test_derived_loopback.gd:test_state_flows_to_client_and_input_flows_to_server                    -> CARRY shell tests/integration/sync (a configure_property derived-set node end to end, driven through the GDScript sync pipeline)
+test_derived_loopback.gd:test_entity_resolves_derived_set_handles                                -> CARRY shell tests/integration/sync (a configure_property derived-set node end to end, driven through the GDScript sync pipeline)
+test_derived_loopback.gd:test_server_only_input_never_reaches_another_client                     -> CARRY shell tests/integration/sync (a configure_property derived-set node end to end, driven through the GDScript sync pipeline)
+test_derived_loopback.gd:test_reports_controller_authored_public_state_relay                     -> CARRY shell tests/integration/sync (a configure_property derived-set node end to end, driven through the GDScript sync pipeline)
+test_interpolator_authoring_tick.gd:test_keys_history_by_authoring_tick                          -> CARRY shell tests/integration/sync (DisplayCore's authoring-tick keying, Ring-0, which ZU-33's pump crossing takes)
+test_interpolator_authoring_tick.gd:test_displayed_authoring_tick_names_a_past_shown_tick        -> CARRY shell tests/integration/sync (DisplayCore's authoring-tick keying, Ring-0, which ZU-33's pump crossing takes)
+test_latency_accuracy.gd:test_latency_is_stable_under_exact_delay                                -> CARRY shell tests/integration/sync (lockstep latency measured off the derived stream, which the GDScript sync pipeline drives)
+test_latency_accuracy.gd:test_latency_is_reproducible_across_runs                                -> CARRY shell tests/integration/sync (lockstep latency measured off the derived stream, which the GDScript sync pipeline drives)
+test_latency_accuracy.gd:test_latency_scales_with_configured_delay                               -> CARRY shell tests/integration/sync (lockstep latency measured off the derived stream, which the GDScript sync pipeline drives)
+test_masked_reconstruction.gd:test_a_reconstructed_row_equals_the_staged_row_under_loss_and_dup  -> wire_send_replay_tests.cpp:"[Networked][Wire][Hosted] a lost datagram leaves its columns owed and the next pass carries them"
+test_masked_reconstruction.gd:test_the_gain_edge_is_always_a_full_mask                           -> repl_row_lane_tests.cpp:"[Networked][Repl][Hosted] the first send to a peer carries the whole row"
+test_masked_reconstruction.gd:test_a_reordered_frame_is_dropped_not_merged                       -> CARRY shell tests/integration/sync (the freshness gate on the declared value plane's receive side, which NetwSyncProgress holds behind the GDScript pipeline)
+test_masked_reconstruction.gd:test_the_receiver_heals_from_a_revert                              -> wire_baseline_book_tests.cpp:"[Networked][Wire][Hosted] a column stays sent until an ack carries it"
+test_nested_visibility_conformance.gd:test_nested_public_sync_never_targets_absent_root          -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_nested_visibility_conformance.gd:test_nested_spawner_clamps_children_to_hidden_parent       -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_nested_visibility_conformance.gd:test_hide_show_applies_in_topological_order                -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_nested_visibility_conformance.gd:test_nested_syncs_need_no_dummy_root_synchronizer          -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_nested_visibility_conformance.gd:test_late_join_replays_only_admitted_subtree_parent_first  -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_sync_loss_reorder.gd:test_state_stream_applies_strictly_forward_under_reorder               -> CARRY shell tests/integration/sync (loss and reorder over the unreliable sync stream, gated by the freshness books NetwSyncProgress holds behind the GDScript pipeline)
+test_sync_loss_reorder.gd:test_masked_state_stream_never_corrupts_under_loss_and_converges       -> CARRY shell tests/integration/sync (loss and reorder over the unreliable sync stream, gated by the freshness books NetwSyncProgress holds behind the GDScript pipeline)
+test_sync_loss_reorder.gd:test_property_sync_never_regresses_and_converges                       -> CARRY shell tests/integration/sync (loss and reorder over the unreliable sync stream, gated by the freshness books NetwSyncProgress holds behind the GDScript pipeline)
+test_synchronizer_conformance.gd:test_spawn_property_applies_before_enter_tree                   -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_sync_property_replicates_to_visible_peer                   -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_watch_property_replicates_on_change                        -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_synchronized_signal_fires_on_receiver                      -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_late_joiner_receives_current_synced_state                  -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_visibility_api_gates_and_heals                             -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_multiple_synchronizers_per_root                            -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_sub_node_property_replicates                               -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_authority_change_moves_the_stream                          -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_session_reset_and_re_host_resyncs                          -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_spawnerless_synchronizer_adopts_in_place                   -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)
+test_synchronizer_conformance.gd:test_native_replicator_stays_empty_across_full_session          -> CARRY kit tests/integration/sync (stock drop-in parity, plan of record 9.1)

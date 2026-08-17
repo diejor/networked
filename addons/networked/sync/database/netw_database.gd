@@ -27,23 +27,23 @@
 ## table with [method table], then fetch, put, or delete [NetwRecord] records:
 ## [codeblock]
 ## # Fetch a player record:
-## var record := db.table(&"players").fetch(username)
+## var record := await db.table(&"players").fetch(username)
 ##
 ## # Property-style access also works (autocomplete via _get_property_list):
-## var same_record := db.players.fetch(username)
+## var same_record := await db.players.fetch(username)
 ## [/codeblock]
 ##
 ## [b]Typed tables:[/b] register a [NetwRecord] subclass so
 ## [method NetwDatabase.TableRepository.fetch] returns the right type automatically:
 ## [codeblock]
 ## db.declare_table(&"rocks", [&"health", &"position"], RockRecord)
-## var rock: RockRecord = db.table(&"rocks").fetch(&"rock_1")
+## var rock: RockRecord = await db.table(&"rocks").fetch(&"rock_1")
 ## [/codeblock]
 ##
 ## [b]Transaction API:[/b] batch writes via a closure to guarantee the commit
 ## always runs:
 ## [codeblock]
-## db.transaction(func(tx: NetwDatabase.TransactionContext):
+## await db.transaction(func(tx: NetwDatabase.TransactionContext):
 ##     tx.queue_upsert(&"rocks", &"rock_1", {&"health": 50})
 ##     tx.queue_upsert(&"rocks", &"rock_2", {&"health": 75})
 ## )
@@ -127,6 +127,33 @@ var _table_scripts: Dictionary[StringName, Script] = { }
 # ── Table access ──────────────────────────────────────────────────────────────
 
 
+## Awaits [param promise] and answers what it settled with, or [param fallback]
+## when it was rejected.
+##
+## A settled promise never emits again, so awaiting its signal unconditionally
+## would wait forever. This is the one place that guard is written.
+static func settled_value(promise: NetwPromise, fallback: Variant) -> Variant:
+	if promise == null:
+		return fallback
+	if not promise.is_settled:
+		await promise.settled
+	return promise.result if promise.is_completed else fallback
+
+
+## The [enum @GlobalScope.Error] form of [method settled_value].
+##
+## A rejection answers with the promise's own code rather than a fallback,
+## because for a verb whose value is an error code that code IS the answer.
+static func settled_error(promise: NetwPromise) -> Error:
+	if promise == null:
+		return ERR_UNCONFIGURED
+	if not promise.is_settled:
+		await promise.settled
+	if promise.is_completed:
+		return int(promise.result) as Error
+	return int(promise.code) as Error
+
+
 ## Returns the [NetwDatabase.TableRepository] for [param table_name].
 ##
 ## Repositories are cached. Repeated calls for the same name return the same
@@ -134,7 +161,7 @@ var _table_scripts: Dictionary[StringName, Script] = { }
 ## Registration happens automatically through [method bind] or explicitly
 ## via [method declare_table].
 ## [codeblock lang=gdscript]
-## var record := db.table(&"players").fetch(username)
+## var record := await db.table(&"players").fetch(username)
 ## [/codeblock]
 func table(table_name: StringName) -> TableRepository:
 	var script := _table_scripts.get(table_name)
@@ -275,8 +302,9 @@ func _initialize_backend() -> void:
 			func(m): push_error(m)
 		)
 		return
-	@warning_ignore("redundant_await")
-	var err: Error = await backend.initialize(_schema, String(slots.current()))
+	var err: Error = await settled_error(
+		backend.initialize(_schema, String(slots.current())),
+	)
 	if err != OK:
 		Netw.dbg.error(
 			"NetwDatabase: backend initialization failed. " +
@@ -286,8 +314,7 @@ func _initialize_backend() -> void:
 		)
 		return
 
-	@warning_ignore("redundant_await")
-	await backend.warm(_build_warm_directives())
+	await settled_error(backend.warm(_build_warm_directives()))
 
 
 
@@ -299,8 +326,9 @@ func _initialize_backend() -> void:
 func warm(table: StringName, request: WarmRequest) -> Error:
 	if not backend:
 		return ERR_UNCONFIGURED
-	@warning_ignore("redundant_await")
-	var err: Error = await backend.warm([{ table = table, request = request }])
+	var err: Error = await settled_error(
+		backend.warm([{ table = table, request = request }]),
+	)
 	return err
 
 
@@ -400,27 +428,52 @@ func _apply_mismatch_policy(
 ## [method NetwDatabase.TransactionContext.queue_upsert] for each record to
 ## write. The transaction is committed after [param body] returns.
 ## Returns [constant OK] on success or the first error returned by the backend.
+##
+## [method transaction_promise] is the same act for a caller that cannot await.
 func transaction(body: Callable) -> Error:
+	return await NetwDatabase.settled_error(transaction_promise(body))
+
+
+## The [NetwPromise] form of [method transaction], for a caller that cannot
+## await: a pump that suspended inside itself would let the next pump start
+## before this one finished.
+##
+## Both faces are the same act. [method transaction] awaits what this answers,
+## so the queue, the commit and [signal transaction_committed] happen once and
+## in one place whichever face a caller chose.
+##
+## The promise SETTLES with an [enum @GlobalScope.Error] rather than rejecting,
+## which is what [method NetwDatabaseBackend.commit] itself does: in this layer
+## a refused write is an ordinary answer, and a caller reads the code off
+## [member NetwPromise.result].
+## [codeblock]
+##     var promise := db.transaction_promise(
+##         func(ctx: NetwDatabase.TransactionContext) -> void:
+##             ctx.queue_upsert(table, id, row)
+##     )
+##     promise.then(func(result: Variant) -> void: written = result == OK)
+## [/codeblock]
+func transaction_promise(body: Callable) -> NetwPromise:
 	if not backend:
 		Netw.dbg.error(
 			"NetwDatabase: transaction called but no backend " +
 			"is set.",
 			func(m): push_error(m)
 		)
-		return ERR_UNCONFIGURED
+		return NetwPromise.resolved(ERR_UNCONFIGURED)
 
 	var ctx := TransactionContext.new()
 	body.call(ctx)
-	@warning_ignore("redundant_await")
-	var err := await ctx._commit(backend)
-
-	if err == OK:
-		var tables: Dictionary = { }
-		for entry in ctx._queue:
-			tables[entry.table] = true
-		transaction_committed.emit(tables.size(), ctx._queue.size())
-
-	return err
+	var tables: Dictionary = { }
+	for entry in ctx._queue:
+		tables[entry.table] = true
+	var table_count := tables.size()
+	var row_count := ctx._queue.size()
+	var promise := backend.commit(ctx._queue)
+	promise.then(func(result: Variant) -> void:
+		if int(result) == OK:
+			transaction_committed.emit(table_count, row_count))
+	return promise
 
 # ── Internal readers ──────────────────────────────────────────────────────────
 
@@ -452,8 +505,10 @@ func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> 
 		out_error[0] = ERR_UNCONFIGURED
 		return { }
 
-	@warning_ignore("redundant_await")
-	var record: Dictionary = await backend.find_by_id(table, id)
+	var record: Dictionary = await settled_value(
+		backend.find_by_id(table, id),
+		{ },
+	)
 	var hit := not record.is_empty()
 	record_loaded.emit(table, id, hit)
 
@@ -532,14 +587,15 @@ func _find_all(table: StringName, filter: Dictionary = { }) -> Array[Dictionary]
 			func(m): push_error(m)
 		)
 		return []
-	@warning_ignore("redundant_await")
-	var rows: Array[Dictionary] = await backend.find_all(table, filter)
+	var rows: Array[Dictionary] = await settled_value(
+		backend.find_all(table, filter),
+		[] as Array[Dictionary],
+	)
 	return rows
 
 
 ## Permanently removes [param id] from [param table].
 func delete(table: StringName, id: StringName) -> Error:
-	@warning_ignore("redundant_await")
 	return await _delete_internal(table, id)
 
 
@@ -551,8 +607,7 @@ func _delete_internal(table: StringName, id: StringName) -> Error:
 			func(m): push_error(m)
 		)
 		return ERR_UNCONFIGURED
-	@warning_ignore("redundant_await")
-	var err: Error = await backend.erase(table, id)
+	var err: Error = await settled_error(backend.erase(table, id))
 	return err
 
 # ── SlotEngine ────────────────────────────────────────────────────────────────
@@ -611,8 +666,10 @@ class SlotEngine:
 		var db := _get_db()
 		if not db or not db.backend:
 			return [] as Array[StringName]
-		@warning_ignore("redundant_await")
-		var names: Array[StringName] = await db.backend.list_namespaces()
+		var names: Array[StringName] = await NetwDatabase.settled_value(
+			db.backend.list_namespaces(),
+			[] as Array[StringName],
+		)
 		return names
 
 
@@ -623,8 +680,9 @@ class SlotEngine:
 		var db := _get_db()
 		if not db or not db.backend:
 			return ERR_UNCONFIGURED
-		@warning_ignore("redundant_await")
-		var err: Error = await db.backend.delete_namespace(String(slot))
+		var err: Error = await NetwDatabase.settled_error(
+			db.backend.delete_namespace(String(slot)),
+		)
 		return err
 
 
@@ -659,12 +717,6 @@ class TransactionContext:
 
 	# Flushes all queued operations to backend as one batch, returning the first
 	# error encountered, or OK.
-	func _commit(backend: NetwDatabaseBackend) -> Error:
-		@warning_ignore("redundant_await")
-		var err: Error = await backend.commit(_queue)
-		return err
-
-
 
 ## A typed read/write interface for a single database table.
 ##
@@ -674,18 +726,18 @@ class TransactionContext:
 ##
 ## [codeblock lang=gdscript]
 ## # Fetch a record and read a column:
-## var record := db.table(&"players").fetch(username)
+## var record := await db.table(&"players").fetch(username)
 ## if record:
 ##     var score := record.get_value(&"score", 0)
 ##
 ## # Write changes back to the database:
-## var err := db.table(&"players").put(username, save_comp.record)
+## var err := await db.table(&"players").put(username, save_comp.record)
 ##
 ## # Delete a record:
-## db.table(&"players").delete(username)
+## await db.table(&"players").delete(username)
 ##
 ## # Fetch every record in the table:
-## for record in db.table(&"players").fetch_all():
+## for record in await db.table(&"players").fetch_all():
 ##     print(record.get_value(&"score"))
 ## [/codeblock]
 ##
@@ -695,7 +747,7 @@ class TransactionContext:
 ## subclass rather than a [DictionaryRecord]:
 ## [codeblock lang=gdscript]
 ## db.declare_table(&"rocks", [&"health", &"position"], RockRecord)
-## var rock: RockRecord = db.table(&"rocks").fetch(&"rock_1")
+## var rock: RockRecord = await db.table(&"rocks").fetch(&"rock_1")
 ## [/codeblock]
 class TableRepository:
 	var _db: NetwDatabase
@@ -720,11 +772,10 @@ class TableRepository:
 	## registered schema, or a schema-mismatch policy blocks the load.
 	## The caller assigns the [NetwRecord] to the component:
 	## [codeblock lang=gdscript]
-	## save_comp.record = db.table(&"players").fetch(username)
+	## save_comp.record = await db.table(&"players").fetch(username)
 	## [/codeblock]
 	func fetch(id: StringName) -> NetwRecord:
 		var out_error: Array[int] = [OK]
-		@warning_ignore("redundant_await")
 		var record: Dictionary = await _db._find_by_id(_table, id, out_error)
 		if out_error[0] != OK or record.is_empty():
 			return null
@@ -738,10 +789,9 @@ class TableRepository:
 	## Uses [method NetwRecord.to_dict] to produce the record. This returns
 	## [constant OK] on success or the first backend error encountered.
 	## [codeblock lang=gdscript]
-	## var err := db.table(&"players").put(username, save_comp.record)
+	## var err := await db.table(&"players").put(username, save_comp.record)
 	## [/codeblock]
 	func put(id: StringName, record: NetwRecord) -> Error:
-		@warning_ignore("redundant_await")
 		return await _db.transaction(
 			func(tx: NetwDatabase.TransactionContext) -> void:
 				tx.queue_upsert(_table, id, record.to_dict())
@@ -751,7 +801,6 @@ class TableRepository:
 	## Permanently removes [param id] from the table.
 	## Idempotent. Returns [constant OK] even when the record does not exist.
 	func delete(id: StringName) -> Error:
-		@warning_ignore("redundant_await")
 		return await _db.delete(_table, id)
 
 
@@ -759,11 +808,12 @@ class TableRepository:
 	## An empty [param filter] returns all records.
 	##
 	## [codeblock lang=gdscript]
-	## var active_players := db.table(&"players").fetch_all({&"online": true})
+	## var active_players := await db.table(&"players").fetch_all(
+	##         {&"online": true},
+	## )
 	## [/codeblock]
 	func fetch_all(filter: Dictionary = { }) -> Array[NetwRecord]:
 		var results: Array[NetwRecord] = []
-		@warning_ignore("redundant_await")
 		for record in await _db._find_all(_table, filter):
 			var loaded_record: NetwRecord = _make_record()
 			loaded_record.from_dict(record)

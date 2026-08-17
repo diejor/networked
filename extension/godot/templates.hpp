@@ -3,7 +3,6 @@
 #if defined(NETW_MODULE)
 #include "core/templates/vector.h"
 
-// Engine types are global, so the aliases keep `godot::` spellings compiling.
 namespace godot {
 using ::Vector;
 } // namespace godot

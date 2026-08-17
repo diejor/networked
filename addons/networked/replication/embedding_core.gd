@@ -55,13 +55,18 @@ func offer_bare_level(level: Node) -> void:
 ## call after [constant NetwEmbeddingHandle.Phase.DECLARING] returns
 ## [constant @GlobalScope.OK]. Reached through
 ## [method NetwEmbeddingHandle.settle].
+##
+## Returns [constant @GlobalScope.ERR_UNCONFIGURED] when a peer-scoped channel
+## the wire declares reached settle with no handler registered for it.
 func settle() -> Error:
 	if _phase != Phase.DECLARING:
 		return OK
 	_set_phase(Phase.SETTLING)
 	_run_settle_resolve()
+	var api := _api()
+	var wired := api._replication.settle_channels() if api else OK
 	_set_phase(Phase.LIVE)
-	return OK
+	return wired
 
 
 func _set_phase(value: Phase) -> void:
@@ -94,7 +99,7 @@ func poll_transport() -> Error:
 	if api == null:
 		return ERR_UNCONFIGURED
 	var err := api.inner.poll()
-	api._liveness.poll()
+	api._liveness_poll()
 	api._rpc_core.sweep_deferred_calls()
 	api._rpc_core.sweep_transactions(api._receive_tick())
 	return err

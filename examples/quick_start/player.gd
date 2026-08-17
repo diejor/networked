@@ -7,7 +7,7 @@ extends CharacterBody2D
 
 func _init() -> void:
 	var entity := NetwEntity.resolve(self)
-	entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
+	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 
 	Netw.configure_persistence(self) \
 			.database(preload("res://examples/quick_start/quick_start_database.tres")) \

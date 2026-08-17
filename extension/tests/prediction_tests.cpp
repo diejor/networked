@@ -17,6 +17,8 @@ namespace TestNetwPredictionCore {
 
 using namespace godot;
 using netw::Attribution;
+using netw::NetwPredictFold;
+using netw::NetwPredictJudgement;
 using netw::NetwPredictionCore;
 using netw::PredictionVerdict;
 using netw::StateFamily;
@@ -119,50 +121,41 @@ TEST_CASE(
     "[Networked][Predict] A newer input label drives fresh, and a stale one "
     "repeats"
 ) {
-    const Dictionary fresh = NetwPredictionCore::predict_fold(7, 4, 99);
-    NETW_CHECK_EQ((int64_t)fresh[StringName("label")], 7);
-    CHECK(bool(fresh[StringName("fresh")]));
-    NETW_CHECK_EQ((int)fresh[StringName("kind")], DRIVE_FRESH);
+    const Ref<NetwPredictFold> fresh
+        = NetwPredictionCore::predict_fold(7, 4, 99);
+    NETW_CHECK_EQ(fresh->label(), 7);
+    CHECK(fresh->fresh());
+    NETW_CHECK_EQ(fresh->kind(), DRIVE_FRESH);
 
-    const Dictionary repeat = NetwPredictionCore::predict_fold(4, 4, 99);
-    NETW_CHECK_EQ((int64_t)repeat[StringName("label")], 4);
-    CHECK_FALSE(bool(repeat[StringName("fresh")]));
-    NETW_CHECK_EQ((int)repeat[StringName("kind")], DRIVE_REPEAT);
+    const Ref<NetwPredictFold> repeat
+        = NetwPredictionCore::predict_fold(4, 4, 99);
+    NETW_CHECK_EQ(repeat->label(), 4);
+    CHECK_FALSE(repeat->fresh());
+    NETW_CHECK_EQ(repeat->kind(), DRIVE_REPEAT);
 }
 
 TEST_CASE(
     "[Networked][Predict] A pass with no input yet labels from its frame"
 ) {
-    const Dictionary plan = NetwPredictionCore::predict_fold(-1, -1, 99);
+    const Ref<NetwPredictFold> fold
+        = NetwPredictionCore::predict_fold(-1, -1, 99);
 
-    NETW_CHECK_EQ((int64_t)plan[StringName("label")], 99);
-    CHECK_FALSE(bool(plan[StringName("fresh")]));
+    NETW_CHECK_EQ(fold->label(), 99);
+    CHECK_FALSE(fold->fresh());
+}
+
+TEST_CASE("[Networked][Predict] A fold naming no drive kind mints nothing") {
+    CHECK(NetwPredictFold::of(7, true, DRIVE_FRESH).is_valid());
+    CHECK(NetwPredictFold::of(7, true, 99).is_null());
+    CHECK(NetwPredictFold::of(7, true, -1).is_null());
 }
 
 TEST_CASE(
     "[Networked][Predict] Authority replays only past the standing buffer"
 ) {
-    const Dictionary past = NetwPredictionCore::consume_plan(3, 2, false);
-    NETW_CHECK_EQ((int)past[StringName("action")], CONSUME_REPLAY);
-    CHECK(bool(past[StringName("warmed")]));
-
-    const Dictionary inside = NetwPredictionCore::consume_plan(2, 2, false);
-    NETW_CHECK_EQ((int)inside[StringName("action")], CONSUME_HOLD);
-
-    const Dictionary empty = NetwPredictionCore::consume_plan(0, 0, false);
-    NETW_CHECK_EQ((int)empty[StringName("action")], CONSUME_STARVED);
-}
-
-TEST_CASE("[Networked][Predict] The warm latch changes no verdict") {
-    // The latch is set on the same test the replay branch re-applies, so a
-    // warmed pass inside the buffer still holds.
-    const Dictionary warmed = NetwPredictionCore::consume_plan(2, 2, true);
-    const Dictionary cold = NetwPredictionCore::consume_plan(2, 2, false);
-
-    NETW_CHECK_EQ(
-        (int)warmed[StringName("action")], (int)cold[StringName("action")]
-    );
-    CHECK(bool(warmed[StringName("warmed")]));
+    NETW_CHECK_EQ(NetwPredictionCore::consume_action(3, 2), CONSUME_REPLAY);
+    NETW_CHECK_EQ(NetwPredictionCore::consume_action(2, 2), CONSUME_HOLD);
+    NETW_CHECK_EQ(NetwPredictionCore::consume_action(0, 0), CONSUME_STARVED);
 }
 
 TEST_CASE(
@@ -251,7 +244,8 @@ TEST_CASE(
     "corrects"
 ) {
     Dictionary sink;
-    const Dictionary res = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res
+        = NetwPredictionCore::evaluate(
         DOMAIN_IN,
         VERDICT_UNJUDGED,
         Dictionary(),
@@ -260,15 +254,16 @@ TEST_CASE(
         sink
     );
 
-    CHECK(bool(res[StringName("corrected")]));
+    CHECK(res->corrected());
     const bool unbounded
-        = std::isinf(double(res[StringName("divergence")]));
+        = std::isinf(res->divergence());
     CHECK(unbounded);
 }
 
 TEST_CASE("[Networked][Predict] A prediction matching its payload is clean") {
     Dictionary sink;
-    const Dictionary res = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), Vector2(1.0, 1.0)),
@@ -277,8 +272,8 @@ TEST_CASE("[Networked][Predict] A prediction matching its payload is clean") {
         sink
     );
 
-    CHECK_FALSE(bool(res[StringName("corrected")]));
-    NETW_CHECK_CLOSE(double(res[StringName("divergence")]), 0.0, 1e-9);
+    CHECK_FALSE(res->corrected());
+    NETW_CHECK_CLOSE(res->divergence(), 0.0, 1e-9);
 }
 
 TEST_CASE(
@@ -288,7 +283,8 @@ TEST_CASE(
     const Dictionary payload = one_field(StringName("pos"), Vector2(0.0, 0.0));
     Dictionary sink;
 
-    const Dictionary within = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> within
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), Vector2(0.25, 0.0)),
@@ -296,9 +292,10 @@ TEST_CASE(
         wiring,
         sink
     );
-    CHECK_FALSE(bool(within[StringName("corrected")]));
+    CHECK_FALSE(within->corrected());
 
-    const Dictionary past = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> past
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), Vector2(0.75, 0.0)),
@@ -306,8 +303,8 @@ TEST_CASE(
         wiring,
         sink
     );
-    CHECK(bool(past[StringName("corrected")]));
-    NETW_CHECK_CLOSE(double(past[StringName("divergence")]), 0.75, 1e-9);
+    CHECK(past->corrected());
+    NETW_CHECK_CLOSE(past->divergence(), 0.75, 1e-9);
 }
 
 TEST_CASE(
@@ -328,16 +325,18 @@ TEST_CASE(
     payload[StringName("tight")] = 0.0;
     Dictionary sink;
 
-    const Dictionary widened = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> widened
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, wiring, sink
     );
-    CHECK_FALSE(bool(widened[StringName("corrected")]));
+    CHECK_FALSE(widened->corrected());
 
     payload[StringName("tight")] = 4.0;
-    const Dictionary neighbour = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> neighbour
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, wiring, sink
     );
-    CHECK(bool(neighbour[StringName("corrected")]));
+    CHECK(neighbour->corrected());
 }
 
 TEST_CASE(
@@ -354,14 +353,15 @@ TEST_CASE(
     payload[StringName("cosmetic")] = 90.0;
     Dictionary sink;
 
-    const Dictionary res = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, wiring, sink
     );
 
     // The field still counts toward the reported divergence, because excluding
     // it from the vote is not a claim that it agreed.
-    CHECK_FALSE(bool(res[StringName("corrected")]));
-    NETW_CHECK_CLOSE(double(res[StringName("divergence")]), 90.0, 1e-9);
+    CHECK_FALSE(res->corrected());
+    NETW_CHECK_CLOSE(res->divergence(), 90.0, 1e-9);
 }
 
 TEST_CASE(
@@ -372,7 +372,8 @@ TEST_CASE(
     payload[StringName("pos")] = 0.0;
     payload[StringName("unpredicted")] = 1.0;
 
-    const Dictionary res = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), 0.0),
@@ -381,7 +382,7 @@ TEST_CASE(
         sink
     );
 
-    CHECK(bool(res[StringName("corrected")]));
+    CHECK(res->corrected());
 }
 
 TEST_CASE(
@@ -397,15 +398,17 @@ TEST_CASE(
     // does not when authority called it equal. That inversion is the whole
     // point of judging in domain, and epsilon spans both errors here so only
     // the verdict can explain the difference.
-    const Dictionary unequal = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> unequal
+        = NetwPredictionCore::evaluate(
         DOMAIN_IN, VERDICT_UNEQUAL, predicted, predicted, wiring, sink
     );
-    CHECK(bool(unequal[StringName("corrected")]));
+    CHECK(unequal->corrected());
 
-    const Dictionary equal = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> equal
+        = NetwPredictionCore::evaluate(
         DOMAIN_IN, VERDICT_EQUAL, predicted, payload, wiring, sink
     );
-    CHECK_FALSE(bool(equal[StringName("corrected")]));
+    CHECK_FALSE(equal->corrected());
 }
 
 TEST_CASE(
@@ -413,7 +416,8 @@ TEST_CASE(
     "decides"
 ) {
     Dictionary sink;
-    const Dictionary res = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT,
         VERDICT_UNEQUAL,
         one_field(StringName("pos"), 0.0),
@@ -422,7 +426,7 @@ TEST_CASE(
         sink
     );
 
-    CHECK_FALSE(bool(res[StringName("corrected")]));
+    CHECK_FALSE(res->corrected());
 }
 
 TEST_CASE(
@@ -435,7 +439,8 @@ TEST_CASE(
           ));
     Dictionary sink;
 
-    const Dictionary res = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("heading"), 0.1),
@@ -445,7 +450,7 @@ TEST_CASE(
     );
 
     // Straight subtraction would read this pair as nearly a full turn apart.
-    NETW_CHECK_CLOSE(double(res[StringName("divergence")]), 0.2, 1e-6);
+    NETW_CHECK_CLOSE(res->divergence(), 0.2, 1e-6);
 }
 
 TEST_CASE(
@@ -460,7 +465,8 @@ TEST_CASE(
     payload[StringName("b")] = 1.0;
 
     Dictionary sink;
-    const Dictionary res = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res
+        = NetwPredictionCore::evaluate(
         DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, Dictionary(), sink
     );
 
@@ -469,7 +475,7 @@ TEST_CASE(
     NETW_CHECK_CLOSE(double(sink[StringName("b")]), 1.0, 1e-9);
 
     // The reported divergence is the worst field rather than their sum.
-    NETW_CHECK_CLOSE(double(res[StringName("divergence")]), 3.0, 1e-9);
+    NETW_CHECK_CLOSE(res->divergence(), 3.0, 1e-9);
 }
 
 TEST_CASE(

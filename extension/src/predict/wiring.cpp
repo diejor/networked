@@ -91,6 +91,45 @@ PackedByteArray canonical_bytes(
     return written.writer->to_bytes();
 }
 
+namespace {
+
+// A transparent alpha rather than Color's own default of opaque black, so a
+// declared colour coasts to nothing the way every other type does.
+const Color ZERO_COLOR = Color(0.0, 0.0, 0.0, 0.0);
+
+bool zero_of(int p_type, Variant &r_zero) {
+    switch (Variant::Type(p_type)) {
+        case Variant::BOOL: r_zero = false; return true;
+        case Variant::INT: r_zero = int64_t(0); return true;
+        case Variant::FLOAT: r_zero = 0.0; return true;
+        case Variant::STRING: r_zero = String(); return true;
+        case Variant::STRING_NAME: r_zero = StringName(); return true;
+        case Variant::VECTOR2: r_zero = Vector2(); return true;
+        case Variant::VECTOR2I: r_zero = Vector2i(); return true;
+        case Variant::VECTOR3: r_zero = Vector3(); return true;
+        case Variant::VECTOR3I: r_zero = Vector3i(); return true;
+        case Variant::VECTOR4: r_zero = Vector4(); return true;
+        case Variant::VECTOR4I: r_zero = Vector4i(); return true;
+        case Variant::COLOR: r_zero = ZERO_COLOR; return true;
+        case Variant::ARRAY: r_zero = Array(); return true;
+        case Variant::DICTIONARY: r_zero = Dictionary(); return true;
+        default: return false;
+    }
+}
+
+} // namespace
+
+Dictionary zero_row(const FieldCodec &p_codec) {
+    Dictionary out;
+    for (uint32_t at = 0; at < p_codec.keys.size(); ++at) {
+        Variant zero;
+        if (zero_of(p_codec.types[at], zero)) {
+            out[p_codec.keys[at]] = zero;
+        }
+    }
+    return out;
+}
+
 Dictionary canonicalize(
     const FieldCodec &p_codec,
     const Dictionary &p_payload

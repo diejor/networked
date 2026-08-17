@@ -59,6 +59,8 @@ struct Lane {
     int lane_first_divergence = -1;
     double lane_epsilon = 0.0;
     bool lane_sample_found = false;
+    bool lane_peer_sample_found = false;
+    bool lane_peer_asked = false;
     int lane_rewind_visits = 0;
     double lane_rewound_x = 0.0;
     double lane_restored_x = 0.0;
@@ -272,6 +274,19 @@ public:
     // Whether the lane's history answered at the tick the scenario named. An
     // entity with no timeline answers nothing, which is a fact rather than a
     // zero.
+    // Whether a peer was actually PUT the question. A law about what a peer
+    // cannot answer is vacuous if no peer was asked, which is the shape a
+    // mirror that never arrived would silently take.
+    bool peer_asked() const {
+        return lane_peer_asked;
+    }
+
+    // Whether a PEER that records no authoritative history answered a sample.
+    // A client holds no timeline, so the honest answer there is nothing.
+    bool peer_sample_found() const {
+        return lane_peer_sample_found;
+    }
+
     bool sample_found() const {
         return lane_sample_found;
     }

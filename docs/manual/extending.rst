@@ -59,7 +59,8 @@ The families
     sync         _entity_add_field_set, _entity_remove_field_set,
                  _sync_encode, _sync_decode, _note_ack, _note_sent
 
-    property     _gather_set, _apply_set
+    sync         _gather_set, _apply_set
+    property
     boundary
 
     spawn        _spawn_declare, _spawn_undeclare, _spawn_reconcile,
@@ -77,11 +78,18 @@ The families
 
 :ref:`_gather_set() <class_NetwMultiplayer_private_method__gather_set>` and
 :ref:`_apply_set() <class_NetwMultiplayer_private_method__apply_set>` are worth
-calling out. They are the entire property boundary: everything the engine reads
-off your nodes goes through one, and everything it writes back goes through the
-other. Overriding that pair redirects replication away from node properties
-altogether, which is the hook for a game whose real state does not live on
-nodes.
+calling out. They are the sync lane's whole property boundary: everything
+replication reads off your nodes goes through one, and everything it writes
+back goes through the other. Overriding that pair redirects replication away
+from node properties altogether, which is the hook for a game whose real state
+does not live on nodes.
+
+The lane is what the pair covers, not the session. The simulation plane
+(prediction, and
+:ref:`lagcomp_rewind() <class_NetwMultiplayer_method_lagcomp_rewind>`) writes
+nodes through its own slot-bound port, because a rewind moves an object the
+sync lane declared no set for and has to put it back whatever the body did. An
+override installed here sees replication traffic and does not see a rewind.
 
 Override a family together
 --------------------------

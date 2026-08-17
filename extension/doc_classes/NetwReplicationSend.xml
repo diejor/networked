@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwReplicationSend" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="acknowledge">
+			<return type="void" />
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="acked_seq" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="apply">
+			<return type="Dictionary" />
+			<param index="0" name="schema" type="SchemaRecord" />
+			<param index="1" name="held" type="PackedByteArray" />
+			<param index="2" name="frame" type="PackedByteArray" />
+			<param index="3" name="masked" type="bool" />
+			<description>
+				Applies one frame this pipeline produced onto the row a peer holds.
+				The receive half of the same crossing, here rather than in its own class because a frame's shape is decided by the send that made it, and a receiver reading it against a different plan is the failure both halves exist to prevent.
+				[param held] is the row the receiver already has, as bytes, and may be empty for a peer holding nothing yet. Answers the values the receiver now holds, or an empty array when the frame does not read against [param schema]. A refusal never half-applies.
+			</description>
+		</method>
+		<method name="apply_window">
+			<return type="Dictionary" />
+			<param index="0" name="schema" type="SchemaRecord" />
+			<param index="1" name="frame" type="PackedByteArray" />
+			<description>
+				Reads one windowed frame, answering every tick it repeats.
+				A windowed frame carries a SEQUENCE rather than a state, so this answers a [code]samples[/code] array of [code]{tick, values}[/code] rather than one row. A caller that took only the newest would discard exactly the ticks the lane repeats the range to deliver.
+			</description>
+		</method>
+		<method name="close_route">
+			<return type="void" />
+			<param index="0" name="route" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="commit">
+			<return type="void" />
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="seq" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="confirm">
+			<return type="void" />
+			<param index="0" name="index" type="int" />
+			<description>
+				Holds send [param index] of the last deferred pass until its datagram is stamped.
+				Called AFTER the frame reached the carrier, because a pass answers what it wants to send and only the carrier knows what went out and in which datagram.
+			</description>
+		</method>
+		<method name="declare_channel">
+			<return type="void" />
+			<param index="0" name="id" type="int" />
+			<param index="1" name="name" type="StringName" />
+			<param index="2" name="fitted" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="forget_peer">
+			<return type="void" />
+			<param index="0" name="peer" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="has_encode_stage" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="lane_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="outstanding" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="peek" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="frame" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="pending_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="peer" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="retain">
+			<return type="void" />
+			<param index="0" name="recipients" type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="retain_row">
+			<return type="void" />
+			<param index="0" name="route" type="int" />
+			<param index="1" name="comp" type="int" />
+			<param index="2" name="recipients" type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+		<method name="retained_lane_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="run">
+			<return type="Dictionary" />
+			<param index="0" name="offers" type="Array" />
+			<param index="1" name="max_bits" type="int" />
+			<param index="2" name="seq" type="int" />
+			<param index="3" name="send_id" type="int" />
+			<description>
+				Runs one send pass over [param offers].
+				An offer is a [Dictionary] of [code]route[/code], [code]comp[/code], [code]channel[/code], [code]schema[/code], [code]values[/code], [code]recipients[/code] and [code]priority[/code]. The answer carries [code]sends[/code], one dictionary per recipient owed a row, plus the counts that say why a pass sent nothing: [code]caught_up[/code], [code]ungathered[/code] and [code]untrackable[/code].
+			</description>
+		</method>
+		<method name="run_deferred">
+			<return type="Dictionary" />
+			<param index="0" name="offers" type="Array" />
+			<description>
+			</description>
+		</method>
+		<method name="set_encode_stage">
+			<return type="void" />
+			<param index="0" name="stage" type="Callable" />
+			<description>
+				Installs the stage every frame's bytes pass through.
+				The shell routes every encode through a virtual a game may replace, so a native pipeline that encoded directly would drop that override on the floor and no game would learn it had happened until its wire changed shape. The callback receives [code](peer, tick, route, comp, mask, bytes)[/code] and answers the bytes that ride; an empty answer drops the frame, which is what the shell's stage already means.
+				A callback that is set and cannot be called is a BROKEN stage rather than an absent one: the frame is dropped and counted rather than quietly encoded the native way, because falling back would hide the breakage behind traffic that looks correct.
+			</description>
+		</method>
+		<method name="window_lane_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

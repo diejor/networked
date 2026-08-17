@@ -1,5 +1,9 @@
 #include "netw/wire/registry.hpp"
 
+#include "netw/colors.hpp"
+#include "netw/log.hpp"
+#include "netw/profile.hpp"
+
 namespace netw::wire {
 
 namespace {
@@ -11,9 +15,22 @@ uint64_t hash_combine(uint64_t h, uint64_t v) {
 } // namespace
 
 bool WireRegistry::register_channel(const ChannelDecl &decl) {
-    if (decl.id == 0) {
+    if (decl.id == 0 && !decl.is_reserved) {
+        NETW_WARN(
+            sys::WIRE,
+            "Channel '%s' claims the reserved id 0 and was not registered.",
+            godot::String(decl.name).utf8().get_data()
+        );
         return false;
     }
+    NETW_WARN_COND(
+        registered[decl.id] && channels[decl.id].name != decl.name,
+        sys::WIRE,
+        "Channel id %d moves from '%s' to '%s'.",
+        int(decl.id),
+        godot::String(channels[decl.id].name).utf8().get_data(),
+        godot::String(decl.name).utf8().get_data()
+    );
     channels[decl.id] = decl;
     registered[decl.id] = true;
     return true;
@@ -35,6 +52,17 @@ const ChannelDecl *WireRegistry::find_channel_by_name(
         }
     }
     return nullptr;
+}
+
+bool WireRegistry::aggregates(uint8_t id, bool requested) const {
+    const ChannelDecl *decl = find_channel(id);
+    if (decl == nullptr || decl->is_reserved) {
+        return requested;
+    }
+    if (decl->delivery == Delivery::IMMEDIATE) {
+        return false;
+    }
+    return decl->aggregated || requested;
 }
 
 uint32_t WireRegistry::active_count() const {
@@ -67,6 +95,7 @@ uint64_t WireRegistry::identity_hash() const {
 }
 
 WireRegistry WireRegistry::create_default() {
+    NETW_ZONE_NC("WireRegistry default table", colors::WIRE);
     WireRegistry reg;
 
     auto res = [&](uint8_t id) {
@@ -461,6 +490,69 @@ WireRegistry WireRegistry::create_default() {
         Direction::CLIENT_TO_SERVER,
         PayloadContract::PLANNED
     );
+    reg_c(
+        39,
+        "SYNC_ROW",
+        ChannelKind::KEYED,
+        Reliability::UNRELIABLE_ACKED,
+        Freshness::FRESHEST_WINS,
+        Delivery::FITTED,
+        Direction::EITHER,
+        PayloadContract::DELTA
+    );
+    // The retained half of the same row frame. Ordered and guaranteed, so its
+    // lane advances on send and no ack settles it, which is why the freshness
+    // book has nothing to judge here.
+    reg_c(
+        40,
+        "SYNC_ROW_DELTA",
+        ChannelKind::ROUTED,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::EITHER,
+        PayloadContract::DELTA
+    );
+
+    // The windowed input lane. Unreliable like the volatile one, and it heals
+    // the same way a reliable lane would without a round trip: the frame
+    // repeats every tick still in flight, so a receiver that missed one gets
+    // it inside the next frame.
+    reg_c(
+        41,
+        "SYNC_ROW_WINDOW",
+        ChannelKind::KEYED,
+        Reliability::UNRELIABLE,
+        Freshness::FRESHEST_WINS,
+        Delivery::FITTED,
+        Direction::EITHER,
+        PayloadContract::PLANNED
+    );
+
+    // The lanes the tick pump flushes. A frame on one of these waits for that
+    // flush without its sender asking, which is what makes a datagram per peer
+    // per tick instead of a datagram per frame.
+    auto batches = [&](const char *name) {
+        const ChannelDecl *decl
+            = reg.find_channel_by_name(godot::StringName(name));
+        NETW_WARN_COND(
+            decl == nullptr,
+            sys::WIRE,
+            "Channel '%s' batches on the tick flush but is not declared.",
+            name
+        );
+        if (decl != nullptr) {
+            reg.channels[decl->id].aggregated = true;
+        }
+    };
+    batches("SIGNAL");
+    batches("PROPERTY_SYNC");
+    batches("TABLE");
+    batches("SYNC");
+    batches("SYNC_DELTA");
+    batches("SYNC_ROW");
+    batches("SYNC_ROW_DELTA");
+    batches("SYNC_ROW_WINDOW");
 
     return reg;
 }

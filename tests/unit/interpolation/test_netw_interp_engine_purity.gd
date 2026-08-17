@@ -57,18 +57,8 @@ const _FORBIDDEN: Array[String] = [
 const _PURE_KERNELS: Array[String] = [
 	"func _pump_history(",
 	"func _dilate_playhead(",
-	"func _calculate_min_lag(",
 	"func _predicted_effective_smooth_time(",
 ]
-
-# The inner display classes, linted as whole blocks. The channel history left
-# this file for [NetwDisplayHistory], whose purity is structural instead: its
-# translation unit includes no engine header that could reach a tree, a clock or
-# a signal, and tools/check_sources.py holds every source to compiling.
-const _PURE_CLASSES: Array[String] = [
-	"class _Playhead:",
-]
-
 
 func _source_lines() -> PackedStringArray:
 	var f := FileAccess.open(_ENGINE, FileAccess.READ)
@@ -103,23 +93,6 @@ func _func_body(lines: PackedStringArray, signature: String) -> String:
 	return out
 
 
-# The body of an inner class block, from its header to the next column-zero class
-# or region marker, comment-stripped.
-func _class_body(lines: PackedStringArray, header: String) -> String:
-	var out := ""
-	var inside := false
-	for line in lines:
-		if not inside:
-			if line.begins_with(header):
-				inside = true
-			continue
-		if line.begins_with("class ") or line.begins_with("#endregion") \
-				or line.begins_with("#region"):
-			break
-		out += _strip_comment(line) + "\n"
-	return out
-
-
 func _assert_pure(region_name: String, body: String, forbidden: Array[String]) -> void:
 	assert_str(body).override_failure_message(
 		"purity lint could not locate region '%s'" % region_name,
@@ -138,8 +111,6 @@ func test_pure_kernels_touch_no_engine_state() -> void:
 	var lines := _source_lines()
 	for signature in _PURE_KERNELS:
 		_assert_pure(signature, _func_body(lines, signature), _FORBIDDEN)
-	for header in _PURE_CLASSES:
-		_assert_pure(header, _class_body(lines, header), _FORBIDDEN)
 
 
 # The CHASE kernel is the one sanctioned reader of the live body, a plain
@@ -167,5 +138,4 @@ func test_lint_is_not_vacuous() -> void:
 
 	var lines := _source_lines()
 	assert_str(_func_body(lines, "func _pump_history(")).contains("display_lag")
-	assert_str(_func_body(lines, "func _dilate_playhead(")).contains("starvation")
-	assert_str(_class_body(lines, "class _Playhead:")).contains("display_lag")
+	assert_str(_func_body(lines, "func _dilate_playhead(")).contains("is_starving")

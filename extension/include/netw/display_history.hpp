@@ -4,19 +4,13 @@
 
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
+#include "netw/interpolate.hpp"
 #include "netw/ring_buffer.hpp"
 
 namespace netw {
 
-// One display channel's recorded samples and the total resample over them.
-//
-// Sampling past the newest tick holds the last value under a buffered playhead,
-// or projects it forward by its derivative under a forecasting one, capped by
-// the forecast tick budget. Two things pin on the first record and hold for the
-// channel's life: the tick domain, so authoring and receive ticks can never
-// share a history, and the value type, so the sample loop never re-decides what
-// it is interpolating. A clear frees the domain, because a teleported channel
-// may legitimately be refed from the other one.
+double angle_difference(double p_from, double p_to);
+
 class NetwDisplayHistory : public godot::RefCounted {
     GDCLASS(NetwDisplayHistory, godot::RefCounted)
 
@@ -29,8 +23,6 @@ class NetwDisplayHistory : public godot::RefCounted {
     godot::Variant last_recorded;
     bool has_recorded = false;
 
-    // Set by the last sample. The pump reads these into its stats record rather
-    // than deciding again what the sample already decided.
     bool projected = false;
     double project_age = 0.0;
     bool snap_taken = false;
@@ -62,7 +54,19 @@ protected:
     static void _bind_methods();
 
 public:
+    enum Pass {
+        PASS_SKIP_SLEEPING,
+        PASS_SKIP_EMPTY,
+        PASS_SAMPLE,
+        PASS_SAMPLE_PROJECT,
+    };
+
     NetwDisplayHistory();
+
+    int pass_verdict(
+        const godot::Ref<NetwInterpolate> &p_spec,
+        bool p_forecast
+    ) const;
 
     void set_mode(int value) { mode = value; }
     int get_mode() const { return mode; }
@@ -110,3 +114,5 @@ public:
 };
 
 } // namespace netw
+
+VARIANT_ENUM_CAST(netw::NetwDisplayHistory::Pass);

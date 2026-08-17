@@ -508,78 +508,6 @@ static func _get_sorted_methods(script: Script) -> Array:
 	return c.sorted_methods() if c else []
 
 
-## Writes a list of values: each is prefixed by a flag byte, 1 when the value
-## is bit-packed by its quantizer and 0 when it rides NetwCodec's tagged
-## fallback.
-static func write_values(
-		w: NetwBitBufferWriter,
-		values: Array,
-		quantizers: Array,
-		types: Array,
-) -> void:
-	w.put_aligned_u8(values.size())
-	for i in values.size():
-		# A node reference is a distinct wire kind, so a node argument crosses as
-		# its route and component address instead of a serialized value.
-		if values[i] is NetwNodeRef:
-			w.put_aligned_u8(2)
-			_write_node_ref(w, values[i])
-			continue
-		var q: NetwQuantize = quantizers[i] if i < quantizers.size() else null
-		var t: int = types[i] if i < types.size() else TYPE_NIL
-		var quantized := q != null and q.supports_type(t) \
-				and q.supports_type(typeof(values[i]) as Variant.Type)
-		if quantized:
-			w.put_aligned_u8(1)
-			NetwCodec.encode_value(w, values[i], q)
-		else:
-			w.put_aligned_u8(0)
-			NetwCodec.encode_value(w, values[i], null)
-
-
-## Reads a list of values written by [method write_values].
-static func read_values(
-		r: NetwBitBufferReader,
-		quantizers: Array,
-		types: Array,
-) -> Array:
-	var count := r.get_aligned_u8()
-	var out: Array = []
-	for i in count:
-		var flag := r.get_aligned_u8()
-		if flag == 2:
-			out.append(_read_node_ref(r))
-		elif flag == 1:
-			var q: NetwQuantize = quantizers[i] if i < quantizers.size() else null
-			var t: int = types[i] if i < types.size() else TYPE_NIL
-			out.append(NetwCodec.decode_value(r, t, q))
-		else:
-			out.append(NetwCodec.decode_value(r, TYPE_NIL, null))
-	return out
-
-
-# Writes a node reference: route varint, component byte, and a path string only
-# when the component byte is the 255 path fallback.
-static func _write_node_ref(w: NetwBitBufferWriter, ref: NetwNodeRef) -> void:
-	NetwCodec.put_varint(w, ref.route)
-	w.put_aligned_u8(ref.comp)
-	if ref.comp == 255:
-		var pb := ref.path.to_utf8_buffer()
-		w.put_aligned_u32(pb.size())
-		w.put_aligned_bytes(pb)
-
-
-# Reads a node reference written by _write_node_ref.
-static func _read_node_ref(r: NetwBitBufferReader) -> NetwNodeRef:
-	var route := NetwCodec.get_safe_varint(r)
-	var comp := r.get_aligned_u8()
-	var path := ""
-	if comp == 255:
-		var plen := r.get_aligned_u32()
-		path = r.get_aligned_bytes(plen).get_string_from_utf8()
-	return NetwNodeRef.new(route, comp, path)
-
-
 ## Writes a token (1-byte ID or StringName).
 static func write_token(w: NetwBitBufferWriter, token: Variant) -> void:
 	if token is int:
@@ -610,7 +538,7 @@ static func write_call_body(
 		arg_types: Array,
 ) -> void:
 	write_token(w, method_val)
-	write_values(w, encoded_args, quantizers, arg_types)
+	NetwCodec.write_values(w, encoded_args, quantizers, arg_types)
 
 
 ## Reads the method token written by [method write_call_body], returning the
@@ -625,14 +553,14 @@ static func read_method_token(r: NetwBitBufferReader) -> Variant:
 
 ## Reads the per-argument stream written by [method write_call_body]. Quantized
 ## arguments reconstruct through their declared parameter type. The stream is
-## identical to [method write_values] output, so this delegates to
-## [method read_values].
+## the codec's own positional row, so this delegates to
+## [method NetwCodec.read_values].
 static func read_call_args(
 		r: NetwBitBufferReader,
 		quantizers: Array,
 		arg_types: Array,
 ) -> Array:
-	return read_values(r, quantizers, arg_types)
+	return NetwCodec.read_values(r, quantizers, arg_types)
 
 
 ## Validates a per-position [param quantizers] list against a parallel
@@ -1360,10 +1288,10 @@ class PropertyConfig:
 	## func _init() -> void:
 	##     Netw.configure_property(self, &"spin").state().carry_step(_carry_spin)
 	##
-	## func _carry_spin(value: Vector3, ctx: PredictionHandle.CarryContext) -> Vector3:
+	## func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
 	##     return value + _drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
 	## [/codeblock]
-	## [param step] may read only its [PredictionHandle.CarryContext] and must
+	## [param step] may read only its [NetwPredictCarryContext] and must
 	## write nothing. The engine holds it to that rather than trusting it: a step
 	## is replayed against transitions the owner already recorded and retired once
 	## it stops reproducing them, and a refused carry writes the acknowledged value
@@ -1704,7 +1632,7 @@ class DespawnConfig:
 	var hook_method: StringName = &""
 
 	## Seconds the node stays in the tree as
-	## [constant LivenessShell.State.LINGERING] before it is freed.
+	## [constant NetwLivenessCore.STATE_LINGERING] before it is freed.
 	## [code]0.0[/code] frees immediately.
 	var linger_seconds: float = 0.0
 
@@ -1718,7 +1646,7 @@ class DespawnConfig:
 
 
 	## Keeps the despawned node in the tree for [param seconds] while its
-	## route reports [constant LivenessShell.State.LINGERING].
+	## route reports [constant NetwLivenessCore.STATE_LINGERING].
 	func linger(seconds: float) -> DespawnConfig:
 		linger_seconds = seconds
 		return self

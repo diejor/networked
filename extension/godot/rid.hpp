@@ -5,7 +5,6 @@
 #include "core/templates/rid.h"
 #include "core/templates/rid_owner.h"
 
-// Engine types are global, so the aliases keep `godot::` spellings compiling.
 namespace godot {
 using ::HashMap;
 using ::KeyValue;

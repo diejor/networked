@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "netw/interpolate.hpp"
 
 #include "godot/class_db.hpp"
@@ -7,7 +9,18 @@ namespace netw {
 
 using namespace godot;
 
+double NetwInterpolate::smoothing_weight(double p_frame_delta) const {
+    if (smoothing <= 0.0) {
+        return 1.0;
+    }
+    return 1.0 - std::exp(-p_frame_delta / smoothing);
+}
+
 void NetwInterpolate::_bind_methods() {
+    ClassDB::bind_method(
+        D_METHOD("smoothing_weight", "frame_delta"),
+        &NetwInterpolate::smoothing_weight
+    );
     ClassDB::bind_method(D_METHOD("set_mode", "mode"), &NetwInterpolate::set_mode);
     ClassDB::bind_method(D_METHOD("get_mode"), &NetwInterpolate::get_mode);
     ClassDB::bind_method(

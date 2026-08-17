@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterestLeave" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		What a peer keeps of an entity it is no longer admitted to, and why.
+	</brief_description>
+	<description>
+		Two books, both keyed by entity slot and peer. The pending one attributes an aggregate wire loss to the layer exits that caused it and lives for exactly one spawn reconciliation pass, which [method finish_sweep] ends. The retained one outlives passes, because a retained copy stays materialized until admission resumes or a despawn wins.
+		DESPAWN is absorbing. One layer wanting the copy gone ends the resolution, so no combination of RETAIN and CUSTOM can keep a copy that some layer's own declaration says must go.
+		[codeblock]
+		record(key, peer, layer)   attribute one exit to the loss it may cause
+		resolve(key, peer, ...)    {despawn: bool, custom: [[Callable, layer]]}
+		commit(key, peer, ...)     apply the verdict, run its CUSTOM actions
+		finish_sweep()             the pass is over; unconsumed attribution goes
+		[/codeblock]
+		A CUSTOM whose callback has since gone invalid despawns the copy and says so. Keeping it would leave a peer holding a route with nothing standing in for the despawn it was spared.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets both books. Session teardown.
+			</description>
+		</method>
+		<method name="commit">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<param index="2" name="decision" type="Dictionary" />
+			<param index="3" name="forced" type="bool" />
+			<description>
+				Applies what [method resolve] answered, after the spawn plane has clamped it against ancestry. [param forced] is an ancestor's despawn overriding this row's own answer, so it despawns whatever [param decision] said. A retained copy is recorded and its CUSTOM actions are called with [code](peer, layer_id)[/code].
+			</description>
+		</method>
+		<method name="finish_sweep">
+			<return type="void" />
+			<description>
+				Drops every pending attribution. One reconciliation pass is what an attribution is good for, and carrying one into the next pass would blame a later loss on an earlier exit.
+			</description>
+		</method>
+		<method name="forget_entity">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<description>
+				Drops both books for one entity. What it was retained by nobody cares about once it is gone.
+			</description>
+		</method>
+		<method name="forget_peer">
+			<return type="void" />
+			<param index="0" name="peer" type="int" />
+			<description>
+				Drops both books for one peer, across every entity. A peer that left keeps nothing.
+			</description>
+		</method>
+		<method name="is_retained" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				Whether [param peer] still holds a materialized copy of [param key] that admission no longer justifies.
+			</description>
+		</method>
+		<method name="pending_layers" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				The layer exits attributed to this loss, in the order they were recorded. Empty when the loss has no attribution, which is a different thing from every layer having agreed to despawn.
+			</description>
+		</method>
+		<method name="record">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<param index="2" name="layer_id" type="StringName" />
+			<description>
+				Attributes one layer exit to the wire loss it may cause. Repeating a layer within one pass changes nothing, and an empty [param layer_id] is not an attribution.
+			</description>
+		</method>
+		<method name="release">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				Stops treating [param peer]'s copy of [param key] as retained, which is what admission resuming means.
+			</description>
+		</method>
+		<method name="resolve" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<param index="2" name="decl" type="NetwInterestDecl" />
+			<param index="3" name="engine" type="NetwInterestEngine" />
+			<description>
+				The verdict for one loss, as [code]{despawn: bool, custom: [[Callable, StringName]]}[/code].
+				[param decl] is the entity's own declaration and [param engine] supplies each layer's default through [method NetwInterestEngine.layer_leave_policy], so an override always resolves before a default and a layer nobody declared resolves to DESPAWN.
+				A loss with no attribution despawns unless the copy is already retained, which is how a peer that lost its route for a reason interest never named keeps a retained copy.
+			</description>
+		</method>
+	</methods>
+</class>

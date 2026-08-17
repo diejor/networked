@@ -91,18 +91,9 @@ signal session_ended()
 ## those are.
 signal participant_admitted(peer_id: int)
 
-## Emitted when server authority pauses the game.
-signal paused(reason: String)
-
-## Emitted when server authority unpauses the game.
-signal unpaused()
-
-## Emitted when server authority kicks this peer.
-signal kicked(reason: String)
-
 ## The machine this interface surrounds: the states, their legal edges, the
 ## roles, and the join flood window.
-var core := NetwSessionCore.new()
+var core: NetwSessionCore
 
 ## The current connection state of the session.
 ##
@@ -206,6 +197,7 @@ var _api_ref: WeakRef
 
 func _init(api: NetwMultiplayer = null) -> void:
 	_api_ref = weakref(api) if api else null
+	core = api._native_core.session_core if api else NetwSessionCore.new()
 	_auth = AuthCoordinator.new(api._roster if api else SessionRoster.new())
 	# The machine decides the edges and this interface is what the session's
 	# consumers connect to, so every engine signal is forwarded. The two hooks
@@ -225,6 +217,42 @@ func _init(api: NetwMultiplayer = null) -> void:
 		api.connected_to_server.connect(_on_inner_connected)
 		api.connection_failed.connect(_on_inner_connect_failed)
 		api.server_disconnected.connect(_on_server_dropped)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_JOIN,
+			_handle_join_frame,
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_ACCEPT,
+			_handle_accept_frame,
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_ROSTER,
+			_handle_roster_frame,
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_PAUSE,
+			_handle_control_frame.bind(NetwFrameEnvelope.Channel.SESSION_PAUSE),
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_UNPAUSE,
+			_handle_control_frame.bind(NetwFrameEnvelope.Channel.SESSION_UNPAUSE),
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_KICKED,
+			_handle_control_frame.bind(NetwFrameEnvelope.Channel.SESSION_KICKED),
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_SHUTDOWN,
+			_handle_control_frame.bind(NetwFrameEnvelope.Channel.SESSION_SHUTDOWN),
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_KICK_REQUEST,
+			_handle_control_frame.bind(NetwFrameEnvelope.Channel.SESSION_KICK_REQUEST),
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.SESSION_LEAVE_REQUEST,
+			_handle_control_frame.bind(NetwFrameEnvelope.Channel.SESSION_LEAVE_REQUEST),
+		)
 
 
 func _api() -> NetwMultiplayer:
@@ -516,7 +544,11 @@ func pause(reason: String = "") -> void:
 			var_to_bytes(reason),
 			true,
 		)
-	_handle_pause_frame(var_to_bytes(reason), 1)
+	_handle_control_frame(
+		var_to_bytes(reason),
+		1,
+		NetwFrameEnvelope.Channel.SESSION_PAUSE,
+	)
 
 
 ## Unpauses the game on every peer.
@@ -533,7 +565,11 @@ func unpause() -> void:
 			PackedByteArray(),
 			true,
 		)
-	_handle_unpause_frame(1)
+	_handle_control_frame(
+		PackedByteArray(),
+		1,
+		NetwFrameEnvelope.Channel.SESSION_UNPAUSE,
+	)
 
 
 ## Disconnects [param peer_id] from the session.
@@ -573,7 +609,11 @@ func notify_shutdown(reason: String = "") -> void:
 			var_to_bytes(reason),
 			true,
 		)
-	_handle_shutdown_frame(var_to_bytes(reason), 1)
+	_handle_control_frame(
+		var_to_bytes(reason),
+		1,
+		NetwFrameEnvelope.Channel.SESSION_SHUTDOWN,
+	)
 
 
 ## Asks the server to kick [param peer_id].
@@ -590,7 +630,11 @@ func request_kick(peer_id: int, reason: String = "") -> void:
 		return
 	var payload := var_to_bytes([peer_id, reason])
 	if api.is_server():
-		_handle_kick_request_frame(payload, 1)
+		_handle_control_frame(
+			payload,
+			1,
+			NetwFrameEnvelope.Channel.SESSION_KICK_REQUEST,
+		)
 	else:
 		api._replication.send_to(
 			1,
@@ -613,7 +657,11 @@ func request_leave(reason: String = "") -> void:
 		return
 	var payload := var_to_bytes(reason)
 	if api.is_server():
-		_handle_leave_request_frame(payload, 1)
+		_handle_control_frame(
+			payload,
+			1,
+			NetwFrameEnvelope.Channel.SESSION_LEAVE_REQUEST,
+		)
 	else:
 		api._replication.send_to(
 			1,
@@ -706,7 +754,9 @@ func _handle_join_frame(payload: PackedByteArray, sender: int) -> void:
 	if _join_flooded(sender):
 		return
 	var join_payload := JoinPayload.new()
-	join_payload.deserialize(payload)
+	if not join_payload.deserialize(payload):
+		Netw.dbg.warn("join: unreadable request from peer %d", [sender])
+		return
 	join_payload.peer_id = sender
 	if not _decode_join_args(join_payload):
 		Netw.dbg.warn(
@@ -838,60 +888,17 @@ func _handle_roster_frame(payload: PackedByteArray, sender: int) -> void:
 		_admit(ResolvedJoin.deserialize(bytes))
 
 
-# Applies a server pause notification locally.
-func _handle_pause_frame(payload: PackedByteArray, sender: int) -> void:
-	if sender != 1:
-		return
-	var scene_tree := Engine.get_main_loop() as SceneTree
-	if scene_tree:
-		scene_tree.paused = true
-	paused.emit(str(bytes_to_var(payload)))
 
-
-# Applies a server unpause notification locally.
-func _handle_unpause_frame(sender: int) -> void:
-	if sender != 1:
-		return
-	var scene_tree := Engine.get_main_loop() as SceneTree
-	if scene_tree:
-		scene_tree.paused = false
-	unpaused.emit()
-
-
-# Announces a server kick notification before the transport closes.
-func _handle_kicked_frame(payload: PackedByteArray, sender: int) -> void:
-	if sender != 1:
-		return
-	kicked.emit(str(bytes_to_var(payload)))
-
-
-# Fires the local shutdown notice from a server SESSION_SHUTDOWN frame.
-func _handle_shutdown_frame(payload: PackedByteArray, sender: int) -> void:
-	if sender != 1:
-		return
+# Routes one session control frame to the session, which owns the channel to
+# announcement mapping, the authority rule, and the payload decode.
+func _handle_control_frame(
+		payload: PackedByteArray,
+		sender: int,
+		channel: int,
+) -> void:
 	var api := _api()
 	if api:
-		api.server_disconnecting.emit(str(bytes_to_var(payload)))
-
-
-# Server receive for a client kick request. The frame sender is the requester;
-# the server decides whether to honor it through kick_requested.
-func _handle_kick_request_frame(payload: PackedByteArray, sender: int) -> void:
-	var api := _api()
-	if api == null or not api.is_server():
-		return
-	var data: Variant = bytes_to_var(payload)
-	if not data is Array or (data as Array).size() != 2:
-		return
-	api.kick_requested.emit(sender, int(data[0]), str(data[1]))
-
-
-# Server receive for a client leave request, decided through disconnect_requested.
-func _handle_leave_request_frame(payload: PackedByteArray, sender: int) -> void:
-	var api := _api()
-	if api == null or not api.is_server():
-		return
-	api.disconnect_requested.emit(sender, str(bytes_to_var(payload)))
+		api._native_core.session_publish_control(channel, sender, payload)
 
 
 # Remembers an accepted join and announces it once. The owner's admission side
@@ -910,6 +917,4 @@ func _admit(rj: ResolvedJoin) -> void:
 	# with no MultiplayerTree still spawns joiners. Server-guarded inside.
 	if api.is_server():
 		run_join_handler(participant)
-	if rj.peer_id == api.get_unique_id():
-		api.local_participant_joined.emit(participant)
-	api.participant_joined.emit(participant)
+	api._native_core.participant_publish_joined(rj.peer_id)

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterestRelay" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		What the server has not yet told each peer about what it can see, in the order it happened.
+	</brief_description>
+	<description>
+		Order per peer is the contract. An enter and the exit that follows it are the same route twice, so a queue that reordered them would hand a peer a live route it was just told to forget. Across peers there is no order to keep, since no peer can observe another's.
+		[codeblock]
+		append(peer, edge)     queue one edge for one peer
+		targets()              the peers owed anything
+		wire_for(peer)         that peer's edges as wire rows, oldest first
+		forget(peer)           a peer that left owes nothing and is owed nothing
+		clear()                the session ended
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="append">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="edge" type="NetwInterestAwareness" />
+			<description>
+				Queues [param edge] for [param peer_id]. A null [param edge] is dropped, so a caller may hand this the answer of [method NetwInterestAwareness.layer_edge] without checking it first.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every peer and everything owed to them.
+			</description>
+		</method>
+		<method name="forget">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Drops [param peer_id] and its backlog. A peer that left cannot be told anything, and re-queuing for it later starts a new backlog at the end.
+			</description>
+		</method>
+		<method name="is_empty" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether any peer is owed anything.
+			</description>
+		</method>
+		<method name="targets" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				The peers owed anything, in the order each was first owed something.
+			</description>
+		</method>
+		<method name="wire_for" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				[param peer_id]'s pending edges as [method NetwInterestAwareness.to_array] rows, oldest first. A peer owed nothing answers an empty [Array].
+			</description>
+		</method>
+	</methods>
+</class>

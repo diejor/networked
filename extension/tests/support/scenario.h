@@ -133,6 +133,14 @@ struct Scenario {
         return step(p_tick, "seat", p_who, p_destination);
     }
 
+    Scenario &move(
+        int p_tick,
+        const godot::StringName &p_who,
+        const godot::StringName &p_destination
+    ) {
+        return step(p_tick, "move", p_who, p_destination);
+    }
+
     Scenario &until(int p_tick) {
         run_ticks = p_tick;
         return *this;

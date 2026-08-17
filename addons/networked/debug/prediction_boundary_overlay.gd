@@ -78,9 +78,9 @@ func _is_relevant(handle) -> bool:
 
 # Reads the four present-time layers without retaining another history.
 func _snapshot(entity: NetwEntity) -> Dictionary:
-	var handle := entity.prediction
-	var live := entity.state_binding.snapshot_payload() \
-	if entity.state_binding else { }
+	var handle: NetwPredictionHandle = entity.prediction
+	var state: NetwPropertySetBinding = entity.state_binding
+	var live := state.snapshot_payload() if state else { }
 	# The digest, never the report: the overlay draws every frame and the report
 	# detaches one entry per comparison the episode has ever settled.
 	var episode: Dictionary = handle.episode_digest()
@@ -103,7 +103,8 @@ func _authority_sample(entity: NetwEntity, live: Dictionary) -> Dictionary:
 	var key := _position_field(live)
 	if key.is_empty():
 		return { }
-	var buffer := entity.interpolation.get_buffer(key)
+	var display: NetwDisplayHandle = entity.interpolation
+	var buffer := display.get_buffer(key)
 	if not buffer or buffer.is_empty():
 		return { }
 	var tick := buffer.newest_tick()
@@ -136,9 +137,10 @@ func _basis_transition(episode: Dictionary) -> int:
 # Reconstructs the displayed value from the declared interpolation target.
 func _display_state(entity: NetwEntity, live: Dictionary) -> Dictionary:
 	var key := _position_field(live)
-	if key.is_empty() or not entity.state_binding:
+	var state_set: NetwPropertySetBinding = entity.state_binding
+	if key.is_empty() or not state_set:
 		return { }
-	var source := entity.state_binding.node()
+	var source := state_set.node()
 	if not is_instance_valid(source):
 		return { }
 	var spec := NetwScriptModel.get_node_property_interpolator(source, key)
@@ -146,7 +148,8 @@ func _display_state(entity: NetwEntity, live: Dictionary) -> Dictionary:
 	if spec and not spec.target.is_empty():
 		target = spec.target
 	var target_node := source
-	var visual_path := entity.interpolation.visual_root
+	var display: NetwDisplayHandle = entity.interpolation
+	var visual_path := display.visual_root
 	if not visual_path.is_empty() and is_instance_valid(entity.owner):
 		var visual := entity.owner.get_node_or_null(visual_path)
 		if visual:
@@ -279,8 +282,8 @@ func _state_position(state: Dictionary) -> Variant:
 	if key.is_empty():
 		return null
 	var entity := _entity()
-	var source := entity.state_binding.node() \
-	if entity and entity.state_binding else null
+	var state_set: NetwPropertySetBinding = entity.state_binding if entity else null
+	var source := state_set.node() if state_set else null
 	return _world_position(source, key, state.get(key))
 
 

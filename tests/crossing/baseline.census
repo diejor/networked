@@ -1,6 +1,6 @@
 # The test corpus, counted. A later sweep diffs against this file.
 #
-# baseline: 61220aaca10aab08b63a4f910a50f280e3aa5bbf
+# baseline: 1afc0ae637fac88b61281498d4044a311231e4d7
 # taken: unrecorded
 #
 # Columns are `tier scope count`. `gdunit` scopes are directories and
@@ -11,12 +11,19 @@
 # parameterized expansions and falls short of it by whatever failed to
 # parse, so a move in either direction is worth reading.
 #
-# Regenerate with `.agents/bin/test-census --write`.
+# Regenerate with `.agents/bin/test-census --write`. This file is
+# crossing infrastructure and is deleted with `tests/crossing/` once
+# `ledger carried-shell` reads 0 and every ledger has closed.
 #
 # `ledger` scopes count crossing-ledger rows by disposition. `carried`
-# is the whole carry, both what the W6 shell still owes and what stays
-# GdUnit forever, because a CARRY row states its reason in prose and
-# not as a class. Splitting the two needs a class token on the verb.
+# splits into `carried-kit`, what stays GdUnit forever under the argued
+# permanent set, `carried-shell`, what a Ring-0 subject still owes a
+# re-authoring, and `carried-retiring`, whose subject the campaign
+# DELETES and which closes with the unit its token names.
+# `carried-shell` and `carried-retiring` both reaching 0 is what closes
+# the ledgers and
+# retires this file. `carried-unclassed` is the count the gate refuses on
+# and must read 0.
 
 gdunit examples/bomber/tests 7
 gdunit examples/bomber/tests/ai 8
@@ -29,12 +36,12 @@ gdunit tests/integration/database 4
 gdunit tests/integration/entity 8
 gdunit tests/integration/gameplay 15
 gdunit tests/integration/interest 7
-gdunit tests/integration/lagcomp 20
+gdunit tests/integration/lagcomp 17
 gdunit tests/integration/liveness 3
 gdunit tests/integration/save 7
-gdunit tests/integration/scene 58
+gdunit tests/integration/scene 64
 gdunit tests/integration/spawn 32
-gdunit tests/integration/sync 35
+gdunit tests/integration/sync 34
 gdunit tests/integration/table 13
 gdunit tests/integration/transport 13
 gdunit tests/live/nakama 10
@@ -43,51 +50,57 @@ gdunit tests/slow/transport/webrtc 5
 gdunit tests/unit/activity 4
 gdunit tests/unit/clock 6
 gdunit tests/unit/context 1
-gdunit tests/unit/core 72
+gdunit tests/unit/core 67
 gdunit tests/unit/data 7
 gdunit tests/unit/database 35
-gdunit tests/unit/entity 6
 gdunit tests/unit/interest 31
-gdunit tests/unit/interpolation 27
-gdunit tests/unit/liveness 51
+gdunit tests/unit/interpolation 26
+gdunit tests/unit/liveness 47
+gdunit tests/unit/repl 12
 gdunit tests/unit/save 9
-gdunit tests/unit/scene 40
+gdunit tests/unit/scene 25
 gdunit tests/unit/schema 24
-gdunit tests/unit/session 35
-gdunit tests/unit/sync 79
+gdunit tests/unit/session 34
+gdunit tests/unit/sync 77
 gdunit tests/unit/table 37
 gdunit tests/unit/transport 48
-gdunit tests/unit/wire 80
+gdunit tests/unit/wire 55
 gdunit tests/unit/wrappers 11
-gdunit-source all 949
-gdunit-run all 886
+gdunit-source all 924
+gdunit-run all 861
+hosted Carrier 10
 hosted Clock 15
 hosted Codec 22
 hosted DeclaredProbe 1
 hosted Determinism 3
 hosted Display 28
 hosted Effect 10
+hosted Entity 19
 hosted Handle 4
 hosted Interest 25
-hosted Liveness 18
-hosted Multiplayer 2
-hosted Predict 192
+hosted LagComp 4
+hosted Liveness 26
+hosted Multiplayer 38
+hosted Predict 213
 hosted PredictWire 21
 hosted Prelude 5
 hosted RateWindow 8
-hosted Record 12
+hosted Record 16
 hosted Recorder 5
+hosted Repl 117
 hosted Report 2
 hosted Reset 3
 hosted Ring 6
 hosted Scene 20
 hosted Services 2
 hosted Session 17
+hosted Settle 6
+hosted Sync 6
 hosted Table 33
 hosted Transport 22
-hosted Wire 61
-hosted WireValue 3
-hosted all 540
+hosted Wire 83
+hosted WireValue 15
+hosted all 805
 module AABB 16
 module AHashMap 17
 module AStar3D 4
@@ -106,6 +119,7 @@ module CSG 1
 module Callable 2
 module Camera2D 3
 module Camera3D 4
+module Carrier 10
 module CenterContainer 2
 module ClassDB 1
 module Clock 15
@@ -128,6 +142,8 @@ module Decal 1
 module Dictionary 30
 module Display 26
 module Editor 1
+module Effect 10
+module Entity 19
 module Expression 10
 module FastNoiseLite 6
 module FileAccess 5
@@ -169,7 +185,7 @@ module JSONRPC 20
 module LRU 2
 module Label 2
 module List 28
-module Liveness 12
+module Liveness 16
 module LocalVector 8
 module Logger 3
 module MarginContainer 3
@@ -177,7 +193,7 @@ module Marshalls 28
 module Math 78
 module MethodBind 1
 module Modules 3
-module Multiplayer 14
+module Multiplayer 50
 module NavigationAgent2D 2
 module NavigationAgent3D 2
 module NavigationObstacle2D 2
@@ -208,7 +224,7 @@ module Path3D 2
 module PathFollow2D 6
 module PathFollow3D 7
 module Plane 7
-module Predict 84
+module Predict 122
 module PredictWire 21
 module Prelude 5
 module Primitive 11
@@ -224,6 +240,7 @@ module Rect2i 13
 module ReferenceRect 5
 module RegEx 18
 module Registry 1
+module Repl 117
 module Reset 3
 module Resource 3
 module ResourceUID 3
@@ -233,6 +250,7 @@ module Scene 9
 module ScrollContainer 5
 module SelfList 1
 module Session 9
+module Settle 6
 module ShaderPreprocessor 8
 module Shortcut 7
 module Skeleton3D 1
@@ -250,6 +268,7 @@ module String 98
 module StyleBoxEmpty 2
 module StyleBoxLine 6
 module StyleBoxTexture 9
+module Sync 6
 module TCPServer 5
 module TabBar 4
 module TabContainer 4
@@ -286,16 +305,20 @@ module Vector4 11
 module Vector4i 6
 module Viewport 4
 module Window 1
-module Wire 61
-module WireValue 3
+module Wire 83
+module WireValue 15
 module WorkerThreadPool 3
 module XMLParser 4
 module ZIPPacker 4
 module ZIPReader 2
 module untagged 13
 module workspace 2
-module all 1727
-ledger carried 478
-ledger dropped 145
-ledger ported 450
-ledger all 1073
+module all 2007
+ledger carried 538
+ledger carried-kit 129
+ledger carried-retiring 13
+ledger carried-shell 396
+ledger carried-unclassed 0
+ledger dropped 166
+ledger ported 484
+ledger all 1188

@@ -24,7 +24,8 @@ func _latencies(delay_polls: int, warmup: int, measure: int) -> Array:
 	var rig := DerivedLoopbackRig.new()
 	await rig.setup(self, TICKRATE, false, false)
 
-	var server_binding := NetwEntity.of(rig.server_node).state_binding
+	var server_binding: NetwPropertySetBinding = NetwEntity.of(rig.server_node) \
+			.state_binding
 	rig.server_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			server_binding.authored_tick = t

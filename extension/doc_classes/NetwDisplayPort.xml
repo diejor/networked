@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayPort" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One display channel's handle on the object it writes and the body it samples from.
+	</brief_description>
+	<description>
+		A display channel writes a smoothed value onto a target object every frame, and the value's frame of reference is the HOST's, because the sample is the host's own property. Both objects are held as instance ids resolved at each write rather than as pointers or references, so a freed target unbinds the port and stops the writes instead of crashing or leaking.
+		A channel aimed at a visual parented under the body writes in global space, so body writes never drag the smoothed channel while unsmoothed channels still inherit from the body. Everything else is a plain property write.
+		[codeblock]
+		var port := NetwDisplayPort.new()
+		port.bind(visual, body)
+		port.declare(&amp;"position", &amp;"position", true)
+
+		match port.write(smoothed):
+			NetwDisplayPort.WRITE_GLOBAL:
+				pass                      # converted out of the host's frame
+			NetwDisplayPort.WRITE_REFUSED:
+				warn_once()               # written locally, dragged by the body
+		[/codeblock]
+		Four channel shapes convert: [code]position[/code] on a [Node2D] or a [Node3D], and [code]rotation[/code] on either. A global-space channel this port has no global setter for is written LOCALLY and answers [constant WRITE_REFUSED], because the caller owns the refusal it reports and a silent local write is the body drag the global-space contract promises to escape.
+		A source property already named in global space ([code]global_position[/code], [code]global_rotation[/code]) needs no conversion, so it passes through whatever the host's parent is.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bind">
+			<return type="void" />
+			<param index="0" name="target" type="Object" />
+			<param index="1" name="host" type="Object" />
+			<description>
+				Binds the object this port writes and the node whose frame the written value is expressed in. Both are held by instance id, so neither keeps the object alive and neither dangles.
+				[param host] is the entity's own body even when [param target] is a visual under it, because the value being written was sampled from the host.
+			</description>
+		</method>
+		<method name="declare">
+			<return type="void" />
+			<param index="0" name="target_prop" type="StringName" />
+			<param index="1" name="source_prop" type="StringName" />
+			<param index="2" name="global_space" type="bool" />
+			<description>
+				Declares which property this port writes, which property the value was sampled from, and whether the write converts out of the host's frame.
+				[param source_prop] decides only whether a conversion is needed at all: a source already in global space passes through.
+			</description>
+		</method>
+		<method name="get_global_space" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether [method write] converts out of the host's frame, as [method declare] was told.
+			</description>
+		</method>
+		<method name="get_lost" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many times the target resolved to a freed object, which is what unbinds a port without anyone asking it to.
+			</description>
+		</method>
+		<method name="get_target_prop" qualifiers="const">
+			<return type="StringName" />
+			<description>
+				The property [method write] sets, as [method declare] was told.
+			</description>
+		</method>
+		<method name="is_bound" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether the target is still bound. A port whose target was freed answers [code]false[/code] from the write that discovered it.
+			</description>
+		</method>
+		<method name="unbind">
+			<return type="void" />
+			<description>
+				Drops both bindings, which leaves the port writing nothing at all.
+			</description>
+		</method>
+		<method name="write">
+			<return type="int" />
+			<param index="0" name="value" type="Variant" />
+			<description>
+				Writes one smoothed value and answers which lane took it.
+				[constant WRITE_UNBOUND] means nothing was written because the target is gone. [constant WRITE_LOCAL] is a plain property write. [constant WRITE_GLOBAL] converted out of the host's frame. [constant WRITE_REFUSED] wrote locally on a channel that asked for global space and has no global setter here, and the caller is the one that says so out loud.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="WRITE_UNBOUND" value="0" enum="Write">
+			The target was freed, so nothing was written.
+		</constant>
+		<constant name="WRITE_LOCAL" value="1" enum="Write">
+			A plain property write, which is what a channel not in global space asks for.
+		</constant>
+		<constant name="WRITE_GLOBAL" value="2" enum="Write">
+			The value was converted out of the host's frame and written as a global property.
+		</constant>
+		<constant name="WRITE_REFUSED" value="3" enum="Write">
+			A global-space channel with no global setter here, written locally so it composes with the body.
+		</constant>
+	</constants>
+</class>

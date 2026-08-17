@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwCarrierDatagram" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="bytes" type="PackedByteArray" setter="" getter="get_bytes" default="PackedByteArray()">
+		</member>
+		<member name="seq" type="int" setter="" getter="get_seq" default="-1">
+		</member>
+	</members>
+</class>

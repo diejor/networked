@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictJudgement" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		What one acknowledged transition was judged to be worth.
+	</brief_description>
+	<description>
+		[method NetwMultiplayer._predict_evaluate] answers with one of these, and a game overriding that seam mints its own through [method of].
+		[method corrected] is not a threshold over [method divergence]. A transition whose antecedents were all declared equal claimed reproducibility, so an exact predicate decides it and the magnitude is only ever reported. One whose antecedents were not is decided by tolerance, since the peers never claimed the exactness a fingerprint would test for.
+		[codeblock]
+		var judged := NetwPredictJudgement.of(INF, true)
+		judged.divergence()   magnitude of the disagreement, INF when unjudged
+		judged.corrected()    true when a recovery must be staged
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="corrected" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether a recovery must be staged for this transition.
+			</description>
+		</method>
+		<method name="divergence" qualifiers="const">
+			<return type="float" />
+			<description>
+				How far apart the two states were, as the worst per-property error. It is [code]INF[/code] when nothing was recorded at or before the acknowledgement, which corrects, because an unjudged transition must never pass as an agreeing one.
+			</description>
+		</method>
+		<method name="of" qualifiers="static">
+			<return type="NetwPredictJudgement" />
+			<param index="0" name="divergence" type="float" />
+			<param index="1" name="corrected" type="bool" />
+			<description>
+				Mints one judgement.
+			</description>
+		</method>
+	</methods>
+</class>

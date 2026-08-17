@@ -97,7 +97,7 @@ func test_builder_shape_flow() -> void:
 	var entity := NetwEntity.of(live)
 	assert_that(entity).is_not_null()
 	assert_that(entity.initial_controller) \
-			.is_equal(NetwEntity.InitialController.REPRESENTED_PEER)
+			.is_equal(NetwEntity.INITIAL_REPRESENTED_PEER)
 	var sync_node: Node = live.get_node("PlayerSync")
 	assert_that(sync_node).is_not_null()
 	assert_that(sync_node.owner).is_equal(live)

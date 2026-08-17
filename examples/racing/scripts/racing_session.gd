@@ -95,7 +95,8 @@ func _declare_islands(scene: NetwSceneHandle) -> void:
 	var approximate := not OS.get_environment(ISLAND_APPROXIMATE_VAR).is_empty()
 	var cars := scene.players
 	for car: NetwEntity in cars:
-		var island := car.prediction.island
+		var prediction: NetwPredictionHandle = car.prediction
+		var island := prediction.island
 		if approximate:
 			island.approximate = true
 		else:

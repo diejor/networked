@@ -52,6 +52,36 @@ Scenario unretained_rewind() {
     return scenario;
 }
 
+// An entity a client controls, so BOTH peers hold a handle for it and the same
+// question can be put to each. The server-only platform above is mirrored
+// nowhere, which makes it useless for a law about what a peer answers.
+Scenario mirrored_lane() {
+    Scenario scenario;
+    scenario.label = "mirrored-lane";
+    scenario.world.clocked(30, 3).lag_compensated().player(
+        EntityDecl()
+            .named("Platform")
+            .on_schema("PlatformPose")
+            .synced("position")
+            .placed_at(godot::Vector2())
+            .predicted(),
+        0
+    );
+    scenario.hold_input(1, "Platform", godot::Vector2(5.0, 0.0));
+    scenario.sample_at(PAST_TICK, "Platform");
+    return scenario.until(24);
+}
+
+// A view tick older than anything the run retained. A compensator asking one
+// is asking a question the history cannot answer, and the answer it is owed is
+// "nothing" rather than the oldest thing retained.
+Scenario unretained_sample() {
+    Scenario scenario = recorded_lane();
+    scenario.label = "unretained-sample";
+    scenario.sample_at(UNRETAINED_TICK, "Platform");
+    return scenario;
+}
+
 Scenario retired_lane() {
     Scenario scenario = recorded_lane();
     scenario.label = "retired-lane";
@@ -204,6 +234,50 @@ LawVerdict law_unretained_rewind_moves_nothing(const ScenarioRun &p_run) {
     return law_held();
 }
 
+LawVerdict law_unretained_sample_answers_nothing(const ScenarioRun &p_run) {
+    const Lane lane = p_run.lane("Platform");
+    if (lane.authority_position_x() <= 0.0) {
+        return law_broken("the body never moved, so nothing was retained");
+    }
+    if (lane.sample_found()) {
+        return law_broken(
+            "a tick nothing retained answered %g",
+            lane.sample_x()
+        );
+    }
+    return law_held();
+}
+
+LawVerdict law_only_authority_answers_history(const ScenarioRun &p_run) {
+    const Lane lane = p_run.lane("Platform");
+    if (!lane.sample_found()) {
+        return law_broken("authority answered nothing, so nothing was asked");
+    }
+    if (!lane.peer_asked()) {
+        return law_broken("no peer held the entity, so none was asked");
+    }
+    if (lane.peer_sample_found()) {
+        return law_broken(
+            "a peer that records no authoritative history answered a sample"
+        );
+    }
+    return law_held();
+}
+
+const LawRow L_OFF_SERVER = {
+    "L-OFF-SERVER",
+    "only the peer that records authoritative history answers a sample, and "
+    "one that does not degrades to nothing rather than fabricating",
+    law_only_authority_answers_history,
+};
+
+const LawRow L_CLAMP = {
+    "L-CLAMP",
+    "a sample of a tick older than anything retained answers nothing rather "
+    "than the oldest thing it holds",
+    law_unretained_sample_answers_nothing,
+};
+
 const LawRow L_UNRETAINED = {
     "L-UNRETAINED",
     "a rewind to a tick nothing was retained at still runs its body and "
@@ -283,6 +357,56 @@ TEST_CASE(
     REQUIRE(run.regime_reached());
     NETW_CELL(L_REWIND, scenario);
     NETW_LAW_BREAKS(L_REWIND, run);
+}
+
+TEST_CASE(
+    "[Networked][Record][Declared][Law] a peer that records no history "
+    "answers no sample"
+) {
+    const Scenario scenario = mirrored_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::record(rig, scenario);
+    REQUIRE(run.regime_reached());
+    NETW_CELL(L_OFF_SERVER, scenario);
+    NETW_LAW_HOLDS(L_OFF_SERVER, run);
+}
+
+TEST_CASE(
+    "[Networked][Record][Declared][Law] a peer answering out of authority's "
+    "history breaks the sample"
+) {
+    const Scenario scenario = mirrored_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run
+        = ScenarioRun::record(rig, scenario, PLANT_PEER_READS_AUTHORITY);
+    REQUIRE(run.regime_reached());
+    NETW_CELL(L_OFF_SERVER, scenario);
+    NETW_LAW_BREAKS(L_OFF_SERVER, run);
+}
+
+TEST_CASE(
+    "[Networked][Record][Declared][Law] a view tick older than the retained "
+    "window answers nothing"
+) {
+    const Scenario scenario = unretained_sample();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::record(rig, scenario);
+    REQUIRE(run.regime_reached());
+    NETW_CELL(L_CLAMP, scenario);
+    NETW_LAW_HOLDS(L_CLAMP, run);
+}
+
+TEST_CASE(
+    "[Networked][Record][Declared][Law] clamping an unanswerable view tick "
+    "into the window breaks the sample"
+) {
+    const Scenario scenario = unretained_sample();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run
+        = ScenarioRun::record(rig, scenario, PLANT_RETAINED_SAMPLE);
+    REQUIRE(run.regime_reached());
+    NETW_CELL(L_CLAMP, scenario);
+    NETW_LAW_BREAKS(L_CLAMP, run);
 }
 
 TEST_CASE(

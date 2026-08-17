@@ -71,7 +71,11 @@ var _running: bool = false
 ## Overrides [method NetwDatabaseBackend._initialize] to declare the schema,
 ## open the specified save [param slot], register it in the slot index, and
 ## start the debounced flush loop.
-func _initialize(schema: Dictionary, slot: String = "") -> Error:
+func _initialize(schema: Dictionary, slot: String = "") -> NetwPromise:
+	return _settling(func() -> Variant: return await _initialize_now(schema, slot))
+
+
+func _initialize_now(schema: Dictionary, slot: String = "") -> Error:
 	_schema = schema
 	_slot = slot if not slot.is_empty() else "default"
 	_cache.clear()
@@ -89,7 +93,19 @@ func _initialize(schema: Dictionary, slot: String = "") -> Error:
 
 ## Overrides [method NetwDatabaseBackend._upsert] to write or update a record
 ## in the local cache and mark it dirty for the next debounced flush.
-func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
+func _upsert(
+		table: StringName,
+		id: StringName,
+		data: Dictionary,
+) -> NetwPromise:
+	return NetwPromise.resolved(_upsert_now(table, id, data))
+
+
+func _upsert_now(
+		table: StringName,
+		id: StringName,
+		data: Dictionary,
+) -> Error:
 	var bucket := _cache_table(table)
 	if not bucket.has(id):
 		bucket[id] = { }
@@ -104,7 +120,11 @@ func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 ## Overrides [method NetwDatabaseBackend._find_by_id] to read a record from the
 ## local cache, falling back to a remote read from Nakama storage if it is not
 ## cached.
-func _find_by_id(table: StringName, id: StringName) -> Dictionary:
+func _find_by_id(table: StringName, id: StringName) -> NetwPromise:
+	return _settling(func() -> Variant: return await _find_by_id_now(table, id))
+
+
+func _find_by_id_now(table: StringName, id: StringName) -> Dictionary:
 	if _cache.has(table) and _cache[table].has(id):
 		return _cache[table][id].duplicate()
 
@@ -125,7 +145,17 @@ func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 
 ## Overrides [method NetwDatabaseBackend._find_all] to return all cached
 ## records matching [param filter].
-func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
+func _find_all(
+		table: StringName,
+		filter: Dictionary = { },
+) -> NetwPromise:
+	return NetwPromise.resolved(_find_all_now(table, filter))
+
+
+func _find_all_now(
+		table: StringName,
+		filter: Dictionary = { },
+) -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	if not _cache.has(table):
 		return results
@@ -138,7 +168,11 @@ func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
 
 ## Overrides [method NetwDatabaseBackend._delete] to remove a record from the
 ## local cache and queue its deletion on Nakama during the next flush.
-func _delete(table: StringName, id: StringName) -> Error:
+func _delete(table: StringName, id: StringName) -> NetwPromise:
+	return NetwPromise.resolved(_delete_now(table, id))
+
+
+func _delete_now(table: StringName, id: StringName) -> Error:
 	if _cache.has(table):
 		_cache[table].erase(id)
 	if _dirty.has(table):
@@ -149,7 +183,11 @@ func _delete(table: StringName, id: StringName) -> Error:
 
 ## Overrides [method NetwDatabaseBackend._warm] to pre-load database records
 ## into the local cache according to the provided [param directives].
-func _warm(directives: Array) -> Error:
+func _warm(directives: Array) -> NetwPromise:
+	return _settling(func() -> Variant: return await _warm_now(directives))
+
+
+func _warm_now(directives: Array) -> Error:
 	if not await _ensure_session():
 		return ERR_CANT_CONNECT
 	for directive in directives:
@@ -171,7 +209,11 @@ func _warm(directives: Array) -> Error:
 ## Lists registered save-slot names from the Nakama slot index.
 ##
 ## See [member NetwDatabase.slots] for the slot namespace model.
-func _list_namespaces() -> Array[StringName]:
+func _list_namespaces() -> NetwPromise:
+	return _settling(func() -> Variant: return await _list_namespaces_now())
+
+
+func _list_namespaces_now() -> Array[StringName]:
 	var out: Array[StringName] = []
 	if not await _ensure_session():
 		return out
@@ -184,7 +226,11 @@ func _list_namespaces() -> Array[StringName]:
 ##
 ## Also removes the slot from the Nakama slot index. See
 ## [member NetwDatabase.slots] for the slot namespace model.
-func _delete_namespace(slot: String) -> Error:
+func _delete_namespace(slot: String) -> NetwPromise:
+	return _settling(func() -> Variant: return await _delete_namespace_now(slot))
+
+
+func _delete_namespace_now(slot: String) -> Error:
 	if slot.is_empty():
 		return ERR_INVALID_PARAMETER
 	if not await _ensure_session():
@@ -461,3 +507,17 @@ func _matches_filter(record: Dictionary, filter: Dictionary) -> bool:
 		if not record.has(key) or record[key] != filter[key]:
 			return false
 	return true
+
+
+# Answers a promise now and settles it when [param work] finishes. The promise
+# IS how the caller waits, so the coroutine is deliberately not awaited here:
+# awaiting it would put a coroutine back across the boundary the promise exists
+# to keep it off.
+func _settling(work: Callable) -> NetwPromise:
+	var promise := NetwPromise.new()
+	_settle_later(promise, work)
+	return promise
+
+
+func _settle_later(promise: NetwPromise, work: Callable) -> void:
+	promise.resolve(await work.call())

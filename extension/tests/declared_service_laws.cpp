@@ -2,9 +2,8 @@
 
 #if defined(NETW_TIER_HOSTED)
 
-#include <godot_cpp/classes/node.hpp>
-#include <godot_cpp/classes/resource_loader.hpp>
-#include <godot_cpp/classes/script.hpp>
+#include "godot/node.hpp"
+#include "godot/script.hpp"
 
 namespace TestDeclaredServiceLaws {
 
@@ -97,6 +96,52 @@ TEST_CASE(
 
     memdelete(lag_node);
     memdelete(clock_node);
+}
+
+TEST_CASE(
+    "[Networked][Services] a live session registers every peer-scoped channel"
+) {
+    LoopbackRig rig(1);
+
+    Object *server_repl = rig.server()->get("_replication");
+    REQUIRE(server_repl != nullptr);
+    NETW_CHECK_EQ(int(server_repl->call("settle_channels")), int(OK));
+
+    Object *client_repl = rig.client(0)->get("_replication");
+    REQUIRE(client_repl != nullptr);
+    NETW_CHECK_EQ(int(client_repl->call("settle_channels")), int(OK));
+}
+
+TEST_CASE("[Networked][Services] a config class with no row installs nothing") {
+    LoopbackRig rig(1);
+    Object *api = rig.server();
+    Object *book = api->get("_install_book");
+    REQUIRE(book != nullptr);
+
+    Ref<RefCounted> clock_config = make_resource(
+        "res://addons/networked/sync/clock/netw_clock_config.gd"
+    );
+    clock_config->set("tickrate", 41);
+    const StringName before = book->call("class_of", clock_config);
+    NETW_FORMAT_TEXT(before_text, String(before).utf8().get_data());
+    CAPTURE(before_text);
+    CHECK(before == StringName("NetwClockConfig"));
+
+    CHECK(bool(book->call("unregister_service", StringName("NetwClockConfig"))));
+    const StringName after = book->call("class_of", clock_config);
+    NETW_FORMAT_TEXT(after_text, String(after).utf8().get_data());
+    CAPTURE(after_text);
+    CHECK(after == StringName());
+
+    NETW_CHECK_EQ(
+        int(api->call("service_install", clock_config)),
+        int(ERR_INVALID_PARAMETER)
+    );
+
+    Object *clock = api->get("_clock");
+    REQUIRE(clock != nullptr);
+    CHECK(!bool(clock->get("_configured")));
+    NETW_CHECK_EQ(int(bool(int(clock->get("tickrate")) == 41)), 0);
 }
 
 TEST_CASE("[Networked][Services] a declared world installs both services") {

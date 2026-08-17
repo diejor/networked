@@ -333,7 +333,7 @@ func _record_pose() -> void:
 	var channels := -1
 	var ambiguous := -1
 	var entity := NetwEntity.of(_body)
-	var interp := entity.interpolation if entity else null
+	var interp: NetwDisplayHandle = entity.interpolation if entity else null
 	if interp:
 		# The channel is named by its target, the display value it writes.
 		var buffer := interp.get_buffer(&"display_position")

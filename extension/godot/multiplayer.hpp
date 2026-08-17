@@ -1,51 +1,67 @@
 #pragma once
 
+#include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 
 #if defined(NETW_MODULE)
+#include "modules/multiplayer/scene_multiplayer.h"
+#include "scene/main/multiplayer_api.h"
 #include "scene/main/multiplayer_peer.h"
 
-// Engine types are global, so the aliases keep `godot::` spellings compiling.
 namespace godot {
+using ::MultiplayerAPI;
+using ::MultiplayerAPIExtension;
 using ::MultiplayerPeer;
 using ::MultiplayerPeerExtension;
+using ::SceneMultiplayer;
 } // namespace godot
 #elif defined(NETW_GDEXTENSION)
+#include <godot_cpp/classes/multiplayer_api.hpp>
+#include <godot_cpp/classes/multiplayer_api_extension.hpp>
 #include <godot_cpp/classes/multiplayer_peer.hpp>
 #include <godot_cpp/classes/multiplayer_peer_extension.hpp>
+#include <godot_cpp/classes/scene_multiplayer.hpp>
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
 
-/* A peer implemented in C++ derives from a different class in each tier, and
- * spells every override differently, for one reason: `MultiplayerPeerExtension`
- * reaches its implementation through GDVIRTUAL, which dispatches to a script or
- * an extension and never to a C++ override. So the module tier, which is
- * compiled INTO the engine, must derive from `MultiplayerPeer` and override the
- * plain virtuals, while the library tier derives from
- * `MultiplayerPeerExtension` and overrides the `_`-prefixed ones.
- *
- * That is the whole of the difference, and it is mechanical: one base, and one
- * leading underscore. `NETW_PEER_VIRTUAL` supplies the underscore where the
- * tier wants it, so an override is declared once.
- *
- *     void NETW_PEER_VIRTUAL(poll)() override;
- *
- * It covers the overrides whose signatures match. The two packet verbs differ
- * in signature as well as in name, so they have no one spelling.
- */
+namespace netw::gd {
+
+inline godot::PackedInt32Array api_peer_ids(
+    const godot::Ref<godot::MultiplayerAPI> &p_api
+) {
+    if (p_api.is_null()) {
+        return godot::PackedInt32Array();
+    }
+#if defined(NETW_MODULE)
+    return p_api->get_peer_ids();
+#else
+    return p_api->get_peers();
+#endif
+}
+
+} // namespace netw::gd
+
 namespace netw {
 
 #if defined(NETW_MODULE)
 using MultiplayerPeerBase = godot::MultiplayerPeer;
+using MultiplayerApiBase = godot::MultiplayerAPI;
 #else
 using MultiplayerPeerBase = godot::MultiplayerPeerExtension;
+using MultiplayerApiBase = godot::MultiplayerAPIExtension;
 #endif
 
 } // namespace netw
 
 #if defined(NETW_MODULE)
 #define NETW_PEER_VIRTUAL(m_name) m_name
+#define NETW_API_VIRTUAL(m_name) m_name
+#define NETW_API_CONST
+#define NETW_API_CONFIG_ARG godot::Variant
 #else
 #define NETW_PEER_VIRTUAL(m_name) _##m_name
+#define NETW_API_VIRTUAL(m_name) _##m_name
+#define NETW_API_CONST const
+#define NETW_API_CONFIG_ARG const godot::Variant &
 #endif

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="ResolvedJoin" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One accepted player's join, with every field guaranteed present.
+	</brief_description>
+	<description>
+		A session admits a peer by producing one of these, so code downstream of admission reads these fields rather than null-checking them. [method JoinPayload.resolve] builds it from what a peer asked for, the session's join gate accepts or replaces it, and [method NetwMultiplayer.peer_get_accepted_join] answers it for the rest of the peer's life.
+		It is also a frame. The server sends the accepted join to every peer, so [method deserialize] reads bytes a remote peer wrote and refuses anything that does not spell a join rather than admitting a half-read one.
+		[codeblock]
+		# The session answers the join it accepted for a peer.
+		var join := api.peer_get_accepted_join(peer_id)
+		print(join.username, " joined as ", join.peer_id)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="deserialize" qualifiers="static">
+			<return type="ResolvedJoin" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Reads a join from [param bytes], or [code]null[/code] when they do not spell one.
+				[param bytes] arrive from a remote peer, so this refuses rather than trusting: bytes that are not a record, a record naming no [member peer_id] or [member username], and a [member peer_id] that is not a number all answer [code]null[/code]. [member arg_values] and [member is_debug] are optional and take their defaults, so a peer running an older build still sends a readable join.
+			</description>
+		</method>
+		<method name="serialize" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Writes this join as the frame the server sends to every peer, which [method deserialize] reads back.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="arg_values" type="Array" setter="set_arg_values" getter="get_arg_values" default="[]">
+			Typed join args the session's registered handler receives after this join, empty when the peer named no join intent. See [member JoinPayload.arg_values].
+		</member>
+		<member name="is_debug" type="bool" setter="set_is_debug" getter="get_is_debug" default="false">
+			Whether this connection used debug initialization data.
+		</member>
+		<member name="peer_id" type="int" setter="set_peer_id" getter="get_peer_id" default="0">
+			The server peer id assigned to this player.
+		</member>
+		<member name="username" type="StringName" setter="set_username" getter="get_username" default="&amp;&quot;&quot;">
+			The player's display name. A session's join gate is what decides two peers may not hold one name, so this is unique only where that gate says it is.
+		</member>
+	</members>
+</class>

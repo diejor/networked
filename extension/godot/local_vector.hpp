@@ -4,7 +4,6 @@
 #include "core/templates/hash_set.h"
 #include "core/templates/local_vector.h"
 
-// Engine types are global, so the aliases keep `godot::` spellings compiling.
 namespace godot {
 using ::HashSet;
 using ::LocalVector;

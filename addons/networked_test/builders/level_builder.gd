@@ -94,7 +94,7 @@ func build() -> Node:
 func _mark_spawn_template_child(child: Node) -> void:
 	if not NetwEntity.parse_entity(child.name).is_empty():
 		return
-	child.set_meta(NetwEntity._SPAWN_TEMPLATE_META, true)
+	child.set_meta(NetwEntity.template_meta(), true)
 
 
 ## Composes, packs, and returns a [PackedScene] registered in memory.

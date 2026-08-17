@@ -5,7 +5,7 @@
 ## values without owning the scene object those values came from.
 ##
 ## [codeblock]
-## var row: NetwRecord = db.table(&"players").fetch(username)
+## var row: NetwRecord = await db.table(&"players").fetch(username)
 ## var health: int = row.get_value(&"health", 100)
 ##
 ## row.set_value(&"health", 75)

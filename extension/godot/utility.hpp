@@ -15,9 +15,6 @@
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
 
-// The engine and godot-cpp name these differently, and the engine's three
-// printing entries are variadic-only, which C++ cannot call. Wrapping all five
-// keeps `UtilityFunctions` out of the rest of the tree.
 namespace netw::gd {
 
 inline void print(const godot::String &message) {
@@ -91,9 +88,17 @@ inline godot::Variant bytes_to_var(const godot::PackedByteArray &bytes) {
 #endif
 }
 
-// The one global random generator both tiers draw from. Seeding it is what
-// makes a run reproducible, and drawing through the same entry is what makes
-// the two tiers draw the same sequence from the same seed.
+inline godot::String hex_of(const godot::PackedByteArray &bytes) {
+    static const char DIGITS[] = "0123456789abcdef";
+    godot::String out;
+    for (int at = 0; at < bytes.size(); at++) {
+        const uint8_t byte = bytes[at];
+        out += godot::String::chr(DIGITS[(byte >> 4) & 0xF]);
+        out += godot::String::chr(DIGITS[byte & 0xF]);
+    }
+    return out;
+}
+
 inline void seed(int64_t value) {
 #if defined(NETW_MODULE)
     VariantUtilityFunctions::seed(value);

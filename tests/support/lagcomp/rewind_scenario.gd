@@ -15,7 +15,8 @@
 ## var e := await r.spawn_state_entity("Target")
 ## r.move_along(e, func(i: int) -> Vector2: return Vector2(i * 8.0, 0.0), 24)
 ## var view_tick := r.clock.tick - 8
-## var past := r.server.api.lagcomp_sample(r.server.api.rid_of(e.owner), tick)
+## var handle := r.server.api.entity_of(e.owner)
+## var past := r.server.api.lagcomp_sample(handle, tick)
 ## [/codeblock]
 class_name RewindScenario
 extends RefCounted
@@ -88,7 +89,7 @@ func spawn_state_entity(
 
 
 ## Spawns a state-synced entity whose controller is player-represented, so it
-## can be despawned with [member NetwEntity.DespawnOpts.linger].
+## can be despawned with [member NetwDespawnOpts.linger].
 func spawn_despawnable_entity(
 		entity_name: String = "Linger",
 		props: Array[StringName] = [&"position"],

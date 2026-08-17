@@ -9,13 +9,23 @@
 ## reproduce, and no amount of later work recovers that.
 ##
 ## [br][br]
-## Every scenario drives [SceneCore] on a bare [NetwMultiplayer] with no scene
-## tree, no node and no frame, because the record plane is exactly the half that
-## does not need one: what a scene column remembers between frames is a routing
-## table keyed by scene identity and one in-flight request. Scenes are named by
-## the entity [RID] they are keyed under rather than by whichever node is
-## standing in for them, and handles are written as identity relations rather
-## than as RIDs, since an RID is an allocation address.
+## Scenarios named [code]observers/[/code] and [code]request/[/code] drive
+## [SceneCore] on a bare [NetwMultiplayer] with no scene tree, no node and no
+## frame, because the record plane is exactly the half that does not need one:
+## what a scene column remembers between frames is a routing table keyed by
+## scene identity and one in-flight request. That is the half that crosses, and
+## the native replay reproduces those rows directly.
+## [br][br]
+## Scenarios named [code]shell/[/code] drive the scene band on [NetwMultiplayer]
+## itself, under a real [MultiplayerTree], because a scene container is a node
+## and every membership and admission verb reads the node the entity stands on.
+## They are the regression guard the port runs against rather than the crossing
+## evidence, and they exist because the shell they observe is deleted before the
+## carried suites over it have been re-authored.
+## [br][br]
+## Scenes are named by the entity [RID] they are keyed under rather than by
+## whichever node is standing in for them, and handles are written as identity
+## relations rather than as RIDs, since an RID is an allocation address.
 ## [codeblock]
 ## godot --headless --path . -s res://tests/crossing/scene_arm.gd
 ## godot --headless --path . -s res://tests/crossing/scene_arm.gd -- --record
@@ -55,11 +65,18 @@ const SCENARIOS: Array[StringName] = [
 	&"request/the_deadline_settles_the_request_it_names",
 	&"request/a_stale_deadline_is_ignored",
 	&"request/a_settled_request_leaves_no_pending_id",
+	&"shell/a_wrapperless_record_parks_its_facet",
+	&"shell/a_node_backed_scene_declares_and_labels",
+	&"shell/membership_walks_the_parent_chain",
+	&"shell/admission_needs_a_boundary_to_land_on",
 ]
+
+const SHELL_PREFIX := "shell/"
 
 var _rows: Array[String] = []
 var _api: NetwMultiplayer
 var _scenes: SceneCore
+var _tree_node: MultiplayerTree
 var _owned: Array[Node] = []
 
 
@@ -101,7 +118,11 @@ func _compare() -> int:
 func _run_all() -> Array[String]:
 	_rows = []
 	for scenario in SCENARIOS:
-		_open()
+		var shell := String(scenario).begins_with(SHELL_PREFIX)
+		if shell:
+			_open_shell()
+		else:
+			_open()
 		match scenario:
 			&"observers/a_registration_is_keyed_by_scene_and_event":
 				_a_registration_is_keyed_by_scene_and_event(scenario)
@@ -125,9 +146,20 @@ func _run_all() -> Array[String]:
 				_a_stale_deadline_is_ignored(scenario)
 			&"request/a_settled_request_leaves_no_pending_id":
 				_a_settled_request_leaves_no_pending_id(scenario)
+			&"shell/a_wrapperless_record_parks_its_facet":
+				_a_wrapperless_record_parks_its_facet(scenario)
+			&"shell/a_node_backed_scene_declares_and_labels":
+				_a_node_backed_scene_declares_and_labels(scenario)
+			&"shell/membership_walks_the_parent_chain":
+				_membership_walks_the_parent_chain(scenario)
+			&"shell/admission_needs_a_boundary_to_land_on":
+				_admission_needs_a_boundary_to_land_on(scenario)
 			_:
 				printerr("unknown scenario: %s" % scenario)
-		_close()
+		if shell:
+			_close_shell()
+		else:
+			_close()
 	return _rows
 
 
@@ -141,7 +173,7 @@ func _a_registration_is_keyed_by_scene_and_event(scenario: StringName) -> void:
 	var sink := _Sink.new()
 	_owned.append(sink)
 
-	_scenes.observe(first, NetwMultiplayer.SceneEvent.SCENE_EVENT_PLAYER, sink.hit)
+	_scenes.core.observe(first, NetwMultiplayer.SceneEvent.SCENE_EVENT_PLAYER, sink.hit)
 
 	for scene_index in 2:
 		for event in EVENTS:
@@ -169,8 +201,8 @@ func _dispatch_reaches_every_live_callback_in_order(scenario: StringName) -> voi
 	_owned.append(second)
 	var event := NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY
 
-	_scenes.observe(scene, event, first.tagged.bind(&"first"))
-	_scenes.observe(scene, event, second.tagged.bind(&"second"))
+	_scenes.core.observe(scene, event, first.tagged.bind(&"first"))
+	_scenes.core.observe(scene, event, second.tagged.bind(&"second"))
 	_dispatch(scene, event, true, 42)
 	_row(scenario, "order", { &"heard": _Sink.log_order })
 
@@ -191,8 +223,8 @@ func _a_duplicate_registration_is_not_stored_twice(scenario: StringName) -> void
 	_owned.append(sink)
 	var event := NetwMultiplayer.SceneEvent.SCENE_EVENT_PLAYER
 
-	_scenes.observe(scene, event, sink.hit)
-	_scenes.observe(scene, event, sink.hit)
+	_scenes.core.observe(scene, event, sink.hit)
+	_scenes.core.observe(scene, event, sink.hit)
 	_dispatch(scene, event, true, 1)
 	_row(scenario, "heard", { &"count": sink.calls.size() })
 
@@ -205,9 +237,9 @@ func _unobserve_removes_one_and_leaves_the_rest(scenario: StringName) -> void:
 	_owned.append(dropped)
 	var event := NetwMultiplayer.SceneEvent.SCENE_EVENT_PLAYER
 
-	_scenes.observe(scene, event, kept.hit)
-	_scenes.observe(scene, event, dropped.hit)
-	_scenes.unobserve(scene, event, dropped.hit)
+	_scenes.core.observe(scene, event, kept.hit)
+	_scenes.core.observe(scene, event, dropped.hit)
+	_scenes.core.unobserve(scene, event, dropped.hit)
 	_dispatch(scene, event, true, 1)
 	_row(
 		scenario,
@@ -216,7 +248,7 @@ func _unobserve_removes_one_and_leaves_the_rest(scenario: StringName) -> void:
 	)
 
 	# Unobserving something never registered is inert rather than an error.
-	_scenes.unobserve(scene, event, dropped.hit)
+	_scenes.core.unobserve(scene, event, dropped.hit)
 	_dispatch(scene, event, true, 2)
 	_row(
 		scenario,
@@ -233,8 +265,8 @@ func _an_invalid_scene_or_callback_registers_nothing(scenario: StringName) -> vo
 	_owned.append(sink)
 	var event := NetwMultiplayer.SceneEvent.SCENE_EVENT_PLAYER
 
-	_scenes.observe(RID(), event, sink.hit)
-	_scenes.observe(scene, event, Callable())
+	_scenes.core.observe(RID(), event, sink.hit)
+	_scenes.core.observe(scene, event, Callable())
 	_dispatch(scene, event, true, 1)
 	_row(scenario, "heard", { &"count": sink.calls.size() })
 
@@ -248,8 +280,8 @@ func _a_dead_callback_is_pruned_at_dispatch(scenario: StringName) -> void:
 	_owned.append(kept)
 	var event := NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY
 
-	_scenes.observe(scene, event, doomed.hit)
-	_scenes.observe(scene, event, kept.hit)
+	_scenes.core.observe(scene, event, doomed.hit)
+	_scenes.core.observe(scene, event, kept.hit)
 	doomed.free()
 
 	_dispatch(scene, event, true, 1)
@@ -280,9 +312,7 @@ func _ids_are_allocated_in_sequence(scenario: StringName) -> void:
 
 
 func _the_deadline_settles_the_request_it_names(scenario: StringName) -> void:
-	var promise := _promise()
-	_scenes._pending_request = promise
-	_pend(7)
+	var promise := _pend(7)
 
 	_scenes._on_request_deadline(7)
 	_row(
@@ -293,9 +323,7 @@ func _the_deadline_settles_the_request_it_names(scenario: StringName) -> void:
 
 
 func _a_stale_deadline_is_ignored(scenario: StringName) -> void:
-	var promise := _promise()
-	_scenes._pending_request = promise
-	_pend(7)
+	var promise := _pend(7)
 
 	_scenes._on_request_deadline(6)
 	_row(scenario, "ignored", { &"settled": promise.is_settled })
@@ -308,8 +336,6 @@ func _a_stale_deadline_is_ignored(scenario: StringName) -> void:
 # A settled request leaves no id behind, so a second deadline for the same id
 # finds nothing rather than settling a request that already answered.
 func _a_settled_request_leaves_no_pending_id(scenario: StringName) -> void:
-	var promise := _promise()
-	_scenes._pending_request = promise
 	_pend(7)
 	_scenes._on_request_deadline(7)
 
@@ -319,6 +345,135 @@ func _a_settled_request_leaves_no_pending_id(scenario: StringName) -> void:
 		{
 			&"pending": _scenes._pending_request != null,
 			&"pending_id": _scenes._pending_request_id,
+		},
+	)
+
+#endregion
+
+#region The shell's scene band
+
+# A record with no node yet parks its facet rather than refusing it, which is
+# what lets a scene be declared before anything stands in for it.
+func _a_wrapperless_record_parks_its_facet(scenario: StringName) -> void:
+	var record := _api.entity_create()
+	_row(
+		scenario,
+		"parked",
+		{
+			&"wrote": _api.scene_declare(record),
+			&"held": _api._pending_scene_facets.get(record, null),
+			&"reads_declared": _api.scene_is_declared(record),
+		},
+	)
+
+	_row(
+		scenario,
+		"unknown",
+		{
+			&"wrote": _api.scene_declare(RID()),
+			&"held": _api._pending_scene_facets.has(RID()),
+		},
+	)
+
+
+# The declaration and the stem are the two things the registry files a scene
+# under, and undeclaring drops both: a stem outliving its declaration is a scene
+# that can still be asked for by name.
+func _a_node_backed_scene_declares_and_labels(scenario: StringName) -> void:
+	var scene := _live_scene(&"arena")
+	var label := NetwMultiplayer.SceneParam.SCENE_PARAM_LABEL
+	_row(
+		scenario,
+		"declared",
+		{
+			&"is_declared": _api.scene_is_declared(scene),
+			&"stem": _api.scene_get_param(scene, label),
+		},
+	)
+
+	_row(
+		scenario,
+		"relabelled",
+		{
+			&"wrote": _api.scene_set_param(scene, label, &"renamed"),
+			&"stem": _api.scene_get_param(scene, label),
+		},
+	)
+
+	_row(
+		scenario,
+		"undeclared",
+		{
+			&"wrote": _api.scene_undeclare(scene),
+			&"is_declared": _api.scene_is_declared(scene),
+			&"stem": _api.scene_get_param(scene, label),
+		},
+	)
+
+	_row(
+		scenario,
+		"unknown",
+		{
+			&"wrote": _api.scene_set_param(RID(), label, &"x"),
+			&"stem": _api.scene_get_param(RID(), label),
+		},
+	)
+
+
+# Membership is read off the container's subtree rather than off an enrolment
+# book, so it is self-inclusive, it answers alike on every peer, and a reparent
+# moves it with nothing re-enrolled.
+func _membership_walks_the_parent_chain(scenario: StringName) -> void:
+	var scene := _live_scene(&"arena")
+	var member := _entity_under(_api.entity_get_node(scene))
+	var loose := _entity_under(_tree_node)
+
+	_row(
+		scenario,
+		"resolved",
+		{
+			&"scene_is_itself": _api.scene_of(scene) == scene,
+			&"member_is_the_scene": _api.scene_of(member) == scene,
+			&"loose_has_a_scene": _api.scene_of(loose).is_valid(),
+			&"encloses": _api.scene_get_entities(scene).size(),
+		},
+	)
+
+	_api.entity_get_node(member).reparent(_tree_node)
+	_row(
+		scenario,
+		"reparented",
+		{
+			&"member_is_the_scene": _api.scene_of(member) == scene,
+			&"encloses": _api.scene_get_entities(scene).size(),
+		},
+	)
+
+
+# Admission is an interest-layer edge, so a scene nobody opened a boundary for
+# has nothing to admit into and says so. The verb answers the admission itself
+# rather than the attempt, which is why a refusal here is ERR_UNAVAILABLE and
+# not a quiet OK over an edge that never landed.
+func _admission_needs_a_boundary_to_land_on(scenario: StringName) -> void:
+	var scene := _live_scene(&"arena")
+	_row(
+		scenario,
+		"empty",
+		{
+			&"admits": _api.scene_admits(scene, 7),
+			&"peers": _api.scene_get_peers(scene).size(),
+			&"layer": _api.scene_get_layer(scene).is_valid(),
+		},
+	)
+
+	_row(
+		scenario,
+		"refused",
+		{
+			&"seven": _api.scene_admit(scene, 7),
+			&"zero": _api.scene_admit(scene, 0),
+			&"unknown": _api.scene_admit(RID(), 7),
+			&"admits_seven": _api.scene_admits(scene, 7),
 		},
 	)
 
@@ -359,25 +514,70 @@ func _close() -> void:
 	_api = null
 
 
-# Puts one named id in flight.
+# A scene container is a node, and every membership and admission verb reads the
+# node the entity stands on, so the wrapper plane needs a real tree.
+func _open_shell() -> void:
+	_tree_node = MultiplayerTree.new()
+	_tree_node.name = "SceneArm"
+	root.add_child(_tree_node)
+	_api = _tree_node.api
+	_scenes = _api._scenes
+
+
+# Freed rather than queued, because this runs between scenarios and a bare
+# SceneTree driven from _initialize never processes the frame a queue needs.
+func _close_shell() -> void:
+	for node in _owned:
+		if is_instance_valid(node):
+			node.free()
+	_owned.clear()
+	_scenes = null
+	_api = null
+	root.remove_child(_tree_node)
+	_tree_node.free()
+	_tree_node = null
+
+
+# `NetwEntity.ensure` builds the record and `entity_of` introduces it to the api
+# answers for, so the node enters the tree before it is named: a verb addressed
+# at `entity.rid` beforehand reaches nothing and answers ERR_DOES_NOT_EXIST.
+func _live_scene(label: StringName) -> RID:
+	var node := Node2D.new()
+	node.name = String(label)
+	NetwEntity.ensure(node)
+	_tree_node.add_child(node)
+	_owned.append(node)
+	var scene := _api.entity_of(node)
+	_api.scene_declare(scene)
+	_api.scene_set_param(
+		scene, NetwMultiplayer.SceneParam.SCENE_PARAM_LABEL, label
+	)
+	return scene
+
+
+func _entity_under(parent: Node) -> RID:
+	var node := Node2D.new()
+	NetwEntity.ensure(node)
+	parent.add_child(node)
+	_owned.append(node)
+	return _api.entity_of(node)
+
+
+# Puts one named id in flight and answers the promise it opened.
 #
-# THE ONE FIXTURE THE PORT FORCED. The record plane used to expose a settable
-# pending id, and a scenario could simply plant one. It no longer does, and it
-# should not: an id that can be claimed without being opened lets a caller
-# answer a request nobody made. Opening is the only route now, so the counter is
-# placed and the request drawn from it, which reaches the same state through the
-# verb that owns it. The rows this produces are the rows recorded before the
-# port, and holding those fixed is the whole test.
-func _pend(request_id: int) -> void:
+# THE ONE FIXTURE THE PORT FORCED, twice. The record plane used to expose a
+# settable pending id, and then a settable pending promise, and a scenario could
+# simply plant either. It no longer does, and it should not: a request a caller
+# can claim without opening lets it answer one nobody made. Opening is the only
+# route now, so the counter is placed and the request drawn from it, which
+# reaches the same state through the verb that owns it. The rows this produces
+# are the rows recorded before the port, and holding those fixed is the whole
+# test. The rejection is absorbed here because an unhandled one warns, and an
+# instrument that prints a warning on every run is one whose real failures are
+# harder to read.
+func _pend(request_id: int) -> NetwPromise:
 	_scenes._next_request_id = request_id
-	_scenes.core.open_request()
-
-
-# A request promise with its rejection already absorbed. An unhandled rejection
-# warns, and an instrument that prints a warning on every run is one whose real
-# failures are harder to read.
-func _promise() -> NetwPromise:
-	var promise := NetwPromise.new()
+	var promise := _scenes.core.request_open(false)
 	promise.catch_error(func(_code: Error, _detail: Variant) -> void: pass)
 	return promise
 

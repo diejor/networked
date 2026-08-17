@@ -36,7 +36,12 @@
  *                 [Registry], [Wire]
  *   [Hosted]      the case is tier-portable and its file is reachable from
  *                 `test_networked_hosted.h`
- *   [SceneTree]   last, module-only, and only for a case that drives a frame
+ *   [SceneTree]   last, and what the module tier's runner reads to stand up
+ *                 Input, the display server, the 2D and 3D physics and
+ *                 navigation servers, and a live tree. A case that drives a
+ *                 frame needs it, and so does a case that merely CONSTRUCTS a
+ *                 node whose constructor reaches a server: `memnew` of any
+ *                 body type segfaults without it, before the first assertion.
  *
  * A filter that matches nothing still exits zero, so a run is only evidence
  * when it is paired with `--list-test-cases` and a grep for the family.

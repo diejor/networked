@@ -108,6 +108,14 @@
 				Returns [code]true[/code] while [method rtt_jitter] is below [member jitter_stability_threshold].
 			</description>
 		</method>
+		<method name="mark_step">
+			<return type="void" />
+			<param index="0" name="seconds_ago" type="float" default="0.0" />
+			<description>
+				Re-stamps the wall clock without stepping, so the next [method seconds_since_step] measures from now. A pump that skipped a frame because something else drove the schedule calls this, otherwise the span it later measures covers frames it did not own.
+				[param seconds_ago] places the stamp that far in the past, handing the clock elapsed time nothing spent. That is how a rig gives a poll a whole frame to pump without waiting one.
+			</description>
+		</method>
 		<method name="one_way_latency" qualifiers="const">
 			<return type="float" />
 			<description>
@@ -133,6 +141,17 @@
 			<description>
 				[method physics_factor] as a whole number, never below one.
 				The physics server runs exactly one step per frame, so a tick can be worth one step or two but never one and a fifth. A fractional factor is a declaration the engine cannot honour, and the step budget rounds it here rather than pretending otherwise.
+			</description>
+		</method>
+		<method name="pumps_for" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="seconds" type="float" />
+			<param index="1" name="rate" type="float" />
+			<description>
+				How many pumps a window of [param seconds] is worth at [param rate] pumps a second, which is the one conversion every deadline in the session goes through: a park waiting on a dependency, a scene lingering after its despawn, a settle scheduled a moment out.
+				It rounds UP, so a window is never shorter than the seconds it was asked for. A wait that expired early would give up on the thing it was waiting for just as it arrived, and the cost of rounding the other way is one pump.
+				A [param rate] below one pump a second counts as one, because a caller with no configured clock still passes whatever rate it has and a window that rounded to zero would expire immediately rather than wait.
+				The rate is passed in rather than read off this clock, so a caller pumping on polls alone can name the engine's frame rate instead.
 			</description>
 		</method>
 		<method name="recommended_display_offset" qualifiers="const">
@@ -165,6 +184,13 @@
 				Mean absolute deviation of the sample window, in seconds. This is what decides [method is_stable] and what widens [method recommended_display_offset].
 			</description>
 		</method>
+		<method name="seconds_since_step" qualifiers="const">
+			<return type="float" />
+			<description>
+				Wall-clock seconds since the last [method physics_step] or [method mark_step], or a negative number while nothing has stamped yet.
+				A pump running outside the physics frame measures its own span with this instead of keeping a second stamp, which is what makes the two pumps agree about when the last frame was. [method force_step] does not stamp, because a stepped clock has no wall-clock meaning.
+			</description>
+		</method>
 		<method name="simulation_behind_count" qualifiers="const">
 			<return type="int" />
 			<description>
@@ -177,6 +203,15 @@
 			<description>
 				The unspent remainder in seconds, unclamped.
 				A visual playhead reads this rather than [method tick_phase]. If a render frame lands just after a physics frame the remainder can exceed one whole tick, and clamping it there stalls the playhead for the rest of that frame, which shows up as a jitter the clamp itself caused.
+			</description>
+		</method>
+		<method name="tick_factor" qualifiers="const">
+			<return type="float" />
+			<description>
+				Where a display sits inside the current tick: [method tick_accumulator] plus however much of this frame has already elapsed, over [method ticktime].
+				Unclamped above, for the reason [method tick_accumulator] is. A render frame that lands just past a physics frame reads above one, and clamping it there stalls the playhead for the rest of that frame, which shows up as a jitter the clamp itself caused. Consumers floor the whole part into their own delta.
+				An unconfigured clock reads zero however much it banked, so a session whose game authored no clock has a playhead that does not move rather than one that reads noise. So does the editor, which runs no session.
+				[member tick_factor_override] answers instead when it is not negative, which is how a deterministic rig places the playhead without a frame.
 			</description>
 		</method>
 		<method name="tick_phase" qualifiers="const">
@@ -194,6 +229,9 @@
 		</method>
 	</methods>
 	<members>
+		<member name="configured" type="bool" setter="set_configured" getter="get_configured" default="false">
+			Whether a configurator has registered. An unconfigured clock is inert rather than absent: [member tick] stays where it was placed and [method tick_factor] reads zero, so the absence of a clock is a playhead that does not move.
+		</member>
 		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="2">
 			How many ticks the visual display lags behind the simulation. Compare against [method recommended_display_offset].
 		</member>
@@ -234,8 +272,14 @@
 		<member name="tick" type="int" setter="set_tick" getter="get_tick" default="0">
 			The current server-calibrated simulation tick. Settable because a peer that has not calibrated yet is placed rather than advanced.
 		</member>
+		<member name="tick_factor_override" type="float" setter="set_tick_factor_override" getter="get_tick_factor_override" default="-1.0">
+			Placed position within the tick, answered by [method tick_factor] instead of any reading. Negative leaves the reading to the running engine, which is what a live session wants and what a deterministic rig replaces.
+		</member>
 		<member name="tickrate" type="int" setter="set_tickrate" getter="get_tickrate" default="30">
 			How many simulation ticks run per second. Every derived duration comes from this.
+		</member>
+		<member name="use_physics_interpolation" type="bool" setter="set_use_physics_interpolation" getter="get_use_physics_interpolation" default="true">
+			Which source [method tick_factor] measures the elapsed part of the frame with: the engine's physics interpolation fraction, or the wall-clock span since the last step. The engine's fraction is the one the renderer itself interpolates against, so it agrees with what is on screen; the wall clock is the fallback for a game that drives its frames some other way.
 		</member>
 	</members>
 	<signals>

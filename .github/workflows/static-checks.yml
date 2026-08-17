@@ -95,8 +95,44 @@ jobs:
       - name: Prove The Registry Check Refuses
         run: python extension/tools/check_hosted_registry.py --self-test
 
+      # A comment under extension/ is a fact doc_classes/<Class>.xml is
+      # missing, a name that should have been better, or plan knowledge that
+      # belongs in .agents/. The tree did not start at zero, so the check is a
+      # ratchet: a file may lose comments freely and may never gain one.
+      - name: Check No File Gained A Comment
+        run: python extension/tools/check_no_comments.py --ratchet
+
+      - name: Prove The Comment Ratchet Refuses
+        run: python extension/tools/check_no_comments.py --self-test
+
+      # A class registers with a written disposition (stay, or retire at a
+      # named unit) or it does not register. The ledger is the plan's §2.9
+      # STAY set as data, and its strict mode is the ZU-39/Z7 gate.
+      - name: Check Every Registration Has A Disposition
+        run: python extension/tools/check_classdb_census.py --check
+
+      - name: Prove The ClassDB Census Refuses
+        run: python extension/tools/check_classdb_census.py --self-test
+
       - name: Check Diagnostic Seams
         run: python extension/tools/check_diagnostics.py
 
       - name: Prove The Diagnostic Check Refuses
         run: python extension/tools/check_diagnostics.py --self-test
+
+      # Holding the decoder against the descriptors needs
+      # `reports/native/wire.spec.json`, which only a native run produces, so
+      # that half rides the embedded suite instead.
+      - name: Prove The Wire Decoder Refuses
+        run: python extension/tools/wire_decode.py --self-test
+
+      # Holding the enum to the registry needs `reports/native/wire.spec.json`
+      # too, so that half rides the embedded suite beside the decoder.
+      - name: Prove The Channel Table Check Refuses
+        run: python extension/tools/check_channel_table.py --self-test
+
+      # Checking a real capture needs one, which needs a two-peer session, so
+      # only the self-test rides here. `NETW_CODE_TAP=1` over a racing suite
+      # produces the capture this reads.
+      - name: Prove The Tap Check Refuses
+        run: python extension/tools/code_tap_check.py --self-test

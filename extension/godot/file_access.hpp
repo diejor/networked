@@ -5,7 +5,6 @@
 #if defined(NETW_MODULE)
 #include "core/io/file_access.h"
 
-// Engine types are global, so the alias keeps `godot::` spellings compiling.
 namespace godot {
 using ::FileAccess;
 } // namespace godot

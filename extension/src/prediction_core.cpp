@@ -1,4 +1,5 @@
 #include "netw/prediction_core.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -8,6 +9,7 @@
 #include "netw/log.hpp"
 #include "netw/predict/compare.hpp"
 #include "netw/predict/frames.hpp"
+#include "netw/predict/sensors.hpp"
 #include "netw/profile.hpp"
 #include "netw/project.hpp"
 
@@ -35,9 +37,6 @@ static double angle_difference(double p_from, double p_to) {
     return std::fmod(2.0 * diff, TAU) - diff;
 }
 
-// A pose channel is FLOAT, VECTOR2 or VECTOR3 and nothing else. An INT field
-// falls out here rather than being widened, so a field the engine declines to
-// converge is a field this declines to converge.
 static Variant pose_delta(
     const Variant &target,
     const Variant &current,
@@ -82,8 +81,6 @@ static Variant pose_sum(const Variant &a, const Variant &b) {
     }
 }
 
-// At or past, because a tier is a distance the body has reached rather than a
-// tolerance it has exceeded. A declared distance of zero teleports every time.
 static bool teleport_reached(
     const Dictionary &pose_errors,
     const Dictionary &thresholds,
@@ -222,8 +219,8 @@ void NetwPredictionCore::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwPredictionCore",
-        D_METHOD("consume_plan", "depth", "buffer", "warmed"),
-        &NetwPredictionCore::consume_plan
+        D_METHOD("consume_action", "depth", "buffer"),
+        &NetwPredictionCore::consume_action
     );
     ClassDB::bind_static_method(
         "NetwPredictionCore",
@@ -309,6 +306,11 @@ void NetwPredictionCore::_bind_methods() {
         "NetwPredictionCore",
         D_METHOD("raw_state_fingerprint", "payload"),
         &NetwPredictionCore::raw_state_fingerprint
+    );
+    ClassDB::bind_static_method(
+        "NetwPredictionCore",
+        D_METHOD("topology_fingerprint", "facts", "quantum"),
+        &NetwPredictionCore::topology_fingerprint
     );
     ClassDB::bind_static_method(
         "NetwPredictionCore",
@@ -403,7 +405,7 @@ void NetwPredictionCore::_bind_methods() {
     );
 }
 
-Dictionary NetwPredictionCore::evaluate(
+Ref<NetwPredictJudgement> NetwPredictionCore::evaluate(
     int domain,
     int verdict,
     const Dictionary &predicted,
@@ -414,13 +416,11 @@ Dictionary NetwPredictionCore::evaluate(
     NETW_ZONE_NC("NetwPredict evaluate", colors::PREDICTION);
     const bool in_domain = domain == int(Domain::IN_DOMAIN);
     field_sink.clear();
-    Dictionary result;
     if (predicted.is_empty()) {
-        result[StringName("divergence")]
-            = std::numeric_limits<double>::infinity();
-        result[StringName("corrected")] = true;
-        result[StringName("in_domain")] = in_domain;
-        return result;
+        return NetwPredictJudgement::of(
+            std::numeric_limits<double>::infinity(),
+            true
+        );
     }
     const Dictionary angles
         = wiring.get(StringName("angle_fields"), Dictionary());
@@ -437,10 +437,34 @@ Dictionary NetwPredictionCore::evaluate(
               wiring.get(StringName("vote_excludes"), Dictionary()),
               angles
           );
-    result[StringName("divergence")] = divergence;
-    result[StringName("corrected")] = corrected;
-    result[StringName("in_domain")] = in_domain;
-    return result;
+    return NetwPredictJudgement::of(divergence, corrected);
+}
+
+Ref<NetwPredictJudgement> NetwPredictJudgement::of(
+    double p_divergence,
+    bool p_corrected
+) {
+    Ref<NetwPredictJudgement> out;
+    out.instantiate();
+    out->judged.divergence = p_divergence;
+    out->judged.corrected = p_corrected;
+    return out;
+}
+
+void NetwPredictJudgement::_bind_methods() {
+    ClassDB::bind_static_method(
+        "NetwPredictJudgement",
+        D_METHOD("of", "divergence", "corrected"),
+        &NetwPredictJudgement::of
+    );
+    ClassDB::bind_method(
+        D_METHOD("divergence"),
+        &NetwPredictJudgement::divergence
+    );
+    ClassDB::bind_method(
+        D_METHOD("corrected"),
+        &NetwPredictJudgement::corrected
+    );
 }
 
 Fold NetwPredictionCore::fold(
@@ -455,36 +479,52 @@ Fold NetwPredictionCore::fold(
     return out;
 }
 
-Dictionary NetwPredictionCore::predict_fold(
+Ref<NetwPredictFold> NetwPredictionCore::predict_fold(
     int64_t latest_input_tick,
     int64_t last_driven_input_tick,
     int64_t frame_tick
 ) {
     const Fold decided
         = fold(latest_input_tick, last_driven_input_tick, frame_tick);
-    Dictionary result;
-    result[StringName("label")] = decided.label;
-    result[StringName("fresh")] = decided.fresh;
-    result[StringName("kind")] = int(decided.kind);
-    return result;
+    return NetwPredictFold::of(decided.label, decided.fresh, int(decided.kind));
 }
 
-Dictionary NetwPredictionCore::consume_plan(
-    int depth,
-    int buffer,
-    bool warmed
+Ref<NetwPredictFold> NetwPredictFold::of(
+    int64_t p_label,
+    bool p_fresh,
+    int p_kind
 ) {
-    const bool now_warmed = warmed || depth > buffer;
-    int action = int(ConsumeAction::STARVED);
-    if (now_warmed && depth > buffer) {
-        action = int(ConsumeAction::REPLAY);
-    } else if (depth > 0) {
-        action = int(ConsumeAction::HOLD);
+    NETW_ERR_COND_V(
+        p_kind < int(DriveKind::NONE) || p_kind > int(DriveKind::SUBSTITUTED),
+        Ref<NetwPredictFold>(),
+        "predict",
+        "NetwPredictFold.of: kind %d names no drive kind.",
+        p_kind
+    );
+    Ref<NetwPredictFold> out;
+    out.instantiate();
+    out->decided.label = p_label;
+    out->decided.fresh = p_fresh;
+    out->decided.kind = DriveKind(p_kind);
+    return out;
+}
+
+void NetwPredictFold::_bind_methods() {
+    ClassDB::bind_static_method(
+        "NetwPredictFold",
+        D_METHOD("of", "label", "fresh", "kind"),
+        &NetwPredictFold::of
+    );
+    ClassDB::bind_method(D_METHOD("label"), &NetwPredictFold::label);
+    ClassDB::bind_method(D_METHOD("fresh"), &NetwPredictFold::fresh);
+    ClassDB::bind_method(D_METHOD("kind"), &NetwPredictFold::kind);
+}
+
+int NetwPredictionCore::consume_action(int depth, int buffer) {
+    if (depth > buffer) {
+        return int(ConsumeAction::REPLAY);
     }
-    Dictionary result;
-    result[StringName("action")] = action;
-    result[StringName("warmed")] = now_warmed;
-    return result;
+    return int(depth > 0 ? ConsumeAction::HOLD : ConsumeAction::STARVED);
 }
 
 Variant NetwPredictionCore::pose_delta(
@@ -578,21 +618,34 @@ Dictionary NetwPredictionCore::converge_toward(
     return out;
 }
 
-static Dictionary recovery_plan(
-    const Variant &restore,
-    const Variant &write,
-    bool teleport,
-    bool skip
+Ref<NetwPredictRecovery> NetwPredictRecovery::of(
+    const Dictionary &p_restore,
+    const Dictionary &p_write,
+    bool p_teleport,
+    bool p_skip
 ) {
-    Dictionary plan;
-    plan[StringName("restore")] = restore;
-    plan[StringName("write")] = write;
-    plan[StringName("teleport")] = teleport;
-    plan[StringName("skip")] = skip;
-    return plan;
+    Ref<NetwPredictRecovery> out;
+    out.instantiate();
+    out->restored = p_restore;
+    out->written = p_write;
+    out->teleported = p_teleport;
+    out->skipped = p_skip;
+    return out;
 }
 
-Dictionary NetwPredictionCore::recover(
+void NetwPredictRecovery::_bind_methods() {
+    ClassDB::bind_static_method(
+        "NetwPredictRecovery",
+        D_METHOD("of", "restore", "write", "teleport", "skip"),
+        &NetwPredictRecovery::of
+    );
+    ClassDB::bind_method(D_METHOD("restore"), &NetwPredictRecovery::restore);
+    ClassDB::bind_method(D_METHOD("write"), &NetwPredictRecovery::write);
+    ClassDB::bind_method(D_METHOD("teleport"), &NetwPredictRecovery::teleport);
+    ClassDB::bind_method(D_METHOD("skip"), &NetwPredictRecovery::skip);
+}
+
+Ref<NetwPredictRecovery> NetwPredictionCore::recover(
     const Dictionary &payload,
     int policy,
     int correction,
@@ -606,10 +659,10 @@ Dictionary NetwPredictionCore::recover(
 ) {
     NETW_ZONE_NC("NetwPredict recover", colors::PREDICTION);
     if (policy == int(RecoveryPolicy::OBSERVE)) {
-        return recovery_plan(Dictionary(), Dictionary(), false, true);
+        return NetwPredictRecovery::of(Dictionary(), Dictionary(), false, true);
     }
     if (correction == int(CorrectionMode::REPLAY)) {
-        return recovery_plan(payload, Dictionary(), false, false);
+        return NetwPredictRecovery::of(payload, Dictionary(), false, false);
     }
 
     Dictionary restore = payload;
@@ -628,7 +681,7 @@ Dictionary NetwPredictionCore::recover(
             wiring.get(StringName("teleport_thresholds"), Dictionary()),
             wiring.get(StringName("teleport_threshold"), 0.0)
         )) {
-        return recovery_plan(restore, restore, true, false);
+        return NetwPredictRecovery::of(restore, restore, true, false);
     }
 
     // Partiality is an in-domain refinement. A divergence outside the declared
@@ -642,11 +695,11 @@ Dictionary NetwPredictionCore::recover(
     if (domain == int(Domain::OUT_OF_DOMAIN)
         || (attribution == int(Attribution::UNKNOWN)
             && bool(verdict.get(StringName("contact_window"), false)))) {
-        return recovery_plan(restore, restore, false, false);
+        return NetwPredictRecovery::of(restore, restore, false, false);
     }
 
     if (bool(verdict.get(StringName("suppressed"), false))) {
-        return recovery_plan(Dictionary(), Dictionary(), false, true);
+        return NetwPredictRecovery::of(Dictionary(), Dictionary(), false, true);
     }
 
     const Dictionary withheld
@@ -664,7 +717,7 @@ Dictionary NetwPredictionCore::recover(
         wiring.get(StringName("converge_rules"), Dictionary()),
         wiring.get(StringName("angle_fields"), Dictionary())
     );
-    return recovery_plan(restore, restore, false, false);
+    return NetwPredictRecovery::of(restore, restore, false, false);
 }
 
 int NetwPredictionCore::domain_of(
@@ -758,6 +811,13 @@ int NetwPredictionCore::attribute(
 
 int64_t NetwPredictionCore::raw_state_fingerprint(const Dictionary &payload) {
     return fingerprint_of(payload);
+}
+
+int64_t NetwPredictionCore::topology_fingerprint(
+    const Dictionary &facts,
+    int quantum
+) {
+    return int64_t(predict::topology_fingerprint(facts, quantum));
 }
 
 int64_t NetwPredictionCore::fact_fingerprint(const Dictionary &facts) {
@@ -922,13 +982,13 @@ PredictionVerdict NetwPredictionCore::evaluate_struct_verdict(
     const Dictionary &wiring
 ) {
     Dictionary sink;
-    const Dictionary res
+    const Ref<NetwPredictJudgement> judged
         = evaluate(domain, verdict, predicted, payload, wiring, sink);
     PredictionVerdict pv;
     pv.domain = domain;
     pv.verdict = verdict;
-    pv.corrected = res.get(StringName("corrected"), false);
-    pv.max_error = res.get(StringName("divergence"), 0.0);
+    pv.corrected = judged->corrected();
+    pv.max_error = judged->divergence();
     return pv;
 }
 

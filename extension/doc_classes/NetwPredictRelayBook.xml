@@ -17,6 +17,7 @@
 			<return type="PackedInt64Array" />
 			<param index="0" name="entity_slot" type="int" />
 			<description>
+				Every subscriber of a slot, in ADMISSION order, which is what makes one server's relay order a function of its own admissions rather than of a hash seed.
 			</description>
 		</method>
 		<method name="release">
@@ -29,12 +30,14 @@
 			<return type="PackedByteArray" />
 			<param index="0" name="subscribed" type="bool" />
 			<description>
+				The subscription request itself, which is one bit and the only thing a client sends on this lane.
 			</description>
 		</method>
 		<method name="request_of" qualifiers="static">
 			<return type="int" />
 			<param index="0" name="bytes" type="PackedByteArray" />
 			<description>
+				What a request states, or [code]-1[/code] for bytes that are not one.
 			</description>
 		</method>
 		<method name="set_subscribed">
@@ -43,6 +46,7 @@
 			<param index="1" name="peer" type="int" />
 			<param index="2" name="subscribed" type="bool" />
 			<description>
+				Admits [param peer] to [param entity_slot]'s relayed command lane, or drops it when [param subscribed] is false. Admitting twice is the same subscription.
 			</description>
 		</method>
 		<method name="slot_count" qualifiers="const">

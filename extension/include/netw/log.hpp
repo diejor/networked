@@ -7,10 +7,10 @@
  * take the same query. Learning to select one is learning to select the other,
  * which is the whole reason the prefix is machine-shaped rather than pretty.
  *
- * The subsystem is the first argument of every macro. The vocabulary is short
- * and shared: `clock`, `codec`, `interest`, `interp`, `lagcomp`, `liveness`,
- * `prediction`, `scene`, `session`, `spawn`, `table`, `tick`, `transport`,
- * `wire`. A new one is a deliberate addition, not a spelling.
+ * The subsystem is the first argument of every macro, and the vocabulary is
+ * `netw/subsystems.hpp`'s table, which the profiler's mask bits come from too:
+ * a name a log line carries is a name a zone filter can select. A name outside
+ * the table is reported once and selects nothing.
  *
  * What each level costs, which is why there are five of them:
  *
@@ -36,9 +36,9 @@
  * an error guard.
  *
  * [codeblock]
- * NETW_TRACE("codec", "encoded snapshot bytes=%d", bytes.size());
- * NETW_WARN_ONCE("transport", "peer=%d sent an unknown channel", peer_id);
- * NETW_ERR_COND(peer_id <= 0, "session", "peer id must be positive");
+ * NETW_TRACE(sys::CODEC, "encoded snapshot bytes=%d", bytes.size());
+ * NETW_WARN_ONCE(sys::TRANSPORT, "peer=%d sent an unknown channel", peer_id);
+ * NETW_ERR_COND(peer_id <= 0, sys::SESSION, "peer id must be positive");
  * [/codeblock]
  */
 
@@ -48,6 +48,7 @@
 #include "godot/utility.hpp"
 #include "godot/variant.hpp"
 #include "netw/profile.hpp"
+#include "netw/subsystems.hpp"
 
 namespace netw::log {
 

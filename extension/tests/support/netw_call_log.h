@@ -53,6 +53,9 @@ class CallLogSink final : public godot::CallableCustom {
     // What the sink answers. A driver callback is read for its return value,
     // so a sink that always answered nil could not stand in for one.
     godot::Variant answer;
+    // A factory answers a NEW object per call, which is what makes "minted
+    // once" observable: a fixed answer passes that law without holding it.
+    bool mints = false;
 
     static bool same(
         const godot::CallableCustom *a,
@@ -73,10 +76,12 @@ public:
         const std::shared_ptr<CallLogEntries> &p_entries,
         const godot::StringName &p_tag,
         const godot::Object *p_anchor,
-        const godot::Variant &p_answer = godot::Variant()
+        const godot::Variant &p_answer = godot::Variant(),
+        bool p_mints = false
     )
         : entries(p_entries), tag(p_tag),
-          anchor(netw::gd::instance_id(p_anchor)), answer(p_answer) {
+          anchor(netw::gd::instance_id(p_anchor)), answer(p_answer),
+          mints(p_mints) {
     }
 
     uint32_t hash() const override {
@@ -115,7 +120,13 @@ public:
         }
         entries->tags.push_back(tag);
         entries->args.push_back(carried);
-        r_return_value = answer;
+        if (mints) {
+            godot::Ref<godot::RefCounted> fresh;
+            fresh.instantiate();
+            r_return_value = fresh;
+        } else {
+            r_return_value = answer;
+        }
         netw::gd::call_ok(r_call_error);
     }
 };
@@ -153,6 +164,14 @@ public:
         return godot::Callable(
             memnew(CallLogSink(entries, p_tag, anchor.ptr(), p_answer))
         );
+    }
+
+    // A callable that records its call and answers a FRESH object each time,
+    // for a subject whose contract is that it asks for one only once.
+    godot::Callable minting(const godot::StringName &p_tag) const {
+        return godot::Callable(memnew(
+            CallLogSink(entries, p_tag, anchor.ptr(), godot::Variant(), true)
+        ));
     }
 
     // The arguments the p_index'th call under p_tag carried, empty when there

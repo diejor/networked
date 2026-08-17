@@ -7,6 +7,7 @@
 
 #include "support/netw_test.h"
 
+#include "netw/entity_ids.hpp"
 #include "netw/liveness_core.hpp"
 #include "support/netw_call_log.h"
 
@@ -154,29 +155,109 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Liveness][Hosted] L5 a revival is a new epoch on the same "
-    "route"
+    "record"
 ) {
     Ref<NetwLivenessCore> core = make_core();
     int route = 0;
-    const RID first = spawn(core, &route);
-    core->set_state(first, NetwLivenessCore::STATE_DEAD);
+    const RID entity = spawn(core, &route);
+    NETW_CHECK_EQ(core->epoch_of(entity), 0);
+    core->set_state(entity, NetwLivenessCore::STATE_DEAD);
 
-    // The shell drops its handle at death, so a re-admission arrives with a
-    // fresh one and the route is re-pointed at it.
-    const RID second = core->entity_create();
-    CHECK(core->bind_route(second, route));
+    CHECK(core->bind_route(entity, route));
 
-    CHECK(second != first);
+    NETW_CHECK_EQ(core->epoch_of(entity), 1);
     CHECK(core->route_state(route) == NetwLivenessCore::STATE_LIVE);
-    CHECK(core->rid_from_route(route) == second);
+    CHECK(core->rid_from_route(route) == entity);
 
-    SUBCASE("the superseded record keeps its tombstone") {
-        CHECK(core->state_of(first) == NetwLivenessCore::STATE_DEAD);
-        CHECK(core->entity_is_valid(first));
+    SUBCASE("the record is the one that carried the tombstone") {
+        NETW_CHECK_EQ(core->route_of(entity), route);
+        CHECK(core->entity_is_valid(entity));
     }
 
-    SUBCASE("the superseded record never resurrects") {
-        CHECK_FALSE(core->set_state(first, NetwLivenessCore::STATE_LIVE));
+    SUBCASE("a second death and revival is a third life") {
+        core->set_state(entity, NetwLivenessCore::STATE_DEAD);
+        CHECK(core->bind_route(entity, route));
+        NETW_CHECK_EQ(core->epoch_of(entity), 2);
+    }
+
+    SUBCASE("set_state is still no way back") {
+        core->set_state(entity, NetwLivenessCore::STATE_DEAD);
+        CHECK_FALSE(core->set_state(entity, NetwLivenessCore::STATE_LIVE));
+        CHECK(core->state_of(entity) == NetwLivenessCore::STATE_DEAD);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] L11 a route never renames, alive or "
+    "tombstoned"
+) {
+    Ref<NetwLivenessCore> core = make_core();
+    int route = 0;
+    const RID holder = spawn(core, &route);
+    const RID stranger = core->entity_create();
+
+    CHECK_FALSE(core->bind_route(stranger, route));
+    CHECK(core->rid_from_route(route) == holder);
+    NETW_CHECK_EQ(core->route_of(stranger), 0);
+    CHECK(core->state_of(stranger) == NetwLivenessCore::STATE_UNKNOWN);
+
+    SUBCASE("a tombstone holds its route against a newcomer") {
+        core->set_state(holder, NetwLivenessCore::STATE_DEAD);
+        CHECK_FALSE(core->bind_route(stranger, route));
+        CHECK(core->rid_from_route(route) == holder);
+        CHECK(core->route_state(route) == NetwLivenessCore::STATE_DEAD);
+    }
+
+    SUBCASE("the refusal spends no epoch") {
+        core->set_state(holder, NetwLivenessCore::STATE_DEAD);
+        core->bind_route(stranger, route);
+        NETW_CHECK_EQ(core->epoch_of(holder), 0);
+        NETW_CHECK_EQ(core->epoch_of(stranger), 0);
+    }
+
+    SUBCASE("the holder may still bind its own route") {
+        CHECK(core->bind_route(holder, route));
+    }
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] L12 the epoch moves on one edge and by one"
+) {
+    Ref<NetwLivenessCore> core = make_core();
+    int route = 0;
+    const RID entity = spawn(core, &route);
+
+    SUBCASE("re-binding a live route is not a life") {
+        for (int i = 0; i < 8; i++) {
+            CHECK(core->bind_route(entity, route));
+        }
+        NETW_CHECK_EQ(core->epoch_of(entity), 0);
+    }
+
+    SUBCASE("lingering is the same life") {
+        core->set_state(entity, NetwLivenessCore::STATE_LINGERING);
+        CHECK(core->bind_route(entity, route));
+        NETW_CHECK_EQ(core->epoch_of(entity), 0);
+    }
+
+    SUBCASE("an unbound record is on its first life") {
+        NETW_CHECK_EQ(core->epoch_of(core->entity_create()), 0);
+    }
+
+    SUBCASE("a record this plane never knew has no life at all") {
+        NETW_CHECK_EQ(core->epoch_of(RID()), -1);
+        const RID loose = netw::entity_ids::mint();
+        NETW_CHECK_EQ(core->epoch_of(loose), -1);
+        netw::entity_ids::release(loose);
+    }
+
+    SUBCASE("the bulk door revives on the same edge") {
+        PackedInt64Array one;
+        one.push_back(route);
+        core->tombstone_routes_data(one);
+        core->bind_routes_data(one);
+        NETW_CHECK_EQ(core->epoch_of(entity), 1);
+        CHECK(core->rid_from_route(route) == entity);
     }
 }
 
@@ -438,6 +519,156 @@ TEST_CASE("[Networked][Liveness][Hosted] clear releases the session") {
         NETW_CHECK_EQ(core->frame(), 0);
         core->poll(0);
         NETW_CHECK_EQ(log.count("live"), 0);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] M1 the mint and the record plane answer "
+    "different questions"
+) {
+    const RID loose = netw::entity_ids::mint();
+    Ref<NetwLivenessCore> core = make_core();
+
+    // A handle exists before any session knows it, which is the whole reason
+    // the mint is not a session service.
+    CHECK(netw::entity_ids::minted(loose));
+    CHECK_FALSE(core->entity_is_valid(loose));
+
+    CHECK(core->adopt(loose));
+    CHECK(core->entity_is_valid(loose));
+
+    // Adoption is idempotent, because a route rebinding an entity it already
+    // knows must not reset the record it is about to read.
+    CHECK(core->set_state(loose, NetwLivenessCore::STATE_LIVE));
+    CHECK(core->adopt(loose));
+    NETW_CHECK_EQ(core->state_of(loose), NetwLivenessCore::STATE_LIVE);
+
+    // The plane lets go of what it adopted, and the minter still holds.
+    core->clear();
+    CHECK_FALSE(core->entity_is_valid(loose));
+    CHECK(netw::entity_ids::minted(loose));
+
+    netw::entity_ids::release(loose);
+    CHECK_FALSE(netw::entity_ids::minted(loose));
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] M2 a handle the mint never issued cannot "
+    "open a record"
+) {
+    Ref<NetwLivenessCore> core = make_core();
+
+    CHECK_FALSE(core->adopt(RID()));
+    CHECK_FALSE(core->entity_is_valid(RID()));
+
+    // A handle this plane released is exactly as forged as one from nowhere,
+    // so a late message naming a retired entity opens nothing.
+    const RID retired = core->entity_create();
+    core->clear();
+    CHECK_FALSE(netw::entity_ids::minted(retired));
+    CHECK_FALSE(core->adopt(retired));
+    CHECK_FALSE(core->entity_is_valid(retired));
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] M3 two planes never see each other's "
+    "entities, and a released handle is never issued again"
+) {
+    Ref<NetwLivenessCore> a = make_core();
+    Ref<NetwLivenessCore> b = make_core();
+
+    const RID from_a = a->entity_create();
+    const RID from_b = b->entity_create();
+    CHECK(from_a != from_b);
+    CHECK_FALSE(a->entity_is_valid(from_b));
+    CHECK_FALSE(b->entity_is_valid(from_a));
+
+    a->clear();
+    const RID reborn = a->entity_create();
+    CHECK(reborn != from_a);
+
+    // The other plane is untouched by its neighbour's teardown, which is what
+    // a shared mint has to keep true to be usable at all.
+    CHECK(b->entity_is_valid(from_b));
+
+    a->clear();
+    b->clear();
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] M4 a plane releases every handle it "
+    "adopted, routed or not"
+) {
+    const int before = netw::entity_ids::outstanding();
+    Ref<NetwLivenessCore> core = make_core();
+
+    const RID routed = core->entity_create();
+    core->entity_create();
+    core->bind_route(routed, core->reserve_route());
+    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before + 2);
+
+    // The unrouted one is the whole point: walking the route table to release
+    // would strand whatever never bound.
+    core->clear();
+    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before);
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] M5 a handle outlives every holder but the "
+    "last"
+) {
+    const int before = netw::entity_ids::outstanding();
+
+    // The shape a wrapper has: it mints at construction and holds until it is
+    // finalized, which is later than any one session's teardown.
+    const RID carried = netw::entity_ids::mint();
+    NETW_CHECK_EQ(netw::entity_ids::holders(carried), 1);
+
+    Ref<NetwLivenessCore> a = make_core();
+    Ref<NetwLivenessCore> b = make_core();
+    CHECK(a->adopt(carried));
+    CHECK(b->adopt(carried));
+    NETW_CHECK_EQ(netw::entity_ids::holders(carried), 3);
+    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before + 1);
+
+    a->clear();
+    CHECK(netw::entity_ids::minted(carried));
+    CHECK_FALSE(a->entity_is_valid(carried));
+    CHECK(b->entity_is_valid(carried));
+
+    b->clear();
+    CHECK(netw::entity_ids::minted(carried));
+    NETW_CHECK_EQ(netw::entity_ids::holders(carried), 1);
+
+    netw::entity_ids::release(carried);
+    CHECK_FALSE(netw::entity_ids::minted(carried));
+    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before);
+
+    SUBCASE("a second adoption by one plane claims no second hold") {
+        const RID once = netw::entity_ids::mint();
+        Ref<NetwLivenessCore> plane = make_core();
+        CHECK(plane->adopt(once));
+        CHECK(plane->adopt(once));
+        NETW_CHECK_EQ(netw::entity_ids::holders(once), 2);
+        plane->clear();
+        NETW_CHECK_EQ(netw::entity_ids::holders(once), 1);
+        netw::entity_ids::release(once);
+    }
+
+    SUBCASE("a handle the mint never issued is retained by nobody") {
+        CHECK_FALSE(netw::entity_ids::retain(RID()));
+        NETW_CHECK_EQ(netw::entity_ids::holders(RID()), 0);
+        Ref<NetwLivenessCore> plane = make_core();
+        CHECK_FALSE(plane->adopt(RID()));
+    }
+
+    SUBCASE("releasing past the last holder is not a way back") {
+        const RID gone = netw::entity_ids::mint();
+        netw::entity_ids::release(gone);
+        netw::entity_ids::release(gone);
+        CHECK_FALSE(netw::entity_ids::minted(gone));
+        NETW_CHECK_EQ(netw::entity_ids::holders(gone), 0);
+        CHECK_FALSE(netw::entity_ids::retain(gone));
     }
 }
 

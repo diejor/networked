@@ -12,6 +12,9 @@ on:
       - main
     paths-ignore:
       - '**.md'
+  # A tier nothing schedules only goes red inside the change that needed it.
+  schedule:
+    - cron: '17 5 * * 1'
   workflow_dispatch:
 
 concurrency:
@@ -84,6 +87,28 @@ jobs:
         shell: bash
         run: ./godot --headless --path . -s res://tests/native/run_native_tests.gd
 
+      # The only check that can catch the code and its own documentation
+      # disagreeing: a round trip through one implementation agrees with itself
+      # whatever either of them says.
+      - name: Hold The Descriptors To The Prose
+        shell: bash
+        run: |
+          set -eu
+          test -s reports/native/wire.spec.json
+          python3 extension/tools/wire_decode.py --self-test \
+            --spec reports/native/wire.spec.json
+
+      # The channel byte the shell sends and the contract the registry declares
+      # for it have to be one table. When they are not, the payload still
+      # crosses and the identity hash still matches, because the hash folds only
+      # what the registry holds.
+      - name: Hold The Channel Enum To The Registry
+        shell: bash
+        run: |
+          set -eu
+          python3 extension/tools/check_channel_table.py \
+            --spec reports/native/wire.spec.json
+
       # The whole point of reading the XML. Four shapes that a run reporting
       # zero failures can still be in, and every one of them reads as green
       # from the exit code alone.
@@ -134,6 +159,21 @@ jobs:
           if claimed < floor:
               sys.exit("corpus shrank: %d cases ran, %d in the census" % (claimed, floor))
           PY
+
+  # Tier 2b: the same cases built into the engine and checked against the
+  # engine's own headers, which is where godot-cpp's divergences from the
+  # engine stop being invisible. Scheduled and dispatched only, because a
+  # 90-minute engine build on every pull request would buy a signal
+  # `module.yml`'s own path gate already gives for the changes that can break
+  # it.
+  module:
+    name: "Engine Module"
+    if: >-
+      github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/module.yml
+    with:
+      profiler: none
 
   # `doc_classes/*.xml` is generated from what `_bind_methods` registers and
   # then hand-written into, so it is a file nobody regenerates by habit. A

@@ -131,6 +131,114 @@ struct Fold {
     DriveKind kind = DriveKind::NONE;
 };
 
+/* The single write that corrects one settled divergence, staged whole.
+ *
+ * Minted rather than read back, because the seam it crosses is overridable and
+ * a game deciding for itself has to answer in the currency the engine does.
+ * `restore` and `write` are keyed by property name, which is the altitude the
+ * seam speaks: the engine's own plan is keyed by field slot.
+ */
+class NetwPredictRecovery : public RefCounted {
+    GDCLASS(NetwPredictRecovery, RefCounted)
+
+    Dictionary restored;
+    Dictionary written;
+    bool teleported = false;
+    bool skipped = true;
+
+protected:
+    static void _bind_methods();
+
+public:
+    static Ref<NetwPredictRecovery> of(
+        const Dictionary &p_restore,
+        const Dictionary &p_write,
+        bool p_teleport,
+        bool p_skip
+    );
+
+    Dictionary restore() const {
+        return restored;
+    }
+
+    Dictionary write() const {
+        return written;
+    }
+
+    bool teleport() const {
+        return teleported;
+    }
+
+    bool skip() const {
+        return skipped;
+    }
+};
+
+/* What one acknowledged transition was judged to be worth.
+ *
+ * `divergence` is a magnitude and `corrected` is not a threshold over it: in
+ * domain the two peers claimed reproducibility, so an exact predicate decides
+ * and the magnitude is only ever reported.
+ */
+struct Judgement {
+    double divergence = 0.0;
+    bool corrected = false;
+};
+
+/* One judgement, as the record the seam answers with.
+ *
+ * Minted rather than read back, because the seam it crosses is overridable and
+ * a game deciding for itself has to answer in the currency the engine does.
+ */
+class NetwPredictJudgement : public RefCounted {
+    GDCLASS(NetwPredictJudgement, RefCounted)
+
+    Judgement judged;
+
+protected:
+    static void _bind_methods();
+
+public:
+    static Ref<NetwPredictJudgement> of(double p_divergence, bool p_corrected);
+
+    double divergence() const {
+        return judged.divergence;
+    }
+
+    bool corrected() const {
+        return judged.corrected;
+    }
+};
+
+/* One drive choice, as the record the seam answers with.
+ *
+ * Minted rather than read back, because the seam it crosses is overridable and
+ * a game deciding for itself has to answer in the currency the engine does.
+ */
+class NetwPredictFold : public RefCounted {
+    GDCLASS(NetwPredictFold, RefCounted)
+
+    Fold decided;
+
+protected:
+    static void _bind_methods();
+
+public:
+    static Ref<NetwPredictFold> of(int64_t p_label, bool p_fresh, int p_kind);
+
+    int64_t label() const {
+        return decided.label;
+    }
+
+    bool fresh() const {
+        return decided.fresh;
+    }
+
+    int kind() const {
+        return int(decided.kind);
+    }
+};
+
 // Whole-engine simulation and prediction calculations for replicated entities.
 class NetwPredictionCore : public RefCounted {
     GDCLASS(NetwPredictionCore, RefCounted)
@@ -139,7 +247,7 @@ protected:
     static void _bind_methods();
 
 public:
-    static Dictionary evaluate(
+    static Ref<NetwPredictJudgement> evaluate(
         int domain,
         int verdict,
         const Dictionary &predicted,
@@ -161,17 +269,14 @@ public:
         int64_t frame_tick
     );
 
-    static Dictionary predict_fold(
+    static Ref<NetwPredictFold> predict_fold(
         int64_t latest_input_tick,
         int64_t last_driven_input_tick,
         int64_t frame_tick
     );
 
-    static Dictionary consume_plan(int depth, int buffer, bool warmed);
+    static int consume_action(int depth, int buffer);
 
-    // A set naming no causal field keeps the whole payload, because an empty
-    // scope agrees vacuously about everything and reports health it never
-    // measured.
     static Dictionary compared_state(
         const Dictionary &payload,
         const Dictionary &causal
@@ -190,7 +295,7 @@ public:
         const Dictionary &angles
     );
 
-    static Dictionary recover(
+    static Ref<NetwPredictRecovery> recover(
         const Dictionary &payload,
         int policy,
         int correction,
@@ -232,6 +337,8 @@ public:
 
     static int64_t fact_fingerprint(const Dictionary &facts);
 
+    static int64_t topology_fingerprint(const Dictionary &facts, int quantum);
+
     static int contact_count_bucket(int count);
 
     static int differing_family(
@@ -270,8 +377,6 @@ public:
         const Dictionary &angles
     );
 
-    // A type with no meaningful midpoint answers nil, and every caller
-    // restores it outright rather than stepping part of the way.
     static Variant pose_delta(
         const Variant &target,
         const Variant &current,

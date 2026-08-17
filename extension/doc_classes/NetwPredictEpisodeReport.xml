@@ -7,6 +7,12 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="active" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether an episode is open or in fallback. A report survives its own close, so the id alone cannot tell a live episode from the last one.
+			</description>
+		</method>
 		<method name="agreement_run" qualifiers="const">
 			<return type="int" />
 			<description>
@@ -23,6 +29,11 @@
 			</description>
 		</method>
 		<method name="attribution" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="breach_transition" qualifiers="const">
 			<return type="int" />
 			<description>
 			</description>

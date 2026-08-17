@@ -24,7 +24,7 @@ func _ready() -> void:
 
 
 func _arm_spawns() -> void:
-	var scene := NetwEntity.of(self).scene
+	var scene: NetwSceneHandle = NetwEntity.of(self).scene
 	if not scene.is_declared:
 		return
 	scene.on_participant_entered(_on_participant_entered)
@@ -44,7 +44,8 @@ func spawn_participant(participant: NetwParticipant) -> void:
 	if _has_vehicle(participant.join):
 		return
 
-	var ordered := NetwEntity.of(self).scene.participants
+	var scene: NetwSceneHandle = NetwEntity.of(self).scene
+	var ordered := scene.participants
 	ordered.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id

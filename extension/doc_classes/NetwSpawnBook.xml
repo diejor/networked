@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSpawnBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One session's spawn ledger: what is armed, what was issued, and what this peer materialized.
+	</brief_description>
+	<description>
+		The issued book answers in the order the session armed its spawns, which is stable and reproducible. That order is NOT ancestry order: a reparent can move an entity under a parent armed after it, so anything that reads a parent's answer before a child's iterates [method ancestry_order] instead.
+		A route is enrolled in the received book before its node is placed, so a locally applied spawn can never re-arm the route it just materialized.
+		[codeblock]
+		arm / take_armed        the verb ran, the node is still orphaned
+		issue / spawned_of      the SPAWN went out, and this is the replay book
+		enroll_recv / is_recv   this peer materialized the route from the server
+		[/codeblock]
+		Every record holds its node as an id, so a node freed while armed drops out of [method armed_records] answers rather than dangling. See [NetwSpawnRecord].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="despawn_order" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="route" type="int" />
+			<description>
+				[param route] and every issued route beneath it, ordered CHILDREN BEFORE the ancestor that contains them, which is [method ancestry_order] read backwards over that subtree alone. A receiver has to process a child's despawn before the ancestor's, for the same reason a spawn goes parent-first read backwards.
+				The whole order is answered before the first drop, so a caller iterating it is not reading a book it is mutating. A [param route] the book never issued answers empty, and a sibling subtree is never carried along.
+			</description>
+		</method>
+		<method name="ancestry_order" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				Every issued route with each one after its [member NetwSpawnRecord.parent_route]. Ancestry is the order a per-peer verdict has to be read in, because a child's verdict is clamped by its parent's.
+			</description>
+		</method>
+		<method name="arm">
+			<return type="void" />
+			<param index="0" name="record" type="NetwSpawnRecord" />
+			<description>
+				Arms [param record] under its own [member NetwSpawnRecord.route]. A record is its own key, so an armed route and the record's route can never name different spawns.
+			</description>
+		</method>
+		<method name="armed_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many spawns are armed and not yet placed.
+			</description>
+		</method>
+		<method name="armed_records" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every armed record, in arm order.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Drops all three books. A node still armed is reported, because reaching here with one means a replicated node was never placed in the tree.
+			</description>
+		</method>
+		<method name="drop_armed">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Forgets an armed route without taking its record, and answers whether it was there.
+			</description>
+		</method>
+		<method name="drop_recv">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Forgets a materialized route, and answers whether it was there.
+			</description>
+		</method>
+		<method name="drop_spawned">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Drops an issued route from the replay book, and answers whether it was there.
+			</description>
+		</method>
+		<method name="enroll_recv">
+			<return type="void" />
+			<param index="0" name="route" type="int" />
+			<param index="1" name="node" type="Node" />
+			<description>
+				Claims [param route] for a node this peer materialized from the server. It runs before the node is placed, so the route is claimed while the node is still orphaned and a locally applied spawn can never re-arm it.
+			</description>
+		</method>
+		<method name="has_armed" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Whether [param route] is armed and not yet placed.
+			</description>
+		</method>
+		<method name="has_spawned" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Whether [param route] was issued from here.
+			</description>
+		</method>
+		<method name="is_recv" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Whether [param route] was materialized on this peer from the server.
+			</description>
+		</method>
+		<method name="issue">
+			<return type="void" />
+			<param index="0" name="record" type="NetwSpawnRecord" />
+			<description>
+				Records that [param record]'s spawn went out, under the same key [method arm] used.
+			</description>
+		</method>
+		<method name="recv_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many routes this peer materialized from the server.
+			</description>
+		</method>
+		<method name="spawned_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many spawns this peer has issued.
+			</description>
+		</method>
+		<method name="recipe_base" qualifiers="static">
+			<return type="String" />
+			<param index="0" name="record" type="NetwSpawnRecord" />
+			<param index="1" name="fallback_scene_path" type="String" />
+			<param index="2" name="fallback_name" type="String" />
+			<description>
+				The stem an auto-assigned entity id is built from: the scene's basename for [constant RECIPE_SCENE], the spawn function's name for [constant RECIPE_FN], the registered id for [constant RECIPE_FN_REGISTRY].
+				Every other recipe has no stem of its own, so it falls to [param fallback_scene_path]'s basename and then to [param fallback_name], which are the spawning node's own scene and name. A null [param record] takes the same fallback, because an id still has to be assignable when the record is gone.
+			</description>
+		</method>
+		<method name="parent_admits" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				Whether [param route]'s issued parent already counts [param peer] among its recipients, which is the clamp a spawn owes: a peer that receives a child before its parent has nowhere to put it.
+				This reads the MATERIALIZED recipients rather than the desired ones, so it answers "may this be sent now" rather than "should this be there at all". A route with no parent, a route whose parent the book does not hold, and a route the book never issued are all UNCLAMPED, because a clamp against an absent parent would strand a record nothing can ever release.
+			</description>
+		</method>
+		<method name="spawn_is_duplicate" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<param index="1" name="state" type="int" />
+			<description>
+				Whether an arriving spawn for [param route] is one this peer already stood up. True where the book already enrolled a received node for the route, and true where [param state] is [constant NetwLivenessCore.STATE_LIVE] or [constant NetwLivenessCore.STATE_LINGERING].
+				A [constant NetwLivenessCore.STATE_DEAD] route is NOT a duplicate, and that is the whole reason this is a verb rather than a comparison. Spawn and despawn share one reliable ordered channel, so a spawn arriving after the despawn that tombstoned a route is an interest RE-ADMISSION reviving the entity, never a stale packet. Reading DEAD as "already handled" drops the revival and the entity never comes back.
+			</description>
+		</method>
+		<method name="spawned_of" qualifiers="const">
+			<return type="NetwSpawnRecord" />
+			<param index="0" name="route" type="int" />
+			<description>
+				The issued record for [param route], or [code]null[/code].
+			</description>
+		</method>
+		<method name="spawned_records" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every issued record, in arm order.
+			</description>
+		</method>
+		<method name="spawned_routes" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				Every issued route, in arm order. It is a copy, so a caller may drop routes while walking it.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="RECIPE_SCENE" value="0" enum="Recipe">
+			The node reconstructs by instantiating its [member Node.scene_file_path].
+		</constant>
+		<constant name="RECIPE_FN" value="1" enum="Recipe">
+			The node reconstructs by invoking a spawn function on a host object that exists on every peer.
+		</constant>
+		<constant name="RECIPE_SPAWNER" value="2" enum="Recipe">
+			The node reconstructs through a [MultiplayerSpawner], addressed by anchor with the spawner's own scene-index compression.
+		</constant>
+		<constant name="RECIPE_ADOPT" value="3" enum="Recipe">
+			The node is not reconstructed at all: every peer already holds it at the frame's parent anchor and name, and the frame only stamps identity onto the existing instance.
+		</constant>
+		<constant name="RECIPE_FN_REGISTRY" value="4" enum="Recipe">
+			The node reconstructs by invoking a spawn function the session registered under a stable id, resolved from the id alone with no host node.
+		</constant>
+	</constants>
+</class>

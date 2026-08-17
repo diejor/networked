@@ -205,16 +205,27 @@ void revival_is_a_new_epoch(const Trace &t) {
     core->tombstone_routes_data(one(route));
     t.state(core, "first_dead", route, first);
 
-    const RID second = core->entity_create();
-    core->bind_route(second, route);
-    t.state(core, "second_live", route, second);
+    const RID stranger = core->entity_create();
+    t.row(
+        "rename",
+        Fields().put(
+            "bound",
+            core->bind_route(stranger, route) ? "true" : "false"
+        )
+    );
+
+    t.row(
+        "revive",
+        Fields().put("bound", core->bind_route(first, route) ? "true" : "false")
+    );
+    t.state(core, "second_live", route, first);
     t.row(
         "identity",
         Fields()
-            .put("first_still_dead", state_name(core->state_of(first)))
+            .put("epoch", core->epoch_of(first))
             .put(
-                "route_holds_second",
-                core->rid_from_route(route) == second ? "true" : "false"
+                "route_holds_first",
+                core->rid_from_route(route) == first ? "true" : "false"
             )
     );
 }

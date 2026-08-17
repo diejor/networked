@@ -37,6 +37,7 @@
 		<method name="create" qualifiers="static">
 			<return type="NetwPredictAckFrame" />
 			<description>
+				An empty frame planned against the declared schema, or [code]null[/code] when that schema declares no fixed-width row.
 			</description>
 		</method>
 		<method name="e_digests" qualifiers="const">
@@ -63,6 +64,8 @@
 			<return type="NetwPredictAckFrame" />
 			<param index="0" name="bytes" type="PackedByteArray" />
 			<description>
+				The frame [param bytes] states, or [code]null[/code] when the bytes are not a complete frame of this plan.
+				A caller counts the refusal and drops the datagram, because a partial window has no honest reading.
 			</description>
 		</method>
 		<method name="post_family_fps" qualifiers="const">

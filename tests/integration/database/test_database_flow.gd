@@ -122,11 +122,16 @@ func test_unregistered_table_read_is_non_destructive() -> void:
 	var fetched := await db.table(&"items").fetch(&"sword")
 	assert_that(fetched).is_null()
 
-	var raw_after: Dictionary = backend.find_by_id(&"items", &"sword")
+	var raw_after: Dictionary = await NetwDatabase.settled_value(
+		backend.find_by_id(&"items", &"sword"),
+		{ },
+	)
 	assert_that(raw_after.is_empty()).is_false()
 
 	DirAccess.make_dir_recursive_absolute(test_dir.path_join("ghost_table"))
-	var err: Error = backend.initialize({ &"items": [&"damage"] })
+	var err: Error = await NetwDatabase.settled_error(
+		backend.initialize({ &"items": [&"damage"] }),
+	)
 	assert_that(err).is_equal(OK)
 
 
@@ -220,5 +225,8 @@ func _assert_fail_policy_keeps_record() -> void:
 	assert_that(out_err[0]).is_equal(ERR_UNCONFIGURED)
 	assert_that(record.is_empty()).is_true()
 
-	var raw: Dictionary = backend.find_by_id(&"gear", &"axe")
+	var raw: Dictionary = await NetwDatabase.settled_value(
+		backend.find_by_id(&"gear", &"axe"),
+		{ },
+	)
 	assert_that(raw.has(&"legacy_power")).is_true()

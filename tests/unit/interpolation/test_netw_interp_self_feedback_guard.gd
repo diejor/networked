@@ -17,15 +17,15 @@ class _Body:
 
 
 func _chase_runtime(self_feedback: bool) -> Dictionary:
-	var rt := DisplayCore._Runtime.new()
-	rt.config = DisplayCore._Config.new()
-	rt.playhead = DisplayCore._Playhead.new()
+	var rt := NetwDisplayRuntime.new()
+	rt.config = NetwDisplayDecl.new()
+	rt.playhead = NetwDisplayPlayhead.new()
 	rt.pump_mode = DisplayCore._PUMP_CHASE
 
 	var body := _Body.new()
 	body.value = 5.0
 
-	var state := DisplayCore._PropertyState.new()
+	var state := NetwDisplayChannel.new()
 	state.name = &"value"
 	state.spec = NetwInterpolate.new().lerp().smooth(0.05)
 	state.source_obj = body
@@ -43,13 +43,13 @@ func _chase_runtime(self_feedback: bool) -> Dictionary:
 
 
 func _history_runtime(self_feedback: bool, pump_mode: int) -> Dictionary:
-	var rt := DisplayCore._Runtime.new()
-	rt.config = DisplayCore._Config.new()
-	rt.playhead = DisplayCore._Playhead.new()
+	var rt := NetwDisplayRuntime.new()
+	rt.config = NetwDisplayDecl.new()
+	rt.playhead = NetwDisplayPlayhead.new()
 	rt.playhead.expected_interval_ticks = 1
 	rt.pump_mode = pump_mode
 
-	var state := DisplayCore._PropertyState.new()
+	var state := NetwDisplayChannel.new()
 	state.name = &"value"
 	state.spec = NetwInterpolate.new().lerp().smooth(0.05)
 	state.source_prop = &"value"

@@ -7,6 +7,17 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="admit_frame" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="channel" type="int" />
+			<param index="1" name="sender" type="int" />
+			<param index="2" name="controller" type="int" />
+			<param index="3" name="receiver_is_server" type="bool" />
+			<param index="4" name="payload_empty" type="bool" />
+			<param index="5" name="route_verdict" type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="attribute" qualifiers="static">
 			<return type="int" />
 			<param index="0" name="pre_equal" type="bool" />
@@ -39,20 +50,20 @@
 			<description>
 			</description>
 		</method>
-		<method name="consume_plan" qualifiers="static">
-			<return type="Dictionary" />
-			<param index="0" name="depth" type="int" />
-			<param index="1" name="buffer" type="int" />
-			<param index="2" name="warmed" type="bool" />
-			<description>
-			</description>
-		</method>
 		<method name="compared_state" qualifiers="static">
 			<return type="Dictionary" />
 			<param index="0" name="payload" type="Dictionary" />
 			<param index="1" name="causal" type="Dictionary" />
 			<description>
 				Narrows [param payload] to the fields named in [param causal], which are the only ones a comparison is entitled to judge. A [param causal] naming nothing keeps the whole payload, because an empty scope agrees vacuously about everything.
+			</description>
+		</method>
+		<method name="consume_action" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="depth" type="int" />
+			<param index="1" name="buffer" type="int" />
+			<description>
+				Whether a queue [param depth] deep is drawn from this pass, as a [enum NetwPredict.ConsumeAction]. [param buffer] is the depth the queue must exceed before anything is taken, so raising it moves the boundary and nothing else: the queue sits that much deeper and every arrival waits that much longer.
 			</description>
 		</method>
 		<method name="contact_count_bucket" qualifiers="static">
@@ -111,7 +122,7 @@
 			</description>
 		</method>
 		<method name="evaluate" qualifiers="static">
-			<return type="Dictionary" />
+			<return type="NetwPredictJudgement" />
 			<param index="0" name="domain" type="int" />
 			<param index="1" name="verdict" type="int" />
 			<param index="2" name="predicted" type="Dictionary" />
@@ -119,6 +130,17 @@
 			<param index="4" name="wiring" type="Dictionary" />
 			<param index="5" name="field_sink" type="Dictionary" />
 			<description>
+				Judges [param predicted] against the acknowledged [param payload], by the exact [param verdict] when [param domain] claimed reproducibility and by [param wiring]'s tolerances otherwise. [param field_sink] is cleared and refilled with the per-property error on every branch, as an argument rather than a return value so a caller already holding the dictionary keeps its reference.
+			</description>
+		</method>
+		<method name="topology_fingerprint" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="facts" type="Dictionary" />
+			<param index="1" name="quantum" type="int" />
+			<description>
+				[method fact_fingerprint] over [param facts] with [param quantum] folded in under the key [code skip-lint]quantum[/code], and nothing else.
+				The quantum is HOW MANY physics steps a drive actually bought, and it belongs in the topology hash because the physics server integrates on its own cadence: a drive and a solve are two events, and only their ratio makes a compared transition mean the same thing on both peers. Without it the boundary ladder walks to CLOSURE and reports that every antecedent agreed.
+				A different [param quantum] is therefore a different topology, deliberately.
 			</description>
 		</method>
 		<method name="fact_fingerprint" qualifiers="static">
@@ -156,11 +178,12 @@
 			</description>
 		</method>
 		<method name="predict_fold" qualifiers="static">
-			<return type="Dictionary" />
+			<return type="NetwPredictFold" />
 			<param index="0" name="latest_input_tick" type="int" />
 			<param index="1" name="last_driven_input_tick" type="int" />
 			<param index="2" name="frame_tick" type="int" />
 			<description>
+				Folds the newest input available and the one the previous frame drove into the one drive this frame applies. [param frame_tick] labels the pass when no input has arrived at all, which is the only case where the label comes from timing rather than from an input.
 			</description>
 		</method>
 		<method name="project_payload" qualifiers="static">
@@ -178,7 +201,7 @@
 			</description>
 		</method>
 		<method name="recover" qualifiers="static">
-			<return type="Dictionary" />
+			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
 			<param index="1" name="policy" type="int" />
 			<param index="2" name="correction" type="int" />

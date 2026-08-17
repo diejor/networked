@@ -77,28 +77,28 @@ const _Param := NetwMultiplayer.DisplayParam
 ## [member CanvasItem.top_level] set takes absolute writes on any channel.
 var visual_root: NodePath:
 	get:
-		return _read(_Param.DISPLAY_PARAM_VISUAL_ROOT, NodePath(""))
+		return _read(_Param.DISPLAY_PARAM_VISUAL_ROOT)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_VISUAL_ROOT, value)
 
 ## Display strategy override for this entity.
 var display_role: DisplayRole:
 	get:
-		return _read(_Param.DISPLAY_PARAM_ROLE, DisplayRole.AUTO)
+		return _read(_Param.DISPLAY_PARAM_ROLE)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_ROLE, value)
 
 ## Predicted display filter used for local prediction.
 var predicted_mode: PredictedMode:
 	get:
-		return _read(_Param.DISPLAY_PARAM_PREDICTED_MODE, PredictedMode.CHASE)
+		return _read(_Param.DISPLAY_PARAM_PREDICTED_MODE)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_PREDICTED_MODE, value)
 
 ## Exponential smoothing time for [constant PredictedMode.CHASE].
 var predicted_smooth_time: float:
 	get:
-		return _read(_Param.DISPLAY_PARAM_PREDICTED_SMOOTH_TIME, 0.0)
+		return _read(_Param.DISPLAY_PARAM_PREDICTED_SMOOTH_TIME)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_PREDICTED_SMOOTH_TIME, value)
 
@@ -117,14 +117,14 @@ var predicted_smooth_time: float:
 ## train from winding the visual away from the body.
 var chase_glide_time: float:
 	get:
-		return _read(_Param.DISPLAY_PARAM_CHASE_GLIDE_TIME, 0.15)
+		return _read(_Param.DISPLAY_PARAM_CHASE_GLIDE_TIME)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_CHASE_GLIDE_TIME, value)
 
 ## Enables display lag adaptation for remote interpolation.
 var enable_smart_dilation: bool:
 	get:
-		return _read(_Param.DISPLAY_PARAM_SMART_DILATION, true)
+		return _read(_Param.DISPLAY_PARAM_SMART_DILATION)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_SMART_DILATION, value)
 
@@ -134,7 +134,7 @@ var enable_smart_dilation: bool:
 ## an authored or predicted display ignores this.
 var timeline_mode: TimelineMode:
 	get:
-		return _read(_Param.DISPLAY_PARAM_TIMELINE_MODE, TimelineMode.BUFFERED)
+		return _read(_Param.DISPLAY_PARAM_TIMELINE_MODE)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_TIMELINE_MODE, value)
 
@@ -143,49 +143,49 @@ var timeline_mode: TimelineMode:
 ## stalled stream freezes at the cap instead of drifting away.
 var max_forecast_ticks: int:
 	get:
-		return _read(_Param.DISPLAY_PARAM_MAX_FORECAST_TICKS, 6)
+		return _read(_Param.DISPLAY_PARAM_MAX_FORECAST_TICKS)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_MAX_FORECAST_TICKS, value)
 
 ## Maximum extra ticks that display lag can grow while starving.
 var max_extra_dilation: float:
 	get:
-		return _read(_Param.DISPLAY_PARAM_MAX_EXTRA_DILATION, 0.0)
+		return _read(_Param.DISPLAY_PARAM_MAX_EXTRA_DILATION)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_MAX_EXTRA_DILATION, value)
 
 ## Per frame fraction used to track the measured lag floor.
 var lag_adapt_rate: float:
 	get:
-		return _read(_Param.DISPLAY_PARAM_LAG_ADAPT_RATE, 0.05)
+		return _read(_Param.DISPLAY_PARAM_LAG_ADAPT_RATE)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_LAG_ADAPT_RATE, value)
 
 ## Ticks per frame added after starvation is sustained.
 var starvation_growth: float:
 	get:
-		return _read(_Param.DISPLAY_PARAM_STARVATION_GROWTH, 0.95)
+		return _read(_Param.DISPLAY_PARAM_STARVATION_GROWTH)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_STARVATION_GROWTH, value)
 
 ## Per frame fraction used to low pass the lag floor.
 var floor_smoothing: float:
 	get:
-		return _read(_Param.DISPLAY_PARAM_FLOOR_SMOOTHING, 0.05)
+		return _read(_Param.DISPLAY_PARAM_FLOOR_SMOOTHING)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_FLOOR_SMOOTHING, value)
 
 ## Starving frames tolerated before lag starts growing.
 var starvation_grace_frames: int:
 	get:
-		return _read(_Param.DISPLAY_PARAM_STARVATION_GRACE_FRAMES, 3)
+		return _read(_Param.DISPLAY_PARAM_STARVATION_GRACE_FRAMES)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_STARVATION_GRACE_FRAMES, value)
 
 ## Frames between interpolation trace logs. [code]0[/code] disables logs.
 var trace_interval: int:
 	get:
-		return _read(_Param.DISPLAY_PARAM_TRACE_INTERVAL, 0)
+		return _read(_Param.DISPLAY_PARAM_TRACE_INTERVAL)
 	set(value):
 		_write(_Param.DISPLAY_PARAM_TRACE_INTERVAL, value)
 
@@ -241,7 +241,7 @@ func channel_census() -> Dictionary:
 		return { &"channels": 0, &"ambiguous": 0 }
 	return {
 		&"channels": runtime.states.size(),
-		&"ambiguous": runtime.ambiguous_targets.size(),
+		&"ambiguous": runtime.tracks.ambiguous_count(),
 	}
 
 ## Read-only count of pump passes this entity's display has taken.
@@ -278,9 +278,11 @@ var starvation_ticks: int:
 		return runtime.playhead.starvation_ticks if runtime else 0
 
 var _entity_ref: WeakRef
-# Settings authored on this handle, kept so they can be re-applied to the
-# record the core builds for each of the entity's lives.
-var _authored: Dictionary[int, Variant] = { }
+# The entity's display declaration. The book publishes this same object under
+# the entity's RID once the session knows it, so a setting authored before the
+# entity is live and one written through the flat verb after it land on one
+# record rather than on two that can disagree.
+var _decl := NetwDisplayDecl.new()
 
 
 ## Snaps [param property] to [param value] and clears its history.
@@ -355,7 +357,7 @@ func displayed_authoring_tick() -> int:
 	var runtime := _runtime()
 	if not iface or not runtime:
 		return -1
-	return iface._displayed_authoring_tick(runtime)
+	return runtime.authoring_tick()
 
 
 ## Returns the [NetwRingBuffer] for [param property], or [code]null[/code].
@@ -371,7 +373,7 @@ func get_buffer(property: StringName) -> NetwRingBuffer:
 	var runtime := _runtime()
 	if not iface or not runtime:
 		return null
-	return iface._get_buffer(runtime, property)
+	return runtime.buffer_of(property)
 
 
 ## Temporarily disables interpolation for about [param duration] seconds.
@@ -421,44 +423,31 @@ func _entity_rid() -> RID:
 	return ent.rid if ent else RID()
 
 
-func _runtime() -> DisplayCore._Runtime:
+func _runtime() -> NetwDisplayRuntime:
 	var iface := _interface()
 	return iface._runtime_for_handle(self) if iface else null
 
 
-# Writes one setting through the flat verb, or buffers it when the entity has
-# no live RID to address yet.
+# Writes one setting through the flat verb, which repairs whatever the write
+# invalidated. A session that does not know the entity yet has nothing to
+# repair, so the write lands on the declaration alone.
 func _write(param: int, value: Variant) -> void:
 	var api := _flat_api()
 	var rid := _entity_rid()
-	if api and rid.is_valid():
+	if api and api._native_core.liveness_core.entity_is_valid(rid):
 		api.display_set_param(rid, param, value)
 		return
-	_record(param, value)
+	_decl.set_param(param, value)
 
 
-# Journals one setting for replay. The core calls this for every write that
-# reaches it, whatever spelling made the write, so a setting outlives the
-# record it landed on.
-func _record(param: int, value: Variant) -> void:
-	_authored[param] = value
+# Reads one setting, which answers its declared default until something writes
+# it.
+func _read(param: int) -> Variant:
+	return _decl.get_param(param)
 
 
-# Reads one setting from the core, falling back to the authored buffer while
-# the entity has no live RID.
-func _read(param: int, fallback: Variant) -> Variant:
-	var api := _flat_api()
-	var rid := _entity_rid()
-	if api and rid.is_valid():
-		var value: Variant = api.display_get_param(rid, param)
-		if value != null:
-			return value
-	return _authored.get(param, fallback)
-
-
-# Drains the authored buffer onto a config record the core has just created.
-# Called once per entity life, because liveness hands a re-admitted entity a
-# fresh RID and with it a fresh record.
-func _author_into(config: DisplayCore._Config) -> void:
-	for param: int in _authored:
-		DisplayCore._apply_config_param(config, param, _authored[param])
+# The declaration this handle authors into, for the book to publish under the
+# entity's RID. Liveness hands a re-admitted entity a fresh RID, and the same
+# declaration is published again under it.
+func _declaration() -> NetwDisplayDecl:
+	return _decl

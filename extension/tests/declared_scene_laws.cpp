@@ -29,6 +29,13 @@ Scenario moved_entity() {
     return scenario;
 }
 
+Scenario relocated_entity() {
+    Scenario scenario = seated_entity();
+    scenario.label = "relocated-entity";
+    scenario.move(1, "Crate", "Annex");
+    return scenario;
+}
+
 // An inner scene seated inside an outer one. Both enclose the crate by
 // ancestry, and only the inner one owns it.
 Scenario nested_scene() {
@@ -70,9 +77,10 @@ LawVerdict law_membership_follows_the_tree(const ScenarioRun &p_run) {
     if (!arena.taken() || !annex.taken()) {
         return law_broken("a declared scene answered nothing");
     }
-    const bool moved = p_run.scenario().declares("seat");
-    const Membership &home = moved ? annex : arena;
-    const Membership &vacated = moved ? arena : annex;
+    const bool relocated = p_run.scenario().declares("seat")
+        || p_run.scenario().declares("move");
+    const Membership &home = relocated ? annex : arena;
+    const Membership &vacated = relocated ? arena : annex;
     if (!home.encloses("Crate")) {
         return law_broken(
             "the scene the crate is seated in encloses %d entities and not it",
@@ -222,6 +230,57 @@ const LawRow L_ADMIT = {
 };
 
 TEST_CASE(
+    "[Networked][Scene][Declared] the scene facet is consumed at arm, so a "
+    "live entity refuses both writes"
+) {
+    LoopbackRig rig(0);
+    const godot::RID scene = rig.declare_scene("Arena");
+
+    NETW_CHECK_EQ(
+        int(rig.server()->call("scene_declare", scene)),
+        int(godot::ERR_UNCONFIGURED)
+    );
+    NETW_CHECK_EQ(
+        int(rig.server()->call("scene_undeclare", scene)),
+        int(godot::ERR_UNCONFIGURED)
+    );
+    CHECK(bool(rig.server()->call("scene_is_declared", scene)));
+}
+
+TEST_CASE(
+    "[Networked][Scene][Declared] a scene that declared itself carries the "
+    "facet and answers under the name it declared"
+) {
+    LoopbackRig rig(0);
+    const godot::RID scene = rig.declare_scene("DeclaredArena");
+
+    // The two halves a self-declaring root buys: the record carries the facet,
+    // and the label it declared is what every scene verb reads it under.
+    CHECK(bool(rig.server()->call("scene_is_declared", scene)));
+    CHECK(
+        godot::StringName(rig.server()->call("scene_get_param", scene, 0))
+        == godot::StringName("DeclaredArena")
+    );
+
+    // An entity built the same way MINUS the declaration carries neither, which
+    // is what makes the facet the thing that distinguishes a scene rather than
+    // the wrapper or the container being there.
+    godot::Object *api = rig.server();
+    const godot::RID plain = api->call("entity_create");
+    godot::Node *body = memnew(godot::Node);
+    body->set_name("Crate");
+    NETW_CHECK_GT(int(api->call("entity_admit", plain)), 0);
+    NETW_CHECK_EQ(
+        int(api->call("entity_bind_node", plain, body)),
+        int(godot::OK)
+    );
+
+    CHECK_FALSE(bool(api->call("scene_is_declared", plain)));
+
+    memdelete(body);
+}
+
+TEST_CASE(
     "[Networked][Scene][Declared][Law] a seated entity belongs to its scene"
 ) {
     const Scenario scenario = seated_entity();
@@ -247,6 +306,31 @@ TEST_CASE(
     "[Networked][Scene][Declared][Law] an enrolled membership misses the move"
 ) {
     const Scenario scenario = moved_entity();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run
+        = ScenarioRun::scenes(rig, scenario, PLANT_ENROLLED_MEMBERSHIP);
+    REQUIRE(run.regime_reached());
+    NETW_CELL(L_MEMBER, scenario);
+    NETW_LAW_BREAKS(L_MEMBER, run);
+}
+
+TEST_CASE(
+    "[Networked][Scene][Declared][Law] a published move carries the "
+    "membership with it"
+) {
+    const Scenario scenario = relocated_entity();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::scenes(rig, scenario);
+    REQUIRE(run.regime_reached());
+    NETW_CELL(L_MEMBER, scenario);
+    NETW_LAW_HOLDS(L_MEMBER, run);
+}
+
+TEST_CASE(
+    "[Networked][Scene][Declared][Law] an enrolled membership misses the "
+    "published move"
+) {
+    const Scenario scenario = relocated_entity();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run
         = ScenarioRun::scenes(rig, scenario, PLANT_ENROLLED_MEMBERSHIP);

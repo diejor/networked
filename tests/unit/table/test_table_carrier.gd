@@ -92,10 +92,10 @@ func test_a_carried_frame_lands_and_binds_its_routes() -> void:
 	)
 	assert_int(api.table_get_tick(table)).is_equal(3)
 	for route in [4, 5]:
-		assert_int(api.route_get_state(route)).is_equal(
+		assert_int(api.entity_get_state(api.entity_from_route(route))).is_equal(
 			NetwMultiplayer.EntityState.LIVE,
 		)
-		assert_bool(api.rid_from_route(route).is_valid()).is_true()
+		assert_bool(api.entity_from_route(route).is_valid()).is_true()
 
 
 ## Verify a table frame from anyone but the authority is refused before it is

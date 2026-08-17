@@ -271,4 +271,31 @@ TEST_CASE(
     );
 }
 
+TEST_CASE(
+    "[Networked][Wire][Hosted] a diff it cannot take names every column, not "
+    "none"
+) {
+    const WirePlan plan
+        = WirePlan::compile(sealed("Foreign", 4, SchemaCore::I16));
+    REQUIRE(plan.valid());
+    CodeRow good = CodeRow::for_plan(plan);
+    REQUIRE(good.write(plan.column(0), 0, 11));
+    CodeRow foreign;
+
+    // A row that is not this plan's cannot be diffed, and the answer decides
+    // what the lane does about it. Zero reads as a caught-up peer and costs
+    // the pass nothing, so a row the sender cannot interpret would strand the
+    // receiver silently and for good. Every column is the answer the baseline
+    // book already gives a peer whose baseline it does not hold: when the diff
+    // is unknown, send the row.
+    NETW_CHECK_EQ(
+        CodeRow::changed_mask(plan, foreign, good),
+        plan.full_mask()
+    );
+    NETW_CHECK_EQ(
+        CodeRow::changed_mask(plan, good, foreign),
+        plan.full_mask()
+    );
+}
+
 } // namespace TestNetwWireCodeRow

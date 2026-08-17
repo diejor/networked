@@ -3,7 +3,6 @@
 #include "godot/ref_counted.hpp"
 
 #if defined(NETW_MODULE)
-// The generated macros need Object, which ref_counted.hpp brings.
 #include "core/object/gdvirtual.gen.h"
 #elif defined(NETW_GDEXTENSION)
 #include <godot_cpp/core/binder_common.hpp>

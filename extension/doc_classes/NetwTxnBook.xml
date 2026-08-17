@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwTxnBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The requests a peer is still waiting on an answer to: who each one addressed, and the tick its patience runs out on.
+	</brief_description>
+	<description>
+		This book holds no promise and settles nothing. What it decides is who may answer a request and when one has waited long enough, and those two questions have to agree across three paths that never see each other: a reply arriving, a timeout sweep, and a peer dropping. The caller above turns each answer into a settle.
+		[codeblock]
+		var txn := book.mint()
+		book.open(txn, PackedInt64Array([peer_id]), current_tick + timeout)
+		# a reply arrives
+		if book.admits(txn, sender):
+			settle(txn, value)
+			book.close(txn)
+		# every tick
+		for id in book.expire(current_tick):
+			fail(id, ERR_TIMEOUT)
+		# a peer drops
+		for id in book.waiting_on(peer_id):
+			...
+		[/codeblock]
+		Ids are minted here and never reused, so a reply that arrives after its transaction closed names a transaction that no longer exists rather than a live one that happens to share its number.
+		Every answer is in minting order, so a sweep that settles a hundred requests settles them the same way twice.
+		Every answer this book gives comes back in minting order, ascending, so a sweep that settles a hundred requests settles them the same way twice.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="addressed" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="txn_id" type="int" />
+			<description>
+				The peers [param txn_id] was sent to. A transaction that is not open addressed nobody.
+			</description>
+		</method>
+		<method name="admits" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="txn_id" type="int" />
+			<param index="1" name="sender" type="int" />
+			<description>
+				Whether [param txn_id] addressed [param sender]. An answer from anyone else, or to a transaction that has closed, is not this request's, and honouring it would let any peer settle a request made of another.
+			</description>
+		</method>
+		<method name="close">
+			<return type="bool" />
+			<param index="0" name="txn_id" type="int" />
+			<description>
+				Forgets [param txn_id], answering whether it was open. Its id is not reused.
+			</description>
+		</method>
+		<method name="drain">
+			<return type="PackedInt64Array" />
+			<description>
+				Every open transaction, emptying the book as it names them, so a settle that opens a new request cannot see the ones being abandoned. This is what a session teardown asks for.
+			</description>
+		</method>
+		<method name="expire">
+			<return type="PackedInt64Array" />
+			<param index="0" name="current" type="int" />
+			<description>
+				Every open transaction whose deadline is at or before [param current], closed as it is named. Naming and closing are one act, so a second sweep at the same tick names none of them again and a caller cannot fail a request twice.
+			</description>
+		</method>
+		<method name="is_open" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="txn_id" type="int" />
+			<description>
+				Whether [param txn_id] is still waiting on an answer.
+			</description>
+		</method>
+		<method name="mint">
+			<return type="int" />
+			<description>
+				The next transaction id, counting from one and never repeating within a session. Minting does not open anything, because a caller that fails to build its request should not leave a transaction behind.
+			</description>
+		</method>
+		<method name="open">
+			<return type="void" />
+			<param index="0" name="txn_id" type="int" />
+			<param index="1" name="addressed" type="PackedInt64Array" />
+			<param index="2" name="deadline" type="int" />
+			<description>
+				Records that [param txn_id] was sent to [param addressed] and gives up at [param deadline], a tick on the same clock [method expire] is swept with.
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many transactions are open.
+			</description>
+		</method>
+		<method name="waiting_on" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Every open transaction that addressed [param peer_id]. A peer dropping is not a timeout, so this names what the caller must settle now rather than closing anything itself.
+			</description>
+		</method>
+	</methods>
+</class>

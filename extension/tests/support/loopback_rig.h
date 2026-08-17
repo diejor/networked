@@ -37,6 +37,9 @@
 #include "godot/ref_counted.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/entity.hpp"
+#include "netw/join_payload.hpp"
+#include "netw/promise.hpp"
 #include "netw/table/schema_core.hpp"
 #include "netw/transport/loopback.hpp"
 #include "world_decl.h"
@@ -57,8 +60,6 @@ namespace netw_test {
 class LoopbackRig {
     static constexpr const char *API_SCRIPT
         = "res://addons/networked/replication/netw_multiplayer.gd";
-    static constexpr const char *ENTITY_SCRIPT
-        = "res://addons/networked/context/session/netw_entity.gd";
 
     godot::Ref<netw::LocalLoopbackSession> link;
     godot::Ref<godot::RefCounted> server_api;
@@ -100,13 +101,6 @@ class LoopbackRig {
             api->set("multiplayer_peer", p_peer);
         }
         return api;
-    }
-
-    static godot::Ref<godot::Script> entity_script() {
-        godot::Ref<godot::Script> script
-            = godot::ResourceLoader::get_singleton()->load(ENTITY_SCRIPT);
-        REQUIRE_MESSAGE(script.is_valid(), "the record script did not load");
-        return script;
     }
 
     static godot::Ref<godot::RefCounted> make_resource(const char *p_path) {
@@ -165,12 +159,19 @@ class LoopbackRig {
     ) const {
         godot::Object *api = p_api;
         REQUIRE_MESSAGE(api != nullptr, "a declaration needs a session");
-        const godot::RID entity = api->call("entity_create");
+        // A declared route the session already stands on is that entity, not a
+        // second name for it, so the declaration resolves before it mints.
+        godot::RID entity = p_decl.route() > 0
+            ? godot::RID(api->call("entity_from_route", p_decl.route()))
+            : godot::RID();
+        if (!entity.is_valid()) {
+            entity = api->call("entity_create");
+        }
         REQUIRE_MESSAGE(entity.is_valid(), "entity_create returned no handle");
 
         const int route = p_decl.route() > 0
             ? p_decl.route()
-            : int(api->call("entity_allocate_route", entity));
+            : int(api->call("entity_admit", entity));
         const godot::Error bound
             = godot::Error(int(api->call("entity_bind_route", entity, route)));
         REQUIRE_MESSAGE(bool(bound == godot::OK), "the route did not bind");
@@ -413,6 +414,27 @@ public:
         return client_apis[p_index].ptr();
     }
 
+    int client_count() const {
+        return client_apis.size();
+    }
+
+    // The client's own handle on a declared entity, or an invalid RID when it
+    // has not mirrored one. Unlike `entity_of` this ASKS rather than requires,
+    // because a law about what a peer cannot answer has to be able to run on a
+    // peer that never saw the entity.
+    godot::RID client_entity_of(
+        int p_client,
+        const godot::StringName &p_name
+    ) const {
+        if (p_client < 0 || p_client >= client_declared.size()) {
+            return godot::RID();
+        }
+        const godot::HashMap<godot::StringName, godot::RID>::ConstIterator found
+            = client_declared[p_client].find(p_name);
+        return found != client_declared[p_client].end() ? found->value
+                                                        : godot::RID();
+    }
+
     // Ids are drawn rather than counted, so this is the only way to name a
     // peer. Nothing may hardcode one. A negative index names the server, as it
     // does for [method peer].
@@ -499,6 +521,32 @@ public:
         return entity;
     }
 
+    godot::Object *join(
+        int p_client,
+        const godot::StringName &p_username = godot::StringName()
+    ) {
+        godot::Object *api = p_client < 0 ? server() : client(p_client);
+        godot::Object *session = api->get("_session");
+        REQUIRE_MESSAGE(session != nullptr, "the session machine is missing");
+        godot::Ref<netw::JoinPayload> payload;
+        payload.instantiate();
+        payload->set_username(p_username);
+        session->call("submit_join", payload);
+        pump(4);
+        return godot::Object::cast_to<godot::Object>(
+            api->get("local_participant")
+        );
+    }
+
+    godot::Ref<netw::NetwEntity> declare_unrecorded_wrapper(
+        const godot::StringName &p_name
+    ) {
+        Carrier *owner = memnew(Carrier);
+        owner->set_name(p_name);
+        owned_nodes.push_back(owner);
+        return netw::NetwEntity::ensure(owner);
+    }
+
     godot::RID declare_mirror(int p_client, const EntityDecl &p_decl) {
         REQUIRE_MESSAGE(p_decl.route() > 0, "a mirror needs an admitted route");
         Carrier *owner = mint_owner(p_decl);
@@ -556,7 +604,7 @@ public:
         container->add_child(level);
         owned_nodes.push_back(container);
 
-        NETW_CHECK_GT(int(api->call("entity_allocate_route", scene)), 0);
+        NETW_CHECK_GT(int(api->call("entity_admit", scene)), 0);
         NETW_CHECK_EQ(
             int(api->call("entity_bind_node", scene, container)),
             int(godot::OK)
@@ -573,6 +621,56 @@ public:
     // `scene_move` verb refuses here rather than doing this: it resolves a
     // destination through the registry `tree_entered` fills, and a declared
     // container never enters a tree.
+    godot::Object *enter_scene(const godot::StringName &p_name) {
+        godot::Object *scenes = server()->get("_scenes");
+        REQUIRE_MESSAGE(scenes != nullptr, "the session has no scene core");
+        godot::Node *container = node_of(entity_of(p_name));
+        REQUIRE_MESSAGE(container != nullptr, "the scene has no container");
+        scenes->call("_on_scene_entered", container);
+        pump();
+        return scenes;
+    }
+
+    godot::RID mirror_scene(int p_client, const godot::StringName &p_name) {
+        const godot::RID origin = entity_of(p_name);
+        REQUIRE_MESSAGE(origin.is_valid(), "the scene was never declared");
+        const int route = int(server()->call("entity_get_route", origin));
+        REQUIRE_MESSAGE(route > 0, "the scene holds no route to mirror");
+
+        godot::Object *api = client(p_client);
+        godot::RID mirror
+            = godot::RID(api->call("entity_from_route", route));
+        if (!mirror.is_valid()) {
+            mirror = api->call("entity_create");
+        }
+        REQUIRE_MESSAGE(mirror.is_valid(), "entity_create returned no handle");
+        NETW_CHECK_EQ(
+            int(api->call("entity_bind_route", mirror, route)),
+            int(godot::OK)
+        );
+        NETW_CHECK_EQ(int(api->call("scene_declare", mirror)), int(godot::OK));
+
+        godot::Node *container = memnew(godot::Node);
+        container->set_name("Scene");
+        godot::Node *level = memnew(godot::Node);
+        level->set_name(
+            godot::String(server()->call("scene_get_param", origin, 0))
+        );
+        container->add_child(level);
+        owned_nodes.push_back(container);
+        NETW_CHECK_EQ(
+            int(api->call("entity_bind_node", mirror, container)),
+            int(godot::OK)
+        );
+
+        godot::Object *scenes = api->get("_scenes");
+        REQUIRE_MESSAGE(scenes != nullptr, "the client has no scene core");
+        scenes->call("_on_scene_entered", container);
+        pump();
+        client_declared.ptrw()[p_client][p_name] = mirror;
+        return mirror;
+    }
+
     void seat(const godot::RID &p_entity, const godot::RID &p_scene) {
         godot::Node *body = node_of(p_entity);
         godot::Node *level = content_of(p_scene);
@@ -581,12 +679,23 @@ public:
         if (body == nullptr || level == nullptr) {
             return;
         }
-        const godot::Ref<godot::RefCounted> record
-            = entity_script()->call("of", body);
+        const godot::Ref<netw::NetwEntity> record = netw::NetwEntity::of(body);
         REQUIRE_MESSAGE(record.is_valid(), "a seated entity needs a record");
         if (record.is_valid()) {
-            record->call("reparent_to", level);
+            record->reparent_to(level, godot::Ref<netw::NetwReparentOpts>());
         }
+        server()->call("interest_flush");
+    }
+
+    void move_scene(
+        const godot::RID &p_entity,
+        const godot::RID &p_destination
+    ) {
+        const godot::Ref<netw::NetwPromise> settled
+            = server()->call("scene_move", p_entity, p_destination);
+        REQUIRE_MESSAGE(settled.is_valid(), "scene_move returned no promise");
+        NETW_CHECK_EQ(int(settled.is_valid() && settled->get_is_settled()), 1);
+        NETW_CHECK_EQ(settled.is_valid() ? settled->get_code() : -1, 0);
         server()->call("interest_flush");
     }
 

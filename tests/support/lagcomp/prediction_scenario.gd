@@ -46,7 +46,7 @@ var _entity_counter: int = 0
 ## Must extend [LagCompSimBody] so the scripted [member LagCompSimBody.motion] and
 ## [member LagCompSimBody.bombing] input and the [PredictedEntity] metric slots
 ## still resolve. Defaults to the closed-form body. Point it at an alternate
-## closed-form subclass (a future predicted-action body) to drive that through the
+## closed-form subclass ([CarriedSimBody] is one) to drive that through the
 ## same rig. A real-physics [CharacterBody2D] does not fit here: the
 ## [LockstepStepper] never steps physics frames, so [method CharacterBody2D.move_and_slide]
 ## would not advance. That replay path lives in its own single-peer fixture
@@ -106,6 +106,8 @@ func add_predicted_entity(
 		missing_policy: PredictionComponent.MissingInput = \
 		PredictionComponent.MissingInput.STALL,
 		epsilon: float = 0.01,
+		schedule: PredictionComponent.Schedule = \
+		PredictionComponent.Schedule.TICK,
 ) -> PredictedEntity:
 	return await _add_entity(
 		_client_peer_id,
@@ -113,6 +115,7 @@ func add_predicted_entity(
 		input_props,
 		missing_policy,
 		epsilon,
+		schedule,
 	)
 
 
@@ -129,6 +132,8 @@ func add_host_entity(
 		missing_policy: PredictionComponent.MissingInput = \
 		PredictionComponent.MissingInput.STALL,
 		epsilon: float = 0.01,
+		schedule: PredictionComponent.Schedule = \
+		PredictionComponent.Schedule.TICK,
 ) -> PredictedEntity:
 	return await _add_entity(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -136,6 +141,7 @@ func add_host_entity(
 		input_props,
 		missing_policy,
 		epsilon,
+		schedule,
 	)
 
 
@@ -145,6 +151,7 @@ func _add_entity(
 		input_props: Array[StringName],
 		missing_policy: PredictionComponent.MissingInput,
 		epsilon: float,
+		schedule: PredictionComponent.Schedule,
 ) -> PredictedEntity:
 	_entity_counter += 1
 	var ename := "Predicted%d" % _entity_counter
@@ -152,7 +159,7 @@ func _add_entity(
 			.with_root(body_type) \
 			.with_state(state_props) \
 			.with_input(input_props) \
-			.with_prediction(missing_policy, epsilon)
+			.with_prediction(missing_policy, epsilon, schedule)
 
 	var server_root := builder.build() as LagCompSimBody
 	var client_root := builder.build() as LagCompSimBody
@@ -208,37 +215,28 @@ func run(n: int, per_tick: Callable = Callable()) -> void:
 		_stepper.sync_ticks(1)
 
 
-## Emits one client frame that bought [param ticks] of simulated time.
+## Advances both peers by [param n] frames, scripting client input each frame.
 ##
-## A FRAME-scheduled entity authors against the frame boundary rather than the
-## tick, so [param ticks] of zero is the frame the clock held: it carries the
-## command lane and opens no transition.
-func emit_client_frame(ticks: int) -> void:
-	_emit_frame(client_clock, ticks)
-
-
-## Emits one host frame that bought [param ticks] of simulated time, which is
-## how a pair from [method add_host_entity] is driven.
-func emit_host_frame(ticks: int) -> void:
-	_emit_frame(server_clock, ticks)
-
-
-func _emit_frame(clock: ClockCore, ticks: int) -> void:
-	clock.before_tick_loop.emit()
-	if ticks > 0:
-		clock.force_step(ticks)
-	clock.after_tick_loop.emit()
-
-
-## Hands [param p]'s pending client command frame to its server peer.
+## This is [method run] for a pair composed under
+## [constant NetwPredict.Schedule.FRAME]: that tier authors, sends its command
+## lane and consumes in the frame boundary rather than in the tick, so a pair
+## driven by [method run] stays at drive zero however many ticks it takes.
 ##
-## The command lane is the input carrier under [constant
-## NetwPredict.Schedule.FRAME], so a server that is never handed one starves
-## rather than replays.
-func deliver_command(p: PredictedEntity) -> void:
-	var bytes: PackedByteArray = p.client_prediction._engine().build_command_frame()
-	if not bytes.is_empty():
-		p.server_prediction._engine().receive_command_frame(bytes)
+## [param per_frame] is an optional [code]func(tick: int)[/code] callback run
+## after input is applied and before the frame steps.
+func run_frames(n: int, per_frame: Callable = Callable()) -> void:
+	for _i in range(n):
+		_apply_scripted_inputs(0.0, client_clock.tick)
+		if per_frame.is_valid():
+			per_frame.call(client_clock.tick)
+		_stepper.sync_frames(1)
+
+
+## Drives [method run_frames] at [param frames_per_tick] physics frames per
+## tick instead of at the ratio the clocks declare, which is a pair whose
+## cadence and declaration disagree.
+func drive_off_quantum(frames_per_tick: int) -> void:
+	_stepper.quantum_override = frames_per_tick
 
 
 ## Runs ticks until [param predicate] (a [code]func() -> bool[/code]) is true or

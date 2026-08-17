@@ -60,7 +60,10 @@ func test_flush_and_hydrate_round_trip_via_database() -> void:
 	var err: Error = await engine.flush()
 	assert_that(err).is_equal(OK)
 
-	var raw: Dictionary = backend.find_by_id(&"players", &"valeria")
+	var raw: Dictionary = await NetwDatabase.settled_value(
+		backend.find_by_id(&"players", &"valeria"),
+		{ },
+	)
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 	root.position = Vector2.ZERO
@@ -132,7 +135,10 @@ func test_table_repository_fetch_and_put_round_trip_entities() -> void:
 	var err: Error = await db.table(&"players").put(&"dave", dave)
 	assert_that(err).is_equal(OK)
 
-	var raw: Dictionary = backend.find_by_id(&"players", &"dave")
+	var raw: Dictionary = await NetwDatabase.settled_value(
+		backend.find_by_id(&"players", &"dave"),
+		{ },
+	)
 	assert_that(raw.get(&"score")).is_equal(77)
 
 

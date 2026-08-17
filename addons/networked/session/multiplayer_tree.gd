@@ -494,7 +494,7 @@ func _make_api() -> NetwMultiplayer:
 	return NetwMultiplayer.make(SceneMultiplayer.new(), api_script)
 
 
-func _process(dt: float) -> void:
+func _process(_dt: float) -> void:
 	if Engine.is_editor_hint():
 		return
 
@@ -503,7 +503,6 @@ func _process(dt: float) -> void:
 	# read inside it already tolerates having no peer.
 	if api:
 		api.poll()
-		api.persist_tick(dt)
 
 
 # Builds the host config from this tree's exported authoring, layering the

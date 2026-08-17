@@ -1,18 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwSceneCore" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The scene column's record plane: a routing table keyed by scene identity, and the one scene request in flight.
+		The scene column's record plane: which scenes are live, a routing table keyed by scene identity, and the one scene request in flight.
 	</brief_description>
 	<description>
 		It holds no [Node] and instantiates nothing, which is what makes a registration outlive the scene it names. A scene is identified by the entity [RID] it is keyed under rather than by whichever node is currently standing in for it, so rebuilding a scene does not silently drop everyone watching it. Everything that reaches a [Node], a [PackedScene] or a promise lives in the interface above this class.
 		[codeblock]
+		scene_enter(scene, stem)          the book gains a live scene under a non-unique stem
+		scene_named(stem)                 an instance of that stem
+		scenes_named(stem)                every instance of it, in registration order
+		scene_retire(scene, pumps)        out of the book now, out of memory after the drain
 		observe(scene, event, callback)   one row per (event, scene), in registration order
 		dispatch(scene, event, ...)       every live callback; the dead ones are dropped here
 		open_request()                    the next id, and it becomes the pending one
+		request_open(from_capture)        supersedes what was in flight, answers a promise
 		is_current(id)                    whether a reply names the request still in flight
-		close_request()                   nothing is pending again
+		request_settle(id, code)          settles that promise and lets go, in one act
+		request_abandon(code)             settles whatever is in flight, at teardown
 		[/codeblock]
+		A stem names an archetype and not an instance, so two live copies of one level share one. [method scene_named] answers with the one that entered most recently, and losing it promotes the oldest survivor sharing the stem rather than making the stem unanswerable.
 		A request id can only be drawn, never claimed. There is no setter for [member pending_request_id], because an id a caller could assign without opening would let it answer a request nobody made.
+		The request protocol's decisions live here as well. [method verify_requested_path] bounds what a peer may name and [method admits_request] is the consent line a request clears on its own, both static verbs over their arguments, and both refusals a caller can check rather than crashes it has to avoid. [method decide_request] is the one verdict composed from them: [member request_handler] answers when one is installed, that consent line when none is.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -20,7 +28,7 @@
 		<method name="clear">
 			<return type="void" />
 			<description>
-				Forgets every registration and the request record, and restarts the id counter. Session teardown.
+				Forgets the live book, every registration and the request record, and restarts the id counter. Session teardown.
 			</description>
 		</method>
 		<method name="close_request">
@@ -38,6 +46,7 @@
 			<description>
 				Calls every live callback registered for [param scene] under [param event], in registration order, passing [param present] and [param subject]. Returns how many were called.
 				A callback whose object is gone is dropped here rather than at a sweep somebody has to remember to run, because a dispatch is the only moment the row is already being walked.
+				A callback is arbitrary code and may register another observer, so the walk runs over a copy of the row taken before it starts. Anything registered during the walk is kept: the pruning is entitled to drop what it found dead, not to roll the row back to what it saw.
 			</description>
 		</method>
 		<method name="forget_scene">
@@ -78,6 +87,247 @@
 				Draws the next request id, makes it the pending one, and returns it. Ids come from one counter, so a reply can name the request it answers and a stale reply can be told apart from the current one.
 			</description>
 		</method>
+		<method name="scene_enter">
+			<return type="void" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="stem" type="StringName" />
+			<param index="2" name="owns_its_world" type="bool" />
+			<description>
+				Records [param scene] as live under [param stem], and makes it the instance [method scene_named] answers with. Entering a scene already in the book re-stems it rather than doubling it. [param owns_its_world] is what [method would_share_one_world] reads.
+			</description>
+		</method>
+		<method name="scene_exit">
+			<return type="void" />
+			<param index="0" name="scene" type="RID" />
+			<description>
+				Drops [param scene] from the book. When it was the instance its stem answered with, the oldest survivor sharing that stem takes the answer, so retiring one arena does not make the other unreachable by name.
+			</description>
+		</method>
+		<method name="scene_retire">
+			<return type="void" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="drain_pumps" type="int" />
+			<description>
+				[method scene_exit], and then a drain window of [param drain_pumps] pumps before [method pump_retired] hands [param scene] back to be freed. The window is counted in pumps because what it holds open is an address for frames still in flight, and the pump is what carries them.
+			</description>
+		</method>
+		<method name="pump_retired">
+			<return type="Array" />
+			<description>
+				Advances every drain window by one pump and returns the scenes whose window closed, dropping them. Empty when nothing is retiring or nothing is due.
+			</description>
+		</method>
+		<method name="retiring_scenes" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every scene still inside its drain window. A session that ends has no next pump, so its teardown reads this rather than waiting for one.
+			</description>
+		</method>
+		<method name="resolve_current" qualifiers="const">
+			<return type="RID" />
+			<param index="0" name="presents" type="bool" />
+			<param index="1" name="seat" type="RID" />
+			<description>
+				What this peer presents, given whether it presents anything at all and which scene the session seats it in. The answer is what [member current_scene] is set from; it is not stored by this call.
+				[codeblock]
+				presents is false     -> an invalid RID, whatever is live
+				seat is valid         -> the seat, even when it is not in the book
+				otherwise             -> the first live scene its stem answers with
+				[/codeblock]
+				[param presents] is false for a dedicated server, which runs every live scene and stands in none of them. Presentation is a local act and the role that decides it is the session's, so it arrives as a reading rather than being looked up here.
+				The fallback skips a scene its stem no longer answers with, so a session holding two instances of one level presents the instance [method scene_named] names rather than whichever entered first.
+			</description>
+		</method>
+		<method name="is_live" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="scene" type="RID" />
+			<description>
+				Whether [param scene] is in the book. False for one that retired, whose wrapper may still be draining.
+			</description>
+		</method>
+		<method name="scene_named" qualifiers="const">
+			<return type="RID" />
+			<param index="0" name="stem" type="StringName" />
+			<description>
+				An instance of [param stem], or an invalid [RID]. See [method scenes_named] when the difference between an instance and every one of them matters.
+			</description>
+		</method>
+		<method name="scenes_named" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="stem" type="StringName" />
+			<description>
+				Every live scene whose stem is [param stem], in registration order.
+			</description>
+		</method>
+		<method name="live_scenes" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every live scene, in registration order.
+			</description>
+		</method>
+		<method name="live_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many scenes are live.
+			</description>
+		</method>
+		<method name="would_share_one_world" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether a scene arriving now would land in a physics space another live scene is already simulating in, which is true exactly when at least one scene is live and none of them declared a world of its own. Legal, and usually a mistake, so it is what the interface warns on.
+			</description>
+		</method>
+		<method name="stem_of" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="scene" type="RID" />
+			<description>
+				The stem [param scene] entered under, or an empty [StringName] when it is not live.
+			</description>
+		</method>
+		<method name="request_open">
+			<return type="NetwPromise" />
+			<param index="0" name="from_capture" type="bool" />
+			<description>
+				Supersedes whatever request was in flight with [constant @GlobalScope.ERR_SKIP], draws the next id, and answers the promise that request will settle through. [param from_capture] records that the request began as a captured native scene change, which is what decides whether [signal native_change_settled] announces its outcome.
+				The promise is minted here rather than handed in, because a request nobody opened is one nothing can answer.
+			</description>
+		</method>
+		<method name="request_settle">
+			<return type="bool" />
+			<param index="0" name="request_id" type="int" />
+			<param index="1" name="code" type="int" />
+			<description>
+				Settles the request in flight when [param request_id] names it, resolving the promise on [constant @GlobalScope.OK] and rejecting it on anything else, and answers whether it did. One act, because checking the id and letting go of the request are two chances to do one without the other, and either half alone answers a request twice or never lets go of one.
+			</description>
+		</method>
+		<method name="request_abandon">
+			<return type="void" />
+			<param index="0" name="code" type="int" />
+			<description>
+				Settles whatever is in flight with [param code], whatever its id. Session teardown, where there is no answer coming and a promise nobody settles is one a caller awaits forever.
+			</description>
+		</method>
+		<method name="receive_result_frame">
+			<return type="bool" />
+			<param index="0" name="payload" type="PackedByteArray" />
+			<param index="1" name="sender" type="int" />
+			<description>
+				Settles the request in flight from a server-authored result frame, and answers whether it did. A [param sender] other than the server authors nothing, and a payload that is not a two-element [Array] of id and code settles nothing, because a request arrives off the wire and a frame nobody checked is a frame a peer chooses.
+			</description>
+		</method>
+		<method name="transition_open">
+			<return type="bool" />
+			<description>
+				Claims the single slot a whole-session replacement holds, and answers whether it was free. A second transition entered while one is still moving peers is refused here, so concurrent approvals never interleave moves against a half-transitioned roster.
+				Asking and claiming are one act. Two calls would let one caller read the slot free and take it after another caller already had it.
+			</description>
+		</method>
+		<method name="transition_close">
+			<return type="void" />
+			<description>
+				Releases the slot [method transition_open] claimed. Idempotent, because the transition unwinds down several paths and each of them releases a slot it may not have taken.
+			</description>
+		</method>
+		<method name="native_entry_verdict" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="has_path" type="bool" />
+			<param index="1" name="is_server" type="bool" />
+			<param index="2" name="session_reach" type="bool" />
+			<param index="3" name="a_scene_is_active" type="bool" />
+			<param index="4" name="listen_host" type="bool" />
+			<param index="5" name="has_local_participant" type="bool" />
+			<param index="6" name="here_owns_its_world" type="bool" />
+			<description>
+				What a marked scene entering the tree natively becomes on this peer, as one [enum Capture]. The whole input is the local presentation state, so the same table answers on a client, a dedicated server and a listen host without any of them holding a rule of its own.
+				[codeblock]
+				no path                              -> CAPTURE_REFUSED
+				not the server                       -> CAPTURE_REQUEST
+				session reach, a scene already live  -> CAPTURE_CHANGE_SESSION
+				a listen host inside its own world   -> CAPTURE_MOVE_ME
+				otherwise                            -> CAPTURE_ACTIVATE
+				[/codeblock]
+			</description>
+		</method>
+		<method name="decide_request" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="participant" type="Variant" />
+			<param index="1" name="destination" type="Variant" />
+			<param index="2" name="args" type="Array" />
+			<param index="3" name="named" type="bool" />
+			<param index="4" name="marked" type="bool" />
+			<param index="5" name="gated" type="bool" />
+			<param index="6" name="path" type="String" />
+			<description>
+				One player scene request's single verdict. [member request_handler] answers when one is installed, called as [code](participant, destination, args)[/code]; with none installed the reading falls to [method admits_request] over [param named], [param marked], [param gated] and [param path].
+				A request has exactly one verdict, which is why the door is a single owner rather than a veto every listener may raise: several listeners disagreeing over one request has no defined resolution.
+				A handler that answers anything but a number has answered no verdict at all, and that refuses. Otherwise [constant @GlobalScope.OK] admits and every other code refuses, so a handler cannot admit by returning something truthy.
+				[param named], [param marked] and [param gated] are readings the authoring tier owns and are handed in already decided, because the registry answering whether a script is a marked scene stays GDScript.
+			</description>
+		</method>
+		<method name="admits_request" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="named" type="bool" />
+			<param index="1" name="marked" type="bool" />
+			<param index="2" name="gated" type="bool" />
+			<param index="3" name="path" type="String" />
+			<description>
+				The consent line one player scene request clears when no request handler is installed. A declared name or a marked scene admits, a raw unmarked path does not, and a gated or session-wide mark denies either. A [param path] that bounded to nothing is admitted by nothing, since there is no destination left to move to.
+			</description>
+		</method>
+		<method name="verify_requested_path" qualifiers="static">
+			<return type="String" />
+			<param index="0" name="path" type="String" />
+			<description>
+				Returns [param path] when it names a scene file a peer may request, and an empty [String] otherwise. A requested path is under [code]res://[/code], no longer than [constant MAX_REQUESTED_PATH_LENGTH], and ends in [code]tscn[/code] or [code]scn[/code]. [param path] is already resolved, so a [code]uid://[/code] reference is normalized by the caller that has the resolver.
+			</description>
+		</method>
+		<method name="native_change_strands" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="online" type="bool" />
+			<param index="1" name="marked" type="bool" />
+			<description>
+				Whether a native scene change has left this peer out of the game. The session is intact either way: what strands the peer is a LOCAL change to a scene the session never agreed to, so an offline peer strands nobody and a marked scene is the change going through the front door.
+				[param marked] arrives already decided, because the registry that answers it is the authoring tier's and stays GDScript.
+			</description>
+		</method>
+		<method name="admission_park">
+			<return type="bool" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				Parks [param peer] against [param scene], answering whether it parked. A peer admitted before the session holds a roster row for it has no participant to seat, so the admission is kept until the row lands. A scene that is not live parks nobody.
+				A parked admission rides the live row rather than a book beside it, because the two open and close together and a peer parked against a scene that is gone must not be retried into it.
+			</description>
+		</method>
+		<method name="admission_unpark">
+			<return type="bool" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				Clears [param peer]'s parked admission on [param scene], answering whether one was standing.
+			</description>
+		</method>
+		<method name="admission_is_parked" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="scene" type="RID" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				Whether [param peer] is parked against [param scene], waiting for its roster row.
+			</description>
+		</method>
+		<method name="spawn_warns_shared_world" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether a spawn now would put a second level into one physics space, which is [method would_share_one_world] read at the moment of a spawn. Nothing here refuses one: several shared-world scenes are legal since isolation became a per-scene fact, so this decides a warning and nothing else.
+			</description>
+		</method>
+		<method name="spawn_note" qualifiers="const">
+			<return type="void" />
+			<param index="0" name="stem" type="StringName" />
+			<description>
+				Says what [method spawn_warns_shared_world] found, once, naming [param stem], on the session's own log rather than the caller's.
+			</description>
+		</method>
 		<method name="unobserve">
 			<return type="void" />
 			<param index="0" name="scene" type="RID" />
@@ -88,12 +338,60 @@
 			</description>
 		</method>
 	</methods>
+	<signals>
+		<signal name="native_change_settled">
+			<param index="0" name="result" type="int" />
+			<description>
+				Emitted when a request that [method request_open] recorded as captured settles, on every outcome. A game that presented a loading screen when the native change was captured tears it down here, including when the request resolved [constant @GlobalScope.ERR_UNAUTHORIZED] or [constant @GlobalScope.ERR_TIMEOUT] and no scene ever arrives.
+				The settle and the announcement are one act, because two adjacent calls are two chances to send one without the other.
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="CAPTURE_REFUSED" value="0" enum="Capture">
+			The entry names no scene file, so it can become no request. An in-memory instance reaches this, and the caller reports rather than desyncing.
+		</constant>
+		<constant name="CAPTURE_REQUEST" value="1" enum="Capture">
+			A client detaches its local instance and asks server authority for the scene, which arrives as spawn frames.
+		</constant>
+		<constant name="CAPTURE_CHANGE_SESSION" value="2" enum="Capture">
+			Server authority replaces what the whole session presents, which is what a session-wide reach means when a scene is already live to replace.
+		</constant>
+		<constant name="CAPTURE_MOVE_ME" value="3" enum="Capture">
+			A listen host presenting its own world reads the bare call as "move me", the same meaning a client's bare call carries, so it relocates rather than spawning a world it does not enter.
+		</constant>
+		<constant name="CAPTURE_ACTIVATE" value="4" enum="Capture">
+			Server authority spawns the scene through the replicated pipeline. The default, because a change nobody narrowed is a scene the session gains.
+		</constant>
+		<constant name="MAX_REQUESTED_PATH_LENGTH" value="512">
+			The longest path [method verify_requested_path] will hand back. A bound rather than a limit anyone is expected to reach: a request arrives off the wire, and a length nobody checked is a length a peer chooses.
+		</constant>
+	</constants>
 	<members>
+		<member name="current_scene" type="RID" setter="set_current_scene" getter="get_current_scene">
+			The scene this peer presents, or an invalid [RID]. Recomputed from [method resolve_current] rather than written by whatever changed, so a scene arriving, leaving or re-seating this peer all settle through one answer.
+			Held rather than derived on read, because the readings it composes are the session's and this class holds neither of them.
+		</member>
 		<member name="next_request_id" type="int" setter="set_next_request_id" getter="get_next_request_id" default="1">
 			The id [method open_request] will draw next.
 		</member>
+		<member name="pending_request" type="NetwPromise" setter="" getter="get_pending_request">
+			The promise the request in flight will settle through, or [code]null[/code] when nothing is. Read-only by construction: see [method request_open].
+		</member>
 		<member name="pending_request_id" type="int" setter="" getter="get_pending_request_id" default="0">
 			The request currently in flight, or zero when none is. Read-only by construction: see [method open_request].
+		</member>
+		<member name="replacing" type="bool" setter="set_replacing" getter="is_replacing" default="false">
+			Suppresses the [method spawn_warns_shared_world] warning while a whole-session replacement is in flight. The incoming scene stands beside the ones it is about to replace for as long as the transition takes, and warning about that would fire on every scene change a session makes.
+		</member>
+		<member name="request_handler" type="Callable" setter="set_request_handler" getter="get_request_handler">
+			The single-owner policy door [method decide_request] asks first. An unset [Callable] is what restores the [method admits_request] consent line, so uninstalling is the same act as never installing.
+			It survives [method clear], because it is a policy the game installed and not a record of the session that just ended.
+		</member>
+		<member name="request_reach" type="int" setter="set_request_reach" getter="get_request_reach" default="0">
+			How far an admitted scene request reaches, using the ordinals [code]NetwMultiplayer.SceneReach[/code] publishes: zero moves only the requesting participant, one moves the whole session.
+			Server policy rather than something a requester may ask for. A reach outside the enum names nothing and is refused rather than stored for a later request to be measured against, so a write that does not take leaves the reach that was already in force.
+			The ordinals are mirrored rather than bound, so [code]NetwMultiplayer.SceneReach[/code] stays the one published spelling.
 		</member>
 	</members>
 </class>

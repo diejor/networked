@@ -39,8 +39,8 @@ namespace {
 // because a case reading a bare 0 says nothing about which selector it meant.
 constexpr int LAYER_PARAM_POLICY = 0;
 constexpr int LAYER_POLICY_HIDE_FROM_INSIDERS = 1;
-constexpr int DISPLAY_PARAM_ROLE = 1;
-constexpr int DISPLAY_ROLE_REMOTE = 2;
+constexpr int DISPLAY_PARAM_ROLE = 0;
+constexpr int DISPLAY_ROLE_REMOTE = 1;
 
 // The spec every display case declares its track with. Built rather than
 // declared because a Ref is not a constant expression.

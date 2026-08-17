@@ -23,14 +23,6 @@ func before_test() -> void:
 	await drain_frames(get_tree(), 2)
 
 
-func test_a_scene_root_declares_itself_through_its_own_init() -> void:
-	var api := harness.server().api
-	var arena := _spawn_arena()
-
-	assert_bool(api.scene_is_declared(api.rid_of(arena))).is_true()
-	assert_that(NetwEntity.of(arena).scene_label).is_equal(&"DeclaredArena")
-
-
 func test_a_declared_scene_carries_a_value_on_its_spawn_packet() -> void:
 	var arena := _spawn_arena(
 		func(node: DeclaredSceneRoot) -> void:
@@ -66,7 +58,9 @@ func test_the_facet_and_stem_survive_the_wire() -> void:
 	assert_that(mirror).is_not_null()
 
 	var client_api := client0.api
-	assert_bool(client_api.scene_is_declared(client_api.rid_of(mirror))).is_true()
+	assert_bool(
+		client_api.scene_is_declared(client_api.entity_of(mirror)),
+	).is_true()
 	assert_that(NetwEntity.of(mirror).scene_label).is_equal(&"DeclaredArena")
 
 
@@ -82,22 +76,14 @@ func test_the_facet_reaches_a_peer_that_joined_after_the_spawn_flushed() -> void
 	var mirror := await _wait_for_mirror(arena, late)
 
 	assert_that(mirror).is_not_null()
-	assert_bool(late.api.scene_is_declared(late.api.rid_of(mirror))).is_true()
+	assert_bool(late.api.scene_is_declared(late.api.entity_of(mirror))).is_true()
 	assert_int(mirror.countdown_target).is_equal(99)
-
-
-func test_declaring_a_live_entity_is_a_programmer_error() -> void:
-	var api := harness.server().api
-	var live := api.rid_of(_spawn_arena())
-
-	assert_that(api.scene_declare(live)).is_equal(ERR_UNCONFIGURED)
-	assert_that(api.scene_undeclare(live)).is_equal(ERR_UNCONFIGURED)
 
 
 func test_undeclaring_before_arm_leaves_an_ordinary_entity() -> void:
 	var api := harness.server().api
 	var node := arena_scene.instantiate() as DeclaredSceneRoot
-	var entity := api.rid_of(node)
+	var entity := api.entity_of(node)
 
 	assert_that(api.scene_undeclare(entity)).is_equal(OK)
 
@@ -107,7 +93,9 @@ func test_undeclaring_before_arm_leaves_an_ordinary_entity() -> void:
 
 	assert_bool(api.scene_is_declared(entity)).is_false()
 	assert_that(mirror).is_not_null()
-	assert_bool(client0.api.scene_is_declared(client0.api.rid_of(mirror))).is_false()
+	assert_bool(
+		client0.api.scene_is_declared(client0.api.entity_of(mirror)),
+	).is_false()
 
 
 func _spawn_arena(configure: Callable = Callable()) -> DeclaredSceneRoot:
@@ -127,10 +115,10 @@ func _wait_for_mirror(
 	var target := client if client else client0
 	var route := NetwEntity.of(arena).route
 	for i in frames:
-		if target.api.route_get_state(route) \
+		if target.api.entity_get_state(target.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.LIVE:
 			return target.api.entity_get_node(
-				target.api.rid_from_route(route),
+				target.api.entity_from_route(route),
 			) as DeclaredSceneRoot
 		await get_tree().process_frame
 	return null

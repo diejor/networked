@@ -82,6 +82,45 @@ func test_host_and_retained_client_share_hide_applier() -> void:
 	assert_bool(observer_visual.visible).is_true()
 
 
+func test_a_changed_layer_default_reapplies_to_every_local_member() -> void:
+	var host := await game.add_host("valeria", true, _level_1_spawn())
+	var observer := await game.add_client("jose", true, _level_1_spawn())
+	await game.wait_for_transitions()
+	for runner in [host, observer]:
+		_mount_arena(runner.tree)
+	await game.sync_ticks(2)
+
+	var server_probe := probe_scene.instantiate()
+	var entity := host.tree.api._replication.replicate(server_probe)
+	host.tree.get_node("Arena").add_child(server_probe)
+	assert_that(await _wait_probe(observer, entity.route)).is_not_null()
+	var server_visual := server_probe.get_node("Visual") as Node2D
+
+	var interest := host.tree.api._interest
+	var layer := interest.layer(&"stealth")
+	layer.default_leave_policy = NetwMultiplayer.LeavePolicy.RETAIN
+	layer.add_viewer(observer.peer_id)
+	layer.add_entity(entity)
+	interest.flush_now()
+	await game.sync_ticks(8)
+
+	assert_bool(interest.participant_sees(host.peer_id, entity)).is_false()
+	assert_bool(server_visual.visible) \
+			.override_failure_message(
+				"the host is not a viewer, so HIDE should have hidden it",
+			).is_false()
+
+	# The only change is the layer default. Nothing about admission moves, so a
+	# restored visual is the reapplication and nothing else.
+	layer.default_perception_policy = NetwMultiplayer.PerceptionPolicy.SHOW
+
+	assert_bool(interest.participant_sees(host.peer_id, entity)).is_false()
+	assert_bool(server_visual.visible) \
+			.override_failure_message(
+				"a changed layer default must reapply to the members it holds",
+			).is_true()
+
+
 func _level_1_spawn() -> SceneNodePath:
 	return SceneNodePath.new(LEVEL_1_SPAWN)
 
@@ -94,7 +133,7 @@ func _mount_arena(mt: MultiplayerTree) -> void:
 
 func _wait_probe(runner: NetwSceneRunner, route: int) -> Node:
 	for _i in 120:
-		var node := runner.tree.api._liveness.node_of(route)
+		var node := runner.tree.api._native_core.liveness_node_of(route)
 		if node:
 			return node
 		await game.sync_ticks(1)

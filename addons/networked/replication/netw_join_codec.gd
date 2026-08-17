@@ -13,7 +13,7 @@ static func encode(
 		payload.schema_hash = 0
 		return
 	var writer := NetwBitBufferWriter.new()
-	NetwScriptModel.write_values(
+	NetwCodec.write_values(
 		writer,
 		payload.arg_values,
 		quantizers,

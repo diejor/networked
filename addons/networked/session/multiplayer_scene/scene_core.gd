@@ -29,9 +29,6 @@ extends RefCounted
 
 const AreaReparentGuard := preload("res://addons/networked/utils/area_reparent_guard.gd")
 
-## Emitted when the local participant's primary scene changes.
-signal local_scene_changed(from: NetwSceneHandle, to: NetwSceneHandle)
-
 ## Emitted when a constructed scene enters the tree on this peer.
 signal scene_spawned(scene: Node)
 
@@ -75,22 +72,43 @@ signal native_change_settled(result: Error)
 ##
 ## The stem is not unique. When several instances of one level are live this
 ## holds the most recent, and [method scenes_named] answers with all of them.
-## Identity is the scene's entity RID, never this key.
-var scenes: Dictionary[StringName, Node] = { }
+## Identity is the scene's entity RID, never this key, so this is a read over
+## the record plane's book rather than a book of its own.
+var scenes: Dictionary[StringName, Node]:
+	get:
+		var out: Dictionary[StringName, Node] = { }
+		for scene: RID in core.live_scenes():
+			var stem := core.stem_of(scene)
+			if core.scene_named(stem) != scene:
+				continue
+			var node := _node_of(scene)
+			if node:
+				out[stem] = node
+		return out
 
 # Every live scene in registration order, so a non-unique stem can still answer
 # "all instances" while `scenes` answers "an instance".
-var _live_scenes: Array[Node] = []
+var _live_scenes: Array[Node]:
+	get:
+		var out: Array[Node] = []
+		for scene: RID in core.live_scenes():
+			var node := _node_of(scene)
+			if node:
+				out.append(node)
+		return out
 
 ## The scene currently presented on this peer, or [code]null[/code].
 var current_scene: Node:
 	get:
-		return _current_scene if is_instance_valid(_current_scene) else null
+		return _node_of(core.current_scene)
 
 ## How far an admitted scene request reaches. See
 ## [method NetwMultiplayer.scene_set_request_reach].
-var request_reach: NetwMultiplayer.SceneReach = \
-		NetwMultiplayer.SceneReach.SCENE_REACH_PARTICIPANT
+var request_reach: NetwMultiplayer.SceneReach:
+	set(value):
+		core.request_reach = value
+	get:
+		return core.request_reach as NetwMultiplayer.SceneReach
 
 ## The registered custom level constructor, or an empty [Callable].
 var level_spawn_function: Callable:
@@ -103,9 +121,7 @@ var _api_ref: WeakRef
 # keyed to the registrar node, so a freed registrar neither drops it nor leaks.
 var _declared_config: NetwSceneConfig
 var _scene_cache: Dictionary[String, PackedScene] = { }
-var _allow_single_spawn := false
 var _constructor_registered := false
-var _current_scene: Node
 var _local_participant: NetwParticipant
 # The tree-less host presentation view this interface parents under the session
 # root, freed on session end. Stays null when an owning MultiplayerTree already
@@ -119,30 +135,24 @@ var _next_request_id: int:
 var _pending_request_id: int:
 	get:
 		return core.pending_request_id
-var _pending_request: NetwPromise
-var _pending_from_capture := false
-# The single-owner policy door installed through set_request_handler. It wins
-# the only door, because a request has exactly one verdict and several
-# listeners vetoing has no defined resolution.
-var _request_handler := Callable()
-# Participants with a scene transition in flight. Per-participant rather than
-# session-wide: with per-scene isolation two participants moving into two worlds
-# concurrently is the feature, and only one participant's own transition must
-# serialize.
-var _change_in_flight: Dictionary[int, bool] = { }
-# Admission bookkeeping the core owns, one row per live scene. The container
-# carries no script, so the peer set, the client-side awareness mirror, and the
-# participants admitted before their roster row landed all live here.
-var _admissions: Dictionary[RID, _Admission] = { }
+var _pending_request: NetwPromise:
+	get:
+		return core.pending_request
+# The client-side awareness mirror each live scene's admission reads from, or
+# null on a server, which reads its own admission edges instead. A key is what
+# says the scene's admission is wired, so wiring it twice is refused. The peers
+# admitted before their roster row landed are the record plane's, on the live
+# row itself.
+var _admission_layers: Dictionary[RID, NetwInterestLayer] = { }
 # The record plane: the observer routing table and the in-flight request id.
 # The table is keyed by the watched scene's entity RID rather than by the
 # container object, which is what lets a registration outlive whichever node
 # currently stands in for the scene.
-var core := NetwSceneCore.new()
-# The per-peer scene-request budget. The same rule the session admits joins
-# under, so a peer that cannot flood one cannot flood the other.
-var _request_window := NetwRateWindow.new()
+var core: NetwSceneCore
 
+# The session's own plane, held directly rather than reached through the shell,
+# because every verb below it is one the shell only relays.
+var session: NetwMultiplayerCore
 ## Seconds a player request waits for a server answer before resolving
 ## [constant ERR_TIMEOUT].
 const DEFAULT_REQUEST_DEADLINE := 10.0
@@ -151,87 +161,48 @@ const DEFAULT_REQUEST_DEADLINE := 10.0
 ## session with no [MultiplayerSceneManager] still reconstructs scene wrappers.
 const SCENE_CONSTRUCTOR_ID := &"__netw_scene__"
 
-# The _change_in_flight key a whole-session replacement holds. Peer ids are
-# never 0, so it can never collide with one participant's own transition.
-const _SESSION_TRANSITION := 0
+const _REFRESH_KEY := &"scene-refresh-current"
 
-
-## Settles [param promise] from a settle code, which is the one place the
-# server's verdict becomes an outcome. OK resolves so then() fires; anything
-# else rejects so catch_error() does.
-static func _settle_promise(promise: NetwPromise, code: Error) -> void:
-	if code == OK:
-		promise.resolve(OK)
-	else:
-		promise.reject(code)
-
-
-# Installs the single handler deciding player scene requests.
-##
-## The handler receives
-## [code](participant, destination, args)[/code] and returns an
-## [enum @GlobalScope.Error], where [constant @GlobalScope.OK] admits. It
-## is the single owner of that verdict, because several listeners disagreeing
-## over one request has no defined resolution. An invalid [param handler]
-## restores the mark-based default.
-## [br][br][b]Server Only.[/b]
-func set_request_handler(handler: Callable) -> void:
-	_request_handler = handler
-
-
-## Registers [param callback] for one [param event] on [param scene].
-##
-## Keyed by the scene's entity RID rather than by a connection to the container,
-## so a registration names the scene rather than the object currently standing
-## in for it. Callables whose object is gone are pruned when the edge fires.
-func observe(
-		scene: RID,
-		event: NetwMultiplayer.SceneEvent,
-		callback: Callable,
-) -> void:
-	core.observe(scene, event, callback)
-
-
-## Reverses [method observe] for one [param callback].
-func unobserve(
-		scene: RID,
-		event: NetwMultiplayer.SceneEvent,
-		callback: Callable,
-) -> void:
-	core.unobserve(scene, event, callback)
+# The reparent reason a move records when the caller named none. NetwReparentOpts
+# defaults to empty, which reads in a journal as a reparent nobody attributed.
+const _MOVE_REASON := &"scene_move"
+const _SYNC_LOCAL_KEY := &"scene-sync-local"
 
 
 # One live scene's admission state. Keyed by the scene's entity RID rather than
 # by its container, so it survives whichever node stands in for the scene.
-class _Admission extends RefCounted:
-	var container: Node
-	# Peers admitted before their participant existed, retried on join.
-	var pending: Dictionary[int, bool] = { }
-	# The client-side awareness mirror this peer reads its own admission from.
-	var layer: NetwInterestLayer
-
-
-## Options for [method move].
-class MoveOpts extends RefCounted:
-	## Keeps timeline history across the move.
-	var preserve_history := false
-	## Optional gameplay label for the move.
-	var reason: StringName = &"scene_move"
-	## Optional destination world position.
-	var target_global_position: Variant = null
-
-
 func _init(api: NetwMultiplayer) -> void:
 	_api_ref = weakref(api)
+	session = api._native_core
+	core = session.scene_core
+	api._connect_once(core.native_change_settled, _relay_native_change_settled)
 	_register_constructor(api)
 	api._connect_once(api.local_participant_joined, bind_local_participant)
 	api._connect_once(api._session.session_entered, _on_session_entered)
 	api._connect_once(api._session.session_ended, _on_session_ended)
-	api._connect_once(api._liveness.entity_live, _on_entity_live)
+	api._connect_once(session.entity_live, _on_entity_live)
+	api._replication.register_protocol(
+		NetwFrameEnvelope.Channel.SESSION_SCENE_REQUEST,
+		_handle_scene_request_frame,
+	)
+	api._replication.register_protocol(
+		NetwFrameEnvelope.Channel.SESSION_SCENE_RESULT,
+		_handle_scene_result_frame,
+	)
+	api._replication.register_protocol(
+		NetwFrameEnvelope.Channel.SESSION_SCENE_RELEASED,
+		_handle_scene_released_frame,
+	)
 	if not Netw.is_test_env():
 		var scene_tree := Engine.get_main_loop() as SceneTree
 		if scene_tree:
 			api._connect_once(scene_tree.scene_changed, _on_native_scene_changed)
+
+
+# The record plane announces the outcome of a request a capture opened, and this
+# publishes it under the name the game connected to.
+func _relay_native_change_settled(result: int) -> void:
+	native_change_settled.emit(result)
 
 
 ## Registers the session's scene declaration. The API owns [param config] for the
@@ -239,19 +210,19 @@ func _init(api: NetwMultiplayer) -> void:
 func configure(config: NetwSceneConfig) -> void:
 	_declared_config = config
 	_register_constructor(_api())
-	refresh_current_scene.call_deferred()
+	_settle_refresh()
 
 
 ## Drops the session's scene declaration.
 func deconfigure() -> void:
 	_declared_config = null
-	refresh_current_scene.call_deferred()
+	_settle_refresh()
 
 
 ## Binds the accepted local [param participant] to [member current_scene].
 func bind_local_participant(participant: NetwParticipant) -> void:
 	if _local_participant == participant:
-		sync_local_participant.call_deferred()
+		_settle_sync_local()
 		return
 	_release_local_participant()
 	_local_participant = participant
@@ -262,8 +233,8 @@ func bind_local_participant(participant: NetwParticipant) -> void:
 				_local_participant.scene_changed,
 				_on_local_scene_changed,
 			)
-	sync_local_participant.call_deferred()
-	refresh_current_scene.call_deferred()
+	_settle_sync_local()
+	_settle_refresh()
 
 
 ## Infers the local participant's scene from wrapper awareness.
@@ -275,7 +246,7 @@ func sync_local_participant() -> void:
 		if not is_instance_valid(scene_node):
 			continue
 		var layer := api._interest.get_layer(
-			api._scene_layer_id(api.rid_of(scene_node)),
+			api._scene_layer_id(session.entity_of(scene_node)),
 		)
 		var entity := NetwEntity.of(scene_node)
 		if layer and entity and layer.has_entity(entity):
@@ -285,7 +256,32 @@ func sync_local_participant() -> void:
 
 ## Recomputes [member current_scene] from the local presentation state.
 func refresh_current_scene() -> void:
-	_current_scene = _resolve_current_scene()
+	core.current_scene = _resolve_current_scene()
+
+
+## Advances every retired wrapper's drain window by one pump, freeing the ones
+## whose window closed.
+##
+## A clocked session pumps on its ticks and an unclocked one on its polls, which
+## is the cadence each of them actually sends at, so a window counted here is a
+## count of the chances an in-flight frame had to land.
+func on_pump() -> void:
+	for scene: RID in core.pump_retired():
+		var scene_node := _node_of(scene)
+		if scene_node:
+			scene_node.queue_free()
+
+
+# Recomputes local presentation at the next settle. Keyed, so a cascade of
+# scene edges recomputes once, after all of them have landed.
+func _settle_refresh() -> void:
+	session.settle_schedule(refresh_current_scene, _REFRESH_KEY)
+
+
+# Re-reads the local participant's scene from awareness at the next settle,
+# which is the pump that also applies the awareness it reads.
+func _settle_sync_local() -> void:
+	session.settle_schedule(sync_local_participant, _SYNC_LOCAL_KEY)
 
 
 ## Releases SceneTree and participant signal connections.
@@ -307,7 +303,13 @@ func dispose() -> void:
 		scene_tree.scene_changed.disconnect(_on_native_scene_changed)
 	_declared_config = null
 	_scene_cache.clear()
-	scenes.clear()
+	# A session that ends has no next pump, so a window still open here would
+	# hold its wrapper forever.
+	for scene: RID in core.retiring_scenes():
+		var retired := _node_of(scene)
+		if retired:
+			retired.queue_free()
+	core.clear()
 
 
 ## Whether a session declared its scenes through a registered [NetwSceneConfig].
@@ -330,8 +332,20 @@ func scene(scene_name: StringName) -> NetwSceneHandle:
 # The container node standing in for [param scene_name], for the paths inside
 # this core that mount, free, and reparent it.
 func _container(scene_name: StringName) -> Node:
-	var active := scenes.get(scene_name) as Node
-	return active if is_instance_valid(active) else null
+	return _node_of(core.scene_named(scene_name))
+
+
+# Whether [param scene] declared a world of its own, which is the fact a
+# session reads when it warns about two levels sharing one physics space.
+func _owns_its_world(api: NetwMultiplayer, scene: RID) -> bool:
+	var record := session.wrapper_of(scene) as NetwEntity
+	return record != null and record.scene_isolation \
+			== NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
+
+
+# The container node one live scene identity stands for, or null.
+func _node_of(scene: RID) -> Node:
+	return session.wrapper_owner(scene) as Node
 
 
 ## Returns every live scene whose stem is [param scene_name].
@@ -340,31 +354,28 @@ func _container(scene_name: StringName) -> Node:
 ## several instances of one level. [method scene] answers with one of them.
 func scenes_named(scene_name: StringName) -> Array[Node]:
 	var out: Array[Node] = []
-	for candidate: Node in _live_scenes:
-		var content := _level_of(candidate)
-		if content == null:
-			continue
-		if StringName(content.name) == scene_name:
+	for scene: RID in core.scenes_named(scene_name):
+		var candidate := _node_of(scene)
+		if candidate:
 			out.append(candidate)
 	return out
 
 
 ## Returns every live scene in the session.
 func live_scenes() -> Array[Node]:
-	var out: Array[Node] = []
-	for candidate: Node in _live_scenes:
-		if is_instance_valid(candidate):
-			out.append(candidate)
-	return out
+	return _live_scenes
 
 
 ## Returns the [Node] containing [param node], or [code]null[/code].
+##
+## The walk stops at a container the record plane holds live, so a level root
+## that declares a scene of its own is passed through: this answers with what
+## the session mounted, which is what every verb here reparents and frees.
 func scene_of(node: Node) -> Node:
-	if not is_instance_valid(node):
-		return null
 	var current := node
-	while current:
-		if _live_scenes.has(current):
+	while is_instance_valid(current):
+		var owned := session.entity_of(current)
+		if core.is_live(owned) and _node_of(owned) == current:
 			return current
 		current = current.get_parent()
 	return null
@@ -376,17 +387,15 @@ func scene_of(node: Node) -> Node:
 ## wrapper, or [code]null[/code] when activation fails.
 ## [br][br][b]Server Only.[/b]
 func activate(scene_ref: Variant) -> Node:
-	var api := _api()
-	assert(api and api.is_server(), "Scene activation is server-only.")
+	assert(session.is_server(), "Scene activation is server-only.")
 	if scene_ref is PackedScene:
 		var packed := scene_ref as PackedScene
 		if packed.resource_path.is_empty():
 			push_error("Cannot activate an in-memory PackedScene.")
 			return null
-		var scene_name := StringName(
-			packed.resource_path.get_file().get_basename(),
+		var active := _container(
+			NetwMultiplayerCore.scene_packed_stem(packed),
 		)
-		var active := _container(scene_name)
 		if active:
 			_level_of(active).process_mode = Node.PROCESS_MODE_INHERIT
 			scene_activated.emit(active)
@@ -405,8 +414,7 @@ func activate(scene_ref: Variant) -> Node:
 ## level to process. Returns the active wrapper, or [code]null[/code] on failure.
 ## [br][br][b]Server Only.[/b]
 func activate_scene(scene_name: StringName) -> Node:
-	var api := _api()
-	assert(api and api.is_server(), "Scene activation is server-only.")
+	assert(session.is_server(), "Scene activation is server-only.")
 	if _container(scene_name) == null:
 		if level_spawn_function.is_valid():
 			spawn(_spawn_data().get(scene_name, scene_name))
@@ -430,8 +438,7 @@ func activate_scene(scene_name: StringName) -> Node:
 func spawn_scene(scene_name: StringName) -> void:
 	if _container(scene_name):
 		return
-	if not _can_spawn_scene(scene_name):
-		return
+	core.spawn_note(scene_name)
 	var path := _scene_path_for(scene_name)
 	if path.is_empty():
 		Netw.dbg.error(
@@ -446,8 +453,7 @@ func spawn_scene(scene_name: StringName) -> void:
 ## Disables processing for the active scene named [param scene_name].
 ## [br][br][b]Server Only.[/b]
 func freeze(scene_name: StringName) -> void:
-	var api := _api()
-	assert(api and api.is_server(), "Scene freezing is server-only.")
+	assert(session.is_server(), "Scene freezing is server-only.")
 	var active := _container(scene_name)
 	if active:
 		_level_of(active).process_mode = Node.PROCESS_MODE_DISABLED
@@ -456,8 +462,7 @@ func freeze(scene_name: StringName) -> void:
 ## Removes the active scene named [param scene_name] from the session.
 ## [br][br][b]Server Only.[/b]
 func destroy(scene_name: StringName) -> void:
-	var api := _api()
-	assert(api and api.is_server(), "Scene destruction is server-only.")
+	assert(session.is_server(), "Scene destruction is server-only.")
 	var active := _container(scene_name)
 	if active == null:
 		return
@@ -467,20 +472,20 @@ func destroy(scene_name: StringName) -> void:
 
 
 ## Removes [param scene_name] from the active registry now, then frees the
-## wrapper after [param drain_frames] process frames.
+## wrapper after [param drain_pumps] pumps.
 ##
 ## Teardown paths that must end game logic immediately while keeping stale
 ## replication paths resolvable for a short drain window use this over
-## [method destroy].
+## [method destroy]. The window is counted in pumps because what it holds open
+## is a path for frames still in flight, and the pump is what carries them.
 ## [br][br][b]Server Only.[/b]
-func retire(scene_name: StringName, drain_frames: int = 8) -> void:
-	var api := _api()
-	assert(api and api.is_server(), "Scene retirement is server-only.")
+func retire(scene_name: StringName, drain_pumps: int = 8) -> void:
+	assert(session.is_server(), "Scene retirement is server-only.")
 	var active := _container(scene_name)
 	if active == null:
 		return
-	_remove_scene(active)
-	_free_retired_scene.call_deferred(active, maxi(0, drain_frames))
+	core.scene_retire(session.entity_of(active), maxi(0, drain_pumps))
+	_settle_refresh()
 
 
 ## Returns the [Node] a freshly instantiated [param player] enters,
@@ -522,10 +527,9 @@ func resolve_hydrated_spawn_scene(
 func move(
 		entity: NetwEntity,
 		destination: Variant,
-		opts: MoveOpts = null,
+		opts: NetwReparentOpts = null,
 ) -> NetwPromise:
-	var api := _api()
-	assert(api and api.is_server(), "Scene movement is server-only.")
+	assert(session.is_server(), "Scene movement is server-only.")
 	var promise := NetwPromise.new()
 	_move_entity(entity, destination, opts, promise)
 	return promise
@@ -536,8 +540,7 @@ func move(
 ## [param destination] accepts the same values as [method move].
 ## [br][br][b]Server Only.[/b]
 func change_to(destination: Variant) -> NetwPromise:
-	var api := _api()
-	assert(api and api.is_server(), "Scene changes are server-only.")
+	assert(session.is_server(), "Scene changes are server-only.")
 	var promise := NetwPromise.new()
 	_change_single_scene(destination, promise)
 	return promise
@@ -598,7 +601,7 @@ func _front_door_change(requester: Node, path: String) -> NetwPromise:
 	var api := _api()
 	if api == null or path.is_empty():
 		return _resolved_promise(ERR_UNAVAILABLE)
-	if not api.is_server():
+	if not session.is_server():
 		return request_change_path(path)
 	var packed := load(path) as PackedScene
 	if packed == null:
@@ -661,17 +664,12 @@ func _start_request(
 		deadline: float = DEFAULT_REQUEST_DEADLINE,
 		from_capture: bool = false,
 ) -> NetwPromise:
-	if _pending_request and not _pending_request.is_settled:
-		_pending_request.reject(ERR_SKIP)
-		_settle_native_change(ERR_SKIP)
-	_pending_from_capture = from_capture
-	var promise := NetwPromise.new()
 	var api := _api()
 	if api == null:
-		promise.reject(ERR_UNAVAILABLE)
-		return promise
-	_pending_request = promise
-	core.open_request()
+		var unavailable := NetwPromise.new()
+		unavailable.reject(ERR_UNAVAILABLE)
+		return unavailable
+	var promise := core.request_open(from_capture)
 	api._replication.send_to(
 		1,
 		0,
@@ -697,12 +695,7 @@ func _arm_request_deadline(request_id: int, deadline: float) -> void:
 
 
 func _on_request_deadline(request_id: int) -> void:
-	if not core.is_current(request_id) or _pending_request == null:
-		return
-	_pending_request.reject(ERR_TIMEOUT)
-	_pending_request = null
-	core.close_request()
-	_settle_native_change(ERR_TIMEOUT)
+	core.request_settle(request_id, ERR_TIMEOUT)
 
 
 # Converts a marked scene's native tree entry into the role's replicated verb.
@@ -712,19 +705,36 @@ func _handle_native_scene_entry(node: Node) -> void:
 	if api == null:
 		return
 	var path := node.scene_file_path
-	if path.is_empty():
-		# An in-memory instance has no path to request, mirroring activate's
-		# rejection of a pathless PackedScene.
-		push_error(
-			"A marked scene entered natively has no resource_path, so it "
-			+ "cannot become a server request. Instantiate it from a saved "
-			+ "scene file.",
-		)
-		return
-	if api.is_server():
-		_discard_and_respawn(node, path)
-	else:
-		_detach_and_request(node, path)
+	match _capture_verdict(api, path):
+		NetwSceneCore.Capture.CAPTURE_REFUSED:
+			# An in-memory instance has no path to request, mirroring activate's
+			# rejection of a pathless PackedScene.
+			push_error(
+				"A marked scene entered natively has no resource_path, so it "
+				+ "cannot become a server request. Instantiate it from a saved "
+				+ "scene file.",
+			)
+		NetwSceneCore.Capture.CAPTURE_REQUEST:
+			_detach_and_request(node, path)
+		var verdict:
+			_discard_and_respawn(node, path, verdict)
+
+
+# The verdict a marked native entry carries on this peer, read from the record
+# plane's table so the local presentation state is the whole of the input.
+func _capture_verdict(api: NetwMultiplayer, path: String) -> int:
+	var here: RID = session.participant_seat(
+		api.local_participant.peer_id,
+	) if api.local_participant else RID()
+	return NetwSceneCore.native_entry_verdict(
+		not path.is_empty(),
+		session.is_server(),
+		request_reach == NetwMultiplayer.SceneReach.SCENE_REACH_SESSION,
+		_has_active_scene(),
+		api.role == NetwMultiplayer.Role.LISTEN_SERVER,
+		api.local_participant != null,
+		_owns_its_world(api, here),
+	)
 
 
 # Server: the native instance already ran _ready outside the wrapper, gate, and
@@ -733,38 +743,23 @@ func _handle_native_scene_entry(node: Node) -> void:
 # listen host under CONCURRENT reads the bare call as "move me", the same meaning
 # a client's bare call carries, so the host relocates rather than spawning a
 # world it does not enter.
-func _discard_and_respawn(node: Node, path: String) -> void:
+func _discard_and_respawn(node: Node, path: String, verdict: int) -> void:
 	_hide_and_free(node)
 	var packed := load(ResourceUID.ensure_path(path)) as PackedScene
 	if packed == null:
 		return
-	if request_reach == NetwMultiplayer.SceneReach.SCENE_REACH_SESSION \
-			and _has_active_scene():
-		change_to(packed)
-	elif _is_concurrent_host_move_me():
-		_apply_player_change(_api().local_participant, packed)
-	else:
-		activate(packed)
-
-
-# Whether a bare native change on this peer means "move the local player": a
-# listen host presenting concurrent worlds, with a local participant to move.
-func _is_concurrent_host_move_me() -> bool:
-	var api := _api()
-	if api == null or api.role != NetwMultiplayer.Role.LISTEN_SERVER \
-			or api.local_participant == null:
-		return false
-	var here := api.local_participant.current_scene
-	return here != null and here.isolation \
-			== NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
+	match verdict:
+		NetwSceneCore.Capture.CAPTURE_CHANGE_SESSION:
+			change_to(packed)
+		NetwSceneCore.Capture.CAPTURE_MOVE_ME:
+			_apply_player_change(_api().local_participant, packed)
+		_:
+			activate(packed)
 
 
 # Whether any scene is currently active.
 func _has_active_scene() -> bool:
-	for active: Node in scenes.values():
-		if is_instance_valid(active):
-			return true
-	return false
+	return core.live_count() > 0
 
 
 # Client: detach the local instance and wait for the authoritative scene to
@@ -793,14 +788,6 @@ func _invoke_pending_hook(
 		node.call(config.pending_method)
 
 
-# Emits the capture-completion signal for a request that began as a native
-# change, so the game undoes an on_pending loading screen on any outcome.
-func _settle_native_change(result: Error) -> void:
-	if _pending_from_capture:
-		native_change_settled.emit(result)
-	_pending_from_capture = false
-
-
 # Hides and frees a detached native instance. The free defers so the engine
 # finishes assigning current_scene before the node leaves the tree.
 func _hide_and_free(node: Node) -> void:
@@ -827,8 +814,7 @@ func _register_constructor(api: NetwMultiplayer) -> void:
 # Server startup spawns the declared initial scenes, deferred one idle frame so
 # the session has settled, then announces completion.
 func _on_session_entered() -> void:
-	var api := _api()
-	if api and api.is_server():
+	if session.is_server():
 		_spawn_initial_scenes.call_deferred()
 	_ensure_host_scene_view.call_deferred()
 
@@ -913,10 +899,7 @@ func _spawn_initial_scenes() -> void:
 # Whether a scene with [param packed]'s root name is already active, so a startup
 # spawn never duplicates a scene a join already brought online.
 func _packed_scene_active(packed: PackedScene) -> bool:
-	var state := packed.get_state()
-	if state.get_node_count() == 0:
-		return false
-	return _container(StringName(state.get_node_name(0))) != null
+	return _container(NetwMultiplayerCore.scene_packed_stem(packed)) != null
 
 
 ## Constructs and replicates a scene wrapper from [param data], parenting it
@@ -932,10 +915,9 @@ func _packed_scene_active(packed: PackedScene) -> bool:
 ## one session may differ. Passing [code]-1[/code] takes the session default.
 ## [br][br][b]Server Only.[/b]
 func spawn(data: Variant, isolation: int = -1) -> Node:
+	assert(session.is_server(), "Scene spawning is server-only.")
 	var api := _api()
-	assert(api and api.is_server(), "Scene spawning is server-only.")
-	if not _can_spawn_scene(&""):
-		return null
+	core.spawn_note(&"")
 	var scene_node := api._replication.spawn_registered(
 		SCENE_CONSTRUCTOR_ID,
 		[data, _default_isolation() if isolation < 0 else isolation],
@@ -962,7 +944,7 @@ func _default_isolation() -> NetwMultiplayer.SceneIsolation:
 # signature alone.
 func _spawn_scene_node(data: Variant, isolation: int) -> Node:
 	var api := _api()
-	var hosting := api.is_server() if api else false
+	var hosting := session.is_server() if api else false
 	var level: Node
 	if level_spawn_function.is_valid():
 		level = level_spawn_function.call(data)
@@ -986,29 +968,19 @@ func _spawn_scene_node(data: Variant, isolation: int) -> Node:
 		return null
 	var wrapper := _make_scene_wrapper(hosting, isolation)
 	_install_level(wrapper, level)
+	_declare_container(wrapper, level)
 	if api:
 		api._connect_once(wrapper.tree_entered, _on_scene_entered.bind(wrapper))
 		api._connect_once(wrapper.tree_exited, _on_scene_exited.bind(wrapper))
 	return wrapper
 
 
-# Builds the container the scene's declared isolation selects. A hosting peer
-# isolates an OWN_WORLD scene in a [SubViewport] with its own world; every other
-# case is a plain [Node], because only the host simulates. Neither carries a
-# script: a scene is its entity record, not a node class.
+# Builds the container the scene's declared isolation selects.
 func _make_scene_wrapper(hosting: bool, isolation: int) -> Node:
-	var wrapper: Node
-	if isolation == NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD \
-			and hosting:
-		var viewport := SubViewport.new()
-		viewport.own_world_3d = true
-		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-		wrapper = viewport
-	else:
-		wrapper = Node.new()
-	wrapper.name = &"Scene"
-	wrapper.set_meta(NetwSceneHandle._SCENE_META, true)
-	return wrapper
+	return NetwMultiplayerCore.scene_build_container(
+		hosting,
+		isolation == NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD,
+	)
 
 
 # The node every scene wrapper parents under. A declaration node co-locates its
@@ -1023,29 +995,6 @@ func _scene_parent() -> Node:
 	if is_instance_valid(manager_node):
 		return manager_node
 	return api.root
-
-
-# Warns when a second scene joins a session whose scenes all share one world,
-# which is legal but usually a mistake: two levels in one physics space collide.
-# A scene that declares SCENE_ISOLATION_OWN_WORLD says it meant it.
-func _can_spawn_scene(scene_name: StringName) -> bool:
-	if _allow_single_spawn or not _has_active_scene():
-		return true
-	for active: Node in _live_scenes:
-		var record := NetwEntity.of(active)
-		if record != null and record.scene_isolation \
-				== NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD:
-			return true
-	var detail := "another scene"
-	if not scene_name.is_empty():
-		detail = "scene '%s'" % scene_name
-	Netw.dbg.warn(
-		"Activating %s while a shared-world scene is active. Both levels "
-		+ "share one physics space. Declare isolation with "
-		+ "Netw.configure_multiplayer_scene(self).isolated() if that is wrong.",
-		[detail],
-	)
-	return true
 
 
 # The declared resource path for a scene name, or an empty string.
@@ -1069,21 +1018,31 @@ func _on_scene_entered(scene_node: Node) -> void:
 	if content == null:
 		return
 	var scene_name := StringName(content.name)
-	# The stem is a non-unique label: N instances of one level are N scenes,
-	# each owning its own route-keyed admission boundary. This map answers
-	# "an instance of this stem", _live_scenes answers "every instance".
-	scenes[scene_name] = scene_node
-	if not _live_scenes.has(scene_node):
-		_live_scenes.append(scene_node)
+	var entering := _api()
+	if entering:
+		# The stem is a non-unique label: N instances of one level are N
+		# scenes, each owning its own route-keyed admission boundary. The book
+		# answers "an instance of this stem" by stem and "every instance" in
+		# registration order.
+		var seat := session.entity_of(scene_node)
+		core.scene_enter(seat, scene_name, _owns_its_world(entering, seat))
 	_open_admission(scene_node)
 	_ensure_host_scene_view()
 	scene_spawned.emit(scene_node)
 	var live_api := _api()
 	var record := NetwEntity.of(scene_node)
 	if live_api and record:
-		live_api.scene_live.emit(record.scene)
-	sync_local_participant.call_deferred()
-	refresh_current_scene.call_deferred()
+		# The session records and announces as one act, and resolves the facet
+		# from the container's own record. The container names itself, because
+		# a mounted scene declares its own facet.
+		var container := session.entity_of(scene_node)
+		session.scene_publish_live(
+			record.route,
+			container,
+			String(scene_node.name),
+		)
+	_settle_sync_local()
+	_settle_refresh()
 
 
 func _on_scene_exited(scene_node: Node) -> void:
@@ -1101,13 +1060,11 @@ func _open_admission(scene_node: Node) -> void:
 	var api := _api()
 	if api == null:
 		return
-	var scene := api.rid_of(scene_node)
-	if not scene.is_valid() or _admissions.has(scene):
+	var scene := session.entity_of(scene_node)
+	if not scene.is_valid() or _admission_layers.has(scene):
 		return
-	var row := _Admission.new()
-	row.container = scene_node
-	_admissions[scene] = row
-	if api.is_server():
+	_admission_layers[scene] = null
+	if session.is_server():
 		for peer: int in api.scene_get_peers(scene):
 			_report_participant(scene, peer, true)
 		return
@@ -1115,7 +1072,7 @@ func _open_admission(scene_node: Node) -> void:
 	var boundary := api._interest.get_layer(api._scene_layer_id(scene))
 	if boundary == null:
 		return
-	row.layer = boundary
+	_admission_layers[scene] = boundary
 	api._connect_once(boundary.entity_visible, _on_scene_visible.bind(scene))
 	api._connect_once(boundary.entity_hidden, _on_scene_hidden.bind(scene))
 	var record := NetwEntity.of(scene_node)
@@ -1129,24 +1086,24 @@ func _close_admission(scene_node: Node) -> void:
 	var api := _api()
 	if api == null:
 		return
-	var scene := api.rid_of(scene_node)
-	var row: _Admission = _admissions.get(scene)
-	if row == null:
+	var scene := session.entity_of(scene_node)
+	if not _admission_layers.has(scene):
 		return
-	if row.layer:
+	var layer: NetwInterestLayer = _admission_layers[scene]
+	if layer:
 		var visible := _on_scene_visible.bind(scene)
-		if row.layer.entity_visible.is_connected(visible):
-			row.layer.entity_visible.disconnect(visible)
+		if layer.entity_visible.is_connected(visible):
+			layer.entity_visible.disconnect(visible)
 		var hidden := _on_scene_hidden.bind(scene)
-		if row.layer.entity_hidden.is_connected(hidden):
-			row.layer.entity_hidden.disconnect(hidden)
-	_admissions.erase(scene)
+		if layer.entity_hidden.is_connected(hidden):
+			layer.entity_hidden.disconnect(hidden)
+	_admission_layers.erase(scene)
 	if api.local_participant:
-		_clear_membership(api.local_participant, scene)
+		api.local_participant._leave_seat(scene)
 	for peer: int in api.scene_get_peers(scene):
 		var participant := api.peer_get_participant(peer)
 		if participant:
-			_clear_membership(participant, scene)
+			participant._leave_seat(scene)
 
 
 ## Admits [param peer] to [param scene], reporting the participant edge when the
@@ -1162,9 +1119,7 @@ func admit_peer(scene: RID, peer: int) -> void:
 	var boundary := api._interest.layer_for(api._scene_layer_id(scene))
 	if boundary == null:
 		return
-	var was_admitted := boundary.viewers.has(peer)
-	boundary.add_viewer(peer)
-	if not was_admitted and boundary.viewers.has(peer):
+	if boundary.add_viewer(peer):
 		_report_participant(scene, peer, true)
 
 
@@ -1178,9 +1133,7 @@ func release_peer(scene: RID, peer: int) -> void:
 	var boundary := api._interest.get_layer(api._scene_layer_id(scene))
 	if boundary == null:
 		return
-	var was_admitted := boundary.viewers.has(peer)
-	boundary.remove_viewer(peer)
-	if was_admitted and not boundary.viewers.has(peer):
+	if boundary.remove_viewer(peer):
 		_report_participant(scene, peer, false)
 
 
@@ -1188,16 +1141,14 @@ func release_peer(scene: RID, peer: int) -> void:
 # peer admitted before its roster row lands is parked and retried on join.
 func _report_participant(scene: RID, peer: int, present: bool) -> void:
 	var api := _api()
-	var row: _Admission = _admissions.get(scene)
 	if api == null:
 		return
 	var participant := api.peer_get_participant(peer)
 	if participant == null:
-		if present and row:
-			row.pending[peer] = true
+		if present:
+			core.admission_park(scene, peer)
 		return
-	if row:
-		row.pending.erase(peer)
+	core.admission_unpark(scene, peer)
 	if present:
 		participant.current_scene = api.scene_handle(scene)
 	else:
@@ -1210,30 +1161,30 @@ func _report_participant(scene: RID, peer: int, present: bool) -> void:
 	)
 
 
-# Clears membership only if [param scene] is still where the participant is, so
-# a move that reassigns membership first wins over a late release.
-func _clear_membership(participant: NetwParticipant, scene: RID) -> void:
-	var current := participant.current_scene
-	if current != null and current.entity == scene:
-		participant.current_scene = null
-
-
 func _clear_membership_deferred(
 		participant: NetwParticipant,
 		scene: RID,
 ) -> void:
-	_clear_membership.call_deferred(participant, scene)
+	var api := _api()
+	if api:
+		session.settle_schedule(
+			participant._leave_seat.bind(scene),
+			StringName(
+				"scene-clear-membership?%d?%d"
+				% [participant.peer_id, scene.get_id()],
+			),
+		)
 
 
 func _on_scene_visible(entity: NetwEntity, scene: RID) -> void:
 	var api := _api()
-	if api and entity == api._entity_wrapper(scene):
+	if api and entity == session.wrapper_of(scene):
 		_report_local_participant(scene, true)
 
 
 func _on_scene_hidden(entity: NetwEntity, scene: RID) -> void:
 	var api := _api()
-	if api and entity == api._entity_wrapper(scene):
+	if api and entity == session.wrapper_of(scene):
 		_report_local_participant(scene, false)
 
 
@@ -1249,15 +1200,15 @@ func _on_participant_joined(participant: NetwParticipant) -> void:
 	var api := _api()
 	if api == null:
 		return
-	for scene: RID in _admissions.keys():
-		var row: _Admission = _admissions[scene]
-		if row.pending.has(participant.peer_id):
+	for scene: RID in _admission_layers.keys():
+		if core.admission_is_parked(scene, participant.peer_id):
 			_report_participant(scene, participant.peer_id, true)
 			continue
-		if row.layer == null or participant != api.local_participant:
+		var layer: NetwInterestLayer = _admission_layers[scene]
+		if layer == null or participant != api.local_participant:
 			continue
-		var record := api._entity_wrapper(scene)
-		if record and row.layer.has_entity(record):
+		var record := session.wrapper_of(scene) as NetwEntity
+		if record and layer.has_entity(record):
 			_report_participant(scene, participant.peer_id, true)
 
 
@@ -1267,10 +1218,7 @@ func _on_participant_joined(participant: NetwParticipant) -> void:
 func _notify_scene_released(scene: RID, peer: int) -> void:
 	var api := _api()
 	var participant := api.peer_get_participant(peer) if api else null
-	if participant == null:
-		return
-	var current := participant.current_scene
-	if current == null or current.entity != scene:
+	if participant == null or not participant._seated_in(scene):
 		return
 	var payload := var_to_bytes(api._scene_layer_id(scene))
 	if peer == api.get_unique_id():
@@ -1309,7 +1257,7 @@ func watch_entity(entity: NetwEntity) -> void:
 	# The id is resolved once, here, while the entity is alive. Re-resolving per
 	# edge would mint a fresh one for an entity on its way out, because a despawn
 	# clears the record's id before the node leaves the tree.
-	var subject := api.rid_of(node)
+	var subject := session.entity_of(node)
 	if not subject.is_valid():
 		return
 	var entered := _report_entity_edge.bind(entity, subject, true)
@@ -1324,17 +1272,22 @@ func watch_entity(entity: NetwEntity) -> void:
 	# Teardown cannot resolve that scene, because the node is already leaving the
 	# tree the walk would follow, so the seat is remembered here instead.
 	if entity.peer_id != 0:
-		var seat := api.scene_of(subject)
+		var seat := session.entity_scene_of(subject)
 		if seat.is_valid() and seat != subject:
 			var leaving := _on_player_exiting.bind(seat, entity, entity.peer_id)
 			if not node.tree_exiting.is_connected(leaving):
 				node.tree_exiting.connect(leaving)
 
 
-# Defers the release so it can tell a free from a reparent, which the exit
+# Settles the release so it can tell a free from a reparent, which the exit
 # signal itself cannot.
 func _on_player_exiting(seat: RID, entity: NetwEntity, peer: int) -> void:
-	_release_departed_player.call_deferred(seat, entity, peer)
+	var api := _api()
+	if api:
+		session.settle_schedule(
+			_release_departed_player.bind(seat, entity, peer),
+			StringName("scene-seat-release?%d?%d" % [peer, seat.get_id()]),
+		)
 
 
 # Reports one entity crossing a scene boundary. A player reports on both the
@@ -1348,7 +1301,7 @@ func _report_entity_edge(
 	var api := _api()
 	if api == null or entity == null or not is_instance_valid(entity.owner):
 		return
-	var scene := api.scene_of(subject)
+	var scene := session.entity_scene_of(subject)
 	if not scene.is_valid() or scene == subject:
 		return
 	_dispatch_observers(
@@ -1367,18 +1320,19 @@ func _report_entity_edge(
 
 
 # Releases a player's admission once it is clear the player left for good. The
-# check defers because tree_exiting cannot tell a free from a reparent: a node
-# on its way to another scene is still valid a frame later, a freed one is not.
+# check waits for the pump because tree_exiting cannot tell a free from a
+# reparent: a node on its way to another scene is still valid by then, a freed
+# one is not.
 func _release_departed_player(
 		scene: RID,
 		entity: NetwEntity,
 		peer: int,
 ) -> void:
 	var api := _api()
-	if api == null or not api.is_server():
+	if api == null or not session.is_server():
 		return
 	if is_instance_valid(entity) and is_instance_valid(entity.owner) \
-			and api.scene_of(api.rid_of(entity.owner)) == scene:
+			and session.entity_scene_of(session.entity_of(entity.owner)) == scene:
 		return
 	release_peer(scene, peer)
 
@@ -1393,37 +1347,21 @@ func _dispatch_observers(
 	core.dispatch(scene, event, present, subject)
 
 
-func _free_retired_scene(scene_node: Node, drain_frames: int) -> void:
-	var tree := Engine.get_main_loop() as SceneTree
-	for i in drain_frames:
-		if tree:
-			await tree.process_frame
-	if is_instance_valid(scene_node):
-		scene_node.queue_free()
-
-
+# A surviving sibling instance of the same stem keeps the stem answerable, so
+# retiring one arena does not make the other unreachable by name, which the
+# record plane's own exit does.
 func _remove_scene(scene_node: Node) -> void:
-	_live_scenes.erase(scene_node)
-	for scene_name: StringName in scenes.keys():
-		if scenes.get(scene_name) == scene_node:
-			scenes.erase(scene_name)
-	# A surviving sibling instance of the same stem keeps the stem answerable,
-	# so retiring one arena does not make the other unreachable by name.
-	for survivor: Node in _live_scenes:
-		var content := _level_of(survivor)
-		if content == null:
-			continue
-		var stem := StringName(content.name)
-		if not scenes.has(stem):
-			scenes[stem] = survivor
-	refresh_current_scene.call_deferred()
+	var api := _api()
+	if api:
+		core.scene_exit(session.entity_of(scene_node))
+	_settle_refresh()
 
 
 # Runs one guarded replicated entity move.
 func _move_entity(
 		entity: NetwEntity,
 		destination: Variant,
-		opts: MoveOpts,
+		opts: NetwReparentOpts,
 		promise: NetwPromise,
 ) -> void:
 	if entity == null or not is_instance_valid(entity.owner):
@@ -1438,14 +1376,11 @@ func _move_entity(
 		promise.resolve(OK)
 		return
 	if opts == null:
-		opts = MoveOpts.new()
+		opts = NetwReparentOpts.new()
+		opts.reason = _MOVE_REASON
 	var guard := AreaReparentGuard.new(entity.owner)
 	await guard.flush()
-	var reparent_opts := NetwEntity.ReparentOpts.new()
-	reparent_opts.preserve_history = opts.preserve_history
-	reparent_opts.reason = opts.reason
-	reparent_opts.target_global_position = opts.target_global_position
-	entity.reparent_to(_level_of(target), reparent_opts)
+	entity.reparent_to(_level_of(target), opts)
 	await guard.flush()
 	guard.release()
 	var participant := entity.participant
@@ -1461,30 +1396,28 @@ func _move_entity(
 # Replaces what the session presents. Every participant ends up in the target
 # wherever it started, and every other live scene retires, so the answer does not
 # depend on which scene happened to be first. A second transition entered while
-# one is still moving peers resolves UNAVAILABLE so concurrent approvals never
-# interleave moves against a half-transitioned roster. It holds the session-wide
-# slot (_SESSION_TRANSITION), so it serializes against itself while two
-# participants moving into two isolated worlds still proceed concurrently.
+# one is still moving peers resolves UNAVAILABLE, so concurrent approvals never
+# interleave moves against a half-transitioned roster.
 func _change_single_scene(
 		destination: Variant,
 		promise: NetwPromise,
 ) -> void:
-	if _change_in_flight.has(_SESSION_TRANSITION):
+	if not core.transition_open():
 		promise.reject(ERR_UNAVAILABLE)
 		return
 	var target := _existing_destination(destination)
 	if target == null:
-		_allow_single_spawn = true
+		core.replacing = true
 		target = activate(destination)
-		_allow_single_spawn = false
+		core.replacing = false
 	if target == null:
+		core.transition_close()
 		promise.reject(ERR_UNAVAILABLE)
 		return
 	var sources: Array[Node] = []
 	for active: Node in _live_scenes:
 		if is_instance_valid(active) and active != target:
 			sources.append(active)
-	_change_in_flight[_SESSION_TRANSITION] = true
 	var moved_peers: Dictionary[int, bool] = { }
 	for source: Node in sources:
 		for entity: NetwEntity in _players_in(source):
@@ -1492,7 +1425,7 @@ func _change_single_scene(
 			if not move_promise.is_settled:
 				await move_promise.settled
 			if move_promise.code != OK:
-				_change_in_flight.erase(_SESSION_TRANSITION)
+				core.transition_close()
 				promise.reject(ERR_UNAVAILABLE)
 				return
 			moved_peers[entity.peer_id] = true
@@ -1506,15 +1439,15 @@ func _change_single_scene(
 		if admitted != OK:
 			# A participant left outside the destination would present a scene it
 			# is not in, so a partial transition fails rather than half-lands.
-			_change_in_flight.erase(_SESSION_TRANSITION)
+			core.transition_close()
 			promise.reject(admitted)
 			return
 	for source: Node in sources:
 		var content := _level_of(source)
 		if content != null:
 			destroy(StringName(content.name))
-	refresh_current_scene.call_deferred()
-	_change_in_flight.erase(_SESSION_TRANSITION)
+	_settle_refresh()
+	core.transition_close()
 	promise.resolve(OK)
 
 
@@ -1526,21 +1459,21 @@ func _resolve_destination(destination: Variant) -> Node:
 
 # Resolves an already active destination reference.
 func _existing_destination(destination: Variant) -> Node:
-	if destination is Node and _live_scenes.has(destination):
+	if destination is Node and core.is_live(session.entity_of(destination)):
 		return destination if is_instance_valid(destination) else null
 	if destination is String or destination is StringName:
 		return _container(StringName(destination))
 	if destination is PackedScene:
-		var path := (destination as PackedScene).resource_path
-		if not path.is_empty():
-			return _container(StringName(path.get_file().get_basename()))
+		return _container(
+			NetwMultiplayerCore.scene_packed_stem(destination),
+		)
 	return null
 
 
 # Server receive for a player scene request off the carrier.
 func _handle_scene_request_frame(payload: PackedByteArray, sender: int) -> void:
 	var api := _api()
-	if api == null or not api.is_server():
+	if api == null or not session.is_server():
 		return
 	if _request_flooded(sender):
 		return
@@ -1557,19 +1490,15 @@ func _handle_scene_request_frame(payload: PackedByteArray, sender: int) -> void:
 # Whether sender's scene requests exceed the flood window. The host at peer 1
 # carries authority and is never limited.
 func _request_flooded(sender: int) -> bool:
+	var api := _api()
+	if api == null:
+		return false
 	# The wall clock is read here and handed down, so the window itself is a
 	# function of its arguments.
-	var flooded := _request_window.exceeded(sender, Time.get_ticks_msec())
-	if flooded:
-		var api := _api()
-		if api:
-			api._warn_gate_verdict(
-				ERR_BUSY,
-				0,
-				"SceneCore: peer %d exceeded scene request rate",
-				[sender],
-			)
-	return flooded
+	return session.scene_request_flooded(
+		sender,
+		Time.get_ticks_msec(),
+	)
 
 
 # Client receive for a server-authored request outcome off the carrier.
@@ -1583,11 +1512,7 @@ func _handle_scene_result_frame(payload: PackedByteArray, sender: int) -> void:
 				"SceneCore: rejected scene result from peer %d",
 				[sender],
 			)
-		return
-	var data: Variant = bytes_to_var(payload)
-	if not data is Array or (data as Array).size() != 2:
-		return
-	_receive_change_result(data[0], data[1])
+	core.receive_result_frame(payload, sender)
 
 
 # Clears the local participant's scene membership from a server release notice.
@@ -1598,11 +1523,11 @@ func _handle_scene_released_frame(payload: PackedByteArray, sender: int) -> void
 	if api == null or api.local_participant == null:
 		return
 	var released := StringName(bytes_to_var(payload))
-	var current := api.local_participant.current_scene
-	if current == null:
-		return
-	if api._scene_layer_id(current.entity) == released:
-		api.local_participant.current_scene = null
+	var seat: RID = session.participant_seat(
+		api.local_participant.peer_id,
+	)
+	if seat.is_valid() and api._scene_layer_id(seat) == released:
+		api.local_participant._leave_seat(seat)
 
 
 # Applies server policy and answers one player request.
@@ -1619,7 +1544,7 @@ func _receive_change_request(
 		_send_change_result(peer_id, request_id, ERR_UNAUTHORIZED)
 		return
 	if is_path:
-		await _receive_path_request(
+		_receive_path_request(
 			peer_id,
 			request_id,
 			participant,
@@ -1627,7 +1552,7 @@ func _receive_change_request(
 			args,
 		)
 	else:
-		await _receive_named_request(
+		_receive_named_request(
 			peer_id,
 			request_id,
 			participant,
@@ -1658,10 +1583,11 @@ func _receive_named_request(
 	):
 		_send_change_result(peer_id, request_id, ERR_UNAUTHORIZED)
 		return
-	var operation := _apply_authorized_change(participant, scene_name, config)
-	if not operation.is_settled:
-		await operation.settled
-	_send_change_result(peer_id, request_id, operation.code)
+	_answer_when_settled(
+		_apply_authorized_change(participant, scene_name, config),
+		peer_id,
+		request_id,
+	)
 
 
 # A path request is bounded to a real scene file, then authorized against the
@@ -1702,16 +1628,16 @@ func _receive_path_request(
 	):
 		_send_change_result(peer_id, request_id, ERR_UNAUTHORIZED)
 		return
-	var operation := _apply_authorized_change(participant, packed, config)
-	if not operation.is_settled:
-		await operation.settled
-	_send_change_result(peer_id, request_id, operation.code)
+	_answer_when_settled(
+		_apply_authorized_change(participant, packed, config),
+		peer_id,
+		request_id,
+	)
 
 
-# Decides one player request. An installed handler answers outright, because a
-# request has exactly one verdict. With none installed the mark is the consent
-# line: a declared name and a marked scene admit, a raw unmarked path does not,
-# and a gated or session-wide mark denies either.
+# Decides one player request. The mark readings are the authoring tier's, so
+# they are read here and handed down, and the verdict itself is the record
+# plane's.
 func _admits_request(
 		participant: NetwParticipant,
 		scene_name: StringName,
@@ -1721,18 +1647,18 @@ func _admits_request(
 		config: NetwScriptModel.SceneMarkConfig,
 ) -> bool:
 	var named := not scene_name.is_empty()
-	if _request_handler.is_valid():
-		var destination: Variant = scene_name if named else scene_path
-		var verdict: Variant = _request_handler.call(
-			participant,
-			destination,
-			args,
-		)
-		return (verdict is int or verdict is float) and int(verdict) == OK
 	var gated := config != null and (config.is_gated or config.is_session_wide)
 	var marked := target_script != null \
 			and Netw.is_multiplayer_scene(target_script)
-	return not scene_path.is_empty() and (named or marked) and not gated
+	return core.decide_request(
+		participant,
+		scene_name if named else scene_path,
+		args,
+		named,
+		marked,
+		gated,
+		scene_path,
+	)
 
 
 # Applies an admitted request. A session-wide scene replaces the whole session,
@@ -1771,13 +1697,9 @@ func _packed_root_script(packed: PackedScene) -> Script:
 
 # Normalizes a UID or resource path and bounds it to a real scene file.
 func _verify_requested_path(scene_path: String) -> String:
-	var resolved := ResourceUID.ensure_path(scene_path)
-	if resolved.is_empty() or resolved.length() > 512:
-		return ""
-	if not resolved.begins_with("res://"):
-		return ""
-	var ext := resolved.get_extension()
-	return resolved if ext == "tscn" or ext == "scn" else ""
+	return NetwSceneCore.verify_requested_path(
+		ResourceUID.ensure_path(scene_path),
+	)
 
 
 # Applies an allowed request at the configured reach.
@@ -1805,6 +1727,25 @@ func _apply_player_change(
 	return completed
 
 
+# Answers [param request_id] once [param operation] settles, which is the same
+# moment an await would have reached: a settled operation answers now and a
+# pending one answers on its own edge. Subscribing rather than awaiting is what
+# leaves the whole receive path drivable by a caller that has no coroutine.
+func _answer_when_settled(
+		operation: NetwPromise,
+		peer_id: int,
+		request_id: int,
+) -> void:
+	if operation.is_settled:
+		_send_change_result(peer_id, request_id, operation.code)
+		return
+	operation.settled.connect(
+		func() -> void:
+			_send_change_result(peer_id, request_id, operation.code),
+		CONNECT_ONE_SHOT,
+	)
+
+
 # Sends a terminal request result to the requesting peer off the carrier.
 func _send_change_result(
 		peer_id: int,
@@ -1825,12 +1766,7 @@ func _send_change_result(
 
 # Resolves the one current local player request.
 func _receive_change_result(request_id: int, result: int) -> void:
-	if not core.is_current(request_id) or _pending_request == null:
-		return
-	_settle_promise(_pending_request, result as Error)
-	_pending_request = null
-	core.close_request()
-	_settle_native_change(result)
+	core.request_settle(request_id, result)
 
 
 # The canonical handle for one scene container, which is how a participant's
@@ -1848,12 +1784,22 @@ func _level_of(scene_node: Node) -> Node:
 	return scene_node.get_child(0)
 
 
+# Writes the scene facet onto the container's own record, before the spawn
+# arms, so the record plane resolves a mounted scene without a node walk behind
+# it. Both peers run this constructor, so the value the SPAWN packet carries is
+# the value the client already wrote.
+func _declare_container(scene_node: Node, level: Node) -> void:
+	var record := NetwEntity.ensure(scene_node)
+	if record == null:
+		return
+	record.declares_scene = true
+	record.scene_label = StringName(level.name)
+
+
 # Parents [param level] under [param scene_node] and names the container after
 # it, which is what makes the container's only child its content root.
 func _install_level(scene_node: Node, level: Node) -> void:
-	scene_node.name = level.name + scene_node.name
-	scene_node.add_child(level)
-	level.owner = scene_node
+	NetwMultiplayerCore.scene_install_level(scene_node, level)
 
 
 # The player entities inside [param scene_node].
@@ -1872,23 +1818,23 @@ func _config() -> NetwSceneConfig:
 	return _declared_config
 
 
-# Resolves the scene this peer presents: the one its participant belongs to,
-# falling back to the only live scene when membership has not landed yet.
-func _resolve_current_scene() -> Node:
+# Resolves the scene this peer presents. A dedicated server presents nothing,
+# and the readings the record plane cannot take for itself are the local role
+# and whichever seat the session holds for this peer.
+func _resolve_current_scene() -> RID:
 	var api := _api()
-	if api == null or api.role == NetwMultiplayer.Role.DEDICATED_SERVER:
-		return null
-	if _local_participant and _local_participant.current_scene:
-		return _local_participant.current_scene.level_container()
-	for scene_node: Node in scenes.values():
-		if is_instance_valid(scene_node):
-			return scene_node
-	return null
+	var presents := api != null \
+			and api.role != NetwMultiplayer.Role.DEDICATED_SERVER
+	var seat := session.participant_seat(_local_participant.peer_id) \
+			if _local_participant else RID()
+	return core.resolve_current(presents, seat)
 
 
-# Relays the participant edge and refreshes the current scene.
-func _on_local_scene_changed(from: NetwSceneHandle, to: NetwSceneHandle) -> void:
-	local_scene_changed.emit(from, to)
+# The session publishes the edge; this refreshes what it means locally.
+func _on_local_scene_changed(
+		_from: NetwSceneHandle,
+		_to: NetwSceneHandle,
+) -> void:
 	refresh_current_scene()
 
 
@@ -1896,32 +1842,26 @@ func _on_local_scene_changed(from: NetwSceneHandle, to: NetwSceneHandle) -> void
 # presentation. Freeing wrappers clears their layer memberships through normal
 # entity lifecycle teardown, so the next session starts cleanly.
 func _on_session_ended() -> void:
-	for scene_node: Node in scenes.values().duplicate():
-		if not is_instance_valid(scene_node):
-			continue
+	for scene_node: Node in _live_scenes:
 		if scene_node.get_parent():
 			scene_node.get_parent().remove_child(scene_node)
 		scene_node.free()
-	scenes.clear()
+	core.clear()
 	if is_instance_valid(_host_scene_view):
 		if _host_scene_view.get_parent():
 			_host_scene_view.get_parent().remove_child(_host_scene_view)
 		_host_scene_view.free()
 	_host_scene_view = null
-	if _local_participant and _local_participant.current_scene:
+	if _local_participant:
 		_local_participant.current_scene = null
 	_release_local_participant()
 	_clear_request_state()
-	_current_scene = null
+	core.current_scene = RID()
 
 
 # Resolves pending work and clears session scoped request policy.
 func _clear_request_state() -> void:
-	if _pending_request and not _pending_request.is_settled:
-		_pending_request.reject(ERR_UNAVAILABLE)
-	_pending_request = null
-	core.close_request()
-	_settle_native_change(ERR_UNAVAILABLE)
+	core.request_abandon(ERR_UNAVAILABLE)
 
 
 # Disconnects the current participant without scheduling another refresh.
@@ -1939,10 +1879,12 @@ func _release_local_participant() -> void:
 # it is exempt.
 func _on_native_scene_changed(scene_root: Node) -> void:
 	var api := _api()
-	if api == null or api.state != NetwMultiplayer.SessionState.ONLINE:
-		return
-	if is_instance_valid(scene_root) \
-			and NetwScriptModel.get_scene_config(scene_root.get_script()) != null:
+	var marked := is_instance_valid(scene_root) \
+			and NetwScriptModel.get_scene_config(scene_root.get_script()) != null
+	if not NetwSceneCore.native_change_strands(
+		api != null and api.state == NetwMultiplayer.SessionState.ONLINE,
+		marked,
+	):
 		return
 	push_error(
 		"Native change_scene_to_* to an unmarked scene during an online "

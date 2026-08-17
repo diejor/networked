@@ -55,7 +55,7 @@ QuarantinePlan begin_reseed(
     r_quarantine.align_pending = true;
     r_quarantine.epoch_confirmed = false;
     r_quarantine.ignore_through = -1;
-    NETW_DEBUG("prediction", "quarantine reseed basis=%d", p_state.basis);
+    NETW_DEBUG(sys::PREDICTION, "quarantine reseed basis=%d", p_state.basis);
     return out;
 }
 
@@ -143,7 +143,7 @@ void Quarantine::enter(
     epoch_confirmed = false;
     probation_pending = false;
     NETW_DEBUG(
-        "prediction",
+        sys::PREDICTION,
         "quarantine enter ack_age=%d target=%d flap=%d",
         p_ack_age,
         target,
@@ -232,7 +232,7 @@ QuarantinePlan Quarantine::align(
     epoch_confirmed = false;
     probation_pending = true;
     NETW_DEBUG(
-        "prediction",
+        sys::PREDICTION,
         "quarantine align transition=%d ignore_through=%d",
         p_transition,
         p_ignore_through

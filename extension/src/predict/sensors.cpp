@@ -46,7 +46,7 @@ WitnessSummary summarize_witness(
         if (contact.identity.is_empty() || !valid_class(contact.witness_class)
             || contact.realization < 0 || contact.realization > 5) {
             NETW_ERROR(
-                "prediction",
+                sys::PREDICTION,
                 "Witness contact %d has an invalid identity or class.",
                 int(at)
             );
@@ -83,7 +83,7 @@ WitnessSummary summarize_witness(
     out.contact_count = int(p_contacts.size());
     out.valid = true;
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "witness contacts=%d classes=%d breach=%d",
         out.contact_count,
         int(out.class_bits),

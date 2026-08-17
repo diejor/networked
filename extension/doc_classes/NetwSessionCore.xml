@@ -19,6 +19,7 @@
 		transition(DISCONNECTING) session_ended, state_changed(ONLINE, DISCONNECTING)
 		transition(ONLINE) twice  nothing; the same state is not a re-entry
 		[/codeblock]
+		The values of [enum State] are the contract rather than the order. The public twins on the session shell are defined FROM these constants, so renumbering one here renumbers every mirror with it.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -105,7 +106,7 @@
 	<signals>
 		<signal name="session_ended">
 			<description>
-				Emitted on leaving [constant STATE_ONLINE], before the state moves. Never fires on a connect that failed before it was live, which is the one guarantee that placement buys.
+				Emitted on leaving [constant STATE_ONLINE], before the state moves, so a listener reads the state it is LEAVING rather than the one it is not in yet. Never fires on a connect that failed before it was live, which is the one guarantee that placement buys.
 			</description>
 		</signal>
 		<signal name="session_entered">

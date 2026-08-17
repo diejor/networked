@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwCompTable" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The one-byte component address for one entity: what a comp id names.
+	</brief_description>
+	<description>
+		Ids are positions in the sorted path list, so two peers that registered the same sub-nodes in different orders still agree on every id. Registration order is a property of whichever code happened to run, and the wire cannot carry it, so an id keyed on it disagrees between peers for a reason neither peer can see.
+		The table refuses rather than guesses, and its three refusals are different facts. A hash the authority did not author leaves it [member poisoned], because the two structures disagree and every id is then a coin flip. An id outside the mapping names nothing. A fallback path that could leave the entity subtree is refused on its shape, before anything resolves it, because resolution is the work a hostile address wants done.
+		[codeblock]
+		comp 0        the entity root
+		comp 1..254   the table's path for that id, or nothing
+		comp 255      `path`, once proven to land inside the entity subtree
+		[/codeblock]
+		[method classify] answers without looking at the tree and so can only leave the descendant proof owed; [method resolve_node] is that question with the proof discharged, and is what a caller holding the entity root asks.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="assign">
+			<return type="void" />
+			<param index="0" name="paths" type="PackedStringArray" />
+			<description>
+				Adopts [param paths] as the whole table, sorted, ids assigned by position. Paths past the addressable range keep their place in the order and gain no id, so a digest built over [method sorted_paths] covers the structure rather than the addressable part of it.
+			</description>
+		</method>
+		<method name="classify" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="comp" type="int" />
+			<param index="1" name="path" type="String" />
+			<description>
+				Returns what the address [param comp] and [param path] names, as one of [enum Address], before any node is resolved. A [constant ADDRESS_RELATIVE] answer still owes a proof that what it resolves to is a descendant of the entity root, which only the resolved node can give, so a caller that means to reach the node asks [method resolve_node] instead.
+			</description>
+		</method>
+		<method name="resolve_node" qualifiers="const">
+			<return type="Node" />
+			<param index="0" name="owner" type="Object" />
+			<param index="1" name="comp" type="int" />
+			<param index="2" name="path" type="String" />
+			<description>
+				Returns the node [param comp] and [param path] address under [param owner], or [code]null[/code].
+				[constant ADDRESS_ROOT] answers [param owner], [constant ADDRESS_MAPPED] the node at this table's path for [param comp], and [constant ADDRESS_RELATIVE] the node at [param path] once it is [param owner] or a descendant of it. Every other [enum Address], and a [param path] naming nothing, answers [code]null[/code].
+				An [param owner] that is not a live [Node] addresses nothing, which is the answer for an entity with no node rather than a check each caller keeps. An address arrives off the wire and chooses its own [param comp], so the descendant proof lives here: a caller that only classified is a caller that can still be handed a node outside the subtree.
+			</description>
+		</method>
+		<method name="has_path" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="path" type="String" />
+			<description>
+				Returns [code]true[/code] when [param path] carries an id here.
+			</description>
+		</method>
+		<method name="id_for_path" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="path" type="String" />
+			<description>
+				Returns the id registered for [param path], or [code]0[/code] when it has none. Ids start at [code]1[/code], so guard with [method has_path] where [code]0[/code] has to be told apart from a miss.
+			</description>
+		</method>
+		<method name="path_for_id" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="id" type="int" />
+			<description>
+				Returns the path registered under [param id], empty when no path carries it.
+			</description>
+		</method>
+		<method name="path_shape_is_safe" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="path" type="String" />
+			<description>
+				Rejects a [param path] that is absolute, parent-relative, or a resource path. A shape-safe relative path can only reach descendants of the root it is resolved against, which is why containment is a separate question the caller answers with the node it got back rather than with the string.
+			</description>
+		</method>
+		<method name="reconcile">
+			<return type="bool" />
+			<param index="0" name="is_authority" type="bool" />
+			<description>
+				Settles [member table_hash] against [member wire_hash] and returns whether the call poisoned the table. Authority authors the digest; anyone else compares against it.
+			</description>
+		</method>
+		<method name="sorted_paths" qualifiers="const">
+			<return type="PackedStringArray" />
+			<description>
+				Returns the table in id order, which is the order a digest reads it in.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="poisoned" type="bool" setter="set_poisoned" getter="get_poisoned" default="false">
+			[code]true[/code] once this peer's structure disagreed with the authority's, so every id answers [constant ADDRESS_UNMAPPED] and routed frames fall back to paths instead of misrouting.
+		</member>
+		<member name="table_hash" type="int" setter="set_table_hash" getter="get_table_hash" default="0">
+			This peer's own digest of its structure. The digest is composed by the caller, because what it covers reaches past this table into the scripts an id addresses.
+		</member>
+		<member name="wire_hash" type="int" setter="set_wire_hash" getter="get_wire_hash" default="0">
+			The digest the authority authored, carried on the spawn packet.
+		</member>
+	</members>
+	<constants>
+		<constant name="ADDRESS_ROOT" value="0" enum="Address">
+			The entity root itself, which every entity has.
+		</constant>
+		<constant name="ADDRESS_MAPPED" value="1" enum="Address">
+			The table's path for this id, trusted because the table is local.
+		</constant>
+		<constant name="ADDRESS_RELATIVE" value="2" enum="Address">
+			The frame's own path, still owed a descendant proof by the caller.
+		</constant>
+		<constant name="ADDRESS_HOSTILE" value="3" enum="Address">
+			A shape that can leave the subtree. Never resolved.
+		</constant>
+		<constant name="ADDRESS_UNMAPPED" value="4" enum="Address">
+			No path carries this id here.
+		</constant>
+	</constants>
+</class>

@@ -17,7 +17,6 @@
 class_name NetwNodeSnapshot
 extends RefCounted
 
-const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 var node_path: String
 var node_name: String
@@ -69,7 +68,7 @@ func to_dict() -> Dictionary:
 static func _collect_sync_properties(node: Node) -> Dictionary:
 	var props: Dictionary = { }
 	for sync: MultiplayerSynchronizer in \
-	SynchronizersCache.get_synchronizers(node):
+	NetwSynchronizers.of_node(node):
 		if not sync.replication_config:
 			continue
 

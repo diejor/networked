@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSpawnRecord" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One armed or issued spawn: the identity a verb stamped, the recipe a receiver rebuilds from, and the peers the frame went to.
+	</brief_description>
+	<description>
+		Every object this record names is held as an id and resolved at each use, so a record never keeps a node alive and a node freed while armed reads as absent rather than as a dangling instance. Orphan ownership therefore stays with the caller that armed it.
+		The recipient set is reached through verbs rather than as an array, because it is the book a despawn is addressed from: a caller that mutated a copy would send the frame to a set nothing recorded.
+		[codeblock]
+		record.bind_node(node)              the node, while it lives
+		record.add_recipient(peer)          the spawn frame reached one more peer
+		record.has_recipient(peer)          and the despawn is owed to it
+		[/codeblock]
+		[member recipe] is one of [enum NetwSpawnBook.Recipe], and the book this record is armed in is [NetwSpawnBook].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="add_recipient">
+			<return type="bool" />
+			<param index="0" name="peer" type="int" />
+			<description>
+				Records that this spawn reached [param peer], and answers whether that is new. A peer already in the book is not enrolled twice.
+			</description>
+		</method>
+		<method name="bind_fn_host">
+			<return type="void" />
+			<param index="0" name="host" type="Node" />
+			<description>
+				Names the object a [code]FN[/code] recipe calls its method on. Passing [code]null[/code] forgets it.
+			</description>
+		</method>
+		<method name="bind_node">
+			<return type="void" />
+			<param index="0" name="node" type="Node" />
+			<description>
+				Names the node this record was stamped for. Passing [code]null[/code] forgets it.
+			</description>
+		</method>
+		<method name="bind_spawner">
+			<return type="void" />
+			<param index="0" name="spawner" type="MultiplayerSpawner" />
+			<description>
+				Names the spawner a [code]SPAWNER[/code] recipe was consumed from. Passing [code]null[/code] forgets it.
+			</description>
+		</method>
+		<method name="fn_host" qualifiers="const">
+			<return type="Node" />
+			<description>
+				The object a [code]FN[/code] recipe calls its method on, or [code]null[/code] once it is gone.
+			</description>
+		</method>
+		<method name="has_recipient" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="peer" type="int" />
+			<description>
+				Whether this spawn reached [param peer], which is also whether its despawn is owed to it.
+			</description>
+		</method>
+		<method name="node" qualifiers="const">
+			<return type="Node" />
+			<description>
+				The node this record was stamped for, or [code]null[/code] once it is gone.
+			</description>
+		</method>
+		<method name="recipients" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				The peers this spawn reached, in the order they were enrolled. It is a copy, so a caller that means to change the book calls [method add_recipient] or [method remove_recipient].
+			</description>
+		</method>
+		<method name="remove_recipient">
+			<return type="bool" />
+			<param index="0" name="peer" type="int" />
+			<description>
+				Drops [param peer] from the book and answers whether it was there.
+			</description>
+		</method>
+		<method name="set_recipients">
+			<return type="void" />
+			<param index="0" name="peers" type="PackedInt32Array" />
+			<description>
+				Replaces the whole book with [param peers], keeping no duplicate.
+			</description>
+		</method>
+		<method name="spawner" qualifiers="const">
+			<return type="MultiplayerSpawner" />
+			<description>
+				The spawner a [code]SPAWNER[/code] recipe was consumed from, or [code]null[/code] once it is gone.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="controller" type="int" setter="set_controller" getter="get_controller" default="0">
+			The peer that controls the spawned entity.
+		</member>
+		<member name="custom_data" type="Variant" setter="set_custom_data" getter="get_custom_data">
+			The custom spawn argument captured from a [method MultiplayerSpawner.spawn], read only when [member scene_index] is negative.
+		</member>
+		<member name="entity_id" type="StringName" setter="set_entity_id" getter="get_entity_id" default="&amp;&quot;&quot;">
+			The stamped entity id the receiver rebinds under.
+		</member>
+		<member name="fn_args" type="Array" setter="set_fn_args" getter="get_fn_args" default="[]">
+			Arguments the spawn function is called with.
+		</member>
+		<member name="fn_method" type="StringName" setter="set_fn_method" getter="get_fn_method" default="&amp;&quot;&quot;">
+			Method a [code]FN[/code] recipe calls on its host.
+		</member>
+		<member name="fn_registry_id" type="StringName" setter="set_fn_registry_id" getter="get_fn_registry_id" default="&amp;&quot;&quot;">
+			Registry id of the spawn function for a [code]FN_REGISTRY[/code] record, which the session resolves to a host-less constructor.
+		</member>
+		<member name="node_name" type="String" setter="set_node_name" getter="get_node_name" default="&quot;&quot;">
+			[member Node.name] carried on the frame. Applied, never parsed.
+		</member>
+		<member name="parent_route" type="int" setter="set_parent_route" getter="get_parent_route" default="0">
+			Route of the nearest tracked ancestor entity at flush time, or [code]0[/code]. Drives the child-first despawn cascade.
+		</member>
+		<member name="peer_id" type="int" setter="set_peer_id" getter="get_peer_id" default="0">
+			The peer the spawned entity belongs to.
+		</member>
+		<member name="recipe" type="int" setter="set_recipe" getter="get_recipe" default="0">
+			How a receiver reconstructs the node, as one of [enum NetwSpawnBook.Recipe].
+		</member>
+		<member name="route" type="int" setter="set_route" getter="get_route" default="0">
+			The route this spawn was stamped under.
+		</member>
+		<member name="scene_index" type="int" setter="set_scene_index" getter="get_scene_index" default="-1">
+			Index into the spawner's scene list, or [code]-1[/code] for a custom spawn whose data rides [member custom_data].
+		</member>
+		<member name="scene_path" type="String" setter="set_scene_path" getter="get_scene_path" default="&quot;&quot;">
+			Scene a [code]SCENE[/code] recipe instantiates.
+		</member>
+	</members>
+</class>

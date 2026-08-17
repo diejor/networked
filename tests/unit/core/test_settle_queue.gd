@@ -93,8 +93,8 @@ func test_a_self_rescheduling_effect_fails_loudly_rather_than_hanging() -> void:
 	# Bounded, so the count is the bound rather than whatever the machine had
 	# time for, and the queue is left empty rather than poisoned for the next
 	# pump.
-	assert_int(seen.size()).is_equal(NetwMultiplayer._SETTLE_PASSES)
-	assert_array(api._settle_queue).is_empty()
+	assert_int(seen.size()).is_equal(NetwMultiplayerCore.settle_max_passes())
+	assert_int(api._native_core.settle_pending()).is_equal(0)
 
 
 # The miswiring: an effect whose own body puts it back on the queue under the

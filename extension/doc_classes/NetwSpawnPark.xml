@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSpawnPark" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The SPAWN frames waiting for something this peer does not have yet.
+	</brief_description>
+	<description>
+		One book rather than two, because a parked route and the frame it parked are one fact. Kept apart, a caller can drop the flag and leave the payload, and the next arrival applies a spawn nothing is waiting for.
+		What a row waits ON decides who retries it. A [constant WAIT_ROUTE] row is retried by its route going live and is bounded by that waiter, so it carries no deadline of its own. A [constant WAIT_SCENE] row has no route to wait on, so any scene arrival retries it and a wall deadline is what stops it waiting forever.
+		[codeblock]
+		park(route, payload, wait, deadline)   answers false for a second arrival
+		take(route)                            the retry's one answer
+		cancel(route)                          the despawn's, with net result zero
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="anchor_parks" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="state" type="int" />
+			<description>
+				Whether a frame naming an anchor whose route is in [param state] parks rather than resolving or dropping.
+				It parks on [constant NetwLivenessCore.STATE_UNKNOWN], which means the frame arrived before the route it depends on, and on [constant NetwLivenessCore.STATE_DEAD], which means an interest re-admission whose reviving spawn is still in flight on the same reliable ordered channel. It does NOT park on [constant NetwLivenessCore.STATE_LINGERING], because a lingering route is still resolvable and waiting for it would defer a frame that can be applied now.
+			</description>
+		</method>
+		<method name="cancel">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Drops a park without applying it, answering whether there was one. This is what a despawn arriving mid-park does, and its net result is zero.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every park, which is what a session end means for all of them.
+			</description>
+		</method>
+		<method name="has" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<description>
+				Whether a frame is parked for [param route].
+			</description>
+		</method>
+		<method name="is_expired" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<param index="1" name="now" type="int" />
+			<description>
+				Whether [param route]'s wall deadline has passed. A [constant WAIT_ROUTE] row has none, so it never expires here: the waiter that bounds it says when it gives up.
+			</description>
+		</method>
+		<method name="park">
+			<return type="bool" />
+			<param index="0" name="route" type="int" />
+			<param index="1" name="payload" type="PackedByteArray" />
+			<param index="2" name="wait" type="int" enum="NetwSpawnPark.Wait" />
+			<param index="3" name="deadline" type="int" />
+			<description>
+				Parks the frame that would spawn [param route], answering whether it is new. A route already parked keeps the frame it parked with, because the second frame is the same spawn arriving twice.
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Frames parked, on either kind of wait.
+			</description>
+		</method>
+		<method name="take">
+			<return type="PackedByteArray" />
+			<param index="0" name="route" type="int" />
+			<description>
+				The frame parked for [param route], forgetting the row in the same act. A route nothing parked answers an empty run, which is also what a cancelled park answers, so a retry that lost its race applies nothing.
+			</description>
+		</method>
+		<method name="waiting_on" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="wait" type="int" enum="NetwSpawnPark.Wait" />
+			<description>
+				Every route parked on [param wait], in no particular order.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="WAIT_ROUTE" value="0" enum="Wait">
+			The frame waits for a route it depends on to go live, and that waiter bounds it.
+		</constant>
+		<constant name="WAIT_SCENE" value="1" enum="Wait">
+			The frame waits for the scene subtree holding a consumed spawner, retried by any scene arrival and bounded by its own deadline.
+		</constant>
+	</constants>
+</class>

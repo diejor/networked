@@ -97,7 +97,7 @@ void LocalLoopbackSession::init_server_side() {
     server_peer.instantiate();
     server_peer->set_loopback_session(this);
     if (server_peer->create_server() != Error::OK) {
-        NETW_WARN("transport", "loopback server could not be created");
+        NETW_WARN(sys::TRANSPORT, "loopback server could not be created");
     }
 }
 
@@ -107,11 +107,9 @@ Ref<LocalMultiplayerPeer> LocalLoopbackSession::create_client_peer() {
     Ref<LocalMultiplayerPeer> client;
     client.instantiate();
     client->set_loopback_session(this);
-    // Ids are drawn rather than counted, so nothing downstream can assume a
-    // peer id is small, sequential, or the same across two runs.
     const int client_id = int(gd::randi_range(2, 2147483647));
     if (client->create_client(client_id) != Error::OK) {
-        NETW_WARN("transport", "loopback client could not be created");
+        NETW_WARN(sys::TRANSPORT, "loopback client could not be created");
         return client;
     }
 
@@ -119,7 +117,7 @@ Ref<LocalMultiplayerPeer> LocalLoopbackSession::create_client_peer() {
     client->force_connect_peer(1, server_peer.ptr());
     client_peers.push_back(client);
     NETW_INFO(
-        "transport",
+        sys::TRANSPORT,
         "loopback handshake complete for client=%d",
         client_id
     );
@@ -190,7 +188,7 @@ void LocalLoopbackSession::poll_peers() {
 void LocalLoopbackSession::poll_or_hold(LocalMultiplayerPeer *p_peer) {
     NETW_ASSERT(
         p_peer != nullptr,
-        "transport",
+        sys::TRANSPORT,
         "A loopback poll requires a peer."
     );
     LinkState *state = link_of(p_peer);
@@ -267,8 +265,6 @@ void LocalLoopbackSession::clear_link_conditions(
 }
 
 void LocalLoopbackSession::clear_all_link_conditions() {
-    // The peers are collected first because releasing a link can retire it,
-    // and a retired link must not invalidate the walk that retired it.
     Vector<uint64_t> peer_ids;
     for (const KeyValue<uint64_t, LinkState> &link : links) {
         peer_ids.push_back(link.key);
@@ -499,8 +495,6 @@ void LocalLoopbackSession::release_due(
     }
 
     for (const InFlight &entry : due) {
-        // A packet whose sender left between send and delivery is dropped
-        // rather than delivered from a peer that is no longer linked.
         if (entry.packet.peer == 0 || p_peer->is_linked_to(entry.packet.peer)) {
             p_peer->packet_queue.push_back(entry.packet);
         }

@@ -40,31 +40,11 @@ const VISIBILITY_SETTLE_KEY := &"interest_visibility"
 const COMPAT_INTENT_SETTLE_KEY := &"interest_compat_intents"
 
 var _layers: Dictionary[StringName, NetwInterestLayer] = { }
-var _entity_layers: Dictionary[NetwEntity, Dictionary] = { }
-var _scene_memberships: Dictionary[NetwEntity, StringName] = { }
-var _intent_entities: Dictionary[NetwEntity, bool] = { }
-var _committed_intent_entities: Dictionary[NetwEntity, bool] = { }
-var _entity_exit_handlers: Dictionary[NetwEntity, Callable] = { }
-var _dirty_entities: Dictionary[NetwEntity, bool] = { }
-var _pending_leave_layers: Dictionary[NetwEntity, Dictionary] = { }
-var _retained_peers: Dictionary[NetwEntity, Dictionary] = { }
-var _perception_visible: Dictionary[NetwEntity, bool] = { }
+var _leave := NetwInterestLeave.new()
+var _perception := NetwInterestPerception.new()
 var _perception_snapshots: Dictionary[NetwEntity, Array] = { }
-var _perception_custom_actions: Dictionary[NetwEntity, Array] = { }
-var _engine := NetwInterestEngine.new()
-var _peer_bits: Dictionary[int, int] = { }
-var _bit_peers: Dictionary[int, int] = { }
-var _next_peer_bit: int = 0
-# The session's numbering, shared with prediction. This core is one holder of
-# a slot rather than its owner, which is why a release here retires nothing on
-# its own.
-const _HOLDER := &"interest"
-
-var _detached_slots: NetwEntitySlots
-var _entity_order: Dictionary[NetwEntity, int] = { }
-var _next_entity_order: int = 1
+var _engine: NetwInterestEngine
 var _pending_delta: NetwInterestDelta
-var _pending_intents: Dictionary[NetwEntity, bool] = { }
 
 ## Transition kind for relayed visibility / observer events.
 enum Kind { EXIT, ENTER }
@@ -144,81 +124,31 @@ class InterestConfig:
 		return self
 
 
-# Server-side payload for one route-addressed awareness projection.
-class _AwarenessRelay:
-	extends RefCounted
-	var type: int
-	var route: int
-	var layer_id: StringName
-	var observer_peer: int
-	var kind: int
-
-
-	func _init(
-			t: int,
-			r: int,
-			l: StringName,
-			o: int,
-			k: int,
-	) -> void:
-		type = t
-		route = r
-		layer_id = l
-		observer_peer = o
-		kind = k
-
-
-	func to_wire() -> Array:
-		return [type, route, layer_id, observer_peer, kind]
-
-
-	static func from_wire(raw: Variant) -> _AwarenessRelay:
-		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 5:
-			return null
-		if not raw[0] is int or not raw[1] is int \
-				or not raw[2] is StringName or not raw[3] is int \
-				or not raw[4] is int:
-			return null
-		var event_type: int = raw[0]
-		var event_route: int = raw[1]
-		var event_layer: StringName = raw[2]
-		var event_observer: int = raw[3]
-		var event_kind: int = raw[4]
-		if event_type < AwarenessType.LAYER \
-				or event_type > AwarenessType.OBSERVER \
-				or event_route <= 0 \
-				or event_layer.is_empty() \
-				or event_observer < 0 \
-				or (event_kind != Kind.ENTER and event_kind != Kind.EXIT):
-			return null
-		if event_type == AwarenessType.LAYER and event_observer != 0:
-			return null
-		if event_type == AwarenessType.OBSERVER and event_observer == 0:
-			return null
-		return _AwarenessRelay.new(
-			event_type,
-			event_route,
-			event_layer,
-			event_observer,
-			event_kind,
-		)
-
-
-enum AwarenessType { LAYER, OBSERVER }
-
-var _awareness_relay: Dictionary[int, Array] = { }
+var _awareness_relay := NetwInterestRelay.new()
 
 # The owning NetwMultiplayer. A weakref because the owner holds this interface
 # strongly and both are reference counted.
 var _api_ref: WeakRef
 
+# The session's own plane, held directly rather than reached through the shell,
+# because every verb below it is one the shell only relays.
+var session: NetwMultiplayerCore
+
 
 func _init(api: NetwMultiplayer = null) -> void:
 	_api_ref = weakref(api) if api else null
+	session = api._native_core if api else null
+	_engine = (
+		session.interest_engine if session else NetwInterestEngine.new()
+	)
 	if api:
 		api._connect_once(api.peer_connected, _on_peer_connected)
 		api._connect_once(api.peer_disconnected, _on_peer_disconnected)
 		api._connect_once(api.session_ended, _on_session_ended)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.INTEREST_AWARENESS,
+			_handle_awareness_events,
+		)
 
 
 func _api() -> NetwMultiplayer:
@@ -234,20 +164,18 @@ func _anchor() -> Node:
 
 
 func _on_peer_connected(peer_id: int) -> void:
-	_ensure_peer_bit(peer_id)
+	_engine.peer_bit_for(peer_id)
 	_sync_live_peers()
-	var api := _api()
-	if api:
-		api._settle_schedule(_refresh_compat_intents, COMPAT_INTENT_SETTLE_KEY)
+	if session:
+		session.settle_schedule(
+			_refresh_compat_intents, COMPAT_INTENT_SETTLE_KEY
+		)
 	_schedule_visibility_flush()
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	_awareness_relay.erase(peer_id)
-	for per_peer: Dictionary in _pending_leave_layers.values():
-		per_peer.erase(peer_id)
-	for per_peer: Dictionary in _retained_peers.values():
-		per_peer.erase(peer_id)
+	_awareness_relay.forget(peer_id)
+	_leave.forget_peer(peer_id)
 	_sync_live_peers()
 	_schedule_visibility_flush()
 
@@ -258,11 +186,11 @@ func _on_peer_disconnected(peer_id: int) -> void:
 # desync them and trip the underflow assert. Deferring makes the reset
 # independent of the order [SceneManager] and this interface handle the signal.
 #
-# TODO: move this onto the settle queue once the despawn path is on it too.
-# The queue is FIFO, so a despawn scheduled before this clear would run before
-# it and the ordering would hold by construction. Today the despawns are still
-# deferred elsewhere, so settling the clear would let it run FIRST, which is
-# the desync above.
+# TODO: move this onto the settle queue once the queue can state that this row
+# runs after the despawn rows. FIFO is not enough on its own: the order the
+# session_ended handlers are called decides which is enqueued first, and a
+# despawn cascade that schedules from inside a drain lands a pass later than a
+# clear enqueued before it.
 func _on_session_ended() -> void:
 	_clear_session_state.call_deferred()
 
@@ -270,33 +198,29 @@ func _on_session_ended() -> void:
 # Drops every per-session entry so a same-layer second session starts clean.
 func _clear_session_state() -> void:
 	_layers.clear()
-	_entity_layers.clear()
-	_intent_entities.clear()
-	_committed_intent_entities.clear()
-	_entity_exit_handlers.clear()
-	_dirty_entities.clear()
-	_pending_leave_layers.clear()
-	_retained_peers.clear()
+	_leave.clear()
 	var perceived_entities: Array[NetwEntity] = []
-	perceived_entities.assign(_perception_visible.keys())
+	perceived_entities.assign(_perception_snapshots.keys())
 	for entity: NetwEntity in perceived_entities:
-		_clear_local_perception(entity, true)
-	_perception_visible.clear()
+		_restore_hidden_presentation(entity)
+	for key: int in _perception.armed_keys():
+		_dispatch_custom_perception(key, true, _local_participant_id())
+	_perception.clear()
 	_perception_snapshots.clear()
-	_perception_custom_actions.clear()
 	_awareness_relay.clear()
-	_engine = NetwInterestEngine.new()
-	_peer_bits.clear()
-	_bit_peers.clear()
-	_next_peer_bit = 0
-	_slots().clear()
-	_entity_order.clear()
-	_next_entity_order = 1
-	var cleared_api := _api()
-	if cleared_api:
-		cleared_api._settle_cancel(VISIBILITY_SETTLE_KEY)
+	_reset_engine()
+	if session:
+		session.settle_cancel(VISIBILITY_SETTLE_KEY)
 	_pending_delta = null
-	_pending_intents.clear()
+
+
+# The session owns the engine, so a reset asks the owner for one rather than
+# swapping in an instance the session would not be holding.
+func _reset_engine() -> void:
+	if session:
+		session.reset_interest()
+	else:
+		_engine.clear()
 
 
 ## Returns the layer for [param layer_id], creating it on first use.
@@ -313,7 +237,6 @@ func layer_for(layer_id: StringName) -> NetwInterestLayer:
 		return found
 	found = NetwInterestLayer.new(layer_id, self)
 	_layers[layer_id] = found
-	_sync_engine_layer(found)
 	return found
 
 
@@ -342,13 +265,12 @@ func _collect_shared_from_live(
 		layer_ids: Array[StringName],
 		found: Dictionary[NetwEntity, bool],
 ) -> void:
-	var api := _api()
-	if api == null:
+	if session == null:
 		return
 	var wanted: Dictionary[StringName, bool] = { }
 	for id: StringName in layer_ids:
 		wanted[id] = true
-	for candidate: NetwEntity in api._liveness.live_entities():
+	for candidate: NetwEntity in session.liveness_live_entities():
 		if candidate == entity \
 				or not is_instance_valid(candidate) \
 				or not is_instance_valid(candidate.owner):
@@ -367,7 +289,7 @@ func resolved_layer_ids(entity: NetwEntity) -> Array[StringName]:
 	var out: Array[StringName] = []
 	if entity == null:
 		return out
-	out.assign(_entity_layers.get(entity, { }).keys())
+	out.assign(_engine.memberships(_entity_slot(entity)))
 	if out.is_empty() and not _is_server():
 		out = entity.interest.layer_ids()
 	out.sort_custom(
@@ -405,14 +327,11 @@ func shared_entities(
 	else:
 		layer_ids.append(layer_id)
 	var found: Dictionary[NetwEntity, bool] = { }
-	for current_id: StringName in layer_ids:
-		var current := get_layer(current_id)
-		if current == null:
-			continue
-		for candidate: NetwEntity in current.entities:
-			if candidate != entity and is_instance_valid(candidate) \
-					and is_instance_valid(candidate.owner):
-				found[candidate] = true
+	for slot: int in _engine.co_members(_entity_slot(entity), layer_ids):
+		var candidate := _entity_for_slot(slot)
+		if candidate and is_instance_valid(candidate) \
+				and is_instance_valid(candidate.owner):
+			found[candidate] = true
 	if found.is_empty() and not _is_server():
 		_collect_shared_from_live(entity, layer_ids, found)
 	var out: Array[NetwEntity] = []
@@ -448,16 +367,12 @@ func shared_entities(
 ## [/codeblock]
 func monitor_snapshot() -> Dictionary:
 	var visible_edges := _engine.stats().edges
-	var transitions_total := 0
-	for layer_id: StringName in _layers:
-		transitions_total += int(
-			_layers[layer_id].monitor_snapshot()[&"transitions_total"],
-		)
+	var transitions_total := _engine.transitions_total()
 	return {
 		&"layers": _layers.size(),
-		&"entities_filtered": _entity_layers.size(),
+		&"entities_filtered": _engine.membership_keys().size(),
 		&"visible_edges": visible_edges,
-		&"dirty_entities": _dirty_entities.size(),
+		&"dirty_entities": _engine.dirty_count(),
 		&"relay_backlog": _liveness_backlog(),
 		&"transitions_total": transitions_total,
 		&"vanished_dirty_skips": _engine.stats().vanished_dirty_skips,
@@ -469,7 +384,7 @@ func committed_admits(entity: NetwEntity) -> Dictionary:
 	var out: Dictionary = { }
 	var row := _engine.row_of(_entity_slot(entity))
 	for bit in NetwInterestBitSet.bits(row):
-		var peer_id := int(_bit_peers.get(bit, 0))
+		var peer_id := _engine.peer_of_bit(bit)
 		if peer_id != 0:
 			out[peer_id] = 1
 	return out
@@ -500,12 +415,12 @@ func explain_bit(entity: NetwEntity, peer_bit: int) -> String:
 func has_filter(entity: NetwEntity) -> bool:
 	if not _is_server() and entity:
 		return not entity.interest.layer_ids().is_empty()
-	return _entity_layers.has(entity)
+	return _engine.has_memberships(_entity_slot(entity))
 
 
 ## Returns whether [param entity] has intent folded into its committed row.
 func has_committed_intent(entity: NetwEntity) -> bool:
-	return _committed_intent_entities.has(entity)
+	return _engine.had_committed_intent(_entity_slot(entity))
 
 
 ## Returns whether replication may send [param entity] to [param peer_id].
@@ -527,13 +442,13 @@ func participant_sees(peer_id: int, entity: NetwEntity) -> bool:
 		return false
 	if not _is_server():
 		return _client_projection_admits(entity)
-	if not _peer_bits.has(peer_id):
+	var bit := _engine.peer_bit_of(peer_id)
+	if bit < 0:
 		return false
-	return _engine.test(_entity_slot(entity), _peer_bits[peer_id])
+	return _engine.test(_entity_slot(entity), bit)
 
 
 func _on_layer_policy_changed(changed_layer: NetwInterestLayer) -> void:
-	_sync_engine_layer(changed_layer)
 	_mark_layer_dirty(changed_layer)
 
 
@@ -542,7 +457,6 @@ func _on_layer_viewer_changed(
 		_peer_id: int,
 		_added: bool,
 ) -> void:
-	_sync_engine_layer(changed_layer)
 	_mark_layer_dirty(changed_layer)
 
 
@@ -573,63 +487,54 @@ func _sync_scene_membership(entity: NetwEntity) -> void:
 	var api := _api()
 	if api == null:
 		return
-	var previous: StringName = _scene_memberships.get(entity, &"")
+	var slot := _ensure_entity_slot(entity)
+	var previous := _engine.scene_membership(slot)
 	var current := _scene_layer_id_for(api, entity)
-	if previous == current:
+	if not _engine.set_scene_membership(slot, current):
 		return
 	if not previous.is_empty():
 		var previous_layer := get_layer(previous)
 		if previous_layer:
 			previous_layer.remove_entity(entity)
-	if current.is_empty():
-		_scene_memberships.erase(entity)
-		return
-	_scene_memberships[entity] = current
-	layer(current).add_entity(entity)
+	if not current.is_empty():
+		layer(current).add_entity(entity)
 
 
 # The layer id of the scene containing [param entity], resolved through the
 # entity facet walk and the scene's own layer handle. Empty when no scene
 # encloses the entity.
 func _scene_layer_id_for(api: NetwMultiplayer, entity: NetwEntity) -> StringName:
-	var scene := api.scene_of(api.rid_of(entity.owner))
+	var scene := api.scene_of(api.entity_of(entity.owner))
 	return api._scene_layer_id(scene) if scene.is_valid() else &""
 
 
 func _track_entity_layer(entity: NetwEntity, layer_id: StringName) -> void:
-	var layers: Dictionary = _entity_layers.get_or_add(entity, { })
-	layers[layer_id] = true
+	_engine.membership_add(_ensure_entity_slot(entity), layer_id)
 
 
 func _untrack_entity_layer(entity: NetwEntity, layer_id: StringName) -> void:
-	var layers: Dictionary = _entity_layers.get(entity, { })
-	layers.erase(layer_id)
-	if layers.is_empty():
-		_entity_layers.erase(entity)
+	_engine.membership_remove(_entity_slot(entity), layer_id)
 
 
 func _track_entity_lifecycle(entity: NetwEntity) -> void:
-	if _entity_exit_handlers.has(entity):
-		return
 	var handler := _on_entity_tree_exiting.bind(entity)
-	_entity_exit_handlers[entity] = handler
+	if not _engine.set_exit_handler(_ensure_entity_slot(entity), handler):
+		return
 	var api := _api()
 	if api:
 		api._connect_once(entity.owner.tree_exiting, handler)
 
 
 func _untrack_entity_lifecycle(entity: NetwEntity) -> void:
-	var handler: Callable = _entity_exit_handlers.get(entity, Callable())
+	var handler := _engine.take_exit_handler(_entity_slot(entity))
 	if handler.is_valid() and is_instance_valid(entity) \
 			and is_instance_valid(entity.owner) \
 			and entity.owner.tree_exiting.is_connected(handler):
 		entity.owner.tree_exiting.disconnect(handler)
-	_entity_exit_handlers.erase(entity)
 
 
 func _on_entity_tree_exiting(entity: NetwEntity) -> void:
-	var layer_ids: Dictionary = _entity_layers.get(entity, { }).duplicate()
-	for layer_id: StringName in layer_ids:
+	for layer_id: StringName in _engine.memberships(_entity_slot(entity)):
 		var exiting_layer := get_layer(layer_id)
 		if not exiting_layer:
 			continue
@@ -639,18 +544,13 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 			exiting_layer._client_untrack_entity(entity)
 	_untrack_entity_lifecycle(entity)
 	_retire_entity(entity)
-	_intent_entities.erase(entity)
-	_entity_order.erase(entity)
-	_dirty_entities.erase(entity)
-	_pending_leave_layers.erase(entity)
-	_retained_peers.erase(entity)
-	_scene_memberships.erase(entity)
+	_leave.forget_entity(_entity_slot(entity))
+	_engine.set_scene_membership(_entity_slot(entity), &"")
 	_clear_local_perception(entity, false)
 
 
-func _mark_layer_dirty(dirty_layer: NetwInterestLayer) -> void:
-	for entity: NetwEntity in dirty_layer._entities:
-		_mark_entity_dirty(entity)
+func _mark_layer_dirty(_dirty_layer: NetwInterestLayer) -> void:
+	_schedule_visibility_flush()
 
 
 func _mark_entity_dirty(entity: NetwEntity) -> void:
@@ -658,7 +558,6 @@ func _mark_entity_dirty(entity: NetwEntity) -> void:
 		entity != null,
 		"InterestCore: _mark_entity_dirty called with null entity",
 	)
-	_dirty_entities[entity] = true
 	_schedule_visibility_flush()
 
 
@@ -666,9 +565,8 @@ func _mark_entity_dirty(entity: NetwEntity) -> void:
 # after the whole cascade. The key IS the coalescing, which is why this no
 # longer carries a scheduled flag of its own.
 func _schedule_visibility_flush() -> void:
-	var api := _api()
-	if api:
-		api._settle_schedule(_flush_visibility, VISIBILITY_SETTLE_KEY)
+	if session:
+		session.settle_schedule(_flush_visibility, VISIBILITY_SETTLE_KEY)
 
 
 ## Flushes the committed matrix and its awareness projection.
@@ -713,20 +611,21 @@ func _flush_visibility() -> void:
 # Computes the pending interest delta without mutating committed rows.
 func _engine_recompute() -> Error:
 	if not _is_server():
-		_dirty_entities.clear()
 		_pending_delta = null
-		_pending_intents.clear()
 		return OK
 	_sync_live_peers()
 	var entities: Dictionary[NetwEntity, bool] = { }
-	for entity: NetwEntity in _entity_layers:
-		entities[entity] = true
-	for entity: NetwEntity in _intent_entities:
-		entities[entity] = true
+	for slot: int in _engine.membership_keys():
+		var member := _entity_for_slot(slot)
+		if member:
+			entities[member] = true
+	for slot: int in _engine.intent_keys():
+		var holder := _entity_for_slot(slot)
+		if holder:
+			entities[holder] = true
 	for entity: NetwEntity in entities:
 		if is_instance_valid(entity) and is_instance_valid(entity.owner):
 			_sync_engine_entity(entity)
-	_pending_intents = _intent_entities.duplicate()
 	_pending_delta = _engine.recompute()
 	return OK
 
@@ -737,12 +636,10 @@ func _engine_commit() -> void:
 		return
 	_apply_engine_delta(_pending_delta)
 	_engine.commit(_pending_delta)
-	_slots().sweep()
-	_committed_intent_entities = _pending_intents
+	if session:
+		session.wrapper_sweep_retired()
 	_refresh_all_local_perception()
-	_dirty_entities.clear()
 	_pending_delta = null
-	_pending_intents = { }
 
 
 func _apply_engine_delta(delta: NetwInterestDelta) -> void:
@@ -753,7 +650,10 @@ func _apply_engine_delta(delta: NetwInterestDelta) -> void:
 	for transition: Array in delta.shows:
 		var entity := _entity_for_slot(transition[0])
 		if entity:
-			_clear_retained_peer(entity, _peer_for_bit(transition[1]))
+			_leave.release(
+				_entity_slot(entity),
+				_engine.peer_of_bit(transition[1]),
+			)
 
 
 func _apply_layer_delta_transition(
@@ -762,7 +662,7 @@ func _apply_layer_delta_transition(
 ) -> void:
 	var layer_id: StringName = transition[0]
 	var entity := _entity_for_slot(transition[1])
-	var peer_id := _peer_for_bit(transition[2])
+	var peer_id := _engine.peer_of_bit(transition[2])
 	var event_layer := get_layer(layer_id)
 	if not event_layer or not entity or peer_id == 0:
 		return
@@ -774,22 +674,10 @@ func _apply_layer_delta_transition(
 
 
 func _client_projection_admits(entity: NetwEntity) -> bool:
-	var labels := entity.interest.layer_ids()
-	if labels.is_empty():
-		return true
-	for layer_id: StringName in labels:
-		var projected_layer := get_layer(layer_id)
-		if projected_layer and projected_layer.has_entity(entity):
-			return true
-	return false
-
-
-func _sync_engine_layer(engine_layer: NetwInterestLayer) -> void:
-	var viewer_bits := PackedInt64Array()
-	for peer_id: int in engine_layer.viewers:
-		var bit := _ensure_peer_bit(peer_id)
-		viewer_bits = NetwInterestBitSet.with_bit(viewer_bits, bit)
-	_engine.set_layer(engine_layer.layer_id, viewer_bits, engine_layer.policy)
+	return _engine.projection_admits(
+		_entity_slot(entity),
+		entity.interest._decl,
+	)
 
 
 func _sync_live_peers() -> void:
@@ -800,14 +688,13 @@ func _sync_live_peers() -> void:
 			peer_ids[peer_id] = true
 	if api and api.role == NetwMultiplayer.Role.LISTEN_SERVER:
 		peer_ids[MultiplayerPeer.TARGET_PEER_SERVER] = true
-	for engine_layer: NetwInterestLayer in _layers.values():
-		for peer_id: int in engine_layer.viewers:
-			peer_ids[peer_id] = true
+	for peer_id: int in _engine.viewer_peers():
+		peer_ids[peer_id] = true
 	var live_bits := PackedInt64Array()
 	var added_peer := false
 	for peer_id in peer_ids:
-		added_peer = added_peer or not _peer_bits.has(peer_id)
-		var bit := _ensure_peer_bit(peer_id)
+		added_peer = added_peer or _engine.peer_bit_of(peer_id) < 0
+		var bit := _engine.peer_bit_for(peer_id)
 		live_bits = NetwInterestBitSet.with_bit(live_bits, bit)
 	_engine.set_live_peers(live_bits)
 	if added_peer and api:
@@ -815,41 +702,16 @@ func _sync_live_peers() -> void:
 
 
 func _sync_engine_entity(entity: NetwEntity) -> void:
-	if not _entity_layers.has(entity) and not _intent_entities.has(entity):
+	var slot := _entity_slot(entity)
+	if not _engine.has_memberships(slot) and not _engine.has_intent(slot):
 		_retire_entity(entity)
 		return
-	_sync_engine_entity_record(entity, { })
+	_sync_engine_entity_record(entity)
 
 
-func _sync_engine_entity_record(
-		entity: NetwEntity,
-		visited: Dictionary,
-) -> void:
-	if entity == null or visited.has(entity):
-		return
-	visited[entity] = true
-	var parent := entity.parent_entity()
-	if parent:
-		_sync_engine_entity_record(parent, visited)
-	var memberships: Array[StringName] = []
-	memberships.assign(_entity_layers.get(entity, { }).keys())
-	_engine.set_membership(_ensure_entity_slot(entity), memberships)
-	_engine.set_parent(
-		_ensure_entity_slot(entity),
-		_ensure_entity_slot(parent) if parent else 0,
-	)
-	var depth := 0
-	var current := parent
-	while current != null:
-		depth += 1
-		current = current.parent_entity()
-	var route := entity.route
-	if route <= 0:
-		if not _entity_order.has(entity):
-			_entity_order[entity] = _next_entity_order
-			_next_entity_order += 1
-		route = _entity_order[entity]
-	_engine.set_order_key(_ensure_entity_slot(entity), depth, route)
+func _sync_engine_entity_record(entity: NetwEntity) -> void:
+	if session and entity:
+		session.interest_sync_record(entity)
 
 
 func _set_entity_intent(
@@ -858,20 +720,18 @@ func _set_entity_intent(
 ) -> void:
 	if entity == null:
 		return
-	_intent_entities[entity] = true
 	_track_entity_lifecycle(entity)
-	_sync_engine_entity_record(entity, { })
+	_sync_engine_entity_record(entity)
 	var row := PackedInt64Array()
 	for peer_id in admitted_peers:
-		var bit := _ensure_peer_bit(peer_id)
+		var bit := _engine.peer_bit_for(peer_id)
 		row = NetwInterestBitSet.with_bit(row, bit)
 	_engine.set_intent(_ensure_entity_slot(entity), row)
 	_mark_entity_dirty(entity)
 
 
 func _clear_entity_intent(entity: NetwEntity) -> void:
-	_intent_entities.erase(entity)
-	if _entity_layers.has(entity):
+	if _engine.has_memberships(_entity_slot(entity)):
 		_engine.set_intent_all(_ensure_entity_slot(entity))
 		_mark_entity_dirty(entity)
 	else:
@@ -880,7 +740,7 @@ func _clear_entity_intent(entity: NetwEntity) -> void:
 
 func _known_peer_ids() -> Array[int]:
 	var out: Array[int] = []
-	out.assign(_peer_bits.keys())
+	out.assign(_engine.known_peers())
 	return out
 
 
@@ -890,65 +750,38 @@ func _refresh_compat_intents() -> void:
 		api._replication._sync_compat.refresh_interest_intents()
 
 
-func _ensure_peer_bit(peer_id: int) -> int:
-	if _peer_bits.has(peer_id):
-		return _peer_bits[peer_id]
-	var bit := _next_peer_bit
-	_next_peer_bit += 1
-	_peer_bits[peer_id] = bit
-	_bit_peers[bit] = peer_id
-	return bit
-
-
-func _peer_for_bit(bit: int) -> int:
-	return int(_bit_peers.get(bit, 0))
-
-
-# The slot an entity is known to the engine by, minted on first use.
-#
-# The engine keys on plain integers so a verdict never depends on an object
-# staying alive. It cannot key on NetwEntity.rid: that handle is unset until
-# liveness admits the entity and is cleared again when it dies, so several
-# entities hold an invalid one at once and keying on it would merge them.
+# The key an entity is known to the engine by, which is its handle's integer
+# form. The engine keys on plain integers so a verdict never depends on an
+# object staying alive, and handles are never reissued, so a late row can only
+# resolve to the entity that earned it or to nothing.
 func _ensure_entity_slot(entity: NetwEntity) -> int:
-	return _slots().ensure(entity, _HOLDER)
+	if entity == null:
+		return 0
+	if session:
+		session.liveness_adopt(entity)
+	return entity.rid.get_id()
 
 
-# The slot an entity already holds, or zero. Reads take this door so asking
-# about an entity the engine never saw does not register it.
+# The key an entity already answers to. Reads take this door, which registers
+# nothing, so asking about an entity the engine never saw does not enrol it.
 func _entity_slot(entity: NetwEntity) -> int:
-	return _slots().slot_of(entity)
+	return entity.rid.get_id() if entity else 0
 
 
 func _entity_for_slot(slot: int) -> NetwEntity:
-	return _slots().entity_for(slot)
+	return session.wrapper_for_id(slot) as NetwEntity if session else null
 
 
-# Drops one entity from the engine and marks its slot for release.
-#
-# The mapping outlives the removal on purpose. A removed entity's last act is a
-# hide to every peer that held it, and those transitions arrive in the NEXT
-# delta naming the slot, so tearing the mapping down here would leave the leave
-# policy nothing to run against. Slots are released once that delta has been
-# applied, and are never reused, so a late row can only resolve to the entity
-# that earned it or to nothing.
+# Drops one entity from the engine. The wrapper it names outlives the removal
+# on purpose: a removed entity's last act is a hide to every peer that held it,
+# and those transitions arrive in the NEXT delta naming its key, so a leave
+# policy would otherwise have nothing to run against. The commit that applies
+# that delta is what sweeps the wrapper.
 func _retire_entity(entity: NetwEntity) -> void:
 	var slot := _entity_slot(entity)
-	if slot == 0:
+	if slot == 0 or not _engine.has_entity(slot):
 		return
 	_engine.remove_entity(slot)
-	_slots().release(entity, _HOLDER)
-
-
-# The session's numbering, or a private one when this core outlives its API,
-# which a torn-down session's deferred clear is the only way to reach.
-func _slots() -> NetwEntitySlots:
-	var api := _api()
-	if api:
-		return api._entity_slots
-	if _detached_slots == null:
-		_detached_slots = NetwEntitySlots.new()
-	return _detached_slots
 
 
 ## Returns committed edge occupancy for [param layer_id].
@@ -964,11 +797,9 @@ func forget_layer_row(layer_id: StringName) -> void:
 	_engine.remove_layer(layer_id)
 
 
-# Relayed transitions parked in LivenessShell.when_live for the monitor.
+# Relayed transitions parked in NetwMultiplayerCore.when_live for the monitor.
 func _liveness_backlog() -> int:
-	var api := _api()
-	var liveness := api._liveness if api else null
-	return liveness.pending_live_count() if liveness else 0
+	return session.liveness_pending_live_count() if session else 0
 
 
 # Authority comes from the API, never the tree. The API answers server offline
@@ -980,32 +811,12 @@ func _is_server() -> bool:
 
 # Resolves the pending layer exits that govern one materialized peer copy.
 func _resolve_leave_decision(entity: NetwEntity, peer_id: int) -> Dictionary:
-	var retained: Dictionary = _retained_peers.get(entity, { })
-	var pending_by_peer: Dictionary = _pending_leave_layers.get(entity, { })
-	var layer_ids: Dictionary = pending_by_peer.get(peer_id, { })
-	if layer_ids.is_empty():
-		return {
-			&"despawn": not bool(retained.get(peer_id, false)),
-			&"custom": [],
-		}
-
-	var custom_actions: Array = []
-	for layer_id: StringName in layer_ids:
-		var event_layer := get_layer(layer_id)
-		var fallback := NetwMultiplayer.LeavePolicy.DESPAWN
-		if event_layer:
-			fallback = event_layer.default_leave_policy
-		var policy := entity.interest._leave_policy_for(layer_id, fallback)
-		if policy == LeavePolicy.DESPAWN:
-			return { &"despawn": true, &"custom": [] }
-		if policy == LeavePolicy.CUSTOM:
-			var callback := entity.interest._custom_leave_for(layer_id)
-			assert(
-				callback.is_valid(),
-				"NetwInterestHandle: CUSTOM leave callback became invalid",
-			)
-			custom_actions.append([callback, layer_id])
-	return { &"despawn": false, &"custom": custom_actions }
+	return _leave.resolve(
+		_entity_slot(entity),
+		peer_id,
+		entity.interest._decl,
+		_engine,
+	)
 
 
 # Commits a resolved leave effect after the spawn pipeline applies ancestry.
@@ -1015,52 +826,17 @@ func _commit_leave_decision(
 		decision: Dictionary,
 		forced_despawn: bool = false,
 ) -> void:
-	_clear_pending_leave(entity, peer_id)
-	if forced_despawn or bool(decision.get(&"despawn", true)):
-		_clear_retained_peer(entity, peer_id)
-		return
-	var retained: Dictionary = _retained_peers.get_or_add(entity, { })
-	retained[peer_id] = true
-	for action: Array in decision.get(&"custom", []):
-		var callback := action[0] as Callable
-		callback.call(peer_id, action[1])
+	_leave.commit(_entity_slot(entity), peer_id, decision, forced_despawn)
 
 
 # Drops unused exit attribution after one spawn reconciliation pass.
 func _finish_leave_sweep() -> void:
-	_pending_leave_layers.clear()
-
-
-# Records the layer whose exit may govern the next aggregate wire loss.
-func _record_pending_leave(
-		entity: NetwEntity,
-		peer_id: int,
-		layer_id: StringName,
-) -> void:
-	var per_peer: Dictionary = _pending_leave_layers.get_or_add(entity, { })
-	var layers: Dictionary = per_peer.get_or_add(peer_id, { })
-	layers[layer_id] = true
-
-
-# Clears consumed exit attribution for one entity and peer.
-func _clear_pending_leave(entity: NetwEntity, peer_id: int) -> void:
-	var per_peer: Dictionary = _pending_leave_layers.get(entity, { })
-	per_peer.erase(peer_id)
-	if per_peer.is_empty():
-		_pending_leave_layers.erase(entity)
-
-
-# Clears a retained materialization when admission resumes or despawn wins.
-func _clear_retained_peer(entity: NetwEntity, peer_id: int) -> void:
-	var per_peer: Dictionary = _retained_peers.get(entity, { })
-	per_peer.erase(peer_id)
-	if per_peer.is_empty():
-		_retained_peers.erase(entity)
+	_leave.finish_sweep()
 
 
 # Reapplies presentation after a local perception configuration change.
 func _reapply_local_perception(entity: NetwEntity) -> void:
-	if not _perception_visible.has(entity):
+	if not _perception.is_known(_entity_slot(entity)):
 		_refresh_local_perception(entity)
 		return
 	_clear_local_perception(entity, true)
@@ -1071,16 +847,20 @@ func _reapply_local_perception(entity: NetwEntity) -> void:
 func _on_layer_perception_policy_changed(
 		changed_layer: NetwInterestLayer,
 ) -> void:
-	for entity: NetwEntity in changed_layer.entities:
-		_reapply_local_perception(entity)
+	for slot: int in _engine.roster(changed_layer.layer_id):
+		var member := _entity_for_slot(slot)
+		if member:
+			_reapply_local_perception(member)
 
 
 # Reconciles every server entity against the local participant row.
 func _refresh_all_local_perception() -> void:
 	if _local_participant_id() == 0:
 		return
-	for entity: NetwEntity in _entity_layers:
-		_refresh_local_perception(entity)
+	for slot: int in _engine.membership_keys():
+		var member := _entity_for_slot(slot)
+		if member:
+			_refresh_local_perception(member)
 
 
 # Applies one local participant row edge without touching simulation state.
@@ -1097,43 +877,24 @@ func _refresh_local_perception(
 	elif entity.interest.layer_ids().is_empty():
 		return
 	var visible := participant_sees(peer_id, entity)
-	if _perception_visible.get(entity, null) == visible:
+	var slot := _entity_slot(entity)
+	if not _perception.set_visible(slot, visible):
 		return
-	_perception_visible[entity] = visible
 	if visible:
 		_restore_hidden_presentation(entity)
-		_dispatch_custom_perception(entity, true, peer_id)
+		_dispatch_custom_perception(slot, true, peer_id)
 		return
 	var layer_ids := layer_hints
 	if layer_ids.is_empty():
 		layer_ids = _local_perception_layers(entity, peer_id)
-	var hide := false
-	var custom_actions: Array = []
-	for layer_id: StringName in layer_ids:
-		var event_layer := get_layer(layer_id)
-		var fallback := NetwMultiplayer.PerceptionPolicy.HIDE
-		if event_layer:
-			fallback = event_layer.default_perception_policy
-		var policy := entity.interest._perception_policy_for(
-			layer_id,
-			fallback,
-		)
-		if policy == PerceptionPolicy.HIDE:
-			hide = true
-		elif policy == PerceptionPolicy.CUSTOM:
-			var callback := entity.interest._custom_perception_for(layer_id)
-			assert(
-				callback.is_valid(),
-				"NetwInterestHandle: CUSTOM perception callback became invalid",
-			)
-			custom_actions.append([callback, layer_id])
-	if hide:
+	var verdict := _perception.resolve(layer_ids, entity.interest._decl, _engine)
+	if bool(verdict[&"hide"]):
 		_hide_presentation(entity)
-	if not custom_actions.is_empty():
-		_perception_custom_actions[entity] = custom_actions
-		for action: Array in custom_actions:
-			var callback := action[0] as Callable
-			callback.call(false, peer_id, action[1])
+	var custom_actions: Array = verdict[&"custom"]
+	_perception.arm(slot, custom_actions)
+	for action: Array in custom_actions:
+		var callback := action[0] as Callable
+		callback.call(false, peer_id, action[1])
 
 
 # Chooses the layer edges responsible for the current aggregate local loss.
@@ -1141,15 +902,14 @@ func _local_perception_layers(
 		entity: NetwEntity,
 		peer_id: int,
 ) -> Array[StringName]:
-	var pending: Dictionary = _pending_leave_layers.get(entity, { }) \
-			.get(peer_id, { })
+	var pending := _leave.pending_layers(_entity_slot(entity), peer_id)
 	if not pending.is_empty():
 		var pending_ids: Array[StringName] = []
-		pending_ids.assign(pending.keys())
+		pending_ids.assign(pending)
 		return pending_ids
 	var out: Array[StringName] = []
 	if _is_server():
-		out.assign(_entity_layers.get(entity, { }).keys())
+		out.assign(_engine.memberships(_entity_slot(entity)))
 	else:
 		out = entity.interest.layer_ids()
 	return out
@@ -1191,27 +951,26 @@ func _restore_hidden_presentation(entity: NetwEntity) -> void:
 
 # Fires the matching CUSTOM enter edge and forgets its active actions.
 func _dispatch_custom_perception(
-		entity: NetwEntity,
+		key: int,
 		visible: bool,
 		peer_id: int,
 ) -> void:
-	var actions: Array = _perception_custom_actions.get(entity, [])
-	for action: Array in actions:
+	for action: Array in _perception.disarm(key):
 		var callback := action[0] as Callable
 		if callback.is_valid():
 			callback.call(visible, peer_id, action[1])
-	_perception_custom_actions.erase(entity)
 
 
 # Releases local presentation state, optionally restoring the live subtree.
 func _clear_local_perception(entity: NetwEntity, restore: bool) -> void:
+	var slot := _entity_slot(entity)
 	if restore:
 		_restore_hidden_presentation(entity)
-		_dispatch_custom_perception(entity, true, _local_participant_id())
+		_dispatch_custom_perception(slot, true, _local_participant_id())
 	else:
 		_perception_snapshots.erase(entity)
-		_perception_custom_actions.erase(entity)
-	_perception_visible.erase(entity)
+		_perception.disarm(slot)
+	_perception.forget(slot)
 
 
 # Returns the local gameplay participant, excluding dedicated authority.
@@ -1233,7 +992,7 @@ func _on_layer_interest_enter(
 		peer_id: int,
 		layer_source: NetwInterestLayer,
 ) -> void:
-	_clear_retained_peer(entity, peer_id)
+	_leave.release(_entity_slot(entity), peer_id)
 	_queue_layer_awareness(layer_source, entity, peer_id, Kind.ENTER)
 	_queue_observer_awareness(layer_source, entity, peer_id, Kind.ENTER)
 
@@ -1243,7 +1002,7 @@ func _on_layer_interest_exit(
 		peer_id: int,
 		layer_source: NetwInterestLayer,
 ) -> void:
-	_record_pending_leave(entity, peer_id, layer_source.layer_id)
+	_leave.record(_entity_slot(entity), peer_id, layer_source.layer_id)
 	_queue_layer_awareness(layer_source, entity, peer_id, Kind.EXIT)
 	_queue_observer_awareness(layer_source, entity, peer_id, Kind.EXIT)
 
@@ -1263,20 +1022,12 @@ func _queue_layer_awareness(
 		return
 	if not entity.owner.is_inside_tree() or not _can_send_to_peer(observer_peer):
 		return
-	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	if not session:
 		return
-	var route := liveness.allocate_route(entity)
-	var bucket: Array = _awareness_relay.get_or_add(observer_peer, [])
-	bucket.append(
-		_AwarenessRelay.new(
-			AwarenessType.LAYER,
-			route,
-			event_layer.layer_id,
-			0,
-			kind,
-		),
+	var route := session.liveness_allocate_route(entity)
+	_awareness_relay.append(
+		observer_peer,
+		NetwInterestAwareness.layer_edge(route, event_layer.layer_id, kind),
 	)
 	_schedule_visibility_flush()
 
@@ -1297,15 +1048,12 @@ func _queue_observer_awareness(
 		return
 	if not entity.owner.is_inside_tree() or not _can_send_to_peer(entity.peer_id):
 		return
-	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	if not session:
 		return
-	var route := liveness.allocate_route(entity)
-	var bucket: Array = _awareness_relay.get_or_add(entity.peer_id, [])
-	bucket.append(
-		_AwarenessRelay.new(
-			AwarenessType.OBSERVER,
+	var route := session.liveness_allocate_route(entity)
+	_awareness_relay.append(
+		entity.peer_id,
+		NetwInterestAwareness.observer_edge(
 			route,
 			event_layer.layer_id,
 			observer_peer,
@@ -1321,12 +1069,10 @@ func _flush_awareness_relay() -> void:
 	if not _is_server():
 		_awareness_relay.clear()
 		return
-	for target_peer: int in _awareness_relay:
+	for target_peer: int in _awareness_relay.targets():
 		if not _can_send_to_peer(target_peer):
 			continue
-		var wire: Array = []
-		for event: _AwarenessRelay in _awareness_relay[target_peer]:
-			wire.append(event.to_wire())
+		var wire := _awareness_relay.wire_for(target_peer)
 		if not wire.is_empty():
 			_send_events(
 				target_peer,
@@ -1374,42 +1120,74 @@ func _handle_awareness_events(payload: PackedByteArray, sender: int) -> void:
 	if typeof(events) != TYPE_ARRAY:
 		return
 	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	if not api or not session:
 		return
-	for raw in events:
-		var event := _AwarenessRelay.from_wire(raw)
+	for raw: Variant in events:
+		var event := NetwInterestAwareness.from_array(raw)
 		if event == null:
 			continue
-		if event.kind != Kind.ENTER \
-				and liveness.route_state(event.route) \
-						!= LivenessShell.State.LIVE:
+		if event.get_kind() != Kind.ENTER \
+				and session.liveness_route_state(event.get_route()) \
+						!= NetwLivenessCore.STATE_LIVE:
 			continue
-		liveness.when_live(
-			event.route,
+		api.when_live(
+			event.get_route(),
 			func():
 				_apply_awareness_event(event)
 		)
 
 
-func _apply_awareness_event(event: _AwarenessRelay) -> void:
+func _apply_awareness_event(event: NetwInterestAwareness) -> void:
 	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	if not api or not session:
 		return
-	var entity := liveness.entity_of(event.route)
+	var entity := session.wrapper_for_route(event.get_route()) as NetwEntity
 	if not entity:
 		return
-	if event.type == AwarenessType.LAYER:
-		var event_layer := layer_for(event.layer_id)
+	var entered := event.get_kind() == Kind.ENTER
+	if event.get_edge_type() == NetwInterestAwareness.LAYER:
+		var event_layer := layer_for(event.get_layer_id())
 		if not event_layer:
 			return
-		if event.kind == Kind.ENTER:
+		_report_edge(api, event, entity, entered, true)
+		if entered:
 			event_layer._client_admit(entity)
 		else:
 			event_layer._client_revoke(entity)
 		return
-	if event.kind == Kind.ENTER:
-		entity.observer_entered.emit(event.layer_id, event.observer_peer)
+	_report_edge(api, event, entity, entered, false)
+	if entered:
+		entity.observer_entered.emit(
+			event.get_layer_id(),
+			event.get_observer_peer(),
+		)
 	else:
-		entity.observer_left.emit(event.layer_id, event.observer_peer)
+		entity.observer_left.emit(
+			event.get_layer_id(),
+			event.get_observer_peer(),
+		)
+
+
+# Reports one awareness edge to the event plane. A layer edge is the entity
+# moving in or out of a layer; an observer edge is one peer beginning or
+# ceasing to see it, so the two are separate taxonomy values rather than one
+# with a flag.
+func _report_edge(
+		api: NetwMultiplayer,
+		event: NetwInterestAwareness,
+		entity: NetwEntity,
+		entered: bool,
+		layer_edge: bool,
+) -> void:
+	var value := NetwMultiplayerCore.INTEREST_ENTER if entered \
+			else NetwMultiplayerCore.INTEREST_EXIT
+	if not layer_edge:
+		value = NetwMultiplayerCore.OBSERVER_ENTERED if entered \
+				else NetwMultiplayerCore.OBSERVER_LEFT
+	api.report_event(
+		value,
+		event.get_route(),
+		{ layer = event.get_layer_id() },
+		event.get_observer_peer(),
+		entity.entity_id,
+	)

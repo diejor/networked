@@ -5,7 +5,6 @@
 #if defined(NETW_MODULE)
 #include "core/math/random_number_generator.h"
 
-// Engine types are global, so the alias keeps `godot::` spellings compiling.
 namespace godot {
 using ::RandomNumberGenerator;
 } // namespace godot

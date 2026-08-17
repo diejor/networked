@@ -1,7 +1,6 @@
 #pragma once
 
 #if defined(NETW_MODULE)
-// A module has no library handle to bind and no entry point to export.
 #elif defined(NETW_GDEXTENSION)
 #include <gdextension_interface.h>
 

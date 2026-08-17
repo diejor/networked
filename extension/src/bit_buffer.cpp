@@ -142,6 +142,7 @@ void NetwBitBufferReader::_bind_methods() {
         D_METHOD("remaining_bytes"),
         &NetwBitBufferReader::remaining_bytes
     );
+    ClassDB::bind_method(D_METHOD("ok"), &NetwBitBufferReader::ok);
 }
 
 Ref<NetwBitBufferReader> NetwBitBufferReader::create(
@@ -158,6 +159,15 @@ void NetwBitBufferReader::reset(const PackedByteArray &bytes) {
     position = 0;
     accumulator = 0;
     bit_count = 0;
+    healthy = true;
+}
+
+uint8_t NetwBitBufferReader::take_byte() {
+    const bool has_byte = position < input.size();
+    healthy = healthy && has_byte;
+    const uint8_t byte = has_byte ? input[position] : 0;
+    position += 1;
+    return byte;
 }
 
 int64_t NetwBitBufferReader::get_bits(int count) {
@@ -167,8 +177,7 @@ int64_t NetwBitBufferReader::get_bits(int count) {
         return 0;
     }
     while (bit_count < count) {
-        const uint8_t byte = position < input.size() ? input[position] : 0;
-        position += 1;
+        const uint8_t byte = take_byte();
         accumulator |= uint64_t(byte) << bit_count;
         bit_count += 8;
     }
@@ -186,9 +195,7 @@ void NetwBitBufferReader::align() {
 int64_t NetwBitBufferReader::get_aligned_u8() {
     NETW_ZONE_NC("NetwBitBufferReader get u8", colors::BIT_BUFFER);
     align();
-    const uint8_t value = position < input.size() ? input[position] : 0;
-    position += 1;
-    return value;
+    return take_byte();
 }
 
 int64_t NetwBitBufferReader::get_aligned_u16() {
@@ -196,9 +203,7 @@ int64_t NetwBitBufferReader::get_aligned_u16() {
     align();
     uint64_t value = 0;
     for (int index = 0; index < 2; ++index) {
-        const uint8_t byte = position < input.size() ? input[position] : 0;
-        position += 1;
-        value |= uint64_t(byte) << (index * 8);
+        value |= uint64_t(take_byte()) << (index * 8);
     }
     return int64_t(value);
 }
@@ -208,9 +213,7 @@ int64_t NetwBitBufferReader::get_aligned_u32() {
     align();
     uint64_t value = 0;
     for (int index = 0; index < 4; ++index) {
-        const uint8_t byte = position < input.size() ? input[position] : 0;
-        position += 1;
-        value |= uint64_t(byte) << (index * 8);
+        value |= uint64_t(take_byte()) << (index * 8);
     }
     return int64_t(value);
 }
@@ -221,6 +224,7 @@ PackedByteArray NetwBitBufferReader::get_aligned_bytes(int count) {
     align();
     const int safe_count = std::max(count, 0);
     const int64_t end = std::min<int64_t>(position + safe_count, input.size());
+    healthy = healthy && position + safe_count <= input.size();
     PackedByteArray bytes = input.slice(position, end);
     position += safe_count;
     return bytes;

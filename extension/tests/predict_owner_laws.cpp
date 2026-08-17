@@ -11,7 +11,7 @@
 
 #include "godot/variant.hpp"
 
-#include <godot_cpp/classes/rigid_body2d.hpp>
+#include "godot/physics_body.hpp"
 
 namespace TestNetwPredictOwnerPort {
 
@@ -378,6 +378,246 @@ TEST_CASE("[Networked][Predict][Owner] AUTO asks the bound owner, and an "
 
     memdelete(body);
     memdelete(plain);
+}
+
+// A slot with a rule, an owner, and a two-entry tape whose recorded states
+// agree with what the rule restates.
+struct CarryFixture {
+    Ref<NetwPredictionEngine> engine;
+    int64_t slot = 0;
+    Carrier *owner = nullptr;
+    Ref<netw::NetwTimeline> lane;
+
+    CarryFixture(const char *p_rule) {
+        engine = pool();
+        slot = engine->open(fields(one("speed")));
+        REQUIRE(engine->configure(
+            slot,
+            int(Schedule::FRAME),
+            int(Role::PREDICT),
+            int(CorrectionMode::SNAP),
+            int(RestoreMode::EXACT),
+            6,
+            NetwPredictionEngine::ISLAND_NONE,
+            true,
+            false
+        ));
+        owner = carrier();
+        engine->bind_owner(slot, owner);
+        engine->set_carry(slot, StringName("speed"), Callable(owner, p_rule));
+
+        lane = netw::NetwTimeline::create(64);
+        engine->bind_timeline(slot, lane);
+        Dictionary command;
+        command[StringName("throttle")] = 2.0;
+        for (int64_t label = 1; label <= 2; label += 1) {
+            engine->tape_author(slot, label, true);
+            lane->record_input(label, command);
+        }
+        // The recorded past the rule is replayed against: each transition
+        // advanced speed by the throttle it ran.
+        const Ref<netw::NetwTimeline> entries = engine->entry_history(slot);
+        for (int64_t at = 0; at <= 2; at += 1) {
+            Dictionary state;
+            state[StringName("speed")] = double(at) * 2.0;
+            entries->record_state(at, state);
+        }
+    }
+
+    ~CarryFixture() {
+        memdelete(owner);
+    }
+
+    Ref<NetwPredictCarryAttempt> attempt() {
+        return engine->attempt_carry(
+            slot,
+            StringName("speed"),
+            10.0,
+            -1,
+            100.0,
+            0.01
+        );
+    }
+};
+
+TEST_CASE("[Networked][Predict][Owner] a rule that reproduces the recorded "
+          "past folds the acknowledged value across every entry past it") {
+    CarryFixture fixture("carry_speed");
+
+    const Ref<NetwPredictCarryAttempt> attempt = fixture.attempt();
+
+    CHECK(attempt->evidence());
+    CHECK(attempt->faithful());
+    CHECK(attempt->same_type());
+    CHECK(attempt->finite());
+    CHECK(attempt->within_envelope());
+    CHECK(attempt->pure());
+    // Two entries past the basis, each advancing by the throttle it carried.
+    NETW_CHECK_CLOSE(double(attempt->value()), 14.0, 0.0001);
+    // Nothing was measured against a tolerance, because nothing disagreed.
+    NETW_CHECK_CLOSE(attempt->residual(), -1.0, 0.0);
+}
+
+TEST_CASE("[Networked][Predict][Owner] a rule that overstates every "
+          "transition is caught by the replay and never folded") {
+    CarryFixture fixture("carry_speed");
+    fixture.owner->set_carry_gain(2.0);
+
+    const Ref<NetwPredictCarryAttempt> attempt = fixture.attempt();
+
+    CHECK(attempt->evidence());
+    CHECK_FALSE(attempt->faithful());
+    // The residual is reported so a caller can name the distance rather than
+    // only the verdict, and it is measured against the field's own tolerance.
+    NETW_CHECK_CLOSE(attempt->residual(), 2.0, 0.0001);
+    NETW_CHECK_CLOSE(attempt->tolerance(), 0.01, 0.0);
+    // A rule the replay refused is never folded, so the value it would have
+    // reached was never computed.
+    NETW_CHECK_EQ(int(attempt->value().get_type()), int(Variant::NIL));
+}
+
+TEST_CASE("[Networked][Predict][Owner] a rule that writes the body it "
+          "describes is caught by the purity bracket") {
+    CarryFixture fixture("carry_speed_and_write");
+
+    const Ref<NetwPredictCarryAttempt> attempt = fixture.attempt();
+
+    // The write does not stop it reproducing the past, which is exactly why
+    // the bracket exists beside the replay rather than instead of it.
+    CHECK(attempt->faithful());
+    CHECK_FALSE(attempt->pure());
+}
+
+TEST_CASE("[Networked][Predict][Owner] an attempt with no transition to "
+          "replay carries no evidence to judge") {
+    CarryFixture fixture("carry_speed");
+
+    // Every entry is acknowledged, so there is no transition past the basis.
+    const Ref<NetwPredictCarryAttempt> empty = fixture.engine->attempt_carry(
+        fixture.slot,
+        StringName("speed"),
+        10.0,
+        1,
+        100.0,
+        0.01
+    );
+    CHECK_FALSE(empty->evidence());
+
+    // A field the slot declares no rule for is the same absence.
+    CHECK_FALSE(fixture.engine
+                    ->attempt_carry(
+                        fixture.slot,
+                        StringName("throttle"),
+                        10.0,
+                        -1,
+                        100.0,
+                        0.01
+                    )
+                    ->evidence());
+}
+
+// A sensor that answers a fixed fact, and one that answers what the carrier
+// currently holds, so a law can move the world under a digest.
+class ReadsCarrier final : public CallableCustom {
+    Carrier *source;
+    StringName key;
+
+    static bool same(const CallableCustom *a, const CallableCustom *b) {
+        return a == b;
+    }
+
+    static bool before(const CallableCustom *a, const CallableCustom *b) {
+        return a < b;
+    }
+
+public:
+    ReadsCarrier(Carrier *p_source, const char *p_key)
+        : source(p_source), key(p_key) {
+    }
+
+    uint32_t hash() const override {
+        return uint32_t(uintptr_t(this));
+    }
+
+    String get_as_text() const override {
+        return String("ReadsCarrier");
+    }
+
+    CompareEqualFunc get_compare_equal_func() const override {
+        return &ReadsCarrier::same;
+    }
+
+    CompareLessFunc get_compare_less_func() const override {
+        return &ReadsCarrier::before;
+    }
+
+    ObjectID get_object() const override {
+        return netw::gd::instance_id(source);
+    }
+
+    void call(
+        const Variant **,
+        int,
+        Variant &r_return_value,
+        netw::gd::CallError &r_call_error
+    ) const override {
+        r_return_value = source->get(key);
+        netw::gd::call_ok(r_call_error);
+    }
+};
+
+TEST_CASE("[Networked][Predict][Owner] a slot that declared no world fact "
+          "digests to the zero an unwritten row already holds") {
+    const Ref<NetwPredictionEngine> engine = pool();
+    const int64_t slot = engine->open(fields(one("speed")));
+
+    NETW_CHECK_EQ(engine->sample_environment(slot, -1), int64_t(0));
+    CHECK(engine->sensor_samples(slot).is_empty());
+
+    // A declared epoch IS a world fact, so it is digested even with no sensor.
+    CHECK(engine->sample_environment(slot, 4) != 0);
+
+    NETW_CHECK_EQ(engine->sample_environment(slot + 9000, 4), int64_t(0));
+}
+
+TEST_CASE("[Networked][Predict][Owner] the digest moves with what the sensors "
+          "answered, and the samples are what it was taken over") {
+    const Ref<NetwPredictionEngine> engine = pool();
+    const int64_t slot = engine->open(fields(one("speed")));
+    Carrier *owner = carrier();
+    engine->set_sensor(
+        slot,
+        StringName("ground"),
+        Callable(memnew(ReadsCarrier(owner, "speed")))
+    );
+
+    owner->set("speed", 1.0);
+    const int64_t first = engine->sample_environment(slot, -1);
+    NETW_CHECK_CLOSE(
+        double(engine->sensor_samples(slot)[StringName("ground")]),
+        1.0,
+        0.0
+    );
+
+    // The world moving without a re-sample leaves the held samples where the
+    // transition saw them: reading them is a read and never a sample.
+    owner->set("speed", 2.0);
+    NETW_CHECK_CLOSE(
+        double(engine->sensor_samples(slot)[StringName("ground")]),
+        1.0,
+        0.0
+    );
+
+    // A re-sample takes the world as it now stands, and a world that moved
+    // digests to a different fact.
+    CHECK(engine->sample_environment(slot, -1) != first);
+    NETW_CHECK_CLOSE(
+        double(engine->sensor_samples(slot)[StringName("ground")]),
+        2.0,
+        0.0
+    );
+
+    memdelete(owner);
 }
 
 #endif // NETW_TIER_HOSTED

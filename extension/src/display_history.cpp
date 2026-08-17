@@ -19,21 +19,10 @@ namespace {
 
 constexpr int64_t DEFAULT_CAPACITY = 16;
 
-// The distance a display value must move before it is a jump rather than
-// drift, and the speed below which projecting one would not move it at all.
 constexpr double SETTLED = 0.001;
 constexpr double NEGLIGIBLE = 0.0001;
 
-// godot-cpp carries lerp_angle and not the difference it is built from, so the
-// engine's own definition is restated once here rather than reached for. The
-// turn is spelled out because the two tiers name their own constant
-// differently.
 constexpr double TURN = 6.2831853071795864769252867666;
-
-double angle_difference(double from, double to) {
-    const double difference = std::fmod(to - from, TURN);
-    return std::fmod(2.0 * difference, TURN) - difference;
-}
 
 bool is_spatial(int type) {
     return type == Variant::VECTOR2 || type == Variant::VECTOR2I
@@ -50,7 +39,35 @@ double spatial_distance(const Variant &from, const Variant &to) {
 
 } // namespace
 
+double angle_difference(double p_from, double p_to) {
+    const double difference = std::fmod(p_to - p_from, TURN);
+    return std::fmod(2.0 * difference, TURN) - difference;
+}
+
+int NetwDisplayHistory::pass_verdict(
+    const Ref<NetwInterpolate> &p_spec,
+    bool p_forecast
+) const {
+    if (sleeping) {
+        return PASS_SKIP_SLEEPING;
+    }
+    if (is_empty()) {
+        return PASS_SKIP_EMPTY;
+    }
+    const bool holds = p_spec.is_valid()
+        && p_spec->get_forecast_tail() == NetwInterpolate::TAIL_HOLD;
+    return p_forecast && !holds ? PASS_SAMPLE_PROJECT : PASS_SAMPLE;
+}
+
 void NetwDisplayHistory::_bind_methods() {
+    ClassDB::bind_method(
+        D_METHOD("pass_verdict", "spec", "forecast"),
+        &NetwDisplayHistory::pass_verdict
+    );
+    BIND_ENUM_CONSTANT(PASS_SKIP_SLEEPING);
+    BIND_ENUM_CONSTANT(PASS_SKIP_EMPTY);
+    BIND_ENUM_CONSTANT(PASS_SAMPLE);
+    BIND_ENUM_CONSTANT(PASS_SAMPLE_PROJECT);
     ClassDB::bind_method(
         D_METHOD("set_mode", "mode"),
         &NetwDisplayHistory::set_mode
@@ -174,7 +191,7 @@ void NetwDisplayHistory::record(
     } else {
         NETW_ERR_COND(
             tick_domain != domain,
-            "interp",
+            sys::INTERPOLATION,
             "A display channel cannot mix authoring and receive ticks."
         );
     }
@@ -185,7 +202,7 @@ void NetwDisplayHistory::record(
     } else {
         NETW_ERR_COND(
             value_type != type,
-            "interp",
+            sys::INTERPOLATION,
             "A display channel cannot change its value type."
         );
     }
@@ -250,9 +267,6 @@ Variant NetwDisplayHistory::sample(
 
     if (next_tick == -1) {
         const Variant result = buffer->get_at(previous_tick);
-        // A forecasting playhead projects the tail. A stationary or
-        // unprojectable channel falls through to the buffered hold below, which
-        // is the only path that sleeps: a moving projection must keep writing.
         if (forecast && NetwProject::supports(result.get_type())) {
             const Variant velocity = has_explicit_velocity
                 ? explicit_velocity
@@ -308,9 +322,6 @@ Variant NetwDisplayHistory::smooth_toward(
     return interpolate(last_written, result, weight);
 }
 
-// The channel's velocity implied by its two newest samples, in units per
-// second, matching the value type. Answers nil when a second sample or a
-// positive span is missing, which forces the caller to hold instead.
 Variant NetwDisplayHistory::finite_velocity(
     int64_t newest,
     double ticktime
@@ -380,8 +391,6 @@ Variant NetwDisplayHistory::lerp_bracketed(
 ) const {
     const int64_t gap = next_tick - previous_tick;
     if (gap > expected_interval_ticks * 2) {
-        // A hole in the stream rather than a slow channel, so the playhead
-        // holds the older sample and spends only the last interval crossing.
         const int64_t start_tick = next_tick - expected_interval_ticks;
         if (dt < start_tick) {
             return previous;
@@ -417,8 +426,6 @@ Variant NetwDisplayHistory::interpolate(
             return Vector2(from).lerp(Vector2(to), real_t(weight));
         case Variant::VECTOR3:
             return Vector3(from).lerp(Vector3(to), real_t(weight));
-        // A quaternion walks the arc whichever mode it declares, because the
-        // engine's own lerp already dispatches it to the spherical walk.
         case Variant::QUATERNION:
             return Quaternion(from).slerp(Quaternion(to), real_t(weight));
         case Variant::COLOR:

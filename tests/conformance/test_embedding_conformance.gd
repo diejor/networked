@@ -128,8 +128,8 @@ func _scenario_spawn_reaches_every_peer(world: NetwEmbeddingWorld) -> void:
 
 	var c1_live := await world.pump_until(
 		func() -> bool:
-			return c1._liveness.route_state(route) \
-					== LivenessShell.State.LIVE
+			return c1._native_core.liveness_route_state(route) \
+					== NetwLivenessCore.STATE_LIVE
 	)
 	assert_bool(c1_live).override_failure_message(
 		"[%s] host spawn never reached client 1" % world.provider(),
@@ -137,8 +137,8 @@ func _scenario_spawn_reaches_every_peer(world: NetwEmbeddingWorld) -> void:
 
 	var c2_live := await world.pump_until(
 		func() -> bool:
-			return c2._liveness.route_state(route) \
-					== LivenessShell.State.LIVE
+			return c2._native_core.liveness_route_state(route) \
+					== NetwLivenessCore.STATE_LIVE
 	)
 	assert_bool(c2_live).override_failure_message(
 		"[%s] host spawn never reached client 2" % world.provider(),

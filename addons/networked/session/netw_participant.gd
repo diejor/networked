@@ -13,9 +13,6 @@ signal scene_changed(from: NetwSceneHandle, to: NetwSceneHandle)
 var peer_id: int
 
 var _api_ref: WeakRef
-# The scene's entity RID rather than its handle, so membership survives the
-# container being rebuilt and never pins a freed node.
-var _current_scene := RID()
 
 
 func _init(api: NetwMultiplayer, id: int) -> void:
@@ -64,7 +61,10 @@ var is_debug: bool:
 ## Primary scene membership, or [code]null[/code] outside every scene.
 ##
 ## A participant is admitted to one scene at a time, so this is a scalar even
-## though the mechanism underneath it is not. Assigning it records membership
+## though the mechanism underneath it is not. The seat is held as the scene
+## entity's identity rather than as a handle, so membership survives the
+## container being rebuilt and never pins a freed node, and the handle read
+## here is minted from that identity on demand. Assigning it records membership
 ## without admitting anyone: [method move_to] is the verb that also moves the
 ## admission edge.
 var current_scene: NetwSceneHandle:
@@ -72,11 +72,13 @@ var current_scene: NetwSceneHandle:
 		var record := _scene_record()
 		return record.scene if record else null
 	set(value):
-		var next := value.entity if value else RID()
-		if _current_scene == next:
+		var api := _api_ref.get_ref() as NetwMultiplayer
+		if api == null:
 			return
 		var from := current_scene
-		_current_scene = next
+		var next := value.entity if value else RID()
+		if not api._native_core.participant_take_seat(peer_id, next):
+			return
 		scene_changed.emit(from, current_scene)
 
 
@@ -97,9 +99,31 @@ func move_to(dest: NetwSceneHandle) -> void:
 	dest.admit(self)
 
 
+# Empties the seat only when [param scene] is the one held, announcing the
+# change when it was, and answers whether it emptied.
+func _leave_seat(scene: RID) -> bool:
+	var api := _api_ref.get_ref() as NetwMultiplayer
+	if api == null:
+		return false
+	var from := current_scene
+	if not api._native_core.participant_leave_seat(peer_id, scene):
+		return false
+	scene_changed.emit(from, null)
+	return true
+
+
+# Whether [param scene] is the seat this participant currently holds.
+func _seated_in(scene: RID) -> bool:
+	var api := _api_ref.get_ref() as NetwMultiplayer
+	return api != null and api._native_core.participant_seat(peer_id) == scene
+
+
 # The scene entity's record while it is alive, or null.
 func _scene_record() -> NetwEntity:
 	var api := _api_ref.get_ref() as NetwMultiplayer
-	if api == null or not _current_scene.is_valid():
+	if api == null:
 		return null
-	return NetwEntity.of(api.entity_get_node(_current_scene))
+	var seat: RID = api._native_core.participant_seat(peer_id)
+	if not seat.is_valid():
+		return null
+	return NetwEntity.of(api.entity_get_node(seat))

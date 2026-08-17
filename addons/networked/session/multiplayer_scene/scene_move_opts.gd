@@ -25,10 +25,9 @@ var reason: StringName = &"scene_move"
 var target_global_position: Variant = null
 
 
-# Lowers this bag into the registry's own options object. The two carry the
-# same fields, and this is the seam where the public POD meets the private core.
-func to_move_opts() -> SceneCore.MoveOpts:
-	var out := SceneCore.MoveOpts.new()
+# Lowers this bag into the reparent record the entity plane takes.
+func to_reparent_opts() -> NetwReparentOpts:
+	var out := NetwReparentOpts.new()
 	out.preserve_history = preserve_history
 	out.reason = reason
 	out.target_global_position = target_global_position

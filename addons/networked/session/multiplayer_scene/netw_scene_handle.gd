@@ -19,8 +19,9 @@ class_name NetwSceneHandle
 extends RefCounted
 
 # Marks a node as a scene container, so an off-session walk can find one
-# without a class to check against. SceneCore stamps it at construction.
-const _SCENE_META := &"_netw_scene_container"
+# without a class to check against. The session stamps it when it builds the
+# container, and this reads the name from there rather than spelling it twice.
+static var _SCENE_META: StringName = NetwMultiplayerCore.scene_container_meta()
 
 var _entity_ref: WeakRef
 
@@ -41,11 +42,13 @@ func _bind(entity: NetwEntity) -> void:
 ## the tree and self-heals on reparent without anything re-enrolling the entity.
 var entity: RID:
 	get:
-		var api := _api()
 		var own := _entity()
-		if api == null or own == null or not is_instance_valid(own.owner):
+		if own == null or not is_instance_valid(own.owner):
 			return RID()
-		return api.scene_of(api.rid_of(own.owner))
+		var core := NetwEntity.session_plane_for(own.owner)
+		if core == null:
+			return RID()
+		return core.entity_scene_of(core.entity_of(own.owner))
 
 
 # The container this handle resolves to. Off-session there is no RID to walk,
@@ -79,15 +82,14 @@ var is_declared: bool:
 ## always the string [method NetwMultiplayer.scene_find] answers to.
 var label: StringName:
 	get:
-		var api := _api()
-		if api == null:
+		var own := _entity()
+		var core := NetwEntity.session_plane_for(own.owner) \
+		if own and is_instance_valid(own.owner) else null
+		if core == null:
 			var node := _scene_node()
-			var record := NetwEntity.of(node) if node else null
-			return record.scene_label if record else &""
-		return api.scene_get_param(
-			entity,
-			NetwMultiplayer.SceneParam.SCENE_PARAM_LABEL,
-		)
+			var found := NetwEntity.of(node) if node else null
+			return found.scene_label if found else &""
+		return core.scene_stem(entity)
 
 ## The scene's own [NetwEntity], or [code]null[/code] when none resolved.
 ##
@@ -98,9 +100,11 @@ var label: StringName:
 ## [/codeblock]
 var record: NetwEntity:
 	get:
-		var api := _api()
-		if api != null:
-			var resolved := api._entity_wrapper(entity)
+		var own := _entity()
+		var core := NetwEntity.session_plane_for(own.owner) \
+		if own and is_instance_valid(own.owner) else null
+		if core != null:
+			var resolved := core.wrapper_of(entity) as NetwEntity
 			if resolved != null:
 				return resolved
 		var node := _scene_node()
@@ -179,10 +183,12 @@ var players: Array[NetwEntity]:
 ## The local peer's player entity inside this scene, or [code]null[/code].
 var local_player: NetwEntity:
 	get:
-		var api := _api()
-		if api == null:
+		var own := _entity()
+		var core := NetwEntity.session_plane_for(own.owner) \
+		if own and is_instance_valid(own.owner) else null
+		if core == null:
 			return null
-		return player_by_peer(api.get_unique_id())
+		return player_by_peer(core.get_unique_id())
 
 
 ## Returns whether the scene admits [param peer_id].
@@ -238,13 +244,16 @@ func move_participants(moving: Array[NetwParticipant]) -> NetwGroupPromise:
 	for participant: NetwParticipant in moving:
 		if participant:
 			peers.append(participant.peer_id)
-	var batch := NetwGroupPromise.new(peers)
+	var batch := NetwGroupPromise.create(PackedInt32Array(peers))
 	for participant: NetwParticipant in moving:
 		if participant:
 			participant.move_to(self)
-	# Arrivals report deferred so a caller chaining on the returned promise is
-	# subscribed before the group settles.
-	_resolve_moved.call_deferred(batch, moving)
+	# Arrivals report at the next settle, so a caller chaining on the returned
+	# promise is subscribed before the group settles, and unkeyed, so two moves
+	# in one cascade each report their own batch.
+	var api := _api()
+	if api:
+		api._settle_schedule(_resolve_moved.bind(batch, moving))
 	return batch
 
 
@@ -257,6 +266,10 @@ func _resolve_moved(
 	for participant: NetwParticipant in moved:
 		if participant:
 			batch.resolve_peer(participant.peer_id, participant)
+	# A move nobody was waiting on settles here, because the last arrival is
+	# what settles every other one and there is no arrival to be last.
+	if not batch.is_completed:
+		batch.resolve_all()
 
 
 # The peer id [param who] names, as a participant or an id already. Zero when it
@@ -305,7 +318,7 @@ func move_in(moved: NetwEntity, opts: SceneMoveOpts = null) -> NetwPromise:
 		var refused := NetwPromise.new()
 		refused.reject(ERR_UNAVAILABLE, "move_in: no session or entity")
 		return refused
-	return api.scene_move(api.rid_of(moved.owner), entity, opts)
+	return api.scene_move(api.entity_of(moved.owner), entity, opts)
 
 
 ## Calls [param callback] with each [NetwParticipant] the scene admits.

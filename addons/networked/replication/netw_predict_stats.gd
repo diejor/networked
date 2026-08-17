@@ -39,6 +39,22 @@ const ARRIVAL_BUCKETS := 9
 const REPLAY_DEPTH_BUCKETS := 33
 
 
+# The pool's drive columns, supplied by the engine that owns the slot. The
+# engine keeps these counters as it drives, so a second copy maintained here
+# would be a second ledger that agrees only while both are remembered.
+var _drive_columns: Callable = Callable()
+
+
+# One pool column, or the value this object carries with no engine behind it.
+func _column(column: NetwPredictionEngine.DriveStat, fallback: int) -> int:
+	if not _drive_columns.is_valid():
+		return fallback
+	var columns: PackedInt64Array = _drive_columns.call()
+	if column >= columns.size():
+		return fallback
+	return int(columns[column])
+
+
 func _init() -> void:
 	arrivals.resize(ARRIVAL_BUCKETS)
 	replay_depth.resize(REPLAY_DEPTH_BUCKETS)
@@ -57,11 +73,21 @@ func to_dictionary() -> Dictionary:
 ## Physics-frame callbacks folded into their tick's existing command record.
 ## A growing value means this peer produces frame callbacks faster than the
 ## shared network clock advances, but it cannot grow the command queue.
-var authoring_clamped: int = 0
+var authoring_clamped: int = 0:
+	get:
+		return _column(
+			NetwPredictionEngine.STAT_AUTHORING_CLAMPED,
+			0,
+		)
 
 ## Prediction passes held because their unacknowledged horizon reached the
 ## structural ceiling. Input capture continues while the simulated body holds.
-var speculation_held: int = 0
+var speculation_held: int = 0:
+	get:
+		return _column(
+			NetwPredictionEngine.STAT_SPECULATION_HELD,
+			0,
+		)
 
 ## Physics steps the world advanced across the newest transition.
 ##
@@ -120,13 +146,28 @@ var folded: int = 0
 
 ## Monotone count of scheduled drive applications. This fingerprints their
 ## ordering without changing simulation behavior.
-var drive_seq: int = 0
+var drive_seq: int = 0:
+	get:
+		return _column(
+			NetwPredictionEngine.STAT_DRIVE_SEQ,
+			0,
+		)
 
 ## Input label applied by the most recent scheduled drive.
-var last_drive_label: int = -1
+var last_drive_label: int = -1:
+	get:
+		return _column(
+			NetwPredictionEngine.STAT_LAST_DRIVE_LABEL,
+			-1,
+		)
 
 ## Selection kind of the most recent scheduled drive, a [enum NetwPredict.DriveKind] value.
-var last_drive_kind: int = NetwPredict.DriveKind.NONE
+var last_drive_kind: int = NetwPredict.DriveKind.NONE:
+	get:
+		return _column(
+			NetwPredictionEngine.STAT_LAST_DRIVE_KIND,
+			NetwPredict.DriveKind.NONE,
+		)
 
 ## Epoch of the active prediction tape, or [code]-1[/code] before one is
 ## authored or received. Rewiring starts a new client-authored epoch.
@@ -308,7 +349,12 @@ var first_divergent_transition: int = -1
 
 ## Rows whose pre-state did not chain from the preceding post-state and carried
 ## no operator provenance. Any nonzero value names an out-of-transition write.
-var chain_breaks: int = 0
+var chain_breaks: int = 0:
+	get:
+		return _column(
+			NetwPredictionEngine.STAT_CHAIN_BREAKS,
+			0,
+		)
 
 ## Transitions authority reached a verdict on for the owner's claimed
 ## post-state, the denominator [member client_mismatches] is unreadable

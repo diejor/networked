@@ -18,7 +18,6 @@
 class_name MultiplayerInterpolator
 extends NetwComponent
 
-const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 @export_group("Display")
 
@@ -132,7 +131,7 @@ func _bind_entity() -> void:
 # seen this node's authored values. The handle it already applied to has, plus
 # whatever the owner layered on top in code, so re-applying there would silently
 # reset every runtime write back to the inspector default.
-func _on_reparented(_reparent: NetwEntity.ReparentOpts) -> void:
+func _on_reparented(_reparent: NetwReparentOpts) -> void:
 	_bind_entity()
 	if _handle() != _applied_handle_ref():
 		_apply_handle()
@@ -328,9 +327,9 @@ func _get_tracked_properties(target: Node) -> Array[StringName]:
 	if not target:
 		return []
 	var result: Array[StringName] = []
-	var props := SynchronizersCache.get_all_synchronized_properties(target)
+	var props := NetwSynchronizers.synchronized_properties(target)
 	for clean_name in props:
-		var value := SynchronizersCache.resolve_value(target, props[clean_name])
+		var value := NetwSynchronizers.resolve_value(target, props[clean_name])
 		if value != null and typeof(value) in [
 			TYPE_FLOAT,
 			TYPE_VECTOR2,

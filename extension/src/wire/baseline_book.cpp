@@ -1,5 +1,9 @@
 #include "netw/wire/baseline_book.hpp"
 
+#include "netw/colors.hpp"
+#include "netw/log.hpp"
+#include "netw/profile.hpp"
+
 using namespace godot;
 
 namespace netw::wire {
@@ -32,6 +36,13 @@ uint64_t BaselineBook::mask_to_send(
     const WirePlan &plan,
     const CodeRow &row
 ) {
+    NETW_WARN_COND_ONCE(
+        !plan.valid(),
+        sys::WIRE,
+        "A baseline mask was asked for against an invalid plan, so peer %d "
+        "is sent nothing.",
+        peer
+    );
     if (!plan.valid() || row.is_empty()) {
         return 0;
     }
@@ -58,6 +69,7 @@ void BaselineBook::stage(int peer, uint16_t seq, const CodeRow &row) {
 }
 
 void BaselineBook::acknowledge(int peer, uint16_t acked_seq) {
+    NETW_ZONE_NC("BaselineBook acknowledge", colors::WIRE);
     Peer *book = peers.getptr(peer);
     if (book == nullptr || book->in_flight.is_empty()) {
         return;

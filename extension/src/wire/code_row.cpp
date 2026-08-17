@@ -192,8 +192,12 @@ uint64_t CodeRow::changed_mask(
     const CodeRow &before,
     const CodeRow &after
 ) {
+    // Every column rather than none. Zero reads as a caught-up peer and costs
+    // the pass nothing, so a row this plan cannot interpret would strand the
+    // receiver silently; the whole mask is what the baseline book already
+    // answers for a peer whose baseline it does not hold.
     if (!before.valid_for(plan) || !after.valid_for(plan)) {
-        return 0;
+        return plan.full_mask();
     }
     uint64_t mask = 0;
     for (uint32_t index = 0; index < plan.column_count(); ++index) {

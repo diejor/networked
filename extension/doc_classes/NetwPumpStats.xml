@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPumpStats" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The counters one display pump folds instead of logging from inside a kernel.
+	</brief_description>
+	<description>
+		A kernel never warns, traces, or signals. It folds counters into a [NetwPumpStats] the shell publishes after the pump, so the same record is the profiler plot source, the debug read, and a correctness observable the display calculus asserts on.
+		Every field is order free, which is what lets a partitioned pump merge its per-slice records at the join: counters sum and maxima take the larger value, so merging in either order answers the same record.
+		[codeblock]
+		stats.runtimes += 1
+		if starving: stats.starving += 1
+		stats.max_display_lag = maxf(stats.max_display_lag, playhead.display_lag)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="merge">
+			<return type="void" />
+			<param index="0" name="other" type="NetwPumpStats" />
+			<description>
+				Folds [param other] into this record, the merge a partitioned pump runs at its join. Counters sum and maxima take the larger value, so the order two slices merge in cannot change the answer. Merging [code]null[/code] is refused and changes nothing.
+			</description>
+		</method>
+		<method name="reset">
+			<return type="void" />
+			<description>
+				Zeroes every counter, so one record serves every pump without allocating a second.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="max_display_lag" type="float" setter="set_max_display_lag" getter="get_max_display_lag" default="0.0">
+			Largest display lag any runtime carried, in ticks.
+		</member>
+		<member name="max_forecast_age" type="float" setter="set_max_forecast_age" getter="get_max_forecast_age" default="0.0">
+			Largest number of ticks any channel projected past its newest sample.
+		</member>
+		<member name="projecting" type="int" setter="set_projecting" getter="get_projecting" default="0">
+			Channels sampled past the newest tick under a forecasting playhead.
+		</member>
+		<member name="runtimes" type="int" setter="set_runtimes" getter="get_runtimes" default="0">
+			Runtimes advanced this pump.
+		</member>
+		<member name="sleeping" type="int" setter="set_sleeping" getter="get_sleeping" default="0">
+			Histories that stopped writing because their stream went quiet.
+		</member>
+		<member name="snaps" type="int" setter="set_snaps" getter="get_snaps" default="0">
+			Snap escapes taken instead of a smoothed step.
+		</member>
+		<member name="starving" type="int" setter="set_starving" getter="get_starving" default="0">
+			Runtimes with no recorded tick after the playhead.
+		</member>
+	</members>
+</class>

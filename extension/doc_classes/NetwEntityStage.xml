@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwEntityStage" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="can_begin_despawn" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="stage" type="int" />
+			<description>
+				Whether a despawn verb may still open the teardown window.
+				Wider than "is live" on purpose: a route can be bound by hand before activation reaches [constant STAGE_LIVE], and an entity in that window still has to tear down rather than be stranded holding a route.
+			</description>
+		</method>
+		<method name="edge_is_legal" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="from" type="int" />
+			<param index="1" name="to" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

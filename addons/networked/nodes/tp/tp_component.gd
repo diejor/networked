@@ -384,7 +384,7 @@ func _reparent_player(
 		)
 		return
 
-	var opts := NetwEntity.ReparentOpts.new()
+	var opts := NetwReparentOpts.new()
 	opts.reason = &"teleport"
 	opts.target_global_position = tp_component._resolve_snap_pos(to_scene.level, tp_path)
 	entity.reparent_to(to_scene.level, opts)

@@ -38,36 +38,6 @@ extends RefCounted
 const PredictionCore := preload("res://addons/networked/replication/prediction_core.gd")
 
 
-## One recorded transition, handed to a
-## [method NetwScriptModel.PropertyConfig.carry_step] rule as it runs.
-##
-## A rule advances an acknowledged value across the transitions the owner has
-## driven since, so what it is given is one of those transitions rather than
-## the present. Everything here is the recorded past, which is the whole
-## reason a rule may not read the live world instead.
-## [codeblock]
-## func _carry(value: Vector3, ctx: PredictionHandle.CarryContext) -> Vector3:
-##     var axis := _drive_axis(ctx.state[&"heading"])
-##     return value + axis * ctx.state[&"speed"] * ctx.delta
-## [/codeblock]
-class CarryContext:
-	extends RefCounted
-
-	## The declared state the owner recorded before this transition drove, the
-	## same values [method NetwScriptModel.PropertyConfig.state] names.
-	var state: Dictionary = { }
-
-	## The command this transition ran, as
-	## [method NetwScriptModel.PropertyConfig.input] declares it.
-	var input: Dictionary = { }
-
-	## This transition's width in simulated seconds.
-	var delta: float = 0.0
-
-	## The input tick this transition was labelled with.
-	var label: int = -1
-
-
 ## One state field's running account of the recoveries it asked for against
 ## the ones that answered it, a row of
 ## [member PredictionHandle.field_recovery].
@@ -730,7 +700,7 @@ func sensor(name: StringName, default: Variant = null) -> Variant:
 	var iface := engine._iface()
 	var api := iface._api() if iface else null
 	return api.predict_sensor_sample(
-		api.rid_of(engine._entity.owner),
+		api.entity_of(engine._entity.owner),
 		name,
 		default,
 	) if api and engine._entity else default
@@ -1257,7 +1227,7 @@ func notify_contact() -> void:
 	var iface := engine._iface() if engine else null
 	var api := iface._api() if iface else null
 	if api and engine._entity:
-		api.predict_notify_contact(api.rid_of(engine._entity.owner))
+		api.predict_notify_contact(api.entity_of(engine._entity.owner))
 
 
 ## Returns the [NetwTimeline] state key for the latest authoritative snapshot at

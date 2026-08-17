@@ -12,7 +12,6 @@ namespace netw {
 
 namespace {
 
-// Signal names, spelled once so a rename is one edit rather than four.
 const char *SIG_STATE_CHANGED = "state_changed";
 const char *SIG_SESSION_ENTERED = "session_entered";
 const char *SIG_SESSION_ENDED = "session_ended";
@@ -77,22 +76,18 @@ void NetwSessionCore::transition(State next) {
     }
     NETW_ERR_COND(
         !edge_is_legal(state, next),
-        "session",
+        sys::SESSION,
         "Illegal session transition %d -> %d.",
         int(state),
         int(next)
     );
     const State previous = state;
-    NETW_DEBUG("session", "transition from=%d to=%d", int(previous), int(next));
+    NETW_DEBUG(sys::SESSION, "transition from=%d to=%d", int(previous), int(next));
     exit_state(previous);
     set_state(next);
     enter_state(next);
 }
 
-// Leaving ONLINE ends the session, so it never fires on a connect that failed
-// before reaching it. The emission precedes the state write, which is what
-// lets a listener read the state it is leaving rather than the one it is not
-// in yet.
 void NetwSessionCore::exit_state(State prev) {
     if (prev == STATE_ONLINE) {
         emit_signal(SIG_SESSION_ENDED);
@@ -111,9 +106,6 @@ void NetwSessionCore::on_peer_assigned(
     int unique_id
 ) {
     if (!has_live_peer) {
-        // A null assignment while already ONLINE is left alone: a tree
-        // deletion nulls the peer that way, and a graceful leave and a server
-        // crash own that teardown instead.
         if (state == STATE_CONNECTING) {
             transition(STATE_OFFLINE);
         }

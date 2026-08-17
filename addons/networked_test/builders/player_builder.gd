@@ -35,6 +35,8 @@ var _has_prediction: bool = false
 var _prediction_missing_policy: PredictionComponent.MissingInput = \
 		PredictionComponent.MissingInput.STALL
 var _prediction_epsilon: float = 0.01
+var _prediction_schedule: PredictionComponent.Schedule = \
+		PredictionComponent.Schedule.TICK
 
 static var _uid_counter: int = 0
 
@@ -65,7 +67,7 @@ func with_root(type: Variant) -> PlayerBuilder:
 ## Enables player-represented control on the [NetwEntity].
 ##
 ## Bakes [member NetwEntity.initial_controller] to
-## [constant NetwEntity.InitialController.REPRESENTED_PEER] the serialization-safe
+## [constant NetwEntity.INITIAL_REPRESENTED_PEER] the serialization-safe
 ## way: [method build] extends the [method with_root] type with a generated root
 ## script whose [code]_init()[/code] writes the archetype config, mirroring how a
 ## hand-authored player root configures itself. The write re-runs on every
@@ -205,18 +207,27 @@ func with_broadcast(props: Array[StringName]) -> PlayerBuilder:
 
 ## Configures a [PredictionComponent] on the player entity.
 ##
-## Attaches the prediction and reconciliation slot with [param missing_policy]
-## and [param epsilon]. Requires [method with_state] and [method with_input], and
-## an entity root that defines [code]_network_tick[/code] so
-## [member PredictionComponent.simulate] auto-binds.
+## Attaches the prediction and reconciliation slot with [param missing_policy],
+## [param epsilon] and [param schedule]. Requires [method with_state] and
+## [method with_input], and an entity root that defines
+## [code]_network_tick[/code] so [member PredictionComponent.simulate]
+## auto-binds.
+##
+## [param schedule] is a build-time parameter rather than a write on the built
+## node because [PredictionComponent] reads it once, when the entity resolves,
+## and a rule declared for a tier the entity did not resolve under is accepted
+## and then permanently retired on first use.
 func with_prediction(
 		missing_policy: PredictionComponent.MissingInput = \
 		PredictionComponent.MissingInput.STALL,
 		epsilon: float = 0.01,
+		schedule: PredictionComponent.Schedule = \
+		PredictionComponent.Schedule.TICK,
 ) -> PlayerBuilder:
 	_has_prediction = true
 	_prediction_missing_policy = missing_policy
 	_prediction_epsilon = epsilon
+	_prediction_schedule = schedule
 	return self
 
 
@@ -273,7 +284,7 @@ func _entity_root_script() -> GDScript:
 	if _has_entity:
 		lines.append(
 			"\tNetwEntity.resolve(self).initial_controller ="
-			+ " NetwEntity.InitialController.REPRESENTED_PEER",
+			+ " NetwEntity.INITIAL_REPRESENTED_PEER",
 		)
 	if _has_interest:
 		if _interest_layers.is_empty():
@@ -379,6 +390,7 @@ func build() -> Node:
 		prediction.name = "PredictionComponent"
 		prediction.missing_policy = _prediction_missing_policy
 		prediction.divergence_epsilon = _prediction_epsilon
+		prediction.schedule = _prediction_schedule
 		var _a9: Node = SceneAssembly.attach(root, prediction, root)
 
 	var player_sync: MultiplayerSynchronizer = MultiplayerSynchronizer.new()

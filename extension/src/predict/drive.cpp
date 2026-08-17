@@ -34,24 +34,23 @@ ConsumeInputPlan plan_consume_input(
     return out;
 }
 
-namespace {
-
 TriggerShape trigger_shape(
     const Wiring &p_wiring,
-    const RecoveryRequest &p_request
+    const LocalVector<double> &p_field_errors,
+    double p_fallback_epsilon
 ) {
     bool saw_trigger = false;
     bool saw_writable = false;
     for (int at = 0; at < p_wiring.count(); ++at) {
         if (p_wiring.causal[uint32_t(at)] == 0
             || p_wiring.trigger_exclude[uint32_t(at)] != 0
-            || at >= int(p_request.field_errors.size())) {
+            || at >= int(p_field_errors.size())) {
             continue;
         }
         const double epsilon = p_wiring.epsilon[uint32_t(at)] >= 0.0
             ? p_wiring.epsilon[uint32_t(at)]
-            : p_request.fallback_epsilon;
-        if (p_request.field_errors[uint32_t(at)] <= epsilon) {
+            : p_fallback_epsilon;
+        if (p_field_errors[uint32_t(at)] <= epsilon) {
             continue;
         }
         saw_trigger = true;
@@ -62,6 +61,10 @@ TriggerShape trigger_shape(
     }
     return saw_writable ? TriggerShape::MIXED : TriggerShape::ALL_WITHHELD;
 }
+
+namespace {
+
+constexpr int64_t QUANTUM_STEPS_MAX = 15;
 
 WritePlan apply_quarantine_plan(
     Slot &r_slot,
@@ -74,7 +77,7 @@ WritePlan apply_quarantine_plan(
     }
     NETW_ASSERT(
         r_slot.episode.active && r_slot.episode.state == EpisodeState::FALLBACK,
-        "prediction",
+        sys::PREDICTION,
         "A quarantine write requires an active fallback episode."
     );
     out.restore = p_plan.payload;
@@ -123,6 +126,13 @@ void Tape::clear() {
     count = 0;
 }
 
+int64_t Tape::oldest_index() const {
+    if (count == 0) {
+        return -1;
+    }
+    return indices[uint32_t(start)];
+}
+
 int64_t Tape::newest_index() const {
     if (count == 0) {
         return -1;
@@ -159,7 +169,7 @@ void Slot::adopt_timing(const Timing &p_timing) {
         quantum_declaration_warned = true;
         NETW_WARN_COND(
             p_timing.quantum < 1,
-            "prediction",
+            sys::PREDICTION,
             "A declared simulation quantum must be a positive integer."
         );
     }
@@ -186,10 +196,92 @@ bool Slot::horizon_full() {
     return stats.ack_age_ticks >= ACK_AGE_MAX;
 }
 
+void Slot::adopt_timeline(const Ref<NetwTimeline> &p_timeline) {
+    timeline = p_timeline;
+}
+
+void Slot::reset_entry_history() {
+    entry_history = NetwTimeline::create(TAPE_HISTORY_LIMIT);
+}
+
+LocalVector<ReplayEntry> Slot::replay_entries(int64_t p_basis) const {
+    LocalVector<ReplayEntry> out;
+    const bool has_lane = timeline.is_valid();
+    if (config.schedule != int(Schedule::FRAME)) {
+        for (int64_t tick = p_basis + 1; tick <= latest_input_tick; ++tick) {
+            ReplayEntry entry;
+            entry.index = tick;
+            entry.label = tick;
+            entry.input = has_lane ? timeline->input_at(tick) : Dictionary();
+            out.push_back(entry);
+        }
+        return out;
+    }
+    const int64_t newest = tape.newest_index();
+    Dictionary carried = has_lane
+        ? timeline->input_at(tape.label_of(p_basis))
+        : Dictionary();
+    for (int64_t index = std::max(tape.oldest_index(), p_basis + 1);
+         index <= newest;
+         ++index) {
+        ReplayEntry entry;
+        entry.index = index;
+        entry.label = tape.label_of(index);
+        if (has_lane && tape.is_fresh(index)) {
+            const Dictionary authored = timeline->input_at(entry.label);
+            if (!authored.is_empty()) {
+                carried = authored;
+            }
+        }
+        entry.input = carried;
+        out.push_back(entry);
+    }
+    return out;
+}
+
+Dictionary Slot::state_before(int64_t p_transition) const {
+    const Ref<NetwTimeline> &book
+        = config.schedule == int(Schedule::FRAME) ? entry_history : timeline;
+    return book.is_valid() ? book->state_at(p_transition) : Dictionary();
+}
+
+void Slot::mark_carry_dirty(int64_t p_transition) {
+    if (carry_rules.is_empty()) {
+        return;
+    }
+    carry_dirty.mark(p_transition);
+}
+
+bool Slot::carry_judgeable(int64_t p_transition) const {
+    return !carry_dirty.holds(p_transition)
+        && !carry_dirty.holds(p_transition + 1);
+}
+
+void Slot::trim_history(int64_t p_ack) {
+    if (config.schedule == int(Schedule::FRAME)) {
+        if (timeline.is_valid()) {
+            timeline->trim_before(tape.label_of(p_ack));
+        }
+        if (entry_history.is_valid()) {
+            entry_history->trim_before(p_ack);
+        }
+        return;
+    }
+    if (timeline.is_valid()) {
+        timeline->trim_before(p_ack);
+    }
+}
+
 void Slot::reset_tape(int64_t p_epoch) {
     tape_epoch = p_epoch;
     tape.clear();
+    // The journal, the decoded command window and the entry book are all
+    // transition-keyed, and a transition is injective only within an epoch, so
+    // a row any of them retained would answer for a number the new epoch is
+    // about to reuse.
     journal.clear(p_epoch);
+    commands.clear();
+    reset_entry_history();
     next_tape_entry_index = 0;
     last_driven_entry_index = -1;
     latest_input_tick = -1;
@@ -218,12 +310,34 @@ void Slot::rewire(const Wiring &p_wiring) {
     // A rule declared against the replaced field table would be judged under
     // a numbering it never saw.
     carry_rules.clear();
+    carry_dirty.clear();
     episode.retire_agreement_run();
     carry.resize(wiring.count());
     last_witness = WitnessSummary();
     last_write_plan = WritePlan();
     last_drive_frame = -1;
     last_quantum = declared_quantum;
+}
+
+void Slot::record_idle_drive(int64_t p_label, DriveKind p_kind) {
+    stats.drive_seq += 1;
+    stats.last_drive_label = p_label;
+    stats.last_drive_kind = p_kind;
+}
+
+void Slot::record_authoring_clamp() {
+    stats.authoring_clamped += 1;
+}
+
+void Slot::record_speculation_hold() {
+    stats.speculation_held += 1;
+}
+
+void Slot::mark_authority_ack(int64_t p_transition) {
+    if (p_transition > latest_authority_ack) {
+        latest_authority_ack = p_transition;
+    }
+    refresh_ack_age();
 }
 
 void Slot::prepare_tick_tape(int64_t p_tick) {
@@ -275,7 +389,7 @@ void Slot::record_drive(
         if (last_quantum != declared_quantum) {
             stats.quantum_faults += 1;
             NETW_DEBUG(
-                "prediction",
+                sys::PREDICTION,
                 "quantum mismatch measured=%d declared=%d transition=%d",
                 last_quantum,
                 declared_quantum,
@@ -303,7 +417,9 @@ int Slot::measure_quantum() {
     if (previous < 0 || frame_index <= 0) {
         return declared_quantum;
     }
-    return int(std::clamp<int64_t>(frame_index - previous, 0, 255));
+    return int(
+        std::clamp<int64_t>(frame_index - previous, 0, QUANTUM_STEPS_MAX)
+    );
 }
 
 DriveRecord Slot::open_drive(
@@ -369,7 +485,8 @@ DriveRecord Slot::replay_drive(
     int64_t p_transition,
     int64_t p_label,
     DriveKind p_kind,
-    const StateStamp &p_pre
+    const StateStamp &p_pre,
+    bool p_authoring
 ) {
     NETW_ZONE_NC("NetwPredict replay drive", colors::PREDICTION);
     adopt_timing(p_timing);
@@ -378,10 +495,18 @@ DriveRecord Slot::replay_drive(
     replayed.label = p_label;
     replayed.kind = p_kind;
     replayed.fresh = p_kind == DriveKind::FRESH;
-    record_drive(p_transition, replayed, p_topology, p_pre);
+
+    int64_t transition = p_transition;
+    if (p_authoring && config.schedule != int(Schedule::FRAME)) {
+        prepare_tick_tape(p_timing.tick);
+        transition = next_tape_entry_index;
+        author_tape_entry(p_label, true);
+        last_driven_input_tick = p_timing.tick;
+    }
+    record_drive(transition, replayed, p_topology, p_pre);
 
     DriveRecord out;
-    out.transition = p_transition;
+    out.transition = transition;
     out.label = p_label;
     out.kind = p_kind;
     out.fresh = replayed.fresh;
@@ -402,14 +527,14 @@ bool Slot::record_evidence(
         journal.slot_of(p_transition) < 0
             || (journal.flags_of(p_transition) & ROW_CLOSED) != 0,
         false,
-        "prediction",
+        sys::PREDICTION,
         "Solve evidence needs an open journal row at transition %d.",
         p_transition
     );
     NETW_ERR_COND_V(
         !config.witness && !p_contacts.is_empty(),
         false,
-        "prediction",
+        sys::PREDICTION,
         "Solve evidence carries contacts without a witness declaration."
     );
     WitnessSummary witness;
@@ -418,7 +543,7 @@ bool Slot::record_evidence(
         NETW_ERR_COND_V(
             !witness.valid,
             false,
-            "prediction",
+            sys::PREDICTION,
             "Solve evidence contains an invalid witness."
         );
         last_witness = witness;
@@ -450,7 +575,7 @@ bool Slot::record_evidence(
         witness_state
     );
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "evidence transition=%d quantum=%d witness=%d",
         p_transition,
         last_quantum,
@@ -595,7 +720,11 @@ WritePlan Slot::recover(const RecoveryRequest &p_request) {
     effective.suppressed = effective.suppressed
         || recovery.suppressed_at(effective.current_label);
     last_write_plan = stage_recovery(wiring, config, effective, recovery);
-    const TriggerShape shape = trigger_shape(wiring, effective);
+    const TriggerShape shape = trigger_shape(
+        wiring,
+        effective.field_errors,
+        effective.fallback_epsilon
+    );
     if (last_write_plan.escalated) {
         episode.record_escalation(shape);
     }

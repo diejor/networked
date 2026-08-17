@@ -4,7 +4,7 @@
 ## The node carries no synchronizer: its script marks one state field and one
 ## input field, so the pipeline registers a derived binding on each peer through
 ## the node's own [signal Node.tree_entered]. The server adopts the node to mint a
-## route, the [constant NetwSpawnBook.Recipe.ADOPT] spawn binds the path-matched
+## route, the [constant NetwSpawnBook.RECIPE_ADOPT] spawn binds the path-matched
 ## client node, and from then on the state field flows server to client and the
 ## input field client to server over the shared
 ## [constant NetwFrameEnvelope.Channel.SYNC] frame.

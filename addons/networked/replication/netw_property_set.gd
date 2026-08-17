@@ -317,6 +317,20 @@ var volatile_schema: SchemaRecord:
 
 var _volatile_schema: SchemaRecord = null
 
+## The sealed [SchemaRecord] of the [constant Lane.RETAINED] members alone, in
+## the same order [member schema] declares them.
+##
+## The mirror of [member volatile_schema], and the two are disjoint
+## subsequences of one declaration. A set with no retained member has an empty
+## record here, which compiles to no plan and offers nothing.
+var retained_schema: SchemaRecord:
+	get:
+		if _retained_schema == null:
+			_retained_schema = _project_retained_schema()
+		return _retained_schema
+
+var _retained_schema: SchemaRecord = null
+
 ## Ordered member columns, the wire order both peers walk positionally.
 var columns: Array[Column] = []
 
@@ -342,9 +356,8 @@ var window: int = 0
 ## Which peers the set reaches.
 var audience: Audience = Audience.AUDIENCE_PUBLIC
 
-## Whether the volatile lane rides the masked per-recipient diff
-## ([constant NetwFrameEnvelope.SYNC_FLAG_MASKED]) instead of a shared broadcast
-## row. Illegal combined with [member window], since a redundant sample
+## Whether the volatile lane rides the masked per-recipient diff that
+## [NetwReplicationSend] writes, instead of a shared broadcast row. Illegal combined with [member window], since a redundant sample
 ## already defeats masking. [method from_property_configs] warns and forces
 ## this back to [code]false[/code] when both are set.
 var masked: bool = false
@@ -724,8 +737,19 @@ func bind(column: Column) -> Column:
 	column.schema_column = schema.columns.size()
 	schema.columns.append(column.shape)
 	columns.append(column)
-	_volatile_schema = null
+	reproject_lanes()
 	return column
+
+
+## Drops the cached [member volatile_schema] and [member retained_schema]
+## projections so the next read splits the columns as they stand now.
+##
+## The two projections are subsequences of [member schema] selected by
+## [member Column.lane], so anything that moves a column between lanes has to
+## call this or the two lanes keep sending each other's columns.
+func reproject_lanes() -> void:
+	_volatile_schema = null
+	_retained_schema = null
 
 
 # The volatile members' shapes as their own sealed record, shared rather than
@@ -734,6 +758,18 @@ func _project_volatile_schema() -> SchemaRecord:
 	var projected := SchemaRecord.new()
 	for column in columns:
 		if column.lane != Lane.VOLATILE or column.shape == null:
+			continue
+		projected.columns.append(column.shape)
+	SchemaCore.fix(projected)
+	return projected
+
+
+# The retained members' shapes as their own sealed record, shared rather than
+# copied so a column typed after the projection is built still types here.
+func _project_retained_schema() -> SchemaRecord:
+	var projected := SchemaRecord.new()
+	for column in columns:
+		if column.lane != Lane.RETAINED or column.shape == null:
 			continue
 		projected.columns.append(column.shape)
 	SchemaCore.fix(projected)

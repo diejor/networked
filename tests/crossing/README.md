@@ -25,7 +25,7 @@ slice rather than up front:
 # baseline: tests/unit/table, tests/unit/schema
 # baseline-count: 83
 test_table_codec.gd:test_round_trip -> table_tests.cpp:"[Networked][Table][Hosted] codec round trip"
-test_table_carrier.gd:test_late_join -> CARRY tests/integration/table (kit-facing)
+test_table_carrier.gd:test_late_join -> CARRY kit tests/integration/table (kit-facing)
 test_table_model.gd:*                -> DROP superseded by the schema split
 ```
 
@@ -35,6 +35,16 @@ exist in that tier's inventory, `CARRY` naming where the case stays, `DROP`
 saying why it goes, or `MATRIX` for a family whose specification is law-shaped.
 A family declaring a parity claim with no tolerance regime has not made a
 claim.
+
+A `CARRY` names its class before its owner, and the two classes are opposite
+futures. `CARRY kit` claims the subject is in the argued permanent set — stock
+conformance, the kit's compilers, real sockets, the published test kit,
+`examples/`, the authoring tier — and the row never crosses. `CARRY shell` says
+the subject is Ring-0, so the row is a waypoint: it is waiting to be
+re-authored against the native surface, and the ledger holding it cannot close.
+A carry with no class is refused, because prose alone read as permanence for
+both and hid the whole re-authoring debt in a number that looked settled.
+`carried-shell` reaching 0 across every ledger is what retires this directory.
 
 `MATRIX` names a cell of the scenario x law product rather than a case, and a
 family opts into it in its own header:
@@ -55,8 +65,15 @@ untouched.
 `baseline-count` is what those scopes held when the family crossed, frozen,
 because the census is retaken and stops counting the cases that left. It is not
 the ledger marking its own homework: the gate holds the two against each other,
-and what the census counts now must be that number minus what the rows say
-ported and dropped.
+and what the census counts now must be that number, plus `added-count`, minus
+what the rows say ported and dropped.
+
+`added-count` is how many cases were written into the scopes after the freeze.
+A crossing slice lands them every time it proves a native law from the shell
+side, and they license nothing, so they get no rows. They are counted apart
+from `baseline-count` because that number is what the family inherited, and a
+family that could grow its own baseline could absorb a deletion into an
+addition and balance.
 
 `<family>_arm.gd` is a family's instrument: it drives the GDScript arm and
 compares it to a golden recorded from that arm before the native port existed,
@@ -107,6 +124,20 @@ nobody prints is indistinguishable from an effect.
                           --inventory tmp/module-cases.txt
 .agents/bin/crossing-gate --self-test    # proves itself red, then green
 ```
+
+## Retirement
+
+This directory is not permanent. It retires when the last ledger closes, and a
+ledger closes when every `CARRY shell` row in it has been re-authored and its
+subject is native — that is, when `ledger carried-shell` in `baseline.census`
+reads 0. At that point `tests/crossing/`, `.agents/bin/crossing-gate`, and
+`.agents/bin/test-census` are deleted in one change, licensed by a full gate.
+
+Two things survive that deletion by not living here. The goldens under
+`tests/native/goldens/` are native test data and already sit outside this tree.
+`.agents/bin/native-report` reads the native tiers and is not crossing
+infrastructure at all. The arms die with the classes they drive, which is
+earlier than any of this.
 
 One thing to know before the first crossing: the census records the commit its
 counts were taken at, and the deletion check reads the GDScript corpus at that

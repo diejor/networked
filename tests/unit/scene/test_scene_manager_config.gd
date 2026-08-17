@@ -28,6 +28,18 @@ func test_scene_uid_resolves_to_its_resource_path() -> void:
 	assert_array(mgr.get_configured_paths()).contains([path])
 
 
+func test_a_declared_scene_is_keyed_by_the_stem_the_live_book_uses() -> void:
+	var path := "res://tests/support/scene/marked_test_scene.tscn"
+	var packed: PackedScene = load(path)
+	var stem := NetwMultiplayerCore.scene_packed_stem(packed)
+	mgr.register_scene_path(path)
+
+	var config := mgr._build_netw_scene_config()
+
+	assert_str(String(stem)).is_not_equal(path.get_file().get_basename())
+	assert_bool(config.scenes.has(stem)).is_true()
+
+
 func test_scene_config_snapshots_isolation() -> void:
 	mgr.scene_isolation = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
 

@@ -232,7 +232,7 @@ func _ready() -> void:
 	if _iface:
 		var api := _iface._api()
 		if api:
-			api.predict_declare(api.rid_of(entity.owner))
+			api.predict_declare(api.entity_of(entity.owner))
 
 
 func _exit_tree() -> void:
@@ -241,7 +241,7 @@ func _exit_tree() -> void:
 	if is_instance_valid(_iface) and _entity:
 		var api := _iface._api()
 		if api:
-			api.predict_undeclare(api.rid_of(_entity.owner))
+			api.predict_undeclare(api.entity_of(_entity.owner))
 	_iface = null
 
 
@@ -353,7 +353,7 @@ func notify_contact() -> void:
 	if _entity and is_instance_valid(_iface):
 		var api := _iface._api()
 		if api:
-			api.predict_notify_contact(api.rid_of(_entity.owner))
+			api.predict_notify_contact(api.entity_of(_entity.owner))
 
 
 ## Sets whether the authoritative body is asleep. Corrections pause while asleep so

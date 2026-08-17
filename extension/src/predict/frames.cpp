@@ -377,6 +377,15 @@ bool reader_consumed(ReadStream &p_reader) {
 
 } // namespace
 
+Dictionary spec_records() {
+    Dictionary out;
+    out["CommandHeader"] = CommandHeader::wire.spec_dump();
+    out["AckHeader"] = AckHeader::wire.spec_dump();
+    out["CommandEvidence"] = command_evidence_prefix.spec_dump();
+    out["AckEvidence"] = ack_evidence_prefix.spec_dump();
+    return out;
+}
+
 PackedByteArray encode_command(
     const CommandFrame &p_frame,
     const wire::WirePlan &p_input_plan
@@ -385,7 +394,7 @@ PackedByteArray encode_command(
     NETW_ERR_COND_V(
         !valid_command_shape(p_frame, p_input_plan),
         PackedByteArray(),
-        "prediction",
+        sys::PREDICTION,
         "Command frame shape does not match its input plan."
     );
     CommandFrame staged = p_frame;
@@ -393,11 +402,11 @@ PackedByteArray encode_command(
     NETW_ERR_COND_V(
         !serialize_command(writer, staged, p_input_plan),
         PackedByteArray(),
-        "prediction",
+        sys::PREDICTION,
         "Command frame exceeds its declared wire bounds."
     );
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "command transitions=%d payloads=%d bytes=%d",
         int(p_frame.transitions.size()),
         int(p_frame.payloads.size()),
@@ -432,16 +441,16 @@ PackedByteArray encode_ack(const AckFrame &p_frame) {
     NETW_ERR_COND_V(
         !serialize_ack(writer, staged),
         PackedByteArray(),
-        "prediction",
+        sys::PREDICTION,
         "Acknowledgement frame exceeds its declared wire bounds."
     );
     NETW_ASSERT(
         writer.to_bytes().size() <= ACK_FRAME_BYTES_MAX,
-        "prediction",
+        sys::PREDICTION,
         "Acknowledgement prefix exceeded its MTU budget."
     );
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "ack records=%d bytes=%d",
         int(staged.records.size()),
         writer.to_bytes().size()

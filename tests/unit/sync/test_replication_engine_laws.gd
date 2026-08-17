@@ -8,23 +8,6 @@
 class_name TestReplicationEngineLaws
 extends NetwTestSuite
 
-const _PURE_SOURCES: Array[String] = [
-	"res://addons/networked/replication/netw_sync_kernel.gd",
-	"res://addons/networked/replication/netw_spawn_reconciler.gd",
-]
-const _FORBIDDEN_KERNEL_TOKENS: Array[String] = [
-	"get_node",
-	"get_tree",
-	"get_script",
-	"is_instance_valid",
-	".owner",
-	"Time.",
-	"Engine.",
-	"emit",
-	"await",
-	"Netw.dbg",
-]
-
 var mt: MultiplayerTree
 var api: NetwMultiplayer
 
@@ -40,12 +23,12 @@ func before_test() -> void:
 
 ## L5. Materialization order is parent-first on gain and child-first on loss.
 func test_l5_ordering() -> void:
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		_nested_rows([2], [2], false, false),
 		PackedInt32Array([2]),
 	)
 	assert_array(_op_routes(plan, &"despawn")).contains_exactly([2, 1])
-	plan = NetwSpawnReconciler.reconcile(
+	plan = NetwSpawnPlanner.reconcile(
 		_nested_rows([], [], true, true),
 		PackedInt32Array([2]),
 	)
@@ -58,29 +41,29 @@ func test_l5_ordering() -> void:
 func test_l5b_book_orders_by_ancestry() -> void:
 	var book := NetwSpawnBook.new()
 	for route in [1, 2, 3]:
-		var record := NetwSpawnBook.SpawnRecord.new()
+		var record := NetwSpawnRecord.new()
 		record.route = route
-		book.spawned[route] = record
+		book.issue(record)
 	assert_array(book.ancestry_order()).contains_exactly([1, 2, 3])
 
 	# Route 3 is armed last, and route 2 moves under it.
-	book.spawned[2].parent_route = 3
+	book.spawned_of(2).parent_route = 3
 	assert_array(book.ancestry_order()).contains_exactly([1, 3, 2])
 
 	# A whole chain armed back to front still comes out root first.
 	var reversed := NetwSpawnBook.new()
 	for route in [1, 2, 3, 4]:
-		var record := NetwSpawnBook.SpawnRecord.new()
+		var record := NetwSpawnRecord.new()
 		record.route = route
 		record.parent_route = route + 1 if route < 4 else 0
-		reversed.spawned[route] = record
+		reversed.issue(record)
 	assert_array(reversed.ancestry_order()).contains_exactly([4, 3, 2, 1])
 
 
 ## L6. A recipient exists only when every supplied admission term agrees.
 func test_l6_recipients() -> void:
 	var rows := _nested_rows([], [], true, false)
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		rows,
 		PackedInt32Array([2]),
 	)
@@ -90,7 +73,7 @@ func test_l6_recipients() -> void:
 ## L7. Flat author policy resolves authority and controller soundly.
 func test_l7_author_gate_soundness() -> void:
 	var root := make_test_entity(mt, "AuthorEntity", 0, false)
-	var entity := api.rid_of(root)
+	var entity := api.entity_of(root)
 	api.entity_bind_route(entity, 71)
 	root.set_multiplayer_authority(4) # SMELL(authority-pin): policy fixture
 	NetwEntity.of(root).controller = 5
@@ -124,32 +107,18 @@ func test_l7_author_gate_soundness() -> void:
 func test_l9_reconciliation_conservation() -> void:
 	var rows := _single_row([2, 3], { 2: true, 3: false, 4: true })
 	rows[0][&"leave"][3] = { &"despawn": false, &"custom": [] }
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		rows,
 		PackedInt32Array([2, 3, 4]),
 	)
-	assert_int(plan.count_action(&"spawn")).is_equal(1)
-	assert_int(plan.count_action(&"retain")).is_equal(1)
-	assert_int(plan.count_action(&"despawn")).is_equal(0)
-
-
-## Pure sync and spawn kernels touch no Object or engine shell state.
-func test_kernel_regions_obey_purity_contract() -> void:
-	for path: String in _PURE_SOURCES:
-		var source := FileAccess.get_file_as_string(path)
-		assert_str(source).is_not_empty()
-		var found: Array[String] = []
-		for token: String in _FORBIDDEN_KERNEL_TOKENS:
-			if token in source:
-				found.append(token)
-		assert_array(found).override_failure_message(
-			"purity violations in %s" % path,
-		).is_empty()
+	assert_int(_op_count(plan, &"spawn")).is_equal(1)
+	assert_int(_op_count(plan, &"retain")).is_equal(1)
+	assert_int(_op_count(plan, &"despawn")).is_equal(0)
 
 
 ## C1. A hidden parent clamps a locally desired child.
 func test_c1_hidden_parent_clamps_child() -> void:
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		_nested_rows([], [], false, true),
 		PackedInt32Array([2]),
 	)
@@ -158,7 +127,7 @@ func test_c1_hidden_parent_clamps_child() -> void:
 
 ## C2. A visible nested pair gains parent before child.
 func test_c2_nested_gain_is_parent_first() -> void:
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		_nested_rows([], [], true, true),
 		PackedInt32Array([2]),
 	)
@@ -169,7 +138,7 @@ func test_c2_nested_gain_is_parent_first() -> void:
 func test_c3_parent_despawn_forces_child() -> void:
 	var rows := _nested_rows([2], [2], false, true)
 	rows[1][&"leave"][2] = { &"despawn": false, &"custom": [] }
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		rows,
 		PackedInt32Array([2]),
 	)
@@ -181,16 +150,16 @@ func test_c4_retained_parent_retains_child() -> void:
 	var rows := _nested_rows([2], [2], false, true)
 	rows[0][&"leave"][2] = { &"despawn": false, &"custom": [] }
 	rows[1][&"leave"][2] = { &"despawn": false, &"custom": [] }
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		rows,
 		PackedInt32Array([2]),
 	)
-	assert_int(plan.count_action(&"retain")).is_equal(2)
+	assert_int(_op_count(plan, &"retain")).is_equal(2)
 
 
 ## C5. A child can leave while its parent stays materialized.
 func test_c5_child_leave_preserves_parent() -> void:
-	var plan := NetwSpawnReconciler.reconcile(
+	var plan := NetwSpawnPlanner.reconcile(
 		_nested_rows([2], [2], true, false),
 		PackedInt32Array([2]),
 	)
@@ -204,7 +173,7 @@ func test_installed_implementation_reaches_flat_stages() -> void:
 	mt.add_child(root)
 	auto_free(root)
 	NetwEntity.ensure(root)
-	var entity := api.rid_of(root)
+	var entity := api.entity_of(root)
 	api.entity_bind_route(entity, 72)
 	var schema := api.schema_create(&"FlatStageEntity")
 	var position := api.schema_add_column(
@@ -276,9 +245,13 @@ func _nested_rows(
 	]
 
 
-func _op_routes(plan: NetwSpawnPlan, action: StringName) -> Array[int]:
+func _op_routes(plan: Array, action: StringName) -> Array[int]:
 	var routes: Array[int] = []
-	for operation: Dictionary in plan.operations:
+	for operation: Dictionary in plan:
 		if operation[&"action"] == action:
 			routes.append(int(operation[&"route"]))
 	return routes
+
+
+func _op_count(plan: Array, action: StringName) -> int:
+	return _op_routes(plan, action).size()

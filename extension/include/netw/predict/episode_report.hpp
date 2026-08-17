@@ -31,8 +31,6 @@ public:
         EPISODE_FALLBACK = 2,
     };
 
-    // Whether an episode is open or in fallback. A report survives its own
-    // close, so the id alone cannot tell a live episode from the last one.
     bool active() const;
     int id() const;
     int state() const;

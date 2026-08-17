@@ -1,10 +1,29 @@
 #include "netw/database_backend.hpp"
 #include "godot/class_db.hpp"
+#include "netw/log.hpp"
+#include "netw/subsystems.hpp"
 
 using namespace godot;
 using namespace netw;
 
 namespace netw {
+
+namespace {
+
+Ref<NetwPromise> answered(const Ref<NetwPromise> &p_ret, const char *p_verb) {
+    if (p_ret.is_valid()) {
+        return p_ret;
+    }
+    NETW_WARN(
+        sys::SESSION,
+        "a backend's %s override answered no promise, so the operation has "
+        "no result to settle",
+        p_verb
+    );
+    return NetwPromise::rejected(int(ERR_INVALID_DATA), String(p_verb));
+}
+
+} // namespace
 
 void NetwDatabaseBackend::_bind_methods() {
     ClassDB::bind_method(
@@ -59,105 +78,118 @@ void NetwDatabaseBackend::_bind_methods() {
     GDVIRTUAL_BIND(_delete_namespace, "slot");
 }
 
-Variant NetwDatabaseBackend::initialize(
+Ref<NetwPromise> NetwDatabaseBackend::initialize(
     const Dictionary &schema,
     const String &slot
 ) {
-    Variant ret;
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_initialize, schema, slot, ret)) {
-        return ret;
+        return answered(ret, "_initialize");
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackend::upsert(
+Ref<NetwPromise> NetwDatabaseBackend::upsert(
     const StringName &table,
     const StringName &id,
     const Dictionary &data
 ) {
-    Variant ret;
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_upsert, table, id, data, ret)) {
-        return ret;
+        return answered(ret, "_upsert");
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackend::commit(const Array &operations) {
-    Variant ret;
+Ref<NetwPromise> NetwDatabaseBackend::commit(const Array &operations) {
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_commit, operations, ret)) {
-        return ret;
+        return answered(ret, "_commit");
     }
     for (int i = 0; i < operations.size(); ++i) {
         Dictionary entry = operations[i];
         StringName table = entry.get("table", StringName());
         StringName id = entry.get("id", StringName());
         Dictionary data = entry.get("data", Dictionary());
-        Variant err = upsert(table, id, data);
-        // An asynchronous upsert answers with a coroutine rather than a code,
-        // and a backend whose writes await owes its own _commit to sequence
-        // them. The fallback loop reports only what it can read.
-        if (err.get_type() == Variant::INT && (Error)(int)err != OK) {
-            return err;
+        const Ref<NetwPromise> wrote = upsert(table, id, data);
+        if (wrote.is_null() || !wrote->get_is_settled()) {
+            NETW_WARN(
+                sys::SESSION,
+                "a backend whose writes settle later owes its own _commit to "
+                "sequence them; this one left operation %d in flight",
+                i
+            );
+            return NetwPromise::rejected(
+                int(ERR_UNAVAILABLE),
+                String("_commit")
+            );
+        }
+        if (wrote->get_is_failed()) {
+            return wrote;
+        }
+        const Variant err = wrote->get_result();
+        if (err.get_type() == Variant::INT && Error(int(err)) != OK) {
+            return wrote;
         }
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackend::find_by_id(
+Ref<NetwPromise> NetwDatabaseBackend::find_by_id(
     const StringName &table,
     const StringName &id
 ) {
-    Variant ret;
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_find_by_id, table, id, ret)) {
-        return ret;
+        return answered(ret, "_find_by_id");
     }
-    return Dictionary();
+    return NetwPromise::resolved(Dictionary());
 }
 
-Variant NetwDatabaseBackend::find_all(
+Ref<NetwPromise> NetwDatabaseBackend::find_all(
     const StringName &table,
     const Dictionary &filter
 ) {
-    Variant ret;
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_find_all, table, filter, ret)) {
-        return ret;
+        return answered(ret, "_find_all");
     }
-    return TypedArray<Dictionary>();
+    return NetwPromise::resolved(TypedArray<Dictionary>());
 }
 
-Variant NetwDatabaseBackend::erase(
+Ref<NetwPromise> NetwDatabaseBackend::erase(
     const StringName &table,
     const StringName &id
 ) {
-    Variant ret;
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_delete, table, id, ret)) {
-        return ret;
+        return answered(ret, "_delete");
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackend::warm(const Array &directives) {
-    Variant ret;
+Ref<NetwPromise> NetwDatabaseBackend::warm(const Array &directives) {
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_warm, directives, ret)) {
-        return ret;
+        return answered(ret, "_warm");
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackend::list_namespaces() {
-    Variant ret;
+Ref<NetwPromise> NetwDatabaseBackend::list_namespaces() {
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_list_namespaces, ret)) {
-        return ret;
+        return answered(ret, "_list_namespaces");
     }
-    return TypedArray<StringName>();
+    return NetwPromise::resolved(TypedArray<StringName>());
 }
 
-Variant NetwDatabaseBackend::delete_namespace(const String &slot) {
-    Variant ret;
+Ref<NetwPromise> NetwDatabaseBackend::delete_namespace(const String &slot) {
+    Ref<NetwPromise> ret;
     if (GDVIRTUAL_CALL(_delete_namespace, slot, ret)) {
-        return ret;
+        return answered(ret, "_delete_namespace");
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
 // In-memory test backend
@@ -185,16 +217,16 @@ bool NetwDatabaseBackendDict::matches_filter(
     return true;
 }
 
-Variant NetwDatabaseBackendDict::initialize(
+Ref<NetwPromise> NetwDatabaseBackendDict::initialize(
     const Dictionary &schema,
     const String &slot
 ) {
     ns = slot;
     get_ns();
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackendDict::upsert(
+Ref<NetwPromise> NetwDatabaseBackendDict::upsert(
     const StringName &table,
     const StringName &id,
     const Dictionary &record_data
@@ -213,10 +245,10 @@ Variant NetwDatabaseBackendDict::upsert(
         Variant k = keys[i];
         rec[k] = record_data[k];
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackendDict::find_by_id(
+Ref<NetwPromise> NetwDatabaseBackendDict::find_by_id(
     const StringName &table,
     const StringName &id
 ) {
@@ -225,20 +257,20 @@ Variant NetwDatabaseBackendDict::find_by_id(
         Dictionary table_map = active_ns[table];
         if (table_map.has(id)) {
             Dictionary rec = table_map[id];
-            return rec.duplicate();
+            return NetwPromise::resolved(rec.duplicate());
         }
     }
-    return Dictionary();
+    return NetwPromise::resolved(Dictionary());
 }
 
-Variant NetwDatabaseBackendDict::find_all(
+Ref<NetwPromise> NetwDatabaseBackendDict::find_all(
     const StringName &table,
     const Dictionary &filter
 ) {
     TypedArray<Dictionary> results;
     Dictionary active_ns = get_ns();
     if (!active_ns.has(table)) {
-        return results;
+        return NetwPromise::resolved(results);
     }
     Dictionary table_map = active_ns[table];
     Array ids = table_map.keys();
@@ -248,10 +280,10 @@ Variant NetwDatabaseBackendDict::find_all(
             results.append(rec.duplicate());
         }
     }
-    return results;
+    return NetwPromise::resolved(results);
 }
 
-Variant NetwDatabaseBackendDict::erase(
+Ref<NetwPromise> NetwDatabaseBackendDict::erase(
     const StringName &table,
     const StringName &id
 ) {
@@ -260,21 +292,21 @@ Variant NetwDatabaseBackendDict::erase(
         Dictionary table_map = active_ns[table];
         table_map.erase(id);
     }
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
-Variant NetwDatabaseBackendDict::list_namespaces() {
+Ref<NetwPromise> NetwDatabaseBackendDict::list_namespaces() {
     TypedArray<StringName> out;
     Array keys = data.keys();
     for (int i = 0; i < keys.size(); ++i) {
         out.append(StringName(keys[i]));
     }
-    return out;
+    return NetwPromise::resolved(out);
 }
 
-Variant NetwDatabaseBackendDict::delete_namespace(const String &slot) {
+Ref<NetwPromise> NetwDatabaseBackendDict::delete_namespace(const String &slot) {
     data.erase(slot);
-    return OK;
+    return NetwPromise::resolved(OK);
 }
 
 } // namespace netw

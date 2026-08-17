@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwGroupPromise" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The pending results of a one-to-many broadcast request, one entry per responding peer.
+	</brief_description>
+	<description>
+		[method Netw.request_all] returns one of these after fanning a request out to every live peer. The awaited set is snapshotted at send time, so a peer that joins mid-flight is not waited on, and a peer that disconnects is dropped from the set so the group can still complete.
+		[method then] fires once with the full [code]peer_id -> value[/code] map when the last response lands, while [signal completed_single] reports each response as it arrives.
+		[codeblock]
+		Netw.request_all(player.ready_check) \
+		    .then(func(votes: Dictionary) -> void:
+		        start_when_all_ready(votes)
+		    )
+		[/codeblock]
+		On timeout the group settles through [method catch_error] with [constant @GlobalScope.ERR_TIMEOUT], and whatever responses arrived first remain readable on [member results]. It settles exactly once, whichever way it goes, and chaining after it settled fires the callback immediately, so there is no race between sending and subscribing.
+		It shares the settle vocabulary of [NetwPromise], which is the one-to-one form. The two are siblings rather than a base and a subclass: a group's answer is a map and a promise's is a value, and nothing reads them through one type.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="catch_error">
+			<return type="NetwGroupPromise" />
+			<param index="0" name="cb" type="Callable" />
+			<description>
+				Chains [param cb] to run when the group fails or times out, receiving [member code] and [member detail]. A group that already failed runs it immediately.
+			</description>
+		</method>
+		<method name="create" qualifiers="static">
+			<return type="NetwGroupPromise" />
+			<param index="0" name="peers" type="PackedInt32Array" />
+			<description>
+				A group awaiting exactly [param peers]. An empty set is already satisfied and is deliberately NOT settled here, because nothing has subscribed yet: whoever hands the group to a caller settles it at their session's next settle, which is the first moment the caller can have chained onto it.
+			</description>
+		</method>
+		<method name="reject">
+			<return type="void" />
+			<param index="0" name="err_code" type="int" />
+			<param index="1" name="err_detail" type="String" default="&quot;&quot;" />
+			<description>
+				Settles the group as failed. Emits [signal failed] then [signal settled] and runs every chained [method catch_error]. A group that already settled is unchanged.
+			</description>
+		</method>
+		<method name="remove_peer">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Drops [param peer_id] from the awaited set without recording an answer for it, which is what a disconnect during the flight does. Settles the group when it was the last one awaited.
+			</description>
+		</method>
+		<method name="resolve_all">
+			<return type="void" />
+			<description>
+				Settles the group as completed with whatever [member results] holds. Emits [signal completed] then [signal settled] and runs every chained [method then].
+			</description>
+		</method>
+		<method name="resolve_peer">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="val" type="Variant" />
+			<description>
+				Records [param peer_id]'s answer and emits [signal completed_single]. Settles the group when it was the last one awaited.
+				A peer the group is not awaiting answers for nobody: it records nothing and settles nothing, because the awaited set is the snapshot the group promised over and a late arrival is not part of it.
+			</description>
+		</method>
+		<method name="then">
+			<return type="NetwGroupPromise" />
+			<param index="0" name="cb" type="Callable" />
+			<description>
+				Chains [param cb] to run when every awaited peer has answered, receiving the [member results] map. A group that already completed runs it immediately.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="code" type="int" setter="" getter="get_code" default="0">
+			The settle code when [member is_failed], otherwise [constant @GlobalScope.OK].
+		</member>
+		<member name="detail" type="String" setter="" getter="get_detail" default="&quot;&quot;">
+			The human-readable reason behind [member code], empty when the code says it all. Diagnostics only, never a branch condition.
+		</member>
+		<member name="expected_peers" type="PackedInt32Array" setter="" getter="get_expected_peers" default="PackedInt32Array()">
+			The peers still owed an answer, in the order the group was created with.
+		</member>
+		<member name="is_completed" type="bool" setter="" getter="get_is_completed" default="false">
+			Whether every awaited peer resolved.
+		</member>
+		<member name="is_failed" type="bool" setter="" getter="get_is_failed" default="false">
+			Whether the request failed or timed out.
+		</member>
+		<member name="is_settled" type="bool" setter="" getter="get_is_settled" default="false">
+			Whether the group settled, whichever way it went.
+		</member>
+		<member name="results" type="Dictionary" setter="" getter="get_results" default="{}">
+			The [code]peer_id -&gt; result[/code] map of every answer received so far, readable before the group settles and after it fails.
+		</member>
+	</members>
+	<signals>
+		<signal name="completed">
+			<param index="0" name="results" type="Dictionary" />
+			<description>
+				Emitted once every awaited peer has resolved.
+			</description>
+		</signal>
+		<signal name="completed_single">
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				Emitted as each awaited peer resolves, before the group itself settles.
+			</description>
+		</signal>
+		<signal name="failed">
+			<param index="0" name="code" type="int" />
+			<param index="1" name="detail" type="String" />
+			<description>
+				Emitted when the group is rejected by a timeout or a failure.
+			</description>
+		</signal>
+		<signal name="settled">
+			<description>
+				Emitted once the group settled, whichever way it went, after [signal completed] or [signal failed].
+			</description>
+		</signal>
+	</signals>
+</class>

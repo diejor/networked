@@ -24,7 +24,7 @@ void NetwEffectLedger::arm(
     entry.deadline_tick = p_deadline_tick;
     entries[p_key] = entry;
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "effect armed key=%s deadline=%d",
         String(p_key),
         p_deadline_tick
@@ -39,7 +39,7 @@ bool NetwEffectLedger::watch(
     NETW_ZONE_NC("NetwEffectLedger watch", colors::PREDICTION);
     if (p_key.is_empty() || !entries.has(p_key)) {
         NETW_TRACE(
-            "prediction",
+            sys::PREDICTION,
             "effect watch refused, key not armed key=%s",
             String(p_key)
         );
@@ -78,7 +78,7 @@ void NetwEffectLedger::resolve(const StringName &p_key, bool p_keep) {
     }
 
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "effect resolved key=%s keep=%d",
         String(p_key),
         int(p_keep)

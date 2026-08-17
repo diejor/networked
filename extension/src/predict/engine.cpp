@@ -485,6 +485,7 @@ int64_t NetwPredictionEngine::open(
     next_slot += 1;
     predict::Slot row;
     row.open = true;
+    row.reset_entry_history();
     if (p_declaration.is_valid()) {
         row.rewire(predict::compile(p_declaration->fields));
     }
@@ -558,7 +559,7 @@ bool NetwPredictionEngine::bind_owner(int64_t p_slot, Object *p_owner) {
     row->owner_solves = p_owner->is_class("RigidBody2D")
         || p_owner->is_class("RigidBody3D");
     resolve_reach(*row, p_owner);
-    NETW_TRACE("prediction", "slot %d bound an owner", p_slot);
+    NETW_TRACE(sys::PREDICTION, "slot %d bound an owner", p_slot);
     return row->port.bound();
 }
 
@@ -671,7 +672,7 @@ bool NetwPredictionEngine::roster_open(const char *p_verb) {
     }
     mutations_refused += 1;
     NETW_WARN_ONCE(
-        "prediction",
+        sys::PREDICTION,
         "%s was refused during a simulation pass; a simulate step must not "
         "register or unregister prediction, and a speculative act goes "
         "through an effect instead",
@@ -765,6 +766,59 @@ int64_t NetwPredictionEngine::order_key_of(int64_t p_slot) const {
     return row != nullptr ? row->order_key : -1;
 }
 
+namespace {
+
+bool authors_pass(int p_role) {
+    return p_role == int(Role::PREDICT)
+        || p_role == int(Role::CONSUME)
+        || p_role == int(Role::HOST_LOCAL);
+}
+
+bool steps_in_phase(const predict::Slot &p_row, int p_phase) {
+    const int role = p_row.config.role;
+    const int schedule = p_row.config.schedule;
+    const bool tick = schedule == int(Schedule::TICK);
+    const bool frame = schedule == int(Schedule::FRAME);
+    const bool authoring_fallback = role == int(Role::REMOTE)
+        && p_row.quarantine.latched;
+    switch (p_phase) {
+        case NetwPredictionEngine::PASS_ISLAND_TICK:
+            return tick && authors_pass(role);
+        case NetwPredictionEngine::PASS_ISLAND_FRAME:
+            return frame && authors_pass(role);
+        case NetwPredictionEngine::PASS_JOINT:
+            return p_row.config.island == NetwPredictionEngine::ISLAND_JOINT
+                && authors_pass(role);
+        case NetwPredictionEngine::PASS_TICK:
+            return tick || role == int(Role::PREDICT)
+                || role == int(Role::HOST_LOCAL)
+                || authoring_fallback;
+        case NetwPredictionEngine::PASS_FRAME:
+            return frame
+                && (authors_pass(role) || authoring_fallback
+                    || role == int(Role::SIMULATE));
+        case NetwPredictionEngine::PASS_FINALIZE_FRAME:
+            return frame && role == int(Role::PREDICT);
+        default:
+            return false;
+    }
+}
+
+} // namespace
+
+PackedInt64Array NetwPredictionEngine::pass_slots(int p_phase) const {
+    NETW_ZONE_NC("predict pass slots", colors::PREDICTION);
+    const PackedInt64Array ordered = ordered_slots();
+    PackedInt64Array out;
+    for (int at = 0; at < ordered.size(); ++at) {
+        const predict::Slot *row = row_of(ordered[at]);
+        if (row != nullptr && steps_in_phase(*row, p_phase)) {
+            out.push_back(ordered[at]);
+        }
+    }
+    return out;
+}
+
 PackedInt64Array NetwPredictionEngine::ordered_slots() const {
     NETW_ZONE_NC("predict ordered slots", colors::PREDICTION);
     LocalVector<int64_t> keys;
@@ -852,6 +906,45 @@ Dictionary NetwPredictionEngine::canonicalize_input(
     const predict::Slot *row = row_of(p_slot);
     return row != nullptr ? predict::canonicalize(row->input_codec, p_payload)
                           : p_payload.duplicate();
+}
+
+Dictionary NetwPredictionEngine::coast_command(int64_t p_slot) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr ? predict::zero_row(row->input_codec) : Dictionary();
+}
+
+int64_t NetwPredictionEngine::sample_environment(
+    int64_t p_slot,
+    int64_t p_epoch
+) {
+    NETW_ZONE_NC("predict sample environment", colors::PREDICTION);
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return 0;
+    }
+    if (p_epoch == -1 && row->sensors.is_empty()) {
+        row->last_samples = Dictionary();
+        return 0;
+    }
+    Dictionary samples;
+    depth += 1;
+    for (const KeyValue<StringName, Callable> &sensor : row->sensors) {
+        if (sensor.value.is_valid()) {
+            samples[sensor.key] = sensor.value.call();
+        }
+    }
+    depth -= 1;
+    row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return 0;
+    }
+    row->last_samples = samples;
+    return NetwPredictionCore::environment_digest(p_epoch, samples);
+}
+
+Dictionary NetwPredictionEngine::sensor_samples(int64_t p_slot) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr ? row->last_samples : Dictionary();
 }
 
 PackedByteArray NetwPredictionEngine::canonical_state_bytes(
@@ -983,14 +1076,14 @@ Ref<NetwPredictConsumePlan> NetwPredictionEngine::plan_consume_input(
     NETW_ERR_COND_V(
         p_schedule != int(Schedule::TICK) && p_schedule != int(Schedule::FRAME),
         Ref<NetwPredictConsumePlan>(),
-        "prediction",
+        sys::PREDICTION,
         "A consume input plan requires a TICK or FRAME schedule."
     );
     NETW_ERR_COND_V(
         p_missing_policy < int(MissingInput::STALL)
             || p_missing_policy > int(MissingInput::REPEAT_LAST),
         Ref<NetwPredictConsumePlan>(),
-        "prediction",
+        sys::PREDICTION,
         "The missing input policy is outside the declared enum."
     );
     Ref<NetwPredictConsumePlan> out;
@@ -1054,6 +1147,73 @@ void NetwPredictDrive::_bind_methods() {
     ClassDB::bind_method(D_METHOD("fresh"), &NetwPredictDrive::fresh);
     ClassDB::bind_method(D_METHOD("held"), &NetwPredictDrive::held);
     ClassDB::bind_method(D_METHOD("clamped"), &NetwPredictDrive::clamped);
+}
+
+void NetwPredictCarryContext::_bind_methods() {
+    ClassDB::bind_method(
+        D_METHOD("get_state"),
+        &NetwPredictCarryContext::get_state
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_input"),
+        &NetwPredictCarryContext::get_input
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_delta"),
+        &NetwPredictCarryContext::get_delta
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_label"),
+        &NetwPredictCarryContext::get_label
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::DICTIONARY, "state"),
+        "",
+        "get_state"
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::DICTIONARY, "input"),
+        "",
+        "get_input"
+    );
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "delta"), "", "get_delta");
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "label"), "", "get_label");
+}
+
+void NetwPredictCarryAttempt::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("value"), &NetwPredictCarryAttempt::value);
+    ClassDB::bind_method(
+        D_METHOD("evidence"),
+        &NetwPredictCarryAttempt::evidence
+    );
+    ClassDB::bind_method(
+        D_METHOD("same_type"),
+        &NetwPredictCarryAttempt::same_type
+    );
+    ClassDB::bind_method(D_METHOD("finite"), &NetwPredictCarryAttempt::finite);
+    ClassDB::bind_method(
+        D_METHOD("within_envelope"),
+        &NetwPredictCarryAttempt::within_envelope
+    );
+    ClassDB::bind_method(D_METHOD("pure"), &NetwPredictCarryAttempt::pure);
+    ClassDB::bind_method(
+        D_METHOD("faithful"),
+        &NetwPredictCarryAttempt::faithful
+    );
+    ClassDB::bind_method(
+        D_METHOD("residual"),
+        &NetwPredictCarryAttempt::residual
+    );
+    ClassDB::bind_method(
+        D_METHOD("tolerance"),
+        &NetwPredictCarryAttempt::tolerance
+    );
+}
+
+void NetwPredictReplayEntry::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("index"), &NetwPredictReplayEntry::index);
+    ClassDB::bind_method(D_METHOD("label"), &NetwPredictReplayEntry::label);
+    ClassDB::bind_method(D_METHOD("input"), &NetwPredictReplayEntry::input);
 }
 
 bool NetwPredictConsumePlan::eligible() const {
@@ -1376,7 +1536,8 @@ Ref<NetwPredictDrive> NetwPredictionEngine::replay_drive(
     int64_t p_pre_momentum_fp,
     int64_t p_pre_controller_fp,
     int64_t p_raw_fp,
-    int p_evidence_mask
+    int p_evidence_mask,
+    bool p_authoring
 ) {
     Ref<NetwPredictDrive> out;
     out.instantiate();
@@ -1404,7 +1565,8 @@ Ref<NetwPredictDrive> NetwPredictionEngine::replay_drive(
         p_transition,
         p_label,
         DriveKind(p_kind),
-        pre
+        pre,
+        p_authoring
     );
     return out;
 }
@@ -1425,7 +1587,7 @@ bool NetwPredictionEngine::record_evidence(
     NETW_ERR_COND_V(
         row == nullptr,
         false,
-        "prediction",
+        sys::PREDICTION,
         "Solve evidence names closed slot %d.",
         p_slot
     );
@@ -1434,7 +1596,7 @@ bool NetwPredictionEngine::record_evidence(
         p_witness_classes.size() != count || p_realizations.size() != count
             || p_outside_boundary.size() != count,
         false,
-        "prediction",
+        sys::PREDICTION,
         "Witness columns have different lengths."
     );
     LocalVector<predict::WitnessContact> contacts;
@@ -1518,6 +1680,45 @@ void NetwPredictionEngine::record_episode_divergence(
     if (row != nullptr) {
         row->episode.record_divergence(row->journal, p_transition);
     }
+}
+
+int NetwPredictionEngine::escalation_field_of(
+    int64_t p_slot,
+    const Array &p_predicted,
+    const Array &p_authority,
+    const PackedFloat64Array &p_field_errors,
+    double p_fallback_epsilon
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    if (row == nullptr) {
+        return -1;
+    }
+    const int width = row->wiring.count();
+    predict::RecoveryRequest request;
+    request.predicted = state_row(p_predicted, width);
+    request.authority = state_row(p_authority, width);
+    request.field_errors = tolerance_row(p_field_errors, width);
+    request.fallback_epsilon = p_fallback_epsilon;
+    return predict::escalation_field(row->wiring, request);
+}
+
+int NetwPredictionEngine::trigger_shape_of(
+    int64_t p_slot,
+    const PackedFloat64Array &p_field_errors,
+    double p_fallback_epsilon
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    if (row == nullptr) {
+        return int(predict::TriggerShape::NONE);
+    }
+    LocalVector<double> errors;
+    errors.resize(uint32_t(p_field_errors.size()));
+    for (uint32_t at = 0; at < errors.size(); ++at) {
+        errors[at] = p_field_errors[int(at)];
+    }
+    return int(
+        predict::trigger_shape(row->wiring, errors, p_fallback_epsilon)
+    );
 }
 
 void NetwPredictionEngine::record_episode_escalation(
@@ -1693,7 +1894,7 @@ bool NetwPredictionEngine::transport_admissible(
     NETW_ERR_COND_V(
         row == nullptr,
         false,
-        "prediction",
+        sys::PREDICTION,
         "Transport evidence names closed slot %d.",
         p_slot
     );
@@ -1724,7 +1925,7 @@ bool NetwPredictionEngine::dissipate_admissible(
     NETW_ERR_COND_V(
         row == nullptr,
         false,
-        "prediction",
+        sys::PREDICTION,
         "Dissipate evidence names closed slot %d.",
         p_slot
     );
@@ -1778,21 +1979,21 @@ int NetwPredictionEngine::judge_carry(
     NETW_ERR_COND_V(
         row == nullptr,
         CARRY_DECLINED,
-        "prediction",
+        sys::PREDICTION,
         "Carry evidence names closed slot %d.",
         p_slot
     );
     NETW_ERR_COND_V(
         !row->config.carry,
         CARRY_DECLINED,
-        "prediction",
+        sys::PREDICTION,
         "Carry evidence needs a carry declaration."
     );
     const int field = row->wiring.fields.index_of(p_field);
     NETW_ERR_COND_V(
         field < 0,
         CARRY_DECLINED,
-        "prediction",
+        sys::PREDICTION,
         "Carry evidence names undeclared field '%s'.",
         String(p_field).utf8().get_data()
     );
@@ -1813,7 +2014,7 @@ int NetwPredictionEngine::decline_carry(
     NETW_ERR_COND_V(
         row == nullptr,
         CARRY_DECLINED,
-        "prediction",
+        sys::PREDICTION,
         "Carry refusal names closed slot %d.",
         p_slot
     );
@@ -1821,7 +2022,7 @@ int NetwPredictionEngine::decline_carry(
     NETW_ERR_COND_V(
         field < 0,
         CARRY_DECLINED,
-        "prediction",
+        sys::PREDICTION,
         "Carry refusal names undeclared field '%s'.",
         String(p_field).utf8().get_data()
     );
@@ -1859,8 +2060,7 @@ PackedInt64Array NetwPredictionEngine::carry_stats(
     int64_t p_slot,
     const StringName &p_field
 ) const {
-    PackedInt64Array out;
-    out.resize(3);
+    PackedInt64Array out = gd::zeroed<PackedInt64Array>(3);
     const predict::Slot *row = row_of(p_slot);
     const predict::CarryFieldStats *stats = row != nullptr
         ? row->carry.field(row->wiring.fields.index_of(p_field))
@@ -1872,6 +2072,287 @@ PackedInt64Array NetwPredictionEngine::carry_stats(
         values[2] = stats->infidelity;
     }
     return out;
+}
+
+void NetwPredictionEngine::mark_carry_dirty(
+    int64_t p_slot,
+    int64_t p_transition
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row != nullptr) {
+        row->mark_carry_dirty(p_transition);
+    }
+}
+
+bool NetwPredictionEngine::carry_judgeable(
+    int64_t p_slot,
+    int64_t p_transition
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr && row->carry_judgeable(p_transition);
+}
+
+int32_t NetwPredictionEngine::compared_fingerprint(
+    predict::Slot &p_row,
+    const Dictionary &p_payload
+) {
+    Dictionary scope;
+    const Array fields = p_payload.keys();
+    for (int at = 0; at < fields.size(); ++at) {
+        const int slot = p_row.wiring.fields.index_of(fields[at]);
+        if (slot >= 0 && p_row.wiring.causal[uint32_t(slot)] != 0) {
+            scope[fields[at]] = p_payload[fields[at]];
+        }
+    }
+    const PackedByteArray bytes
+        = predict::canonical_bytes(p_row.wiring.codec, scope);
+    return predict::fnv1a(bytes.ptr(), int(bytes.size()));
+}
+
+Variant NetwPredictionEngine::call_carry(
+    int64_t p_slot,
+    const Callable &p_rule,
+    const Variant &p_value,
+    const predict::ReplayEntry &p_entry,
+    const Dictionary &p_state
+) {
+    Ref<NetwPredictCarryContext> context;
+    context.instantiate();
+    context->state_at = p_state;
+    context->input_at = p_entry.input;
+    context->authored_label = p_entry.label;
+    const predict::Slot *row = row_of(p_slot);
+    context->step_delta = row != nullptr ? row->tick_delta : 0.0;
+
+    Array arguments;
+    arguments.push_back(p_value);
+    arguments.push_back(context);
+    depth += 1;
+    const Variant result = p_rule.callv(arguments);
+    depth -= 1;
+
+    switch (result.get_type()) {
+        case Variant::FLOAT:
+            return std::isfinite(double(result)) ? result : Variant();
+        case Variant::VECTOR2:
+            return Vector2(result).is_finite() ? result : Variant();
+        case Variant::VECTOR3:
+            return Vector3(result).is_finite() ? result : Variant();
+        default:
+            return result;
+    }
+}
+
+void NetwPredictionEngine::replay_carry(
+    predict::CarryAttempt &r_attempt,
+    int64_t p_slot,
+    const Callable &p_rule,
+    const StringName &p_field,
+    int p_field_slot,
+    const LocalVector<predict::ReplayEntry> &p_entries,
+    bool p_angle,
+    double p_divergence_epsilon
+) {
+    // Oldest first, because the pairs nearest the present are the ones a
+    // recovery has most recently landed in.
+    for (uint32_t at = 0; at < p_entries.size(); ++at) {
+        const predict::Slot *row = row_of(p_slot);
+        if (row == nullptr) {
+            break;
+        }
+        const int64_t index = p_entries[at].index;
+        if (!row->carry_judgeable(index)) {
+            continue;
+        }
+        const Dictionary from = row->state_before(index);
+        const Dictionary reached = row->state_before(index + 1);
+        if (!from.has(p_field) || !reached.has(p_field)) {
+            continue;
+        }
+        const double tolerance
+            = row->wiring.epsilon[uint32_t(p_field_slot)] >= 0.0
+            ? row->wiring.epsilon[uint32_t(p_field_slot)]
+            : p_divergence_epsilon;
+        const Variant stepped
+            = call_carry(p_slot, p_rule, from[p_field], p_entries[at], from);
+        if (stepped.get_type() != reached[p_field].get_type()) {
+            r_attempt.probe.faithful = false;
+            return;
+        }
+        // Judged at the field's own declared tolerance, in the field's own
+        // units. A rule only has to be as good as the error the recovery is
+        // allowed to leave behind.
+        const double residual
+            = predict::value_error(stepped, reached[p_field], p_angle);
+        if (residual > tolerance) {
+            r_attempt.probe.faithful = false;
+            r_attempt.residual = residual;
+            r_attempt.tolerance = tolerance;
+        }
+        return;
+    }
+    r_attempt.evidence = false;
+}
+
+void NetwPredictionEngine::fold_carry(
+    predict::CarryAttempt &r_attempt,
+    int64_t p_slot,
+    const Callable &p_rule,
+    int p_field_slot,
+    const Variant &p_start,
+    const LocalVector<predict::ReplayEntry> &p_entries,
+    bool p_angle,
+    double p_teleport_default
+) {
+    Variant value = p_start;
+    for (uint32_t at = 0; at < p_entries.size(); ++at) {
+        const predict::Slot *row = row_of(p_slot);
+        if (row == nullptr) {
+            r_attempt.evidence = false;
+            return;
+        }
+        const Dictionary state = row->state_before(p_entries[at].index);
+        if (state.is_empty()) {
+            r_attempt.evidence = false;
+            return;
+        }
+        const Variant stepped
+            = call_carry(p_slot, p_rule, value, p_entries[at], state);
+        if (stepped.get_type() == Variant::NIL) {
+            r_attempt.probe.finite = false;
+            return;
+        }
+        if (stepped.get_type() != p_start.get_type()) {
+            r_attempt.probe.same_type = false;
+            return;
+        }
+        value = stepped;
+    }
+    const predict::Slot *row = row_of(p_slot);
+    if (row == nullptr) {
+        r_attempt.evidence = false;
+        return;
+    }
+    const double envelope = row->wiring.teleport[uint32_t(p_field_slot)] >= 0.0
+        ? row->wiring.teleport[uint32_t(p_field_slot)]
+        : p_teleport_default;
+    if (predict::value_error(value, p_start, p_angle) >= envelope) {
+        r_attempt.probe.within_envelope = false;
+        return;
+    }
+    r_attempt.value = value;
+}
+
+Ref<NetwPredictCarryAttempt> NetwPredictionEngine::attempt_carry(
+    int64_t p_slot,
+    const StringName &p_field,
+    const Variant &p_acknowledged,
+    int64_t p_basis,
+    double p_teleport_default,
+    double p_divergence_epsilon
+) {
+    NETW_ZONE_NC("predict attempt carry", colors::PREDICTION);
+    Ref<NetwPredictCarryAttempt> out;
+    out.instantiate();
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return out;
+    }
+    const int field = row->wiring.fields.index_of(p_field);
+    HashMap<StringName, Callable>::Iterator rule
+        = row->carry_rules.find(p_field);
+    if (field < 0 || !rule) {
+        return out;
+    }
+    const LocalVector<predict::ReplayEntry> entries
+        = row->replay_entries(p_basis);
+    if (entries.is_empty()) {
+        return out;
+    }
+    out->record.evidence = true;
+    const bool angle = row->wiring.angle[uint32_t(field)] != 0;
+    const Callable step = rule->value;
+
+    replay_carry(
+        out->record,
+        p_slot,
+        step,
+        p_field,
+        field,
+        entries,
+        angle,
+        p_divergence_epsilon
+    );
+    if (!out->record.evidence || !out->record.probe.faithful) {
+        return out;
+    }
+
+    row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        out->record.evidence = false;
+        return out;
+    }
+    const bool guarded = row->port.bound();
+    const int32_t before = guarded
+        ? compared_fingerprint(
+              *row,
+              capture_through(*row, row->wiring.codec, row->owner_has_state)
+          )
+        : 0;
+
+    fold_carry(
+        out->record,
+        p_slot,
+        step,
+        field,
+        p_acknowledged,
+        entries,
+        angle,
+        p_teleport_default
+    );
+
+    row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        out->record.evidence = false;
+        return out;
+    }
+    const int32_t after = guarded
+        ? compared_fingerprint(
+              *row,
+              capture_through(*row, row->wiring.codec, row->owner_has_state)
+          )
+        : 0;
+    out->record.probe.pure = !guarded || after == before;
+    return out;
+}
+
+TypedArray<NetwPredictReplayEntry> NetwPredictionEngine::replay_entries(
+    int64_t p_slot,
+    int64_t p_basis
+) const {
+    TypedArray<NetwPredictReplayEntry> out;
+    const predict::Slot *row = row_of(p_slot);
+    if (row == nullptr) {
+        return out;
+    }
+    const LocalVector<predict::ReplayEntry> entries
+        = row->replay_entries(p_basis);
+    out.resize(int(entries.size()));
+    for (uint32_t at = 0; at < entries.size(); ++at) {
+        Ref<NetwPredictReplayEntry> entry;
+        entry.instantiate();
+        entry->record = entries[at];
+        out[int(at)] = entry;
+    }
+    return out;
+}
+
+Dictionary NetwPredictionEngine::state_before(
+    int64_t p_slot,
+    int64_t p_transition
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr ? row->state_before(p_transition) : Dictionary();
 }
 
 void NetwPredictionEngine::close_drive(
@@ -1919,7 +2400,7 @@ void NetwPredictionEngine::mark_chain_broken(
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Chain break names closed slot %d.",
         p_slot
     );
@@ -1937,14 +2418,14 @@ void NetwPredictionEngine::mark_provenance(
     NETW_ERR_COND(
         p_operator < int(predict::Operator::NONE)
             || p_operator > int(predict::Operator::JOINT_REBASE),
-        "prediction",
+        sys::PREDICTION,
         "Journal operator %d is outside the declared range.",
         p_operator
     );
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Journal provenance names closed slot %d.",
         p_slot
     );
@@ -1971,7 +2452,7 @@ void NetwPredictionEngine::mark_attribution(
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Attribution names closed slot %d.",
         p_slot
     );
@@ -1989,14 +2470,14 @@ void NetwPredictionEngine::mark_differing_family(
     NETW_ERR_COND(
         p_family < int(predict::DifferingFamily::NONE)
             || p_family > int(predict::DifferingFamily::CONTROLLER_LATCH),
-        "prediction",
+        sys::PREDICTION,
         "Differing family %d is outside the declared range.",
         p_family
     );
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Differing family names closed slot %d.",
         p_slot
     );
@@ -2017,7 +2498,7 @@ void NetwPredictionEngine::mark_solve(
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Solve evidence names closed slot %d.",
         p_slot
     );
@@ -2030,6 +2511,14 @@ void NetwPredictionEngine::mark_solve(
     );
 }
 
+bool NetwPredictionEngine::witness_judged(
+    int64_t p_slot,
+    int64_t p_transition
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr && row->journal.witness_judged(p_transition);
+}
+
 void NetwPredictionEngine::mark_witness_match(
     int64_t p_slot,
     int64_t p_transition,
@@ -2038,7 +2527,7 @@ void NetwPredictionEngine::mark_witness_match(
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Witness verdict names closed slot %d.",
         p_slot
     );
@@ -2821,8 +3310,7 @@ Ref<NetwPredictJointPlan> NetwPredictionEngine::joint_pass(
 }
 
 PackedInt64Array NetwPredictionEngine::joint_stats(int64_t p_slot) const {
-    PackedInt64Array out;
-    out.resize(STAT_JOINT_COUNT);
+    PackedInt64Array out = gd::zeroed<PackedInt64Array>(STAT_JOINT_COUNT);
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr) {
         return out;
@@ -2895,8 +3383,7 @@ PackedInt32Array NetwPredictionEngine::journal_pre_families_at(
     int64_t p_slot,
     int p_index
 ) const {
-    PackedInt32Array out;
-    out.resize(3);
+    PackedInt32Array out = gd::zeroed<PackedInt32Array>(3);
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr) {
         return out;
@@ -2914,8 +3401,7 @@ PackedInt32Array NetwPredictionEngine::journal_post_families_at(
     int64_t p_slot,
     int p_index
 ) const {
-    PackedInt32Array out;
-    out.resize(3);
+    PackedInt32Array out = gd::zeroed<PackedInt32Array>(3);
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr) {
         return out;
@@ -3028,7 +3514,7 @@ void NetwPredictionEngine::journal_clear(int64_t p_slot, int64_t p_epoch) {
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Journal reset names closed slot %d.",
         p_slot
     );
@@ -3039,7 +3525,7 @@ void NetwPredictionEngine::tape_reset(int64_t p_slot, int64_t p_epoch) {
     predict::Slot *row = mutable_row_of(p_slot);
     NETW_ERR_COND(
         row == nullptr,
-        "prediction",
+        sys::PREDICTION,
         "Tape reset names closed slot %d.",
         p_slot
     );
@@ -3056,7 +3542,7 @@ PackedByteArray NetwPredictionEngine::build_ack_frame(
     NETW_ERR_COND_V(
         row == nullptr,
         PackedByteArray(),
-        "prediction",
+        sys::PREDICTION,
         "Acknowledgement frame names closed slot %d.",
         p_slot
     );
@@ -3122,6 +3608,16 @@ int NetwPredictionEngine::tape_size(int64_t p_slot) const {
     return row != nullptr ? row->tape.size() : 0;
 }
 
+PackedInt64Array NetwPredictionEngine::tape_span(int64_t p_slot) const {
+    const predict::Slot *row = row_of(p_slot);
+    PackedInt64Array span;
+    span.resize(2);
+    int64_t *values = span.ptrw();
+    values[0] = row != nullptr ? row->tape.oldest_index() : -1;
+    values[1] = row != nullptr ? row->tape.newest_index() : -1;
+    return span;
+}
+
 int64_t NetwPredictionEngine::tape_label_of(
     int64_t p_slot,
     int64_t p_index
@@ -3138,9 +3634,201 @@ bool NetwPredictionEngine::tape_is_fresh(
     return row != nullptr && row->tape.is_fresh(p_index);
 }
 
-PackedInt64Array NetwPredictionEngine::drive_stats(int64_t p_slot) const {
+void NetwPredictionEngine::tape_prepare_tick(int64_t p_slot, int64_t p_tick) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    NETW_ERR_COND(
+        row == nullptr,
+        sys::PREDICTION,
+        "Tape re-key names closed slot %d.",
+        p_slot
+    );
+    row->prepare_tick_tape(p_tick);
+}
+
+void NetwPredictionEngine::tape_author(
+    int64_t p_slot,
+    int64_t p_label,
+    bool p_fresh
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    NETW_ERR_COND(
+        row == nullptr,
+        sys::PREDICTION,
+        "Tape entry names closed slot %d.",
+        p_slot
+    );
+    row->author_tape_entry(p_label, p_fresh);
+}
+
+void NetwPredictionEngine::bind_timeline(
+    int64_t p_slot,
+    const Ref<NetwTimeline> &p_timeline
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    NETW_ERR_COND(
+        row == nullptr,
+        sys::PREDICTION,
+        "Timeline bind names closed slot %d.",
+        p_slot
+    );
+    row->adopt_timeline(p_timeline);
+}
+
+Ref<NetwTimeline> NetwPredictionEngine::entry_history(int64_t p_slot) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr ? row->entry_history : Ref<NetwTimeline>();
+}
+
+void NetwPredictionEngine::trim_history(int64_t p_slot, int64_t p_ack) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    NETW_ERR_COND(
+        row == nullptr,
+        sys::PREDICTION,
+        "History trim names closed slot %d.",
+        p_slot
+    );
+    row->trim_history(p_ack);
+}
+
+bool NetwPredictionEngine::command_admit(
+    int64_t p_slot,
+    int64_t p_transition,
+    int64_t p_label,
+    bool p_fresh,
+    const Dictionary &p_command
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    NETW_ERR_COND_V(
+        row == nullptr,
+        false,
+        sys::PREDICTION,
+        "Command cell names closed slot %d.",
+        p_slot
+    );
+    return row->commands.admit(p_transition, p_label, p_fresh, p_command);
+}
+
+bool NetwPredictionEngine::command_has(
+    int64_t p_slot,
+    int64_t p_transition
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr && row->commands.has(p_transition);
+}
+
+int64_t NetwPredictionEngine::command_label_of(
+    int64_t p_slot,
+    int64_t p_transition
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    const predict::CommandCell *cell
+        = row != nullptr ? row->commands.cell(p_transition) : nullptr;
+    return cell != nullptr ? cell->label : -1;
+}
+
+bool NetwPredictionEngine::command_is_fresh(
+    int64_t p_slot,
+    int64_t p_transition
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    const predict::CommandCell *cell
+        = row != nullptr ? row->commands.cell(p_transition) : nullptr;
+    return cell != nullptr && cell->fresh;
+}
+
+Dictionary NetwPredictionEngine::command_payload_of(
+    int64_t p_slot,
+    int64_t p_transition
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    const predict::CommandCell *cell
+        = row != nullptr ? row->commands.cell(p_transition) : nullptr;
+    return cell != nullptr ? cell->command : Dictionary();
+}
+
+int NetwPredictionEngine::command_depth_from(
+    int64_t p_slot,
+    int64_t p_cursor
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr ? row->commands.depth_from(p_cursor) : 0;
+}
+
+PackedInt64Array NetwPredictionEngine::command_transitions(
+    int64_t p_slot
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr ? row->commands.transitions() : PackedInt64Array();
+}
+
+void NetwPredictionEngine::record_idle_drive(
+    int64_t p_slot,
+    int64_t p_label,
+    int p_kind
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row != nullptr) {
+        row->record_idle_drive(p_label, DriveKind(p_kind));
+    }
+}
+
+void NetwPredictionEngine::record_authoring_clamp(int64_t p_slot) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row != nullptr) {
+        row->record_authoring_clamp();
+    }
+}
+
+void NetwPredictionEngine::record_speculation_hold(int64_t p_slot) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row != nullptr) {
+        row->record_speculation_hold();
+    }
+}
+
+void NetwPredictionEngine::refresh_ack_age(int64_t p_slot) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row != nullptr) {
+        row->refresh_ack_age();
+    }
+}
+
+int NetwPredictionEngine::mark_authority_ack(
+    int64_t p_slot,
+    int64_t p_transition
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return -1;
+    }
+    row->mark_authority_ack(p_transition);
+    return int(row->stats.ack_age_ticks);
+}
+
+bool NetwPredictionEngine::journal_has(int64_t p_slot, int64_t p_transition)
+    const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr && row->journal.slot_of(p_transition) >= 0;
+}
+
+PackedInt64Array NetwPredictionEngine::drive_cursors(int64_t p_slot) const {
     PackedInt64Array out;
-    out.resize(STAT_COUNT);
+    out.resize(CURSOR_COUNT);
+    const predict::Slot *row = row_of(p_slot);
+    const predict::Slot absent;
+    const predict::Slot &slot = row != nullptr ? *row : absent;
+    int64_t *values = out.ptrw();
+    values[CURSOR_TAPE_EPOCH] = slot.tape_epoch;
+    values[CURSOR_NEXT_TAPE_ENTRY] = slot.next_tape_entry_index;
+    values[CURSOR_LAST_DRIVEN_ENTRY] = slot.last_driven_entry_index;
+    values[CURSOR_LATEST_INPUT_TICK] = slot.latest_input_tick;
+    values[CURSOR_LAST_DRIVEN_INPUT_TICK] = slot.last_driven_input_tick;
+    values[CURSOR_LAST_FRAME_TRANSITION_TICK] = slot.last_frame_transition_tick;
+    return out;
+}
+
+PackedInt64Array NetwPredictionEngine::drive_stats(int64_t p_slot) const {
+    PackedInt64Array out = gd::zeroed<PackedInt64Array>(STAT_COUNT);
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr) {
         return out;
@@ -3164,8 +3852,7 @@ PackedInt64Array NetwPredictionEngine::drive_stats(int64_t p_slot) const {
 }
 
 PackedInt64Array NetwPredictionEngine::compare_stats(int64_t p_slot) const {
-    PackedInt64Array out;
-    out.resize(STAT_COMPARE_COUNT);
+    PackedInt64Array out = gd::zeroed<PackedInt64Array>(STAT_COMPARE_COUNT);
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr) {
         return out;
@@ -3223,6 +3910,10 @@ void NetwPredictionEngine::_bind_methods() {
         &NetwPredictionEngine::ordered_slots
     );
     ClassDB::bind_method(
+        D_METHOD("pass_slots", "phase"),
+        &NetwPredictionEngine::pass_slots
+    );
+    ClassDB::bind_method(
         D_METHOD("has_simulate", "slot"),
         &NetwPredictionEngine::has_simulate
     );
@@ -3277,6 +3968,18 @@ void NetwPredictionEngine::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("canonicalize_input", "slot", "payload"),
         &NetwPredictionEngine::canonicalize_input
+    );
+    ClassDB::bind_method(
+        D_METHOD("coast_command", "slot"),
+        &NetwPredictionEngine::coast_command
+    );
+    ClassDB::bind_method(
+        D_METHOD("sample_environment", "slot", "epoch"),
+        &NetwPredictionEngine::sample_environment
+    );
+    ClassDB::bind_method(
+        D_METHOD("sensor_samples", "slot"),
+        &NetwPredictionEngine::sensor_samples
     );
     ClassDB::bind_method(
         D_METHOD("canonical_state_bytes", "slot", "payload"),
@@ -3461,7 +4164,8 @@ void NetwPredictionEngine::_bind_methods() {
             "pre_momentum_fp",
             "pre_controller_fp",
             "raw_fp",
-            "evidence_mask"
+            "evidence_mask",
+            "authoring"
         ),
         &NetwPredictionEngine::replay_drive,
         DEFVAL(1),
@@ -3470,7 +4174,8 @@ void NetwPredictionEngine::_bind_methods() {
         DEFVAL(0),
         DEFVAL(0),
         DEFVAL(0),
-        DEFVAL(0)
+        DEFVAL(0),
+        DEFVAL(false)
     );
     ClassDB::bind_method(
         D_METHOD(
@@ -3527,6 +4232,23 @@ void NetwPredictionEngine::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("record_episode_divergence", "slot", "transition"),
         &NetwPredictionEngine::record_episode_divergence
+    );
+    ClassDB::bind_method(
+        D_METHOD(
+            "escalation_field_of",
+            "slot",
+            "predicted",
+            "authority",
+            "field_errors",
+            "fallback_epsilon"
+        ),
+        &NetwPredictionEngine::escalation_field_of
+    );
+    ClassDB::bind_method(
+        D_METHOD(
+            "trigger_shape_of", "slot", "field_errors", "fallback_epsilon"
+        ),
+        &NetwPredictionEngine::trigger_shape_of
     );
     ClassDB::bind_method(
         D_METHOD("record_episode_escalation", "slot", "trigger_shape"),
@@ -3656,6 +4378,34 @@ void NetwPredictionEngine::_bind_methods() {
         &NetwPredictionEngine::carry_stats
     );
     ClassDB::bind_method(
+        D_METHOD("mark_carry_dirty", "slot", "transition"),
+        &NetwPredictionEngine::mark_carry_dirty
+    );
+    ClassDB::bind_method(
+        D_METHOD("carry_judgeable", "slot", "transition"),
+        &NetwPredictionEngine::carry_judgeable
+    );
+    ClassDB::bind_method(
+        D_METHOD("replay_entries", "slot", "basis"),
+        &NetwPredictionEngine::replay_entries
+    );
+    ClassDB::bind_method(
+        D_METHOD("state_before", "slot", "transition"),
+        &NetwPredictionEngine::state_before
+    );
+    ClassDB::bind_method(
+        D_METHOD(
+            "attempt_carry",
+            "slot",
+            "field",
+            "acknowledged",
+            "basis",
+            "teleport_default",
+            "divergence_epsilon"
+        ),
+        &NetwPredictionEngine::attempt_carry
+    );
+    ClassDB::bind_method(
         D_METHOD("mark_domain", "slot", "transition", "domain"),
         &NetwPredictionEngine::mark_domain
     );
@@ -3694,6 +4444,10 @@ void NetwPredictionEngine::_bind_methods() {
             "witness_class_bits"
         ),
         &NetwPredictionEngine::mark_solve
+    );
+    ClassDB::bind_method(
+        D_METHOD("witness_judged", "slot", "transition"),
+        &NetwPredictionEngine::witness_judged
     );
     ClassDB::bind_method(
         D_METHOD("mark_witness_match", "slot", "transition", "matched"),
@@ -4068,6 +4822,10 @@ void NetwPredictionEngine::_bind_methods() {
         &NetwPredictionEngine::tape_size
     );
     ClassDB::bind_method(
+        D_METHOD("tape_span", "slot"),
+        &NetwPredictionEngine::tape_span
+    );
+    ClassDB::bind_method(
         D_METHOD("tape_label_of", "slot", "index"),
         &NetwPredictionEngine::tape_label_of
     );
@@ -4076,14 +4834,99 @@ void NetwPredictionEngine::_bind_methods() {
         &NetwPredictionEngine::tape_is_fresh
     );
     ClassDB::bind_method(
+        D_METHOD("tape_prepare_tick", "slot", "tick"),
+        &NetwPredictionEngine::tape_prepare_tick
+    );
+    ClassDB::bind_method(
+        D_METHOD("tape_author", "slot", "label", "fresh"),
+        &NetwPredictionEngine::tape_author
+    );
+    ClassDB::bind_method(
+        D_METHOD("bind_timeline", "slot", "timeline"),
+        &NetwPredictionEngine::bind_timeline
+    );
+    ClassDB::bind_method(
+        D_METHOD("entry_history", "slot"),
+        &NetwPredictionEngine::entry_history
+    );
+    ClassDB::bind_method(
+        D_METHOD("trim_history", "slot", "ack"),
+        &NetwPredictionEngine::trim_history
+    );
+    ClassDB::bind_method(
+        D_METHOD(
+            "command_admit", "slot", "transition", "label", "fresh", "command"
+        ),
+        &NetwPredictionEngine::command_admit
+    );
+    ClassDB::bind_method(
+        D_METHOD("command_has", "slot", "transition"),
+        &NetwPredictionEngine::command_has
+    );
+    ClassDB::bind_method(
+        D_METHOD("command_label_of", "slot", "transition"),
+        &NetwPredictionEngine::command_label_of
+    );
+    ClassDB::bind_method(
+        D_METHOD("command_is_fresh", "slot", "transition"),
+        &NetwPredictionEngine::command_is_fresh
+    );
+    ClassDB::bind_method(
+        D_METHOD("command_payload_of", "slot", "transition"),
+        &NetwPredictionEngine::command_payload_of
+    );
+    ClassDB::bind_method(
+        D_METHOD("command_depth_from", "slot", "cursor"),
+        &NetwPredictionEngine::command_depth_from
+    );
+    ClassDB::bind_method(
+        D_METHOD("command_transitions", "slot"),
+        &NetwPredictionEngine::command_transitions
+    );
+    ClassDB::bind_method(
+        D_METHOD("record_idle_drive", "slot", "label", "kind"),
+        &NetwPredictionEngine::record_idle_drive
+    );
+    ClassDB::bind_method(
+        D_METHOD("record_authoring_clamp", "slot"),
+        &NetwPredictionEngine::record_authoring_clamp
+    );
+    ClassDB::bind_method(
+        D_METHOD("record_speculation_hold", "slot"),
+        &NetwPredictionEngine::record_speculation_hold
+    );
+    ClassDB::bind_method(
+        D_METHOD("refresh_ack_age", "slot"),
+        &NetwPredictionEngine::refresh_ack_age
+    );
+    ClassDB::bind_method(
+        D_METHOD("mark_authority_ack", "slot", "transition"),
+        &NetwPredictionEngine::mark_authority_ack
+    );
+    ClassDB::bind_method(
         D_METHOD("drive_stats", "slot"),
         &NetwPredictionEngine::drive_stats
+    );
+    ClassDB::bind_method(
+        D_METHOD("journal_has", "slot", "transition"),
+        &NetwPredictionEngine::journal_has
+    );
+    ClassDB::bind_method(
+        D_METHOD("drive_cursors", "slot"),
+        &NetwPredictionEngine::drive_cursors
     );
     ClassDB::bind_method(
         D_METHOD("compare_stats", "slot"),
         &NetwPredictionEngine::compare_stats
     );
 
+    BIND_ENUM_CONSTANT(CURSOR_TAPE_EPOCH);
+    BIND_ENUM_CONSTANT(CURSOR_NEXT_TAPE_ENTRY);
+    BIND_ENUM_CONSTANT(CURSOR_LAST_DRIVEN_ENTRY);
+    BIND_ENUM_CONSTANT(CURSOR_LATEST_INPUT_TICK);
+    BIND_ENUM_CONSTANT(CURSOR_LAST_DRIVEN_INPUT_TICK);
+    BIND_ENUM_CONSTANT(CURSOR_LAST_FRAME_TRANSITION_TICK);
+    BIND_ENUM_CONSTANT(CURSOR_COUNT);
     BIND_ENUM_CONSTANT(STAT_DRIVE_SEQ);
     BIND_ENUM_CONSTANT(STAT_LAST_DRIVE_LABEL);
     BIND_ENUM_CONSTANT(STAT_LAST_DRIVE_KIND);
@@ -4104,6 +4947,12 @@ void NetwPredictionEngine::_bind_methods() {
     BIND_ENUM_CONSTANT(STAT_FP_MISMATCHES);
     BIND_ENUM_CONSTANT(STAT_FIRST_DIVERGENT_TRANSITION);
     BIND_ENUM_CONSTANT(STAT_COMPARE_COUNT);
+    BIND_ENUM_CONSTANT(PASS_ISLAND_TICK);
+    BIND_ENUM_CONSTANT(PASS_ISLAND_FRAME);
+    BIND_ENUM_CONSTANT(PASS_JOINT);
+    BIND_ENUM_CONSTANT(PASS_TICK);
+    BIND_ENUM_CONSTANT(PASS_FRAME);
+    BIND_ENUM_CONSTANT(PASS_FINALIZE_FRAME);
     BIND_ENUM_CONSTANT(ISLAND_NONE);
     BIND_ENUM_CONSTANT(STAT_EPISODE_ID);
     BIND_ENUM_CONSTANT(STAT_EPISODE_STATE);

@@ -1,5 +1,7 @@
 #include "netw/codec.hpp"
 
+#include "netw/node_ref.hpp"
+
 #include <cstdint>
 #include <cstring>
 
@@ -98,6 +100,16 @@ void NetwCodec::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwCodec",
+        D_METHOD("write_values", "writer", "values", "quantizers", "types"),
+        &NetwCodec::write_values
+    );
+    ClassDB::bind_static_method(
+        "NetwCodec",
+        D_METHOD("read_values", "reader", "quantizers", "types"),
+        &NetwCodec::read_values
+    );
+    ClassDB::bind_static_method(
+        "NetwCodec",
         D_METHOD("put_varint", "writer", "value"),
         &NetwCodec::put_varint
     );
@@ -112,6 +124,96 @@ void NetwCodec::_bind_methods() {
     BIND_ENUM_CONSTANT(T_VECTOR2);
     BIND_ENUM_CONSTANT(T_FLOAT);
     BIND_ENUM_CONSTANT(T_VECTOR3);
+}
+
+namespace {
+
+// A node reference is its own kind on the wire. 0 is a raw value, 1 is a
+// quantized one, 2 is this.
+const uint8_t KIND_RAW = 0;
+const uint8_t KIND_QUANTIZED = 1;
+const uint8_t KIND_NODE_REF = 2;
+
+void write_node_ref(
+    const Ref<NetwBitBufferWriter> &p_writer,
+    const Ref<NetwNodeRef> &p_ref
+) {
+    NetwCodec::put_varint(p_writer, p_ref->route);
+    p_writer->put_aligned_u8(uint8_t(p_ref->comp));
+    if (p_ref->comp == 255) {
+        const PackedByteArray bytes = p_ref->path.to_utf8_buffer();
+        p_writer->put_aligned_u32(uint32_t(bytes.size()));
+        p_writer->put_aligned_bytes(bytes);
+    }
+}
+
+Ref<NetwNodeRef> read_node_ref(const Ref<NetwBitBufferReader> &p_reader) {
+    const int64_t route = NetwCodec::get_safe_varint(p_reader);
+    const int64_t comp = p_reader->get_aligned_u8();
+    String path;
+    if (comp == 255) {
+        const uint32_t length = p_reader->get_aligned_u32();
+        path = gd::utf8_string(p_reader->get_aligned_bytes(int64_t(length)));
+    }
+    return NetwNodeRef::create(route, comp, path);
+}
+
+} // namespace
+
+void NetwCodec::write_values(
+    const Ref<NetwBitBufferWriter> &writer,
+    const Array &values,
+    const Array &quantizers,
+    const Array &types
+) {
+    writer->put_aligned_u8(uint8_t(values.size()));
+    for (int64_t i = 0; i < values.size(); ++i) {
+        const Variant value = values[i];
+        const Ref<NetwNodeRef> ref = value;
+        if (ref.is_valid()) {
+            writer->put_aligned_u8(KIND_NODE_REF);
+            write_node_ref(writer, ref);
+            continue;
+        }
+        const Ref<NetwQuantize> quantizer = quantizer_at(quantizers, int(i));
+        const int declared = type_at(types, int(i));
+        const bool quantized = quantizer.is_valid()
+            && quantizer->supports_type(declared)
+            && quantizer->supports_type(int(value.get_type()));
+        if (quantized) {
+            writer->put_aligned_u8(KIND_QUANTIZED);
+            encode_value(writer, value, quantizer);
+        } else {
+            writer->put_aligned_u8(KIND_RAW);
+            encode_value(writer, value, Ref<NetwQuantize>());
+        }
+    }
+}
+
+Array NetwCodec::read_values(
+    const Ref<NetwBitBufferReader> &reader,
+    const Array &quantizers,
+    const Array &types
+) {
+    const int64_t count = reader->get_aligned_u8();
+    Array out;
+    for (int64_t i = 0; i < count; ++i) {
+        const uint8_t kind = reader->get_aligned_u8();
+        if (kind == KIND_NODE_REF) {
+            out.push_back(read_node_ref(reader));
+        } else if (kind == KIND_QUANTIZED) {
+            out.push_back(decode_value(
+                reader,
+                type_at(types, int(i)),
+                quantizer_at(quantizers, int(i))
+            ));
+        } else {
+            out.push_back(
+                decode_value(reader, Variant::NIL, Ref<NetwQuantize>())
+            );
+        }
+    }
+    return out;
 }
 
 Ref<NetwQuantize> NetwCodec::quantizer_at(const Array &quantizers, int index) {
@@ -168,7 +270,7 @@ int64_t NetwCodec::get_safe_varint(const Ref<NetwBitBufferReader> &reader) {
             return value;
         }
     }
-    NETW_ERROR("codec", "NetwCodec: Varint overflow/corrupt packet.");
+    NETW_ERROR(sys::CODEC, "NetwCodec: Varint overflow/corrupt packet.");
     return -1;
 }
 
@@ -280,7 +382,7 @@ PackedByteArray NetwCodec::encode_snapshot(
     const PackedByteArray bytes = writer->to_bytes();
     NETW_ZONE_VALUE(bytes.size());
     NETW_PLOT(profile::names::CODEC_BYTES, bytes.size());
-    NETW_TRACE("codec", "encoded snapshot bytes=%d", bytes.size());
+    NETW_TRACE(sys::CODEC, "encoded snapshot bytes=%d", bytes.size());
     return bytes;
 }
 

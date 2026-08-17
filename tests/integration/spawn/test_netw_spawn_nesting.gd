@@ -50,16 +50,21 @@ func test_child_frame_before_parent_parks_then_applies() -> void:
 	replication._spawn_pipeline._handle_spawn_frame(frames["child"], 1)
 	assert_int(int(replication.counters()[&"spawn_deferrals"])) \
 			.is_equal(deferrals + 1)
-	assert_that(client1.api.route_get_state(child_route)) \
+	assert_that(client1.api.entity_get_state(
+			client1.api.entity_from_route(child_route))) \
 			.is_equal(NetwMultiplayer.EntityState.UNKNOWN)
 
 	replication._spawn_pipeline._handle_spawn_frame(frames["parent"], 1)
-	assert_that(client1.api.route_get_state(parent_route)) \
+	assert_that(client1.api.entity_get_state(
+			client1.api.entity_from_route(parent_route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_that(client1.api.route_get_state(child_route)) \
+	assert_that(client1.api.entity_get_state(
+			client1.api.entity_from_route(child_route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	var parent_node := client1.api.entity_get_node(client1.api.rid_from_route(parent_route))
-	assert_that(client1.api.entity_get_node(client1.api.rid_from_route(child_route)).get_parent()) \
+	var parent_node := client1.api.entity_get_node(
+			client1.api.entity_from_route(parent_route))
+	assert_that(client1.api.entity_get_node(
+			client1.api.entity_from_route(child_route)).get_parent()) \
 			.is_equal(parent_node)
 
 
@@ -85,10 +90,12 @@ func test_despawn_cancels_parked_spawn() -> void:
 			.is_equal(cancelled + 1)
 
 	replication._spawn_pipeline._handle_spawn_frame(frames["parent"], 1)
-	var parent_node := client1.api.entity_get_node(client1.api.rid_from_route(parent_route))
+	var parent_node := client1.api.entity_get_node(
+			client1.api.entity_from_route(parent_route))
 	assert_that(parent_node).is_not_null()
 	assert_int(parent_node.get_child_count()).is_equal(0)
-	assert_that(client1.api.route_get_state(child_route)) \
+	assert_that(client1.api.entity_get_state(
+			client1.api.entity_from_route(child_route))) \
 			.is_equal(NetwMultiplayer.EntityState.UNKNOWN)
 
 
@@ -112,11 +119,14 @@ func test_reparent_keeps_route_and_instance() -> void:
 			break
 
 	assert_bool(moved).is_true()
-	assert_that(harness.server().api.route_get_state(route)) \
+	assert_that(harness.server().api.entity_get_state(
+			harness.server().api.entity_from_route(route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_that(client0.api.route_get_state(route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_that(client0.api.entity_get_node(client0.api.rid_from_route(route))).is_equal(client_node)
+	assert_that(client0.api.entity_get_node(
+			client0.api.entity_from_route(route))).is_equal(client_node)
 
 
 func test_parent_despawn_cascades_without_unknown_drops() -> void:
@@ -133,18 +143,20 @@ func test_parent_despawn_cascades_without_unknown_drops() -> void:
 	var both_dead := false
 	for i in 60:
 		await get_tree().process_frame
-		var liveness := client0.api._liveness
-		if liveness.route_state(parent_route) \
+		var liveness := client0.api._native_core
+		if liveness.liveness_route_state(parent_route) \
 				== NetwMultiplayer.EntityState.DEAD \
-				and liveness.route_state(child_route) \
+				and liveness.liveness_route_state(child_route) \
 						== NetwMultiplayer.EntityState.DEAD:
 			both_dead = true
 			break
 
 	assert_bool(both_dead).is_true()
-	assert_that(harness.server().api.route_get_state(parent_route)) \
+	assert_that(harness.server().api.entity_get_state(
+			harness.server().api.entity_from_route(parent_route))) \
 			.is_equal(NetwMultiplayer.EntityState.DEAD)
-	assert_that(harness.server().api.route_get_state(child_route)) \
+	assert_that(harness.server().api.entity_get_state(
+			harness.server().api.entity_from_route(child_route))) \
 			.is_equal(NetwMultiplayer.EntityState.DEAD)
 	assert_int(
 		int(
@@ -156,8 +168,8 @@ func test_parent_despawn_cascades_without_unknown_drops() -> void:
 func test_entity_get_parent_walks_the_ancestry_chain() -> void:
 	var spawned := _spawn_nested_pair()
 	var api := harness.server().api
-	var parent := api.rid_from_route(spawned["parent_entity"].route)
-	var child := api.rid_from_route(spawned["child_entity"].route)
+	var parent := api.entity_from_route(spawned["parent_entity"].route)
+	var child := api.entity_from_route(spawned["child_entity"].route)
 
 	assert_that(api.entity_get_parent(child)).is_equal(parent)
 	assert_bool(api.entity_get_parent(parent).is_valid()).is_false()
@@ -173,7 +185,7 @@ func test_entity_get_parent_walks_the_ancestry_chain() -> void:
 func test_entity_get_peer_names_the_represented_participant() -> void:
 	var api := harness.server().api
 	var server_owned := _spawn_nested_pair()
-	var prop := api.rid_from_route(server_owned["parent_entity"].route)
+	var prop := api.entity_from_route(server_owned["parent_entity"].route)
 
 	assert_int(api.entity_get_peer(prop)).is_equal(0)
 
@@ -183,7 +195,7 @@ func test_entity_get_peer_names_the_represented_participant() -> void:
 	_replication().replicate(player_node)
 	harness.server().get_node("Arena").add_child(player_node)
 
-	var player := api.rid_of(player_node)
+	var player := api.entity_of(player_node)
 	assert_int(api.entity_get_peer(player)).is_equal(peer_id)
 
 
@@ -210,11 +222,11 @@ func _reencode_frames(spawned: Dictionary) -> Dictionary:
 	var child_route: int = spawned["child_entity"].route
 	return {
 		"parent": replication._spawn_pipeline._encode_spawn_frame(
-			replication._spawn_pipeline._spawn_book.spawned[parent_route],
+			replication._spawn_pipeline._spawn_book.spawned_of(parent_route),
 			spawned["parent_node"],
 		),
 		"child": replication._spawn_pipeline._encode_spawn_frame(
-			replication._spawn_pipeline._spawn_book.spawned[child_route],
+			replication._spawn_pipeline._spawn_book.spawned_of(child_route),
 			spawned["child_node"],
 		),
 	}
@@ -233,9 +245,9 @@ func _replication() -> ReplicationCore:
 
 func _wait_live(mt: MultiplayerTree, route: int, frames: int = 120) -> Node:
 	for i in frames:
-		if mt.api.route_get_state(route) \
+		if mt.api.entity_get_state(mt.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.LIVE:
-			return mt.api.entity_get_node(mt.api.rid_from_route(route))
+			return mt.api.entity_get_node(mt.api.entity_from_route(route))
 		await get_tree().process_frame
 	return null
 

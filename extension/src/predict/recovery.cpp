@@ -198,52 +198,6 @@ void converge(
     }
 }
 
-int escalation_field(const Wiring &p_wiring, const RecoveryRequest &p_request) {
-    int dominant = -1;
-    int exact = -1;
-    double top = 0.0;
-    double exact_top = 0.0;
-    for (int at = 0; at < p_wiring.count(); ++at) {
-        if (p_wiring.causal[uint32_t(at)] == 0
-            || p_wiring.trigger_exclude[uint32_t(at)] != 0
-            || !p_request.predicted.has(at) || !p_request.authority.has(at)) {
-            continue;
-        }
-        const double error = field_error(p_request, at);
-        const double epsilon
-            = epsilon_at(p_wiring, at, p_request.fallback_epsilon);
-        if (error <= epsilon) {
-            continue;
-        }
-        if (epsilon <= 0.0) {
-            if (error > exact_top) {
-                exact_top = error;
-                exact = at;
-            }
-            continue;
-        }
-        const double ratio = error / epsilon;
-        if (ratio > top) {
-            top = ratio;
-            dominant = at;
-        }
-    }
-    if (dominant >= 0) {
-        return dominant;
-    }
-    if (exact >= 0) {
-        return exact;
-    }
-    for (int at = 0; at < p_wiring.count(); ++at) {
-        if (field_error(p_request, at) > top && p_request.predicted.has(at)
-            && p_request.authority.has(at)) {
-            top = field_error(p_request, at);
-            dominant = at;
-        }
-    }
-    return dominant;
-}
-
 void direction_of(
     const Wiring &p_wiring,
     const RecoveryRequest &p_request,
@@ -335,6 +289,53 @@ void track_recovery(
 }
 
 } // namespace
+
+int escalation_field(const Wiring &p_wiring, const RecoveryRequest &p_request) {
+    int dominant = -1;
+    int exact = -1;
+    double top = 0.0;
+    double exact_top = 0.0;
+    for (int at = 0; at < p_wiring.count(); ++at) {
+        if (p_wiring.causal[uint32_t(at)] == 0
+            || p_wiring.trigger_exclude[uint32_t(at)] != 0
+            || !p_request.predicted.has(at) || !p_request.authority.has(at)) {
+            continue;
+        }
+        const double error = field_error(p_request, at);
+        const double epsilon
+            = epsilon_at(p_wiring, at, p_request.fallback_epsilon);
+        if (error <= epsilon) {
+            continue;
+        }
+        if (epsilon <= 0.0) {
+            if (error > exact_top) {
+                exact_top = error;
+                exact = at;
+            }
+            continue;
+        }
+        const double ratio = error / epsilon;
+        if (ratio > top) {
+            top = ratio;
+            dominant = at;
+        }
+    }
+    if (dominant >= 0) {
+        return dominant;
+    }
+    if (exact >= 0) {
+        return exact;
+    }
+    for (int at = 0; at < p_wiring.count(); ++at) {
+        if (field_error(p_request, at) > top && p_request.predicted.has(at)
+            && p_request.authority.has(at)) {
+            top = field_error(p_request, at);
+            dominant = at;
+        }
+    }
+    return dominant;
+}
+
 
 void RecoveryState::reset_trackers() {
     nonshrink_streak = 0;
@@ -518,7 +519,7 @@ bool transport_admissible(const TransportEvidence &p_evidence) {
         && p_evidence.below_teleport && !p_evidence.escalated
         && p_evidence.snap_correction && !p_evidence.observing;
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "transport admissible=%d candidate=%d witness=%d/%d non_pose=%d "
         "below=%d escalated=%d snap=%d observing=%d",
         int(out),
@@ -541,7 +542,7 @@ bool dissipate_admissible(const DissipateEvidence &p_evidence) {
         && !p_evidence.escalated && p_evidence.snap_correction
         && !p_evidence.observing && p_evidence.meter > 0;
     NETW_TRACE(
-        "prediction",
+        sys::PREDICTION,
         "dissipate admissible=%d momentum=%d other=%d witness=%d/%d "
         "escalated=%d snap=%d observing=%d meter=%d",
         int(out),

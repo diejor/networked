@@ -7,13 +7,17 @@
 #
 # The unit is the display data plane: the projection helper, the per value
 # interpolation spec, and the channel history that resamples one value stream.
-# What did NOT cross is DisplayCore itself, and that is a content boundary
-# rather than a deferral. Role resolution reads control, authority and the
-# authored sync channels; the writer sets Node properties and reads parent
-# transforms for global-space output; and the CHASE pump reads the live
-# predicted body every frame, which the plan of record already fixes as
-# permanent Ring 2. The file mixed two planes and this batch carved one out,
-# exactly as liveness and scenes did before it.
+# The file mixed two planes and this batch carved one out, exactly as liveness
+# and scenes did before it.
+#
+# WHAT DID NOT CROSS HAS SHRUNK SINCE, and a reason below that still names
+# DisplayCore whole is stale on its face. The book, the runtime row, the
+# channel row, the writer port, the render offset, the per-channel pass
+# verdict, the pump transition verdict and the role LADDER
+# (NetwDisplayRoleFacts) are all native. What is left in display_core.gd is
+# the pump LOOP, the channel-table build that reads Nodes and sync channels,
+# the role facts it gathers from them, and the CHASE pump's read of the live
+# predicted body, which the plan of record fixes as permanent Ring 2.
 #
 # THE DEPENDENCY DECIDED THE ORDER. NetwDisplayHistory names NetwInterpolate for
 # its mode and NetwProject for its tail, so both crossed first, in their own
@@ -57,14 +61,15 @@
 # The arm stays runnable as the whole-trace check the per-case restatement
 # cannot be.
 #
-# THE PURITY LINT CARRIES WITH ONE REGION REMOVED. It reads display_core.gd as a
-# string and asserts forbidden tokens are absent from the pure kernels and the
-# inner classes. `class _History:` is gone, so the lint would have failed loudly
-# rather than passing vacuously, which is the right way round. Its successor for
-# the history is structural: display_history.cpp includes no engine header that
-# could reach a tree, a clock or a signal, and tools/check_sources.py holds
-# every source to compiling. `class _Playhead:` still lints and still belongs to
-# the shell, and it is the next carve.
+# THE PURITY LINT CARRIES WITH ITS CLASS REGIONS REMOVED. It reads
+# display_core.gd as a string and asserts forbidden tokens are absent from the
+# pure kernels. `class _History:` and `class _Playhead:` are both gone, and the
+# lint would have failed loudly rather than passing vacuously, which is the
+# right way round. Their successor is structural: display_history.cpp and
+# display_playhead.cpp include no engine header that could reach a tree, a
+# clock or a signal, and tools/check_sources.py holds every source to
+# compiling. `func _calculate_min_lag(` left the kernel list with the same
+# argument, as `NetwDisplayPlayhead.min_lag`.
 #
 test_netw_project.gd:test_project_advances_linear_types_by_velocity_times_age  -> project_tests.cpp:"[Networked][Display][Hosted] a linear value advances by velocity times age"
 test_netw_project.gd:test_zero_velocity_holds_the_value                        -> project_tests.cpp:"[Networked][Display][Hosted] a zero velocity holds the value"
@@ -73,30 +78,30 @@ test_netw_project.gd:test_supports_names_only_the_projectable_types            -
 test_netw_interp_history_semantics.gd:test_history_keys_and_interpolates_by_authoring_tick    -> display_history_tests.cpp:"[Networked][Display][Hosted] an authoring stream brackets by authoring ticks"
 test_netw_interp_history_semantics.gd:test_history_sleeps_when_settled_then_revives_on_new_record -> display_history_tests.cpp:"[Networked][Display][Hosted] a settled channel holds and sleeps until a distinct record"
 test_netw_interp_history_semantics.gd:test_duplicate_record_does_not_wake_a_sleeping_history  -> display_history_tests.cpp:"[Networked][Display][Hosted] a repeated value is not recorded twice"
-test_netw_interp_calculus.gd:test_p1_monotonic_display_time                        -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p2_continuity                                    -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p3_bounded_lag                                   -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p4_steadiness                                    -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p5_bounded_jerk                                  -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p5_chase_bounded_jerk                            -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
-test_netw_interp_calculus.gd:test_p6_loss_robustness                               -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p7_chase_absorbs_a_recovery_without_a_jump       -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
-test_netw_interp_calculus.gd:test_p7_chase_absorbs_a_correction_train_without_stepping -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
-test_netw_interp_calculus.gd:test_p7_a_teleport_snaps_the_chase                    -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
-test_netw_interp_calculus.gd:test_p7_the_chase_offset_clamps_by_magnitude          -> CARRY tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
-test_netw_interp_calculus.gd:test_p7_forecast_error_bounded                        -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p7_forecast_leads_buffered                       -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p7_server_never_forecasts                        -> CARRY tests/unit/interpolation (role resolution stays shell-side)
-test_netw_interp_calculus.gd:test_p8_role_offsets_preserve_shortest_rotation_channels -> CARRY tests/unit/interpolation (the display offset is seeded and decayed by the shell)
-test_netw_interp_calculus.gd:test_p8_stationary_stream_sleeps                      -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p8_moving_stream_projects_to_cap_then_holds      -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p9_replay_determinism                            -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_calculus.gd:test_p10_schedule_independence                        -> CARRY tests/unit/interpolation (the display calculus drives the whole engine through the harness)
-test_netw_interp_engine_purity.gd:test_pure_kernels_touch_no_engine_state          -> CARRY tests/unit/interpolation (it lints display_core.gd, which does not cross)
-test_netw_interp_engine_purity.gd:test_chase_kernel_reads_only_the_live_body       -> CARRY tests/unit/interpolation (it lints display_core.gd, which does not cross)
-test_netw_interp_engine_purity.gd:test_lint_is_not_vacuous                         -> CARRY tests/unit/interpolation (it lints display_core.gd, which does not cross)
-test_netw_interp_self_feedback_guard.gd:test_chase_skips_a_self_feedback_channel     -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
-test_netw_interp_self_feedback_guard.gd:test_chase_writes_a_redirected_channel       -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
-test_netw_interp_self_feedback_guard.gd:test_bracketed_skips_a_self_feedback_channel -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
-test_netw_interp_self_feedback_guard.gd:test_bracketed_writes_a_redirected_channel   -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
-test_netw_interp_self_feedback_guard.gd:test_remote_writes_even_a_self_feedback_channel -> CARRY tests/unit/interpolation (self-feedback is decided in role resolution)
+test_netw_interp_calculus.gd:test_p1_monotonic_display_time                        -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p2_continuity                                    -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p3_bounded_lag                                   -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p4_steadiness                                    -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p5_bounded_jerk                                  -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p5_chase_bounded_jerk                            -> CARRY shell tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p6_loss_robustness                               -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p7_chase_absorbs_a_recovery_without_a_jump       -> CARRY shell tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_chase_absorbs_a_correction_train_without_stepping -> CARRY shell tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_a_teleport_snaps_the_chase                    -> CARRY shell tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_the_chase_offset_clamps_by_magnitude          -> CARRY shell tests/unit/interpolation (the chase pump reads the live body and stays shell-side)
+test_netw_interp_calculus.gd:test_p7_forecast_error_bounded                        -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p7_forecast_leads_buffered                       -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p7_server_never_forecasts                        -> CARRY shell tests/unit/interpolation (the bracketed pump's refusal to forecast is NetwDisplayHistory.pass_verdict and native; what carries this case is the harness run and its aggregate stats)
+test_netw_interp_calculus.gd:test_p8_role_offsets_preserve_shortest_rotation_channels -> display_offset_tests.cpp:"[Networked][Display][Hosted] O6 a circular channel takes its residual the short way around, whatever shape carries the angle"
+test_netw_interp_calculus.gd:test_p8_stationary_stream_sleeps                      -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p8_moving_stream_projects_to_cap_then_holds      -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p9_replay_determinism                            -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_calculus.gd:test_p10_schedule_independence                        -> CARRY shell tests/unit/interpolation (the display calculus drives the whole engine through the harness)
+test_netw_interp_engine_purity.gd:test_pure_kernels_touch_no_engine_state          -> CARRY retiring:ZU-38 tests/unit/interpolation (it lints display_core.gd, which ZU-38 deletes)
+test_netw_interp_engine_purity.gd:test_chase_kernel_reads_only_the_live_body       -> CARRY retiring:ZU-38 tests/unit/interpolation (it lints display_core.gd, which ZU-38 deletes)
+test_netw_interp_engine_purity.gd:test_lint_is_not_vacuous                         -> CARRY retiring:ZU-38 tests/unit/interpolation (it lints display_core.gd, which ZU-38 deletes)
+test_netw_interp_self_feedback_guard.gd:test_chase_skips_a_self_feedback_channel     -> CARRY shell tests/unit/interpolation (self_feedback is a native channel column decided by DisplayCore._build_property_states, which reads the target Node and its property, and skipped by the shell pump)
+test_netw_interp_self_feedback_guard.gd:test_chase_writes_a_redirected_channel       -> CARRY shell tests/unit/interpolation (self_feedback is a native channel column decided by DisplayCore._build_property_states, which reads the target Node and its property, and skipped by the shell pump)
+test_netw_interp_self_feedback_guard.gd:test_bracketed_skips_a_self_feedback_channel -> CARRY shell tests/unit/interpolation (self_feedback is a native channel column decided by DisplayCore._build_property_states, which reads the target Node and its property, and skipped by the shell pump)
+test_netw_interp_self_feedback_guard.gd:test_bracketed_writes_a_redirected_channel   -> CARRY shell tests/unit/interpolation (self_feedback is a native channel column decided by DisplayCore._build_property_states, which reads the target Node and its property, and skipped by the shell pump)
+test_netw_interp_self_feedback_guard.gd:test_remote_writes_even_a_self_feedback_channel -> CARRY shell tests/unit/interpolation (self_feedback is a native channel column decided by DisplayCore._build_property_states, which reads the target Node and its property, and skipped by the shell pump)

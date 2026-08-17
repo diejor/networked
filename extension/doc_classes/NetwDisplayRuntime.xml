@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayRuntime" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Everything one entity's display pump reads and writes for a frame.
+	</brief_description>
+	<description>
+		One of these per displayed entity. It carries the entity's channels, the playhead they are sampled through, the role the pump was resolved for, and the bookkeeping a pass needs to tell a stalled display from one being driven to a constant.
+		The entity and its owner node are held by instance id and resolved on each read, so a runtime that outlives either answers [code]null[/code] and the pass declines rather than following a pointer.
+		[codeblock]
+		var runtime := NetwDisplayRuntime.new()
+		runtime.route = route
+		runtime.bind(entity, entity.owner)
+		runtime.config = decl
+		runtime.playhead = NetwDisplayPlayhead.new()
+
+		if runtime.pump_mode == NetwDisplayDecl.PUMP_UNRESOLVED:
+			resolve_role(runtime)
+		for channel in runtime.states:
+			pump(channel)
+		[/codeblock]
+		[member pump_mode] and [member role] are two answers, not one: two roles share the bracketed pump, so the pump alone cannot say which one is running. Role resolution is event-driven — liveness, control, reparenting, config rebuilds and every network record — so a pass resolves only a runtime that has never been resolved and never scans authority per frame.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="authoring_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				The authoring tick the display is currently standing on, or [code]-1[/code].
+				Answered by the first channel that carries the authoring stamp, read at [member playhead]'s display tick: a display is showing a moment, and that moment's tick is what a caller comparing display against simulation needs. [code]-1[/code] when no set authors this entity, when the playhead has not placed yet, and when no authoring channel has a sample behind the playhead.
+			</description>
+		</method>
+		<method name="bind">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="owner" type="Node" />
+			<description>
+				Binds the entity this runtime displays and the node its channels are sampled from. Neither is kept alive by the binding, and neither dangles.
+			</description>
+		</method>
+		<method name="buffer_of" qualifiers="const">
+			<return type="NetwRingBuffer" />
+			<param index="0" name="track" type="StringName" />
+			<description>
+				The recorded samples behind [param track], or [code]null[/code].
+				A chase pump answers nothing whatever the track: it eases toward a live body rather than sampling a history, so a buffer read there would hand a caller a ring the display is not showing from.
+			</description>
+		</method>
+		<method name="channel_named" qualifiers="const">
+			<return type="NetwDisplayChannel" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				The channel [param name] addresses, or [code]null[/code] when no channel claimed it. Addressed by NAME through [member tracks], which is the property a caller holds, never by the channel's own key.
+			</description>
+		</method>
+		<method name="entity">
+			<return type="NetwEntity" />
+			<description>
+				The bound entity, or [code]null[/code] once it has been freed.
+			</description>
+		</method>
+		<method name="owner">
+			<return type="Node" />
+			<description>
+				The bound owner node, or [code]null[/code] once it has been freed.
+			</description>
+		</method>
+		<method name="track_stat" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="track" type="StringName" />
+			<param index="1" name="stat" type="StringName" />
+			<description>
+				One display diagnostic, or [code]null[/code] when [param stat] names none.
+				[code]sleeping[/code], [code]buffer[/code] and [code]buffer_size[/code] answer about [param track]; [code]channels[/code], [code]ambiguous[/code], [code]pumped_frames[/code], [code]starvation_ticks[/code] and [code]display_lag[/code] answer about the whole runtime and ignore it.
+				These are diagnostics rather than law: a display that is not behaving is read here instead of being re-derived from the pump.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="authoring_binding" type="RefCounted" setter="set_authoring_binding" getter="get_authoring_binding">
+			The declared set whose frames carry the tick-ack stamp, which is the single authoring stream the displayed tick is read from. Null when no set authors one.
+		</member>
+		<member name="chase_hooks" type="Array" setter="set_chase_hooks" getter="get_chase_hooks" default="[]">
+			The recovery-absorption subscription, held only while the chase pump runs.
+		</member>
+		<member name="config" type="NetwDisplayDecl" setter="set_config" getter="get_config">
+			What the entity declared about how it is displayed.
+		</member>
+		<member name="disable_until_tick" type="int" setter="set_disable_until_tick" getter="get_disable_until_tick" default="-1">
+			The display tick past which a timed disable re-enables this runtime, or [code]-1[/code] when the disable is not timed. This is the tick-space replacement for a scene-tree timer, so a paused session does not run the window down.
+		</member>
+		<member name="disabled" type="bool" setter="set_disabled" getter="get_disabled" default="false">
+			Whether the pump skips this runtime entirely.
+		</member>
+		<member name="display_offset_limit" type="float" setter="set_display_offset_limit" getter="get_display_offset_limit">
+			The largest render offset a chase absorption may hold, which is the entity's own teleport tier. Infinite until a role resolution reads one, because an entity that declares no teleport threshold is entitled to glide any distance.
+		</member>
+		<member name="entity_hooks" type="Array" setter="set_entity_hooks" getter="get_entity_hooks" default="[]">
+			The control-changed and reparented subscriptions, held for the runtime's life.
+		</member>
+		<member name="playhead" type="NetwDisplayPlayhead" setter="set_playhead" getter="get_playhead">
+			Where in recorded time this entity is being shown.
+		</member>
+		<member name="pump_mode" type="int" setter="set_pump_mode" getter="get_pump_mode" default="-1">
+			Which pump drives this runtime, one of [NetwDisplayDecl]'s [code]PUMP_*[/code] values. [constant NetwDisplayDecl.PUMP_UNRESOLVED] until a role resolution answers, which is what makes the resolve event-driven rather than per frame.
+		</member>
+		<member name="pumped" type="int" setter="set_pumped" getter="get_pumped" default="0">
+			How many passes this runtime has actually taken, which is what tells a stalled display apart from one the pump is driving to a constant.
+		</member>
+		<member name="rebuild_queued" type="bool" setter="set_rebuild_queued" getter="get_rebuild_queued" default="false">
+			Whether a channel-table rebuild is already scheduled for the session's settle, so a cascade of config writes costs one rebuild.
+		</member>
+		<member name="role" type="int" setter="set_role" getter="get_role" default="0">
+			The role [member pump_mode] was chosen for. Two roles share the bracketed pump, so the pump alone cannot answer which one is running.
+		</member>
+		<member name="route" type="int" setter="set_route" getter="get_route" default="0">
+			The session route this runtime's entity was enrolled under.
+		</member>
+		<member name="saved_freeze" type="Dictionary" setter="set_saved_freeze" getter="get_saved_freeze" default="{}">
+			What a body's freeze state was before a remote role froze it, so restoring the role restores the body rather than guessing at a default.
+		</member>
+		<member name="states" type="NetwDisplayChannel[]" setter="set_states" getter="get_states" default="[]">
+			The channels this entity is displayed through, in declaration order.
+		</member>
+		<member name="tracks" type="NetwDisplayTracks" setter="set_tracks" getter="get_tracks">
+			Which channel a track resolves to, by either of a channel's two names. Minted with the runtime.
+		</member>
+		<member name="trace_frame" type="int" setter="set_trace_frame" getter="get_trace_frame" default="0">
+			The last frame this runtime emitted a trace on, so tracing costs one line per frame rather than one per channel.
+		</member>
+		<member name="warned_self_feedback" type="bool" setter="set_warned_self_feedback" getter="get_warned_self_feedback" default="false">
+			Whether the self-feedback warning has already fired, so it warns once per runtime rather than once per role resolution.
+		</member>
+	</members>
+</class>

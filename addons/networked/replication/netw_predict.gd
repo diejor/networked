@@ -138,6 +138,25 @@ enum DriveKind {
 	SUBSTITUTED,
 }
 
+## What the fields past their own epsilon looked like when a recovery was
+## judged, carried by every write an episode records.
+##
+## The distinction is between a recovery that had an operator for part of its
+## job and one that had none: a write answering both a withheld field and a
+## writable one did repair something, while a write whose every trigger is
+## withheld repairs nothing and is charged as non-contraction.
+enum TriggerShape {
+	## No causal field was past its own epsilon. The exact fingerprint verdict
+	## can disagree while every field sits inside its tolerance, so a recovery
+	## can be staged with nothing asking for one.
+	NONE,
+	## At least one field past its epsilon is one a sub-teleport restore may
+	## write.
+	MIXED,
+	## Every field past its epsilon is one no sub-teleport restore may write.
+	ALL_WITHHELD,
+}
+
 ## Which of the three things a FRAME consume pass can do this frame.
 enum ConsumeAction {
 	## A queued transition is available past the standing buffer, so it runs.

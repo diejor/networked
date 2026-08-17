@@ -90,11 +90,12 @@ func test_a_commit_reaches_a_client_that_owns_no_nodes() -> void:
 		Vector3(3, 0, 0),
 	)
 	for value in routes:
-		assert_int(client.api.route_get_state(int(value))).is_equal(
+		assert_int(client.api.entity_get_state(
+				client.api.entity_from_route(int(value)))).is_equal(
 			NetwMultiplayer.EntityState.LIVE,
 		)
 		assert_object(
-			client.api.entity_get_node(client.api.rid_from_route(int(value))),
+			client.api.entity_get_node(client.api.entity_from_route(int(value))),
 		).is_null()
 
 
@@ -153,7 +154,8 @@ func test_releasing_a_route_tombstones_it_on_the_client() -> void:
 	assert_array(client.api.table_read_deaths(table)).contains(
 		[int(routes[1])],
 	)
-	assert_int(client.api.route_get_state(int(routes[1]))).is_equal(
+	assert_int(client.api.entity_get_state(
+			client.api.entity_from_route(int(routes[1])))).is_equal(
 		NetwMultiplayer.EntityState.DEAD,
 	)
 	assert_int(client.api.table_read_routes(table).size()).is_equal(2)

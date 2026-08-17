@@ -13,6 +13,9 @@
 			<param index="1" name="tick" type="int" />
 			<param index="2" name="body" type="Callable" />
 			<description>
+				Applies each named slot's state at [param tick] to its owner, runs [param body], and restores what it overwrote, unconditionally, on return. Answers how many slots were moved.
+				A slot with no owner or no retained row at [param tick] is left at its live state and skipped, so the restore touches exactly the objects the rewind moved. Only the fields the retained row names and [method timeline_declare] declares are captured and put back: a field history never held is a field the rewind never wrote, and a field the slot never declared is one the rewind never touches even when the row carries it.
+				What lands on the owner is the recorded value, which the recorder wrote in the wire's canonical form. What goes back is the live value exactly as it stood, so a rewind is not a quantization step the simulation pays for.
 			</description>
 		</method>
 		<method name="timeline_bind_owner">
@@ -26,6 +29,21 @@
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
 			<description>
+			</description>
+		</method>
+		<method name="timeline_declare">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="keys" type="Array" />
+			<description>
+				Names the fields [param slot] owns, which is the filter [method rewind] captures and applies through. A slot that declares nothing falls back to the fields its retained row happens to carry, which is the right answer only while nothing else writes that row.
+			</description>
+		</method>
+		<method name="timeline_declared" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The fields [param slot] declares, in declaration order, or an empty [Array] when it declares none.
 			</description>
 		</method>
 		<method name="timeline_history" qualifiers="const">

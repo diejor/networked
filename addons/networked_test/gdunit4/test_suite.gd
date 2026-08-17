@@ -120,7 +120,7 @@ func make_test_entity(
 	root.name = entity_name
 	var entity := NetwEntity.new()
 	entity.peer_id = peer_id
-	root.set_meta(NetwEntity._META_KEY, entity)
+	root.set_meta(NetwEntity.meta_key(), entity)
 	entity.owner = root
 	parent.add_child(root)
 	auto_free(root)

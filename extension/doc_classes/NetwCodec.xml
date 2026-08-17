@@ -114,6 +114,26 @@
 				Writes [param value] as a varint into [param writer].
 			</description>
 		</method>
+		<method name="read_values" qualifiers="static">
+			<return type="Array" />
+			<param index="0" name="reader" type="NetwBitBufferReader" />
+			<param index="1" name="quantizers" type="Array" />
+			<param index="2" name="types" type="Array" />
+			<description>
+			</description>
+		</method>
+		<method name="write_values" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="writer" type="NetwBitBufferWriter" />
+			<param index="1" name="values" type="Array" />
+			<param index="2" name="quantizers" type="Array" />
+			<param index="3" name="types" type="Array" />
+			<description>
+				Writes a positional row whose values describe themselves.
+				A declared schema is what lets a row leave its types off the wire, and a caller here has none: these are the rows a stock synchronizer config and an RPC argument list produce, where the shape is whatever the game put on the node. So each value carries its own kind byte, and [param quantizers] and [param types] only decide whether a value may be PACKED rather than what it is.
+				A node crosses as its own kind rather than as a value, because a [Node] cannot be serialized and the receiver holds a different instance of it.
+			</description>
+		</method>
 	</methods>
 	<constants>
 		<constant name="T_FALLBACK" value="0" enum="RawType">

@@ -14,6 +14,15 @@
 ## plain [code]multiplayer_peer = peer[/code] moves it on its own. States and
 ## roles are written symbolically, so a renumbered [enum SessionCore.State]
 ## fails the comparison instead of moving the golden quietly.
+## [br][br]
+## Scenarios named [code]machine/[/code], [code]edges/[/code],
+## [code]flood/[/code] and [code]apptag/[/code] read [SessionCore] directly:
+## that is the plane which crosses, and the native replay reproduces those rows.
+## Scenarios named [code]shell/[/code] take the same readings through
+## [NetwMultiplayer]'s own band instead, so they pin what the wrapper answers
+## rather than what the machine holds. They are the regression guard the port
+## runs against, and they exist because the shell is deleted before the carried
+## suites over it have been re-authored.
 ## [codeblock]
 ## godot --headless --path . -s res://tests/crossing/session_arm.gd
 ## godot --headless --path . -s res://tests/crossing/session_arm.gd -- --record
@@ -87,6 +96,9 @@ const SCENARIOS: Array[StringName] = [
 	&"flood/the_host_self_join_is_never_limited",
 	&"flood/each_peer_draws_its_own_budget",
 	&"apptag/the_fold_is_the_compatibility_gate",
+	&"shell/the_api_mirrors_the_machine_it_holds",
+	&"shell/the_service_registry_answers_by_type",
+	&"shell/disposal_is_idempotent_and_leaves_no_peer",
 ]
 
 var _rows: Array[String] = []
@@ -168,10 +180,112 @@ func _run_all() -> Array[String]:
 				_each_peer_draws_its_own_budget(scenario)
 			&"apptag/the_fold_is_the_compatibility_gate":
 				_the_fold_is_the_compatibility_gate(scenario)
+			&"shell/the_api_mirrors_the_machine_it_holds":
+				_the_api_mirrors_the_machine_it_holds(scenario)
+			&"shell/the_service_registry_answers_by_type":
+				_the_service_registry_answers_by_type(scenario)
+			&"shell/disposal_is_idempotent_and_leaves_no_peer":
+				_disposal_is_idempotent_and_leaves_no_peer(scenario)
 			_:
 				printerr("unknown scenario: %s" % scenario)
 	return _rows
 
+
+#region The shell's session band
+
+# The api's state, role and the two booleans derived from them are reads of the
+# machine rather than a second copy, so every edge the machine takes has to show
+# through them without anything pushing it across.
+func _the_api_mirrors_the_machine_it_holds(scenario: StringName) -> void:
+	_open()
+	_mirror(scenario, "constructed")
+
+	_assign(_server_peer())
+	_mirror(scenario, "server_assigned")
+
+	_api.multiplayer_peer = null
+	_mirror(scenario, "peer_cleared")
+	_close()
+
+	_open()
+	_assign(_client_peer())
+	_mirror(scenario, "client_assigned")
+	_close()
+
+
+# The registry is a discovery surface for the kit and game code, keyed by the
+# script a node was registered under rather than by the node, so a lookup
+# answers a type and unregistering a type nobody registered changes nothing.
+func _the_service_registry_answers_by_type(scenario: StringName) -> void:
+	_open()
+	var type := GDScript.new()
+	type.source_code = "extends Node\n"
+	type.reload()
+	var service := Node.new()
+	service.set_script(type)
+
+	_row(
+		scenario,
+		"empty",
+		{ &"found": _api.get_service(type) != null },
+	)
+
+	_api.register_service(service, type)
+	_row(
+		scenario,
+		"registered",
+		{
+			&"found": _api.get_service(type) == service,
+			&"listed": _api.get_services(type).size(),
+		},
+	)
+
+	_api.register_service(service, type)
+	_row(
+		scenario,
+		"twice",
+		{ &"listed": _api.get_services(type).size() },
+	)
+
+	_api.unregister_service(service, type)
+	_row(
+		scenario,
+		"unregistered",
+		{
+			&"found": _api.get_service(type) != null,
+			&"listed": _api.get_services(type).size(),
+		},
+	)
+
+	_api.unregister_service(service, type)
+	_row(
+		scenario,
+		"again",
+		{ &"listed": _api.get_services(type).size() },
+	)
+
+	service.free()
+	_close()
+
+
+# Disposal is what an embedder calls, and it is called from teardown paths that
+# cannot know whether another already ran. A second call has to be inert rather
+# than a second teardown, and the api has to read offline afterwards.
+func _disposal_is_idempotent_and_leaves_no_peer(scenario: StringName) -> void:
+	_open()
+	_assign(_server_peer())
+	_mirror(scenario, "online")
+
+	_api.embedding.dispose()
+	_mirror(scenario, "disposed")
+	_signals(scenario)
+
+	_api.embedding.dispose()
+	_mirror(scenario, "disposed_again")
+	_signals(scenario)
+	_close(false)
+
+#endregion
 
 #region The machine
 
@@ -455,6 +569,22 @@ func _assign(peer: MultiplayerPeer) -> void:
 
 # The machine's whole reading at one moment, symbolic so a renumbering fails
 # the comparison rather than moving the golden.
+# The same reading taken through the api rather than through the machine, which
+# is the only difference these scenarios are about.
+func _mirror(scenario: StringName, label: String) -> void:
+	_row(
+		scenario,
+		"mirror",
+		{
+			&"at": label,
+			&"is_host": _api.is_host,
+			&"is_online": _api.is_online,
+			&"role": _role_name(_api.role),
+			&"state": _state_name(_api.state),
+		},
+	)
+
+
 func _state(scenario: StringName, label: String) -> void:
 	_row(
 		scenario,

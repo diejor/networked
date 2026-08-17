@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwJoinRoster" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Who this peer has admitted, who it refused and why, and how it settles two players arriving under one name.
+	</brief_description>
+	<description>
+		The two books move together. A peer remembered as accepted while a refusal reason still names it is a peer the session disagrees with itself about, so [method forget] erases both and there is no way to erase one.
+		It holds no [Object] and disconnects nobody. A name collision is answered as a verdict the caller carries out, which is what lets the same rule decide for a join arriving on the wire and for one a test hands in directly.
+		[codeblock]
+		match roster.name_verdict(name, taken, rj.is_debug, has_identity):
+			NetwJoinRoster.RENAME:
+				rj.username = roster.free_name(name, taken)
+			NetwJoinRoster.REFUSE:
+				roster.refuse(rj.peer_id, reason)
+				disconnect(rj.peer_id)
+		[/codeblock]
+		Every answer is in peer order, because a roster backfill and the roster it backfills have to agree about order and a hash walk does not.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="accepted_join" qualifiers="const">
+			<return type="ResolvedJoin" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				The join record remembered for [param peer_id], or [code]null[/code] when none is.
+			</description>
+		</method>
+		<method name="accepted_joins" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every remembered join, in peer order.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every peer at once, which is what a session teardown asks for.
+			</description>
+		</method>
+		<method name="forget">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Forgets [param peer_id] from both books. There is deliberately no way to forget one and keep the other.
+			</description>
+		</method>
+		<method name="free_name" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="name" type="StringName" />
+			<param index="1" name="taken" type="PackedStringArray" />
+			<description>
+				The first name of the form [param name] followed by a number that nobody in [param taken] holds, counting from one. What a [constant RENAME] verdict is carried out with.
+			</description>
+		</method>
+		<method name="name_verdict" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="name" type="StringName" />
+			<param index="1" name="taken" type="PackedStringArray" />
+			<param index="2" name="is_debug" type="bool" />
+			<param index="3" name="has_identity" type="bool" />
+			<description>
+				How a join asking for [param name] is settled against the names in [param taken], as one of [enum Verdict].
+				[param is_debug] and [param has_identity] are the two things about the joining peer that change the answer, and they are asked in that order: a debug build renames rather than colliding at all, and only an authenticated peer can lose a name to somebody else's claim.
+			</description>
+		</method>
+		<method name="refusal" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Why [param peer_id] was refused, or an empty string when it was not.
+			</description>
+		</method>
+		<method name="refuse">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="reason" type="String" />
+			<description>
+				Records why [param peer_id] was refused. Recording is all this does: dropping the connection belongs to the caller that can reach the peer.
+			</description>
+		</method>
+		<method name="remember">
+			<return type="bool" />
+			<param index="0" name="rj" type="ResolvedJoin" />
+			<description>
+				Remembers one accepted join, answering whether the roster learned anything.
+				A peer already remembered is remembered again only when the new record carries args the old one lacked, which is what keeps a roster backfill from replacing a real join with its argless echo.
+			</description>
+		</method>
+		<method name="serialize_accepted" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every remembered join serialized, in peer order, which is what a backfill sends.
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many joins are remembered.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="ADMIT" value="0" enum="Verdict">
+			Nobody holds the name, or somebody does and the session says so without stopping the join. An unauthenticated claim is not proof the name belongs to whoever made it first.
+		</constant>
+		<constant name="RENAME" value="1" enum="Verdict">
+			A debug join takes the next free name instead of the one it asked for, so two developers running the same build both get in.
+		</constant>
+		<constant name="REFUSE" value="2" enum="Verdict">
+			An authenticated name belongs to whoever authenticated it, so the second claim is turned away.
+		</constant>
+	</constants>
+</class>

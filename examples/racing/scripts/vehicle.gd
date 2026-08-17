@@ -198,8 +198,8 @@ var angular_propulsion: Vector3 = Vector3.ZERO
 
 func _init() -> void:
 	var e := NetwEntity.resolve(self)
-	e.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
-	e.on_controller_disconnect = NetwEntity.DisconnectRule.DESPAWN
+	e.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+	e.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 
 	# Solver-owned half: the sphere pose replicates atomically with its velocities.
 	# The interpolated pose is redirected to display_position so the smoothed value
@@ -320,7 +320,7 @@ func _ready() -> void:
 	# A dynamic body against walls is the case the reference stance freezes rather
 	# than extrapolates: a forecast tail projects a remote car straight into a wall
 	# it has no geometry for, so remotes BUFFER and the small buffer covers the gap.
-	var handle := entity.interpolation if entity else null
+	var handle: NetwDisplayHandle = entity.interpolation if entity else null
 	if handle:
 		handle.timeline_mode = NetwDisplayHandle.TimelineMode.BUFFERED
 		# Corrections land on the solver in one write; the declared chase

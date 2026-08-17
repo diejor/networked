@@ -65,7 +65,7 @@ func test_poll_pumps_tick_after_node_free() -> void:
 	assert_that(engine.tick).is_equal(0)
 
 	# Back-date the baseline so the next poll sees a real frame of elapsed time.
-	engine._last_physics_time_usec -= 100_000
+	engine.core.mark_step(0.1)
 	engine.poll_step()
 	assert_that(engine.tick).is_greater(0)
 
@@ -76,7 +76,7 @@ func test_poll_does_not_pump_while_node_drives() -> void:
 	mt.api.object_configuration_add(clock, clock._build_config())
 
 	var engine := mt.api._clock
-	engine._last_physics_time_usec = Time.get_ticks_usec() - 100_000
+	engine.core.mark_step(0.1)
 	engine.poll_step()
 
 	# A bound node owns the pump, so the poll leaves the tick alone.

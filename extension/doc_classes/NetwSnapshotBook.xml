@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSnapshotBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		What one persisted entity owes its database: the frozen column set, each column's own cadence, and the values last written.
+	</brief_description>
+	<description>
+		The scene is the record, so this book holds no node and reads nothing live. The caller above gathers values off the nodes that declared them and hands them here, and what the book decides is which columns are DUE and, of those, which actually changed.
+		Those two are separate on purpose. A column that ticked past its interval and still holds the value already written is owed nothing, and writing it anyway is a row rewritten every interval for the life of the session.
+		[codeblock]
+		var due := book.advance(delta)          # cadence: which columns came up
+		var current := gather(due)              # the caller reads the live scene
+		var owed := book.changed(current)       # change: which of those moved
+		if not owed.is_empty():
+			write(owed)
+			book.commit(owed)               # what was written is now believed
+		[/codeblock]
+		Every column carries its own interval, and a column declared with none falls back to [member default_interval]. A cadence longer than one step is exact rather than approximate, because a column not named by [method advance] keeps what it accumulated.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="adopt">
+			<return type="void" />
+			<param index="0" name="values" type="Dictionary" />
+			<description>
+				Replaces what the book believes is written with [param values]. A caller that just read the whole row back from the database says what every column is, so nothing outside [param values] survives. Compare [method commit].
+			</description>
+		</method>
+		<method name="advance">
+			<return type="Array" />
+			<param index="0" name="delta" type="float" />
+			<description>
+				Advances every column's cadence by [param delta] and answers the properties whose interval elapsed, rearming each one it names.
+				A column not named keeps what it accumulated, so a cadence longer than one step stays exact instead of drifting toward the step size.
+			</description>
+		</method>
+		<method name="changed">
+			<return type="Dictionary" />
+			<param index="0" name="current" type="Dictionary" />
+			<description>
+				The subset of [param current] that differs from what was last written. A property the book has never seen written counts as changed.
+			</description>
+		</method>
+		<method name="commit">
+			<return type="void" />
+			<param index="0" name="values" type="Dictionary" />
+			<description>
+				Adopts [param values] as written, merging. A caller flushing a subset says nothing about the columns it left out, so their last written values stand. Compare [method adopt].
+			</description>
+		</method>
+		<method name="declare">
+			<return type="void" />
+			<param index="0" name="property" type="StringName" />
+			<param index="1" name="interval" type="float" />
+			<description>
+				Declares one persisted column, at its own [param interval] or at [member default_interval] when that is zero.
+				A property declared twice keeps one column carrying the later cadence, which is the same rule the value itself follows: the last declaration wins.
+			</description>
+		</method>
+		<method name="differs">
+			<return type="bool" />
+			<param index="0" name="current" type="Dictionary" />
+			<description>
+				Whether [param current] differs from what was last written at all, which is what makes an entity dirty.
+			</description>
+		</method>
+		<method name="is_empty" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether nothing was declared, which is how an archetype that asked for persistence and marked no field reads.
+			</description>
+		</method>
+		<method name="properties" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every declared property, in declaration order.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="default_interval" type="float" setter="set_default_interval" getter="get_default_interval" default="0.0">
+			The cadence a column declared without one runs at. Zero makes every such column due on every [method advance].
+		</member>
+	</members>
+</class>

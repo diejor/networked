@@ -5,7 +5,6 @@
 #if defined(NETW_MODULE)
 #include "main/performance.h"
 
-// Engine types are global, so the alias keeps `godot::` spellings compiling.
 namespace godot {
 using ::Performance;
 } // namespace godot
@@ -17,9 +16,6 @@ using ::Performance;
 
 namespace netw::gd {
 
-// The live Object and Resource counts, or -1 where no monitor is up. Both
-// tiers spell the monitors the same; only the singleton's availability varies,
-// and a headless run without the servers has none.
 inline int64_t object_count() {
     godot::Performance *performance = godot::Performance::get_singleton();
     if (performance == nullptr) {

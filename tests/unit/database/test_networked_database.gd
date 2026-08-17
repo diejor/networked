@@ -9,8 +9,8 @@ class FailingBackend extends TestMemoryBackend:
 			_table: StringName,
 			_id: StringName,
 			_data: Dictionary,
-	) -> Error:
-		return ERR_CANT_CREATE
+	) -> NetwPromise:
+		return NetwPromise.resolved(ERR_CANT_CREATE)
 
 
 func _make_db(backend: Variant = null) -> NetwDatabase:
@@ -72,6 +72,50 @@ func test_transaction_flow() -> void:
 	)
 	assert_that(err).is_equal(ERR_CANT_CREATE)
 	assert_that(committed[0]).is_false()
+
+
+func test_the_promise_face_is_the_same_act_as_the_awaited_one() -> void:
+	# The native persistence loop cannot await inside a pump, so it drives the
+	# promise face. Both faces queue, commit and announce once, which is what
+	# lets one of them be implemented as the other.
+	var db := _make_db()
+	db._register_schema(&"rocks", [&"health"])
+	await get_tree().process_frame
+
+	var announced: Array = []
+	db.transaction_committed.connect(
+		func(tc: int, rc: int): announced.append([tc, rc]),
+	)
+	var promise := db.transaction_promise(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 50 })
+			tx.queue_upsert(&"rocks", &"r2", { &"health": 20 })
+	)
+	var err := await NetwDatabase.settled_error(promise)
+
+	var backend := db.backend as TestMemoryBackend
+	assert_that(err).is_equal(OK)
+	assert_that(backend.upsert_calls.size()).is_equal(2)
+	assert_that(announced).is_equal([[1, 2]])
+
+
+func test_the_promise_face_stays_silent_on_a_refused_commit() -> void:
+	# A commit that answered an error announced nothing before the promise face
+	# existed, and a promise that resolves is not the same thing as a commit
+	# that succeeded.
+	var db := _make_db(FailingBackend.new())
+	db._register_schema(&"rocks", [&"health"])
+	await get_tree().process_frame
+
+	var announced := [false]
+	db.transaction_committed.connect(func(_tc, _rc): announced[0] = true)
+	var err := await NetwDatabase.settled_error(db.transaction_promise(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 }),
+	))
+
+	assert_that(err).is_equal(ERR_CANT_CREATE)
+	assert_that(announced[0]).is_false()
 
 
 func test_reader_and_delete_flow() -> void:

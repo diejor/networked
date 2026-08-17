@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwNodeRef" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="create" qualifiers="static">
+			<return type="NetwNodeRef" />
+			<param index="0" name="route" type="int" default="0" />
+			<param index="1" name="comp" type="int" default="0" />
+			<param index="2" name="path" type="String" default="&quot;&quot;" />
+			<description>
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="comp" type="int" setter="set_comp" getter="get_comp" default="0">
+		</member>
+		<member name="path" type="String" setter="set_path" getter="get_path" default="&quot;&quot;">
+			The path to the component, relative to the entity root, and only read when [member comp] is 255.
+		</member>
+		<member name="route" type="int" setter="set_route" getter="get_route" default="0">
+		</member>
+	</members>
+</class>

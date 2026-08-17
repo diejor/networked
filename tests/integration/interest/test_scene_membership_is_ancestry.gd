@@ -46,7 +46,7 @@ func test_a_child_with_no_membership_inherits_the_scene_row() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
 
 	# The child declares no membership of its own.
-	assert_bool(child.interest._layer_ids.is_empty()).is_true()
+	assert_bool(child.interest.layer_ids().is_empty()).is_true()
 
 	# Not admitted: the parent clamp must hide the child.
 	assert_bool(api._interest.participant_sees(peer_id, child)).is_false()

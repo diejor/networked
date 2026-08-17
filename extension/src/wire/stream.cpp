@@ -46,14 +46,14 @@ bool WriteStream::bits(uint64_t &value, int count) {
     }
     if (!width_is_legal(count)) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Bit width is out of range.");
+        NETW_ERR_V(false, sys::WIRE, "Bit width is out of range.");
     }
     if (count == 0) {
         return true;
     }
     if ((value & ~low_mask(count)) != 0) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Value does not fit its declared bit width.");
+        NETW_ERR_V(false, sys::WIRE, "Value does not fit its declared bit width.");
     }
     int written = 0;
     while (written < count) {
@@ -78,11 +78,11 @@ bool WriteStream::int_range(int64_t &value, int64_t low, int64_t high) {
     }
     if (low > high) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Integer range bounds are inverted.");
+        NETW_ERR_V(false, sys::WIRE, "Integer range bounds are inverted.");
     }
     if (value < low || value > high) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Value is outside its declared range.");
+        NETW_ERR_V(false, sys::WIRE, "Value is outside its declared range.");
     }
     uint64_t raw = uint64_t(value - low);
     return bits(raw, bits_required(uint64_t(high - low)));
@@ -94,7 +94,7 @@ bool WriteStream::varuint(uint64_t &value, int max_bytes) {
     }
     if (!byte_count_is_legal(max_bytes)) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Varint byte limit is out of range.");
+        NETW_ERR_V(false, sys::WIRE, "Varint byte limit is out of range.");
     }
     if (!align_verify()) {
         return false;
@@ -114,7 +114,7 @@ bool WriteStream::varuint(uint64_t &value, int max_bytes) {
         }
     }
     healthy = false;
-    NETW_ERR_V(false, "wire", "Value exceeds its varint byte limit.");
+    NETW_ERR_V(false, sys::WIRE, "Value exceeds its varint byte limit.");
 }
 
 bool WriteStream::svarint(int64_t &value, int max_bytes) {
@@ -133,7 +133,7 @@ bool WriteStream::bytes_capped(PackedByteArray &value, int cap) {
     }
     if (cap < 0 || value.size() > cap) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Blob exceeds its declared cap.");
+        NETW_ERR_V(false, sys::WIRE, "Blob exceeds its declared cap.");
     }
     int64_t length = value.size();
     if (!int_range(length, 0, cap) || !align_verify()) {
@@ -178,7 +178,7 @@ bool ReadStream::take(int count, uint64_t &out) {
     }
     if (!width_is_legal(count)) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Bit width is out of range.");
+        NETW_ERR_V(false, sys::WIRE, "Bit width is out of range.");
     }
     if (count == 0) {
         out = 0;
@@ -221,7 +221,7 @@ bool ReadStream::int_range(int64_t &value, int64_t low, int64_t high) {
     }
     if (low > high) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Integer range bounds are inverted.");
+        NETW_ERR_V(false, sys::WIRE, "Integer range bounds are inverted.");
     }
     uint64_t raw = 0;
     if (!take(bits_required(uint64_t(high - low)), raw)) {
@@ -242,7 +242,7 @@ bool ReadStream::varuint(uint64_t &value, int max_bytes) {
     }
     if (!byte_count_is_legal(max_bytes)) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Varint byte limit is out of range.");
+        NETW_ERR_V(false, sys::WIRE, "Varint byte limit is out of range.");
     }
     if (!align_verify()) {
         return false;
@@ -295,7 +295,7 @@ bool ReadStream::bytes_capped(PackedByteArray &value, int cap) {
     }
     if (cap < 0) {
         healthy = false;
-        NETW_ERR_V(false, "wire", "Blob cap is negative.");
+        NETW_ERR_V(false, sys::WIRE, "Blob cap is negative.");
     }
     int64_t length = 0;
     if (!int_range(length, 0, cap) || !align_verify()) {
@@ -333,7 +333,7 @@ bool ReadStream::align_verify() {
 bool MeasureStream::bits(uint64_t &value, int count) {
     (void)value;
     if (!width_is_legal(count)) {
-        NETW_ERR_V(false, "wire", "Bit width is out of range.");
+        NETW_ERR_V(false, sys::WIRE, "Bit width is out of range.");
     }
     bits_described += count;
     return true;
@@ -342,7 +342,7 @@ bool MeasureStream::bits(uint64_t &value, int count) {
 bool MeasureStream::int_range(int64_t &value, int64_t low, int64_t high) {
     (void)value;
     if (low > high) {
-        NETW_ERR_V(false, "wire", "Integer range bounds are inverted.");
+        NETW_ERR_V(false, sys::WIRE, "Integer range bounds are inverted.");
     }
     bits_described += bits_required(uint64_t(high - low));
     return true;
@@ -350,7 +350,7 @@ bool MeasureStream::int_range(int64_t &value, int64_t low, int64_t high) {
 
 bool MeasureStream::varuint(uint64_t &value, int max_bytes) {
     if (!byte_count_is_legal(max_bytes)) {
-        NETW_ERR_V(false, "wire", "Varint byte limit is out of range.");
+        NETW_ERR_V(false, sys::WIRE, "Varint byte limit is out of range.");
     }
     bits_described += pad_to_byte(bits_described);
     uint64_t remaining = value;
@@ -361,7 +361,7 @@ bool MeasureStream::varuint(uint64_t &value, int max_bytes) {
             return true;
         }
     }
-    NETW_ERR_V(false, "wire", "Value exceeds its varint byte limit.");
+    NETW_ERR_V(false, sys::WIRE, "Value exceeds its varint byte limit.");
 }
 
 bool MeasureStream::svarint(int64_t &value, int max_bytes) {
@@ -377,7 +377,7 @@ bool MeasureStream::bool1(bool &value) {
 
 bool MeasureStream::bytes_capped(PackedByteArray &value, int cap) {
     if (cap < 0) {
-        NETW_ERR_V(false, "wire", "Blob cap is negative.");
+        NETW_ERR_V(false, sys::WIRE, "Blob cap is negative.");
     }
     bits_described += bits_required(uint64_t(cap));
     bits_described += pad_to_byte(bits_described);

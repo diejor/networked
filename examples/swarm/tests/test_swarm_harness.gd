@@ -91,7 +91,7 @@ func test_the_swarm_reaches_a_client_that_owns_no_nodes() -> void:
 	).is_between(swarm.ring_radius - 1.0, swarm.ring_radius + 1.0)
 	for route in client.api.table_read_routes(mobs):
 		assert_object(
-			client.api.entity_get_node(client.api.rid_from_route(int(route))),
+			client.api.entity_get_node(client.api.entity_from_route(int(route))),
 		).override_failure_message("a mob must have no node anywhere").is_null()
 
 
@@ -166,7 +166,8 @@ func test_a_dead_mob_is_retired_on_the_client() -> void:
 	var burning := client.api.table_find(SwarmTables.Burning.NAME)
 	assert_int(client.api.table_get_row(mobs, doomed)).is_equal(-1)
 	assert_int(client.api.table_get_row(burning, doomed)).is_equal(-1)
-	assert_int(client.api.route_get_state(doomed)).is_equal(
+	assert_int(client.api.entity_get_state(
+			client.api.entity_from_route(doomed))).is_equal(
 		NetwMultiplayer.EntityState.DEAD,
 	)
 	assert_int(client.api.table_read_routes(mobs).size()).is_equal(15)

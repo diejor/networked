@@ -241,7 +241,7 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 	assert_that(jose_local) \
 			.override_failure_message("jose has no local player after return") \
 			.is_not_null()
-	var jose_scene := NetwEntity.of(jose_local).scene
+	var jose_scene: NetwSceneHandle = NetwEntity.of(jose_local).scene
 	assert_that(jose_scene) \
 			.override_failure_message("jose's player belongs to no scene") \
 			.is_not_null()

@@ -1,5 +1,5 @@
 ## Unit tests for [NetwLivenessCore], the record store behind
-## [LivenessShell].
+## [NetwMultiplayerCore].
 class_name TestLivenessCore
 extends NetwTestSuite
 
@@ -15,20 +15,12 @@ func before_test() -> void:
 func test_state_enums_agree() -> void:
 	assert_int(NetwLivenessCore.STATE_UNKNOWN) \
 			.is_equal(NetwMultiplayer.EntityState.UNKNOWN)
-	assert_int(NetwLivenessCore.STATE_UNKNOWN) \
-			.is_equal(LivenessShell.State.UNKNOWN)
 	assert_int(NetwLivenessCore.STATE_LIVE) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_int(NetwLivenessCore.STATE_LIVE) \
-			.is_equal(LivenessShell.State.LIVE)
 	assert_int(NetwLivenessCore.STATE_LINGERING) \
 			.is_equal(NetwMultiplayer.EntityState.LINGERING)
-	assert_int(NetwLivenessCore.STATE_LINGERING) \
-			.is_equal(LivenessShell.State.LINGERING)
 	assert_int(NetwLivenessCore.STATE_DEAD) \
 			.is_equal(NetwMultiplayer.EntityState.DEAD)
-	assert_int(NetwLivenessCore.STATE_DEAD) \
-			.is_equal(LivenessShell.State.DEAD)
 
 
 ## Verify a bound route reaches LIVE and resolves back to its own handle.
@@ -54,21 +46,24 @@ func test_tombstone_is_permanent() -> void:
 	assert_int(core.route_state(route)).is_equal(NetwLivenessCore.STATE_DEAD)
 
 
-## Verify a re-admission onto a tombstoned route binds a fresh handle and
-## leaves the superseded record dead.
+## Verify a re-admission onto a tombstoned route revives the record that wore
+## the tombstone, one epoch higher, and refuses any other handle asking for it.
 func test_revival_is_a_new_epoch() -> void:
-	var first := core.entity_create()
+	var entity := core.entity_create()
 	var route := core.reserve_route()
-	core.bind_route(first, route)
-	core.set_state(first, NetwLivenessCore.STATE_DEAD)
+	core.bind_route(entity, route)
+	core.set_state(entity, NetwLivenessCore.STATE_DEAD)
+	assert_int(core.epoch_of(entity)).is_equal(0)
 
-	var second := core.entity_create()
-	assert_bool(core.bind_route(second, route)).is_true()
+	var stranger := core.entity_create()
+	assert_bool(core.bind_route(stranger, route)).is_false()
+	assert_int(core.epoch_of(stranger)).is_equal(0)
 
-	assert_that(second).is_not_equal(first)
+	assert_bool(core.bind_route(entity, route)).is_true()
+
+	assert_int(core.epoch_of(entity)).is_equal(1)
 	assert_int(core.route_state(route)).is_equal(NetwLivenessCore.STATE_LIVE)
-	assert_that(core.rid_from_route(route)).is_equal(second)
-	assert_int(core.state_of(first)).is_equal(NetwLivenessCore.STATE_DEAD)
+	assert_that(core.rid_from_route(route)).is_equal(entity)
 
 
 ## Verify an unbound route reads UNKNOWN rather than DEAD, which is what keeps

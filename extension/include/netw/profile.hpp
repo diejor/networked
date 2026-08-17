@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include "netw/colors.hpp"
+#include "netw/subsystems.hpp"
 
 namespace netw::profile {
 
@@ -21,19 +22,13 @@ enum class PlotFormat {
     PERCENTAGE,
 };
 
-enum Subsystem : uint32_t {
-    SUBSYSTEM_CLOCK = 1U << 0,
-    SUBSYSTEM_SESSION = 1U << 1,
-    SUBSYSTEM_SCENE = 1U << 2,
-    SUBSYSTEM_LIVENESS = 1U << 3,
-    SUBSYSTEM_TABLE = 1U << 4,
-    SUBSYSTEM_WIRE = 1U << 5,
-    SUBSYSTEM_TRANSPORT = 1U << 6,
-    SUBSYSTEM_INTEREST = 1U << 7,
-    SUBSYSTEM_PREDICTION = 1U << 8,
-    SUBSYSTEM_INTERPOLATION = 1U << 9,
-    SUBSYSTEM_ALL = 0xffffffffU,
-};
+using netw::Subsystem;
+using netw::SUBSYSTEM_ALL;
+using netw::SUBSYSTEM_NONE;
+#define NETW_SUBSYSTEM_ALIAS(m_name, m_text, m_index) \
+    using netw::SUBSYSTEM_##m_name;
+NETW_SUBSYSTEM_TABLE(NETW_SUBSYSTEM_ALIAS)
+#undef NETW_SUBSYSTEM_ALIAS
 
 namespace names {
 

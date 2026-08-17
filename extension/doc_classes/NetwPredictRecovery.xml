@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictRecovery" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The single write that corrects one settled divergence, staged whole.
+	</brief_description>
+	<description>
+		[method NetwMultiplayer._predict_recover] answers with one of these, and a game overriding that seam mints its own through [method of].
+		The whole recovery is decided here and applied by the shell in one write, so a correction has no tail: nothing is left outstanding to ease in over later frames, and the state recorded after a recovery is exactly what was staged. Deciding it and performing it are separate for that reason, and a record is what carries the decision between them.
+		[codeblock]
+		var staged := NetwPredictRecovery.of(restore, restore, false, false)
+		staged.restore()    the payload to apply, by property name
+		staged.write()      what the display is told moved
+		staged.teleport()   the body kept nothing worth blending from
+		staged.skip()       this recovery declines to write at all
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="of" qualifiers="static">
+			<return type="NetwPredictRecovery" />
+			<param index="0" name="restore" type="Dictionary" />
+			<param index="1" name="write" type="Dictionary" />
+			<param index="2" name="teleport" type="bool" />
+			<param index="3" name="skip" type="bool" />
+			<description>
+				Mints one staged recovery.
+			</description>
+		</method>
+		<method name="restore" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				The payload to apply to the body, keyed by property name. A recovery that withheld fields has already dropped them here, so a caller writes what it is handed rather than filtering again.
+			</description>
+		</method>
+		<method name="skip" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether this recovery declines to write at all. A replay reaches the present under its own power and an observing policy was only ever going to report, so both decline while still having decided.
+			</description>
+		</method>
+		<method name="teleport" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether the body kept nothing worth blending from. The tier is measured per property against its own threshold, because the errors have different units and one number cannot be right for all of them.
+			</description>
+		</method>
+		<method name="write" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				What the display is told moved. It is empty for a recovery that restores without a visible correction, which is what a replay does.
+			</description>
+		</method>
+	</methods>
+</class>

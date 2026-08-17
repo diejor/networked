@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwEntityIds" inherits="Object" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The process-wide mint every entity handle comes from.
+	</brief_description>
+	<description>
+		An entity is constructed, configured and read long before a session exists to number it, so the mint cannot belong to one. It is process-wide and has no instance: every verb here is a static over one mint, because a wrapper that carries a handle from birth needs one no session owns. [NetwEntity] takes a handle here at construction and carries it for the whole life of the wrapper, and a session's [NetwLivenessCore] adopts that handle rather than owning it.
+		That separation makes two questions different that used to be one. [method is_minted] asks whether a handle was ever issued, and [method NetwLivenessCore.entity_is_valid] asks whether one particular session knows the entity behind it. A handle from another session is minted and unknown, a handle from nowhere is neither, and a plane that cannot tell those apart answers the same refusal to a stale lookup and to a forged one.
+		[codeblock]
+		var handle := NetwEntityIds.mint()      # one holder, the caller
+		NetwEntityIds.retain(handle)            # a second holder
+		NetwEntityIds.release(handle)           # still held
+		NetwEntityIds.release(handle)           # freed here, and never reissued
+		[/codeblock]
+		A handle has holders rather than an owner, because they end on different cadences: the engine finalizes a wrapper, and a record plane lets go at [method NetwLivenessCore.clear]. The value survives until the last holder releases, which is what lets a session tear down without stranding a wrapper that still holds. Released values are never issued again, so a late message naming a retired entity resolves to nothing rather than to whoever came next.
+		Nothing in a game calls these. Reach for them only when writing the identity plane itself.
+		The mint outlives every session, so the extension releases whatever is still outstanding at its own shutdown. A count read at process exit is therefore a session that failed to clear rather than the mint leaking.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="holders" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Returns how many holders [param entity] has, or [code]0[/code] when it names nothing. Exists so the last-holder rule is checkable rather than inferred from [method outstanding].
+			</description>
+		</method>
+		<method name="is_minted" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Returns [code]true[/code] while [param entity] is a handle this mint issued and has not freed. Says nothing about whether any session knows the entity behind it.
+			</description>
+		</method>
+		<method name="mint" qualifiers="static">
+			<return type="RID" />
+			<description>
+				Returns a fresh handle with one holder, the caller. The caller owes it one [method release].
+			</description>
+		</method>
+		<method name="outstanding" qualifiers="static">
+			<return type="int" />
+			<description>
+				Returns how many handles are still held. Exists so a teardown can be checked for having actually torn down.
+			</description>
+		</method>
+		<method name="release" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Drops one hold on [param entity]. The last one frees the value. A handle this mint never issued is ignored.
+			</description>
+		</method>
+		<method name="retain" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Claims another hold on [param entity], answering [code]false[/code] for a handle the mint never issued so an adoption cannot forge one.
+			</description>
+		</method>
+	</methods>
+</class>

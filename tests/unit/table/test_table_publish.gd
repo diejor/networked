@@ -216,7 +216,7 @@ func test_the_row_map_answers_one_route_and_a_whole_join() -> void:
 ## table key on the routes of the table it refines.
 func test_a_foreign_route_is_writable() -> void:
 	var entity := api.entity_create()
-	var route := api.entity_allocate_route(entity)
+	var route := api.entity_admit(entity)
 	var claimed := api.claim_routes(1)
 
 	var verdict := _publish(

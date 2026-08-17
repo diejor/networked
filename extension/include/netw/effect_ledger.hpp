@@ -9,23 +9,6 @@
 
 namespace netw {
 
-// A keyed ledger of optimistic acts: a revert parked against a deadline tick.
-// Adopt keeps the act and drops the revert, discard and timeout run it, so a
-// timeout is a denial rather than a third outcome.
-//
-// The ledger never reads a clock. A deadline is measured against the tick its
-// sweep is handed, which is what makes the span testable.
-//
-// A watcher is refused unless its key is armed, so an observer can never
-// outlive the act it observes.
-//
-// [codeblock]
-// arm("act__p__7__0", revert, deadline 9)
-//   sweep(8)            kept
-//   adopt               revert dropped unrun, confirmed fires
-//   discard             revert runs, denied fires
-//   sweep(9)            revert runs, denied fires
-// [/codeblock]
 class NetwEffectLedger : public godot::RefCounted {
     GDCLASS(NetwEffectLedger, godot::RefCounted)
 
@@ -63,8 +46,6 @@ public:
     void discard(const godot::StringName &p_key);
     bool pending(const godot::StringName &p_key) const;
     int64_t count() const;
-    // Arms made by a mid-sweep revert are kept rather than swept, because the
-    // expired set is collected before the first revert runs.
     void sweep(int64_t p_tick);
     void clear();
 };

@@ -37,7 +37,7 @@
 			How many elements one row occupies. A fixed-capacity array is expressed as a stride rather than as a second type family, so eight ability cooldowns is one [PackedFloat32Array] of stride eight.
 		</member>
 		<member name="type" type="int" setter="set_type" getter="get_type" default="15">
-			The value shape, one of [enum SchemaCore.ColumnType].
+			The value shape, one of [enum SchemaCore.ColumnType]. Typed [int] rather than as the enum because a property set rewrites it while compiling a reflected script property, and the compile reaches shapes the enum names before it knows which one it landed on.
 		</member>
 	</members>
 </class>

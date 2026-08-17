@@ -37,15 +37,17 @@ const META_COLUMNS := &"netw_persistence_columns"
 
 var _entity_ref: WeakRef
 var _config: NetwScriptModel.PersistenceConfig
-var _columns: Array[_Column] = []
-# Last flushed values, so the snapshot loop only writes a changed subset.
-var _last_flushed: Dictionary = { }
+var _book := NetwSnapshotBook.new()
+# The node each declared column reads and writes, keyed by the property, so a
+# sibling component's persisted field lands in the same row as the root's.
+var _column_nodes: Dictionary[StringName, WeakRef] = { }
 var _schema_registered: bool = false
 
 
 func _init(entity: NetwEntity, config: NetwScriptModel.PersistenceConfig) -> void:
 	_entity_ref = weakref(entity)
 	_config = config
+	_book.default_interval = config.default_interval
 	_build_columns(entity)
 
 
@@ -56,33 +58,24 @@ func _build_columns(entity: NetwEntity) -> void:
 	var root := entity.owner
 	if not is_instance_valid(root):
 		return
-	var seen: Dictionary[StringName, bool] = { }
 	for node in _entity_nodes(entity, root):
 		var configs := NetwScriptModel.get_node_property_configs(node)
 		for property: StringName in configs:
 			var cfg := configs[property] as NetwScriptModel.PropertyConfig
 			if not cfg or not cfg.is_persisted:
 				continue
-			if seen.has(property):
+			if _column_nodes.has(property):
 				_warn_duplicate(property, root)
-			seen[property] = true
-			var col := _Column.new()
-			col.node_ref = weakref(node)
-			col.property = property
-			col.interval = cfg.persist_interval
-			_columns.append(col)
+			_column_nodes[property] = weakref(node)
+			_book.declare(property, cfg.persist_interval)
 	# Metadata-declared columns (the scriptless builder path) read from the
 	# root and join the same row.
 	for entry in root.get_meta(META_COLUMNS, [] as Array):
 		var property: StringName = entry.get("property", &"")
-		if property.is_empty() or seen.has(property):
+		if property.is_empty() or _column_nodes.has(property):
 			continue
-		seen[property] = true
-		var col := _Column.new()
-		col.node_ref = weakref(root)
-		col.property = property
-		col.interval = float(entry.get("interval", 0.0))
-		_columns.append(col)
+		_column_nodes[property] = weakref(root)
+		_book.declare(property, float(entry.get("interval", 0.0)))
 
 
 func _warn_duplicate(property: StringName, root: Node) -> void:
@@ -108,9 +101,27 @@ func _entity_nodes(entity: NetwEntity, root: Node) -> Array[Node]:
 	return out
 
 
+## The live root of the entity this engine persists, or [code]null[/code] once
+## that entity or its owner is gone.
+##
+## The snapshot loop reads this to decide whether a row still has a body to
+## gather from, so an engine whose owner left the tree drops out of the loop
+## rather than flushing a freed node.
+func owner_node() -> Node:
+	var entity := _entity_ref.get_ref() as NetwEntity
+	if not entity or not is_instance_valid(entity.owner):
+		return null
+	return entity.owner
+
+
 ## Returns [code]true[/code] when the archetype declared no persisted field.
 func columns_empty() -> bool:
-	return _columns.is_empty()
+	return _book.is_empty()
+
+
+func _column_node(property: StringName) -> Node:
+	var ref: WeakRef = _column_nodes.get(property)
+	return ref.get_ref() as Node if ref else null
 
 
 ## Returns the effective [NetwDatabase], the instance override when present else
@@ -146,28 +157,28 @@ func wants_spawn_hydration() -> bool:
 ## [param keys] when non-empty.
 func gather(keys: Array = []) -> Dictionary:
 	var out: Dictionary = { }
-	for col in _columns:
-		if not keys.is_empty() and col.property not in keys:
+	for property: StringName in _book.properties():
+		if not keys.is_empty() and property not in keys:
 			continue
-		var node := col.node_ref.get_ref() as Node
+		var node := _column_node(property)
 		if is_instance_valid(node):
-			out[col.property] = node.get(col.property)
+			out[property] = node.get(property)
 	return out
 
 
 ## Writes fetched values onto the live scene properties.
 func apply(data: Dictionary) -> void:
-	for col in _columns:
-		if not data.has(col.property):
+	for property: StringName in _book.properties():
+		if not data.has(property):
 			continue
-		var node := col.node_ref.get_ref() as Node
+		var node := _column_node(property)
 		if is_instance_valid(node):
-			node.set(col.property, data[col.property])
+			node.set(property, data[property])
 
 
 ## [code]true[/code] when the live values differ from the last flush.
 func is_dirty() -> bool:
-	return gather() != _last_flushed
+	return _book.differs(gather())
 
 
 ## Fetches the saved row by record id, applies it, and emits [signal hydrated].
@@ -180,12 +191,11 @@ func hydrate() -> Error:
 		return ERR_UNCONFIGURED
 	_ensure_schema()
 	var rid := _record_id()
-	@warning_ignore("redundant_await")
 	var record := await db.table(table).fetch(rid)
 	var data := record.to_dict() if record else { }
 	if not data.is_empty():
 		apply(data)
-		_last_flushed = gather()
+		_book.adopt(gather())
 	hydrated.emit()
 	return OK
 
@@ -203,14 +213,12 @@ func flush(keys: Array = []) -> Error:
 	if subset.is_empty():
 		return OK
 	var rid := _record_id()
-	@warning_ignore("redundant_await")
 	var err := await db.transaction(
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(table, rid, subset)
 	)
 	if err == OK:
-		for key: StringName in subset:
-			_last_flushed[key] = subset[key]
+		_book.commit(subset)
 		flushed.emit()
 	return err
 
@@ -231,31 +239,17 @@ func flush(keys: Array = []) -> Error:
 ## [/codeblock]
 ## [br][br][b]Server Only.[/b]
 func snapshot_tick(delta: float) -> Dictionary:
-	var due: Array[StringName] = []
-	for col in _columns:
-		col.accum += delta
-		var interval := col.interval if col.interval > 0.0 \
-		else _config.default_interval
-		if col.accum >= interval:
-			col.accum = 0.0
-			due.append(col.property)
+	var due := _book.advance(delta)
 	if due.is_empty():
 		return { }
-	var changed: Array[StringName] = []
-	var current := gather(due)
-	for key in due:
-		if _last_flushed.get(key) != current.get(key):
-			changed.append(key)
-	if changed.is_empty():
+	var values := _book.changed(gather(due))
+	if values.is_empty():
 		return { }
 	var db := database()
 	var table := _table()
 	if not db or table.is_empty():
 		return { }
 	_ensure_schema()
-	var values: Dictionary = { }
-	for key in changed:
-		values[key] = current[key]
 	return {
 		&"db": db,
 		&"table": table,
@@ -267,8 +261,7 @@ func snapshot_tick(delta: float) -> Dictionary:
 ## Adopts [param values] as the last flushed state after the snapshot loop
 ## committed them, and emits [signal flushed].
 func commit_snapshot(values: Dictionary) -> void:
-	for key: StringName in values:
-		_last_flushed[key] = values[key]
+	_book.commit(values)
 	flushed.emit()
 
 
@@ -288,13 +281,13 @@ func _ensure_schema() -> void:
 		return
 	var declaration := NetwSchemaModel.Declaration.new(table)
 	declaration.replicated = false
-	for col in _columns:
-		var node := col.node_ref.get_ref() as Node
+	for property: StringName in _book.properties():
+		var node := _column_node(property)
 		var script := node.get_script() as Script if is_instance_valid(node) \
 		else null
 		declaration.column(
-			col.property,
-			NetwPropertySet.column_type_for(script, node, col.property),
+			property,
+			NetwPropertySet.column_type_for(script, node, property),
 			1,
 			null,
 		)
@@ -366,12 +359,12 @@ func _lint(_api: NetwMultiplayer) -> void:
 	var entity := _entity_ref.get_ref() as NetwEntity
 	if not entity or not is_instance_valid(entity.owner):
 		return
-	for col in _columns:
-		var node := col.node_ref.get_ref() as Node
+	for property: StringName in _book.properties():
+		var node := _column_node(property)
 		if not is_instance_valid(node):
 			continue
 		var cfg := NetwScriptModel.get_node_property_configs(node).get(
-			col.property,
+			property,
 		) as NetwScriptModel.PropertyConfig
 		if not cfg or cfg.write_policy == NetwScriptModel.Policy.AUTHORITY:
 			continue
@@ -385,24 +378,17 @@ func _lint(_api: NetwMultiplayer) -> void:
 				+ "server never sees the client's value, so it saves stale "
 				+ "data. Add a sync axis (state/input/retained) or make it "
 				+ "authority-written.",
-				[col.property],
+				[property],
 				func(m): push_warning(m),
 			)
 			continue
 		# L1: also governed by another synchronizer is double authority.
-		var real_path := entity.property_path(node, col.property)
+		var real_path := entity.property_path(node, property)
 		if not real_path.is_empty() and entity.governs_property(real_path):
 			Netw.dbg.warn(
 				"Persisted client-owned field '%s' is also governed by a "
 				+ "synchronizer (double authority); did you mean an "
 				+ "authority write policy?",
-				[col.property],
+				[property],
 				func(m): push_warning(m),
 			)
-
-
-class _Column extends RefCounted:
-	var node_ref: WeakRef
-	var property: StringName
-	var interval: float = 0.0
-	var accum: float = 0.0

@@ -11,44 +11,23 @@
 
 namespace netw {
 
-// Columns of fixed-width rows keyed by wire routes, and the store both the
-// publisher and the receiver of those rows read back through. A table is a view
-// over routes, never a container of them, so any number of tables may key on
-// the same route.
 class TableCore : public godot::RefCounted {
     GDCLASS(TableCore, godot::RefCounted)
 
 public:
     enum {
-        // The receiver clears the table, then applies this frame's rows.
         FLAG_SNAPSHOT = 1 << 0,
-        // The payload is routes only and those rows are removed.
         FLAG_REMOVE = 1 << 1,
-        // Reserved: row identity is a (source, target) pair.
         FLAG_PAIR_KEY = 1 << 2,
-        // Reserved: rows have no identity, an event stream.
         FLAG_NO_KEY = 1 << 3,
-        // The flag bits this implementation reads. A frame carrying any other
-        // bit is refused whole.
         FLAGS_IMPLEMENTED = FLAG_SNAPSHOT | FLAG_REMOVE,
-        // The wire id that names the route lifecycle stream rather than a
-        // table.
         LIFECYCLE_STREAM = 0,
-        // Bytes reserved for one frame's own header and the envelope that
-        // carries it, subtracted from the carrier budget before rows are
-        // planned.
         FRAME_OVERHEAD_BYTES = 32,
     };
 
-    // Bits one element of each SchemaCore::ColumnType occupies unquantized.
-    // ENTITY is a varint, counted at its worst case for planning.
     static int wire_bits(int type);
 
 private:
-    // The declaration flattened at bind time. A table refuses an unsealed
-    // schema, and sealing is what fixes the declaration forever, so the hot
-    // encode and decode loops read this instead of walking the record's
-    // RefCounted column objects per element.
     struct ColumnShape {
         godot::StringName key;
         int type = SchemaCore::VARIANT;
@@ -70,12 +49,7 @@ private:
         bool dirty = false;
 
         godot::HashMap<int64_t, int> row_of;
-        // Per-row tick of the freshest frame applied to that row, parallel to
-        // routes. The receiver's freshness book, which route-0 frames cannot
-        // borrow from the carrier.
         godot::LocalVector<int64_t> row_ticks;
-        // route -> the tick of the removal that took it away, so an upsert a
-        // reliable removal outran is dropped rather than resurrecting the row.
         godot::HashMap<int64_t, int64_t> removal_memos;
 
         godot::PackedInt64Array pending_routes;
@@ -83,11 +57,7 @@ private:
         godot::LocalVector<bool> pending_written;
         bool pending_routes_written = false;
 
-        // Whether the current carrier intake has already applied a frame here,
-        // which is what makes twenty two frames from one tick one wave.
         bool wave_touched = false;
-        // The row set peers hold as of the last flush, which is what membership
-        // subtraction is measured against rather than the previous commit.
         godot::HashSet<int64_t> published;
     };
 
@@ -95,8 +65,6 @@ private:
     godot::PackedInt64Array pending_lifecycle;
     godot::HashSet<int64_t> tombstones;
 
-    // Wire ids are the name-sorted position of a sealed table, so two peers
-    // that adopted the same declarations agree without negotiating.
     godot::LocalVector<godot::RID> wire_order;
     godot::HashMap<godot::RID, int> wire_id_of;
 
@@ -172,8 +140,6 @@ protected:
     static void _bind_methods();
 
 public:
-    // Declaration. A table declares nothing of its own: the schema arrives
-    // already sealed, which is what makes column order the wire order.
     godot::Error declare(
         const godot::RID &table,
         const godot::Ref<SchemaRecord> &schema
@@ -194,8 +160,6 @@ public:
     int wire_id(const godot::RID &table) const;
     godot::RID table_from_wire_id(int id) const;
 
-    // Publish. Writes hold the caller's arrays until commit copies them, so
-    // the caller's arrays are theirs again the moment commit returns.
     godot::Error write_routes(
         const godot::RID &table,
         const godot::PackedInt64Array &routes
@@ -211,8 +175,6 @@ public:
     godot::TypedArray<godot::RID> published_tables() const;
     godot::PackedInt64Array take_pending_removals(const godot::RID &table);
 
-    // Consume. Reads answer the store itself, which is what makes reading a
-    // 2,000-row column free.
     godot::PackedInt64Array read_routes(const godot::RID &table) const;
     godot::Variant read_column(const godot::RID &table, int column) const;
     godot::PackedInt64Array read_births(const godot::RID &table) const;
@@ -224,7 +186,6 @@ public:
     ) const;
     int64_t tick_of(const godot::RID &table) const;
 
-    // Wire.
     godot::TypedArray<godot::PackedByteArray> encode_frames(
         const godot::RID &table,
         int budget,
@@ -249,20 +210,12 @@ public:
     void begin_intake();
     godot::TypedArray<godot::RID> touched_tables() const;
 
-    // The routes released here and still owed to the reliable route-lifecycle
-    // stream. Three verbs rather than one array, because a bound property
-    // answers a copy and an in-place append would reach nothing.
     void queue_lifecycle_removals(const godot::PackedInt64Array &routes);
     godot::PackedInt64Array take_lifecycle_removals();
     godot::PackedInt64Array lifecycle_removals() const;
 
-    // Whether this peer has retired a route. A row naming one is dropped rather
-    // than resurrected, which is what makes a tombstone permanent without
-    // keeping the row it used to describe.
     bool is_tombstoned(int64_t route) const;
 
-    // Session teardown. Keeps the declarations, so a re-entered session finds
-    // the same tables under the same RIDs.
     void clear_session();
     godot::Dictionary counters() const;
 };

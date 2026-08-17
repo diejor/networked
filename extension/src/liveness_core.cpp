@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "godot/class_db.hpp"
+#include "netw/entity_ids.hpp"
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
 
@@ -12,8 +13,6 @@ namespace netw {
 
 namespace {
 
-// The forward order of the state machine. UNKNOWN is where a record starts and
-// DEAD is where it stops, so a legal set_state only ever raises this rank.
 int rank_of(NetwLivenessCore::State state) {
     switch (state) {
         case NetwLivenessCore::STATE_UNKNOWN:
@@ -31,15 +30,30 @@ int rank_of(NetwLivenessCore::State state) {
 } // namespace
 
 NetwLivenessCore::Record *NetwLivenessCore::record_of(const RID &entity) const {
-    return records.get_or_null(entity);
+    HashMap<RID, Record>::Iterator found
+        = const_cast<HashMap<RID, Record> &>(records).find(entity);
+    return found ? &found->value : nullptr;
 }
 
 RID NetwLivenessCore::entity_create() {
-    return records.make_rid(Record());
+    const RID entity = entity_ids::mint();
+    records.insert(entity, Record());
+    return entity;
+}
+
+bool NetwLivenessCore::adopt(const RID &entity) {
+    if (records.has(entity)) {
+        return true;
+    }
+    if (!entity_ids::retain(entity)) {
+        return false;
+    }
+    records.insert(entity, Record());
+    return true;
 }
 
 bool NetwLivenessCore::entity_is_valid(const RID &entity) const {
-    return records.owns(entity);
+    return records.has(entity);
 }
 
 int NetwLivenessCore::reserve_route() {
@@ -56,13 +70,23 @@ bool NetwLivenessCore::bind_route(const RID &entity, int route) {
         return false;
     }
 
-    // Re-pointing supersedes whatever record held the route before. A tombstone
-    // that loses its route keeps its own STATE_DEAD, so the record that earned
-    // it never resurrects.
+    const RID held = rid_from_route(route);
+    if (held.is_valid() && held != entity) {
+        return false;
+    }
+    if (record->state == STATE_DEAD) {
+        record->epoch += 1;
+    }
+
     record->route = route;
     record->state = STATE_LIVE;
     by_route[route] = entity;
     return true;
+}
+
+int NetwLivenessCore::epoch_of(const RID &entity) const {
+    const Record *record = record_of(entity);
+    return record ? record->epoch : -1;
 }
 
 int NetwLivenessCore::route_of(const RID &entity) const {
@@ -100,8 +124,8 @@ bool NetwLivenessCore::set_state(const RID &entity, State state) {
 PackedInt32Array NetwLivenessCore::live_routes() const {
     PackedInt32Array out;
     for (const godot::KeyValue<int32_t, RID> &row : by_route) {
-        const Record *record = records.get_or_null(row.value);
-        if (record && record->state == STATE_LIVE) {
+        const HashMap<RID, Record>::ConstIterator record = records.find(row.value);
+        if (record && record->value.state == STATE_LIVE) {
             out.push_back(row.key);
         }
     }
@@ -121,8 +145,6 @@ void NetwLivenessCore::bind_routes_data(const PackedInt64Array &routes) {
         if (route <= 0) {
             continue;
         }
-        // A record already standing for this route is the identity a wrapper
-        // minted, so the row lands on it rather than minting past it.
         const RID held = rid_from_route(route);
         const RID entity = held.is_valid() ? held : entity_create();
         if (!bind_route(entity, route)) {
@@ -172,12 +194,6 @@ void NetwLivenessCore::flush_live(int route) {
     if (found == pending.end()) {
         return;
     }
-    // The queue is emptied before a single callback runs, so a callback that
-    // parks a fresh wait on this same route is waiting rather than answered.
-    //
-    // Direct-initialized, not copy-initialized: the engine declares
-    // LocalVector's copy constructor `explicit` and godot-cpp does not, so
-    // `= found->value` compiles in one tier and not the other.
     const LocalVector<Pending> waiting(found->value);
     pending.remove(found);
     for (const Pending &entry : waiting) {
@@ -240,9 +256,6 @@ PackedInt32Array NetwLivenessCore::sweep_pending(int clock_tick) {
     }
     expired.sort();
 
-    // Every timeout runs after the queue is consistent again. A callback is
-    // free to park a new wait, and one that did so mid-sweep would otherwise be
-    // swept by the same pass that woke it.
     for (const Callable &callback : fired) {
         callback.call();
     }
@@ -250,25 +263,17 @@ PackedInt32Array NetwLivenessCore::sweep_pending(int clock_tick) {
 }
 
 void NetwLivenessCore::clear() {
-    // Every owned record, not just the routed ones: entity_create mints before
-    // a route is known, so walking by_route would strand whatever never bound.
-    const uint32_t count = records.get_rid_count();
-    if (count > 0) {
-        std::vector<RID> owned(count);
-        records.fill_owned_buffer(owned.data());
-        for (const RID &entity : owned) {
-            records.free(entity);
-        }
+    for (const KeyValue<RID, Record> &row : records) {
+        entity_ids::release(row.key);
     }
+    records.clear();
     by_route.clear();
     pending.clear();
     route_counter = 0;
     frame_counter = 0;
 }
 
-NetwLivenessCore::NetwLivenessCore() {
-    records.set_description("netw::NetwLivenessCore::Record");
-}
+NetwLivenessCore::NetwLivenessCore() {}
 
 NetwLivenessCore::~NetwLivenessCore() {
     clear();
@@ -279,6 +284,7 @@ void NetwLivenessCore::_bind_methods() {
         D_METHOD("entity_create"),
         &NetwLivenessCore::entity_create
     );
+    ClassDB::bind_method(D_METHOD("adopt", "entity"), &NetwLivenessCore::adopt);
     ClassDB::bind_method(
         D_METHOD("entity_is_valid", "entity"),
         &NetwLivenessCore::entity_is_valid
@@ -298,6 +304,10 @@ void NetwLivenessCore::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("rid_from_route", "route"),
         &NetwLivenessCore::rid_from_route
+    );
+    ClassDB::bind_method(
+        D_METHOD("epoch_of", "entity"),
+        &NetwLivenessCore::epoch_of
     );
     ClassDB::bind_method(
         D_METHOD("state_of", "entity"),

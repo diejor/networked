@@ -7,6 +7,12 @@
 #     -- --record
 # Regenerating against a candidate implementation destroys the
 # evidence this file exists to be.
+#
+# record/revival_is_a_new_epoch is the one scenario whose rows are
+# hand-written rather than recorded. Its recorded rows described a
+# revival minting a second record, which the record plane no longer
+# does, so the arm and the native replay were re-authored separately
+# against these rows instead of either being recorded from the other.
 record/mint_bind_tombstone|state|at=minted entity=UNKNOWN route=UNKNOWN
 record/mint_bind_tombstone|state|at=bound entity=LIVE route=LIVE
 record/mint_bind_tombstone|route_of|route=1
@@ -24,8 +30,10 @@ record/bulk_claim_and_release|state|route=1 state=LIVE
 record/bulk_claim_and_release|state|route=2 state=DEAD
 record/bulk_claim_and_release|state|route=3 state=LIVE
 record/revival_is_a_new_epoch|state|at=first_dead entity=DEAD route=DEAD
+record/revival_is_a_new_epoch|rename|bound=false
+record/revival_is_a_new_epoch|revive|bound=true
 record/revival_is_a_new_epoch|state|at=second_live entity=LIVE route=LIVE
-record/revival_is_a_new_epoch|identity|first_still_dead=DEAD route_holds_second=true
+record/revival_is_a_new_epoch|identity|epoch=1 route_holds_first=true
 record/pending_live_flush|pending|count=1
 record/pending_live_flush|cb|route=2
 record/pending_live_flush|claimed|routes=[2]

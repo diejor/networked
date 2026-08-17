@@ -17,17 +17,16 @@ using namespace netw_test;
  * Both are flat verbs on the session, which is what makes these laws about the
  * route table rather than about the wrapper that reaches it.
  *
- * These cover the RECORD plane only. `entity_bind_route` takes a second path
- * when the entity already carries a wrapper, and a rig that stands entities up
- * route-before-node never reaches it. Covering that one needs a verb that
- * mints a wrapper with no record, which the rig does not have.
+ * These cover the RECORD plane only. The wrapper plane, where the entity
+ * already carries a wrapper when the route reaches it, is
+ * `route_adoption_laws.cpp`.
  */
 
 godot::RID minted_by_row(LoopbackRig &p_rig, int64_t &r_route) {
     const godot::PackedInt64Array routes = p_rig.server()->call("claim_routes", 1);
     REQUIRE(routes.size() == 1);
     r_route = routes[0];
-    return p_rig.server()->call("rid_from_route", r_route);
+    return p_rig.server()->call("entity_from_route", r_route);
 }
 
 TEST_CASE("[Networked][Liveness] a row then a spawn converge on one record") {
@@ -40,7 +39,7 @@ TEST_CASE("[Networked][Liveness] a row then a spawn converge on one record") {
         = rig.declare_entity(EntityDecl().named("Late").on_route(int(route)));
 
     NETW_CHECK_EQ(int(rig.server()->call("entity_get_route", entity)), route);
-    const godot::RID resolved = rig.server()->call("rid_from_route", route);
+    const godot::RID resolved = rig.server()->call("entity_from_route", route);
     CHECK(resolved == entity);
     const godot::PackedInt64Array live = rig.server()->call("live_routes");
     NETW_CHECK_EQ(live.size(), 1);
@@ -58,7 +57,7 @@ TEST_CASE("[Networked][Liveness] a spawn then a row reuses the same record") {
     rows.push_back(route);
     rig.server()->call("bind_routes_data", rows);
 
-    CHECK(godot::RID(rig.server()->call("rid_from_route", route)) == entity);
+    CHECK(godot::RID(rig.server()->call("entity_from_route", route)) == entity);
     const godot::PackedInt64Array live = rig.server()->call("live_routes");
     NETW_CHECK_EQ(live.size(), 1);
     NETW_CHECK_EQ(live[0], route);
@@ -66,8 +65,10 @@ TEST_CASE("[Networked][Liveness] a spawn then a row reuses the same record") {
 
 TEST_CASE("[Networked][Liveness] a parked callback flushes exactly once") {
     LoopbackRig rig(0);
-    const int64_t route
-        = int64_t(rig.server()->call("reserve_route")) + 1;
+    const godot::PackedInt64Array seeded
+        = rig.server()->call("claim_routes", 1);
+    REQUIRE(seeded.size() == 1);
+    const int64_t route = seeded[0] + 1;
     const CallLog log;
     rig.server()->call("when_live", route, log.callable("live"));
 
@@ -80,17 +81,40 @@ TEST_CASE("[Networked][Liveness] a parked callback flushes exactly once") {
     NETW_CHECK_EQ(log.count("live"), 1);
 }
 
-TEST_CASE("[Networked][Liveness] a second wrapper is still a new record") {
+TEST_CASE("[Networked][Liveness] a second handle is refused a standing route") {
     LoopbackRig rig(0);
     const godot::RID first = rig.declare_entity(EntityDecl().named("First"));
     const int64_t route
         = int64_t(rig.server()->call("entity_get_route", first));
 
-    const godot::RID second
-        = rig.declare_entity(EntityDecl().named("Second").on_route(int(route)));
+    const godot::RID second = rig.server()->call("entity_create");
+    const int bound = int(
+        rig.server()->call("entity_bind_route", second, int(route))
+    );
 
-    CHECK(second != first);
-    CHECK(godot::RID(rig.server()->call("rid_from_route", route)) == second);
+    NETW_CHECK_EQ(bound, int(godot::ERR_ALREADY_IN_USE));
+    CHECK(godot::RID(rig.server()->call("entity_from_route", route)) == first);
+    NETW_CHECK_EQ(int(rig.server()->call("entity_get_route", second)), 0);
+    NETW_CHECK_EQ(int(rig.server()->call("entity_get_epoch", first)), 0);
+}
+
+TEST_CASE("[Networked][Liveness] a route stands for one entity across lives") {
+    LoopbackRig rig(0);
+    const godot::RID entity = rig.declare_entity(EntityDecl().named("Once"));
+    const int64_t route
+        = int64_t(rig.server()->call("entity_get_route", entity));
+    NETW_CHECK_EQ(int(rig.server()->call("entity_get_epoch", entity)), 0);
+
+    godot::PackedInt64Array one;
+    one.push_back(route);
+    rig.server()->call("release_routes", one);
+
+    NETW_CHECK_EQ(
+        int(rig.server()->call("entity_bind_route", entity, int(route))),
+        int(godot::OK)
+    );
+    NETW_CHECK_EQ(int(rig.server()->call("entity_get_epoch", entity)), 1);
+    CHECK(godot::RID(rig.server()->call("entity_from_route", route)) == entity);
 }
 
 TEST_CASE("[Networked][Liveness] an adopted record answers with its node") {

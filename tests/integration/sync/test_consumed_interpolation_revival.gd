@@ -72,7 +72,7 @@ func _mount_arena(mt: MultiplayerTree) -> void:
 
 
 func _client_buffer(route: int, key: StringName) -> NetwRingBuffer:
-	var node := client0.api.entity_get_node(client0.api.rid_from_route(route))
+	var node := client0.api.entity_get_node(client0.api.entity_from_route(route))
 	if not is_instance_valid(node):
 		return null
 	var entity := NetwEntity.of(node)
@@ -104,7 +104,8 @@ func _wait_state(
 		frames: int = 180,
 ) -> bool:
 	for i in frames:
-		if client0.api.route_get_state(route) == state:
+		if client0.api.entity_get_state(
+				client0.api.entity_from_route(route)) == state:
 			return true
 		await get_tree().process_frame
 	return false

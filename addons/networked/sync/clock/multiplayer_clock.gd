@@ -23,6 +23,8 @@
 class_name MultiplayerClock
 extends NetwService
 
+const _CONFIGURE_KEY_PREFIX := "clock-configure?"
+
 #region ── Signals ─────────────────────────────────────────────────────────────
 
 ## Fires when the multiplayer API and clock registration are complete.
@@ -185,8 +187,14 @@ func _service_entered(api: NetwMultiplayer) -> void:
 	if not api.session_entered.is_connected(configured.emit):
 		api.session_entered.connect(configured.emit)
 
+	# A clock that registers into a session already online has missed the entry
+	# signal, so it catches up at the next settle rather than on the spot: the
+	# rest of this service's entry has to finish first.
 	if api.is_online:
-		_on_tree_configured.call_deferred()
+		api._settle_schedule(
+			_on_tree_configured,
+			StringName("%s%d" % [_CONFIGURE_KEY_PREFIX, get_instance_id()]),
+		)
 
 
 func _service_exiting(api: NetwMultiplayer) -> void:

@@ -142,4 +142,6 @@ godot::Error admit_frame(
     godot::Error p_route_verdict
 );
 
+godot::Dictionary spec_records();
+
 } // namespace netw::predict

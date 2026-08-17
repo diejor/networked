@@ -59,6 +59,7 @@
 			<param index="0" name="tick" type="int" />
 			<description>
 				Discards every act whose deadline is at or before [param tick]. The expired set is collected before the first revert runs, so an act armed by a revert during the sweep is kept rather than swept.
+				The expired set is collected before the first revert runs, so an act a revert arms mid-sweep is kept rather than swept by the same pass that woke the one that armed it.
 			</description>
 		</method>
 		<method name="watch">

@@ -99,6 +99,14 @@ Dictionary canonicalize(
     const Dictionary &p_payload
 );
 
+/* Every declared field at the zero of its own declared type.
+ *
+ * A field whose declaration carries no type is OMITTED rather than guessed:
+ * the whole point of the row is that it commands nothing, and a value invented
+ * for a type nobody declared is a command like any other.
+ */
+Dictionary zero_row(const FieldCodec &p_codec);
+
 /* The declared fields in declaration order, and the only place a name is
  * hashed.
  *

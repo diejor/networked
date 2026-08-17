@@ -65,11 +65,25 @@ flood/a_flood_trips_at_the_limit|trip|at=8
 flood/the_host_self_join_is_never_limited|host|flooded_once=false
 flood/each_peer_draws_its_own_budget|neighbour|flooded=false
 apptag/the_fold_is_the_compatibility_gate|fold|length=0 tag=0
-apptag/the_fold_is_the_compatibility_gate|fold|length=9 tag=147420842
-apptag/the_fold_is_the_compatibility_gate|fold|length=9 tag=147420843
-apptag/the_fold_is_the_compatibility_gate|fold|length=48 tag=1873437475
-apptag/the_fold_is_the_compatibility_gate|fold|length=6 tag=3370624142
-apptag/the_fold_is_the_compatibility_gate|fold|length=11 tag=3847523677
-apptag/the_fold_is_the_compatibility_gate|fold|length=2 tag=1009813573
-apptag/the_fold_is_the_compatibility_gate|fold|length=10 tag=314816269
-apptag/the_fold_is_the_compatibility_gate|fold|length=10 tag=314816498
+apptag/the_fold_is_the_compatibility_gate|fold|length=9 tag=123655117
+apptag/the_fold_is_the_compatibility_gate|fold|length=9 tag=123655116
+apptag/the_fold_is_the_compatibility_gate|fold|length=48 tag=1614661188
+apptag/the_fold_is_the_compatibility_gate|fold|length=6 tag=3346006505
+apptag/the_fold_is_the_compatibility_gate|fold|length=11 tag=3938658362
+apptag/the_fold_is_the_compatibility_gate|fold|length=2 tag=866594082
+apptag/the_fold_is_the_compatibility_gate|fold|length=10 tag=492049002
+apptag/the_fold_is_the_compatibility_gate|fold|length=10 tag=492049045
+shell/the_api_mirrors_the_machine_it_holds|mirror|at=constructed is_host=false is_online=false role=NONE state=OFFLINE
+shell/the_api_mirrors_the_machine_it_holds|mirror|at=server_assigned is_host=true is_online=true role=LISTEN_SERVER state=ONLINE
+shell/the_api_mirrors_the_machine_it_holds|mirror|at=peer_cleared is_host=true is_online=true role=LISTEN_SERVER state=ONLINE
+shell/the_api_mirrors_the_machine_it_holds|mirror|at=client_assigned is_host=false is_online=false role=NONE state=CONNECTING
+shell/the_service_registry_answers_by_type|empty|found=false
+shell/the_service_registry_answers_by_type|registered|found=true listed=1
+shell/the_service_registry_answers_by_type|twice|listed=1
+shell/the_service_registry_answers_by_type|unregistered|found=false listed=0
+shell/the_service_registry_answers_by_type|again|listed=0
+shell/disposal_is_idempotent_and_leaves_no_peer|mirror|at=online is_host=true is_online=true role=LISTEN_SERVER state=ONLINE
+shell/disposal_is_idempotent_and_leaves_no_peer|mirror|at=disposed is_host=true is_online=true role=LISTEN_SERVER state=ONLINE
+shell/disposal_is_idempotent_and_leaves_no_peer|signals|order=[state_changed(OFFLINE->CONNECTING),state_changed(CONNECTING->ONLINE),session_entered]
+shell/disposal_is_idempotent_and_leaves_no_peer|mirror|at=disposed_again is_host=true is_online=true role=LISTEN_SERVER state=ONLINE
+shell/disposal_is_idempotent_and_leaves_no_peer|signals|order=[]

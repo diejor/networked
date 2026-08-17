@@ -35,6 +35,16 @@ Ref<NetwClockCore> make_clock(int rate = EXACT_RATE) {
     return clock;
 }
 
+// A clock whose in-frame elapsed time is pinned. The engine's interpolation
+// fraction moves with the frame a case is running in, so the wall source is
+// the one a case can hold still: unstepped, it contributes nothing.
+Ref<NetwClockCore> pinned_clock() {
+    Ref<NetwClockCore> clock = make_clock();
+    clock->set_configured(true);
+    clock->set_use_physics_interpolation(false);
+    return clock;
+}
+
 // Frames a clock admits, while p_ticks_per_frame names the ticks each frame
 // emitted — a throttled clock described as the pattern it actually produces.
 Vector<bool> admitted(
@@ -418,6 +428,85 @@ TEST_CASE(
     }
 }
 
+TEST_CASE(
+    "[Networked][Clock][Hosted] L15 the tick factor is where a display sits "
+    "inside the tick"
+) {
+    Ref<NetwClockCore> clock = pinned_clock();
+    clock->handle_pong(0.0, 40, 0.5, false);
+
+    NETW_CHECK_CLOSE(clock->tick_factor(), 0.5, 0.0);
+
+    SUBCASE("an unconfigured clock reads zero however much it banked") {
+        clock->set_configured(false);
+        NETW_CHECK_CLOSE(clock->tick_factor(), 0.0, 0.0);
+    }
+
+    SUBCASE("the override answers instead of any reading") {
+        clock->set_tick_factor_override(0.25);
+        NETW_CHECK_CLOSE(clock->tick_factor(), 0.25, 0.0);
+
+        clock->set_configured(false);
+        NETW_CHECK_CLOSE(clock->tick_factor(), 0.25, 0.0);
+    }
+
+    SUBCASE("a negative override leaves the reading to the clock") {
+        clock->set_tick_factor_override(-1.0);
+        NETW_CHECK_CLOSE(clock->tick_factor(), 0.5, 0.0);
+    }
+
+    SUBCASE("the frame that has already elapsed counts toward the reading") {
+        clock->mark_step(HALF_TICK);
+        NETW_CHECK_CLOSE(clock->tick_factor(), 1.0, 0.001);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Clock][Hosted] L17 the step stamp measures the span since "
+    "the last step"
+) {
+    Ref<NetwClockCore> clock = make_clock();
+
+    const bool unstepped_has_no_span = clock->seconds_since_step() < 0.0;
+    CHECK(unstepped_has_no_span);
+
+    clock->physics_step(TICK);
+    const bool a_step_stamps = clock->seconds_since_step() >= 0.0;
+    CHECK(a_step_stamps);
+
+    SUBCASE("a session restart forgets the stamp") {
+        clock->clear();
+        const bool cleared_has_no_span = clock->seconds_since_step() < 0.0;
+        CHECK(cleared_has_no_span);
+    }
+
+    SUBCASE("a frame pumped elsewhere re-stamps without stepping") {
+        const int before = clock->get_tick();
+        clock->mark_step();
+        NETW_CHECK_EQ(clock->get_tick(), before);
+        const bool marked_has_span = clock->seconds_since_step() >= 0.0;
+        CHECK(marked_has_span);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Clock][Hosted] L16 the tick factor is not clamped where the "
+    "phase is"
+) {
+    // Clamping stalls a playhead for the part of a frame that ran past a tick
+    // boundary, which shows up as a jitter the clamp itself caused.
+    Ref<NetwClockCore> clock = pinned_clock();
+    clock->set_max_ticks_per_frame(1);
+
+    clock->physics_step(TICK * 3.0);
+
+    NETW_CHECK_EQ(clock->get_tick(), 1);
+    NETW_CHECK_CLOSE(clock->tick_phase(), 1.0, 0.0);
+    NETW_CHECK_CLOSE(clock->tick_factor(), 2.0, 0.01);
+    const bool above_the_phase = clock->tick_factor() > clock->tick_phase();
+    CHECK(above_the_phase);
+}
+
 TEST_CASE("[Networked][Clock][Hosted] clear restarts the session") {
     Ref<NetwClockCore> clock = make_clock();
     clock->arm_gate();
@@ -433,6 +522,21 @@ TEST_CASE("[Networked][Clock][Hosted] clear restarts the session") {
     NETW_CHECK_EQ(clock->get_simulation_behind_count(), 0);
     CHECK(std::fabs(clock->rtt_avg()) < 0.0000001);
     CHECK(std::fabs(clock->tick_phase()) < 0.0000001);
+}
+
+TEST_CASE("[Networked][Clock][Hosted] a window in pumps rounds up, so a wait "
+          "is never shorter than the seconds it was asked for") {
+    NETW_CHECK_EQ(NetwClockCore::pumps_for(2.0, 30.0), int64_t(60));
+    NETW_CHECK_EQ(NetwClockCore::pumps_for(0.05, 30.0), int64_t(2));
+    NETW_CHECK_EQ(NetwClockCore::pumps_for(0.5, 60.0), int64_t(30));
+    NETW_CHECK_EQ(NetwClockCore::pumps_for(0.0, 30.0), int64_t(0));
+}
+
+TEST_CASE("[Networked][Clock][Hosted] a rate below one pump a second counts "
+          "as one, so an unconfigured clock still expires a wait") {
+    NETW_CHECK_EQ(NetwClockCore::pumps_for(3.0, 0.0), int64_t(3));
+    NETW_CHECK_EQ(NetwClockCore::pumps_for(3.0, 0.25), int64_t(3));
+    NETW_CHECK_EQ(NetwClockCore::pumps_for(3.0, -30.0), int64_t(3));
 }
 
 } // namespace TestNetwClockCore

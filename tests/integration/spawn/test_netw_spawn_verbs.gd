@@ -3,7 +3,7 @@
 ##
 ## Pins the I1/I2 invariants (identity and spawn state valid at
 ## [method Node._enter_tree] on every peer), the spawn-function round trip,
-## implicit despawn into [LivenessShell], and duplicate-SPAWN
+## implicit despawn into [NetwMultiplayerCore], and duplicate-SPAWN
 ## idempotence.
 class_name TestNetwSpawnVerbs
 extends NetwTestSuite
@@ -162,16 +162,18 @@ func test_despawn_reaches_liveness_and_receiver_hook() -> void:
 	var dead := false
 	for i in 60:
 		await get_tree().process_frame
-		if client0.api.route_get_state(route) \
+		if client0.api.entity_get_state(client0.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.DEAD:
 			dead = true
 			break
 
 	assert_bool(dead).is_true()
-	assert_that(harness.server().api.route_get_state(route)) \
+	assert_that(harness.server().api.entity_get_state(
+			harness.server().api.entity_from_route(route))) \
 			.is_equal(NetwMultiplayer.EntityState.DEAD)
 	assert_int(NetwSpawnProbe.last_despawn_hook_route).is_equal(route)
-	assert_that(client0.api.entity_get_node(client0.api.rid_from_route(route))).is_null()
+	assert_that(client0.api.entity_get_node(
+			client0.api.entity_from_route(route))).is_null()
 
 
 func test_duplicate_spawn_frame_is_idempotent() -> void:
@@ -181,8 +183,8 @@ func test_duplicate_spawn_frame_is_idempotent() -> void:
 	var client_node := await _wait_live(client0, entity.route)
 	assert_that(client_node).is_not_null()
 
-	var record: NetwSpawnBook.SpawnRecord = (
-			_replication()._spawn_pipeline._spawn_book.spawned[entity.route]
+	var record: NetwSpawnRecord = (
+			_replication()._spawn_pipeline._spawn_book.spawned_of(entity.route)
 	)
 	var payload := _replication()._spawn_pipeline._encode_spawn_frame(record, node)
 	var client_replication := client0.api._replication
@@ -231,7 +233,7 @@ func test_unresolvable_spawn_state_entry_keeps_later_entries_intact() -> void:
 	# Parent anchor: scene structure, the client's Arena node.
 	w.put_aligned_u8(0)
 	pipeline._put_str(w, "Arena")
-	w.put_aligned_u8(NetwSpawnBook.Recipe.SCENE)
+	w.put_aligned_u8(NetwSpawnBook.RECIPE_SCENE)
 	pipeline._put_scene_recipe(w, probe_scene.resource_path)
 
 	NetwCodec.put_varint(w, 2)
@@ -246,7 +248,7 @@ func test_unresolvable_spawn_state_entry_keeps_later_entries_intact() -> void:
 	w.put_aligned_u8(0)
 	NetwScriptModel.write_token(w, &"marker")
 	var vw := NetwBitBufferWriter.new()
-	NetwScriptModel.write_values(vw, ["recovered"], [null], [TYPE_STRING])
+	NetwCodec.write_values(vw, ["recovered"], [null], [TYPE_STRING])
 	var vbytes := vw.to_bytes()
 	NetwCodec.put_varint(w, vbytes.size())
 	w.put_aligned_bytes(vbytes)
@@ -254,7 +256,8 @@ func test_unresolvable_spawn_state_entry_keeps_later_entries_intact() -> void:
 	pipeline._handle_spawn_frame(w.to_bytes(), 1)
 	await drain_frames(get_tree(), 2)
 
-	var node := client0.api.entity_get_node(client0.api.rid_from_route(route)) as NetwSpawnProbe
+	var node := client0.api.entity_get_node(
+			client0.api.entity_from_route(route)) as NetwSpawnProbe
 	assert_that(node).is_not_null()
 	assert_str(node.marker).is_equal("recovered")
 
@@ -283,7 +286,7 @@ func test_late_join_replay_hydrates_a_new_peer() -> void:
 	var dead := false
 	for i in 90:
 		await get_tree().process_frame
-		if client1.api.route_get_state(route) \
+		if client1.api.entity_get_state(client1.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.DEAD:
 			dead = true
 			break
@@ -300,9 +303,9 @@ func _server_arena() -> Node:
 
 func _wait_live(mt: MultiplayerTree, route: int, frames: int = 120) -> Node:
 	for i in frames:
-		if mt.api.route_get_state(route) \
+		if mt.api.entity_get_state(mt.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.LIVE:
-			return mt.api.entity_get_node(mt.api.rid_from_route(route))
+			return mt.api.entity_get_node(mt.api.entity_from_route(route))
 		await get_tree().process_frame
 	return null
 

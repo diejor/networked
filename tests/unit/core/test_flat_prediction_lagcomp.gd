@@ -19,7 +19,7 @@ func before_test() -> void:
 
 func test_prediction_declaration_and_parameters_are_flat() -> void:
 	var root := make_test_entity(mt, "PredictedSubject", 0, false)
-	var entity := api.rid_of(root)
+	var entity := api.entity_of(root)
 
 	assert_int(api.predict_declare(entity)).is_equal(OK)
 	api.predict_set_param(
@@ -44,8 +44,8 @@ func test_prediction_declaration_and_parameters_are_flat() -> void:
 func test_prediction_callbacks_and_island_are_rid_addressed() -> void:
 	var root := make_test_entity(mt, "IslandOwner", 0, false)
 	var other_root := make_test_entity(mt, "IslandMember", 0, false)
-	var entity := api.rid_of(root)
-	var other := api.rid_of(other_root)
+	var entity := api.entity_of(root)
+	var other := api.entity_of(other_root)
 	var sensor := func() -> int: return 17
 	var simulate := func(_delta: float, _tick: int, _fresh: bool) -> void: pass
 
@@ -58,7 +58,7 @@ func test_prediction_callbacks_and_island_are_rid_addressed() -> void:
 		true,
 	)
 
-	var handle := NetwEntity.of(root).prediction
+	var handle: NetwPredictionHandle = NetwEntity.of(root).prediction
 	assert_bool(handle.sensors[&"ground"] == sensor).is_true()
 	assert_bool(handle.simulate == simulate).is_true()
 	assert_bool(handle.island.participants.has(NetwEntity.of(other_root))) \
@@ -68,7 +68,7 @@ func test_prediction_callbacks_and_island_are_rid_addressed() -> void:
 
 func test_timeline_and_lagcomp_queries_are_flat() -> void:
 	var root := make_test_entity(mt, "HistorySubject", 0, false)
-	var entity := api.rid_of(root)
+	var entity := api.entity_of(root)
 
 	assert_int(api.timeline_declare(entity)).is_equal(OK)
 	assert_object(api.timeline_sample(entity, 3)).is_not_null()

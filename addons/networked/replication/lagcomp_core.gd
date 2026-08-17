@@ -254,6 +254,17 @@ const DebugFeature := preload("res://addons/networked/debug/ui/debug_feature.gd"
 ## shell that steps it.
 const PredictTiming := NetwPredict.Timing
 
+# The columns of one pass's outcome, as native_open_drive and
+# native_replay_drive both report it.
+const DRIVE_RECORD_TRANSITION := 0
+const DRIVE_RECORD_LABEL := 1
+const DRIVE_RECORD_KIND := 2
+const DRIVE_RECORD_FRESH := 3
+const DRIVE_RECORD_RAN := 4
+const DRIVE_RECORD_WIDTH := 5
+
+const _OBSERVE_KEY_PREFIX := "lagcomp-observe-node?"
+
 # Tri-state result of the action readiness check, shared by admission and drain.
 enum _Readiness { NOT_READY, READY, READY_BY_DEADLINE }
 
@@ -360,9 +371,9 @@ func relay_subscribe(
 		return ERR_UNAUTHORIZED
 	if entity == null or not is_instance_valid(entity):
 		return ERR_DOES_NOT_EXIST
-	var slot := api._entity_slots.slot_of(entity)
-	if slot == 0:
+	if not api._native_core.liveness_core.entity_is_valid(entity.rid):
 		return ERR_DOES_NOT_EXIST
+	var slot := entity.rid.get_id()
 	if not subscribed:
 		_relay_book.set_subscribed(slot, peer, false)
 		return OK
@@ -378,7 +389,7 @@ func relay_subscribed(entity: NetwEntity, peer: int) -> bool:
 	var api := _api()
 	if api == null or entity == null or not is_instance_valid(entity):
 		return false
-	return _relay_book.subscribed(api._entity_slots.slot_of(entity), peer)
+	return _relay_book.subscribed(entity.rid.get_id(), peer)
 
 
 # Re-emits one admitted command frame to every subscriber interest still
@@ -393,12 +404,12 @@ func _relay_command_frame(
 	var api := _api()
 	if api == null or not api.is_server():
 		return
-	var slot := api._entity_slots.slot_of(entity)
+	var slot := entity.rid.get_id()
 	var subscribers := _relay_book.peers(slot)
 	if subscribers.is_empty():
 		return
-	var liveness := api._liveness if api else null
-	var route := liveness.route_of(entity) if liveness else -1
+	var native_core := api._native_core if api else null
+	var route := native_core.liveness_route_of(entity) if native_core else -1
 	if route <= 0:
 		return
 	for peer in subscribers:
@@ -466,7 +477,6 @@ var _tap = null
 var _tap_off: bool = false
 var _tap_every: int = 1
 var _tap_frame: int = 0
-var _queries: _RewindQueries
 var _pending_actions: Array[_PendingAction] = []
 var _action_slots: Dictionary[String, int] = { }
 var _observed_entities: Dictionary[NetwEntity, bool] = { }
@@ -475,8 +485,12 @@ var _gate_fallbacks: int = 0
 
 func _init(api: NetwMultiplayer = null) -> void:
 	_api_ref = weakref(api) if api else null
-	_queries = _RewindQueries.new(_registry)
 	_runner._service = self
+	if api:
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.LAGCOMP_DENY,
+			_handle_deny,
+		)
 
 
 func _api() -> NetwMultiplayer:
@@ -543,7 +557,6 @@ func register_prediction(entity: NetwEntity) -> void:
 	var engine := PredictionCore._PredictionEngine.new()
 	_engines[entity] = engine
 	_prediction_slots[entity] = _prediction_pool.open(null)
-	_hold_slot(entity)
 	entity.prediction._engine_ref = weakref(engine)
 	engine._attach(self, entity)
 	_attach_prediction_overlay(entity)
@@ -652,7 +665,7 @@ func _bind_declared_owner(entity: NetwEntity, node: Node) -> void:
 		var root := entity.owner
 		if is_instance_valid(root) and root.has_method(&"_network_tick"):
 			handle.simulate = Callable(root, &"_network_tick")
-	native_set_order_key(entity, _api()._liveness.route_of(entity))
+	native_set_order_key(entity, _api()._native_core.liveness_route_of(entity))
 	native_set_simulate(entity, handle.simulate)
 	native_set_witness(entity, handle.witness_contacts)
 	native_set_corridor(entity, handle.transport_corridor)
@@ -1073,6 +1086,25 @@ func native_witness_class(collider: Object, declared_support: bool) -> int:
 	return _prediction_pool.witness_class(collider, declared_support)
 
 
+# Every declared input field at the zero of its own declared type, which is
+# the command COAST is defined as.
+func native_coast_command(entity: NetwEntity) -> Dictionary:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.coast_command(slot) if slot >= 0 else { }
+
+
+# Runs this entity's declared sensors and folds what they answered into the
+# transition's world digest.
+func native_sample_environment(entity: NetwEntity, epoch: int) -> int:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.sample_environment(slot, epoch) if slot >= 0 else 0
+
+
+func native_sensor_samples(entity: NetwEntity) -> Dictionary:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.sensor_samples(slot) if slot >= 0 else { }
+
+
 func native_carry_eligible(entity: NetwEntity, field: StringName) -> bool:
 	var slot := native_prediction_slot(entity)
 	return _prediction_pool.carry_eligible(slot, field) if slot >= 0 else false
@@ -1186,10 +1218,10 @@ func native_open_drive(
 		families: PackedInt32Array,
 		raw_fp: int = 0,
 		evidence_mask: int = 0,
-) -> int:
+) -> PackedInt64Array:
 	var slot := native_prediction_slot(entity)
 	if slot < 0 or families.size() < 3:
-		return -1
+		return _drive_record(null)
 	var drive := _prediction_pool.open_drive(
 		slot,
 		topology,
@@ -1205,7 +1237,25 @@ func native_open_drive(
 		raw_fp,
 		evidence_mask,
 	)
-	return drive.transition() if drive.ran() else -1
+	return _drive_record(drive)
+
+
+# One pass's outcome as the shell reads it: where it landed, what it decided,
+# and whether it ran at all. Returned whole because the pool folds for itself
+# on the open path, so the label and kind are ANSWERS rather than arguments.
+func _drive_record(drive: NetwPredictDrive) -> PackedInt64Array:
+	var out := PackedInt64Array()
+	out.resize(DRIVE_RECORD_WIDTH)
+	if drive == null:
+		out[DRIVE_RECORD_TRANSITION] = -1
+		out[DRIVE_RECORD_LABEL] = -1
+		return out
+	out[DRIVE_RECORD_TRANSITION] = drive.transition() if drive.ran() else -1
+	out[DRIVE_RECORD_LABEL] = drive.label()
+	out[DRIVE_RECORD_KIND] = drive.kind()
+	out[DRIVE_RECORD_FRESH] = 1 if drive.fresh() else 0
+	out[DRIVE_RECORD_RAN] = 1 if drive.ran() else 0
+	return out
 
 
 # Hands the pool the after-solve observation, as the facts the shell read off
@@ -1247,9 +1297,9 @@ func native_record_evidence(
 	)
 
 
-# Journals a transition the owner authored and this peer is replaying. Returns
-# the pool's transition, which a replay always names itself, so the caller keys
-# its close the same way an authored drive does.
+# Journals a transition the owner authored and this peer is replaying. A replay
+# names its own transition, label and kind, so the record comes back carrying
+# what the caller supplied rather than what the pool decided.
 func native_replay_drive(
 		entity: NetwEntity,
 		topology: Dictionary,
@@ -1264,10 +1314,11 @@ func native_replay_drive(
 		families: PackedInt32Array,
 		raw_fp: int = 0,
 		evidence_mask: int = 0,
-) -> int:
+		authoring: bool = false,
+) -> PackedInt64Array:
 	var slot := native_prediction_slot(entity)
 	if slot < 0 or families.size() < 3:
-		return -1
+		return _drive_record(null)
 	var drive := _prediction_pool.replay_drive(
 		slot,
 		topology,
@@ -1284,8 +1335,9 @@ func native_replay_drive(
 		families[2],
 		raw_fp,
 		evidence_mask,
+		authoring,
 	)
-	return drive.transition() if drive.ran() else -1
+	return _drive_record(drive)
 
 
 func native_close_drive(
@@ -1367,6 +1419,66 @@ func native_mark_differing_family(
 		_prediction_pool.mark_differing_family(slot, transition, family)
 
 
+func native_record_idle_drive(
+		entity: NetwEntity,
+		label: int,
+		kind: int,
+) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.record_idle_drive(slot, label, kind)
+
+
+func native_record_speculation_hold(entity: NetwEntity) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.record_speculation_hold(slot)
+
+
+func native_record_authoring_clamp(entity: NetwEntity) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.record_authoring_clamp(slot)
+
+
+func native_mark_authority_ack(entity: NetwEntity, transition: int) -> int:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return -1
+	return _prediction_pool.mark_authority_ack(slot, transition)
+
+
+func native_refresh_ack_age(entity: NetwEntity) -> int:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return -1
+	_prediction_pool.refresh_ack_age(slot)
+	return int(
+		_prediction_pool.drive_stats(slot)[
+			NetwPredictionEngine.STAT_ACK_AGE_TICKS
+		],
+	)
+
+
+func native_journal_has(entity: NetwEntity, transition: int) -> bool:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.journal_has(slot, transition) if slot >= 0 \
+			else false
+
+
+func native_drive_stats(entity: NetwEntity) -> PackedInt64Array:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return PackedInt64Array()
+	return _prediction_pool.drive_stats(slot)
+
+
+func native_witness_judged(entity: NetwEntity, transition: int) -> bool:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.witness_judged(slot, transition) if slot >= 0 \
+			else false
+
+
 func native_mark_witness_match(
 		entity: NetwEntity,
 		transition: int,
@@ -1414,6 +1526,169 @@ func native_tape_reset(entity: NetwEntity, epoch: int) -> void:
 	var slot := native_prediction_slot(entity)
 	if slot >= 0:
 		_prediction_pool.tape_reset(slot, epoch)
+
+
+# Returns the oldest and newest entry index the tape ring still holds, both -1
+# when it holds nothing.
+func native_tape_span(entity: NetwEntity) -> PackedInt64Array:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return PackedInt64Array([-1, -1])
+	return _prediction_pool.tape_span(slot)
+
+
+func native_tape_label_of(entity: NetwEntity, index: int) -> int:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.tape_label_of(slot, index) if slot >= 0 else -1
+
+
+func native_tape_is_fresh(entity: NetwEntity, index: int) -> bool:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.tape_is_fresh(slot, index) if slot >= 0 else false
+
+
+# Re-keys the tape to [param tick] for a pass that authors a command without
+# opening a transition. A drive re-keys its own.
+func native_tape_prepare_tick(entity: NetwEntity, tick: int) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.tape_prepare_tick(slot, tick)
+
+
+# Appends one tape entry for a pass that authors a command without opening a
+# transition. A drive appends its own.
+func native_tape_author(entity: NetwEntity, label: int, fresh: bool) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.tape_author(slot, label, fresh)
+
+
+# Hands the pool the store this entity reads its input lane and tick-keyed
+# states out of, which a server role shares with the history recorder.
+func native_bind_timeline(entity: NetwEntity, timeline: NetwTimeline) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.bind_timeline(slot, timeline)
+
+
+# The FRAME tier's own state store, minted by the pool with the tape epoch it
+# is keyed under.
+func native_entry_history(entity: NetwEntity) -> NetwTimeline:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.entry_history(slot) if slot >= 0 else null
+
+
+func native_trim_history(entity: NetwEntity, ack: int) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.trim_history(slot, ack)
+
+
+# Records that the state at [param transition] is something other than a drive
+# result, so no rule may be judged across the transitions it bounds.
+func native_mark_carry_dirty(entity: NetwEntity, transition: int) -> void:
+	var slot := native_prediction_slot(entity)
+	if slot >= 0:
+		_prediction_pool.mark_carry_dirty(slot, transition)
+
+
+# Every transition this entity drove after [param basis], oldest first, each
+# carrying the command that drove it.
+func native_replay_entries(
+		entity: NetwEntity,
+		basis: int,
+) -> Array[NetwPredictReplayEntry]:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return []
+	return _prediction_pool.replay_entries(slot, basis)
+
+
+# Runs [param entity]'s rule for [param field] against the transitions past
+# [param basis] and answers what it produced with every probe it earned.
+func native_attempt_carry(
+		entity: NetwEntity,
+		field: StringName,
+		acknowledged: Variant,
+		basis: int,
+		teleport_default: float,
+		divergence_epsilon: float,
+) -> NetwPredictCarryAttempt:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return NetwPredictCarryAttempt.new()
+	return _prediction_pool.attempt_carry(
+		slot,
+		field,
+		acknowledged,
+		basis,
+		teleport_default,
+		divergence_epsilon,
+	)
+
+
+# Files one decoded owner cell, answering false when the window already holds
+# that transition.
+func native_command_admit(
+		entity: NetwEntity,
+		transition: int,
+		label: int,
+		fresh: bool,
+		command: Dictionary,
+) -> bool:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return false
+	return _prediction_pool.command_admit(
+		slot,
+		transition,
+		label,
+		fresh,
+		command,
+	)
+
+
+func native_command_has(entity: NetwEntity, transition: int) -> bool:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.command_has(slot, transition) if slot >= 0 else false
+
+
+func native_command_label_of(entity: NetwEntity, transition: int) -> int:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return -1
+	return _prediction_pool.command_label_of(slot, transition)
+
+
+func native_command_is_fresh(entity: NetwEntity, transition: int) -> bool:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return false
+	return _prediction_pool.command_is_fresh(slot, transition)
+
+
+func native_command_payload_of(
+		entity: NetwEntity,
+		transition: int,
+) -> Dictionary:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return { }
+	return _prediction_pool.command_payload_of(slot, transition)
+
+
+# Returns the contiguous decoded cells beginning exactly at [param cursor].
+func native_command_depth_from(entity: NetwEntity, cursor: int) -> int:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.command_depth_from(slot, cursor) if slot >= 0 else 0
+
+
+# Returns every decoded transition still held, ascending.
+func native_command_transitions(entity: NetwEntity) -> PackedInt64Array:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return PackedInt64Array()
+	return _prediction_pool.command_transitions(slot)
 
 
 # Returns the newest native row whose drive produced a state.
@@ -1465,6 +1740,44 @@ func native_build_ack_frame(
 # One acknowledgement stages one recovery, so the carrier is refilled rather
 # than reminted.
 var _recovery_request := NetwPredictRecoveryRequest.new()
+
+
+# Answers which declared field's divergence a recovery is answering, as an
+# index into the declaration, or -1.
+func native_escalation_field(
+		entity: NetwEntity,
+		predicted: Array,
+		authority: Array,
+		field_errors: PackedFloat64Array,
+		fallback_epsilon: float,
+) -> int:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return -1
+	return _prediction_pool.escalation_field_of(
+		slot,
+		predicted,
+		authority,
+		field_errors,
+		fallback_epsilon,
+	)
+
+
+# Answers whether [param field_errors], in declaration order, ask for a
+# recovery and whether any field asking may be written.
+func native_trigger_shape(
+		entity: NetwEntity,
+		field_errors: PackedFloat64Array,
+		fallback_epsilon: float,
+) -> int:
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return 0
+	return _prediction_pool.trigger_shape_of(
+		slot,
+		field_errors,
+		fallback_epsilon,
+	)
 
 
 func native_escalation_pending(entity: NetwEntity) -> bool:
@@ -1807,25 +2120,11 @@ func native_admit_ack(
 	)
 
 
-# A predicting engine is released only by an explicit predict_undeclare, which
-# is a longer hold than interest's tree-exit retirement. Claiming the slot is
-# what stops interest's commit sweeping a number this core still reads.
-const _SLOT_HOLDER := &"predict"
-
-
-func _hold_slot(entity: NetwEntity) -> void:
-	var api := _api()
-	if api:
-		api._entity_slots.ensure(entity, _SLOT_HOLDER)
-
-
 func _release_slot(entity: NetwEntity) -> void:
-	var api := _api()
-	if api:
-		# The subscribers go with the slot, because a slot is never reused and a
-		# row left behind would answer for an entity nothing predicts.
-		_relay_book.release(api._entity_slots.slot_of(entity))
-		api._entity_slots.release(entity, _SLOT_HOLDER)
+	# The subscribers go with the handle, because a handle is never reissued and
+	# a row left behind would answer for an entity nothing predicts.
+	if entity:
+		_relay_book.release(entity.rid.get_id())
 
 
 # Adds the read-only in-world overlay when the shared debug gate is active.
@@ -1921,7 +2220,7 @@ func metrics() -> Dictionary:
 ##
 ## [br][br][b]Server Only.[/b]
 func sample(entity: NetwEntity, tick: int) -> NetwSnapshot:
-	return _queries.sample(entity, tick)
+	return NetwSnapshot.from_dictionary(_registry.sample(entity, tick))
 
 
 ## Applies each entity's state at [param tick] to its live node for the duration of
@@ -1937,7 +2236,12 @@ func sample(entity: NetwEntity, tick: int) -> NetwSnapshot:
 ##
 ## [br][br][b]Server Only.[/b]
 func rewind(entities: Array[NetwEntity], tick: int, body: Callable) -> void:
-	_queries.rewind(entities, tick, body)
+	var slots := PackedInt64Array()
+	for entity in entities:
+		var slot := _registry.arm(entity)
+		if slot >= 0:
+			slots.append(slot)
+	_registry.core().rewind(slots, tick, body)
 
 
 ## Returns a [NetwAction] bound to [param authority].
@@ -2219,9 +2523,9 @@ func submit_action(
 
 	var target_path: NodePath = NodePath()
 	var anchor := api.root if api else null
-	var liveness := api._liveness if api else null
-	if anchor and liveness:
-		var entity := liveness.entity_of(route)
+	var native_core := api._native_core if api else null
+	if anchor and native_core:
+		var entity := native_core.wrapper_for_route(route) as NetwEntity
 		if entity and is_instance_valid(entity.owner):
 			target_path = anchor.get_path_to(entity.owner)
 
@@ -2286,14 +2590,14 @@ func _send_action_request(
 	var anchor := api.root if api else null
 	var node := anchor.get_node_or_null(target_path) if anchor else null
 	var entity := NetwEntity.of(node)
-	var liveness := api._liveness if api else null
-	if entity and liveness:
-		route = liveness.route_of(entity)
+	var native_core := api._native_core if api else null
+	if entity and native_core:
+		route = native_core.liveness_route_of(entity)
 		if route <= 0 and not is_remote:
-			route = liveness.allocate_route(entity)
+			route = native_core.liveness_allocate_route(entity)
 	if route <= 0:
 		Netw.dbg.warn(
-			"LagCompensation: action target '%s' has no liveness route; "
+			"LagCompensation: action target '%s' has no native_core route; "
 			+ "the request will be denied",
 			[String(target_path)],
 		)
@@ -2520,7 +2824,20 @@ func _current_tick() -> int:
 
 func _on_node_added(node: Node) -> void:
 	_observe_node_entity(node)
-	call_deferred("_observe_node_entity_ref", weakref(node))
+	_settle_observe(node)
+
+
+# Re-reads the node at the next settle, because a node enters the tree before
+# whatever stamps an entity onto it has run. Keyed by instance, so a batch of
+# adds in one cascade observes every one of them.
+func _settle_observe(node: Node) -> void:
+	var api := _api()
+	if api == null:
+		return
+	api._settle_schedule(
+		_observe_node_entity_ref.bind(weakref(node)),
+		StringName("%s%d" % [_OBSERVE_KEY_PREFIX, node.get_instance_id()]),
+	)
 
 
 func _observe_node_entity_ref(node_ref: WeakRef) -> void:
@@ -2613,6 +2930,32 @@ class _TimelineRegistry extends RefCounted:
 		return _core.timeline_history(slot) if slot >= 0 else null
 
 
+	func core() -> NetwLagCompCore:
+		return _core
+
+
+	# Points slot at the node its state set declares and names that set's
+	# fields, so a rewind writes exactly what the set owns and puts back
+	# exactly what it overwrote. Answers -1 for an entity the pool cannot
+	# rewind, which is one with no slot, no state set, or no live node.
+	func arm(entity: NetwEntity) -> int:
+		var slot := int(_slots.get(entity, -1))
+		if slot < 0:
+			return -1
+		var state: NetwPropertySetBinding = entity.state_binding if entity else null
+		if state == null or state.set == null:
+			return -1
+		var node := state.node()
+		if not is_instance_valid(node):
+			return -1
+		_core.timeline_bind_owner(slot, node)
+		var keys: Array[StringName] = []
+		for column: NetwPropertySet.Column in state.set.columns:
+			keys.append(column.key)
+		_core.timeline_declare(slot, keys)
+		return slot
+
+
 	# The entity's recorded state at or before tick, read out of the pool that
 	# holds it rather than out of a second copy.
 	func sample(entity: NetwEntity, tick: int) -> Dictionary:
@@ -2664,6 +3007,9 @@ class _SimulationRunner extends RefCounted:
 	# roster changes, so re-resolving an unchanged roster every tick is not
 	# paid.
 	var _sorted: Array[PredictionCore._PredictionEngine] = []
+	# The pool's slot back to the engine that carries the body, rebuilt with
+	# the order. Empty when the pool could not name the whole roster.
+	var _by_slot: Dictionary[int, PredictionCore._PredictionEngine] = { }
 	var _sort_dirty: bool = true
 	var _service: LagCompCore
 
@@ -2680,38 +3026,46 @@ class _SimulationRunner extends RefCounted:
 
 
 	func tick_step(timing: NetwPredict.Timing) -> void:
-		if _sort_dirty:
-			_rebuild_sorted()
-		for engine in _sorted:
+		for engine in _phase(NetwPredictionEngine.PASS_ISLAND_TICK):
 			engine.prepare_island(NetwPredict.Schedule.TICK)
-		if _sort_dirty:
-			_rebuild_sorted()
 		# Every group replays before any member drives fresh, so a pass carries
 		# the whole group to the present against one committed roster.
-		for engine in _sorted:
+		for engine in _phase(NetwPredictionEngine.PASS_JOINT):
 			engine.joint_pass(timing)
-		if _sort_dirty:
-			_rebuild_sorted()
-		for engine in _sorted:
+		for engine in _phase(NetwPredictionEngine.PASS_TICK):
 			engine.network_tick(timing)
 
 
 	func frame_step(timing: NetwPredict.Timing) -> void:
-		if _sort_dirty:
-			_rebuild_sorted()
-		for engine in _sorted:
+		for engine in _phase(NetwPredictionEngine.PASS_ISLAND_FRAME):
 			engine.prepare_island(NetwPredict.Schedule.FRAME)
-		if _sort_dirty:
-			_rebuild_sorted()
-		for engine in _sorted:
+		for engine in _phase(NetwPredictionEngine.PASS_FRAME):
 			engine.simulate_frame(timing)
 
 
 	func before_frame_step() -> void:
+		for engine in _phase(NetwPredictionEngine.PASS_FINALIZE_FRAME):
+			engine.finalize_frame_state()
+
+
+	# The engines one phase steps, in the order the pool declares. Both the
+	# order and the membership are determinism contracts, so the pool answers
+	# them and this resolves the answer back to the engines that carry the
+	# bodies. A roster the pool cannot name whole is one mid-registration, and
+	# the fallback steps every engine so a slice never silently skips one.
+	func _phase(
+			phase: NetwPredictionEngine.PassPhase,
+	) -> Array[PredictionCore._PredictionEngine]:
 		if _sort_dirty:
 			_rebuild_sorted()
-		for engine in _sorted:
-			engine.finalize_frame_state()
+		if _service == null or _by_slot.size() != _engines.size():
+			return _sorted
+		var out: Array[PredictionCore._PredictionEngine] = []
+		for slot: int in _service._prediction_pool.pass_slots(phase):
+			var engine := _by_slot.get(slot) as PredictionCore._PredictionEngine
+			if engine:
+				out.append(engine)
+		return out
 
 
 	func metrics() -> Dictionary:
@@ -2779,8 +3133,10 @@ class _SimulationRunner extends RefCounted:
 	# run. Rebuilt only when an engine registers or unregisters, since entity ids
 	# are fixed once spawned.
 	func _rebuild_sorted() -> void:
+		_by_slot.clear()
 		_sorted = _pool_order()
 		if _sorted.size() != _engines.size():
+			_by_slot.clear()
 			_sorted = _engines.duplicate()
 			_sorted.sort_custom(
 				func(
@@ -2799,14 +3155,14 @@ class _SimulationRunner extends RefCounted:
 		var resolved: Array[PredictionCore._PredictionEngine] = []
 		if _service == null:
 			return resolved
-		var by_slot: Dictionary[int, PredictionCore._PredictionEngine] = { }
 		for engine in _engines:
 			var slot := _service.native_prediction_slot(engine._entity)
 			if slot < 0:
+				_by_slot.clear()
 				return []
-			by_slot[slot] = engine
+			_by_slot[slot] = engine
 		for slot: int in _service._prediction_pool.ordered_slots():
-			var engine := by_slot.get(slot) as PredictionCore._PredictionEngine
+			var engine := _by_slot.get(slot) as PredictionCore._PredictionEngine
 			if engine:
 				resolved.append(engine)
 		return resolved
@@ -2867,7 +3223,7 @@ class _HistoryRecorder extends RefCounted:
 			# and is live by its registration alone.
 			if entity.owner.is_inside_tree() and not entity.owner.can_process():
 				continue
-			var state := entity.state_binding
+			var state: NetwPropertySetBinding = entity.state_binding
 			if state:
 				var record_tick := tick
 				var engine := engines.get(entity) as PredictionCore._PredictionEngine
@@ -2888,63 +3244,3 @@ class _HistoryRecorder extends RefCounted:
 					timelines[entity].record_state(record_tick, payload)
 				if engine:
 					engine.finalize_recorded_state(payload)
-
-
-# Read-only history queries over the registry, the server-side lag-compensation
-# surface. Lag compensation is a query, not a system: with the server recording
-# authoritative snapshots every tick, answering "where was this entity when the
-# shooter saw it" is a timeline read. A consumer of the registry, never a producer.
-class _RewindQueries extends RefCounted:
-	var _registry: _TimelineRegistry
-
-
-	func _init(registry: _TimelineRegistry) -> void:
-		_registry = registry
-
-
-	# Returns entity's recorded state at or before tick as a detached NetwSnapshot,
-	# reading history without touching the live scene. The snapshot carries forward,
-	# so a tick between recordings reads the latest prior state. A view tick older
-	# than the retained window, an unregistered entity, or a call off the server all
-	# return an empty snapshot.
-	func sample(entity: NetwEntity, tick: int) -> NetwSnapshot:
-		return NetwSnapshot.from_dictionary(_registry.sample(entity, tick))
-
-
-	# Briefly applies each entity's state at tick to its live node, runs body, then
-	# restores the live state, unconditionally, on return. The opt-in heavyweight
-	# for validation that needs real physics. An entity with no retained history at
-	# tick is left at its live state and skipped.
-	func rewind(entities: Array[NetwEntity], tick: int, body: Callable) -> void:
-		# Capture only the entities we actually rewind, so restore touches exactly
-		# the nodes we moved and an entity with no history stays at its live state.
-		var captured: Array[Dictionary] = []
-		for entity in entities:
-			var state := entity.state_binding
-			if not state:
-				continue
-			var snap := _registry.sample(entity, tick)
-			if snap.is_empty():
-				continue
-			captured.append({ &"entity": entity, &"live": state.snapshot_payload() })
-			state.apply_payload(snap)
-			_force_update_transform(entity)
-
-		body.call()
-
-		for entry in captured:
-			var entity: NetwEntity = entry[&"entity"]
-			var state := entity.state_binding
-			if not state:
-				continue
-			state.apply_payload(entry[&"live"])
-			_force_update_transform(entity)
-
-
-	# Pushes a rewound or restored transform into the physics server so a space-state
-	# query inside the callable sees it. Godot's direct space state reflects the last
-	# physics sync, so this must run after each apply.
-	func _force_update_transform(entity: NetwEntity) -> void:
-		var node := entity.owner
-		if is_instance_valid(node) and node.has_method(&"force_update_transform"):
-			node.force_update_transform()

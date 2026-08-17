@@ -84,6 +84,17 @@ public:
         int type,
         const godot::Ref<NetwQuantize> &quantizer
     );
+    static void write_values(
+        const godot::Ref<NetwBitBufferWriter> &writer,
+        const godot::Array &values,
+        const godot::Array &quantizers,
+        const godot::Array &types
+    );
+    static godot::Array read_values(
+        const godot::Ref<NetwBitBufferReader> &reader,
+        const godot::Array &quantizers,
+        const godot::Array &types
+    );
     static void put_varint(
         const godot::Ref<NetwBitBufferWriter> &writer,
         int64_t value

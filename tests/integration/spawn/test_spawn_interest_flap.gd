@@ -34,7 +34,8 @@ func test_interest_readmission_revives_route() -> void:
 	layer.add_entity(entity)
 	interest.flush()
 	await drain_frames(get_tree(), 5)
-	assert_that(client0.api.route_get_state(route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(route))) \
 			.is_equal(NetwMultiplayer.EntityState.UNKNOWN)
 
 	layer.add_viewer(peer0)
@@ -90,9 +91,11 @@ func test_leave_policy_retain_custom_and_override() -> void:
 	layer.remove_viewer(peer0)
 	interest.flush()
 	await drain_frames(get_tree(), 5)
-	assert_that(client0.api.route_get_state(route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_that(client0.api.entity_get_node(client0.api.rid_from_route(route))).is_same(client_node)
+	assert_that(client0.api.entity_get_node(
+			client0.api.entity_from_route(route))).is_same(client_node)
 	_assert_books_converged(route, [client0])
 
 	layer.add_viewer(peer0)
@@ -109,7 +112,8 @@ func test_leave_policy_retain_custom_and_override() -> void:
 	interest.flush()
 	await drain_frames(get_tree(), 5)
 	assert_array(custom_calls).contains_exactly([[peer0, &"policy"]])
-	assert_that(client0.api.entity_get_node(client0.api.rid_from_route(route))).is_same(client_node)
+	assert_that(client0.api.entity_get_node(
+			client0.api.entity_from_route(route))).is_same(client_node)
 	_assert_books_converged(route, [client0])
 
 	layer.add_viewer(peer0)
@@ -155,9 +159,11 @@ func test_ancestor_despawn_dominates_nested_retain() -> void:
 	layer.remove_viewer(peer0)
 	interest.flush()
 	await drain_frames(get_tree(), 5)
-	assert_that(client0.api.route_get_state(parent.route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(parent.route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_that(client0.api.route_get_state(child.route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(child.route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
 	_assert_books_converged(parent.route, [client0])
 	_assert_books_converged(child.route, [client0])
@@ -178,7 +184,8 @@ func test_ancestor_despawn_dominates_nested_retain() -> void:
 			NetwMultiplayer.EntityState.DEAD,
 		),
 	).is_true()
-	assert_that(client0.api.route_get_state(child.route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(child.route))) \
 			.is_equal(NetwMultiplayer.EntityState.DEAD)
 	_assert_books_converged(parent.route, [client0])
 	_assert_books_converged(child.route, [client0])
@@ -196,9 +203,11 @@ func test_spawn_parked_on_dead_anchor_applies_on_revival() -> void:
 	pipeline._handle_despawn_frame(_despawn_payload(child_route), 1)
 	pipeline._handle_despawn_frame(_despawn_payload(parent_route), 1)
 	await drain_frames(get_tree(), 2)
-	assert_that(client0.api.route_get_state(parent_route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(parent_route))) \
 			.is_equal(NetwMultiplayer.EntityState.DEAD)
-	assert_that(client0.api.route_get_state(child_route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(child_route))) \
 			.is_equal(NetwMultiplayer.EntityState.DEAD)
 
 	var deferrals := int(replication.counters()[&"spawn_deferrals"])
@@ -210,12 +219,16 @@ func test_spawn_parked_on_dead_anchor_applies_on_revival() -> void:
 			.is_equal(unresolved)
 
 	pipeline._handle_spawn_frame(frames["parent"], 1)
-	assert_that(client0.api.route_get_state(parent_route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(parent_route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_that(client0.api.route_get_state(child_route)) \
+	assert_that(client0.api.entity_get_state(
+			client0.api.entity_from_route(child_route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	var parent_node := client0.api.entity_get_node(client0.api.rid_from_route(parent_route))
-	assert_that(client0.api.entity_get_node(client0.api.rid_from_route(child_route)).get_parent()) \
+	var parent_node := client0.api.entity_get_node(
+			client0.api.entity_from_route(parent_route))
+	assert_that(client0.api.entity_get_node(
+			client0.api.entity_from_route(child_route)).get_parent()) \
 			.is_equal(parent_node)
 
 
@@ -234,7 +247,7 @@ func test_park_expiry_unparks_route_and_heals() -> void:
 	var pipeline := replication._spawn_pipeline
 	pipeline.park_timeout_seconds = 0.05
 	pipeline._handle_spawn_frame(frames["child"], 1)
-	assert_bool(pipeline._parked_spawn_routes.has(child_route)).is_true()
+	assert_bool(pipeline._park.has(child_route)).is_true()
 
 	var expired := false
 	for i in 300:
@@ -243,7 +256,7 @@ func test_park_expiry_unparks_route_and_heals() -> void:
 			expired = true
 			break
 	assert_bool(expired).is_true()
-	assert_bool(pipeline._parked_spawn_routes.is_empty()).is_true()
+	assert_int(pipeline._park.size()).is_equal(0)
 
 	# A DESPAWN after the expiry must not be swallowed by a stale park flag,
 	# which is exactly the leak that kept a later revived node from freeing.
@@ -257,9 +270,11 @@ func test_park_expiry_unparks_route_and_heals() -> void:
 
 	pipeline._handle_spawn_frame(frames["parent"], 1)
 	pipeline._handle_spawn_frame(frames["child"], 1)
-	assert_that(client1.api.route_get_state(parent_route)) \
+	assert_that(client1.api.entity_get_state(
+			client1.api.entity_from_route(parent_route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
-	assert_that(client1.api.route_get_state(child_route)) \
+	assert_that(client1.api.entity_get_state(
+			client1.api.entity_from_route(child_route))) \
 			.is_equal(NetwMultiplayer.EntityState.LIVE)
 
 
@@ -292,10 +307,12 @@ func test_reparent_skips_peer_losing_visibility() -> void:
 	var moved := false
 	for i in 120:
 		await get_tree().process_frame
-		var c0_child := client0.api.entity_get_node(client0.api.rid_from_route(child_route))
+		var c0_child := client0.api.entity_get_node(
+				client0.api.entity_from_route(child_route))
 		if c0_child and c0_child.get_parent() \
-				== client0.api.entity_get_node(client0.api.rid_from_route(zone2_route)) \
-				and client1.api.route_get_state(child_route) \
+				== client0.api.entity_get_node(client0.api.entity_from_route(zone2_route)) \
+				and client1.api.entity_get_state(
+						client1.api.entity_from_route(child_route)) \
 						== NetwMultiplayer.EntityState.DEAD:
 			moved = true
 			break
@@ -304,7 +321,7 @@ func test_reparent_skips_peer_losing_visibility() -> void:
 	# The losing peer must get the sweep's DESPAWN and never a REPARENT
 	# anchored on a route it was not sent, so nothing is left waiting.
 	await drain_frames(get_tree(), 5)
-	assert_int(client1.api._liveness.pending_live_count()).is_equal(0)
+	assert_int(client1.api._native_core.liveness_pending_live_count()).is_equal(0)
 	_assert_books_converged(child_route, [client0, client1])
 
 
@@ -331,7 +348,8 @@ func test_reparent_reanchors_consumed_spawner_recipe() -> void:
 	var mover_route: int = NetwEntity.of(mover).route
 	assert_int(mover_route).is_greater(0)
 	assert_that(await _wait_live(client0, mover_route)).is_not_null()
-	assert_that(client1.api.route_get_state(mover_route)) \
+	assert_that(client1.api.entity_get_state(
+			client1.api.entity_from_route(mover_route))) \
 			.is_equal(NetwMultiplayer.EntityState.UNKNOWN)
 
 	var unresolved := int(
@@ -340,12 +358,13 @@ func test_reparent_reanchors_consumed_spawner_recipe() -> void:
 	mover.get_parent().remove_child(mover)
 	zone2.add_child(mover)
 
-	var record: NetwSpawnBook.SpawnRecord = \
-			_replication()._spawn_pipeline._spawn_book.spawned[mover_route]
+	var record: NetwSpawnRecord = \
+			_replication()._spawn_pipeline._spawn_book.spawned_of(mover_route)
 	var c1_mover := await _wait_live(client1, mover_route)
 	assert_that(c1_mover).is_not_null()
 	assert_that(c1_mover.get_parent()) \
-			.is_equal(client1.api.entity_get_node(client1.api.rid_from_route(zone2_route)))
+			.is_equal(client1.api.entity_get_node(
+					client1.api.entity_from_route(zone2_route)))
 	assert_that(record.spawner()).is_equal(zone2.get_node("Spawner"))
 	assert_int(
 		int(
@@ -354,7 +373,7 @@ func test_reparent_reanchors_consumed_spawner_recipe() -> void:
 	).is_equal(unresolved)
 
 	await drain_frames(get_tree(), 5)
-	assert_int(client1.api._liveness.pending_live_count()).is_equal(0)
+	assert_int(client1.api._native_core.liveness_pending_live_count()).is_equal(0)
 	_assert_books_converged(mover_route, [client0, client1])
 
 
@@ -401,11 +420,11 @@ func _reencode_frames(spawned: Dictionary) -> Dictionary:
 	var child_route: int = spawned["child_entity"].route
 	return {
 		"parent": replication._spawn_pipeline._encode_spawn_frame(
-			replication._spawn_pipeline._spawn_book.spawned[parent_route],
+			replication._spawn_pipeline._spawn_book.spawned_of(parent_route),
 			spawned["parent_node"],
 		),
 		"child": replication._spawn_pipeline._encode_spawn_frame(
-			replication._spawn_pipeline._spawn_book.spawned[child_route],
+			replication._spawn_pipeline._spawn_book.spawned_of(child_route),
 			spawned["child_node"],
 		),
 	}
@@ -420,14 +439,14 @@ func _despawn_payload(route: int) -> PackedByteArray:
 # Asserts the per-peer books agree: a peer is in the server record's
 # recipients exactly when its own recv book holds the route.
 func _assert_books_converged(route: int, clients: Array) -> void:
-	var record: NetwSpawnBook.SpawnRecord = \
-			_replication()._spawn_pipeline._spawn_book.spawned.get(route)
+	var record: NetwSpawnRecord = \
+			_replication()._spawn_pipeline._spawn_book.spawned_of(route)
 	assert_that(record).is_not_null()
 	for mt: MultiplayerTree in clients:
 		var peer_id := mt.multiplayer_peer.get_unique_id()
-		var has_route := mt.api.route_get_state(route) \
+		var has_route := mt.api.entity_get_state(mt.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.LIVE
-		assert_bool(has_route).is_equal(peer_id in record.recipients)
+		assert_bool(has_route).is_equal(record.has_recipient(peer_id))
 
 
 func _mount_rig(mt: MultiplayerTree) -> void:
@@ -442,9 +461,9 @@ func _replication() -> ReplicationCore:
 
 func _wait_live(mt: MultiplayerTree, route: int, frames: int = 120) -> Node:
 	for i in frames:
-		if mt.api.route_get_state(route) \
+		if mt.api.entity_get_state(mt.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.LIVE:
-			return mt.api.entity_get_node(mt.api.rid_from_route(route))
+			return mt.api.entity_get_node(mt.api.entity_from_route(route))
 		await get_tree().process_frame
 	return null
 
@@ -456,7 +475,7 @@ func _wait_state(
 		frames: int = 120,
 ) -> bool:
 	for i in frames:
-		if mt.api.route_get_state(route) == state:
+		if mt.api.entity_get_state(mt.api.entity_from_route(route)) == state:
 			return true
 		await get_tree().process_frame
 	return false

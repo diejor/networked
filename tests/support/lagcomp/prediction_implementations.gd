@@ -13,10 +13,11 @@
 ##     res://addons/gdUnit4/bin/GdUnitCmdTool.gd --headless \
 ##     --ignoreHeadlessMode -c -a res://tests
 ## [/codeblock]
-## Every law then runs against it, because [EngineRig] takes its decisions
-## through [method under_test] and [PredictionScenario] installs it on both
-## peers. No law is written twice and none is opted in: a law that exists is a
-## law a candidate must pass.
+## Every law then runs against it, because the session hook points the
+## project's multiplayer script setting at the named script before the first
+## suite, so every peer a scenario stands up constructs it. No law is written
+## twice and none is opted in: a law that exists is a law a candidate must
+## pass.
 ##
 ## [b]Why an environment variable and not a parameter.[/b] Conformance is a
 ## property of a whole run. A suite that looped over implementations inside each

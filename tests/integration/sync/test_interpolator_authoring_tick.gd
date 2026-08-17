@@ -27,7 +27,8 @@ func _drive_delayed_stream() -> NetwEntity:
 	interp.owner = rig.client_node
 	await (Engine.get_main_loop() as SceneTree).process_frame
 
-	var server_binding := NetwEntity.of(rig.server_node).state_binding
+	var server_binding: NetwPropertySetBinding = NetwEntity.of(rig.server_node) \
+			.state_binding
 	rig.server_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			server_binding.authored_tick = t
@@ -44,7 +45,8 @@ func test_keys_history_by_authoring_tick() -> void:
 	await rig.setup(self)
 	var entity := await _drive_delayed_stream()
 
-	var buf := entity.interpolation.get_buffer(&"position")
+	var display: NetwDisplayHandle = entity.interpolation
+	var buf := display.get_buffer(&"position")
 	assert_bool(buf != null).is_true()
 	var newest := buf.newest_tick()
 	assert_int(newest).is_greater(0)
@@ -61,7 +63,7 @@ func test_keys_history_by_authoring_tick() -> void:
 	# moves, including the switch that arms the pump's own trace.
 	entity.interpolation.predicted_smooth_time = 0.25
 	entity.interpolation.trace_interval = 20
-	entity.reparented.emit(NetwEntity.ReparentOpts.new())
+	entity.reparented.emit(NetwReparentOpts.new())
 	assert_float(entity.interpolation.predicted_smooth_time) \
 			.override_failure_message(
 				"a reparent must not reset a code-written display setting",
@@ -76,7 +78,8 @@ func test_displayed_authoring_tick_names_a_past_shown_tick() -> void:
 	# Advance the interpolation playhead so a displayed tick exists to name.
 	await (Engine.get_main_loop() as SceneTree).process_frame
 
-	var view := entity.interpolation.displayed_authoring_tick()
+	var display: NetwDisplayHandle = entity.interpolation
+	var view := display.displayed_authoring_tick()
 	# A server authoring tick is named, it is a real recorded key, and it
 	# trails the live server tick.
 	assert_int(view).is_greater_equal(0)

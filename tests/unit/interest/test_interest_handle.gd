@@ -38,7 +38,7 @@ func test_join_leave_and_tree_lifecycle() -> void:
 	root.name = "Player"
 	auto_free(root)
 	var entity := NetwEntity.ensure(root)
-	var interest := entity.interest
+	var interest: NetwInterestHandle = entity.interest
 	interest.join(&"a").join(&"b").join(&"a")
 
 	assert_array(interest.layer_ids()).contains_exactly([&"a", &"b"])
@@ -117,16 +117,22 @@ func test_leave_policy_builder_and_custom_guard() -> void:
 			NetwMultiplayer.LeavePolicy.DESPAWN,
 		),
 	).is_equal(NetwMultiplayer.LeavePolicy.RETAIN)
-	await assert_error(
-		func() -> void:
-			entity.interest.on_leave_policy(
-				&"stealth",
-				NetwMultiplayer.LeavePolicy.CUSTOM,
-			)
-	).is_runtime_error(
-		"Assertion failed: NetwInterestHandle.on_leave_policy: "
-		+ "CUSTOM requires a callback",
+
+	var custom := func(_peer_id: int, _layer_id: StringName) -> void: pass
+	entity.interest.on_leave_policy(
+		&"stealth",
+		NetwMultiplayer.LeavePolicy.CUSTOM,
+		custom,
 	)
+
+	assert_int(
+		entity.interest._leave_policy_for(
+			&"stealth",
+			NetwMultiplayer.LeavePolicy.DESPAWN,
+		),
+	).is_equal(NetwMultiplayer.LeavePolicy.CUSTOM)
+	assert_bool(entity.interest._custom_leave_for(&"stealth") == custom) \
+			.is_true()
 
 
 func test_perception_builder_and_custom_guard() -> void:
@@ -144,16 +150,26 @@ func test_perception_builder_and_custom_guard() -> void:
 			NetwMultiplayer.PerceptionPolicy.HIDE,
 		),
 	).is_equal(NetwMultiplayer.PerceptionPolicy.SHOW)
-	await assert_error(
-		func() -> void:
-			entity.interest.on_perception_policy(
-				&"stealth",
-				NetwMultiplayer.PerceptionPolicy.CUSTOM,
-			)
-	).is_runtime_error(
-		"Assertion failed: NetwInterestHandle.on_perception_policy: "
-		+ "CUSTOM requires a callback",
+
+	var custom := func(
+			_visible: bool,
+			_peer_id: int,
+			_layer_id: StringName,
+	) -> void: pass
+	entity.interest.on_perception_policy(
+		&"stealth",
+		NetwMultiplayer.PerceptionPolicy.CUSTOM,
+		custom,
 	)
+
+	assert_int(
+		entity.interest._perception_policy_for(
+			&"stealth",
+			NetwMultiplayer.PerceptionPolicy.HIDE,
+		),
+	).is_equal(NetwMultiplayer.PerceptionPolicy.CUSTOM)
+	assert_bool(entity.interest._custom_perception_for(&"stealth") == custom) \
+			.is_true()
 
 
 func test_wire_admission_does_not_override_host_participant_row() -> void:
@@ -238,7 +254,7 @@ func test_awareness_enter_waits_for_delayed_node() -> void:
 		var_to_bytes(
 			[
 				[
-					InterestCore.AwarenessType.LAYER,
+					NetwInterestAwareness.LAYER,
 					route,
 					&"sight",
 					0,
@@ -259,7 +275,7 @@ func test_awareness_enter_waits_for_delayed_node() -> void:
 		func(layer_id: StringName, peer_id: int):
 			entered.append([layer_id, peer_id])
 	)
-	mt.api._liveness.bind_route(route, entity)
+	mt.api._native_core.liveness_bind_route(route, entity)
 	await drain_frames(get_tree(), 2)
 
 	assert_array(visible).contains_exactly([entity])
@@ -272,7 +288,7 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 	var root := _make_entity("Observed")
 	var entity := NetwEntity.of(root)
 	var route := 43
-	mt.api._liveness.bind_route(route, entity)
+	mt.api._native_core.liveness_bind_route(route, entity)
 	var entered: Array = []
 	var left: Array = []
 	entity.observer_entered.connect(
@@ -288,14 +304,14 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 		var_to_bytes(
 			[
 				[
-					InterestCore.AwarenessType.OBSERVER,
+					NetwInterestAwareness.OBSERVER,
 					route,
 					&"sight",
 					7,
 					InterestCore.Kind.ENTER,
 				],
 				[
-					InterestCore.AwarenessType.OBSERVER,
+					NetwInterestAwareness.OBSERVER,
 					^"Observed",
 					&"sight",
 					9,
@@ -312,7 +328,7 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 		var_to_bytes(
 			[
 				[
-					InterestCore.AwarenessType.OBSERVER,
+					NetwInterestAwareness.OBSERVER,
 					route,
 					&"sight",
 					7,

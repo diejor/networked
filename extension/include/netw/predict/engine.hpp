@@ -141,6 +141,109 @@ public:
     }
 };
 
+class NetwPredictCarryContext : public RefCounted {
+    GDCLASS(NetwPredictCarryContext, RefCounted)
+
+    friend class NetwPredictionEngine;
+
+    Dictionary state_at;
+    Dictionary input_at;
+    double step_delta = 0.0;
+    int64_t authored_label = -1;
+
+protected:
+    static void _bind_methods();
+
+public:
+    Dictionary get_state() const {
+        return state_at;
+    }
+
+    Dictionary get_input() const {
+        return input_at;
+    }
+
+    double get_delta() const {
+        return step_delta;
+    }
+
+    int64_t get_label() const {
+        return authored_label;
+    }
+};
+
+class NetwPredictCarryAttempt : public RefCounted {
+    GDCLASS(NetwPredictCarryAttempt, RefCounted)
+
+    friend class NetwPredictionEngine;
+
+    predict::CarryAttempt record;
+
+protected:
+    static void _bind_methods();
+
+public:
+    Variant value() const {
+        return record.value;
+    }
+
+    bool evidence() const {
+        return record.evidence;
+    }
+
+    bool same_type() const {
+        return record.probe.same_type;
+    }
+
+    bool finite() const {
+        return record.probe.finite;
+    }
+
+    bool within_envelope() const {
+        return record.probe.within_envelope;
+    }
+
+    bool pure() const {
+        return record.probe.pure;
+    }
+
+    bool faithful() const {
+        return record.probe.faithful;
+    }
+
+    double residual() const {
+        return record.residual;
+    }
+
+    double tolerance() const {
+        return record.tolerance;
+    }
+};
+
+class NetwPredictReplayEntry : public RefCounted {
+    GDCLASS(NetwPredictReplayEntry, RefCounted)
+
+    friend class NetwPredictionEngine;
+
+    predict::ReplayEntry record;
+
+protected:
+    static void _bind_methods();
+
+public:
+    int64_t index() const {
+        return record.index;
+    }
+
+    int64_t label() const {
+        return record.label;
+    }
+
+    Dictionary input() const {
+        return record.input;
+    }
+};
+
 class NetwPredictEvidence : public RefCounted {
     GDCLASS(NetwPredictEvidence, RefCounted)
 
@@ -390,6 +493,61 @@ class NetwPredictionEngine : public RefCounted {
 
     static Object *resolve_owner(predict::Slot &p_row);
     static void resolve_reach(predict::Slot &p_row, const Object *p_owner);
+    // The fingerprint the purity bracket compares, over the causal scope alone:
+    // a rule is forbidden to write the state a comparison judges, and nothing
+    // else about the body is its business.
+    static int32_t compared_fingerprint(
+        predict::Slot &p_row,
+        const Dictionary &p_payload
+    );
+    // Invokes p_rule once under the run_step discipline and refuses a
+    // non-finite result rather than folding it forward. Answers a null Variant
+    // for the refusal, which no rule can return by itself.
+    Variant call_carry(
+        int64_t p_slot,
+        const Callable &p_rule,
+        const Variant &p_value,
+        const predict::ReplayEntry &p_entry,
+        const Dictionary &p_state
+    );
+    /* Replays the rule over one transition the owner already recorded and asks
+     * whether it reaches the state that transition actually reached.
+     *
+     * This is the only check that can see a rule reading the live world instead
+     * of the transition's, or one whose arithmetic is simply wrong, because
+     * both reproduce the recorded past incorrectly while looking entirely
+     * reasonable at the moment of the write. One transition per recovery is
+     * enough: a rule that disagrees does so on most of them, and the retirement
+     * counter integrates.
+     */
+    void replay_carry(
+        predict::CarryAttempt &r_attempt,
+        int64_t p_slot,
+        const Callable &p_rule,
+        const StringName &p_field,
+        int p_field_slot,
+        const LocalVector<predict::ReplayEntry> &p_entries,
+        bool p_angle,
+        double p_divergence_epsilon
+    );
+    /* Folds the rule across every entry onto the acknowledged value.
+     *
+     * A step that returns the wrong type, a non-finite value, or lands further
+     * from the acknowledged value than a teleport would move the body is not
+     * advancing it, whatever it computed. The envelope is THIS field's declared
+     * distance, because the rule advances one field in one unit and the entity
+     * default is only the right number for it by coincidence.
+     */
+    void fold_carry(
+        predict::CarryAttempt &r_attempt,
+        int64_t p_slot,
+        const Callable &p_rule,
+        int p_field_slot,
+        const Variant &p_start,
+        const LocalVector<predict::ReplayEntry> &p_entries,
+        bool p_angle,
+        double p_teleport_default
+    );
     static Dictionary capture_through(
         predict::Slot &p_row,
         const predict::FieldCodec &p_codec,
@@ -407,8 +565,6 @@ protected:
 
 public:
     int64_t open(const Ref<NetwPredictDeclaration> &p_declaration);
-    // The input declaration compiles to a codec and nothing else: an input row
-    // is canonicalized and shipped, never recovered, so it earns no tables.
     void rewire(
         int64_t p_slot,
         const Ref<NetwPredictDeclaration> &p_declaration,
@@ -417,45 +573,16 @@ public:
     );
     void close(int64_t p_slot);
 
-    /* The form a predicting peer and its authority can both name.
-     *
-     * One reads a live property and the other reads what survived the wire, so
-     * the round trip is what makes the two comparable exactly rather than
-     * approximately. A field with no quantizer round-trips through its raw wire
-     * form, which for a float is 32 bits, so a live double comes back rounded
-     * to what the receiver will hold.
-     */
-    /* The owner port: the one place a pool slot touches a game object. Its
-     * resolve-per-moment rule is ObjectPort's, and a failed resolve counts
-     * STAT_OWNER_LOST.
-     *
-     * Binding is optional. A slot driven by set_state alone never binds, and
-     * every property this port reads or writes is one the declaration names.
-     */
     bool bind_owner(int64_t p_slot, Object *p_owner);
     void unbind_owner(int64_t p_slot);
     bool owner_bound(int64_t p_slot) const;
-    // Answered at the bind rather than asked per correction, because it is a
-    // fact about the object and the object does not change class.
     bool owner_solves(int64_t p_slot) const;
 
-    // The declared state fields the owner currently holds. A field the owner
-    // does not have is absent rather than null, which is the same absence the
-    // shell's gather spells by marking it unreadable.
     Dictionary capture_state(int64_t p_slot);
     Dictionary capture_input(int64_t p_slot);
-    // Writes the declared fields p_payload names onto the owner and answers
-    // whether the owner resolved. A key the declaration does not name is
-    // ignored, so a restore lands exactly the declared fields.
     bool apply_state(int64_t p_slot, const Dictionary &p_payload);
     bool apply_input(int64_t p_slot, const Dictionary &p_payload);
 
-    /* The behaviour a game injects, one Callable per slot per role.
-     *
-     * An explicit simulate always wins over the one bind_owner adopted, and
-     * keeps winning across a re-bind, because a caller that named the step
-     * said something the convention cannot override.
-     */
     void set_simulate(int64_t p_slot, const Callable &p_callable);
     void set_witness(int64_t p_slot, const Callable &p_callable);
     void set_corridor(int64_t p_slot, const Callable &p_callable);
@@ -471,24 +598,21 @@ public:
     );
     bool has_simulate(int64_t p_slot) const;
 
-    // The pass order, which is a determinism contract rather than a
-    // convenience: two peers step the same roster the same way or their
-    // transitions are not comparable.
     void set_order_key(int64_t p_slot, int64_t p_order_key);
     int64_t order_key_of(int64_t p_slot) const;
-    // Every open slot, ascending by order key and then by slot, which is what
-    // makes the order total even before every slot has been keyed.
     PackedInt64Array ordered_slots() const;
 
-    /* One authored transition, run on the bound owner.
-     *
-     * The declared input is applied through the port, the step runs, and the
-     * declared state is captured back, which is the whole of what a pass does
-     * to a game object. The roster is frozen for the duration: a step that
-     * opens, closes, rewires or re-binds a slot is refused and counted, so a
-     * speculative game act during a fresh tick goes through an effect rather
-     * than through the roster.
-     */
+    enum PassPhase {
+        PASS_ISLAND_TICK = 0,
+        PASS_ISLAND_FRAME = 1,
+        PASS_JOINT = 2,
+        PASS_TICK = 3,
+        PASS_FRAME = 4,
+        PASS_FINALIZE_FRAME = 5,
+    };
+
+    PackedInt64Array pass_slots(int p_phase) const;
+
     Dictionary run_step(
         int64_t p_slot,
         const Dictionary &p_input,
@@ -497,8 +621,6 @@ public:
         bool p_fresh
     );
 
-    // Nonzero while a pass is running, which is what the roster verbs refuse
-    // against.
     int pass_depth() const;
     int64_t mutations_refused_count() const;
 
@@ -510,8 +632,10 @@ public:
         int64_t p_slot,
         const Dictionary &p_payload
     ) const;
-    // The bytes that ship are the bytes that hash, so a fingerprint taken here
-    // and one taken by a peer decoding the frame describe the same values.
+    Dictionary coast_command(int64_t p_slot) const;
+
+    int64_t sample_environment(int64_t p_slot, int64_t p_epoch);
+    Dictionary sensor_samples(int64_t p_slot) const;
     PackedByteArray canonical_state_bytes(
         int64_t p_slot,
         const Dictionary &p_payload
@@ -524,22 +648,6 @@ public:
     bool is_open(int64_t p_slot) const;
     int open_count() const;
 
-    /* The declared axis space, which grows one slice at a time.
-     *
-     * A caller reading true for a configuration nothing drives is the failure
-     * this verb exists to prevent, so the answer is false everywhere the state
-     * a configuration needs has not landed.
-     *
-     * Every role is driven, because the pass a slot performs is the same one
-     * whichever peer owns the entity: a role decides whether a shell calls the
-     * slot, never what the slot then does. SIMULATE is the exception and needs
-     * an island, having no timeline of its own.
-     *
-     * Two configurations are refused for naming something no path performs.
-     * AUTO is a body-type guess and the body is what a pool slot cannot see.
-     * EXTRAPOLATED under REPLAY promises a projection, where REPLAY reaches the
-     * present by re-running commands over an exact restore.
-     */
     bool supports(
         int p_schedule,
         int p_role,
@@ -550,8 +658,6 @@ public:
         bool p_witness = false
     ) const;
 
-    // Refused rather than stored when `supports` answers false, so a slot
-    // never holds an axis point its own pool declines to drive.
     bool configure(
         int64_t p_slot,
         int p_schedule,
@@ -580,8 +686,6 @@ public:
     int field_slot(int64_t p_slot, const StringName &p_key) const;
     StringName field_name(int64_t p_slot, int p_field) const;
 
-    // The compiled tables, read back under the names the GDScript wiring
-    // spells them with, because the certification arm compares the two.
     int projection_of(int64_t p_slot, int p_field) const;
     int state_family_of(int64_t p_slot, int p_field) const;
     double converge_rate_of(int64_t p_slot, int p_field) const;
@@ -627,7 +731,8 @@ public:
         int64_t p_pre_momentum_fp,
         int64_t p_pre_controller_fp,
         int64_t p_raw_fp = 0,
-        int p_evidence_mask = 0
+        int p_evidence_mask = 0,
+        bool p_authoring = false
     );
 
     bool record_evidence(
@@ -643,16 +748,8 @@ public:
         bool p_sleeping
     );
 
-    // AUTO earns SNAP only from a solver body, whose transition is a physics
-    // step and cannot be re-run per input. A slot with no owner replays.
     int resolve_correction(int64_t p_slot, int p_declared) const;
 
-    // The two questions `_on_state`'s ladder asks of an episode before it
-    // stages anything: has the structural budget run out, and is an operator
-    // still awaiting the verdict that would price it.
-    // A conditional operator's verdict, charged by the caller that gathered
-    // its evidence. The pool decides admissibility; only the caller knows
-    // whether the corridor it then ran agreed.
     void record_episode_decision(
         int64_t p_slot,
         int p_operator,
@@ -664,6 +761,18 @@ public:
 
     bool open_episode(int64_t p_slot, int64_t p_transition, int p_attribution);
     void record_episode_divergence(int64_t p_slot, int64_t p_transition);
+    int escalation_field_of(
+        int64_t p_slot,
+        const Array &p_predicted,
+        const Array &p_authority,
+        const PackedFloat64Array &p_field_errors,
+        double p_fallback_epsilon
+    ) const;
+    int trigger_shape_of(
+        int64_t p_slot,
+        const PackedFloat64Array &p_field_errors,
+        double p_fallback_epsilon
+    ) const;
     void record_episode_escalation(int64_t p_slot, int p_trigger_shape);
     void stamp_episode_write_delta(int64_t p_slot, int p_delta_fp);
     int record_episode_write(
@@ -678,8 +787,6 @@ public:
         bool p_null_operator
     );
 
-    // Scalars rather than a report, because a report copies the whole
-    // retained record and these are read once per guard.
     bool episode_active(int64_t p_slot) const;
     int episode_state(int64_t p_slot) const;
 
@@ -707,31 +814,18 @@ public:
         STAT_EPISODE_COUNT = 20,
     };
 
-    // One call for every scalar a caller reads per admit, on the DriveStat
-    // pattern, so a guard never copies the retained record to read an int.
     PackedInt64Array episode_stats(int64_t p_slot) const;
     bool episode_budget_exhausted(int64_t p_slot) const;
     bool episode_operator_pending(int64_t p_slot, int p_operator) const;
 
-    // The contact that demoted this slot out of speculation. The detail stays
-    // with the caller that sampled it; the pool records only which transition.
     void record_breach(int64_t p_slot, int64_t p_transition);
 
-    /* Whether one transition's witness is evidence an operator may build on:
-     * awake through the whole solve, and reporting only contact the closure
-     * reproduces, which is nothing, the declared support, or static geometry.
-     *
-     * `p_require_peer` additionally demands that authority witnessed the same
-     * thing, which is what makes the row a shared fact rather than a local one.
-     */
     bool witness_row_clean(
         int64_t p_slot,
         int64_t p_transition,
         bool p_require_peer
     ) const;
 
-    // The slot supplies the correction axis it was configured with, so a
-    // caller states only what it sampled.
     bool transport_admissible(
         int64_t p_slot,
         bool p_candidate,
@@ -753,15 +847,11 @@ public:
         int p_meter
     ) const;
 
-    // A withheld momentum field is the only thing a dissipate window lets go
-    // of, so a declaration with none can never open one.
     bool dissipate_declared(int64_t p_slot) const;
 
     bool static_geometry(Object *p_collider) const;
     int witness_class(Object *p_collider, bool p_declared_support) const;
 
-    // Addressed by field NAME and resolved against the slot's own table, so
-    // no caller mints a second numbering for the fields.
     int judge_carry(
         int64_t p_slot,
         const StringName &p_field,
@@ -773,12 +863,28 @@ public:
     );
     int decline_carry(int64_t p_slot, const StringName &p_field);
 
-    // Asked before the invocation: a rule the pool has already convicted must
-    // not be handed the game's own code to run one more time.
     bool carry_eligible(int64_t p_slot, const StringName &p_field) const;
     bool carry_retired(int64_t p_slot, const StringName &p_field) const;
     PackedInt64Array carry_stats(int64_t p_slot, const StringName &p_field)
         const;
+
+    void mark_carry_dirty(int64_t p_slot, int64_t p_transition);
+    bool carry_judgeable(int64_t p_slot, int64_t p_transition) const;
+
+    Ref<NetwPredictCarryAttempt> attempt_carry(
+        int64_t p_slot,
+        const StringName &p_field,
+        const Variant &p_acknowledged,
+        int64_t p_basis,
+        double p_teleport_default,
+        double p_divergence_epsilon
+    );
+
+    TypedArray<NetwPredictReplayEntry> replay_entries(
+        int64_t p_slot,
+        int64_t p_basis
+    ) const;
+    Dictionary state_before(int64_t p_slot, int64_t p_transition) const;
 
     void close_drive(
         int64_t p_slot,
@@ -789,9 +895,6 @@ public:
         int64_t p_post_controller_fp
     );
 
-    // The domain is the shell's answer. Whether an entity declared its world,
-    // whether it declared the world approximate, and how long a change to it
-    // keeps the window open are all facts the pool stores for nobody.
     void mark_domain(int64_t p_slot, int64_t p_transition, int p_domain);
     void mark_chain_broken(int64_t p_slot, int64_t p_transition);
     void mark_provenance(
@@ -820,6 +923,7 @@ public:
         int p_evidence_mask,
         int p_witness_class_bits
     );
+    bool witness_judged(int64_t p_slot, int64_t p_transition) const;
     void mark_witness_match(
         int64_t p_slot,
         int64_t p_transition,
@@ -827,9 +931,6 @@ public:
     );
     void declare_skipped(int64_t p_slot, int64_t p_transition, int64_t p_label);
 
-    // The aligned error records a comparison that reached a verdict. An
-    // unsettled comparison reached none, so the column stays unwritten rather
-    // than carrying a zero that reads as agreement.
     void mark_aligned_error(
         int64_t p_slot,
         int64_t p_transition,
@@ -871,8 +972,6 @@ public:
         int64_t p_label,
         int p_cooldown
     );
-    // The ladder's own answer, read before a recovery is staged because the
-    // transport attempt ahead of it declines on a promoted recovery.
     bool escalation_pending(int64_t p_slot) const;
     int64_t recovery_window_until(int64_t p_slot) const;
     int64_t recovery_cooldown_until(int64_t p_slot) const;
@@ -1000,10 +1099,6 @@ public:
         int64_t p_transition
     ) const;
 
-    // Every column reader below addresses a ring index while a transition
-    // names a row rather than a position. A caller holding a transition
-    // resolves it here once and indexes every column with the answer. A
-    // transition the ring no longer retains resolves to -1.
     int journal_slot_of(int64_t p_slot, int64_t p_transition) const;
 
     int64_t journal_transition_at(int64_t p_slot, int p_index) const;
@@ -1048,8 +1143,29 @@ public:
     ) const;
 
     int tape_size(int64_t p_slot) const;
+    PackedInt64Array tape_span(int64_t p_slot) const;
     int64_t tape_label_of(int64_t p_slot, int64_t p_index) const;
     bool tape_is_fresh(int64_t p_slot, int64_t p_index) const;
+    void tape_prepare_tick(int64_t p_slot, int64_t p_tick);
+    void tape_author(int64_t p_slot, int64_t p_label, bool p_fresh);
+
+    void bind_timeline(int64_t p_slot, const Ref<NetwTimeline> &p_timeline);
+    Ref<NetwTimeline> entry_history(int64_t p_slot) const;
+    void trim_history(int64_t p_slot, int64_t p_ack);
+
+    bool command_admit(
+        int64_t p_slot,
+        int64_t p_transition,
+        int64_t p_label,
+        bool p_fresh,
+        const Dictionary &p_command
+    );
+    bool command_has(int64_t p_slot, int64_t p_transition) const;
+    int64_t command_label_of(int64_t p_slot, int64_t p_transition) const;
+    bool command_is_fresh(int64_t p_slot, int64_t p_transition) const;
+    Dictionary command_payload_of(int64_t p_slot, int64_t p_transition) const;
+    int command_depth_from(int64_t p_slot, int64_t p_cursor) const;
+    PackedInt64Array command_transitions(int64_t p_slot) const;
 
     /* The drive counters, in one array a law and a plot both index by
      * [enum DriveStat].
@@ -1076,6 +1192,23 @@ public:
         STAT_COUNT = 13,
     };
 
+    void record_idle_drive(int64_t p_slot, int64_t p_label, int p_kind);
+    void record_authoring_clamp(int64_t p_slot);
+    void record_speculation_hold(int64_t p_slot);
+    void refresh_ack_age(int64_t p_slot);
+    int mark_authority_ack(int64_t p_slot, int64_t p_transition);
+    enum DriveCursor {
+        CURSOR_TAPE_EPOCH = 0,
+        CURSOR_NEXT_TAPE_ENTRY = 1,
+        CURSOR_LAST_DRIVEN_ENTRY = 2,
+        CURSOR_LATEST_INPUT_TICK = 3,
+        CURSOR_LAST_DRIVEN_INPUT_TICK = 4,
+        CURSOR_LAST_FRAME_TRANSITION_TICK = 5,
+        CURSOR_COUNT = 6,
+    };
+
+    bool journal_has(int64_t p_slot, int64_t p_transition) const;
+    PackedInt64Array drive_cursors(int64_t p_slot) const;
     PackedInt64Array drive_stats(int64_t p_slot) const;
 
     enum CompareStat {
@@ -1093,8 +1226,10 @@ public:
 } // namespace netw
 
 VARIANT_ENUM_CAST(netw::NetwPredictionEngine::DriveStat);
+VARIANT_ENUM_CAST(netw::NetwPredictionEngine::DriveCursor);
 VARIANT_ENUM_CAST(netw::NetwPredictionEngine::CompareStat);
 VARIANT_ENUM_CAST(netw::NetwPredictionEngine::IslandMode);
+VARIANT_ENUM_CAST(netw::NetwPredictionEngine::PassPhase);
 VARIANT_ENUM_CAST(netw::NetwPredictionEngine::CarryVerdictBits);
 VARIANT_ENUM_CAST(netw::NetwPredictionEngine::EpisodeStat);
 VARIANT_ENUM_CAST(netw::NetwPredictionEngine::JointFloorSource);

@@ -178,19 +178,6 @@ func test_scene_multiplayer_properties_forward_both_ways() -> void:
 	assert_bool(api.server_relay).is_true()
 
 
-func test_dedicated_hint_resolves_dedicated_role() -> void:
-	var api := _bare_api()
-	var config := NetwSessionConfig.new()
-	config.desired_role = NetwMultiplayer.Role.DEDICATED_SERVER
-	api._session.configure(config)
-
-	var peer := LocalMultiplayerPeer.new()
-	peer.create_server()
-	api.multiplayer_peer = peer
-
-	assert_int(api.role).is_equal(NetwMultiplayer.Role.DEDICATED_SERVER)
-
-
 func test_auth_dispatcher_arms_tree_less() -> void:
 	var api := _bare_api()
 

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictCarryContext" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One recorded transition, handed to a carry rule as it runs.
+	</brief_description>
+	<description>
+		A rule advances an acknowledged value across the transitions the owner has driven since, so what it is given is one of those transitions rather than the present. Everything here is the recorded past, which is the whole reason a rule may not read the live world instead: the engine replays the rule against transitions the owner already recorded and retires it once it stops reproducing them.
+		[codeblock]
+		func _carry(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
+		    var axis := _drive_axis(ctx.state[&amp;"heading"])
+		    return value + axis * ctx.state[&amp;"speed"] * ctx.delta
+		[/codeblock]
+		Declared through [method NetwScriptModel.PropertyConfig.carry_step]. The record is minted by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="delta" type="float" setter="" getter="get_delta" default="0.0">
+			This transition's width in simulated seconds.
+		</member>
+		<member name="input" type="Dictionary" setter="" getter="get_input" default="{}">
+			The command this transition ran, as [method NetwScriptModel.PropertyConfig.input] declares it.
+		</member>
+		<member name="label" type="int" setter="" getter="get_label" default="-1">
+			The input tick this transition was labelled with.
+		</member>
+		<member name="state" type="Dictionary" setter="" getter="get_state" default="{}">
+			The declared state the owner recorded before this transition drove, the same values [method NetwScriptModel.PropertyConfig.state] names.
+		</member>
+	</members>
+</class>

@@ -33,7 +33,7 @@ func test_control_transfer_policy_flow() -> void:
 	)
 
 	var server_entity := NetwEntity.of(server_player)
-	server_entity.transfer = NetwEntity.Transfer.REQUESTABLE
+	server_entity.transfer = NetwEntity.TRANSFER_REQUESTABLE
 	var client_entity := NetwEntity.of(client_player)
 	var peer_id := client1.multiplayer_peer.get_unique_id()
 
@@ -77,9 +77,9 @@ func test_control_request_rejection_flow() -> void:
 	await _wait_for_player_on(client1, harness.player_name_for(client0))
 
 	var denied_entity := NetwEntity.of(denied_player)
-	denied_entity.transfer = NetwEntity.Transfer.REQUESTABLE
+	denied_entity.transfer = NetwEntity.TRANSFER_REQUESTABLE
 	denied_entity.control_requested.connect(
-		func(_peer_id: int, request: NetwEntity.ControlRequest) -> void:
+		func(_peer_id: int, request: NetwControlRequest) -> void:
 			request.deny()
 	)
 
@@ -104,6 +104,81 @@ func test_control_request_rejection_flow() -> void:
 	original_peer = client0.multiplayer_peer.get_unique_id()
 	assert_that(fixed_player.get_multiplayer_authority()).is_equal(original_peer)
 	assert_that(NetwEntity.of(fixed_player).controller).is_equal(original_peer)
+
+
+## Verify a watched session names both halves of a transfer: the request it was
+## asked for, carrying the verdict the server answered, and the change that
+## followed a grant. A denied request is still a request, which is why the
+## refusal rides the row rather than suppressing it.
+func test_a_transfer_reports_the_request_and_the_change() -> void:
+	var reported: Array[NetwEvent] = []
+	var server_core: NetwMultiplayerCore = harness.server().api._native_core
+	server_core.event_watch(
+		[
+			NetwMultiplayerCore.CONTROL_REQUESTED,
+			NetwMultiplayerCore.CONTROL_CHANGED,
+		],
+		{ },
+		{ },
+		func(event: NetwEvent) -> void:
+			reported.append(event),
+	)
+
+	var server_player := _spawn_control_player(client0)
+	harness.spawn_player(client1, player_builder.packed)
+	await _wait_for_player_on(client1, harness.player_name_for(client0))
+	var route: int = NetwEntity.of(server_player).route
+	var controller_peer := client1.multiplayer_peer.get_unique_id()
+	var represented_peer := client0.multiplayer_peer.get_unique_id()
+
+	NetwEntity.of(_client_player(client1, client0)).request_control()
+	await _wait_until(
+		func() -> bool:
+			return server_player.get_multiplayer_authority() == controller_peer,
+		"server authority to move",
+	)
+
+	var granted := _rows_of(
+		reported,
+		route,
+		NetwMultiplayerCore.CONTROL_REQUESTED,
+	)
+	assert_int(granted.size()).is_equal(1)
+	assert_int(granted[0].verdict).is_equal(OK)
+	assert_int(int(granted[0].detail.get(&"requester"))).is_equal(controller_peer)
+
+	var moved := _rows_of(reported, route, NetwMultiplayerCore.CONTROL_CHANGED)
+	assert_int(moved.size()).is_equal(1)
+	assert_int(int(moved[0].detail.get(&"from"))).is_equal(represented_peer)
+	assert_int(int(moved[0].detail.get(&"to"))).is_equal(controller_peer)
+
+	NetwEntity.of(server_player).control_requested.connect(
+		func(_peer_id: int, request: NetwControlRequest) -> void:
+			request.deny()
+	)
+	NetwEntity.of(_client_player(client1, client0)).request_control()
+	await NetwTestSuite.drain_frames(get_tree(), 5)
+
+	var refused := _rows_of(
+		reported,
+		route,
+		NetwMultiplayerCore.CONTROL_REQUESTED,
+	)
+	assert_int(refused.size()).is_equal(2)
+	assert_int(refused[1].verdict).is_equal(ERR_UNAUTHORIZED)
+	# A refused request steers nobody, so the change count stands where the
+	# granted one left it.
+	assert_int(
+		_rows_of(reported, route, NetwMultiplayerCore.CONTROL_CHANGED).size()
+	).is_equal(1)
+
+
+func _rows_of(rows: Array[NetwEvent], route: int, event: int) -> Array[NetwEvent]:
+	var kept: Array[NetwEvent] = []
+	for row in rows:
+		if row.route == route and row.event == event:
+			kept.append(row)
+	return kept
 
 
 func test_controller_disconnect_policy_flow() -> void:
@@ -140,7 +215,7 @@ func test_controller_disconnect_policy_flow() -> void:
 	controller_peer = client1.multiplayer_peer.get_unique_id()
 	server_entity = NetwEntity.of(server_player)
 	server_entity.on_controller_disconnect = \
-	NetwEntity.DisconnectRule.DESPAWN
+	NetwEntity.DISCONNECT_DESPAWN
 
 	server_entity.grant_control(controller_peer)
 	await _wait_until(
@@ -167,7 +242,7 @@ func test_controller_disconnect_policy_flow() -> void:
 	var represented_peer := client0.multiplayer_peer.get_unique_id()
 	server_entity = NetwEntity.of(server_player)
 	server_entity.on_controller_disconnect = \
-	NetwEntity.DisconnectRule.REVERT_TO_SERVER
+	NetwEntity.DISCONNECT_REVERT_TO_SERVER
 
 	server_entity.grant_control(represented_peer)
 	server_player_ref = weakref(server_player)
@@ -192,7 +267,7 @@ func _setup_harness(target: NetwTestHarness) -> void:
 
 func _spawn_control_player(client: MultiplayerTree) -> Node:
 	var player := harness.spawn_player(client, player_builder.packed)
-	NetwEntity.of(player).transfer = NetwEntity.Transfer.REQUESTABLE
+	NetwEntity.of(player).transfer = NetwEntity.TRANSFER_REQUESTABLE
 	return player
 
 

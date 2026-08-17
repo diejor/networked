@@ -35,7 +35,7 @@ var _tree: MultiplayerTree
 var _clock_node: MultiplayerClock
 var _clock: ClockCore
 var _replication: ReplicationCore
-var _liveness: LivenessShell
+var _native_core: NetwMultiplayerCore
 var _iface: DisplayCore
 var _player: InterpTarget
 var _visual: Node2D
@@ -62,7 +62,7 @@ func before_test() -> void:
 	_clock = api._clock
 
 	_replication = _tree.api._replication
-	_liveness = _tree.api._liveness
+	_native_core = _tree.api._native_core
 	_iface = _tree.api._display
 
 
@@ -193,7 +193,8 @@ func test_display_role_switches_glide_between_remote_and_predicted() -> void:
 	# A disabled role writes nothing, so it must not be counted as a pass. A
 	# counter that advanced anyway would read identically to a healthy pump,
 	# and a frozen display would look like one that ran and chose this value.
-	var pumped_predicted := _entity.interpolation.pumped_frames
+	var display: NetwDisplayHandle = _entity.interpolation
+	var pumped_predicted := display.pumped_frames
 	for frame in 10:
 		_render()
 	assert_int(_entity.interpolation.pumped_frames).override_failure_message(
@@ -204,7 +205,8 @@ func test_display_role_switches_glide_between_remote_and_predicted() -> void:
 			NetwDisplayHandle.DisplayRole.DISABLED
 	)
 	_render()
-	var pumped_disabled := _entity.interpolation.pumped_frames
+	var disabled_display: NetwDisplayHandle = _entity.interpolation
+	var pumped_disabled := disabled_display.pumped_frames
 	for frame in 10:
 		_render()
 	assert_int(_entity.interpolation.pumped_frames).override_failure_message(
@@ -263,14 +265,14 @@ func test_demote_flip_seeds_role_offset_on_first_frame() -> void:
 	)
 	var runtime := _iface._runtime_for_handle(_entity.interpolation)
 	var state = runtime.states[0]
-	assert_bool(state.role_offset_pending).is_true()
+	assert_bool(state.offset.is_armed()).is_true()
 
 	_display_at(1, 0, 0.0)
-	assert_bool(state.role_offset_pending) \
+	assert_bool(state.offset.is_armed()) \
 			.override_failure_message(
 				"the role offset must seed on the first frame after a demote",
 			).is_false()
-	assert_that(state.display_offset).is_not_null()
+	assert_bool(state.offset.is_held()).is_true()
 
 
 func test_promote_flip_still_clears_history() -> void:
@@ -308,7 +310,7 @@ func test_remote_rigidbody_freezes_and_restores_from_handle_role() -> void:
 	entity.interpolation.enable_smart_dilation = false
 	Netw.configure_property(body, &"position").interpolate(spec)
 	_tree.add_child(body)
-	_liveness.bind_route(44, entity)
+	_native_core.liveness_bind_route(44, entity)
 
 	assert_bool(body.freeze).is_true()
 	assert_int(body.freeze_mode).is_equal(RigidBody2D.FREEZE_MODE_KINEMATIC)
@@ -323,6 +325,86 @@ func test_remote_rigidbody_freezes_and_restores_from_handle_role() -> void:
 	assert_int(body.freeze_mode).is_equal(RigidBody2D.FREEZE_MODE_STATIC)
 
 
+func test_auto_role_disables_a_display_this_peer_holds_authority_over() -> void:
+	# Every other target here pins authority to peer 2, so the AUTO ladder's
+	# authority rung is only reached by an entity this peer owns. Nothing
+	# streams to it, so there is nothing for a display to smooth.
+	var node := Node2D.new()
+	node.name = "LocallyOwnedPlayer"
+	var entity := NetwEntity.ensure(node)
+	entity.interpolation.enable_smart_dilation = false
+	Netw.configure_property(node, &"position").interpolate(
+		NetwInterpolate.new().lerp().smooth(0.0).to(&"position"),
+	)
+	_tree.add_child(node)
+	auto_free(node)
+	_native_core.liveness_bind_route(51, entity)
+
+	_iface.record(node, &"position", P0, 0)
+
+	assert_int(entity.interpolation.resolved_display_role).is_equal(
+		NetwDisplayHandle.DisplayRole.DISABLED
+	)
+
+
+func test_auto_role_predicts_a_locally_simulated_entity() -> void:
+	# A prediction component makes the entity simulate here, and a predicted
+	# input source makes it this peer's to predict. That outranks the
+	# authority rung above, which would otherwise disable the same entity.
+	var node := Node2D.new()
+	node.name = "PredictedPlayer"
+	var component := Node.new()
+	component.name = "PredictionComponent"
+	node.add_child(component)
+	component.unique_name_in_owner = true
+	component.owner = node
+	var entity := NetwEntity.ensure(node)
+	entity.interpolation.enable_smart_dilation = false
+	entity.prediction.input_source = NetwPredict.InputSource.PREDICTED
+	Netw.configure_property(node, &"position").interpolate(
+		NetwInterpolate.new().lerp().smooth(0.0).to(&"position"),
+	)
+	_tree.add_child(node)
+	auto_free(node)
+	_native_core.liveness_bind_route(52, entity)
+
+	_iface.record(node, &"position", P0, 0)
+
+	assert_int(entity.interpolation.resolved_display_role).is_equal(
+		NetwDisplayHandle.DisplayRole.PREDICTED
+	)
+
+
+func test_auto_role_predicts_what_this_peer_steers() -> void:
+	# The other half of the prediction rung: local control reaches it without
+	# any declared input source, and it outranks the authority this peer also
+	# holds over the same entity.
+	var node := Node2D.new()
+	node.name = "SteeredPlayer"
+	var component := Node.new()
+	component.name = "PredictionComponent"
+	node.add_child(component)
+	component.unique_name_in_owner = true
+	component.owner = node
+	var entity := NetwEntity.ensure(node)
+	entity.interpolation.enable_smart_dilation = false
+	Netw.configure_property(node, &"position").interpolate(
+		NetwInterpolate.new().lerp().smooth(0.0).to(&"position"),
+	)
+	_tree.add_child(node)
+	auto_free(node)
+	_native_core.liveness_bind_route(53, entity)
+	entity.set_controller(1)
+
+	_iface.record(node, &"position", P0, 0)
+	_iface._mark_role_dirty(entity.rid)
+
+	assert_bool(entity.is_controlled_locally).is_true()
+	assert_int(entity.interpolation.resolved_display_role).is_equal(
+		NetwDisplayHandle.DisplayRole.PREDICTED
+	)
+
+
 func test_scriptless_node_via_overlay_interpolates() -> void:
 	var node := Node2D.new()
 	node.name = "OverlayPlayer"
@@ -335,7 +417,7 @@ func test_scriptless_node_via_overlay_interpolates() -> void:
 	)
 	_tree.add_child(node)
 	auto_free(node)
-	_liveness.bind_route(33, entity)
+	_native_core.liveness_bind_route(33, entity)
 
 	_iface.record(node, &"position", P0, 0)
 	_iface.record(node, &"position", P1, 1)
@@ -354,7 +436,7 @@ func test_unconfigured_record_is_a_noop() -> void:
 	var entity := NetwEntity.ensure(node)
 	_tree.add_child(node)
 	auto_free(node)
-	_liveness.bind_route(31, entity)
+	_native_core.liveness_bind_route(31, entity)
 
 	_iface.record(node, &"position", P1, 0)
 
@@ -381,7 +463,7 @@ func test_two_nodes_interpolating_position_do_not_collide() -> void:
 	)
 	_tree.add_child(player)
 	auto_free(player)
-	_liveness.bind_route(21, entity)
+	_native_core.liveness_bind_route(21, entity)
 
 	_iface.record(a, &"position", P0, 0)
 	_iface.record(b, &"position", P2, 0)
@@ -408,7 +490,7 @@ func test_slerp_interpolates_quaternion_rotation() -> void:
 	)
 	_tree.add_child(node)
 	auto_free(node)
-	_liveness.bind_route(41, entity)
+	_native_core.liveness_bind_route(41, entity)
 
 	var q0 := Quaternion.IDENTITY
 	var q1 := Quaternion(Vector3.UP, PI / 2.0)
@@ -599,7 +681,7 @@ func _spawn_target(use_visual: bool) -> void:
 
 
 func _bind_route() -> void:
-	_liveness.bind_route(7, _entity)
+	_native_core.liveness_bind_route(7, _entity)
 
 
 func _render(delta: float = 1.0 / 60.0) -> void:
@@ -617,7 +699,7 @@ func _display_at(tick: int, display_offset: int, factor: float) -> void:
 func _dispatch_property(property: StringName, value: Variant) -> void:
 	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_token(w, property)
-	NetwScriptModel.write_values(w, [value], [null], [typeof(value)])
+	NetwCodec.write_values(w, [value], [null], [typeof(value)])
 	_replication._dispatch(
 		_entity.route,
 		0,
@@ -653,7 +735,7 @@ func _dispatch_rpc(method: StringName, args: Array) -> void:
 func _dispatch_signal(signal_name: StringName, args: Array) -> void:
 	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_token(w, signal_name)
-	NetwScriptModel.write_values(
+	NetwCodec.write_values(
 		w,
 		args,
 		[],

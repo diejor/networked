@@ -391,4 +391,80 @@ TEST_CASE(
     NETW_CHECK_CLOSE(past.w, 0.881921, 0.000001);
 }
 
+TEST_CASE(
+    "[Networked][Display][Hosted] H1 a history answers what a pass may do "
+    "with it, and sleeping outranks empty because only sleeping is counted"
+) {
+    Ref<NetwDisplayHistory> history = make_history();
+    Ref<NetwInterpolate> spec;
+    spec.instantiate();
+
+    NETW_CHECK_EQ(
+        history->pass_verdict(spec, false),
+        int(NetwDisplayHistory::PASS_SKIP_EMPTY)
+    );
+
+    history->set_sleeping(true);
+    NETW_CHECK_EQ(
+        history->pass_verdict(spec, false),
+        int(NetwDisplayHistory::PASS_SKIP_SLEEPING)
+    );
+
+    history->set_sleeping(false);
+    history->record(0, 1.0, false);
+    NETW_CHECK_EQ(
+        history->pass_verdict(spec, false),
+        int(NetwDisplayHistory::PASS_SAMPLE)
+    );
+    NETW_CHECK_EQ(
+        history->pass_verdict(spec, true),
+        int(NetwDisplayHistory::PASS_SAMPLE_PROJECT)
+    );
+
+    history->set_sleeping(true);
+    NETW_CHECK_EQ(
+        history->pass_verdict(spec, true),
+        int(NetwDisplayHistory::PASS_SKIP_SLEEPING)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] H2 a HOLD channel never projects, however "
+    "hard the entity forecasts, and a channel with no spec always may"
+) {
+    Ref<NetwDisplayHistory> history = make_history();
+    history->record(0, 1.0, false);
+
+    Ref<NetwInterpolate> holding;
+    holding.instantiate();
+    holding->set_forecast_tail(NetwInterpolate::TAIL_HOLD);
+    NETW_CHECK_EQ(
+        history->pass_verdict(holding, true),
+        int(NetwDisplayHistory::PASS_SAMPLE)
+    );
+
+    NETW_CHECK_EQ(
+        history->pass_verdict(Ref<NetwInterpolate>(), true),
+        int(NetwDisplayHistory::PASS_SAMPLE_PROJECT)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] H3 the smoothing weight is frame-rate "
+    "independent, and an unsmoothed channel takes the whole step"
+) {
+    Ref<NetwInterpolate> spec;
+    spec.instantiate();
+
+    spec->set_smoothing(0.0);
+    NETW_CHECK_CLOSE(spec->smoothing_weight(1.0 / 60.0), 1.0, 0.000001);
+
+    spec->set_smoothing(0.1);
+    const double one = spec->smoothing_weight(1.0 / 60.0);
+    NETW_CHECK_CLOSE(one, 0.153518, 0.000001);
+
+    const double doubled = spec->smoothing_weight(2.0 / 60.0);
+    NETW_CHECK_CLOSE(doubled, 1.0 - (1.0 - one) * (1.0 - one), 0.000001);
+}
+
 } // namespace TestNetwDisplayHistory

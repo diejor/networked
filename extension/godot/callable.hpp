@@ -3,9 +3,9 @@
 #include "godot/object.hpp"
 
 #if defined(NETW_MODULE)
+#include "core/object/callable_mp.h"
 #include "core/variant/callable.h"
 
-// Engine types are global, so the aliases keep `godot::` spellings compiling.
 namespace godot {
 using ::Callable;
 using ::CallableCustom;
@@ -15,15 +15,13 @@ using ::ObjectID;
 #include <godot_cpp/core/object_id.hpp>
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/callable_custom.hpp>
+#include <godot_cpp/variant/callable_method_pointer.hpp>
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
 
-// A custom callable is written once and compiled twice. The three places the
-// two surfaces differ are named here so a subclass reads the same in both.
 namespace netw::gd {
 
-// The out-parameter `CallableCustom::call` reports through.
 #if defined(NETW_MODULE)
 using CallError = godot::Callable::CallError;
 #else
@@ -38,7 +36,6 @@ inline void call_ok(CallError &error) {
 #endif
 }
 
-// The engine returns an ObjectID, godot-cpp returns the raw integer inside it.
 inline godot::ObjectID instance_id(const godot::Object *object) {
     if (object == nullptr) {
         return godot::ObjectID();
@@ -50,8 +47,6 @@ inline godot::ObjectID instance_id(const godot::Object *object) {
 #endif
 }
 
-// The way back, for a reference that must not keep its target alive. Answers
-// null once the object is gone, which is the whole point of holding the id.
 inline godot::Object *instance_from_id(const godot::ObjectID &id) {
     if (!id.is_valid()) {
         return nullptr;

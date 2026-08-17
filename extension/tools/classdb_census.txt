@@ -1,0 +1,141 @@
+# The ClassDB disposition ledger (ring-0 plan §2.9 as data, per ZD-15).
+# One row per registered class: `<Class> stay` or `<Class> retire:ZU-n`,
+# where the unit is the schedule row whose landing removes the class from
+# the script-visible surface (unregister, internalize, or delete: the unit
+# decides the mechanism). check_classdb_census.py refuses a registration
+# with no row and reports a row with no registration as STALE.
+#
+# stay requires an argument: a §2.9 prose clause, a published contract
+# type (a seam twin's return, an option record, a kit-facing record), or a
+# holder in the permanently-GDScript tier (§9: the compat adapters, the
+# kit, the authoring tier). The default for scaffolding is retire.
+
+# --- §2.9 named surface ---
+NetwProject stay
+NetwEntity stay
+NetwBitBufferWriter stay
+NetwBitBufferReader stay
+NetwCodec stay
+NetwInterpolate stay
+NetwPromise stay
+NetwGroupPromise stay
+NetwQuantize stay
+NetwQuantizeBits stay
+NetwQuantizeFixed stay
+NetwQuantizeAngle stay
+NetwQuantizeQuaternion stay
+NetwQuantizeTransform2D stay
+NetwQuantizeTransform3D stay
+LocalLinkConditions stay
+LocalMultiplayerPeer stay
+LocalLoopbackSession stay
+
+# --- published contract types and kit-facing records ---
+NetwTimeline stay
+NetwRingBuffer stay
+NetwEvent stay
+NetwDatabaseBackend stay
+NetwIdentity stay
+ResolvedJoin stay
+JoinPayload stay
+NetwDespawnOpts stay
+NetwReparentOpts stay
+NetwControlRequest stay
+NetwPredictCarryContext stay
+NetwPredictFold stay
+NetwPredictJudgement stay
+NetwPredictRecovery stay
+NetwSynchronizers stay
+
+# --- held by the permanently-GDScript compat adapters (ZD-5), which
+#     falsifies their old "once the compat is native" triggers ---
+NetwWatchBook stay
+NetwSyncKernel stay
+NetwSpawnerRoster stay
+NetwStagedWrites stay
+
+# --- test-build-only registrations (NETW_TESTS guard) ---
+Carrier stay
+NetwNativeTests stay
+
+# --- zero GDScript reach today: leave the surface without waiting (ZU-17) ---
+NetwRateWindow retire:ZU-17
+NetwInterestStats retire:ZU-17
+NetwEffectLedger retire:ZU-17
+NetwEntityIdentity retire:ZU-17
+NetwCarrierBuffers retire:ZU-17
+NetwCarrierDatagram retire:ZU-17
+NetwEntityStage retire:ZU-17
+
+# --- shell scaffolding: the last GDScript caller dies at the swap ---
+NetwMultiplayerCore retire:ZU-38
+NetwClockCore retire:ZU-38
+NetwSessionCore retire:ZU-38
+NetwSceneCore retire:ZU-38
+NetwLivenessCore retire:ZU-38
+NetwPredictionEngine retire:ZU-38
+NetwPredictionCore retire:ZU-38
+NetwLagCompCore retire:ZU-38
+NetwHandleLedger retire:ZU-38
+NetwCompTable retire:ZU-38
+NetwEntityRecord retire:ZU-38
+NetwEntityControl retire:ZU-38
+NetwJoinRoster retire:ZU-38
+NetwCallPark retire:ZU-38
+NetwChannelBook retire:ZU-38
+NetwServiceInstallBook retire:ZU-38
+NetwTxnBook retire:ZU-38
+NetwSnapshotBook retire:ZU-38
+NetwPersistenceBook retire:ZU-38
+NetwSpawnRecord retire:ZU-38
+NetwSpawnBook retire:ZU-38
+NetwSpawnPark retire:ZU-38
+NetwSpawnPlanner retire:ZU-38
+NetwSyncModel retire:ZU-38
+NetwSyncSetRow retire:ZU-38
+NetwSyncProgress retire:ZU-38
+NetwReplicationSend retire:ZU-38
+NetwNodeRef retire:ZU-38
+NetwCarrierFrame retire:ZU-38
+NetwInterestEngine retire:ZU-38
+NetwInterestBitSet retire:ZU-38
+NetwInterestDelta retire:ZU-38
+NetwInterestDecl retire:ZU-38
+NetwInterestAwareness retire:ZU-38
+NetwInterestRelay retire:ZU-38
+NetwInterestLeave retire:ZU-38
+NetwInterestPerception retire:ZU-38
+NetwDisplayHistory retire:ZU-38
+NetwDisplayDecl retire:ZU-38
+NetwDisplayRoleFacts retire:ZU-38
+NetwDisplayPlayhead retire:ZU-38
+NetwDisplayTracks retire:ZU-38
+NetwDisplayBook retire:ZU-38
+NetwDisplayChannel retire:ZU-38
+NetwDisplayOffset retire:ZU-38
+NetwDisplayPort retire:ZU-38
+NetwDisplayRuntime retire:ZU-38
+NetwPumpStats retire:ZU-38
+NetwPredictDeclaration retire:ZU-38
+NetwPredictConsumePlan retire:ZU-38
+NetwPredictDrive retire:ZU-38
+NetwPredictEvidence retire:ZU-38
+NetwPredictJournalRow retire:ZU-38
+NetwPredictRecoveryRequest retire:ZU-38
+NetwPredictWritePlan retire:ZU-38
+NetwPredictEpisodeReport retire:ZU-38
+NetwPredictJointPlan retire:ZU-38
+NetwPredictVerdict retire:ZU-38
+NetwPredictCommandFrame retire:ZU-38
+NetwPredictAckFrame retire:ZU-38
+NetwPredictRelayBook retire:ZU-38
+NetwPredictReplayEntry retire:ZU-38
+NetwPredictCarryAttempt retire:ZU-38
+SchemaColumn retire:ZU-38
+SchemaRecord retire:ZU-38
+SchemaCore retire:ZU-38
+TableCore retire:ZU-38
+
+# --- terminal tail: test doubles and id namespaces ---
+NetwDatabaseBackendDict retire:ZU-39
+NetwEntityIds retire:ZU-39

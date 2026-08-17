@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayChannel" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One independently smoothed value stream: where it is sampled, how it is smoothed, and where it is written.
+	</brief_description>
+	<description>
+		A display runtime holds one of these per channel. The channel carries the whole path a value takes: [member source_obj] and [member source_prop] name where it is sampled, [member spec] and [member history] decide what is shown for a given playhead, [member offset] holds whatever residual is gliding off, and [member output] writes it.
+		Both object ends are held by instance id and resolved at each read, so a freed node answers [code]null[/code] rather than a pointer nobody may follow. That is why they are read through the properties rather than cached by a caller.
+		[codeblock]
+		var channel := NetwDisplayChannel.new()
+		channel.name = &amp;"position"
+		channel.state_key = &amp;"%d/position" % body.get_instance_id()
+		channel.spec = interpolate
+		channel.history = NetwDisplayHistory.new()
+		channel.source_obj = body
+		channel.source_prop = &amp;"position"
+		channel.target_prop = &amp;"position"
+		[/codeblock]
+		A channel has two names for two questions, exactly as [NetwDisplayTracks] indexes them: [member state_key] is its identity, the object and property it samples, and [member name] is what a caller addresses it by, the property it writes.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="copy_shape_from">
+			<return type="void" />
+			<param index="0" name="other" type="NetwDisplayChannel" />
+			<description>
+				Adopts [param other]'s SHAPE: its spec, its two object ends, its two property names and its self-feedback verdict. This is what a re-declaration does to a channel that already exists, so the identity, the recorded history, the writer, the offset and the last written value all stay.
+				[member authoring_ticks] is the one field that accumulates rather than replaces: a channel that has ever carried the authoring stream still carries it, because a second declaration that happens not to author does not un-author the first.
+				A null [param other] changes nothing, because a channel with no twin is already its own shape.
+			</description>
+		</method>
+		<method name="snap">
+			<return type="void" />
+			<param index="0" name="value" type="Variant" />
+			<description>
+				Writes [param value] out immediately and forgets everything that would have smoothed away from it: the recorded samples, the held render offset, and the value the next pass would have eased from.
+				This is what a teleport is. A snap that kept the history would glide back toward the pose it just left.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="authoring_ticks" type="bool" setter="set_authoring_ticks" getter="get_authoring_ticks" default="false">
+			Whether this channel's samples carry the authoring tick stamp, which is what the displayed tick is read from.
+		</member>
+		<member name="history" type="NetwDisplayHistory" setter="set_history" getter="get_history">
+			The recorded samples this channel is displayed from.
+		</member>
+		<member name="last_written" type="Variant" setter="set_last_written" getter="get_last_written">
+			The value last written through [member output], which the next pass smooths away from and holds when the history has nothing newer.
+		</member>
+		<member name="name" type="StringName" setter="set_name" getter="get_name" default="&amp;&quot;&quot;">
+			The property this channel writes, which is what a caller addresses it by.
+		</member>
+		<member name="offset" type="NetwDisplayOffset" setter="set_offset" getter="get_offset">
+			The render offset holding the visual still through a correction or a change of display source. Minted with the channel, so no caller has to remember to.
+		</member>
+		<member name="output" type="RefCounted" setter="set_output" getter="get_output">
+			The writer one smoothed value is handed to. Swappable: a test backend records the sequence instead of touching a node.
+		</member>
+		<member name="self_feedback" type="bool" setter="set_self_feedback" getter="get_self_feedback" default="false">
+			[code]true[/code] when the channel writes the very property it samples on the very object it samples it from. A remote display writes it harmlessly because the body is frozen; a predicted or authority pump skips it, because feeding a display filter into the simulation it is filtering is a drag with no bottom.
+		</member>
+		<member name="source_obj" type="Object" setter="set_source_obj" getter="get_source_obj">
+			The object this channel samples, or [code]null[/code] once it has been freed.
+		</member>
+		<member name="source_prop" type="StringName" setter="set_source_prop" getter="get_source_prop" default="&amp;&quot;&quot;">
+			The property sampled on [member source_obj]. Empty for a channel with no source at all, which is what an event argument is.
+		</member>
+		<member name="spec" type="NetwInterpolate" setter="set_spec" getter="get_spec">
+			How this channel is smoothed, and what it does past its newest sample.
+		</member>
+		<member name="state_key" type="StringName" setter="set_state_key" getter="get_state_key" default="&amp;&quot;&quot;">
+			The channel's identity, the object and property it samples. Two declarations of one key describe one channel twice.
+		</member>
+		<member name="target_obj" type="Object" setter="set_target_obj" getter="get_target_obj">
+			The object this channel writes, or [code]null[/code] once it has been freed. The same object as [member source_obj] unless a visual root or a redirect took the write elsewhere.
+		</member>
+		<member name="target_prop" type="StringName" setter="set_target_prop" getter="get_target_prop" default="&amp;&quot;&quot;">
+			The property written on [member target_obj].
+		</member>
+	</members>
+</class>

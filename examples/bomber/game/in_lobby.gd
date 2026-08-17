@@ -35,7 +35,8 @@ func _on_membership_changed(_participant: NetwParticipant) -> void:
 func _refresh() -> void:
 	_member_list.clear()
 	var local := _ctx.local_participant
-	var participants := NetwEntity.of(self).scene.participants
+	var scene: NetwSceneHandle = NetwEntity.of(self).scene
+	var participants := scene.participants
 	participants.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id

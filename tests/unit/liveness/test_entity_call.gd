@@ -65,28 +65,127 @@ class TestTargetNode:
 		p.resolve(val)
 
 
-# Subclass NetwMultiplayer to mock and capture outgoing packets
+# Records what the carrier hands the transport. The suite's subject is the
+# datagram a send produces, and the carrier reaches the transport rather than
+# any script surface, so the recording peer is where the bytes are still
+# observable. It reports every id the suite addresses as connected, because the
+# carrier refuses a peer the transport does not have.
+class RecordingPeer:
+	extends MultiplayerPeerExtension
+
+	const REACHABLE: Array[int] = [1, 2, 3, 5]
+
+	var sent: Array[Dictionary] = []
+
+	var _target := 0
+	var _reliable := true
+
+
+	func announce_peers() -> void:
+		for id in REACHABLE:
+			peer_connected.emit(id)
+
+
+	func _get_connection_status() -> ConnectionStatus:
+		return CONNECTION_CONNECTED
+
+
+	func _get_unique_id() -> int:
+		return 1
+
+
+	func _is_server() -> bool:
+		return true
+
+
+	# A relay would wrap the datagram in a SYS envelope addressed to the
+	# server, and the bytes a send produced would no longer be the bytes here.
+	func _is_server_relay_supported() -> bool:
+		return false
+
+
+	func _get_available_packet_count() -> int:
+		return 0
+
+
+	func _set_target_peer(id: int) -> void:
+		_target = id
+
+
+	func _set_transfer_channel(_channel: int) -> void:
+		pass
+
+
+	func _get_transfer_channel() -> int:
+		return 0
+
+
+	func _set_transfer_mode(mode: TransferMode) -> void:
+		_reliable = mode == TRANSFER_MODE_RELIABLE
+
+
+	func _get_transfer_mode() -> TransferMode:
+		return TRANSFER_MODE_RELIABLE if _reliable else TRANSFER_MODE_UNRELIABLE
+
+
+	func _put_packet_script(buffer: PackedByteArray) -> Error:
+		sent.append(
+			{
+				"peer_id": _target,
+				"bytes": buffer,
+				"reliable": _reliable,
+			},
+		)
+		return OK
+
+
+	func _poll() -> void:
+		pass
+
+
+	func _close() -> void:
+		pass
+
+
+	func _disconnect_peer(_id: int, _force: bool) -> void:
+		pass
+
+
+# Subclass NetwMultiplayer to fake the local id the send branches read.
 class TestNetwMultiplayer:
 	extends NetwMultiplayer
 
-	var sent_packets: Array[Dictionary] = []
+	var recorder: RecordingPeer
 
 	# When non-negative, this peer pretends to be that unique id, so a test can
-	# exercise the client-side send branches without a live transport.
+	# exercise the client-side send branches without a second machine.
 	var fake_unique_id := -1
 
+	# Every datagram the carrier produced, stripped back to the frames it
+	# carries. The transport's own raw-command byte and the carrier header ride
+	# in front of them, and neither is what a case here is about.
+	var sent_packets: Array[Dictionary]:
+		get:
+			var out: Array[Dictionary] = []
+			for row in recorder.sent:
+				var datagram: PackedByteArray = row["bytes"].slice(1)
+				var header := NetwCarrierFrame.read(datagram)
+				if header.kind == NetwCarrierFrame.Kind.FOREIGN:
+					continue
+				if header.kind == NetwCarrierFrame.Kind.MALFORMED:
+					continue
+				out.append(
+					{
+						"peer_id": row["peer_id"],
+						"bytes": datagram.slice(header.payload_offset),
+						"reliable": row["reliable"],
+					},
+				)
+			return out
 
-	func _send_packet(peer_id: int, bytes: PackedByteArray, reliable: bool) -> int:
-		_sent_packets += 1
-		_sent_bytes += bytes.size()
-		sent_packets.append(
-			{
-				"peer_id": peer_id,
-				"bytes": bytes,
-				"reliable": reliable,
-			},
-		)
-		return -1
+
+	func clear_sent() -> void:
+		recorder.sent.clear()
 
 
 	func _get_unique_id() -> int:
@@ -115,6 +214,22 @@ func before_test() -> void:
 	auto_free(mt)
 	api = mt.api as TestNetwMultiplayer
 
+	var peer := RecordingPeer.new()
+	api.recorder = peer
+	# The transport learns the peers so a send is not refused for addressing one
+	# it does not have. Nothing joined a session here, so the arrivals must not
+	# reach the session: the session's handshake would hold each one pending
+	# forever and the blocked signals keep the admissions inside the transport.
+	# The handshake goes back afterwards, because a case that installs its own
+	# peer expects to find the session as the session left it.
+	var handshake := api.inner.auth_callback
+	api.inner.auth_callback = Callable()
+	api.inner.multiplayer_peer = peer
+	api.inner.set_block_signals(true)
+	peer.announce_peers()
+	api.inner.set_block_signals(false)
+	api.inner.auth_callback = handshake
+
 
 func _bound_entity(route: int, node: Node = null) -> NetwEntity:
 	var owner_node = node
@@ -128,7 +243,7 @@ func _bound_entity(route: int, node: Node = null) -> NetwEntity:
 	var mock_api := SceneMultiplayer.new()
 	owner_node.set_meta(&"_multiplayer_api", mock_api)
 
-	var rid := api.rid_of(entity.owner)
+	var rid := api.entity_of(entity.owner)
 	api.entity_bind_route(rid, route)
 	return entity
 
@@ -224,7 +339,7 @@ func test_component_argument_resolves_on_receive() -> void:
 	Netw.configure_rpc(node.receive_node)
 	var comp_id = entity.components.id_for_path(NodePath("Child"))
 
-	var ref := NetwNodeRef.new(1, comp_id, "")
+	var ref := NetwNodeRef.create(1, comp_id, "")
 	var call_payload := _pack_call(0, &"receive_node", [ref, 7])
 	api._drive_carrier(
 		1,
@@ -247,7 +362,7 @@ func test_node_argument_outside_sender_interest_is_not_disclosed() -> void:
 	Netw.configure_rpc(node.receive_node)
 	api._interest.layer(&"hidden").add_entity(hidden)
 
-	var ref := NetwNodeRef.new(2, 0, "")
+	var ref := NetwNodeRef.create(2, 0, "")
 	var call_payload := _pack_call(0, &"receive_node", [ref, 7])
 	api._drive_carrier(
 		2,
@@ -342,7 +457,7 @@ func test_reply_value_roundtrips_through_codec() -> void:
 		[1],
 		99999,
 	)
-	api.sent_packets.clear()
+	api.clear_sent()
 
 	# Reply to peer 2 so it rides the wire instead of loopback-dispatching.
 	api._rpc_core.send_reply(2, 5, 1, "hello")
@@ -440,7 +555,7 @@ func test_component_table_divergence_guard() -> void:
 func _serialize_prop(property: StringName, value: Variant) -> PackedByteArray:
 	var w := NetwBitBufferWriter.new()
 	NetwScriptModel.write_token(w, property)
-	NetwScriptModel.write_values(w, [value], [], [typeof(value)])
+	NetwCodec.write_values(w, [value], [], [typeof(value)])
 	return w.to_bytes()
 
 
@@ -532,7 +647,7 @@ func test_property_sync_payload_is_token_then_value_only() -> void:
 	var frame: Dictionary = NetwFrameEnvelope.unpack_all(sent["bytes"])[0]
 	var r := NetwBitBufferReader.create(frame["payload"])
 	NetwScriptModel.read_token(r)
-	var values := NetwScriptModel.read_values(r, [null], [TYPE_INT])
+	var values := NetwCodec.read_values(r, [null], [TYPE_INT])
 	assert_that(values[0]).is_equal(70)
 	assert_that(r.remaining_bytes()).is_equal(0)
 
@@ -884,3 +999,43 @@ func test_component_address_at_a_nodeless_route_resolves_to_nothing() -> void:
 	# A null entity is the same answer, because the receive dispatch reaches here
 	# with whatever the route table gave it.
 	assert_object(replication.resolve_comp_node(null, 255, "Child")).is_null()
+
+
+# A path shaped safely can still land outside the subtree, because a unique
+# name is resolved against the whole owning scene rather than against the node
+# it is asked from. The shape check happens before anything resolves, so the
+# containment answer can only come from the node that came back.
+func test_a_relative_component_address_may_not_leave_the_entity_subtree() -> void:
+	var root := Node.new()
+	root.name = "Root"
+	add_child(root)
+	auto_free(root)
+
+	var outsider := Node.new()
+	outsider.name = "Outsider"
+	root.add_child(outsider)
+	outsider.owner = root
+	outsider.unique_name_in_owner = true
+
+	var host := Node.new()
+	host.name = "Host"
+	root.add_child(host)
+	host.owner = root
+
+	var inside := Node.new()
+	inside.name = "Inside"
+	host.add_child(inside)
+	inside.owner = root
+
+	var entity := NetwEntity.ensure(host)
+	var replication := api._replication
+
+	assert_bool(NetwCompTable.path_shape_is_safe("%Outsider")).is_true()
+	assert_object(root.get_node_or_null("%Outsider")).is_not_null()
+
+	assert_that(replication.resolve_comp_node(entity, 0, "")).is_equal(host)
+	assert_that(replication.resolve_comp_node(entity, 255, "Inside")) \
+			.is_equal(inside)
+	assert_that(replication.resolve_comp_node(entity, 255, ".")).is_equal(host)
+	assert_object(replication.resolve_comp_node(entity, 255, "%Outsider")) \
+			.is_null()

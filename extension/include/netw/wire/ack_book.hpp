@@ -24,7 +24,10 @@ private:
     bool has_acked = false;
 
 public:
-    // Records a pending send tied to a datagram sequence number.
+    // Records a pending send tied to a datagram sequence number. False when
+    // the slot already holds a live send for a different seq: taking it would
+    // drop that send with nothing left to ack it or report it lost, so the
+    // caller would never learn the send it was told had been recorded is gone.
     bool record_send(uint16_t seq, uint8_t channel_id, int64_t send_id);
 
     // Processes an inbound ack sequence. Returns delivered and lost sends.

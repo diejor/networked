@@ -118,7 +118,7 @@ func _run_all() -> Array[String]:
 # line, with the unbound reads that must stay UNKNOWN rather than DEAD.
 func _mint_bind_tombstone(scenario: StringName) -> void:
 	var entity := _api.entity_create()
-	var route := _api.reserve_route()
+	var route := _api._native_core.liveness_reserve_route()
 	_state(scenario, "minted", route, entity)
 
 	_api.entity_bind_route(entity, route)
@@ -126,7 +126,7 @@ func _mint_bind_tombstone(scenario: StringName) -> void:
 	_row(scenario, "route_of", { &"route": _api.entity_get_route(entity) })
 	_row(scenario, "live_routes", { &"routes": _api.live_routes() })
 
-	_api._liveness.tombstone_routes_data(PackedInt64Array([route]))
+	_api._native_core.liveness_tombstone_routes_data(PackedInt64Array([route]))
 	_state(scenario, "tombstoned", route, entity)
 	_row(scenario, "live_routes", { &"routes": _api.live_routes() })
 
@@ -135,7 +135,8 @@ func _mint_bind_tombstone(scenario: StringName) -> void:
 	_row(
 		scenario,
 		"unreserved",
-		{ &"state": _state_name(_api.route_get_state(route + 1000)) },
+		{ &"state": _state_name(_api.entity_get_state(
+				_api.entity_from_route(route + 1000))) },
 	)
 
 
@@ -152,11 +153,12 @@ func _bulk_claim_and_release(scenario: StringName) -> void:
 			"state",
 			{
 				&"route": int(value),
-				&"state": _state_name(_api.route_get_state(int(value))),
+				&"state": _state_name(_api.entity_get_state(
+						_api.entity_from_route(int(value)))),
 			},
 		)
 
-	_api._liveness.tombstone_routes_data(PackedInt64Array([routes[1]]))
+	_api._native_core.liveness_tombstone_routes_data(PackedInt64Array([routes[1]]))
 	_row(scenario, "live_routes", { &"routes": _api.live_routes() })
 	for value in routes:
 		_row(
@@ -164,31 +166,42 @@ func _bulk_claim_and_release(scenario: StringName) -> void:
 			"state",
 			{
 				&"route": int(value),
-				&"state": _state_name(_api.route_get_state(int(value))),
+				&"state": _state_name(_api.entity_get_state(
+						_api.entity_from_route(int(value)))),
 			},
 		)
 
 
-# A tombstone is permanent for the record that wore it, and a re-admission on
-# the same route is a new life rather than a resurrection. Both facts have to
-# hold at once, which is what makes this the scenario the port most easily gets
-# half right.
+# A route names one entity for the whole session, so a re-admission is the
+# record it already had one life higher and a stranger asking for the same route
+# is refused. Both facts have to hold at once, which is what makes this the
+# scenario the port most easily gets half right.
 func _revival_is_a_new_epoch(scenario: StringName) -> void:
 	var first := _api.entity_create()
-	var route := _api.reserve_route()
+	var route := _api._native_core.liveness_reserve_route()
 	_api.entity_bind_route(first, route)
-	_api._liveness.tombstone_routes_data(PackedInt64Array([route]))
+	_api._native_core.liveness_tombstone_routes_data(PackedInt64Array([route]))
 	_state(scenario, "first_dead", route, first)
 
-	var second := _api.entity_create()
-	_api.entity_bind_route(second, route)
-	_state(scenario, "second_live", route, second)
+	var stranger := _api.entity_create()
+	_row(
+		scenario,
+		"rename",
+		{ &"bound": _api.entity_bind_route(stranger, route) == OK },
+	)
+
+	_row(
+		scenario,
+		"revive",
+		{ &"bound": _api.entity_bind_route(first, route) == OK },
+	)
+	_state(scenario, "second_live", route, first)
 	_row(
 		scenario,
 		"identity",
 		{
-			&"first_still_dead": _state_name(_api.entity_get_state(first)),
-			&"route_holds_second": _api.rid_from_route(route) == second,
+			&"epoch": _api.entity_get_epoch(first),
+			&"route_holds_first": _api.entity_from_route(route) == first,
 		},
 	)
 
@@ -197,23 +210,23 @@ func _revival_is_a_new_epoch(scenario: StringName) -> void:
 # The count before and after is what says the queue released the entry rather
 # than merely running it.
 func _pending_live_flush(scenario: StringName) -> void:
-	var route := _api.reserve_route() + 1
+	var route := _api._native_core.liveness_reserve_route() + 1
 	_api.when_live(route, func() -> void: _row(scenario, "cb", { &"route": route }))
-	_row(scenario, "pending", { &"count": _api._liveness.pending_live_count() })
+	_row(scenario, "pending", { &"count": _api._native_core.liveness_pending_live_count() })
 
 	var claimed := _api.claim_routes(1)
 	_row(scenario, "claimed", { &"routes": claimed })
-	_row(scenario, "pending", { &"count": _api._liveness.pending_live_count() })
+	_row(scenario, "pending", { &"count": _api._native_core.liveness_pending_live_count() })
 
 	# A second binding of the same route must not answer the same caller twice.
-	_api._liveness.bind_routes_data(PackedInt64Array([route]))
-	_row(scenario, "pending", { &"count": _api._liveness.pending_live_count() })
+	_api._native_core.liveness_bind_routes_data(PackedInt64Array([route]))
+	_row(scenario, "pending", { &"count": _api._native_core.liveness_pending_live_count() })
 
 
 # The expiry half. Nothing binds the route, so the entry ages out against the
 # frame counter and the timeout callback runs in its place.
 func _pending_live_timeout(scenario: StringName) -> void:
-	var route := _api.reserve_route() + 5
+	var route := _api._native_core.liveness_reserve_route() + 5
 	_row(scenario, "clock", { &"configured": _api._clock.is_configured() })
 
 	_api.when_live(
@@ -223,13 +236,13 @@ func _pending_live_timeout(scenario: StringName) -> void:
 		func() -> void: _row(scenario, "timeout", { &"route": route }),
 	)
 	for step in 4:
-		_api._liveness.poll()
+		_api._liveness_poll()
 		_row(
 			scenario,
 			"polled",
 			{
 				&"step": step,
-				&"pending": _api._liveness.pending_live_count(),
+				&"pending": _api._native_core.liveness_pending_live_count(),
 			},
 		)
 
@@ -237,7 +250,7 @@ func _pending_live_timeout(scenario: StringName) -> void:
 # Two waits on one route with different deadlines. The shorter one expiring
 # must not take the longer one with it, which is the sweep's one real edge.
 func _pending_live_two_deadlines(scenario: StringName) -> void:
-	var route := _api.reserve_route() + 5
+	var route := _api._native_core.liveness_reserve_route() + 5
 	_api.when_live(
 		route,
 		func() -> void: _row(scenario, "cb", { &"deadline": 2 }),
@@ -251,13 +264,13 @@ func _pending_live_two_deadlines(scenario: StringName) -> void:
 		func() -> void: _row(scenario, "timeout", { &"deadline": 4 }),
 	)
 	for step in 5:
-		_api._liveness.poll()
+		_api._liveness_poll()
 		_row(
 			scenario,
 			"polled",
 			{
 				&"step": step,
-				&"pending": _api._liveness.pending_live_count(),
+				&"pending": _api._native_core.liveness_pending_live_count(),
 			},
 		)
 
@@ -268,11 +281,11 @@ func _pending_live_two_deadlines(scenario: StringName) -> void:
 func _adoption_row_then_wrapper(scenario: StringName) -> void:
 	var recorder := _watch()
 	var route := int(_api.claim_routes(1)[0])
-	var minted := _api.rid_from_route(route)
+	var minted := _api.entity_from_route(route)
 	_row(scenario, "signals", { &"order": recorder.order() })
 
 	var entity := _spawn_entity()
-	_api._liveness.bind_route(route, entity)
+	_api._native_core.liveness_bind_route(route, entity)
 	_row(
 		scenario,
 		"adopted",
@@ -290,17 +303,17 @@ func _adoption_row_then_wrapper(scenario: StringName) -> void:
 func _adoption_wrapper_then_row(scenario: StringName) -> void:
 	var recorder := _watch()
 	var entity := _spawn_entity()
-	var route := _api.entity_allocate_route(_api.rid_of(entity.owner))
+	var route := _api.entity_admit(_api.entity_of(entity.owner))
 	var held := entity.rid
 	_row(scenario, "signals", { &"order": recorder.order() })
 
-	_api._liveness.bind_routes_data(PackedInt64Array([route]))
+	_api._native_core.liveness_bind_routes_data(PackedInt64Array([route]))
 	_row(
 		scenario,
 		"reused",
 		{
 			&"same_record": entity.rid == held,
-			&"route_holds_wrapper": _api.rid_from_route(route) == held,
+			&"route_holds_wrapper": _api.entity_from_route(route) == held,
 		},
 	)
 	_row(scenario, "signals", { &"order": recorder.order() })
@@ -330,7 +343,7 @@ func _close_session() -> void:
 
 func _watch() -> Recorder:
 	return Recorder.new(
-		_api._liveness,
+		_api._native_core,
 		[&"entity_live", &"entity_lingering", &"entity_dead"],
 	)
 
@@ -375,7 +388,7 @@ func _state(
 		{
 			&"at": label,
 			&"entity": _state_name(_api.entity_get_state(entity)),
-			&"route": _state_name(_api.route_get_state(route)),
+			&"route": _state_name(_api.entity_get_state(_api.entity_from_route(route))),
 		},
 	)
 
@@ -406,6 +419,12 @@ func _header() -> String:
 		+ "#     -- --record\n"
 		+ "# Regenerating against a candidate implementation destroys the\n"
 		+ "# evidence this file exists to be.\n"
+		+ "#\n"
+		+ "# record/revival_is_a_new_epoch is the one scenario whose rows are\n"
+		+ "# hand-written rather than recorded. Its recorded rows described a\n"
+		+ "# revival minting a second record, which the record plane no longer\n"
+		+ "# does, so the arm and the native replay were re-authored separately\n"
+		+ "# against these rows instead of either being recorded from the other.\n"
 	)
 
 

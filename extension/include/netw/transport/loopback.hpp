@@ -15,14 +15,10 @@ namespace netw {
 
 class LocalLoopbackSession;
 
-// Declarative inbound impairment for one loopback link, in human units. The
-// numbers are read at receive time and never quantized to the physics rate, so
-// a latency shorter than one frame stays expressible.
 class LocalLinkConditions : public godot::RefCounted {
     GDCLASS(LocalLinkConditions, godot::RefCounted)
 
     static constexpr double DEFAULT_RETRANSMIT_MS = 30.0;
-    // A negative retransmit means "derive it from the latency when it is read".
     static constexpr double AUTO_RETRANSMIT = -1.0;
 
     double latency_ms = 0.0;
@@ -39,8 +35,6 @@ protected:
     static void _bind_methods();
 
 public:
-    // A registered class's `new()` takes no arguments, so the seed arrives
-    // through a static instead.
     static godot::Ref<LocalLinkConditions> create(int64_t p_seed = 0);
 
     static godot::Ref<LocalLinkConditions> perfect();
@@ -49,8 +43,6 @@ public:
     static godot::Ref<LocalLinkConditions> poor_3g();
     static godot::Ref<LocalLinkConditions> satellite();
 
-    // Converts a deterministic test cadence into the same millisecond unit a
-    // real link uses. The default is Godot's default physics cadence.
     static godot::Ref<LocalLinkConditions> polls(
         int p_count,
         double p_period_ms = 1000.0 / 60.0
@@ -81,9 +73,6 @@ public:
     double effective_retransmit_ms() const;
 };
 
-// An in-process peer that routes packets through memory instead of a socket.
-// Peer IDs, connection status and packet queues answer exactly what
-// ENetMultiplayerPeer's do, so a session cannot tell which one it is holding.
 class LocalMultiplayerPeer : public MultiplayerPeerBase {
     GDCLASS(LocalMultiplayerPeer, MultiplayerPeerBase)
 
@@ -139,7 +128,8 @@ public:
     godot::PackedInt32Array linked_peer_ids() const;
 
     void set_loopback_session(LocalLoopbackSession *p_session);
-    LocalLoopbackSession *get_loopback_session() const;
+    LocalLoopbackSession *loopback_session() const;
+    godot::Ref<LocalLoopbackSession> get_loopback_session() const;
 
     void NETW_PEER_VIRTUAL(set_transfer_channel)(int p_channel) override;
     int NETW_PEER_VIRTUAL(get_transfer_channel)() const override;
@@ -166,9 +156,6 @@ public:
     int NETW_PEER_VIRTUAL(get_unique_id)() const override;
     ConnectionStatus NETW_PEER_VIRTUAL(get_connection_status)() const override;
 
-    // The one place the tiers differ in signature and not only in spelling:
-    // the engine hands a raw buffer up from PacketPeer, and the extension base
-    // hands a PackedByteArray down from the script surface.
 #if defined(NETW_MODULE)
     godot::Error get_packet(
         const uint8_t **r_buffer,
@@ -186,16 +173,11 @@ public:
 #endif
 };
 
-// The in-process session that links peers to each other and simulates the link
-// between them. Time advances only when something advances it, so a delay is
-// counted in polls rather than in wall clock and a run reproduces.
 class LocalLoopbackSession : public godot::Resource {
     GDCLASS(LocalLoopbackSession, godot::Resource)
 
     friend class LocalMultiplayerPeer;
 
-    // Absorbs float-accumulation error so a packet due exactly on a poll
-    // boundary releases on that poll rather than the next one.
     static constexpr double RELEASE_EPSILON_MS = 0.0001;
 
     struct InFlight {
@@ -292,8 +274,6 @@ protected:
     static void _bind_methods();
 
 public:
-    // The process-wide session, minted on first access. `has_shared_session`
-    // is the way to ask whether one exists without minting one.
     static godot::Ref<LocalLoopbackSession> get_shared_session();
     static void set_shared_session(
         const godot::Ref<LocalLoopbackSession> &p_session
@@ -311,9 +291,6 @@ public:
     godot::StringName get_server_app_id() const;
 
     void poll();
-    // Advances by however many physics frames have actually passed, so a
-    // latency in milliseconds stays a latency in milliseconds no matter how
-    // many idle frames the engine ran.
     void poll_frame_scoped();
     void advance_time(double p_ms);
 
@@ -340,7 +317,6 @@ public:
     int in_flight_count(const LocalMultiplayerPeer *p_peer) const;
     bool is_holding_inbound(const LocalMultiplayerPeer *p_peer) const;
 
-    // Closes every peer and empties the session so a new server can host.
     void reset();
 };
 

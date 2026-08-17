@@ -97,7 +97,8 @@ func _impair_uplink(seed_value: int) -> void:
 func test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss() -> void:
 	await _setup_pair()
 
-	var client_binding := NetwEntity.of(client_root).broadcast_binding
+	var client_binding: NetwPropertySetBinding = NetwEntity.of(client_root) \
+			.broadcast_binding
 	assert_that(client_binding).is_not_null()
 	var last_tick := [-1]
 	var author := func(_d: float, t: int) -> void:
@@ -125,7 +126,7 @@ func test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss() -
 
 	var client_snap := client.api.stats_snapshot()
 	var server_snap := server.api.stats_snapshot()
-	assert_int(int(client_snap[&"masked_frames_out"])).is_greater(0)
+	assert_int(int(client_snap[&"row_frames_out"])).is_greater(0)
 	assert_int(int(server_snap[&"derived_frames_in"])).is_greater(0)
 
 	# The server authors nothing toward the client, so every ack it sends is a
@@ -152,3 +153,11 @@ func test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss() -
 	_stepper.sync_ticks(6)
 	var t: int = last_tick[0]
 	assert_that(server_root.aim_dir).is_equal(Vector2(t, -t))
+
+	# Nothing authors any more, so a stream whose baseline promoted has nothing
+	# left to diff and goes quiet. A send side that staged its rows against a
+	# datagram they did not ride would still be resending this row forever.
+	var settled := int(client.api.stats_snapshot()[&"row_frames_out"])
+	_stepper.sync_ticks(6)
+	assert_int(int(client.api.stats_snapshot()[&"row_frames_out"])) \
+			.is_equal(settled)

@@ -111,6 +111,28 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Sync][Hosted][Timeline] a despawned entity stays answerable "
+    "until the window passes the tick it died at"
+) {
+    const Ref<NetwTimeline> timeline = NetwTimeline::create(64);
+    for (int64_t tick = 0; tick < 30; ++tick) {
+        timeline->record_state(tick, motion(double(tick)));
+    }
+    const int64_t despawned_at = 29;
+
+    // A shooter who saw the target at 20 validates against where it stood,
+    // after the target is gone. That is the whole of what a despawn linger
+    // buys: the history outlives the body.
+    NETW_CHECK_EQ(x_of(timeline->latest_state_at_or_before(20)), 20.0);
+
+    // Once the retained window passes the tick it died at, the answer expires
+    // rather than freezing at the last thing it held.
+    timeline->trim_before(despawned_at + 1);
+    CHECK(timeline->latest_state_at_or_before(20).is_empty());
+    CHECK(timeline->state_at(20).is_empty());
+}
+
+TEST_CASE(
     "[Networked][Sync][Hosted][Timeline] the retained window is bounded by the "
     "declared limit"
 ) {

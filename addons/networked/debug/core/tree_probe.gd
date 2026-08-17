@@ -9,7 +9,6 @@
 class_name TreeProbe
 extends Node
 
-const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 ## Emitted when the tree has finished initial debug wiring.
 signal tree_ready
@@ -244,11 +243,11 @@ func send_topology_snapshot(player: Node) -> void:
 	if is_instance_valid(player.get_parent()) else ""
 	snap.active_scene = get_active_scene_path(player)
 	snap.cache_info = {
-		"hit": player.has_meta(SynchronizersCache.META_KEY),
+		"hit": player.has_meta(NetwSynchronizers.meta_key()),
 		"hooked": player.has_meta(&"_sc_invalidation_connected"),
 	}
 
-	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(player):
+	for sync: MultiplayerSynchronizer in NetwSynchronizers.of_node(player):
 		var si := NetwTopologySnapshot.SyncInfo.new()
 		si.name = sync.name
 		si.root_path = str(sync.root_path)
@@ -312,7 +311,7 @@ func watch_node(np: NodePath) -> void:
 		return
 
 	var hooked: Array = []
-	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(node):
+	for sync: MultiplayerSynchronizer in NetwSynchronizers.of_node(node):
 		var cb := func() -> void: _send_replication_snapshot(node, sync)
 		sync.delta_synchronized.connect(cb)
 		sync.synchronized.connect(cb)
@@ -362,7 +361,7 @@ func _send_full_replication_snapshot(node: Node) -> void:
 
 	var all_props: Dictionary = { }
 	var inventory: Array = []
-	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(node):
+	for sync: MultiplayerSynchronizer in NetwSynchronizers.of_node(node):
 		all_props.merge(_collect_properties(node, sync))
 		inventory.append(
 			{
@@ -660,7 +659,7 @@ func _hook_synchronizer(scene: Node) -> void:
 		if present and node != null:
 			_on_player_spawned(node, scene)
 	api.scene_observe(
-		api.rid_of(scene),
+		api.entity_of(scene),
 		NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
 		cb,
 	)
@@ -672,7 +671,7 @@ func _unhook_synchronizer(scene: Node) -> void:
 	var api := _api()
 	if api != null and cb.is_valid() and is_instance_valid(scene):
 		api.scene_unobserve(
-			api.rid_of(scene),
+			api.entity_of(scene),
 			NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
 			cb,
 		)

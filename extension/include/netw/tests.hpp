@@ -30,6 +30,8 @@ public:
         const godot::String &cells_path = godot::String()
     );
     void instrumentation_probe(int64_t value) const;
+
+    godot::Dictionary wire_spec() const;
 };
 
 } // namespace netw

@@ -192,6 +192,13 @@ void Journal::mark_witness_match(int64_t p_transition, bool p_matched) {
     if (p_matched) {
         flags[uint32_t(slot)] |= ROW_WITNESS_MATCHED;
     }
+    witness_states[uint32_t(slot)] |= WITNESS_JUDGED;
+}
+
+bool Journal::witness_judged(int64_t p_transition) const {
+    const int slot = slot_of(p_transition);
+    return slot >= 0
+        && (witness_states[uint32_t(slot)] & WITNESS_JUDGED) != 0;
 }
 
 void Journal::mark_substituted(int64_t p_transition) {

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSyncProgress" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Receive-side freshness books, keyed by route, sender, and channel.
+	</brief_description>
+	<description>
+		One unreliable datagram carries one sequence for every frame in it, and those frames belong to different streams. This decides per stream whether an arriving frame is newer than the last accepted one, so a reordered datagram loses only the streams a fresher datagram already superseded.
+		Freshness is judged across a half window rather than by magnitude, so a sequence that wrapped past 65535 still reads as forward. An equal sequence is stale.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="accept_unreliable">
+			<return type="bool" />
+			<param index="0" name="sender" type="int" />
+			<param index="1" name="route" type="int" />
+			<param index="2" name="channel" type="int" />
+			<param index="3" name="sequence" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="clear_peer">
+			<return type="void" />
+			<param index="0" name="peer" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="clear_route">
+			<return type="void" />
+			<param index="0" name="route" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="stats" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

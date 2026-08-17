@@ -94,8 +94,12 @@ var stall_threshold: float:
 		return core.stall_threshold
 
 ## Reads the engine's physics interpolation fraction for [member tick_factor]
-## when available, instead of a wall-clock estimate.
-var use_physics_interpolation: bool = true
+## instead of the wall-clock span since the last step.
+var use_physics_interpolation: bool:
+	set(v):
+		core.use_physics_interpolation = v
+	get:
+		return core.use_physics_interpolation
 
 ## Strategy used to align the local clock with the server, one of [enum SyncMode].
 var sync_mode: SyncMode:
@@ -187,7 +191,7 @@ var enable_drift_logging: bool = false
 ## Held rather than mirrored: the tick schedule, the calibration and the
 ## simulation gate are arithmetic over integers and durations, so they outlive
 ## every node that authors them and reach no [Object] at all.
-var core := NetwClockCore.new()
+var core: NetwClockCore
 
 ## The current server-calibrated simulation tick.
 var tick: int:
@@ -242,34 +246,14 @@ var simulation_behind_count: int:
 	get:
 		return core.simulation_behind_count()
 
-## The fractional position [0, 1) within the current tick.
+## Where a display sits inside the current tick, unclamped, per
+## [method NetwClockCore.tick_factor]. Assigning places it, and a negative
+## assignment hands the reading back to the clock.
 var tick_factor: float:
 	set(v):
-		_tick_factor_override = v
+		core.tick_factor_override = v
 	get:
-		if _tick_factor_override >= 0.0:
-			return _tick_factor_override
-
-		if Engine.is_editor_hint() or not is_configured():
-			return 0.0
-
-		var phys_delta := 1.0 / float(Engine.physics_ticks_per_second)
-		var time_in_frame := 0.0
-
-		if use_physics_interpolation and \
-				Engine.has_method(&"get_physics_interpolation_fraction"):
-			# Engine fraction (0->1) represents time since start of physics frame
-			time_in_frame = Engine.get_physics_interpolation_fraction() * phys_delta
-		else:
-			# Fallback to wall-clock time since start of physics frame
-			time_in_frame = (Time.get_ticks_usec() - _last_physics_time_usec) / 1_000_000.0
-
-		# CRITICAL: Do NOT clamp to 1.0.
-		# If the render frame happens just before the next physics frame and
-		# timing is slightly off, the factor might be 1.01.
-		# Clamping causes the playhead to stall, creating small jagged jumps.
-		# MultiplayerInterpolator already handles factor > 1.0 by floor()ing it into dt.
-		return (core.tick_accumulator() + time_in_frame) / ticktime
+		return core.tick_factor()
 
 ## The tick index used for visual display: [code]tick - display_offset[/code].
 var display_tick: int:
@@ -440,14 +424,17 @@ var _api_ref: WeakRef
 # pong_received).
 var _node: MultiplayerClock
 
-var _configured := false
-var _last_physics_time_usec: int = 0
+var _configured: bool:
+	set(v):
+		core.configured = v
+	get:
+		return core.configured
+
 # Cadence counters behind cadence(). Zero until the first counted call, so a
 # never-pumped clock reports an empty span rather than a stale one.
 var _cadence_started_usec: int = 0
 var _physics_frame_count: int = 0
 var _poll_count: int = 0
-var _tick_factor_override: float = -1.0
 var _drift_samples: Array[int] = []
 var _drift_timer: float = 0.0
 
@@ -457,6 +444,7 @@ var _drift_timer: float = 0.0
 
 func _init(api: NetwMultiplayer = null) -> void:
 	_api_ref = weakref(api) if api else null
+	core = api._native_core.clock_core if api else NetwClockCore.new()
 	# The schedule is emitted where it is decided, and this interface is what
 	# the session's consumers connect to, so every engine signal is forwarded
 	# rather than re-derived. Forwarding is what keeps a caller's connection
@@ -467,6 +455,23 @@ func _init(api: NetwMultiplayer = null) -> void:
 	core.after_tick.connect(after_tick.emit)
 	core.after_tick_loop.connect(after_tick_loop.emit)
 	core.clock_synchronized.connect(clock_synchronized.emit)
+	if api:
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE,
+			_handle_handshake,
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE_REPLY,
+			_handle_handshake_reply,
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.CLOCK_PING,
+			_handle_ping,
+		)
+		api._replication.register_protocol(
+			NetwFrameEnvelope.Channel.CLOCK_PONG,
+			_handle_pong,
+		)
 	core.stability_changed.connect(stability_changed.emit)
 	core.display_offset_insufficient.connect(display_offset_insufficient.emit)
 
@@ -481,10 +486,9 @@ func _api() -> NetwMultiplayer:
 func physics_step(delta: float) -> void:
 	# The cadence counters stay here because they are wall-clock truth about the
 	# pump, which is this interface's concern rather than the schedule's.
-	_last_physics_time_usec = Time.get_ticks_usec()
 	_physics_frame_count += 1
 	if _cadence_started_usec == 0:
-		_cadence_started_usec = _last_physics_time_usec
+		_cadence_started_usec = Time.get_ticks_usec()
 
 	core.physics_step(delta)
 
@@ -523,11 +527,11 @@ func is_gated() -> bool:
 ## [method detach_node]'s counterpart [method configure], so the two pumps never
 ## both run.
 func poll_step() -> void:
-	var now := Time.get_ticks_usec()
-	if _node or manual_tick or not is_configured() or _last_physics_time_usec == 0:
-		_last_physics_time_usec = now
+	var span := core.seconds_since_step()
+	if _node or manual_tick or not is_configured() or span < 0.0:
+		core.mark_step()
 		return
-	physics_step(float(now - _last_physics_time_usec) / 1_000_000.0)
+	physics_step(span)
 
 
 ## Accumulates the client ping cadence. Returns [code]true[/code] and resets

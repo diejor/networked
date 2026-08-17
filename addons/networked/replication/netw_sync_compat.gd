@@ -53,7 +53,6 @@
 class_name NetwSyncCompat
 extends RefCounted
 
-const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 ## Watched properties per consumed synchronizer ride a 64-bit delta mask, the
 ## same ceiling the native replicator has, enforced loudly at consumption.
@@ -88,9 +87,9 @@ var _drops_sync_bad_sender: int = 0
 # Receiver: frame for a binding whose schema hash disagreed with the SPAWN
 # frame's descriptor. The binding is poisoned and every frame drops loudly.
 var _drops_sync_poisoned: int = 0
-# Receiver: SYNC frame carrying a flag bit this version does not implement. The
-# consumed decoder reads only the plain (flags 0) grammar, so any set bit is a
-# version skew and the frame drops loudly rather than misreading the payload.
+# Receiver: SYNC frame whose reserved byte was written. The sender speaks a
+# grammar this version does not have, so the frame drops loudly rather than
+# reading its values against the wrong layout.
 var _drops_sync_unknown_flag: int = 0
 
 
@@ -196,7 +195,7 @@ func consume_remove(root: Node, sync: MultiplayerSynchronizer) -> Error:
 		if _consumed[i].sync() == sync:
 			_drop_declaration(_consumed[i])
 			_disconnect_config(_consumed[i])
-			_watch_book.reset(_consumed[i])
+			_watch_book.reset(_consumed[i].get_instance_id())
 			_consumed.remove_at(i)
 	_refresh_interest_intent(root)
 	return OK
@@ -304,7 +303,7 @@ func _refresh_binding(binding: _Consumed) -> void:
 		watch.resize(WATCH_LIMIT)
 	if watch != binding.watch_paths:
 		binding.watch_paths = watch
-		_watch_book.reset(binding)
+		_watch_book.reset(binding.get_instance_id())
 	binding.schema_hash = _schema_hash(binding)
 	_declare_model_row(binding)
 
@@ -349,7 +348,7 @@ func pump() -> void:
 	var api := _api()
 	if not api or not api.inner.multiplayer_peer:
 		return
-	var liveness := api._liveness
+	var native_core := api._native_core
 	var repl := api._replication
 	var now := Time.get_ticks_usec()
 
@@ -400,7 +399,7 @@ func pump() -> void:
 
 		if not binding.sync_paths.is_empty() \
 				and _throttle_elapsed(binding.last_sync_usec, sync.replication_interval, now):
-			var stock_payload := _encode_sync_frame(binding, route, liveness)
+			var stock_payload := _encode_sync_frame(binding, route, native_core)
 			if not stock_payload.is_empty():
 				binding.last_sync_usec = now
 				for peer_id in recipients:
@@ -423,11 +422,14 @@ func pump() -> void:
 				and _throttle_elapsed(binding.last_watch_usec, sync.delta_interval, now):
 			binding.last_watch_usec = now
 			_poll_watchers(binding)
-			_send_deltas(binding, route, recipients, liveness, repl)
+			_send_deltas(binding, route, recipients, native_core, repl)
 
 		# A baseline held against a peer that lost the route must not survive
 		# to its next admission: absence is what triggers the full-row heal.
-		_watch_book.retain_baselines(binding, recipients)
+		_watch_book.retain_baselines(
+			binding.get_instance_id(),
+			PackedInt32Array(recipients),
+		)
 
 
 func _prune() -> void:
@@ -435,7 +437,7 @@ func _prune() -> void:
 		if not is_instance_valid(_consumed[i].sync()):
 			_drop_declaration(_consumed[i])
 			_disconnect_config(_consumed[i])
-			_watch_book.reset(_consumed[i])
+			_watch_book.reset(_consumed[i].get_instance_id())
 			_consumed.remove_at(i)
 
 
@@ -465,19 +467,20 @@ func _recipients_for(
 	var local_id := api.get_unique_id()
 	if api.is_host:
 		var pipeline := api._replication._spawn_pipeline
-		if pipeline._spawn_book.armed.has(route):
+		if pipeline._spawn_book.has_armed(route):
 			# The SPAWN has not flushed yet, so no peer can have the node.
 			return out
 		var base: Array[int] = []
-		var record: NetwSpawnBook.SpawnRecord = pipeline._spawn_book.spawned.get(route)
+		var record := pipeline._spawn_book.spawned_of(route)
 		if record:
-			if api.route_get_state(route) != NetwMultiplayer.EntityState.LIVE:
+			if api.entity_get_state(
+					api.entity_from_route(route)) != NetwMultiplayer.EntityState.LIVE:
 				return out
-			base.assign(record.recipients)
+			base.assign(record.recipients())
 		else:
 			base = api._replication.live_peers(entity)
 		# The filter verdict is entity-wide, so resolve it once outside the loop.
-		var filtered := api.interest_is_filtered(api.rid_of(entity.owner))
+		var filtered := api.interest_is_filtered(api.entity_of(entity.owner))
 		for peer_id in base:
 			if peer_id == local_id:
 				continue
@@ -522,29 +525,20 @@ func synchronizer_verdict(peer_id: int, node: Node) -> bool:
 	return not found
 
 
-# Gathers the binding's sync row and encodes one plain SYNC payload through the
-# shared frame codec. A consumed stock set carries no stamp, ack, or mask, so the
-# flags byte is zero and the frame is the bare positional row. An unresolved
-# field target skips the whole pass so a half-row never crosses the wire.
+# Gathers the binding's sync row and encodes it through the shared kernel. An
+# unresolved field target skips the whole pass so a half-row never crosses the
+# wire.
 func _encode_sync_frame(
 		binding: _Consumed,
 		route: int,
-		liveness: LivenessShell,
+		native_core: NetwMultiplayerCore,
 ) -> PackedByteArray:
 	var values := _gather_paths(binding, binding.sync_paths)
 	if values.size() != binding.sync_paths.size():
 		return PackedByteArray()
-	var types: Array = []
-	for value: Variant in values:
-		types.append(typeof(value))
 	return NetwSyncKernel.encode_volatile(
-		_ordinal_of(binding, route, liveness),
-		0,
+		_ordinal_of(binding, route, native_core),
 		values,
-		[],
-		types,
-		-1,
-		-1,
 	)
 
 
@@ -559,7 +553,7 @@ func _poll_watchers(binding: _Consumed) -> void:
 		true,
 		readable,
 	)
-	_watch_book.poll(binding, values, readable)
+	_watch_book.poll(binding.get_instance_id(), values, readable)
 
 
 # Sends one masked SYNC_DELTA per recipient whose baseline is older than a
@@ -569,29 +563,20 @@ func _send_deltas(
 		binding: _Consumed,
 		route: int,
 		recipients: Array[int],
-		liveness: LivenessShell,
+		native_core: NetwMultiplayerCore,
 		repl: ReplicationCore,
 ) -> void:
-	if not _watch_book.is_inited(binding):
+	if not _watch_book.is_inited(binding.get_instance_id()):
 		return
-	var ordinal := _ordinal_of(binding, route, liveness)
+	var ordinal := _ordinal_of(binding, route, native_core)
 	for peer_id in recipients:
-		var selected := _watch_book.mask_for(binding, peer_id)
+		var selected := _watch_book.mask_for(binding.get_instance_id(), peer_id)
 		var mask: int = selected[0]
 		var values: Array = selected[1]
-		_watch_book.commit(binding, peer_id)
+		_watch_book.commit(binding.get_instance_id(), peer_id)
 		if mask == 0:
 			continue
-		var types: Array = []
-		for v in values:
-			types.append(typeof(v))
-		var stock_bytes := NetwSyncKernel.encode_retained(
-			ordinal,
-			mask,
-			values,
-			[],
-			types,
-		)
+		var stock_bytes := NetwSyncKernel.encode_retained(ordinal, mask, values)
 		var bytes := _run_encode_stage(peer_id, stock_bytes)
 		if bytes.is_empty():
 			continue
@@ -619,6 +604,12 @@ func _run_encode_stage(peer: int, stock: PackedByteArray) -> PackedByteArray:
 	var tick := api.clock.tick if api.clock.is_configured() else 0
 	var bytes := api._sync_encode(peer, tick)
 	api._sync_encoder = Callable()
+	api.report_event(
+		NetwMultiplayerCore.SYNC_ENCODE,
+		0,
+		{ bytes = bytes.size() },
+		peer,
+	)
 	return bytes
 
 #endregion
@@ -635,7 +626,7 @@ func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> v
 	var api := _api()
 	if not api:
 		return
-	var route := api._liveness.route_of(entity)
+	var route := api._native_core.liveness_route_of(entity)
 	var r := NetwBitBufferReader.create(payload)
 	var ordinal := NetwCodec.get_safe_varint(r)
 	var binding := _binding_by_ordinal(route, ordinal)
@@ -643,7 +634,7 @@ func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> v
 		_drops_sync_no_set += 1
 		return
 	_refresh_binding(binding)
-	_validate_schema(binding, route, api._liveness)
+	_validate_schema(binding, route, api._native_core)
 	if binding.poisoned:
 		_drops_sync_poisoned += 1
 		return
@@ -652,9 +643,9 @@ func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> v
 		_drops_sync_bad_sender += 1
 		return
 	var flags := r.get_aligned_u8()
-	if flags != 0:
-		# A flag bit this version does not implement means the sender speaks a
-		# newer grammar. Drop loudly instead of misreading the framed payload.
+	if flags != NetwSyncKernel.RESERVED:
+		# A sender that wrote the reserved byte speaks a newer grammar. Drop
+		# loudly instead of misreading the framed payload.
 		_drops_sync_unknown_flag += 1
 		push_warning(
 			"NetwSyncCompat: consumed synchronizer '%s' SYNC flags %d unimplemented, "
@@ -673,12 +664,7 @@ func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> v
 		-1,
 		payload,
 		func() -> Error:
-			decoded[0] = NetwSyncKernel.decode_volatile(
-				payload,
-				keys,
-				[],
-				[],
-			)
+			decoded[0] = NetwSyncKernel.decode_volatile(payload, keys)
 			return OK if decoded[0] else ERR_INVALID_DATA,
 	)
 	var staged := decoded[0]
@@ -702,7 +688,7 @@ func handle_sync_delta(entity: NetwEntity, payload: PackedByteArray, sender: int
 	var api := _api()
 	if not api:
 		return
-	var route := api._liveness.route_of(entity)
+	var route := api._native_core.liveness_route_of(entity)
 	var r := NetwBitBufferReader.create(payload)
 	var ordinal := NetwCodec.get_safe_varint(r)
 	var binding := _binding_by_ordinal(route, ordinal)
@@ -710,7 +696,7 @@ func handle_sync_delta(entity: NetwEntity, payload: PackedByteArray, sender: int
 		_drops_sync_no_set += 1
 		return
 	_refresh_binding(binding)
-	_validate_schema(binding, route, api._liveness)
+	_validate_schema(binding, route, api._native_core)
 	if binding.poisoned:
 		_drops_sync_poisoned += 1
 		return
@@ -734,12 +720,7 @@ func handle_sync_delta(entity: NetwEntity, payload: PackedByteArray, sender: int
 		-1,
 		payload,
 		func() -> Error:
-			decoded[0] = NetwSyncKernel.decode_retained(
-				payload,
-				keys,
-				[],
-				[],
-			)
+			decoded[0] = NetwSyncKernel.decode_retained(payload, keys)
 			return OK if decoded[0] else ERR_INVALID_DATA,
 	)
 	var staged := decoded[0]
@@ -773,6 +754,15 @@ func _run_decode_stage(
 	api._sync_decoder = decoder
 	var verdict := api._sync_decode(entity, comp, flags, tick, payload)
 	api._sync_decoder = Callable()
+	api.report_event(
+		NetwMultiplayerCore.SYNC_DECODE,
+		api._native_core.liveness_core.route_of(entity),
+		{ comp = comp },
+		0,
+		&"",
+		{ },
+		verdict,
+	)
 	return verdict
 
 
@@ -819,7 +809,7 @@ func _display_paths_for(
 	var out: Array = []
 	var root := binding.root()
 	if is_instance_valid(root):
-		for db: Array in SynchronizersCache.display_bindings(sync, root):
+		for db: Array in NetwSynchronizers.display_bindings(sync, root):
 			out.append([db[1] as Node, db[2] as StringName])
 	binding.display_feed_paths = out
 	binding.display_feed_built = true
@@ -835,15 +825,15 @@ func _display_paths_for(
 ## receiver validates its translated sets against the sender's at spawn time.
 func encode_descriptors(w: NetwBitBufferWriter, route: int) -> void:
 	var api := _api()
-	var rows: Array[NetwSyncModel.SetRow] = []
+	var rows: Array[NetwSyncSetRow] = []
 	if api:
-		for row: NetwSyncModel.SetRow in api._replication.sync_model.route_rows(
+		for row: NetwSyncSetRow in api._replication.sync_model.route_rows(
 			route,
 		):
-			if row.kind == NetwSyncModel.Kind.CONSUMED:
+			if row.kind == NetwSyncModel.Kind.KIND_CONSUMED:
 				rows.append(row)
 	NetwCodec.put_varint(w, rows.size())
-	for row: NetwSyncModel.SetRow in rows:
+	for row: NetwSyncSetRow in rows:
 		NetwCodec.put_varint(w, row.ordinal)
 		w.put_aligned_u16(row.schema_hash)
 
@@ -861,7 +851,7 @@ func note_schema(route: int, descriptors: Dictionary) -> void:
 func _validate_schema(
 		binding: _Consumed,
 		route: int,
-		liveness: LivenessShell,
+		native_core: NetwMultiplayerCore,
 ) -> void:
 	if binding.schema_checked:
 		return
@@ -869,7 +859,7 @@ func _validate_schema(
 	if pending.is_empty():
 		return
 	binding.schema_checked = true
-	var ordinal := _ordinal_of(binding, route, liveness)
+	var ordinal := _ordinal_of(binding, route, native_core)
 	if not pending.has(ordinal):
 		return
 	if int(pending[ordinal]) != binding.schema_hash:
@@ -895,14 +885,14 @@ func _poison(binding: _Consumed, route: int, reason: String) -> void:
 #region Ordinals
 
 # A route's consumed bindings in captured wire-ordinal order.
-func _route_group(route: int, _liveness: LivenessShell = null) \
+func _route_group(route: int, _native_core: NetwMultiplayerCore = null) \
 -> Array[_Consumed]:
 	var out: Array[_Consumed] = []
 	var api := _api()
 	if not api:
 		return out
-	for row: NetwSyncModel.SetRow in api._replication.sync_model.route_rows(route):
-		if row.kind != NetwSyncModel.Kind.CONSUMED:
+	for row: NetwSyncSetRow in api._replication.sync_model.route_rows(route):
+		if row.kind != NetwSyncModel.Kind.KIND_CONSUMED:
 			continue
 		for binding: _Consumed in _consumed:
 			if binding.route == route and binding.order_key == row.key:
@@ -911,25 +901,14 @@ func _route_group(route: int, _liveness: LivenessShell = null) \
 	return out
 
 
-func _ordinal_of(binding: _Consumed, route: int, liveness: LivenessShell) -> int:
+func _ordinal_of(binding: _Consumed, route: int, native_core: NetwMultiplayerCore) -> int:
 	var api := _api()
 	var row := api._replication.sync_model.row_for(
 		route,
-		NetwSyncModel.Kind.CONSUMED,
+		NetwSyncModel.Kind.KIND_CONSUMED,
 		binding.order_key,
 	) if api else null
 	return row.ordinal if row else -1
-
-
-## Returns the count of consumed sets on [param route], the base [code]K[/code] a
-## derived set's ordinal is offset above. A consumed set holds ordinals
-## [code]0[/code] to [code]K - 1[/code], so [NetwSyncPipeline] slots its derived
-## sets at [code]K[/code] and upward and a receiver splits an inbound ordinal at
-## the same boundary. Both peers derive [code]K[/code] structurally, so the split
-## is deterministic.
-func route_set_count(route: int) -> int:
-	var api := _api()
-	return api._replication.sync_model.consumed_count(route) if api else 0
 
 
 func _binding_by_ordinal(route: int, ordinal: int) -> _Consumed:
@@ -937,7 +916,7 @@ func _binding_by_ordinal(route: int, ordinal: int) -> _Consumed:
 	if not api or ordinal < 0:
 		return null
 	var row := api._replication.sync_model.row(route, ordinal)
-	if row == null or row.kind != NetwSyncModel.Kind.CONSUMED:
+	if row == null or row.kind != NetwSyncModel.Kind.KIND_CONSUMED:
 		return null
 	for binding: _Consumed in _consumed:
 		if binding.route == route and binding.order_key == row.key:
@@ -969,7 +948,7 @@ func _declare_model_row(binding: _Consumed) -> void:
 		return
 	api._replication.sync_model.declare(
 		binding.route,
-		NetwSyncModel.Kind.CONSUMED,
+		NetwSyncModel.Kind.KIND_CONSUMED,
 		binding.order_key,
 		binding.comp,
 		RID(),
@@ -984,7 +963,7 @@ func _drop_declaration(binding: _Consumed) -> void:
 	if api and binding.route > 0 and not binding.order_key.is_empty():
 		api._replication.sync_model.drop(
 			binding.route,
-			NetwSyncModel.Kind.CONSUMED,
+			NetwSyncModel.Kind.KIND_CONSUMED,
 			binding.order_key,
 		)
 	binding.route = 0
@@ -1084,7 +1063,7 @@ static func _write_path(root: Node, path: NodePath, value: Variant) -> void:
 func clear_session() -> void:
 	_pending_schema.clear()
 	for binding in _consumed:
-		_watch_book.clear_baselines(binding)
+		_watch_book.clear_baselines(binding.get_instance_id())
 		binding.schema_checked = false
 		binding.poisoned = false
 		binding.last_sync_usec = -1

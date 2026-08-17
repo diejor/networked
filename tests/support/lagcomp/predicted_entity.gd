@@ -154,7 +154,7 @@ func server_sample_at(tick: int) -> NetwSnapshot:
 	if not scenario or not scenario.server:
 		return NetwSnapshot.new()
 	return scenario.server.api.lagcomp_sample(
-		scenario.server.api.rid_of(server_root),
+		scenario.server.api.entity_of(server_root),
 		tick,
 	)
 

@@ -104,7 +104,7 @@ func _wait_probe(
 		route: int,
 ) -> NetwSpawnProbe:
 	for _i in 120:
-		var node := runner.tree.api._liveness.node_of(route) as NetwSpawnProbe
+		var node := runner.tree.api._native_core.liveness_node_of(route) as NetwSpawnProbe
 		if node:
 			return node
 		await game.sync_ticks(1)

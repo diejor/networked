@@ -66,9 +66,12 @@ var pump_mode := DisplayCore._PUMP_REMOTE
 ## project-to-cap families. Records scheduled past it are dropped.
 var record_cutoff_sec := INF
 
+# The flat selector the display record is written through.
+const _Param := NetwMultiplayer.DisplayParam
+
 var _iface: DisplayCore
-var _rt: DisplayCore._Runtime
-var _state: DisplayCore._PropertyState
+var _rt: NetwDisplayRuntime
+var _state: NetwDisplayChannel
 var _writer: NetwInterpRecordingWriter
 var _stats := NetwPumpStats.new()
 var _body: _ChaseBody
@@ -99,15 +102,17 @@ func configure(spec: NetwInterpolate, initial: Variant) -> void:
 	frame_dt_sec = 1.0 / fps
 	_iface = DisplayCore.new()
 
-	_rt = DisplayCore._Runtime.new()
-	_rt.config = DisplayCore._Config.new()
-	_rt.config.timeline_mode = timeline_mode
-	_rt.config.max_forecast_ticks = max_forecast_ticks
-	_rt.playhead = DisplayCore._Playhead.new()
+	_rt = NetwDisplayRuntime.new()
+	_rt.config = NetwDisplayDecl.new()
+	_rt.config.set_param(_Param.DISPLAY_PARAM_TIMELINE_MODE, timeline_mode)
+	_rt.config.set_param(
+		_Param.DISPLAY_PARAM_MAX_FORECAST_TICKS, max_forecast_ticks
+	)
+	_rt.playhead = NetwDisplayPlayhead.new()
 	_rt.playhead.expected_interval_ticks = maxi(1, send_period)
 	_rt.pump_mode = pump_mode
 
-	_state = DisplayCore._PropertyState.new()
+	_state = NetwDisplayChannel.new()
 	_state.name = &"value"
 	_state.spec = spec
 	_state.source_prop = &"value"
@@ -120,7 +125,7 @@ func configure(spec: NetwInterpolate, initial: Variant) -> void:
 	_state.last_written = initial
 
 	_rt.states.append(_state)
-	_rt.states_by_key[_state.name] = _state
+	_rt.tracks.declare(_state.name, _state.name)
 
 
 ## Builds a single-channel predicted CHASE runtime that eases toward a live body
@@ -129,16 +134,18 @@ func configure_chase(spec: NetwInterpolate, smooth_time: float, initial: Variant
 	frame_dt_sec = 1.0 / fps
 	_iface = DisplayCore.new()
 
-	_rt = DisplayCore._Runtime.new()
-	_rt.config = DisplayCore._Config.new()
-	_rt.config.predicted_smooth_time = smooth_time
-	_rt.playhead = DisplayCore._Playhead.new()
+	_rt = NetwDisplayRuntime.new()
+	_rt.config = NetwDisplayDecl.new()
+	_rt.config.set_param(
+		_Param.DISPLAY_PARAM_PREDICTED_SMOOTH_TIME, smooth_time
+	)
+	_rt.playhead = NetwDisplayPlayhead.new()
 	_rt.pump_mode = DisplayCore._PUMP_CHASE
 
 	_body = _ChaseBody.new()
 	_body.value = initial
 
-	_state = DisplayCore._PropertyState.new()
+	_state = NetwDisplayChannel.new()
 	_state.name = &"value"
 	_state.spec = spec
 	_state.source_obj = _body
@@ -230,10 +237,9 @@ func run(
 	var schedule := delivery.build(oracle, tickrate, send_period, duration_sec)
 
 	# Prime the lag floor the way _reset_runtime does before the first pump.
-	var seed_timing := _timing(0.0)
-	var floor_lag := _iface._calculate_min_lag(_rt, seed_timing)
-	_rt.playhead.smoothed_floor = floor_lag
-	_rt.playhead.display_lag = floor_lag
+	_rt.playhead.settle(
+		_rt.config, display_offset, recommended_display_offset
+	)
 
 	frames = PackedFloat64Array()
 	displayed = []

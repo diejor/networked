@@ -99,6 +99,13 @@ enum Plant {
     // A rewind to a tick nothing was retained at is served from the nearest
     // tick that was, so an unanswerable past answers anyway.
     PLANT_RETAINED_REWIND,
+    // A SAMPLE of a tick older than anything retained is clamped into the
+    // window instead of answering nothing, so a compensator that should have
+    // declined is handed a position the history never held.
+    PLANT_RETAINED_SAMPLE,
+    // A peer that records no authoritative history is asked AUTHORITY's
+    // timeline, so a client answers a sample it has no history behind.
+    PLANT_PEER_READS_AUTHORITY,
     // Authority is granted the owner's clock whatever the scenario declared
     // for it, so no stream can ever stand ahead of what authority consumed.
     PLANT_LOCKSTEP_AUTHORITY,
@@ -380,13 +387,14 @@ inline void ScenarioRun::drive(int p_tick, Plant p_plant) {
     Track *rows = tracks.ptrw();
     for (int at = 0; at < tracks.size(); ++at) {
         Track &track = rows[at];
-        const godot::Dictionary fold = netw::NetwPredictionCore::predict_fold(
-            track.latest_input_tick,
-            track.last_driven_input_tick,
-            p_tick
-        );
+        const godot::Ref<netw::NetwPredictFold> fold
+            = netw::NetwPredictionCore::predict_fold(
+                track.latest_input_tick,
+                track.last_driven_input_tick,
+                p_tick
+            );
         const bool fresh = p_plant == PLANT_DRIVE_EVERY_TICK
-            || int(fold[godot::StringName("kind")]) == DRIVE_FRESH;
+            || fold->kind() == DRIVE_FRESH;
         if (fresh) {
             track.last_driven_input_tick = track.latest_input_tick;
             track.lane.lane_consumed += 1;
@@ -413,36 +421,37 @@ inline void ScenarioRun::judge(int p_tick, Plant p_plant) {
         const int domain
             = netw::NetwPredictionCore::domain_of(true, false, p_tick, -1);
         godot::Dictionary pose_errors;
-        const godot::Dictionary result = netw::NetwPredictionCore::evaluate(
-            domain,
-            VERDICT_UNJUDGED,
-            predicted,
-            payload,
-            wiring,
-            pose_errors
-        );
+        const godot::Ref<netw::NetwPredictJudgement> judgement
+            = netw::NetwPredictionCore::evaluate(
+                domain,
+                VERDICT_UNJUDGED,
+                predicted,
+                payload,
+                wiring,
+                pose_errors
+            );
         judged += 1;
-        const double divergence
-            = double(result[godot::StringName("divergence")]);
+        const double divergence = judgement->divergence();
         track.lane.lane_divergence.push_back(divergence);
-        if (!bool(result[godot::StringName("corrected")])) {
+        if (!judgement->corrected()) {
             continue;
         }
 
         godot::Dictionary verdict;
         verdict[godot::StringName("domain")] = domain;
-        const godot::Dictionary plan = netw::NetwPredictionCore::recover(
-            payload,
-            POLICY_RECOVER,
-            CORRECTION_SNAP,
-            RESTORE_EXACT,
-            godot::Dictionary(),
-            predicted,
-            pose_errors,
-            wiring,
-            verdict,
-            DELTA
-        );
+        const godot::Ref<netw::NetwPredictRecovery> plan
+            = netw::NetwPredictionCore::recover(
+                payload,
+                POLICY_RECOVER,
+                CORRECTION_SNAP,
+                RESTORE_EXACT,
+                godot::Dictionary(),
+                predicted,
+                pose_errors,
+                wiring,
+                verdict,
+                DELTA
+            );
 
         const double gap = track.authority.x - track.predicted.x;
         const int sign = gap > 0.0 ? 1 : (gap < 0.0 ? -1 : 0);
@@ -463,11 +472,10 @@ inline void ScenarioRun::judge(int p_tick, Plant p_plant) {
         track.last_divergence
             = p_plant == PLANT_CARRY_STREAK ? 0.0 : divergence;
 
-        if (bool(plan[godot::StringName("skip")])
-            || p_plant == PLANT_NO_RECOVER) {
+        if (plan->skip() || p_plant == PLANT_NO_RECOVER) {
             continue;
         }
-        const godot::Dictionary restore = plan[godot::StringName("restore")];
+        const godot::Dictionary restore = plan->restore();
         track.predicted = godot::Vector2(restore[track.field]);
         track.lane.lane_corrections += 1;
         track.lane.lane_max_replay_depth = 1;
@@ -1111,16 +1119,46 @@ inline ScenarioRun ScenarioRun::record(
         if (asked == sample_ticks.end()) {
             continue;
         }
+        int sample_tick = asked->value;
+        if (p_plant == PLANT_RETAINED_SAMPLE && sample_tick < 0) {
+            sample_tick = 0;
+        }
         const godot::Ref<godot::RefCounted> past = p_rig.server()->call(
             "lagcomp_sample",
             p_rig.entity_of(track.name),
-            asked->value
+            sample_tick
         );
         if (past.is_valid()
             && bool(past->call("has_value", track.field))) {
             track.lane.lane_sample_found = true;
             track.lane.lane_sample_x
                 = godot::Vector2(past->get(track.field)).x;
+        }
+        // The same question put to a peer that records no authoritative
+        // history. A client's facade must degrade to an empty snapshot rather
+        // than fabricate a position or refuse.
+        if (p_rig.client_count() > 0) {
+            const godot::RID peer_entity
+                = p_rig.client_entity_of(0, track.name);
+            track.lane.lane_peer_asked = peer_entity.is_valid();
+            if (peer_entity.is_valid()) {
+                godot::Object *asked_peer = p_plant
+                        == PLANT_PEER_READS_AUTHORITY
+                    ? p_rig.server()
+                    : p_rig.client(0);
+                const godot::RID asked_entity = p_plant
+                        == PLANT_PEER_READS_AUTHORITY
+                    ? p_rig.entity_of(track.name)
+                    : peer_entity;
+                const godot::Ref<godot::RefCounted> peer_past
+                    = asked_peer->call(
+                        "lagcomp_sample",
+                        asked_entity,
+                        sample_tick
+                    );
+                track.lane.lane_peer_sample_found = peer_past.is_valid()
+                    && bool(peer_past->call("has_value", track.field));
+            }
         }
 
         const godot::HashMap<godot::StringName, int>::ConstIterator rewound
@@ -1180,6 +1218,12 @@ inline ScenarioRun ScenarioRun::scenes(
     p_rig.server()->call("interest_flush");
     p_rig.pump(2);
 
+    if (p_scenario.declares("move")) {
+        for (int at = 0; at < p_scenario.world.scene_count(); ++at) {
+            p_rig.enter_scene(p_scenario.world.scene_at(at).name);
+        }
+    }
+
     godot::Vector<godot::StringName> entity_names;
     for (int index = 0; index < p_scenario.world.entity_count(); ++index) {
         const godot::StringName name = p_scenario.world.entity_at(index).name();
@@ -1198,6 +1242,12 @@ inline ScenarioRun ScenarioRun::scenes(
             }
             if (step.verb == godot::StringName("seat")) {
                 p_rig.seat(
+                    p_rig.entity_of(step.subject),
+                    p_rig.entity_of(godot::StringName(step.value))
+                );
+                run.judged += 1;
+            } else if (step.verb == godot::StringName("move")) {
+                p_rig.move_scene(
                     p_rig.entity_of(step.subject),
                     p_rig.entity_of(godot::StringName(step.value))
                 );

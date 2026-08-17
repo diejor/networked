@@ -1,5 +1,9 @@
 #include "netw/wire/ack_book.hpp"
 
+#include "netw/colors.hpp"
+#include "netw/log.hpp"
+#include "netw/profile.hpp"
+
 namespace netw::wire {
 
 namespace {
@@ -12,6 +16,16 @@ int slot_of(uint16_t seq) {
 
 bool AckBook::record_send(uint16_t seq, uint8_t channel_id, int64_t send_id) {
     const int slot = slot_of(seq);
+    if (active[slot] && ring[slot].seq != seq) {
+        NETW_WARN_ONCE(
+            sys::WIRE,
+            "Sequence %d finds its ack slot held by %d, so this send is "
+            "untracked.",
+            int(seq),
+            int(ring[slot].seq)
+        );
+        return false;
+    }
     ring[slot].seq = seq;
     ring[slot].channel_id = channel_id;
     ring[slot].send_id = send_id;
@@ -24,6 +38,7 @@ void AckBook::process_ack(
     godot::LocalVector<AckEntry> &out_delivered,
     godot::LocalVector<AckEntry> &out_lost
 ) {
+    NETW_ZONE_NC("AckBook process ack", colors::WIRE);
     out_delivered.clear();
     out_lost.clear();
 

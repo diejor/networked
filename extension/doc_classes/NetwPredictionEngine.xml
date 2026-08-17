@@ -45,6 +45,14 @@
 			<description>
 			</description>
 		</method>
+		<method name="adopt_alignment">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="ignore_through" type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="align_reseed">
 			<return type="NetwPredictWritePlan" />
 			<param index="0" name="slot" type="int" />
@@ -70,6 +78,20 @@
 				Writes the declared state fields [param payload] names onto the bound owner and answers whether the owner resolved. A key the declaration does not name is ignored.
 			</description>
 		</method>
+		<method name="attempt_carry">
+			<return type="NetwPredictCarryAttempt" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="StringName" />
+			<param index="2" name="acknowledged" type="Variant" />
+			<param index="3" name="basis" type="int" />
+			<param index="4" name="teleport_default" type="float" />
+			<param index="5" name="divergence_epsilon" type="float" />
+			<description>
+				Runs this slot's rule for [param field] against every transition past [param basis] and answers what it produced with every probe it earned. The rule is replayed against one transition the owner already recorded before it is folded at all, so the fold's purity bracket only ever covers a rule the replay accepted.
+				[param teleport_default] and [param divergence_epsilon] are the entity-wide fallbacks a field with no declared [code]teleport_at[/code] or [code]epsilon_override[/code] is judged at. They are handed in rather than held, because they are the caller's configuration and the pool decides against them rather than owning them.
+				Answers evidence alone. [method judge_carry] turns it into a verdict, and [method decline_carry] is the refusal for an attempt with no evidence to judge.
+			</description>
+		</method>
 		<method name="bind_owner">
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
@@ -77,6 +99,15 @@
 			<description>
 				Binds [param owner] as the object this slot reads declared input onto and captures declared state from, and answers whether the slot exists.
 				The slot holds an id rather than a pointer and resolves it at each property-I/O moment, because the simulate step between them is arbitrary user code and may free the object. Binding is optional: a slot driven by [method set_state] alone never binds and touches no property.
+			</description>
+		</method>
+		<method name="bind_timeline">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="timeline" type="NetwTimeline" />
+			<description>
+				Adopts [param timeline] as the store this slot reads its input lane and its tick-keyed states out of. It is handed in rather than minted, because a server role shares one store with the recorder writing authority rows into it and two stores would be two histories that agree only by accident.
+				The entry book [method entry_history] answers is minted here instead, because a FRAME transition is a tape entry rather than a tick and its states cannot be filed under a numbering the input lane also uses.
 			</description>
 		</method>
 		<method name="build_ack_frame" qualifiers="const">
@@ -135,18 +166,43 @@
 				The declared state fields the bound owner holds. A field the owner does not answer for is absent rather than null.
 			</description>
 		</method>
+		<method name="carry_eligible" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="StringName" />
+			<description>
+				Whether [param slot]'s carry rule for [param field] may still be invoked.
+				Asked BEFORE the invocation: a rule the pool has already convicted must not be handed the game's own code to run one more time.
+			</description>
+		</method>
+		<method name="carry_judgeable" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				Whether a carry rule may be judged across [param transition], which needs BOTH of its ends to be the owner's own drive. A rule states what a DRIVE does, so judging it across a recorded state a recovery wrote would convict it of the engine's own correction. Mark those states with [method mark_carry_dirty].
+			</description>
+		</method>
 		<method name="carry_retired" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
-			<param index="1" name="field" type="int" />
+			<param index="1" name="field" type="StringName" />
 			<description>
 			</description>
 		</method>
 		<method name="carry_stats" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<param index="0" name="slot" type="int" />
-			<param index="1" name="field" type="int" />
+			<param index="1" name="field" type="StringName" />
 			<description>
+			</description>
+		</method>
+		<method name="coast_command" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Every declared input field at the zero of its own DECLARED type, which is the command COAST is defined as. A field whose declaration carries no type is omitted rather than guessed, because the whole point of the row is that it commands nothing and a value invented for a type nobody declared is a command like any other.
+				A declared colour zeroes to a transparent one rather than to [Color]'s own default of opaque black, so it coasts to nothing the way every other type does.
 			</description>
 		</method>
 		<method name="close">
@@ -180,6 +236,62 @@
 			<param index="8" name="stream_reconstructed" type="bool" default="true" />
 			<param index="9" name="ack_domain_confirmed" type="bool" default="false" />
 			<description>
+			</description>
+		</method>
+		<method name="command_admit">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="label" type="int" />
+			<param index="3" name="fresh" type="bool" />
+			<param index="4" name="command" type="Dictionary" />
+			<description>
+				Files one decoded owner cell and answers whether it was taken. A transition the window already holds answers [code]false[/code] and keeps the first arrival: the owner lane re-sends an overlapping window every frame, so a second arrival is that redundancy rather than a correction, and taking it would let a late duplicate rewrite a transition the consume cursor may already have passed.
+			</description>
+		</method>
+		<method name="command_depth_from" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="cursor" type="int" />
+			<description>
+				The contiguous decoded cells beginning exactly at [param cursor]. A hole ends the run, because the consume cursor may not step over a transition whose command has not arrived.
+			</description>
+		</method>
+		<method name="command_has" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="command_is_fresh" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="command_label_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				The input tick the owner labelled [param transition] with, or [code]-1[/code] for a transition the window does not answer for.
+			</description>
+		</method>
+		<method name="command_payload_of" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				The command the owner authored [param transition] with, empty for a transition the window does not answer for. It stays a [Dictionary] because it is keyed by the input set's own field names, which the pool never declares and cannot order.
+			</description>
+		</method>
+		<method name="command_transitions" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Every decoded transition still held, ascending. The window gaps wherever a datagram was lost, so a caller enumerating it reads this rather than a range.
 			</description>
 		</method>
 		<method name="compare_stats" qualifiers="const">
@@ -224,10 +336,61 @@
 			<description>
 			</description>
 		</method>
+		<method name="decline_carry">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="StringName" />
+			<description>
+			</description>
+		</method>
+		<method name="dissipate_admissible" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="momentum_active" type="bool" />
+			<param index="2" name="other_active" type="bool" />
+			<param index="3" name="basis_witness_clean" type="bool" />
+			<param index="4" name="recent_witness_clean" type="bool" />
+			<param index="5" name="escalated" type="bool" />
+			<param index="6" name="observing" type="bool" />
+			<param index="7" name="meter" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="dissipate_declared" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Whether [param slot] declared a withheld momentum field.
+				That field is the only thing a dissipate window lets go of, so a declaration with none can never open one.
+			</description>
+		</method>
+		<method name="drive_cursors" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="drive_stats" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<param index="0" name="slot" type="int" />
 			<description>
+			</description>
+		</method>
+		<method name="enter_quarantine">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="stream_reconstructed" type="bool" />
+			<param index="3" name="attribution" type="int" />
+			<param index="4" name="demoted" type="bool" default="false" />
+			<description>
+			</description>
+		</method>
+		<method name="entry_history" qualifiers="const">
+			<return type="NetwTimeline" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The FRAME tier's own state store, keyed by the transition each state stands BEFORE, so a transition's post-state and its successor's pre-state are one entry. A slot has one from the moment it opens, and [method tape_reset] mints a fresh one, because the entry index it is keyed by is injective only within a tape epoch. Nothing else replaces it: a caller holding the store must be able to write into the one the pool reads.
 			</description>
 		</method>
 		<method name="episode" qualifiers="const">
@@ -236,11 +399,64 @@
 			<description>
 			</description>
 		</method>
+		<method name="episode_active" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Whether [param slot] is inside an episode.
+				A scalar rather than a report, because a report copies the whole retained record and this is read once per guard.
+			</description>
+		</method>
+		<method name="episode_budget_exhausted" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="episode_operator_pending" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="operator" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="episode_state" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="episode_stats" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				[param slot]'s episode counters, one array a guard indexes rather than a report it would have to copy the retained record to read.
+			</description>
+		</method>
 		<method name="epsilon_of" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+			</description>
+		</method>
+		<method name="escalation_field_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="predicted" type="Array" />
+			<param index="2" name="authority" type="Array" />
+			<param index="3" name="field_errors" type="PackedFloat64Array" />
+			<param index="4" name="fallback_epsilon" type="float" />
+			<description>
+				Which declared field's divergence a recovery is answering, as an index into the declaration, or [code]-1[/code] when neither state carries one. Ranked by error over the field's OWN tolerance so fields in different units are comparable: a raw maximum would hand the answer to whichever field carries the larger numbers rather than to whichever is furthest out of tolerance. A field declaring a tolerance of zero triggers on any error and has no scale to be ranked on, so it ranks last and answers only when no field with a positive tolerance did. With nothing past its own tolerance the ranking falls back to raw magnitude, because the delta still has a sign the overshoot test is entitled to see.
+			</description>
+		</method>
+		<method name="escalation_pending" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Whether [param slot]'s ladder has an escalation waiting.
+				Read before a recovery is staged, because the transport attempt ahead of it declines on a promoted recovery.
 			</description>
 		</method>
 		<method name="field_count" qualifiers="const">
@@ -267,6 +483,12 @@
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="corrected" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="has_simulate" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
 			<description>
 			</description>
 		</method>
@@ -328,10 +550,11 @@
 			<param index="4" name="distance_squared" type="PackedFloat64Array" />
 			<param index="5" name="fidelities" type="PackedInt32Array" />
 			<param index="6" name="eligible" type="PackedByteArray" />
-			<param index="7" name="promotion" type="int" />
-			<param index="8" name="promotion_count" type="int" />
-			<param index="9" name="promotion_meters" type="float" />
-			<param index="10" name="frontier" type="int" />
+			<param index="7" name="contact" type="PackedByteArray" />
+			<param index="8" name="promotion" type="int" />
+			<param index="9" name="promotion_count" type="int" />
+			<param index="10" name="promotion_meters" type="float" />
+			<param index="11" name="frontier" type="int" />
 			<description>
 			</description>
 		</method>
@@ -341,10 +564,29 @@
 			<description>
 			</description>
 		</method>
+		<method name="island_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="island_promoted" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="member" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="joint_clear">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="joint_command_at" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
 			<description>
 			</description>
 		</method>
@@ -360,6 +602,13 @@
 			<return type="NetwPredictJointPlan" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="present" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="joint_provenance_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
 			<description>
 			</description>
 		</method>
@@ -476,6 +725,14 @@
 			<description>
 			</description>
 		</method>
+		<method name="journal_has" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				Whether [param slot]'s journal still retains [param transition].
+			</description>
+		</method>
 		<method name="journal_kind_at" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="slot" type="int" />
@@ -556,6 +813,8 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<description>
+				The ring index [param transition] occupies in [param slot]'s journal, or [code]-1[/code] when the ring no longer retains it.
+				Every column reader addresses a ring index while a transition names a row rather than a position, so a caller holding a transition resolves it here once and indexes every column with the answer.
 			</description>
 		</method>
 		<method name="journal_topology_at" qualifiers="const">
@@ -600,15 +859,17 @@
 			</description>
 		</method>
 		<method name="judge_carry">
-			<return type="bool" />
+			<return type="int" />
 			<param index="0" name="slot" type="int" />
-			<param index="1" name="field" type="int" />
+			<param index="1" name="field" type="StringName" />
 			<param index="2" name="same_type" type="bool" />
 			<param index="3" name="finite" type="bool" />
 			<param index="4" name="within_envelope" type="bool" />
 			<param index="5" name="pure" type="bool" />
 			<param index="6" name="faithful" type="bool" />
 			<description>
+				The pool's standing verdict on [param slot]'s carry rule for one field.
+				Addressed by field NAME and resolved against the slot's own table, so no caller mints a second numbering for the fields.
 			</description>
 		</method>
 		<method name="mark_aligned_error">
@@ -617,6 +878,8 @@
 			<param index="1" name="transition" type="int" />
 			<param index="2" name="error" type="float" />
 			<description>
+				Records the aligned error of a comparison that reached a verdict.
+				An unsettled comparison reached none, so the column stays unwritten rather than carrying a zero that would read as agreement.
 			</description>
 		</method>
 		<method name="mark_attribution">
@@ -624,6 +887,13 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<param index="2" name="attribution" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mark_authority_ack">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
 			<description>
 			</description>
 		</method>
@@ -642,12 +912,23 @@
 			<description>
 			</description>
 		</method>
+		<method name="mark_carry_dirty">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				Records that the state at [param transition] is something other than a drive result, so [method carry_judgeable] refuses the two transitions it bounds. A slot that declares no rule records nothing, because a book no rule can be judged against is a book nothing reads.
+				The book is bounded with the tape it indexes into and a rewire empties it, because either way the marks it drops name transitions no rule can still reach.
+			</description>
+		</method>
 		<method name="mark_domain">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<param index="2" name="domain" type="int" />
 			<description>
+				Records the domain [param transition] ran in for [param slot].
+				The domain is the shell's answer. Whether an entity declared its world, whether it declared that world approximate, and how long a change to it keeps the window open are all facts the pool stores for nobody.
 			</description>
 		</method>
 		<method name="mark_provenance">
@@ -677,6 +958,11 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<param index="2" name="matched" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="mutations_refused_count" qualifiers="const">
+			<return type="int" />
 			<description>
 			</description>
 		</method>
@@ -711,6 +997,14 @@
 			<description>
 			</description>
 		</method>
+		<method name="open_episode">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="attribution" type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="open_recovery_window">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
@@ -719,11 +1013,47 @@
 			<description>
 			</description>
 		</method>
+		<method name="order_key_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="ordered_slots" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				Every open slot, ascending by order key and then by slot, which is what makes the order total even before every slot has been keyed.
+			</description>
+		</method>
 		<method name="owner_bound" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
 			<description>
 				Whether [param slot] currently holds a live owner.
+			</description>
+		</method>
+		<method name="owner_solves" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Whether [param slot]'s bound owner solves its own transition, a physics body rather than a scripted step.
+				Answered at the bind rather than asked per correction, because it is a fact about the object and the object does not change class.
+			</description>
+		</method>
+		<method name="pass_depth" qualifiers="const">
+			<return type="int" />
+			<description>
+				How deep a pass is currently running, and zero when none is.
+				Nonzero is what the roster verbs refuse against, so a step cannot open, close, rewire or re-bind a slot the pass is walking.
+			</description>
+		</method>
+		<method name="pass_slots" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="phase" type="int" />
+			<description>
+				The slots phase [param phase] steps, in the pool's declared order.
+				Order and participation are both determinism contracts: two peers step the same roster in the same order without exchanging anything about it, and a slot the phase does not name is one the phase must not reach.
+				The BODY stays with the caller, so this answers a list rather than driving one, and no phase pays a call back across the language boundary per slot.
 			</description>
 		</method>
 		<method name="plan_consume_input" qualifiers="const">
@@ -747,6 +1077,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				[param slot]'s compiled projection for [param field], read back under the name the GDScript wiring spells it with, because the certification arm compares the two.
 			</description>
 		</method>
 		<method name="quarantine_clean_run" qualifiers="const">
@@ -785,6 +1116,62 @@
 			<description>
 			</description>
 		</method>
+		<method name="record_authoring_clamp">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="record_breach">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				Records that [param transition] is the contact that demoted [param slot] out of speculation.
+				The detail stays with the caller that sampled it; the pool records only which transition.
+			</description>
+		</method>
+		<method name="record_episode_decision">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="operator" type="int" />
+			<param index="2" name="basis" type="int" />
+			<param index="3" name="eligible" type="bool" />
+			<param index="4" name="applied" type="bool" />
+			<param index="5" name="eligibility" type="Dictionary" />
+			<description>
+				Charges a conditional operator's verdict against [param slot]'s episode.
+				The pool decides admissibility; only the caller that gathered the evidence knows whether the corridor it then ran agreed, so the verdict is recorded here rather than inferred.
+			</description>
+		</method>
+		<method name="record_episode_divergence">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="record_episode_escalation">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="trigger_shape" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="record_episode_write">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="operator" type="int" />
+			<param index="2" name="basis" type="int" />
+			<param index="3" name="delta_fp" type="int" />
+			<param index="4" name="target" type="StringName" />
+			<param index="5" name="ack_age" type="int" />
+			<param index="6" name="trigger_shape" type="int" />
+			<param index="7" name="evidence_free" type="bool" default="false" />
+			<param index="8" name="null_operator" type="bool" default="false" />
+			<description>
+			</description>
+		</method>
 		<method name="record_evidence">
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
@@ -800,11 +1187,25 @@
 			<description>
 			</description>
 		</method>
+		<method name="record_idle_drive">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="label" type="int" />
+			<param index="2" name="kind" type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="record_input">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="tick" type="int" />
 			<param index="2" name="c_hash" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="record_speculation_hold">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
 			<description>
 			</description>
 		</method>
@@ -827,6 +1228,12 @@
 			<description>
 			</description>
 		</method>
+		<method name="refresh_ack_age">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="replay_drive">
 			<return type="NetwPredictDrive" />
 			<param index="0" name="slot" type="int" />
@@ -844,7 +1251,11 @@
 			<param index="12" name="pre_controller_fp" type="int" default="0" />
 			<param index="13" name="raw_fp" type="int" default="0" />
 			<param index="14" name="evidence_mask" type="int" default="0" />
+			<param index="15" name="authoring" type="bool" default="false" />
 			<description>
+				Journals a transition whose fold has already been decided, so the caller names [param transition], [param label] and [param kind] instead of reading them back.
+				Two callers want that, and [param authoring] is what tells them apart. A consuming peer re-runs a lane its owner numbered: the tape entry arrived with the entry, so nothing here may author one, and every queued entry replays at one timing where [method open_drive] would admit only the first. An owner on a tick schedule instead knows its own answers before it asks, because a tick drive is its own transition and every entry is fresh; passing [code]true[/code] makes this advance the tape and the input cursor exactly as [method open_drive] would have, and the transition it answers is the tape's, not the caller's.
+				[param authoring] does nothing on a [constant NetwPredict.Schedule.FRAME] slot, where the tape entry IS the fold and only [method open_drive] can decide it.
 			</description>
 		</method>
 		<method name="reseed_align_pending" qualifiers="const">
@@ -865,6 +1276,24 @@
 			<description>
 			</description>
 		</method>
+		<method name="replay_entries" qualifiers="const">
+			<return type="NetwPredictReplayEntry[]" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="basis" type="int" />
+			<description>
+				Every transition this slot drove after [param basis], oldest first. The pool composes them out of the tape and the input lane it holds, so a replay and a carry are handed one account rather than each rebuilding one.
+				FRAME numbers a transition by its tape entry, so an entry the clock repeated carries the command the last fresh entry authored: the owner ran that sample again rather than authoring a new one. Every other tier numbers a transition by its tick and reads the command filed under it.
+			</description>
+		</method>
+		<method name="resolve_correction" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="declared" type="int" />
+			<description>
+				The correction mode [param slot] resolves [param declared] to.
+				[constant NetwPredict.CORRECTION_AUTO] earns a snap only from a solver body, whose transition is a physics step and cannot be re-run per input. A slot with no owner replays.
+			</description>
+		</method>
 		<method name="rewire">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
@@ -882,6 +1311,29 @@
 				The role [param slot] was configured with.
 			</description>
 		</method>
+		<method name="run_step">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="input" type="Dictionary" />
+			<param index="2" name="delta" type="float" />
+			<param index="3" name="tick" type="int" />
+			<param index="4" name="fresh" type="bool" />
+			<description>
+				One authored transition, run on [param slot]'s bound owner.
+				The declared input is applied through the port, the step runs, and the declared state is captured back, which is the whole of what a pass does to a game object.
+				The roster is FROZEN for the duration: a step that opens, closes, rewires or re-binds a slot is refused and counted, so a speculative game act during a fresh tick goes through an effect rather than through the roster.
+			</description>
+		</method>
+		<method name="sample_environment">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<description>
+				Runs every sensor [method set_sensor] declared and folds what they answered, with [param epoch], into this transition's world digest. What they answered is held for [method sensor_samples].
+				A slot that names no epoch and declares no sensor digests to the same zero an unwritten row already holds, so the fold is skipped rather than run to reach a foregone answer. Every drive of every predicting entity passes through here.
+				The sensors run inside the pass, so one that tries to open or close a slot is refused exactly as a step is.
+			</description>
+		</method>
 		<method name="schedule_of" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="slot" type="int" />
@@ -889,10 +1341,80 @@
 				The schedule [param slot] was configured with.
 			</description>
 		</method>
+		<method name="sensor_samples" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				What the declared sensors answered on the last [method sample_environment]. Held rather than re-sampled, so a caller reading one world fact reads the value the digest was taken over rather than a fresher one the transition never saw.
+			</description>
+		</method>
+		<method name="set_carry">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field" type="StringName" />
+			<param index="2" name="callable" type="Callable" />
+			<description>
+			</description>
+		</method>
+		<method name="set_corridor">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="callable" type="Callable" />
+			<description>
+			</description>
+		</method>
+		<method name="set_order_key">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="order_key" type="int" />
+			<description>
+				Sets the key [param slot] is stepped under.
+				The pass order is a determinism contract rather than a convenience: two peers step the same roster the same way or their transitions are not comparable.
+			</description>
+		</method>
+		<method name="set_sensor">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="name" type="StringName" />
+			<param index="2" name="callable" type="Callable" />
+			<description>
+			</description>
+		</method>
+		<method name="set_simulate">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="callable" type="Callable" />
+			<description>
+				The step behaviour [param slot] runs, one [Callable] per slot per role.
+				An explicit simulate always wins over the one [method bind_owner] adopted by convention, and keeps winning across a re-bind, because a caller that named the step said something the convention cannot override.
+			</description>
+		</method>
 		<method name="set_state">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="state" type="Array" />
+			<description>
+			</description>
+		</method>
+		<method name="state_before" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				The declared state [param transition] ran FROM, out of the book its tier keys by, which is [method entry_history] under FRAME and the bound timeline otherwise. Empty where the book holds no entry, which is the absence a caller judging a rule across the pair already handles.
+			</description>
+		</method>
+		<method name="set_witness">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="callable" type="Callable" />
+			<description>
+			</description>
+		</method>
+		<method name="stamp_episode_write_delta">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="delta_fp" type="int" />
 			<description>
 			</description>
 		</method>
@@ -914,6 +1436,12 @@
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="static_geometry" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="collider" type="Object" />
 			<description>
 			</description>
 		</method>
@@ -939,6 +1467,15 @@
 			<description>
 			</description>
 		</method>
+		<method name="tape_author">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="label" type="int" />
+			<param index="2" name="fresh" type="bool" />
+			<description>
+				Appends one tape entry at the next entry index, for a pass that carries the owner command lane without opening a transition. A drive authors its own entry, so calling this beside one appends twice.
+			</description>
+		</method>
 		<method name="tape_is_fresh" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="slot" type="int" />
@@ -951,6 +1488,14 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="index" type="int" />
 			<description>
+			</description>
+		</method>
+		<method name="tape_prepare_tick">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Re-keys the tape to [param tick], opening a new epoch and dropping the ring when [param tick] is not contiguous with the newest entry, because the lane codec implies contiguous indices. Pairs with [method tape_author] for a pass that authors a command without opening a transition. A drive re-keys its own.
 			</description>
 		</method>
 		<method name="tape_reset">
@@ -966,11 +1511,27 @@
 			<description>
 			</description>
 		</method>
+		<method name="tape_span" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The oldest and newest entry index the ring still holds, both [code]-1[/code] when it holds nothing. A caller walks the tape over this range rather than over a count, because the ring drops its oldest entries and the indices it keeps are the recent ones.
+			</description>
+		</method>
 		<method name="teleport_of" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+			</description>
+		</method>
+		<method name="trigger_shape_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="field_errors" type="PackedFloat64Array" />
+			<param index="2" name="fallback_epsilon" type="float" />
+			<description>
+				Whether [param field_errors], in declaration order, ask for a recovery, and whether any field asking is one a sub-teleport restore may write. The answer is a [enum NetwPredict.TriggerShape]. A field's own declared epsilon outranks [param fallback_epsilon], an error the array does not hold asks for nothing, and a shape of [code]ALL_WITHHELD[/code] is the write that repairs nothing and is charged as non-contraction.
 			</description>
 		</method>
 		<method name="tenure_begin" qualifiers="const">
@@ -985,11 +1546,58 @@
 			<description>
 			</description>
 		</method>
+		<method name="transport_admissible" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="candidate" type="bool" />
+			<param index="2" name="basis_witness_clean" type="bool" />
+			<param index="3" name="recent_witness_clean" type="bool" />
+			<param index="4" name="non_pose_agrees" type="bool" />
+			<param index="5" name="below_teleport" type="bool" />
+			<param index="6" name="escalated" type="bool" />
+			<param index="7" name="observing" type="bool" />
+			<description>
+				Whether [param slot] admits a transport correction for what the caller sampled.
+				The slot supplies the correction axis it was configured with, so a caller states only its sample.
+			</description>
+		</method>
+		<method name="trim_history">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="ack" type="int" />
+			<description>
+				Retires everything the acknowledged transition [param ack] made unreachable, in whichever numbering this slot's schedule keeps its history under. FRAME acknowledges a tape entry, so it retires [method entry_history] at that index and the bound timeline at the label the entry authored, which are two numberings for one transition. Every other schedule numbers both by the tick.
+			</description>
+		</method>
 		<method name="unbind_owner">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
 			<description>
 				Releases [param slot]'s owner. The slot keeps deciding, it stops touching properties.
+			</description>
+		</method>
+		<method name="witness_class" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="collider" type="Object" />
+			<param index="1" name="declared_support" type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="witness_judged" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="witness_row_clean" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<param index="2" name="require_peer" type="bool" />
+			<description>
+				Whether [param transition]'s witness is evidence an operator may build on: awake through the whole solve, and reporting only contact the closure reproduces, which is nothing, the declared support, or static geometry.
+				[param require_peer] additionally demands that authority witnessed the same thing, which is what makes the row a shared fact rather than a local one.
 			</description>
 		</method>
 	</methods>
@@ -1014,6 +1622,20 @@
 		</signal>
 	</signals>
 	<constants>
+		<constant name="CURSOR_TAPE_EPOCH" value="0" enum="DriveCursor">
+		</constant>
+		<constant name="CURSOR_NEXT_TAPE_ENTRY" value="1" enum="DriveCursor">
+		</constant>
+		<constant name="CURSOR_LAST_DRIVEN_ENTRY" value="2" enum="DriveCursor">
+		</constant>
+		<constant name="CURSOR_LATEST_INPUT_TICK" value="3" enum="DriveCursor">
+		</constant>
+		<constant name="CURSOR_LAST_DRIVEN_INPUT_TICK" value="4" enum="DriveCursor">
+		</constant>
+		<constant name="CURSOR_LAST_FRAME_TRANSITION_TICK" value="5" enum="DriveCursor">
+		</constant>
+		<constant name="CURSOR_COUNT" value="6" enum="DriveCursor">
+		</constant>
 		<constant name="STAT_DRIVE_SEQ" value="0" enum="DriveStat">
 		</constant>
 		<constant name="STAT_LAST_DRIVE_LABEL" value="1" enum="DriveStat">
@@ -1038,7 +1660,9 @@
 		</constant>
 		<constant name="STAT_QUANTUM_FAULTS" value="11" enum="DriveStat">
 		</constant>
-		<constant name="STAT_COUNT" value="12" enum="DriveStat">
+		<constant name="STAT_OWNER_LOST" value="12" enum="DriveStat">
+		</constant>
+		<constant name="STAT_COUNT" value="13" enum="DriveStat">
 		</constant>
 		<constant name="STAT_COMPARISONS_RAN" value="0" enum="CompareStat">
 		</constant>
@@ -1052,7 +1676,75 @@
 		</constant>
 		<constant name="STAT_COMPARE_COUNT" value="5" enum="CompareStat">
 		</constant>
+		<constant name="PASS_ISLAND_TICK" value="0" enum="PassPhase">
+		</constant>
+		<constant name="PASS_ISLAND_FRAME" value="1" enum="PassPhase">
+		</constant>
+		<constant name="PASS_JOINT" value="2" enum="PassPhase">
+		</constant>
+		<constant name="PASS_TICK" value="3" enum="PassPhase">
+		</constant>
+		<constant name="PASS_FRAME" value="4" enum="PassPhase">
+		</constant>
+		<constant name="PASS_FINALIZE_FRAME" value="5" enum="PassPhase">
+		</constant>
 		<constant name="ISLAND_NONE" value="0" enum="IslandMode">
+		</constant>
+		<constant name="STAT_EPISODE_ID" value="0" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_STATE" value="1" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_OPENED" value="2" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_ATTRIBUTION" value="3" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_NON_CONTRACTION" value="4" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_WITHHELD_NC" value="5" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_EVIDENCE_FREE_NC" value="6" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_NO_TRIGGER_NC" value="7" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_MIXED_TRIGGER_NC" value="8" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_CLOSURE_USED" value="9" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_AGREEMENT_RUN" value="10" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_LAST_COMPARISON" value="11" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_AGREEMENT_WRITE_ID" value="12" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_LAST_WRITE_ID" value="13" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_EVIDENCE_DROPPED" value="14" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_WRITE_COUNT" value="15" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_COMPARISON_COUNT" value="16" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_ACTIVE" value="17" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_TRANSPORT_DECIDED" value="18" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_DISSIPATE_DECIDED" value="19" enum="EpisodeStat">
+		</constant>
+		<constant name="STAT_EPISODE_COUNT" value="20" enum="EpisodeStat">
+		</constant>
+		<constant name="CARRY_CARRIED" value="0" enum="CarryVerdictBits">
+		</constant>
+		<constant name="CARRY_DECLINED" value="1" enum="CarryVerdictBits">
+		</constant>
+		<constant name="CARRY_UNFAITHFUL" value="2" enum="CarryVerdictBits">
+		</constant>
+		<constant name="CARRY_RETIRED_ALREADY" value="3" enum="CarryVerdictBits">
+		</constant>
+		<constant name="CARRY_RETIRED_SCHEDULE" value="4" enum="CarryVerdictBits">
+		</constant>
+		<constant name="CARRY_RETIRED_IMPURE" value="5" enum="CarryVerdictBits">
+		</constant>
+		<constant name="CARRY_RETIRED_INFIDELITY" value="6" enum="CarryVerdictBits">
 		</constant>
 		<constant name="ISLAND_DECLARED" value="1" enum="IslandMode">
 		</constant>

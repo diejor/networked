@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwCarrierFrame" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="build" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="payload" type="PackedByteArray" />
+			<param index="1" name="reliable" type="bool" />
+			<param index="2" name="seq" type="int" />
+			<param index="3" name="ack" type="int" />
+			<description>
+				The datagram carrying [param payload].
+				A negative [param ack] means this peer has been heard from but is owed no echo, so the shorter unreliable shape is written. [param seq] is ignored for a reliable datagram, which is ordered by the transport and needs no stamp.
+			</description>
+		</method>
+		<method name="read" qualifiers="static">
+			<return type="NetwCarrierFrame" />
+			<param index="0" name="packet" type="PackedByteArray" />
+			<description>
+				What [param packet] is. Read [member seq], [member ack] and [member payload_offset] off this object afterwards; they are zero for a kind that does not carry them.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="ack" type="int" setter="" getter="get_ack" default="0">
+		</member>
+		<member name="kind" type="int" setter="" getter="get_kind" default="0">
+		</member>
+		<member name="payload_offset" type="int" setter="" getter="get_payload_offset" default="0">
+		</member>
+		<member name="seq" type="int" setter="" getter="get_seq" default="0">
+		</member>
+	</members>
+	<constants>
+		<constant name="MAGIC_RELIABLE" value="86" enum="Magic">
+		</constant>
+		<constant name="MAGIC_UNRELIABLE" value="118" enum="Magic">
+		</constant>
+		<constant name="MAGIC_UNRELIABLE_ACKED" value="150" enum="Magic">
+		</constant>
+		<constant name="FOREIGN" value="0" enum="Kind">
+		</constant>
+		<constant name="MALFORMED" value="1" enum="Kind">
+		</constant>
+		<constant name="RELIABLE" value="2" enum="Kind">
+		</constant>
+		<constant name="UNRELIABLE" value="3" enum="Kind">
+		</constant>
+		<constant name="UNRELIABLE_ACKED" value="4" enum="Kind">
+		</constant>
+	</constants>
+</class>

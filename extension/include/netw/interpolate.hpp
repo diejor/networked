@@ -59,6 +59,8 @@ public:
     }
     godot::StringName get_project_channel() const { return project_channel; }
 
+    double smoothing_weight(double p_frame_delta) const;
+
     godot::Ref<NetwInterpolate> none();
     godot::Ref<NetwInterpolate> lerp();
     godot::Ref<NetwInterpolate> angle();

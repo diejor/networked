@@ -29,17 +29,17 @@ func test_claimed_routes_are_live_and_monotonic() -> void:
 	assert_int(routes[1]).is_equal(routes[0] + 1)
 	assert_int(routes[2]).is_equal(routes[1] + 1)
 	for value in routes:
-		assert_int(api.route_get_state(int(value))).is_equal(
+		assert_int(api.entity_get_state(api.entity_from_route(int(value)))).is_equal(
 			NetwMultiplayer.EntityState.LIVE,
 		)
-		assert_bool(api.rid_from_route(int(value)).is_valid()).is_true()
+		assert_bool(api.entity_from_route(int(value)).is_valid()).is_true()
 
 
 ## Verify a claimed row carries no node, which is the whole point: there is no
 ## other route to a replicated thing that is not in the tree.
 func test_a_claimed_row_carries_no_node() -> void:
 	var routes := api.claim_routes(1)
-	var entity := api.rid_from_route(int(routes[0]))
+	var entity := api.entity_from_route(int(routes[0]))
 
 	assert_object(api.entity_get_node(entity)).is_null()
 	assert_int(api.entity_get_route(entity)).is_equal(int(routes[0]))
@@ -52,7 +52,7 @@ func test_a_claimed_row_carries_no_node() -> void:
 ## dispatches is exactly the per-row crossing cohorts exist to avoid.
 func test_a_wave_of_rows_emits_no_per_row_signal() -> void:
 	var seen: Array[int] = []
-	api._liveness.entity_live.connect(
+	api._native_core.entity_live.connect(
 		func(route: int, _entity: NetwEntity) -> void:
 			seen.append(route),
 	)
@@ -65,7 +65,7 @@ func test_a_wave_of_rows_emits_no_per_row_signal() -> void:
 ## Verify a callback parked on one particular route still runs, so a caller who
 ## asked about a row by name is answered even though the wave is silent.
 func test_a_parked_when_live_callback_still_runs() -> void:
-	var next_route := api.reserve_route() + 1
+	var next_route := api._native_core.liveness_reserve_route() + 1
 	var fired: Array[int] = []
 	api.when_live(next_route, func() -> void: fired.append(next_route))
 	assert_array(fired).is_empty()
@@ -83,7 +83,7 @@ func test_releasing_tombstones_and_queues_the_lifecycle_removal() -> void:
 	assert_int(api.release_routes(routes)).is_equal(OK)
 
 	for value in routes:
-		assert_int(api.route_get_state(int(value))).is_equal(
+		assert_int(api.entity_get_state(api.entity_from_route(int(value)))).is_equal(
 			NetwMultiplayer.EntityState.DEAD,
 		)
 	assert_array(api._table_core.lifecycle_removals()).is_equal(routes)
@@ -98,7 +98,8 @@ func test_a_tombstoned_route_is_never_reissued() -> void:
 	var fresh := api.claim_routes(1)
 
 	assert_int(fresh[0]).is_greater(int(routes[0]))
-	assert_int(api.route_get_state(int(routes[0]))).is_equal(
+	assert_int(api.entity_get_state(
+			api.entity_from_route(int(routes[0])))).is_equal(
 		NetwMultiplayer.EntityState.DEAD,
 	)
 

@@ -5,6 +5,7 @@
 	</brief_description>
 	<description>
 		A value handed out by [method NetwInterestEngine.recompute] and handed back to [method NetwInterestEngine.commit]. Between those two calls the engine's read matrix is untouched, which is what lets a caller decide what a transition means before acting on it.
+		Whatever [method NetwInterestEngine.commit] needs to advance the read matrix rides inside this value and is nobody else's business, so it is not on the bound surface: a caller reading a transition never needs the state the engine is about to replace its own with.
 		[codeblock]
 		keys ┄ old_rows ┄ new_rows ┄ order_keys   parallel, one entry per moved row
 		shows ┄┄┄┄┄┄┄┄┄┄┄ [entity, bit]           ordered parent-first
@@ -51,7 +52,7 @@
 			The rows [member keys] held before this pass.
 		</member>
 		<member name="order_keys" type="Array" setter="" getter="get_order_keys" default="[]">
-			The [code][depth, route][/code] pair each moved row was ordered by.
+			The [code][depth, route][/code] pair each moved row was ordered by. Route breaks the depth tie, so the order is total and two runs over the same matrix produce the same sequence.
 		</member>
 		<member name="removed_keys" type="PackedInt64Array" setter="" getter="get_removed_keys" default="PackedInt64Array()">
 			Entities that left the matrix. They are gone from it after the commit rather than sitting in it empty.

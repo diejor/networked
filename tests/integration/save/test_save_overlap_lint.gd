@@ -1,6 +1,6 @@
 ## Regression test for the overlap primitives behind the persistence L1 lint.
 ##
-## [method SynchronizersCache.governed_targets] and
+## [method NetwSynchronizers.governed_targets] and
 ## [method NetwEntity.governs_property] must see that a persisted property is
 ## ALSO governed by another synchronizer, at a post-[code]_ready[/code] point and
 ## after a teleport reparents the subtree. The lint is non-load-bearing
@@ -11,7 +11,6 @@ extends NetwTestSuite
 
 const AreaReparentGuard := preload("res://addons/networked/utils/area_reparent_guard.gd")
 
-const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 const SPAWNER_PATH := "OverlapPlayer"
 
@@ -91,7 +90,7 @@ func _assert_overlap(player: Node) -> void:
 
 	# The root script's derived state set governs the same live target as the
 	# persisted position column.
-	var binding := entity.state_binding
+	var binding: NetwPropertySetBinding = entity.state_binding
 	assert_that(binding).is_not_null()
 	assert_bool(&"position" in binding.set.keys()).is_true()
 

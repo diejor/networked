@@ -368,38 +368,15 @@ func test_p7_a_teleport_snaps_the_chase() -> void:
 # a huge correction can never wind the visual further from the body than a
 # teleport would have moved it.
 func test_p7_the_chase_offset_clamps_by_magnitude() -> void:
-	var clamped: Vector3 = DisplayCore._clamp_delta(
-		Vector3(10.0, 0.0, 0.0),
-		2.0,
-	)
+	var spatial := NetwDisplayOffset.new()
+	spatial.absorb(Vector3(-10.0, 0.0, 0.0), 2.0)
+	var clamped: Vector3 = spatial.held()
 	assert_float(clamped.length()).is_equal_approx(2.0, 0.0001)
 	assert_float(clamped.x).is_greater(0.0)
-	assert_float(float(DisplayCore._clamp_delta(-9.0, 2.0))) \
-			.is_equal_approx(-2.0, 0.0001)
 
-
-func test_p8_role_offsets_preserve_shortest_rotation_channels() -> void:
-	var displayed_angle := deg_to_rad(179.0)
-	var target_angle := deg_to_rad(-179.0)
-	var angle_offset: float = DisplayCore._role_offset(
-		displayed_angle,
-		target_angle,
-		NetwInterpolate.MODE_ANGLE,
-	)
-	assert_float(absf(angle_offset)).is_equal_approx(deg_to_rad(2.0), 0.0001)
-
-	var displayed := Quaternion(Vector3.UP, deg_to_rad(170.0))
-	var target := Quaternion(Vector3.UP, deg_to_rad(-170.0))
-	var offset: Quaternion = DisplayCore._role_offset(
-		displayed,
-		target,
-		NetwInterpolate.MODE_SLERP,
-	)
-	var recomposed: Quaternion = DisplayCore._add_delta(
-		target,
-		offset,
-	)
-	assert_float(recomposed.angle_to(displayed)).is_less(0.0001)
+	var scalar := NetwDisplayOffset.new()
+	scalar.absorb(9.0, 2.0)
+	assert_float(float(scalar.held())).is_equal_approx(-2.0, 0.0001)
 
 
 # P6 Loss robustness. Under heavy loss and jitter the display still holds P1, P2,

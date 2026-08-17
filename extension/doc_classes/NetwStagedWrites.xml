@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwStagedWrites" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="header" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				The header a prediction or display feed reads.
+			</description>
+		</method>
+		<method name="is_valid" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether the decoded frame has a consistent key and value shape.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="ack" type="int" setter="set_ack" getter="get_ack" default="-1">
+		</member>
+		<member name="keys" type="Array" setter="set_keys" getter="get_keys" default="[]">
+			The property keys this frame selected, parallel to [member values].
+		</member>
+		<member name="ordinal" type="int" setter="set_ordinal" getter="get_ordinal" default="0">
+		</member>
+		<member name="row" type="Dictionary" setter="set_row" getter="get_row" default="{}">
+			The whole reconstructed row, which for a masked frame is more than [member values]: the columns that did not ride are the ones the receiver already held.
+		</member>
+		<member name="samples" type="Array" setter="set_samples" getter="get_samples" default="[]">
+			Redundant window rows, as [code]{tick, payload}[/code] records.
+		</member>
+		<member name="tick" type="int" setter="set_tick" getter="get_tick" default="-1">
+		</member>
+		<member name="values" type="Array" setter="set_values" getter="get_values" default="[]">
+		</member>
+		<member name="whole" type="bool" setter="set_whole" getter="get_whole" default="true">
+		</member>
+	</members>
+</class>

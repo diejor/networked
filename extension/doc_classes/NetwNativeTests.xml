@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwNativeTests" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="instrumentation_probe" qualifiers="const">
+			<return type="void" />
+			<param index="0" name="value" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="run">
+			<return type="Dictionary" />
+			<param index="0" name="filter" type="String" default="&quot;&quot;" />
+			<param index="1" name="report_path" type="String" default="&quot;res://reports/native/results.xml&quot;" />
+			<param index="2" name="cells_path" type="String" default="&quot;&quot;" />
+			<description>
+			</description>
+		</method>
+		<method name="wire_spec" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

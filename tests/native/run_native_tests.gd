@@ -21,7 +21,21 @@ func _initialize() -> void:
 		"res://reports/native/results.xml",
 		cells_path,
 	)
+	_write_wire_spec(runner)
 	print("NATIVE_JUNIT ", result[&"report_path"])
 	if not cells_path.is_empty():
 		print("NATIVE_CELLS ", cells_path, " ", result[&"cells"])
 	quit(result[&"exit_code"])
+
+
+# Written beside the JUnit because it is this run's output: a spec taken from a
+# different build describes a different format.
+func _write_wire_spec(runner: Object) -> void:
+	var spec: Dictionary = runner.wire_spec()
+	var path := "res://reports/native/wire.spec.json"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("Cannot write %s" % path)
+		return
+	file.store_string(JSON.stringify(spec, "  ", true))
+	print("NATIVE_WIRE_SPEC ", path, " ", spec[&"records"].size())

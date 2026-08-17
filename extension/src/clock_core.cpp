@@ -1,9 +1,11 @@
 #include "netw/clock_core.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "godot/class_db.hpp"
 #include "godot/engine.hpp"
+#include "godot/time.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -14,7 +16,6 @@ namespace netw {
 
 namespace {
 
-// Signal names, spelled once so a rename is one edit rather than nine.
 const char *SIG_BEFORE_TICK = "before_tick";
 const char *SIG_ON_TICK = "on_tick";
 const char *SIG_AFTER_TICK = "after_tick";
@@ -27,6 +28,11 @@ const char *SIG_DISPLAY_OFFSET_INSUFFICIENT = "display_offset_insufficient";
 int physics_ticks_per_second() {
     const Engine *engine = Engine::get_singleton();
     return engine ? engine->get_physics_ticks_per_second() : 60;
+}
+
+uint64_t wall_usec() {
+    const Time *clock = Time::get_singleton();
+    return clock ? clock->get_ticks_usec() : 0;
 }
 
 } // namespace
@@ -90,6 +96,13 @@ NETW_CLOCK_ACCESSOR(
 )
 NETW_CLOCK_ACCESSOR(int, tick, tick)
 NETW_CLOCK_ACCESSOR(bool, synchronized, is_synchronized)
+NETW_CLOCK_ACCESSOR(bool, configured, configured)
+NETW_CLOCK_ACCESSOR(
+    bool,
+    use_physics_interpolation,
+    use_physics_interpolation
+)
+NETW_CLOCK_ACCESSOR(double, tick_factor_override, tick_factor_override)
 
 #undef NETW_CLOCK_ACCESSOR
 
@@ -129,6 +142,42 @@ double NetwClockCore::tick_phase() const {
 
 double NetwClockCore::tick_accumulator() const {
     return accumulator;
+}
+
+double NetwClockCore::seconds_into_frame() const {
+    if (use_physics_interpolation) {
+        const Engine *engine = Engine::get_singleton();
+        const double fraction
+            = engine ? engine->get_physics_interpolation_fraction() : 0.0;
+        return fraction / double(physics_ticks_per_second());
+    }
+    const double span = seconds_since_step();
+    return span > 0.0 ? span : 0.0;
+}
+
+double NetwClockCore::tick_factor() const {
+    if (tick_factor_override >= 0.0) {
+        return tick_factor_override;
+    }
+    const Engine *engine = Engine::get_singleton();
+    if (!configured || (engine && engine->is_editor_hint())) {
+        return 0.0;
+    }
+    return (accumulator + seconds_into_frame()) / ticktime();
+}
+
+double NetwClockCore::seconds_since_step() const {
+    if (step_stamp_usec == NEVER_STAMPED) {
+        return -1.0;
+    }
+    return double(wall_usec() - step_stamp_usec) / 1'000'000.0;
+}
+
+void NetwClockCore::mark_step(double seconds_ago) {
+    const uint64_t now = wall_usec();
+    const uint64_t back
+        = seconds_ago > 0.0 ? uint64_t(seconds_ago * 1'000'000.0) : 0;
+    step_stamp_usec = back < now ? now - back : NEVER_STAMPED + 1;
 }
 
 double NetwClockCore::rtt() const {
@@ -184,22 +233,19 @@ void NetwClockCore::force_step(int count) {
     for (int index = 0; index < count; ++index) {
         emit_tick();
     }
-    // A stepped frame owes the same decision a pumped one makes, so a manual
-    // frame that emitted no tick holds exactly as a pumped one would.
     resolve_simulation_gate(count);
 }
 
 void NetwClockCore::physics_step(double delta) {
     NETW_ZONE_NC("NetwClockCore physics step", colors::CLOCK);
+    mark_step();
     NETW_WARN_COND_ONCE(
         delta > stall_threshold,
-        "clock",
+        sys::CLOCK,
         "Physics step %.3f exceeded stall threshold %.3f.",
         delta,
         stall_threshold
     );
-    // A frame longer than the threshold is a hitch rather than simulated time,
-    // so whatever was banked before it is discarded instead of paid out.
     if (delta > stall_threshold) {
         accumulator = 0.0;
         simulation_credit = 0;
@@ -209,16 +255,11 @@ void NetwClockCore::physics_step(double delta) {
 
     accumulator += delta;
 
-    // Drift the estimate forward with the server, then close the residual gap a
-    // fraction at a time so the playhead never teleports on a pong.
     if (is_synchronized && sync_mode == SYNC_STRETCH) {
         target_tick_estimate += delta * double(tickrate);
         nudge_toward_estimate();
     }
 
-    // A gated clock emits at most one tick per frame, because a second tick in
-    // one frame would have to share the single step the physics server runs and
-    // the two would then mean different amounts of simulated time.
     const int ceiling = simulation_gates > 0 ? 1 : max_ticks_per_frame;
     int ticks_this_frame = 0;
     const double step = ticktime();
@@ -240,8 +281,6 @@ void NetwClockCore::resolve_simulation_gate(int ticks_this_frame) {
         return;
     }
     if (accumulator >= ticktime()) {
-        // The loop wanted another tick and the ceiling refused it, so this peer
-        // is not keeping up with the authority it tracks.
         simulation_behind_count += 1;
     }
     simulation_credit += ticks_this_frame * physics_steps_per_tick();
@@ -283,10 +322,6 @@ Dictionary NetwClockCore::handle_pong(
 
     const double lead
         = apply_lead ? stats.avg * 0.5 / ticktime() + lead_ticks : 0.0;
-    // The target is a continuous clock position rather than a whole tick.
-    // Rounding the phase away would make it jump by a full tick as the ping's
-    // arrival phase slid across a server boundary, and STRETCH would then chase
-    // that sawtooth for about a second at a time.
     const double target
         = double(server_tick_at_pong) + server_tick_phase + lead;
     const int pre_calibrate_diff = int(std::lround(target)) - tick;
@@ -311,9 +346,6 @@ void NetwClockCore::calibrate(double target) {
     const int whole = int(std::floor(target));
 
     if (!is_synchronized) {
-        // The first calibration hard-aligns so STRETCH begins already
-        // converged, and it seeds the phase within the tick rather than landing
-        // on the boundary below it.
         tick = whole;
         accumulator = (target - double(whole)) * ticktime();
         target_tick_estimate = target;
@@ -326,8 +358,6 @@ void NetwClockCore::calibrate(double target) {
         tick = whole;
         accumulator = (target - double(whole)) * ticktime();
     } else {
-        // Re-anchor the estimate to the fresh measurement. The tick loop nudges
-        // the live clock toward it every frame.
         target_tick_estimate = target;
     }
 }
@@ -337,8 +367,6 @@ void NetwClockCore::nudge_toward_estimate() {
     const double current = double(tick) + accumulator / step;
     const double divergence = target_tick_estimate - current;
 
-    // A large gap is a real desync rather than drift, so it snaps rather than
-    // crawling, matching the panic path SNAP mode relies on.
     if (std::fabs(divergence) > double(panic_snap_threshold)) {
         tick = int(std::lround(target_tick_estimate));
         accumulator = (target_tick_estimate - double(tick)) * step;
@@ -379,12 +407,22 @@ void NetwClockCore::clear() {
     target_tick_estimate = 0.0;
     ping_timer = 0.0;
     display_offset_insufficient_latched = false;
+    step_stamp_usec = NEVER_STAMPED;
     simulation_gates = 0;
     simulation_credit = 0;
     stats.clear();
 }
 
+int64_t NetwClockCore::pumps_for(double seconds, double rate) {
+    return int64_t(std::ceil(seconds * std::max(1.0, rate)));
+}
+
 void NetwClockCore::_bind_methods() {
+    ClassDB::bind_static_method(
+        "NetwClockCore",
+        D_METHOD("pumps_for", "seconds", "rate"),
+        &NetwClockCore::pumps_for
+    );
 #define NETW_CLOCK_BIND(m_name, m_variant) \
     ClassDB::bind_method( \
         D_METHOD("set_" #m_name, "value"), \
@@ -413,6 +451,9 @@ void NetwClockCore::_bind_methods() {
     NETW_CLOCK_BIND(jitter_stability_threshold, Variant::FLOAT);
     NETW_CLOCK_BIND(tick, Variant::INT);
     NETW_CLOCK_BIND(synchronized, Variant::BOOL);
+    NETW_CLOCK_BIND(configured, Variant::BOOL);
+    NETW_CLOCK_BIND(use_physics_interpolation, Variant::BOOL);
+    NETW_CLOCK_BIND(tick_factor_override, Variant::FLOAT);
 
 #undef NETW_CLOCK_BIND
 
@@ -453,6 +494,7 @@ void NetwClockCore::_bind_methods() {
         D_METHOD("tick_accumulator"),
         &NetwClockCore::tick_accumulator
     );
+    ClassDB::bind_method(D_METHOD("tick_factor"), &NetwClockCore::tick_factor);
     ClassDB::bind_method(D_METHOD("rtt"), &NetwClockCore::rtt);
     ClassDB::bind_method(D_METHOD("rtt_avg"), &NetwClockCore::rtt_avg);
     ClassDB::bind_method(D_METHOD("rtt_jitter"), &NetwClockCore::rtt_jitter);
@@ -473,6 +515,15 @@ void NetwClockCore::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("force_step", "count"),
         &NetwClockCore::force_step
+    );
+    ClassDB::bind_method(
+        D_METHOD("seconds_since_step"),
+        &NetwClockCore::seconds_since_step
+    );
+    ClassDB::bind_method(
+        D_METHOD("mark_step", "seconds_ago"),
+        &NetwClockCore::mark_step,
+        DEFVAL(0.0)
     );
     ClassDB::bind_method(
         D_METHOD("is_simulating"),

@@ -2,12 +2,39 @@
 
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/predict/drive.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
 
 namespace netw {
 
 namespace predict {
+
+void CarryDirty::clear() {
+    marks.clear();
+    start = 0;
+}
+
+void CarryDirty::mark(int64_t p_transition) {
+    if (holds(p_transition)) {
+        return;
+    }
+    if (int(marks.size()) < TAPE_HISTORY_LIMIT) {
+        marks.push_back(p_transition);
+        return;
+    }
+    marks[uint32_t(start)] = p_transition;
+    start = (start + 1) % TAPE_HISTORY_LIMIT;
+}
+
+bool CarryDirty::holds(int64_t p_transition) const {
+    for (uint32_t at = 0; at < marks.size(); ++at) {
+        if (marks[at] == p_transition) {
+            return true;
+        }
+    }
+    return false;
+}
 
 void CarryTrack::resize(int p_count) {
     fields.resize(uint32_t(p_count < 0 ? 0 : p_count));
@@ -31,7 +58,7 @@ CarryVerdict CarryTrack::judge(
     NETW_ERR_COND_V(
         p_field < 0 || p_field >= int(fields.size()),
         CarryVerdict::DECLINED,
-        "prediction",
+        sys::PREDICTION,
         "Carry evidence names field %d outside width %d.",
         p_field,
         int(fields.size())
@@ -45,7 +72,7 @@ CarryVerdict CarryTrack::judge(
         stats.declined += 1;
         stats.retired = true;
         NETW_WARN(
-            "prediction",
+            sys::PREDICTION,
             "carry_step field=%d retired because its schedule is not FRAME.",
             p_field
         );
@@ -55,7 +82,7 @@ CarryVerdict CarryTrack::judge(
         stats.declined += 1;
         stats.retired = true;
         NETW_WARN(
-            "prediction",
+            sys::PREDICTION,
             "carry_step field=%d retired after writing live state.",
             p_field
         );
@@ -64,7 +91,7 @@ CarryVerdict CarryTrack::judge(
     if (!p_probe.same_type || !p_probe.finite || !p_probe.within_envelope) {
         stats.declined += 1;
         NETW_DEBUG(
-            "prediction",
+            sys::PREDICTION,
             "carry_step field=%d declined type=%d finite=%d envelope=%d",
             p_field,
             int(p_probe.same_type),
@@ -79,7 +106,7 @@ CarryVerdict CarryTrack::judge(
         if (stats.infidelity >= CARRY_INFIDELITY_LIMIT) {
             stats.retired = true;
             NETW_WARN(
-                "prediction",
+                sys::PREDICTION,
                 "carry_step field=%d retired after %d failed replays.",
                 p_field,
                 stats.infidelity
@@ -87,7 +114,7 @@ CarryVerdict CarryTrack::judge(
             return CarryVerdict::RETIRED_INFIDELITY;
         }
         NETW_DEBUG(
-            "prediction",
+            sys::PREDICTION,
             "carry_step field=%d replayed unfaithfully, run=%d",
             p_field,
             stats.infidelity
@@ -102,7 +129,7 @@ CarryVerdict CarryTrack::decline(int p_field, int p_schedule) {
     NETW_ERR_COND_V(
         p_field < 0 || p_field >= int(fields.size()),
         CarryVerdict::DECLINED,
-        "prediction",
+        sys::PREDICTION,
         "Carry refusal names field %d outside width %d.",
         p_field,
         int(fields.size())
@@ -115,7 +142,7 @@ CarryVerdict CarryTrack::decline(int p_field, int p_schedule) {
     if (p_schedule != int(Schedule::FRAME)) {
         stats.retired = true;
         NETW_WARN(
-            "prediction",
+            sys::PREDICTION,
             "carry_step field=%d retired because its schedule is not FRAME.",
             p_field
         );

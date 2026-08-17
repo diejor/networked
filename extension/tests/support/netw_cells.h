@@ -60,15 +60,20 @@ struct LawVerdict {
     char detail[192] = { 0 };
 };
 
-typedef LawVerdict (*LawCheck)(const ScenarioRun &);
-
-struct LawRow {
+// A law reads whatever its family's driver hands back, so the row is
+// parameterized by that run rather than by the one driver that came first.
+template <typename Run>
+struct LawRowFor {
     // The identifier a ledger row names, and half of every cell coordinate.
     const char *name;
     // The failure prose, stated once here rather than per assertion.
     const char *claim;
-    LawCheck check;
+    LawVerdict (*check)(const Run &);
 };
+
+typedef LawVerdict (*LawCheck)(const ScenarioRun &);
+
+typedef LawRowFor<ScenarioRun> LawRow;
 
 inline LawVerdict law_held() {
     return LawVerdict();

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSpawnPlanner" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="ancestry_order" qualifiers="static">
+			<return type="PackedInt64Array" />
+			<param index="0" name="routes" type="PackedInt64Array" />
+			<param index="1" name="parents" type="Dictionary" />
+			<description>
+				Answers [param routes] with every route after its parent. [param parents] maps a route to its parent route, or to [code]0[/code] where it anchors nothing.
+			</description>
+		</method>
+		<method name="reconcile" qualifiers="static">
+			<return type="Array" />
+			<param index="0" name="rows" type="Array" />
+			<param index="1" name="peers" type="PackedInt32Array" />
+			<description>
+				Plans [param peers] against [param rows], which arrive in parent-before-child book order.
+				Each row is [code]{route, parent_route, recipients, local_desired, leave}[/code] and each operation is [code]{action, route, peer}[/code], plus [code]{decision, forced}[/code] when the action is a loss.
+			</description>
+		</method>
+	</methods>
+</class>

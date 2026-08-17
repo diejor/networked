@@ -64,6 +64,59 @@ bool NetwLagCompCore::timeline_owner_bound(int64_t p_slot) const {
     return row != nullptr && row->port.bound();
 }
 
+void NetwLagCompCore::timeline_declare(int64_t p_slot, const Array &p_keys) {
+    Row *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    row->declared.clear();
+    for (int at = 0; at < p_keys.size(); ++at) {
+        row->declared.push_back(StringName(p_keys[at]));
+    }
+}
+
+Array NetwLagCompCore::timeline_declared(int64_t p_slot) const {
+    Array out;
+    const Row *row = row_of(p_slot);
+    if (row == nullptr) {
+        return out;
+    }
+    for (uint32_t at = 0; at < row->declared.size(); ++at) {
+        out.push_back(row->declared[at]);
+    }
+    return out;
+}
+
+Array NetwLagCompCore::touched_keys(const Row &p_row, const Dictionary &p_past) {
+    if (p_row.declared.is_empty()) {
+        return p_past.keys();
+    }
+    Array out;
+    for (uint32_t at = 0; at < p_row.declared.size(); ++at) {
+        if (p_past.has(p_row.declared[at])) {
+            out.push_back(p_row.declared[at]);
+        }
+    }
+    return out;
+}
+
+Dictionary NetwLagCompCore::declared_only(
+    const Row &p_row,
+    const Dictionary &p_payload
+) {
+    if (p_row.declared.is_empty()) {
+        return p_payload;
+    }
+    Dictionary out;
+    for (uint32_t at = 0; at < p_row.declared.size(); ++at) {
+        const StringName &key = p_row.declared[at];
+        if (p_payload.has(key)) {
+            out[key] = p_payload[key];
+        }
+    }
+    return out;
+}
+
 void NetwLagCompCore::timeline_record(
     int64_t p_slot,
     int64_t p_tick,
@@ -114,11 +167,15 @@ int NetwLagCompCore::rewind(
         if (past.is_empty()) {
             continue;
         }
-        const Dictionary held = port_capture(row->port, MODULE, past.keys());
+        const Array keys = touched_keys(*row, past);
+        if (keys.is_empty()) {
+            continue;
+        }
+        const Dictionary held = port_capture(row->port, MODULE, keys);
         if (held.is_empty()) {
             continue;
         }
-        port_apply(row->port, MODULE, past);
+        port_apply(row->port, MODULE, declared_only(*row, past));
         port_sync_transform(row->port.resolve(MODULE));
         moved.push_back(slot);
         live.push_back(held);
@@ -163,6 +220,14 @@ void NetwLagCompCore::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("timeline_owner_bound", "slot"),
         &NetwLagCompCore::timeline_owner_bound
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeline_declare", "slot", "keys"),
+        &NetwLagCompCore::timeline_declare
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeline_declared", "slot"),
+        &NetwLagCompCore::timeline_declared
     );
     ClassDB::bind_method(
         D_METHOD("timeline_history", "slot"),

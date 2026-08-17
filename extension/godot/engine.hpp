@@ -3,7 +3,6 @@
 #if defined(NETW_MODULE)
 #include "core/config/engine.h"
 
-// Engine types are global, so the alias keeps `godot::` spellings compiling.
 namespace godot {
 using ::Engine;
 } // namespace godot

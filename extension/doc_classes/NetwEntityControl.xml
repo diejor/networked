@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwEntityControl" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="admits_request" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether a transfer request is eligible to be arbitrated at all.
+			</description>
+		</method>
+		<method name="controlled_by" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="local_peer" type="int" />
+			<param index="1" name="peer_id" type="int" />
+			<description>
+				Whether [param local_peer] is the one steering. A local peer of [code]0[/code] is no session, and a server-controlled entity is steered by nobody.
+			</description>
+		</method>
+		<method name="disconnect_verdict" qualifiers="const">
+			<return type="int" enum="NetwEntityControl.Verdict" />
+			<param index="0" name="disconnected" type="int" />
+			<param index="1" name="peer_id" type="int" />
+			<description>
+				What [param disconnected] leaving asks of an entity representing [param peer_id].
+				Representation outranks control: a peer that both represents and steers the entity takes it with them, because the entity IS that player. Only once representation is out of the picture does the disconnect rule get to choose.
+			</description>
+		</method>
+		<method name="policy_admits" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="policy" type="int" />
+			<param index="1" name="sender" type="int" />
+			<param index="2" name="authority" type="int" />
+			<param index="3" name="controller" type="int" />
+			<description>
+				Whether [param sender] may write a field declared under [param policy], which is one of the ordinals [code]NetwScriptModel.Policy[/code] publishes.
+				Both sides of the wire ask this and get the same answer. A receiver asks whether the peer that sent a write was allowed to; an author asks whether it is the peer that may write the stream at all, which is the same question with its own id as [param sender].
+				Static, because it answers for a node carrying no entity too. Such a node has no controller, [param controller] is zero for it, and a controller policy refuses every sender rather than crashing on the absence. A policy ordinal naming nothing admits nobody.
+			</description>
+		</method>
+		<method name="resolve" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				The controller as of now: an explicit write if one happened, otherwise what the initial rule yields for an entity representing [param peer_id].
+			</description>
+		</method>
+		<method name="set_controller">
+			<return type="bool" />
+			<param index="0" name="controller" type="int" />
+			<description>
+				Records [param controller] and answers whether it MOVED, so a caller emits a change signal exactly when there was one.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="configured" type="bool" setter="" getter="get_configured" default="false">
+		</member>
+		<member name="controller" type="int" setter="" getter="get_controller" default="0">
+		</member>
+		<member name="initial" type="int" setter="set_initial" getter="get_initial" default="0">
+		</member>
+		<member name="on_disconnect" type="int" setter="set_on_disconnect" getter="get_on_disconnect" default="0">
+		</member>
+		<member name="transfer" type="int" setter="set_transfer" getter="get_transfer" default="0">
+		</member>
+	</members>
+	<constants>
+		<constant name="NOTHING" value="0" enum="Verdict">
+		</constant>
+		<constant name="DESPAWN_REPRESENTED" value="1" enum="Verdict">
+		</constant>
+		<constant name="REVERT_TO_SERVER" value="2" enum="Verdict">
+		</constant>
+		<constant name="DESPAWN_CONTROLLER" value="3" enum="Verdict">
+		</constant>
+	</constants>
+</class>

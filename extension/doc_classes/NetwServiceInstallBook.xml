@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwServiceInstallBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Which configuration class installs which session service, and how it is taken back out.
+	</brief_description>
+	<description>
+		A session installs a typed configuration by looking its class up here, so no one dispatcher has to know every service. Each service's wiring writes its own row at construction, and a service whose row is gone installs nothing rather than installing half of itself.
+		Install and uninstall are one row because they are one service. Held apart, a caller can register an install path and leave no way back, and the session that configured through it can never be deconfigured.
+		A row is found by walking the configuration's script inheritance up to the first registered class, so a subclass of a registered configuration installs through its base's row.
+		[codeblock]
+		book.register_service(&amp;"NetwClockConfig", installer, uninstaller)
+		book.class_of(config)          # the registered class it resolves to
+		book.install(config, node)     # OK, or ERR_INVALID_PARAMETER
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="class_of" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="config" type="Object" />
+			<description>
+				The registered class [param config] resolves to by walking its script inheritance, or an empty [StringName] when no ancestor is registered.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every registration.
+			</description>
+		</method>
+		<method name="has_service" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="config_class" type="StringName" />
+			<description>
+				Whether [param config_class] itself holds a row. This asks about the exact class, where [method class_of] asks what a configuration resolves to.
+			</description>
+		</method>
+		<method name="install">
+			<return type="int" enum="Error" />
+			<param index="0" name="config" type="Object" />
+			<param index="1" name="object" type="Object" />
+			<description>
+				Calls the installer registered for [param config]'s class with [param config] and [param object], and answers what it returned. [param object] is the node that registered the configuration, or [code]null[/code] when it was installed by verb.
+				Returns [constant @GlobalScope.ERR_INVALID_PARAMETER] and warns, naming the class, when no ancestor of [param config] is registered.
+			</description>
+		</method>
+		<method name="register_service">
+			<return type="bool" />
+			<param index="0" name="config_class" type="StringName" />
+			<param index="1" name="installer" type="Callable" />
+			<param index="2" name="uninstaller" type="Callable" />
+			<description>
+				Registers the pair that installs and uninstalls [param config_class], and answers whether it replaced an earlier row. Both callables take the configuration and the registering object.
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many configuration classes are registered.
+			</description>
+		</method>
+		<method name="uninstall">
+			<return type="int" enum="Error" />
+			<param index="0" name="config" type="Object" />
+			<param index="1" name="object" type="Object" />
+			<description>
+				The paired inverse of [method install], refusing the same way for an unregistered class.
+			</description>
+		</method>
+		<method name="unregister_service">
+			<return type="bool" />
+			<param index="0" name="config_class" type="StringName" />
+			<description>
+				Drops [param config_class]'s row, and answers whether there was one. The uninstaller goes with the installer.
+			</description>
+		</method>
+	</methods>
+</class>

@@ -464,21 +464,40 @@ const TableCore::ColumnShape *TableCore::shape_at(
     return &record->shapes[column];
 }
 
-/* Declaration */
-
 Error TableCore::declare(const RID &table, const Ref<SchemaRecord> &schema) {
     if (schema.is_null() || !schema->sealed) {
+        NETW_DEBUG(
+            sys::TABLE,
+            "A table is declared from a SEALED schema, and this one is %s.",
+            schema.is_null() ? "null" : "still open"
+        );
         return ERR_UNCONFIGURED;
     }
     for (int i = 0; i < schema->column_count(); i++) {
         const Ref<SchemaColumn> column = schema->at(i);
         if (column.is_valid() && column->type == SchemaCore::VARIANT) {
+            NETW_DEBUG(
+                sys::TABLE,
+                "Column '%s' is a Variant, which no column layout can size.",
+                String(column->key).utf8().get_data()
+            );
             return ERR_INVALID_DATA;
         }
     }
     Record *existing = record_of(table);
     if (existing != nullptr) {
-        return existing->schema == schema ? OK : ERR_ALREADY_EXISTS;
+        if (existing->schema != schema) {
+            NETW_DEBUG(
+                sys::TABLE,
+                "Table '%s' is already declared under another schema.",
+                String(existing->schema.is_valid() ? existing->schema->name
+                                                   : StringName())
+                    .utf8()
+                    .get_data()
+            );
+            return ERR_ALREADY_EXISTS;
+        }
+        return OK;
     }
 
     Record record;
@@ -599,8 +618,6 @@ void TableCore::rebuild_wire_order() {
     }
 }
 
-/* Publish */
-
 Error TableCore::write_routes(
     const RID &table,
     const PackedInt64Array &routes
@@ -630,10 +647,24 @@ Error TableCore::write_column(
         return ERR_UNCONFIGURED;
     }
     if (column < 0 || column >= static_cast<int>(record->shapes.size())) {
+        NETW_DEBUG(
+            sys::TABLE,
+            "Column %d is outside table '%s', which declares %d.",
+            column,
+            String(record->schema->name).utf8().get_data(),
+            int(record->shapes.size())
+        );
         return ERR_INVALID_DATA;
     }
     if (static_cast<int>(data.get_type())
         != SchemaCore::storage_type(record->shapes[column].type)) {
+        NETW_DEBUG(
+            sys::TABLE,
+            "Column '%s' is declared as storage type %d and was written a %d.",
+            String(record->shapes[column].key).utf8().get_data(),
+            SchemaCore::storage_type(record->shapes[column].type),
+            int(data.get_type())
+        );
         return ERR_INVALID_DATA;
     }
     record->pending_columns[column] = data;
@@ -647,17 +678,44 @@ Error TableCore::commit(const RID &table, int64_t tick) {
     if (record == nullptr) {
         return ERR_DOES_NOT_EXIST;
     }
-    if (!record->schema->sealed || !record->pending_routes_written) {
+    if (!record->schema->sealed) {
+        NETW_DEBUG(
+            sys::TABLE,
+            "Table '%s' commits from a schema that is still open.",
+            String(record->schema->name).utf8().get_data()
+        );
+        return ERR_INVALID_DATA;
+    }
+    if (!record->pending_routes_written) {
+        NETW_DEBUG(
+            sys::TABLE,
+            "Table '%s' commits with no route column written this wave.",
+            String(record->schema->name).utf8().get_data()
+        );
         return ERR_INVALID_DATA;
     }
     const int rows = record->pending_routes.size();
     const int count = static_cast<int>(record->shapes.size());
     for (int i = 0; i < count; i++) {
         if (!record->pending_written[i]) {
+            NETW_DEBUG(
+                sys::TABLE,
+                "Column '%s' was not written this wave, and a wave writes "
+                "every column or none.",
+                String(record->shapes[i].key).utf8().get_data()
+            );
             return ERR_INVALID_DATA;
         }
         if (element_count(record->pending_columns[i])
             != rows * record->shapes[i].stride) {
+            NETW_DEBUG(
+                sys::TABLE,
+                "Column '%s' carries %d elements for %d rows of stride %d.",
+                String(record->shapes[i].key).utf8().get_data(),
+                int(element_count(record->pending_columns[i])),
+                rows,
+                record->shapes[i].stride
+            );
             return ERR_INVALID_DATA;
         }
     }
@@ -722,8 +780,6 @@ PackedInt64Array TableCore::take_pending_removals(const RID &table) {
     }
     return out;
 }
-
-/* Consume */
 
 PackedInt64Array TableCore::read_routes(const RID &table) const {
     const Record *record = record_of(table);
@@ -1011,8 +1067,6 @@ TypedArray<PackedByteArray> TableCore::encode_lifecycle(
     return encode_routes_only(LIFECYCLE_STREAM, 0, routes, tick, budget);
 }
 
-/* Wire — decode */
-
 Dictionary TableCore::peek_header(const PackedByteArray &payload) {
     Dictionary out;
     if (payload.size() < 5) {
@@ -1287,8 +1341,6 @@ Dictionary TableCore::apply_frame(const PackedByteArray &payload) {
     return result;
 }
 
-/* Intake and session */
-
 void TableCore::begin_intake() {
     for (KeyValue<RID, Record> &entry : tables) {
         entry.value.wave_touched = false;
@@ -1310,9 +1362,6 @@ void TableCore::count_bad_sender() {
     drops_bad_sender += 1;
 }
 
-// Retires routes here: they become tombstones and their rows leave every table
-// that held one. The authority runs this the moment it releases an identity and
-// every other peer runs it when the lifecycle frame lands.
 void TableCore::retire_routes(const PackedInt64Array &routes, bool as_wave) {
     for (int i = 0; i < routes.size(); i++) {
         tombstones.insert(routes[i]);
@@ -1481,17 +1530,17 @@ void TableCore::apply_removal(
 void TableCore::swap_remove_row(Record &record, int64_t route, int row) {
     NETW_ASSERT(
         row >= 0 && row < record.routes.size(),
-        "table",
+        sys::TABLE,
         "Swap-remove row is outside the route store."
     );
     NETW_ASSERT(
         record.row_ticks.size() == record.routes.size(),
-        "table",
+        sys::TABLE,
         "Route and row-tick stores have different lengths."
     );
     NETW_ASSERT(
         record.columns_data.size() == record.shapes.size(),
-        "table",
+        sys::TABLE,
         "Column stores and shapes have different lengths."
     );
     const int last = record.routes.size() - 1;
@@ -1509,7 +1558,7 @@ void TableCore::swap_remove_row(Record &record, int64_t route, int row) {
         Variant &storage = record.columns_data[c];
         NETW_ASSERT(
             storage_size(storage) == (last + 1) * stride,
-            "table",
+            sys::TABLE,
             "Column storage does not match the route store."
         );
         copy_elements(storage, row * stride, storage, last * stride, stride);

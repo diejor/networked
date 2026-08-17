@@ -5,15 +5,15 @@
 ##
 ## A Godot RPC is addressed to a node, so it errors when the receiver has not
 ## spawned that node yet. Entity traffic is addressed to [NetwMultiplayer]
-## instead, which exists before any entity does, and [LivenessShell]
+## instead, which exists before any entity does, and [NetwMultiplayerCore]
 ## resolves each frame's route to its [NetwEntity] afterward, so a frame never
 ## targets a node that has not spawned. Games rarely touch this interface
 ## directly. They call the [Netw] facade, which encodes arguments and resolves
 ## this interface for a node.
 ##
 ## [br][br][b]Resolve, gate, dispatch[/b]
-## [br]An arriving frame resolves its route through [LivenessShell], and the
-## route's [enum LivenessShell.State] decides its fate. Absence is normal while a
+## [br]An arriving frame resolves its route through [NetwMultiplayerCore], and the
+## route's [enum NetwLivenessCore.State] decides its fate. Absence is normal while a
 ## spawn packet is still in flight, so it is a drop or a short deferral, never an
 ## error.
 ## [codeblock]
@@ -49,11 +49,9 @@ const RpcCore := preload("res://addons/networked/replication/rpc_core.gd")
 # strongly and both are reference counted.
 var _api_ref: WeakRef
 
-var _handlers: Dictionary[int, Callable] = { }
-var _defer_channels: Dictionary[int, bool] = { }
-
-var _unreliable_buffers: Dictionary = { } # peer_id -> PackedByteArray
-var _reliable_buffers: Dictionary = { } # peer_id -> PackedByteArray
+# The session's channel book, held by NetwMultiplayerCore so a registration
+# outlives this interface's dissolution.
+var _channels: NetwChannelBook
 
 var _drops_unknown_route: int = 0
 var _drops_not_live: int = 0
@@ -90,10 +88,27 @@ var sync_model := NetwSyncModel.new()
 
 func _init(api: NetwMultiplayer) -> void:
 	_api_ref = weakref(api) if api else null
+	_channels = api._native_core.channel_book
 	_sync_pipeline = NetwSyncPipeline.new(api)
 	_spawn_pipeline = NetwSpawnPipeline.new(api)
 	_spawner_compat = NetwSpawnerCompat.new(api)
 	_sync_compat = NetwSyncCompat.new(api)
+	register_protocol(
+		NetwFrameEnvelope.Channel.TABLE,
+		_handle_table_frame,
+	)
+	register_protocol(
+		NetwFrameEnvelope.Channel.SPAWN,
+		_spawn_pipeline._handle_spawn_frame,
+	)
+	register_protocol(
+		NetwFrameEnvelope.Channel.DESPAWN,
+		_spawn_pipeline._handle_despawn_frame,
+	)
+	register_protocol(
+		NetwFrameEnvelope.Channel.REPARENT,
+		_spawn_pipeline._handle_reparent_frame,
+	)
 
 
 func _api() -> NetwMultiplayer:
@@ -113,17 +128,33 @@ var is_applying_remote_frame: bool:
 ## [code]handler(entity: NetwEntity, payload: PackedByteArray, sender: int)[/code].
 ## If [param defer_when_unknown] is set to [code]true[/code], incoming packets
 ## for this channel targeting unknown routes will be deferred until the route
-## transitions to [constant LivenessShell.State.LIVE].
+## transitions to [constant NetwLivenessCore.STATE_LIVE].
 func register_channel(
 		channel: NetwFrameEnvelope.Channel,
 		handler: Callable,
 		defer_when_unknown: bool = false,
 ) -> void:
-	_handlers[channel] = handler
-	if defer_when_unknown:
-		_defer_channels[channel] = true
-	else:
-		_defer_channels.erase(channel)
+	_channels.register_channel(channel, handler, defer_when_unknown)
+
+
+## Registers [param handler] to receive payloads for the peer-scoped
+## [param channel], which carries no entity route.
+##
+## [param handler] is called as:
+## [code]handler(payload: PackedByteArray, sender: int)[/code]. Each core
+## registers its own protocol channels, so a channel's handler crosses with the
+## core that owns it rather than through a central table.
+func register_protocol(
+		channel: NetwFrameEnvelope.Channel,
+		handler: Callable,
+) -> void:
+	_channels.register_protocol(channel, handler)
+
+
+## Whether every peer-scoped channel the wire declares holds a handler,
+## answering [constant @GlobalScope.ERR_UNCONFIGURED] when one does not.
+func settle_channels() -> Error:
+	return _channels.settle_protocol()
 
 
 ## Returns the derived [NetwPropertySetBinding] [param node] declares for
@@ -139,7 +170,7 @@ func derived_group(route: int) -> Array[NetwPropertySetBinding]:
 	if not api:
 		var none: Array[NetwPropertySetBinding] = []
 		return none
-	return _sync_pipeline.derived_group(route, api._liveness)
+	return _sync_pipeline.derived_group(route, api._native_core)
 
 
 ## Forwards [param peer_id]'s advanced datagram ack to
@@ -171,26 +202,19 @@ func send_to(
 		return
 
 	var framed := NetwFrameEnvelope.pack(route, comp, channel, payload, path)
-	# Aggregation is flushed by the tick pump. Without a running clock there is
-	# no flush, so a frame would sit buffered forever. Only batch when the pump
-	# is live, otherwise send immediately. Per-tick carriers batch by default;
-	# a custom channel opts in through [param batched].
-	var should_aggregate := api._clock.is_configured() and (\
-			batched \
-					or channel in [NetwFrameEnvelope.Channel.PROPERTY_SYNC, NetwFrameEnvelope.Channel.SIGNAL, NetwFrameEnvelope.Channel.SYNC, NetwFrameEnvelope.Channel.SYNC_DELTA, NetwFrameEnvelope.Channel.TABLE])
+	# The tick pump is what flushes an aggregate, so without a running clock a
+	# buffered frame would sit there forever.
+	var should_aggregate: bool = (
+			api._clock.is_configured()
+			and api._native_core.channel_aggregates(channel, batched)
+	)
 
 	if should_aggregate:
-		var buffers = _reliable_buffers if reliable else _unreliable_buffers
-		var buf: PackedByteArray = buffers.get_or_add(peer_id, PackedByteArray())
-		if not reliable:
-			var max_size := maxi(128, api.inner.max_sync_packet_size - 150)
-			if buf.size() + framed.size() > max_size:
-				_flush_buffer(peer_id, false)
-				buf = _unreliable_buffers.get_or_add(peer_id, PackedByteArray())
-		buf.append_array(framed)
-		buffers[peer_id] = buf
+		_note_staged(api, peer_id, api._native_core.carrier_append(
+				peer_id, framed, reliable,
+		))
 	else:
-		api._send_packet(peer_id, framed, reliable)
+		api._native_core.send_datagram(peer_id, framed, reliable)
 
 
 ## Fans a control change for [param entity] out to [param peer], reaching every
@@ -217,16 +241,16 @@ func broadcast_control(entity: NetwEntity, peer: int) -> void:
 
 ## Returns [code]true[/code] when sending [param entity] traffic to
 ## [param peer_id] is meaningful: the entity is locally
-## [constant LivenessShell.State.LIVE] and the peer's committed
+## [constant NetwLivenessCore.STATE_LIVE] and the peer's committed
 ## [InterestCore] admission allows it.
 ##
 ## The gate lives here because it is a join, and neither half owns the other.
-## [LivenessShell] reports what a peer [i]has[/i] and
+## [NetwMultiplayerCore] reports what a peer [i]has[/i] and
 ## [InterestCore] decides what it [i]should[/i] see, so the subsystem
 ## that fans carriers out is the one that asks both.
 ## [codeblock]
 ## is_live_for(peer, entity)
-## ┠╴ route_state == LIVE          LivenessShell
+## ┠╴ route_state == LIVE          NetwMultiplayerCore
 ## ┖╴ wire_admits(peer, entity)    InterestCore, when a filter exists
 ## [/codeblock]
 ## The verdict is a send gate, not a delivery guarantee. It is optimistic by
@@ -238,7 +262,7 @@ func is_live_for(peer_id: int, entity: NetwEntity) -> bool:
 	var api := _api()
 	if not api:
 		return true
-	if api._liveness.state_of(entity) != LivenessShell.State.LIVE:
+	if api._native_core.liveness_state_of(entity) != NetwLivenessCore.STATE_LIVE:
 		return false
 	if peer_id == 1 or peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
@@ -272,15 +296,13 @@ func policy_admits(
 		node: Node,
 		entity: NetwEntity = null,
 ) -> bool:
-	match policy:
-		NetwScriptModel.Policy.AUTHORITY:
-			return sender == node.get_multiplayer_authority()
-		NetwScriptModel.Policy.CONTROLLER:
-			var resolved := entity if entity else NetwEntity.of(node)
-			return resolved != null and sender == resolved.controller
-		NetwScriptModel.Policy.ANY_PEER:
-			return true
-	return false
+	var resolved := entity if entity else NetwEntity.of(node)
+	return NetwEntityControl.policy_admits(
+		policy,
+		sender,
+		node.get_multiplayer_authority(),
+		resolved.controller if resolved else 0,
+	)
 
 
 ## Returns every peer currently passing [method is_live_for] for
@@ -316,29 +338,20 @@ func request_control(entity: NetwEntity) -> void:
 
 ## Flushes all buffered aggregates.
 func flush_all_buffers() -> void:
-	for peer_id in _unreliable_buffers.duplicate():
-		_flush_buffer(peer_id, false)
-	_unreliable_buffers.clear()
-	for peer_id in _reliable_buffers.duplicate():
-		_flush_buffer(peer_id, true)
-	_reliable_buffers.clear()
-
-
-# Flushes one peer's aggregated buffer, reporting the assigned unreliable seq
-# to the sync pipeline so a masked-delta send staged this pass commits
-# its pending row under the seq that will carry its acknowledgment. A reliable
-# flush or an empty buffer reports nothing, matching send_packet's -1 sentinel.
-func _flush_buffer(peer_id: int, reliable: bool) -> void:
-	var buffers = _reliable_buffers if reliable else _unreliable_buffers
-	var buf: PackedByteArray = buffers.get(peer_id, PackedByteArray())
-	if buf.is_empty():
-		return
 	var api := _api()
-	if api:
-		var seq := api._send_packet(peer_id, buf, reliable)
-		if not reliable and seq >= 0:
-			api._note_sent(peer_id, seq)
-	buffers.erase(peer_id)
+	if api == null:
+		return
+	var staged: PackedInt64Array = api._native_core.carrier_flush()
+	for i in range(0, staged.size(), 2):
+		api._note_sent(staged[i], staged[i + 1])
+
+
+# Reports an assigned unreliable seq to the sync pipeline, so a masked-delta
+# send staged this pass commits its pending row under the seq that will carry
+# its acknowledgment.
+func _note_staged(api: NetwMultiplayer, peer_id: int, seq: int) -> void:
+	if seq >= 0:
+		api._note_sent(peer_id, seq)
 
 
 ## Unpacks a received carrier datagram and dispatches each frame as it is read,
@@ -362,14 +375,35 @@ func receive_carrier(
 	var verdicts := { }
 	var r := NetwBitBufferReader.create(framed_bytes)
 	var result := OK
+	var frames := 0
 	while r.remaining_bytes() > 0:
 		var frame := NetwFrameEnvelope.unpack_next(r)
 		if frame.is_empty():
-			return ERR_INVALID_DATA
+			return _finish_receive_pass(frames, ERR_INVALID_DATA, sender)
+		frames += 1
 		var verdict := _dispatch(frame["route"], frame["comp"], frame["channel"], frame["payload"], frame["path"], sender, reliable, seq, verdicts)
 		if result == OK and verdict != OK:
 			result = verdict
-	return result
+	return _finish_receive_pass(frames, result, sender)
+
+
+# Reports one receive pass, the mirror of the send pass GATHER reports. The
+# count is what a stalled stream is read from: a datagram that carried nothing
+# and one that carried frames every gate refused look identical from the
+# per-frame rows alone.
+func _finish_receive_pass(frames: int, verdict: Error, sender: int) -> Error:
+	var api := _api()
+	if api:
+		api.report_event(
+			NetwMultiplayerCore.APPLY,
+			0,
+			{ frames = frames },
+			sender,
+			&"",
+			{ },
+			verdict,
+		)
+	return verdict
 
 
 # Stamps the frame's sender on the api for the duration of dispatch, so a
@@ -422,61 +456,19 @@ func _dispatch_frame(
 	var api := _api()
 	if not api:
 		return
-	var liveness := api._liveness
+	var native_core := api._native_core
 	var rpc_interface := api._rpc_core
 
 	if route == 0:
-		# Peer-scoped protocol frames carry no entity route.
-		match channel:
-			NetwFrameEnvelope.Channel.INTEREST_AWARENESS:
-				api._interest._handle_awareness_events(payload, sender)
-			NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE:
-				api._clock._handle_handshake(payload, sender)
-			NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE_REPLY:
-				api._clock._handle_handshake_reply(payload, sender)
-			NetwFrameEnvelope.Channel.CLOCK_PING:
-				api._clock._handle_ping(payload, sender)
-			NetwFrameEnvelope.Channel.CLOCK_PONG:
-				api._clock._handle_pong(payload, sender)
-			NetwFrameEnvelope.Channel.LAGCOMP_DENY:
-				api._lagcomp._handle_deny(payload, sender)
-			NetwFrameEnvelope.Channel.TABLE:
-				_handle_table_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SPAWN:
-				_spawn_pipeline._handle_spawn_frame(payload, sender)
-			NetwFrameEnvelope.Channel.DESPAWN:
-				_spawn_pipeline._handle_despawn_frame(payload, sender)
-			NetwFrameEnvelope.Channel.REPARENT:
-				_spawn_pipeline._handle_reparent_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_JOIN:
-				api._session._handle_join_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_ACCEPT:
-				api._session._handle_accept_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_ROSTER:
-				api._session._handle_roster_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_PAUSE:
-				api._session._handle_pause_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_UNPAUSE:
-				api._session._handle_unpause_frame(sender)
-			NetwFrameEnvelope.Channel.SESSION_KICKED:
-				api._session._handle_kicked_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_SCENE_REQUEST:
-				api._scenes._handle_scene_request_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_SCENE_RESULT:
-				api._scenes._handle_scene_result_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_SHUTDOWN:
-				api._session._handle_shutdown_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_SCENE_RELEASED:
-				api._scenes._handle_scene_released_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_KICK_REQUEST:
-				api._session._handle_kick_request_frame(payload, sender)
-			NetwFrameEnvelope.Channel.SESSION_LEAVE_REQUEST:
-				api._session._handle_leave_request_frame(payload, sender)
-			_:
-				if channel >= 100 and channel <= 254:
-					var handler: Callable = _handlers.get(channel, Callable())
-					if handler.is_valid():
-						handler.call(null, payload, sender)
+		var protocol := _channels.protocol_handler_of(channel)
+		if protocol.is_valid():
+			protocol.call(payload, sender)
+		elif channel >= 100 and channel <= 254:
+			# A user channel is one registration serving both routes, so a
+			# peer-scoped frame on it reaches the entity handler with no entity.
+			var handler := _channels.handler_of(channel)
+			if handler.is_valid():
+				handler.call(null, payload, sender)
 		return
 
 	# Unreliable route traffic is freshest-wins per stream: a frame applies
@@ -490,30 +482,27 @@ func _dispatch_frame(
 		var r := NetwBitBufferReader.create(payload)
 		var txn := NetwCodec.get_safe_varint(r)
 		if txn >= 0:
-			var values := NetwScriptModel.read_values(r, [], [])
+			var values := NetwCodec.read_values(r, [], [])
 			var value: Variant = values[0] if not values.is_empty() else null
 			if value is NetwNodeRef:
 				var ref: NetwNodeRef = value
-				if ref.route > 0 and liveness.route_state(ref.route) == LivenessShell.State.UNKNOWN:
-					liveness.when_live(
+				if ref.route > 0 and native_core.liveness_route_state(ref.route) == NetwLivenessCore.STATE_UNKNOWN:
+					api.when_live(
 						ref.route,
 						func() -> void:
-							var ent := liveness.entity_of(ref.route)
+							var ent := native_core.wrapper_for_route(ref.route) as NetwEntity
 							rpc_interface.handle_reply(txn, sender, resolve_comp_node(ent, ref.comp, ref.path) if ent else null)
 					)
 				else:
-					var ent := liveness.entity_of(ref.route)
+					var ent := native_core.wrapper_for_route(ref.route) as NetwEntity
 					rpc_interface.handle_reply(txn, sender, resolve_comp_node(ent, ref.comp, ref.path) if ent else null)
 			else:
 				rpc_interface.handle_reply(txn, sender, value)
 		return
 
-	var state := liveness.route_state(route)
-	if state == LivenessShell.State.UNKNOWN:
-		# A reliable call that beat its target's spawn parks until the route
-		# binds. An unreliable call is freshest-wins per-tick traffic, so a lost
-		# frame is superseded by the next one, never deferred.
-		if channel == NetwFrameEnvelope.Channel.CALL and reliable:
+	var state := native_core.liveness_route_state(route)
+	if state == NetwLivenessCore.STATE_UNKNOWN:
+		if _defers_unknown_route(channel, reliable):
 			rpc_interface.defer_call(
 				sender,
 				route,
@@ -523,7 +512,7 @@ func _dispatch_frame(
 			return
 		_drops_unknown_route += 1
 		return
-	if state == LivenessShell.State.DEAD or state == LivenessShell.State.LINGERING:
+	if state == NetwLivenessCore.STATE_DEAD or state == NetwLivenessCore.STATE_LINGERING:
 		# A frame in flight when the entity despawned. A healthy race, not an
 		# error. The counter is the standing signal; the trace is for anyone
 		# actively chasing a "why did my call vanish" question.
@@ -532,39 +521,51 @@ func _dispatch_frame(
 			Netw.dbg.trace("ReplicationCore: dropped channel %d for route %d (%s)", [channel, route, "dead/lingering"])
 		return
 
-	var entity := liveness.entity_of(route)
+	var entity := native_core.wrapper_for_route(route) as NetwEntity
 	if not entity or not is_instance_valid(entity.owner):
 		_drops_no_node += 1
 		return
 
 	var comp_node: Node = entity.owner
-	if comp == 255:
-		if not RpcCore._CallRouter.is_path_shape_safe(path):
-			# Hostile shape: absolute, parent-relative, or resource path.
-			Netw.dbg.warn("ReplicationCore: path traversal clamp rejected '%s' on '%s'", [path, entity.owner.name])
+	match entity.components.classify(comp, path):
+		NetwCompTable.ADDRESS_HOSTILE:
+			Netw.dbg.warn(
+				"ReplicationCore: path traversal clamp rejected '%s' on '%s'",
+				[path, entity.owner.name],
+			)
 			_drops_traversal += 1
 			return
-		comp_node = entity.owner.get_node_or_null(path)
-		if not is_instance_valid(comp_node):
-			# Shape-safe but unresolved, usually a sub-node still spawning.
-			_drops_comp_unresolved += 1
-			if Netw.dbg.is_enabled():
-				Netw.dbg.trace("ReplicationCore: component '%s' on '%s' not resolved yet", [path, entity.owner.name])
-			return
-		if not (comp_node == entity.owner or entity.owner.is_ancestor_of(comp_node)):
-			# Resolved outside the entity subtree. Treat as hostile.
-			Netw.dbg.warn("ReplicationCore: component path '%s' escaped entity subtree on '%s'", [path, entity.owner.name])
-			_drops_traversal += 1
-			return
-	elif comp > 0:
-		if entity.components.poisoned:
+		NetwCompTable.ADDRESS_UNMAPPED:
 			_drops_no_node += 1
 			return
-		var rel_path := entity.components.path_for_id(comp)
-		if rel_path.is_empty():
-			_drops_no_node += 1
-			return
-		comp_node = entity.owner.get_node_or_null(rel_path)
+		NetwCompTable.ADDRESS_RELATIVE:
+			comp_node = entity.owner.get_node_or_null(path)
+			if not is_instance_valid(comp_node):
+				# Shape-safe but unresolved, usually a sub-node still spawning.
+				_drops_comp_unresolved += 1
+				if Netw.dbg.is_enabled():
+					Netw.dbg.trace(
+						"ReplicationCore: component '%s' on '%s' not "
+						+ "resolved yet",
+						[path, entity.owner.name],
+					)
+				return
+			if not (
+					comp_node == entity.owner
+					or entity.owner.is_ancestor_of(comp_node)
+			):
+				# Resolved outside the entity subtree. Treat as hostile.
+				Netw.dbg.warn(
+					"ReplicationCore: component path '%s' escaped entity "
+					+ "subtree on '%s'",
+					[path, entity.owner.name],
+				)
+				_drops_traversal += 1
+				return
+		NetwCompTable.ADDRESS_MAPPED:
+			comp_node = entity.owner.get_node_or_null(
+				entity.components.path_for_id(comp),
+			)
 
 	if not is_instance_valid(comp_node):
 		_drops_no_node += 1
@@ -589,35 +590,47 @@ func _dispatch_frame(
 		NetwFrameEnvelope.Channel.SIGNAL:
 			_sync_pipeline._property_signal_router.handle_signal(entity, comp_node, payload, sender)
 		NetwFrameEnvelope.Channel.SYNC:
-			var s_reader := NetwBitBufferReader.create(payload)
-			var s_ordinal := NetwCodec.get_safe_varint(s_reader)
-			s_reader.get_aligned_u8()
-			if s_ordinal >= _sync_compat.route_set_count(route):
-				_sync_pipeline.handle_derived_sync(entity, s_ordinal, payload, sender)
-			else:
-				_sync_compat.handle_sync(entity, payload, sender)
+			_sync_compat.handle_sync(entity, payload, sender)
+		NetwFrameEnvelope.Channel.SYNC_ROW:
+			_sync_pipeline.handle_derived_row(entity, payload, sender)
+		NetwFrameEnvelope.Channel.SYNC_ROW_DELTA:
+			_sync_pipeline.handle_retained_row(entity, payload, sender)
+		NetwFrameEnvelope.Channel.SYNC_ROW_WINDOW:
+			_sync_pipeline.handle_window_row(entity, payload, sender)
 		NetwFrameEnvelope.Channel.SYNC_DELTA:
-			var d_ordinal := NetwCodec.get_safe_varint(NetwBitBufferReader.create(payload))
-			if d_ordinal >= _sync_compat.route_set_count(route):
-				_sync_pipeline.handle_derived_delta(entity, d_ordinal, payload, sender)
-			else:
-				_sync_compat.handle_sync_delta(entity, payload, sender)
+			_sync_compat.handle_sync_delta(entity, payload, sender)
 		NetwFrameEnvelope.Channel.PREDICT_COMMAND, \
 		NetwFrameEnvelope.Channel.PREDICT_ACK, \
 		NetwFrameEnvelope.Channel.PREDICT_RELAY, \
 		NetwFrameEnvelope.Channel.PREDICT_RELAY_REQUEST:
-			var handler: Callable = _handlers.get(channel, Callable())
+			var handler := _channels.handler_of(channel)
 			if handler.is_valid():
 				handler.call(entity, payload, sender)
 		NetwFrameEnvelope.Channel.ACTION:
-			var handler: Callable = _handlers.get(channel, Callable())
+			var handler := _channels.handler_of(channel)
 			if handler.is_valid():
 				handler.call(entity, payload, sender)
 		_:
 			if channel >= 100 and channel <= 254:
-				var handler: Callable = _handlers.get(channel, Callable())
+				var handler := _channels.handler_of(channel)
 				if handler.is_valid():
 					handler.call(entity, payload, sender)
+
+
+# Whether a frame for a route this peer does not know yet waits for it.
+#
+# A reliable call parks because it beat its target's spawn and nothing will
+# repeat it. An unreliable call does not: it is freshest-wins per-tick traffic,
+# so a lost frame is superseded by the next one. Any other channel parks exactly
+# when its registration asked to, whatever its reliability, because the caller
+# that asked owns that trade.
+func _defers_unknown_route(
+		channel: NetwFrameEnvelope.Channel,
+		reliable: bool,
+) -> bool:
+	if channel == NetwFrameEnvelope.Channel.CALL:
+		return reliable
+	return _channels.defers(channel)
 
 
 # Runs the hostile-input gate before route resolution for gated entity lanes.
@@ -631,9 +644,11 @@ func _admit_entity_frame(
 	var api := _api()
 	if not api:
 		return ERR_UNAVAILABLE
+	var gate := -1
 	var verdict := OK
 	match channel:
 		NetwFrameEnvelope.Channel.SYNC:
+			gate = NetwMultiplayerCore.GATE_SYNC
 			var reader := NetwBitBufferReader.create(payload)
 			NetwCodec.get_safe_varint(reader)
 			var flags := reader.get_aligned_u8()
@@ -646,7 +661,11 @@ func _admit_entity_frame(
 				-1,
 				payload,
 			)
+		NetwFrameEnvelope.Channel.SYNC_ROW, \
+		NetwFrameEnvelope.Channel.SYNC_ROW_DELTA, \
+		NetwFrameEnvelope.Channel.SYNC_ROW_WINDOW, \
 		NetwFrameEnvelope.Channel.SYNC_DELTA:
+			gate = NetwMultiplayerCore.GATE_SYNC
 			verdict = api._sync_admit_frame(
 				sender,
 				route,
@@ -660,13 +679,16 @@ func _admit_entity_frame(
 		NetwFrameEnvelope.Channel.PREDICT_ACK, \
 		NetwFrameEnvelope.Channel.PREDICT_RELAY, \
 		NetwFrameEnvelope.Channel.PREDICT_RELAY_REQUEST:
+			gate = NetwMultiplayerCore.GATE_PREDICT
 			verdict = api._predict_admit_frame(
 				sender,
 				route,
 				channel,
 				payload,
 			)
-	return api._finish_gate_verdict(verdict, route)
+	if gate < 0:
+		return OK
+	return api._finish_stage_verdict(gate, verdict, route)
 
 
 # Preserves the relay counters that predate the unified gate verdict stats.
@@ -739,36 +761,14 @@ func _resolve_comp(entity: NetwEntity, node: Node) -> Dictionary:
 ## value [code]1[/code] to [code]254[/code] indexes the registered component
 ## table, and [code]255[/code] falls back to [param path] relative to the root.
 ##
-## Returns [code]null[/code] when the address is unsafe (a [code]255[/code]
-## path that is absolute, parent-relative, or escapes the entity subtree),
-## unresolved (the child has not spawned), or the component table cannot map
-## it. An addressing pair arriving off the wire is untrusted, so the same
-## traversal clamp the receive dispatch applies is enforced here.
+## Returns [code]null[/code] for every address
+## [method NetwComponentMap.classify] refuses and for one it admits: a
+## [constant NetwCompTable.ADDRESS_RELATIVE] path that resolves outside the
+## entity subtree, which only the resolved node can answer.
 func resolve_comp_node(entity: NetwEntity, comp: int, path: String) -> Node:
-	# A nodeless route has no owner to address a component under, and every
-	# branch below traverses from one. An address arriving off the wire chooses
-	# its own comp, so this is reachable from a remote peer and not only from a
-	# local mistake.
-	if entity == null or not is_instance_valid(entity.owner):
+	if entity == null:
 		return null
-	if comp == 0:
-		return entity.owner
-	if comp == 255:
-		if not RpcCore._CallRouter.is_path_shape_safe(path):
-			return null
-		var node := entity.owner.get_node_or_null(path)
-		if not is_instance_valid(node):
-			return null
-		if not (node == entity.owner or entity.owner.is_ancestor_of(node)):
-			return null
-		return node
-	if entity.components.poisoned:
-		return null
-	var rel_path := entity.components.path_for_id(comp)
-	if rel_path.is_empty():
-		return null
-	var node := entity.owner.get_node_or_null(rel_path)
-	return node if is_instance_valid(node) else null
+	return entity.components.resolve_node(entity.owner, comp, path)
 
 
 ## Pumps every registered binding for [param tick], then flushes the per-peer
@@ -808,13 +808,11 @@ func pump_tables(tick: int) -> void:
 	if not api:
 		return
 	var core := api._table_core
-	for table in core.touched_tables():
-		api.table_received.emit(table, core.tick_of(table))
-	core.begin_intake()
+	api._native_core.table_publish_intake()
 
 	if not api.is_server() or not api.inner.multiplayer_peer:
 		return
-	var budget := maxi(128, api.inner.max_sync_packet_size - 150)
+	var budget := api._native_core.datagram_budget()
 	var retired := core.take_lifecycle_removals()
 	if not retired.is_empty():
 		_broadcast_table_frames(
@@ -833,7 +831,7 @@ func pump_tables(tick: int) -> void:
 			core.is_reliable(table),
 		)
 		core.clear_dirty(table)
-		api.table_received.emit(table, core.tick_of(table))
+		api._native_core.table_publish(table)
 
 
 # Sends one table's frames to every connected peer on route 0.
@@ -873,15 +871,19 @@ func _handle_table_frame(payload: PackedByteArray, sender: int) -> void:
 		NetwFrameEnvelope.Channel.TABLE,
 		payload,
 	)
-	if api._finish_gate_verdict(verdict, 0) != OK:
+	if api._finish_stage_verdict(
+			NetwMultiplayerCore.GATE_TABLE,
+			verdict,
+			0,
+	) != OK:
 		return
 	var result := api._table_core.apply_frame(payload)
 	var bound: PackedInt64Array = result[&"bound"]
 	if not bound.is_empty():
-		api._liveness.bind_routes_data(bound)
+		api._native_core.liveness_bind_routes_data(bound)
 	var retired: PackedInt64Array = result[&"retired"]
 	if not retired.is_empty():
-		api._liveness.tombstone_routes_data(retired)
+		api._native_core.liveness_tombstone_routes_data(retired)
 
 
 ## Replays every table's committed rows to one peer as an ordered reliable
@@ -897,7 +899,7 @@ func replay_tables(peer_id: int) -> void:
 	if not api or not api.is_server() or not api.inner.multiplayer_peer:
 		return
 	var core := api._table_core
-	var budget := maxi(128, api.inner.max_sync_packet_size - 150)
+	var budget := api._native_core.datagram_budget()
 	for table in core.published_tables():
 		for frame in core.encode_frames(table, budget, true):
 			send_to(
@@ -954,8 +956,9 @@ func on_poll() -> void:
 ## buffer, or freshness record outlives its session. Called by
 ## [NetwMultiplayer] on session teardown.
 func clear_session() -> void:
-	_unreliable_buffers.clear()
-	_reliable_buffers.clear()
+	var api := _api()
+	if api:
+		api._native_core.carrier_clear()
 	sync_model.clear()
 	_sync_pipeline.clear_session()
 	_spawn_pipeline.clear_session()
@@ -1011,9 +1014,10 @@ func counters() -> Dictionary:
 ##
 ## Identity is stamped synchronously before this method returns, so
 ## [method Node._enter_tree] and [method Node._ready] observe a valid
-## [NetwEntity] on every peer. The SPAWN frame is snapshotted at end-of-frame
-## of tree entry, so the window between this call and
-## [method Node.add_child] is where async hydration belongs.
+## [NetwEntity] on every peer. The SPAWN frame is snapshotted at the first
+## pump after tree entry, so the window between this call and
+## [method Node.add_child] is where async hydration belongs, and so is every
+## property written before that pump.
 ## [codeblock]
 ## var player := PlayerScene.instantiate()
 ## var entity := api._replication.replicate(player, participant)
@@ -1067,7 +1071,7 @@ func spawn_registered(
 
 
 ## Mints a route for [param root], a node every peer already holds at the same
-## tree location, and issues an [constant NetwSpawnBook.Recipe.ADOPT] frame that
+## tree location, and issues an [constant NetwSpawnBook.RECIPE_ADOPT] frame that
 ## stamps the same identity onto the peers' in-place instances.
 ##
 ## No structure is reconstructed, so a node the peers built for themselves gains
@@ -1098,14 +1102,14 @@ func adopt_in_place(root: Node) -> NetwEntity:
 func spawn_state_of(root: Node) -> Array[Dictionary]:
 	var api := _api()
 	var wrapper := NetwEntity.of(root)
-	if api and wrapper and wrapper.rid.is_valid():
+	if api and wrapper and api._native_core.liveness_core.entity_is_valid(wrapper.rid):
 		return api.spawn_get_state(wrapper.rid)
 	return _spawn_pipeline._collect_spawn_state(root)
 
 
 ## Returns [code]true[/code] when [param route] is tracked by the spawn
 ## ledger on this peer, as an issued authority spawn or a received
-## materialization. [LivenessShell] consults this to grant tracked
+## materialization. [NetwMultiplayerCore] consults this to grant tracked
 ## roots the end-of-frame reparent grace.
 func owns_spawned_route(route: int) -> bool:
 	return _spawn_pipeline.owns_spawned_route(route)

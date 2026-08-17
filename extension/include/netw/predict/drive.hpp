@@ -24,6 +24,7 @@
 #include "godot/callable.hpp"
 #include "godot/local_vector.hpp"
 #include "netw/predict/carry.hpp"
+#include "netw/predict/command_queue.hpp"
 #include "netw/predict/compare.hpp"
 #include "netw/predict/episode.hpp"
 #include "netw/predict/joint.hpp"
@@ -34,6 +35,7 @@
 #include "netw/object_port.hpp"
 #include "netw/predict/wiring.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/timeline.hpp"
 
 namespace netw {
 
@@ -70,6 +72,7 @@ public:
         return count;
     }
 
+    int64_t oldest_index() const;
     int64_t newest_index() const;
 
     // -1 when the entry has fallen out of the ring, which is the same absence
@@ -116,6 +119,18 @@ struct DriveRecord {
     bool clamped = false;
 };
 
+/* One transition past a basis, with the command that drove it.
+ *
+ * `index` addresses the transition in the numbering its schedule keeps and
+ * `label` is the tick the command was authored at, which are the same number
+ * on every tier except FRAME.
+ */
+struct ReplayEntry {
+    int64_t index = -1;
+    int64_t label = -1;
+    Dictionary input;
+};
+
 struct ConsumeInputPlan {
     bool eligible = false;
     bool missing = false;
@@ -123,6 +138,19 @@ struct ConsumeInputPlan {
     bool use_last = false;
     DriveKind kind = DriveKind::NONE;
 };
+
+/* Whether a comparison's field errors ask for a recovery, and whether any
+ * field asking for one may be written.
+ *
+ * ALL_WITHHELD is the case a budget exists for: every field past its own
+ * tolerance is one a recovery is forbidden to write, so the write it would
+ * stage repairs nothing and the episode charges it as non-contraction.
+ */
+TriggerShape trigger_shape(
+    const Wiring &p_wiring,
+    const LocalVector<double> &p_field_errors,
+    double p_fallback_epsilon
+);
 
 ConsumeInputPlan plan_consume_input(
     Schedule p_schedule,
@@ -196,6 +224,19 @@ struct Slot {
     HashMap<StringName, Callable> carry_rules;
     Journal journal;
     Tape tape;
+    CommandQueue commands;
+    /* The two stores a transition's state is read out of, both keyed by the
+     * transition the state stands BEFORE, so a transition's post-state and its
+     * successor's pre-state are one entry.
+     *
+     * `timeline` is the entity's one history and is adopted rather than minted,
+     * because a server role shares it with the recorder that writes authority
+     * rows into it. `entry_history` is the FRAME tier's alone: a FRAME
+     * transition is a tape entry rather than a tick, so its states cannot be
+     * filed under a numbering the input lane also uses.
+     */
+    Ref<NetwTimeline> timeline;
+    Ref<NetwTimeline> entry_history;
     DriveStats stats;
     CompareStats compare_stats;
     StateVerdict last_state_verdict;
@@ -206,7 +247,12 @@ struct Slot {
     JointStats joint_stats;
     Quarantine quarantine;
     CarryTrack carry;
+    CarryDirty carry_dirty;
     WitnessSummary last_witness;
+    // What the declared sensors last answered, held so a caller reading one
+    // world fact reads the value the digest was taken over rather than a
+    // fresher one the transition never saw.
+    Dictionary last_samples;
     RecoveryState recovery;
     RecoveryStats recovery_stats;
     WritePlan last_write_plan;
@@ -235,8 +281,36 @@ struct Slot {
     bool quantum_declaration_warned = false;
 
     void adopt_timing(const Timing &p_timing);
+    void adopt_timeline(const Ref<NetwTimeline> &p_timeline);
+    void reset_entry_history();
     void reset_tape(int64_t p_epoch);
+
+    /* Every transition this slot drove after p_basis, oldest first.
+     *
+     * FRAME numbers a transition by its tape entry, so an entry the clock
+     * repeated carries the command the last fresh entry authored: the owner
+     * ran that sample again rather than authoring a new one. Every other tier
+     * numbers a transition by its tick and reads the command filed under it.
+     */
+    LocalVector<ReplayEntry> replay_entries(int64_t p_basis) const;
+
+    // The declared state p_transition ran FROM, out of the book its tier keys
+    // by, which is the entry book under FRAME and the input lane otherwise.
+    Dictionary state_before(int64_t p_transition) const;
+
+    // A slot declaring no rule marks nothing, because a book no rule can be
+    // judged against is a book nothing reads.
+    void mark_carry_dirty(int64_t p_transition);
+    // Whether a rule may be judged across p_transition, which needs BOTH of
+    // its ends to be the owner's own drive.
+    bool carry_judgeable(int64_t p_transition) const;
     void record_input(int64_t p_tick, int32_t p_c_hash);
+
+    // Retires everything an acknowledged transition made unreachable. FRAME
+    // acknowledges a tape entry, so it retires the entry book at that index and
+    // the input lane at the label the entry authored, which are two numberings
+    // for one transition. Every other schedule numbers both by the tick.
+    void trim_history(int64_t p_ack);
 
     DriveRecord open_drive(
         const Timing &p_timing,
@@ -260,7 +334,8 @@ struct Slot {
         int64_t p_transition,
         int64_t p_label,
         DriveKind p_kind,
-        const StateStamp &p_pre
+        const StateStamp &p_pre,
+        bool p_authoring
     );
 
     bool record_evidence(
@@ -331,6 +406,18 @@ struct Slot {
     bool horizon_full();
     void refresh_ack_age();
     void rewire(const Wiring &p_wiring);
+    // A pass that advanced the lane without opening a transition: a hold, a
+    // starve, or a substituted command. It counts as a drive because a reader
+    // asking "when did this slot last act" is asking about these too, and it
+    // opens no journal row because nothing was simulated.
+    void record_idle_drive(int64_t p_label, DriveKind p_kind);
+    void record_authoring_clamp();
+    void record_speculation_hold();
+    // The frontier a caller proved on a lane the pool does not decode. A
+    // transition can be acknowledged without this slot ever holding a row for
+    // it, and the speculative span is measured from the freshest proof on
+    // EITHER lane rather than from the newest row.
+    void mark_authority_ack(int64_t p_transition);
     void latch_quarantine(
         int64_t p_transition,
         bool p_stream_reconstructed,
@@ -338,10 +425,12 @@ struct Slot {
         bool p_demoted = false
     );
 
-private:
-    // Re-keys a TICK tape when its clock jumps past the contiguous lane.
+    // The two tape writes a drive performs for itself, public because the pass
+    // that authors a command without opening a transition performs them alone.
     void prepare_tick_tape(int64_t p_tick);
     void author_tape_entry(int64_t p_label, bool p_fresh);
+
+private:
     void record_drive(
         int64_t p_transition,
         const Fold &p_fold,

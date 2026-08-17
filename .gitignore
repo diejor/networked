@@ -4,6 +4,9 @@
 /reports
 # gdUnit writes here when a run is pinned with `-rd res://reports_scoped`.
 /reports_scoped
+# And here for the NETW_MARGINAL=1 racing measurement, which is read against
+# the same baseline but must not overwrite the gated run's report.
+/reports_marginal
 *.tmp
 
 # Export outputs (CI exports the itch.io web demo here; see itch-demo.yml)

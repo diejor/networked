@@ -35,6 +35,9 @@ class NetwBitBufferReader : public godot::RefCounted {
     int64_t position = 0;
     uint64_t accumulator = 0;
     int bit_count = 0;
+    bool healthy = true;
+
+    uint8_t take_byte();
 
 protected:
     static void _bind_methods();
@@ -51,6 +54,10 @@ public:
     int64_t get_aligned_u32();
     godot::PackedByteArray get_aligned_bytes(int count);
     int remaining_bytes();
+
+    bool ok() const {
+        return healthy;
+    }
 };
 
 } // namespace netw

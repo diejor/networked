@@ -22,6 +22,7 @@ namespace TestNetwInterestEngine {
 
 using namespace godot;
 using netw::NetwInterestBitSet;
+using netw::NetwInterestDecl;
 using netw::NetwInterestDelta;
 using netw::NetwInterestEngine;
 
@@ -48,6 +49,15 @@ Array names(std::initializer_list<const char *> p_ids) {
         out.push_back(StringName(id));
     }
     return out;
+}
+
+void check_line(const String &p_produced, const char *p_expected) {
+    NETW_FORMAT_TEXT(produced, p_produced.utf8().get_data());
+    NETW_FORMAT_TEXT(expected, p_expected);
+    CAPTURE(produced);
+    CAPTURE(expected);
+    const bool matches = p_produced == String(p_expected);
+    CHECK(matches);
 }
 
 Ref<NetwInterestEngine> fresh() {
@@ -598,6 +608,720 @@ TEST_CASE(
         expected.push_back(entry);
     }
     CHECK(same(shows->shows, expected));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a layer's viewer set answers in peer ids "
+    "and reports only real edges"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+
+    CHECK(engine->layer_add_viewer(near, 11));
+    CHECK(!engine->layer_add_viewer(near, 11));
+    CHECK(engine->layer_add_viewer(near, 4));
+    CHECK(engine->layer_has_viewer(near, 11));
+    CHECK(!engine->layer_has_viewer(near, 9));
+    CHECK(!engine->layer_has_viewer(StringName("far"), 11));
+
+    PackedInt64Array expected;
+    expected.push_back(11);
+    expected.push_back(4);
+    CHECK(engine->layer_viewers(near) == expected);
+
+    CHECK(engine->layer_remove_viewer(near, 11));
+    CHECK(!engine->layer_remove_viewer(near, 11));
+    CHECK(!engine->layer_remove_viewer(StringName("far"), 4));
+    CHECK(!engine->layer_has_viewer(near, 11));
+    NETW_CHECK_EQ(engine->layer_viewers(near).size(), 1);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a viewer edge makes the layer's members "
+    "owe a pass"
+) {
+    // The whole risk of an incremental viewer door is that it writes the row
+    // and forgets the dirty set, which reads as a mutation that never lands.
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+    const int bit = engine->peer_bit_for(11);
+    engine->set_live_peers(bits({bit}));
+    engine->set_order_key(ROOT, 0, 1);
+    engine->set_membership(ROOT, names({"near"}));
+    commit(engine);
+    CHECK(!engine->test(ROOT, bit));
+
+    engine->layer_add_viewer(near, 11);
+    commit(engine);
+    CHECK(engine->test(ROOT, bit));
+
+    engine->layer_remove_viewer(near, 11);
+    commit(engine);
+    CHECK(!engine->test(ROOT, bit));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a layer's policy is what the verdict "
+    "composes with, and replacing it reports the change"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName blind("blind");
+    const int bit = engine->peer_bit_for(11);
+    engine->set_live_peers(bits({bit}));
+    engine->set_order_key(ROOT, 0, 1);
+    engine->set_membership(ROOT, names({"blind"}));
+    engine->layer_add_viewer(blind, 11);
+    commit(engine);
+    CHECK(engine->test(ROOT, bit));
+
+    NETW_CHECK_EQ(engine->layer_policy(blind), int(OUTSIDERS));
+    CHECK(engine->layer_set_policy(blind, INSIDERS));
+    CHECK(!engine->layer_set_policy(blind, INSIDERS));
+    NETW_CHECK_EQ(engine->layer_policy(blind), int(INSIDERS));
+
+    commit(engine);
+    CHECK(!engine->test(ROOT, bit));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] one layer's verdict on one peer is its "
+    "policy composed with viewer membership and nothing else"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName sight("sight");
+    engine->declare_layer(sight);
+
+    CHECK_FALSE(engine->layer_admits(sight, 7));
+    engine->layer_add_viewer(sight, 7);
+    CHECK(engine->layer_admits(sight, 7));
+
+    SUBCASE("the inside policy inverts it") {
+        engine->layer_set_policy(sight, INSIDERS);
+        CHECK_FALSE(engine->layer_admits(sight, 7));
+    }
+
+    SUBCASE("a peer the engine never minted a bit for is an outsider") {
+        // Not an absence: it is in no viewer set, and the inside policy
+        // admits exactly those.
+        CHECK_FALSE(engine->layer_admits(sight, 9));
+        engine->layer_set_policy(sight, INSIDERS);
+        CHECK(engine->layer_admits(sight, 9));
+    }
+
+    SUBCASE("peer zero names no participant under either policy") {
+        CHECK_FALSE(engine->layer_admits(sight, 0));
+        engine->layer_set_policy(sight, INSIDERS);
+        CHECK_FALSE(engine->layer_admits(sight, 0));
+    }
+
+    SUBCASE("the server peer is evaluated as an ordinary participant") {
+        CHECK_FALSE(engine->layer_admits(sight, 1));
+        engine->layer_add_viewer(sight, 1);
+        CHECK(engine->layer_admits(sight, 1));
+    }
+
+    SUBCASE("an undeclared layer admits nobody") {
+        CHECK_FALSE(engine->layer_admits(StringName("nowhere"), 7));
+    }
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] the layer explanation names the verdict, "
+    "the membership and the policy that composed them"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName sight("sight");
+    engine->layer_add_viewer(sight, 7);
+
+    check_line(
+        engine->layer_explain(sight, 7),
+        "ADMIT peer=7 in viewers under HIDE_FROM_OUTSIDERS"
+    );
+    check_line(
+        engine->layer_explain(sight, 9),
+        "REJECT peer=9 not in viewers under HIDE_FROM_OUTSIDERS"
+    );
+
+    engine->layer_set_policy(sight, INSIDERS);
+    check_line(
+        engine->layer_explain(sight, 7),
+        "REJECT peer=7 in viewers under HIDE_FROM_INSIDERS"
+    );
+    check_line(
+        engine->layer_explain(sight, 0),
+        "REJECT peer=0 (no peer context)"
+    );
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] the dirty set is the engine's, and a "
+    "commit that saw every mutation empties it"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+    engine->set_live_peers(bits({0}));
+    engine->set_order_key(ROOT, 0, 1);
+    engine->set_order_key(CHILD, 1, 2);
+    engine->set_parent(CHILD, ROOT);
+
+    NETW_CHECK_EQ(engine->dirty_count(), 2);
+
+    commit(engine);
+    NETW_CHECK_EQ(engine->dirty_count(), 0);
+
+    // One mutation on the parent dirties the subtree, which is the number a
+    // caller keeping its own per-entity set could not report.
+    engine->membership_add(ROOT, near);
+    NETW_CHECK_EQ(engine->dirty_count(), 2);
+
+    // A delta a later mutation overtook leaves that mutation still owed.
+    const Ref<NetwInterestDelta> stale = engine->recompute();
+    engine->membership_add(CHILD, near);
+    engine->commit(stale);
+    NETW_CHECK_EQ(engine->dirty_count(), 2);
+
+    commit(engine);
+    NETW_CHECK_EQ(engine->dirty_count(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a membership moves one layer at a time and "
+    "keeps the order it joined in"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+    const StringName far("far");
+
+    CHECK(!engine->has_memberships(ROOT));
+    CHECK(engine->membership_add(ROOT, near));
+    CHECK(!engine->membership_add(ROOT, near));
+    CHECK(engine->membership_add(ROOT, far));
+
+    Array expected;
+    expected.push_back(near);
+    expected.push_back(far);
+    CHECK(engine->memberships(ROOT) == expected);
+    CHECK(engine->has_memberships(ROOT));
+    CHECK(engine->has_layer(near));
+
+    CHECK(engine->membership_remove(ROOT, near));
+    CHECK(!engine->membership_remove(ROOT, near));
+    CHECK(!engine->membership_remove(CHILD, far));
+    NETW_CHECK_EQ(engine->memberships(ROOT).size(), 1);
+
+    CHECK(engine->membership_remove(ROOT, far));
+    CHECK(!engine->has_memberships(ROOT));
+
+    ERR_PRINT_OFF;
+    CHECK(!engine->membership_add(0, near));
+    CHECK(!engine->membership_add(ROOT, StringName()));
+    ERR_PRINT_ON;
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a membership edge makes the entity owe a "
+    "pass, and the keys name who is owed one"
+) {
+    // The membership is to a layer admitting nobody, so the edge alone moves
+    // the row. Joining a layer that admits this peer anyway would leave the
+    // row where it was and prove nothing about the dirty set.
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName empty("empty");
+    const int bit = engine->peer_bit_for(11);
+    engine->set_live_peers(bits({bit}));
+    engine->set_order_key(ROOT, 0, 1);
+    engine->declare_layer(empty);
+    commit(engine);
+    CHECK(engine->test(ROOT, bit));
+
+    engine->membership_add(ROOT, empty);
+    commit(engine);
+    CHECK(!engine->test(ROOT, bit));
+
+    PackedInt64Array expected;
+    expected.push_back(ROOT);
+    CHECK(engine->membership_keys() == expected);
+
+    engine->membership_remove(ROOT, empty);
+    commit(engine);
+    CHECK(engine->test(ROOT, bit));
+    NETW_CHECK_EQ(engine->membership_keys().size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] an intent row is a different thing from "
+    "the default of admitting every live peer"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    engine->set_live_peers(bits({0, 1}));
+    engine->set_order_key(ROOT, 0, 1);
+
+    CHECK(!engine->has_intent(ROOT));
+    NETW_CHECK_EQ(engine->intent_keys().size(), 0);
+
+    engine->set_intent(ROOT, bits({0, 1}));
+    CHECK(engine->has_intent(ROOT));
+
+    PackedInt64Array expected;
+    expected.push_back(ROOT);
+    CHECK(engine->intent_keys() == expected);
+
+    engine->set_intent_all(ROOT);
+    CHECK(!engine->has_intent(ROOT));
+    NETW_CHECK_EQ(engine->intent_keys().size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] what the committed matrix was computed "
+    "with is answered by the commit, not by intake"
+) {
+    // Intake gains and loses an intent row between passes, and what a
+    // committed row MEANS is decided by the state it was computed against.
+    // A reader answering from intake would attribute the old row to the new
+    // state.
+    const Ref<NetwInterestEngine> engine = fresh();
+    engine->set_live_peers(bits({0, 1}));
+    engine->set_order_key(ROOT, 0, 1);
+
+    CHECK(!engine->had_committed_intent(ROOT));
+
+    engine->set_intent(ROOT, bits({0}));
+    CHECK(!engine->had_committed_intent(ROOT));
+
+    commit(engine);
+    CHECK(engine->had_committed_intent(ROOT));
+
+    engine->set_intent_all(ROOT);
+    CHECK(engine->had_committed_intent(ROOT));
+
+    commit(engine);
+    CHECK(!engine->had_committed_intent(ROOT));
+
+    engine->set_intent(ROOT, bits({0}));
+    commit(engine);
+    CHECK(engine->had_committed_intent(ROOT));
+    engine->clear();
+    CHECK(!engine->had_committed_intent(ROOT));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a layer's departure policies are declared "
+    "on it and never composed into a row"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+    const int bit = engine->peer_bit_for(11);
+    engine->set_live_peers(bits({bit}));
+    engine->set_order_key(ROOT, 0, 1);
+    engine->set_membership(ROOT, names({"near"}));
+    engine->layer_add_viewer(near, 11);
+    commit(engine);
+
+    NETW_CHECK_EQ(engine->layer_leave_policy(near), 0);
+    NETW_CHECK_EQ(engine->layer_perception_policy(near), 0);
+    NETW_CHECK_EQ(engine->layer_leave_policy(StringName("nowhere")), 0);
+
+    CHECK(engine->layer_set_leave_policy(near, 1));
+    CHECK(!engine->layer_set_leave_policy(near, 1));
+    CHECK(engine->layer_set_perception_policy(near, 2));
+
+    NETW_CHECK_EQ(engine->layer_leave_policy(near), 1);
+    NETW_CHECK_EQ(engine->layer_perception_policy(near), 2);
+
+    // The row is what a declaration must NOT move.
+    commit(engine);
+    CHECK(engine->test(ROOT, bit));
+
+    ERR_PRINT_OFF;
+    CHECK(!engine->layer_set_leave_policy(near, 3));
+    CHECK(!engine->layer_set_perception_policy(near, -1));
+    CHECK(!engine->layer_set_leave_policy(StringName(), 1));
+    ERR_PRINT_ON;
+
+    NETW_CHECK_EQ(engine->layer_leave_policy(near), 1);
+    NETW_CHECK_EQ(engine->layer_perception_policy(near), 2);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a layer's roster is its own book, not the "
+    "memberships read backwards"
+) {
+    // A server enrols what it admits others to and holds a membership for it;
+    // a peer that computes no admission enrols what it was told it can see and
+    // holds no membership at all. One book derived from the other would answer
+    // for one of those two and not the other.
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+
+    CHECK(engine->roster_add(near, ROOT));
+    CHECK(!engine->roster_add(near, ROOT));
+    CHECK(engine->roster_add(near, CHILD));
+    CHECK(engine->roster_has(near, ROOT));
+    CHECK(!engine->roster_has(near, LEAF));
+    CHECK(!engine->roster_has(StringName("far"), ROOT));
+    CHECK(engine->has_layer(near));
+
+    // The roster does not make a membership, and a membership does not make a
+    // roster entry.
+    CHECK(!engine->has_memberships(ROOT));
+    engine->membership_add(LEAF, StringName("far"));
+    CHECK(!engine->roster_has(StringName("far"), LEAF));
+
+    PackedInt64Array expected;
+    expected.push_back(ROOT);
+    expected.push_back(CHILD);
+    CHECK(engine->roster(near) == expected);
+
+    CHECK(engine->roster_remove(near, ROOT));
+    CHECK(!engine->roster_remove(near, ROOT));
+    CHECK(!engine->roster_remove(StringName("nowhere"), CHILD));
+    NETW_CHECK_EQ(engine->roster(near).size(), 1);
+
+    ERR_PRINT_OFF;
+    CHECK(!engine->roster_add(near, 0));
+    CHECK(!engine->roster_add(StringName(), ROOT));
+    ERR_PRINT_ON;
+
+    engine->clear();
+    NETW_CHECK_EQ(engine->roster(near).size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a layer counts the edges it reported, "
+    "since it was declared"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+
+    NETW_CHECK_EQ(engine->transitions(near), 0);
+
+    engine->note_transition(near);
+    engine->note_transition(near);
+    engine->note_transition(StringName("far"));
+
+    NETW_CHECK_EQ(engine->transitions(near), 2);
+    NETW_CHECK_EQ(engine->transitions(StringName("far")), 1);
+    NETW_CHECK_EQ(engine->transitions(StringName("nowhere")), 0);
+
+    engine->note_transition(StringName());
+    NETW_CHECK_EQ(engine->transitions(StringName()), 0);
+
+    // A layer that is removed and named again starts from nothing, because the
+    // count belongs to the layer rather than to its name.
+    engine->remove_layer(near);
+    NETW_CHECK_EQ(engine->transitions(near), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a viewer bit that names no peer is not a "
+    "viewer"
+) {
+    // `set_layer` writes bits directly, so a row can hold a bit no peer was
+    // ever minted. Such a bit still grants inside the algebra and still has
+    // nobody to name outside it.
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+    engine->set_layer(near, bits({0, 1}), OUTSIDERS);
+
+    NETW_CHECK_EQ(engine->layer_viewers(near).size(), 0);
+    NETW_CHECK_EQ(engine->viewer_peers().size(), 0);
+
+    engine->peer_bit_for(11);
+    PackedInt64Array expected;
+    expected.push_back(11);
+    CHECK(engine->layer_viewers(near) == expected);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] the viewer peers are the union across "
+    "every layer"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    engine->layer_add_viewer(StringName("near"), 11);
+    engine->layer_add_viewer(StringName("near"), 4);
+    engine->layer_add_viewer(StringName("far"), 4);
+    engine->layer_add_viewer(StringName("far"), 7);
+
+    PackedInt64Array expected;
+    expected.push_back(11);
+    expected.push_back(4);
+    expected.push_back(7);
+    CHECK(engine->viewer_peers() == expected);
+
+    engine->remove_layer(StringName("far"));
+    NETW_CHECK_EQ(engine->viewer_peers().size(), 2);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a declared layer exists admitting nobody"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const StringName near("near");
+    CHECK(!engine->has_layer(near));
+
+    engine->declare_layer(near);
+
+    CHECK(engine->has_layer(near));
+    NETW_CHECK_EQ(engine->layer_viewers(near).size(), 0);
+    CHECK(!engine->layer_has_viewer(near, 11));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] an entity with no route is ordered by an "
+    "ordinal minted once"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+
+    NETW_CHECK_EQ(engine->order_route_for(ROOT), 1);
+    NETW_CHECK_EQ(engine->order_route_for(CHILD), 2);
+    NETW_CHECK_EQ(engine->order_route_for(ROOT), 1);
+
+    // The entity leaving is not the ordinal leaving. It comes back ordered
+    // where it was rather than after everything minted since.
+    engine->remove_entity(ROOT);
+    NETW_CHECK_EQ(engine->order_route_for(ROOT), 1);
+
+    ERR_PRINT_OFF;
+    NETW_CHECK_EQ(engine->order_route_for(0), 0);
+    ERR_PRINT_ON;
+
+    engine->clear();
+    NETW_CHECK_EQ(engine->order_route_for(CHILD), 1);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a peer's bit is minted once and stays "
+    "dense from zero"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+
+    NETW_CHECK_EQ(engine->peer_bit_for(7), 0);
+    NETW_CHECK_EQ(engine->peer_bit_for(3), 1);
+    NETW_CHECK_EQ(engine->peer_bit_for(7), 0);
+    NETW_CHECK_EQ(engine->peer_bit_for(3), 1);
+    NETW_CHECK_EQ(engine->peer_bit_for(9), 2);
+
+    PackedInt64Array expected;
+    expected.push_back(7);
+    expected.push_back(3);
+    expected.push_back(9);
+    CHECK(engine->known_peers() == expected);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a bit and its peer resolve back to each "
+    "other, and nothing else does"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    const int bit = engine->peer_bit_for(42);
+
+    NETW_CHECK_EQ(engine->peer_of_bit(bit), 42);
+    NETW_CHECK_EQ(engine->peer_of_bit(bit + 1), 0);
+    NETW_CHECK_EQ(engine->peer_of_bit(-1), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] reading a peer's bit does not enrol the "
+    "peer"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+
+    NETW_CHECK_EQ(engine->peer_bit_of(5), -1);
+    NETW_CHECK_EQ(engine->known_peers().size(), 0);
+    NETW_CHECK_EQ(engine->peer_bit_for(5), 0);
+    NETW_CHECK_EQ(engine->peer_bit_of(5), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] peer id zero is refused a bit rather "
+    "than given one"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+
+    ERR_PRINT_OFF;
+    NETW_CHECK_EQ(engine->peer_bit_for(0), -1);
+    ERR_PRINT_ON;
+
+    NETW_CHECK_EQ(engine->known_peers().size(), 0);
+    NETW_CHECK_EQ(engine->peer_bit_for(1), 0);
+    NETW_CHECK_EQ(engine->peer_of_bit(0), 1);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a cleared engine mints the next session's "
+    "bits from zero again"
+) {
+    const Ref<NetwInterestEngine> engine = fresh();
+    engine->peer_bit_for(7);
+    engine->peer_bit_for(3);
+
+    engine->clear();
+
+    NETW_CHECK_EQ(engine->peer_bit_of(7), -1);
+    NETW_CHECK_EQ(engine->peer_of_bit(0), 0);
+    NETW_CHECK_EQ(engine->peer_bit_for(3), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a peer that computes no admission projects "
+    "from what the entity declares"
+) {
+    Ref<NetwInterestEngine> engine;
+    engine.instantiate();
+    Ref<NetwInterestDecl> silent;
+    silent.instantiate();
+    Ref<NetwInterestDecl> declared;
+    declared.instantiate();
+    declared->join(StringName("arena"));
+    declared->join(StringName("stealth"));
+
+    engine->declare_layer(StringName("arena"));
+    engine->declare_layer(StringName("stealth"));
+
+    CHECK(engine->projection_admits(1, silent));
+    CHECK_FALSE(engine->projection_admits(1, declared));
+
+    engine->roster_add(StringName("stealth"), 1);
+    CHECK(engine->projection_admits(1, declared));
+    CHECK_FALSE(engine->projection_admits(2, declared));
+
+    engine->roster_remove(StringName("stealth"), 1);
+    CHECK_FALSE(engine->projection_admits(1, declared));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a projection over a layer nobody declared "
+    "admits nobody, and no declaration at all is refused"
+) {
+    Ref<NetwInterestEngine> engine;
+    engine.instantiate();
+    Ref<NetwInterestDecl> declared;
+    declared.instantiate();
+    declared->join(StringName("nowhere"));
+
+    CHECK_FALSE(engine->projection_admits(1, declared));
+
+    ERR_PRINT_OFF;
+    CHECK_FALSE(engine->projection_admits(1, Ref<NetwInterestDecl>()));
+    ERR_PRINT_ON;
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] sharing a scope is every enrolled entity "
+    "but the asker, named once"
+) {
+    Ref<NetwInterestEngine> engine;
+    engine.instantiate();
+    engine->declare_layer(StringName("arena"));
+    engine->declare_layer(StringName("stealth"));
+    engine->roster_add(StringName("arena"), 1);
+    engine->roster_add(StringName("arena"), 2);
+    engine->roster_add(StringName("stealth"), 2);
+    engine->roster_add(StringName("stealth"), 3);
+
+    Array both;
+    both.push_back(StringName("arena"));
+    both.push_back(StringName("stealth"));
+
+    PackedInt64Array expected;
+    expected.push_back(1);
+    expected.push_back(3);
+    CHECK(engine->co_members(2, both) == expected);
+
+    PackedInt64Array from_one;
+    from_one.push_back(2);
+    from_one.push_back(3);
+    CHECK(engine->co_members(1, both) == from_one);
+
+    Array unknown;
+    unknown.push_back(StringName("nowhere"));
+    NETW_CHECK_EQ(engine->co_members(1, unknown).size(), 0);
+    NETW_CHECK_EQ(engine->co_members(1, Array()).size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] the churn of the plane is every layer's, "
+    "and a layer nothing reported for contributes nothing"
+) {
+    Ref<NetwInterestEngine> engine;
+    engine.instantiate();
+    engine->declare_layer(StringName("arena"));
+    engine->declare_layer(StringName("stealth"));
+    engine->declare_layer(StringName("quiet"));
+
+    NETW_CHECK_EQ(engine->transitions_total(), 0);
+
+    engine->note_transition(StringName("arena"));
+    engine->note_transition(StringName("arena"));
+    engine->note_transition(StringName("stealth"));
+
+    NETW_CHECK_EQ(engine->transitions_total(), 3);
+    NETW_CHECK_EQ(engine->transitions(StringName("quiet")), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] a scene membership moves once per move, and "
+    "an empty name forgets the entity"
+) {
+    Ref<NetwInterestEngine> engine;
+    engine.instantiate();
+
+    CHECK(engine->scene_membership(1) == StringName());
+    CHECK_FALSE(engine->set_scene_membership(1, StringName()));
+
+    CHECK(engine->set_scene_membership(1, StringName("level-1")));
+    CHECK(engine->scene_membership(1) == StringName("level-1"));
+    CHECK_FALSE(engine->set_scene_membership(1, StringName("level-1")));
+
+    CHECK(engine->set_scene_membership(1, StringName("level-2")));
+    CHECK(engine->scene_membership(1) == StringName("level-2"));
+    CHECK(engine->scene_membership(2) == StringName());
+
+    CHECK(engine->set_scene_membership(1, StringName()));
+    CHECK(engine->scene_membership(1) == StringName());
+    CHECK_FALSE(engine->set_scene_membership(1, StringName()));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] the scene memberships end with the session, "
+    "so a second one starts naming nothing"
+) {
+    Ref<NetwInterestEngine> engine;
+    engine.instantiate();
+    engine->set_scene_membership(1, StringName("level-1"));
+    engine->set_scene_membership(2, StringName("level-2"));
+
+    engine->clear();
+
+    CHECK(engine->scene_membership(1) == StringName());
+    CHECK(engine->scene_membership(2) == StringName());
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] an entity's departure is watched through "
+    "exactly one handler, handed back to disconnect it"
+) {
+    Ref<NetwInterestEngine> engine;
+    engine.instantiate();
+    Ref<NetwInterestDecl> holder;
+    holder.instantiate();
+    const Callable first(holder.ptr(), StringName("clear"));
+    const Callable second(holder.ptr(), StringName("labels"));
+
+    CHECK_FALSE(engine->exit_handler(1).is_valid());
+
+    CHECK(engine->set_exit_handler(1, first));
+    CHECK(engine->exit_handler(1) == first);
+    CHECK_FALSE(engine->set_exit_handler(1, second));
+    CHECK(engine->exit_handler(1) == first);
+
+    CHECK(engine->take_exit_handler(1) == first);
+    CHECK_FALSE(engine->exit_handler(1).is_valid());
+    CHECK_FALSE(engine->take_exit_handler(1).is_valid());
+
+    CHECK(engine->set_exit_handler(1, second));
+    engine->clear();
+    CHECK_FALSE(engine->exit_handler(1).is_valid());
 }
 
 } // namespace TestNetwInterestEngine

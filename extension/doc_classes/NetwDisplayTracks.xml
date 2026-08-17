@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayTracks" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Which display channel a track resolves to, by the two names a channel has.
+	</brief_description>
+	<description>
+		A channel is identified by its KEY, the node and property it samples, and addressed from outside by its NAME, the property it writes. Those answer different questions, which is why they are two indexes and not one.
+		A key is an identity, so declaring one twice describes one channel twice and creates no second. A name is what a caller holds, and two channels writing the same property on different objects make the name ambiguous rather than making a second channel.
+		[codeblock]
+		var channel := tracks.by_key(key)
+		if channel >= 0:
+			absorb(channels[channel])       # one channel, described again
+		else:
+			channels.append(tracks.declare(key, name))
+
+		var found := tracks.by_name("position")
+		if tracks.is_ambiguous("position"):
+			warn_and_answer_anyway(found)
+		[/codeblock]
+		Indices count up from zero in declaration order, so the caller holds its channels in a flat row addressed by what this book answers.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="ambiguous_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many names more than one channel writes. A diagnostic rather than a fault: ambiguity makes a name unanswerable, not a display wrong.
+			</description>
+		</method>
+		<method name="by_key" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<description>
+				The channel declared under [param key], or [code]-1[/code] when none was.
+			</description>
+		</method>
+		<method name="by_name" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				The channel [param name] addresses, which is the FIRST to claim it, or [code]-1[/code] when none did.
+				A later claimant makes the name ambiguous through [method is_ambiguous] without displacing the answer, so a lookup that was right before a second channel appeared stays right.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Forgets every channel and every ambiguity, which is where a rebuild starts. Indices count from zero again, because the caller's row is empty too.
+			</description>
+		</method>
+		<method name="declare">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="name" type="StringName" />
+			<description>
+				Declares one channel and answers its index, counting up from zero in declaration order.
+				A [param key] already declared keeps its channel and claims no second [param name], because the two declarations are one channel described twice.
+			</description>
+		</method>
+		<method name="is_ambiguous" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				Whether more than one channel writes [param name], which is what makes addressing by that name unreliable rather than wrong.
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many channels are declared.
+			</description>
+		</method>
+	</methods>
+</class>

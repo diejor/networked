@@ -65,86 +65,96 @@
 # module tier. Neither is this batch's and neither is silent.
 #
 # THE REST OF tests/unit/core CARRIES, and the reasons are not one reason.
-# Three suites await a coroutine or a promise, which no native tier can drive;
-# four drive a tree, a component or the join path; two assert on the logger's
-# own output; one assembles PackedScenes, which is the affirmative permanent
-# carry; and test_flat_prediction_lagcomp.gd carries because the sim family
-# crosses with its own port rather than with this one.
+# ONE suite awaits a coroutine no native tier can drive (test_async_mutex.gd,
+# over a GDScript utility whose lock IS the coroutine); four drive a tree, a
+# component or the join path; two assert on the logger's own output; one
+# assembles PackedScenes, which is the affirmative permanent carry;
+# test_settle_queue.gd drives the shell session's relay onto a queue that is
+# already native; and test_flat_prediction_lagcomp.gd carries because the sim
+# family crosses with its own port rather than with this one.
 #
-test_async_mutex.gd:test_lock_and_unlock_updates_state -> CARRY tests/unit/core (awaits a coroutine, which no native tier can drive)
-test_async_mutex.gd:test_unlock_releases_and_is_idempotent -> CARRY tests/unit/core (awaits a coroutine, which no native tier can drive)
-test_async_mutex.gd:test_second_lock_waits_until_release -> CARRY tests/unit/core (awaits a coroutine, which no native tier can drive)
-test_auth_protocol.gd:test_classify_packets -> CARRY tests/unit/core (drives the connect kit and its resources)
-test_auth_protocol.gd:test_hello_round_trips -> CARRY tests/unit/core (drives the connect kit and its resources)
-test_auth_protocol.gd:test_probe_round_trips -> CARRY tests/unit/core (drives the connect kit and its resources)
-test_auth_protocol.gd:test_decode_rejections -> CARRY tests/unit/core (drives the connect kit and its resources)
-test_benign_error_seam.gd:test_the_session_hook_installed_the_eraser -> CARRY tests/unit/core (asserts on engine error output the tiers spell differently)
-test_benign_error_seam.gd:test_an_error_matching_every_marker_is_erased -> CARRY tests/unit/core (asserts on engine error output the tiers spell differently)
-test_benign_error_seam.gd:test_the_tolerated_error_is_named_by_every_marker -> CARRY tests/unit/core (asserts on engine error output the tiers spell differently)
-test_builders.gd:test_scene_assembly_flow -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
-test_builders.gd:test_sync_config_builder -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
-test_builders.gd:test_path_namespace_allocates_and_resets -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
-test_builders.gd:test_builder_shape_flow -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
-test_builders.gd:test_builders_support_custom_root_types_and_autogen -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
-test_builders.gd:test_player_builder_with_custom_synchronizer -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
-test_builders.gd:test_player_builder_with_lag_comp -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
-test_builders.gd:test_player_builder_lag_comp_composes_with_entity_and_interest -> CARRY tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+# RE-STATED at ZU-11 against the measured tree. The settle-queue rows read
+# "awaits a promise, which no native tier can drive" and that was false twice
+# over: five of the six cases await nothing at all, the sixth awaits gdUnit's
+# own assert_error, and the subject is NetwMultiplayerCore's settle_schedule /
+# settle_cancel / settle_drain, which are native. A native promise is also
+# drivable by a native tier as of the database boundary's flip, so the phrase
+# could not have been kept even where a promise was really awaited.
+#
+test_async_mutex.gd:test_lock_and_unlock_updates_state -> CARRY kit tests/unit/core (awaits a coroutine, which no native tier can drive)
+test_async_mutex.gd:test_unlock_releases_and_is_idempotent -> CARRY kit tests/unit/core (awaits a coroutine, which no native tier can drive)
+test_async_mutex.gd:test_second_lock_waits_until_release -> CARRY kit tests/unit/core (awaits a coroutine, which no native tier can drive)
+test_auth_protocol.gd:test_classify_packets -> CARRY kit tests/unit/core (drives the connect kit and its resources)
+test_auth_protocol.gd:test_hello_round_trips -> CARRY kit tests/unit/core (drives the connect kit and its resources)
+test_auth_protocol.gd:test_probe_round_trips -> CARRY kit tests/unit/core (drives the connect kit and its resources)
+test_auth_protocol.gd:test_decode_rejections -> CARRY kit tests/unit/core (drives the connect kit and its resources)
+test_benign_error_seam.gd:test_the_session_hook_installed_the_eraser -> CARRY shell tests/unit/core (asserts on engine error output the tiers spell differently)
+test_benign_error_seam.gd:test_an_error_matching_every_marker_is_erased -> CARRY shell tests/unit/core (asserts on engine error output the tiers spell differently)
+test_benign_error_seam.gd:test_the_tolerated_error_is_named_by_every_marker -> CARRY shell tests/unit/core (asserts on engine error output the tiers spell differently)
+test_builders.gd:test_scene_assembly_flow -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+test_builders.gd:test_sync_config_builder -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+test_builders.gd:test_path_namespace_allocates_and_resets -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+test_builders.gd:test_builder_shape_flow -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+test_builders.gd:test_builders_support_custom_root_types_and_autogen -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+test_builders.gd:test_player_builder_with_custom_synchronizer -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+test_builders.gd:test_player_builder_with_lag_comp -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
+test_builders.gd:test_player_builder_lag_comp_composes_with_entity_and_interest -> CARRY kit tests/unit/core (assembles PackedScenes, the affirmative permanent carry)
 test_flat_interest_display.gd:test_interest_layer_lifecycle_and_committed_row_are_flat -> flat_interest_display_tests.cpp:"[Networked][Interest] a layer's lifecycle is addressed by handles"
 test_flat_interest_display.gd:test_interest_driver_and_monitor_use_entity_handles -> flat_interest_display_tests.cpp:"[Networked][Interest] a driver and a monitor exchange entity handles"
 test_flat_interest_display.gd:test_interest_policy_is_selected_by_flat_param -> flat_interest_display_tests.cpp:"[Networked][Interest] a policy is selected by the flat param"
 test_flat_interest_display.gd:test_display_declare_record_and_diagnostics_are_flat -> flat_interest_display_tests.cpp:"[Networked][Display] a track declares, records and reports by handle"
 test_flat_interest_display.gd:test_display_callback_is_a_flat_writer -> flat_interest_display_tests.cpp:"[Networked][Display] the output callback carries the public tuple"
-test_flat_prediction_lagcomp.gd:test_prediction_declaration_and_parameters_are_flat -> CARRY tests/unit/core (the sim family crosses with the port)
-test_flat_prediction_lagcomp.gd:test_prediction_callbacks_and_island_are_rid_addressed -> CARRY tests/unit/core (the sim family crosses with the port)
-test_flat_prediction_lagcomp.gd:test_timeline_and_lagcomp_queries_are_flat -> CARRY tests/unit/core (the sim family crosses with the port)
-test_input_component.gd:test_initial_state_has_actions_and_defaults -> CARRY tests/unit/core (drives a component node inside a tree)
-test_input_component.gd:test_get_axis_reports_direction -> CARRY tests/unit/core (drives a component node inside a tree)
-test_input_component.gd:test_get_vector2_reports_normalized_zero_and_cardinal -> CARRY tests/unit/core (drives a component node inside a tree)
-test_input_component.gd:test_on_tick_emits_snapshot_with_tick_state_and_actions -> CARRY tests/unit/core (drives a component node inside a tree)
-test_input_component.gd:test_before_tick_runs_gather_each_tick -> CARRY tests/unit/core (drives a component node inside a tree)
-test_input_component.gd:test_base_gather_is_noop_for_non_overriders -> CARRY tests/unit/core (drives a component node inside a tree)
-test_intake_security.gd:test_predict_command_rejects_a_non_controller_sender -> CARRY tests/unit/core (drives the tree's join path end to end)
-test_intake_security.gd:test_predict_ack_rejects_a_non_server_sender -> CARRY tests/unit/core (drives the tree's join path end to end)
-test_intake_security.gd:test_gate_verdict_preserves_the_legacy_drop_counter -> CARRY tests/unit/core (drives the tree's join path end to end)
-test_intake_security.gd:test_direct_tick_door_services_the_session -> CARRY tests/unit/core (drives the tree's join path end to end)
-test_intake_security.gd:test_gate_verdicts_are_partitioned_and_counted -> CARRY tests/unit/core (drives the tree's join path end to end)
-test_join_payload_serde.gd:test_round_trip_preserves_scalars -> CARRY tests/unit/core (reads project settings and resources)
-test_join_payload_serde.gd:test_default_is_debug_is_false -> CARRY tests/unit/core (reads project settings and resources)
-test_join_payload_serde.gd:test_empty_args_round_trip_to_empty -> CARRY tests/unit/core (reads project settings and resources)
-test_join_payload_serde.gd:test_arg_bytes_and_hash_round_trip -> CARRY tests/unit/core (reads project settings and resources)
-test_join_payload_serde.gd:test_arg_values_are_transient -> CARRY tests/unit/core (reads project settings and resources)
-test_multiplayer_extension.gd:test_make_constructs_an_explicit_extension -> CARRY tests/unit/core (extends the GDScript api, which is W6)
-test_multiplayer_extension.gd:test_make_reads_the_project_setting -> CARRY tests/unit/core (extends the GDScript api, which is W6)
-test_multiplayer_extension.gd:test_tree_api_script_overrides_the_project_setting -> CARRY tests/unit/core (extends the GDScript api, which is W6)
-test_multiplayer_extension.gd:test_callthrough_gate_preserves_the_stock_verdict -> CARRY tests/unit/core (extends the GDScript api, which is W6)
-test_multiplayer_extension.gd:test_flipping_gate_rejects_a_stock_accepted_frame -> CARRY tests/unit/core (extends the GDScript api, which is W6)
-test_netw_debug_scope.gd:test_noop_debug_facade_returns_callable_spans -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_discipline_lint.gd:test_entity_record_is_wire_free -> CARRY tests/unit/core (a source lint over res://, hosted-only either way)
-test_netw_discipline_lint.gd:test_no_addon_script_shadows_a_native_name -> CARRY tests/unit/core (a source lint over res://, hosted-only either way)
-test_netw_discipline_lint.gd:test_core_interfaces_never_query_the_service_registry -> CARRY tests/unit/core (a source lint over res://, hosted-only either way)
-test_netw_discipline_lint.gd:test_forcing_test_lines_carry_a_smell_tag -> CARRY tests/unit/core (a source lint over res://, hosted-only either way)
-test_netw_discipline_lint.gd:test_core_interfaces_never_name_a_connect_kit_class -> CARRY tests/unit/core (a source lint over res://, hosted-only either way)
-test_netw_discipline_lint.gd:test_the_connect_kit_never_reaches_a_core_private -> CARRY tests/unit/core (a source lint over res://, hosted-only either way)
-test_netw_log_scope.gd:test_profile_resource_cannot_silence_error -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_log_scope.gd:test_stack_scan_finds_the_addon_root_after_log_rename -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_log_scope.gd:test_scoped_global_level_applies_until_close -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_log_scope.gd:test_scoped_module_override_applies_until_close -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_log_scope.gd:test_double_close_is_harmless -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_log_scope.gd:test_nested_scopes_restore_previous_layer -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_log_scope.gd:test_out_of_order_close_fails_safely -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_log_scope.gd:test_enable_logs_uses_session_hook_for_current_test -> CARRY tests/unit/core (asserts on the logger's own output)
-test_netw_multiplayer_stats.gd:test_snapshot_preserves_legacy_keys_and_covers_every_stat -> CARRY tests/unit/core (reads a tree-bound counter)
-test_property_set_surface.gd:test_handle_ledger_is_kind_local_and_reversible -> CARRY tests/unit/core (drives MultiplayerTree and a script's own declarations)
-test_property_set_surface.gd:test_from_script_compiles_a_cached_sealed_rid_with_identical_bytes -> CARRY tests/unit/core (drives MultiplayerTree and a script's own declarations)
-test_property_set_surface.gd:test_a_manual_set_binds_the_schema_by_column_address -> CARRY tests/unit/core (drives MultiplayerTree and a script's own declarations)
-test_property_set_surface.gd:test_a_column_no_set_binds_rides_no_lane -> CARRY tests/unit/core (drives MultiplayerTree and a script's own declarations)
-test_property_set_surface.gd:test_a_strided_schema_cannot_create_a_property_set -> CARRY tests/unit/core (drives MultiplayerTree and a script's own declarations)
-test_settle_queue.gd:test_unkeyed_effects_run_in_enqueue_order -> CARRY tests/unit/core (awaits a promise, which no native tier can drive)
-test_settle_queue.gd:test_a_key_coalesces_to_the_latest_position -> CARRY tests/unit/core (awaits a promise, which no native tier can drive)
-test_settle_queue.gd:test_cancel_withdraws_a_pending_key -> CARRY tests/unit/core (awaits a promise, which no native tier can drive)
-test_settle_queue.gd:test_an_effect_scheduled_during_a_drain_runs_in_the_same_drain -> CARRY tests/unit/core (awaits a promise, which no native tier can drive)
-test_settle_queue.gd:test_a_self_rescheduling_effect_fails_loudly_rather_than_hanging -> CARRY tests/unit/core (awaits a promise, which no native tier can drive)
-test_settle_queue.gd:test_a_drained_queue_stays_drained -> CARRY tests/unit/core (awaits a promise, which no native tier can drive)
-test_decision_seams.gd:test_a_stock_session_overrides_nothing                                                    -> CARRY tests/unit/core (reads a GDScript script's method table, which no native tier has)
-test_decision_seams.gd:test_an_override_claims_only_its_own_seam                                                 -> CARRY tests/unit/core (reads a GDScript script's method table, which no native tier has)
-test_decision_seams.gd:test_an_inherited_override_still_counts                                                   -> CARRY tests/unit/core (reads a GDScript script's method table, which no native tier has)
+test_flat_prediction_lagcomp.gd:test_prediction_declaration_and_parameters_are_flat -> CARRY shell tests/unit/core (the sim family crosses with the port)
+test_flat_prediction_lagcomp.gd:test_prediction_callbacks_and_island_are_rid_addressed -> CARRY shell tests/unit/core (the sim family crosses with the port)
+test_flat_prediction_lagcomp.gd:test_timeline_and_lagcomp_queries_are_flat -> CARRY shell tests/unit/core (the sim family crosses with the port)
+test_input_component.gd:test_initial_state_has_actions_and_defaults -> CARRY kit tests/unit/core (drives a component node inside a tree)
+test_input_component.gd:test_get_axis_reports_direction -> CARRY kit tests/unit/core (drives a component node inside a tree)
+test_input_component.gd:test_get_vector2_reports_normalized_zero_and_cardinal -> CARRY kit tests/unit/core (drives a component node inside a tree)
+test_input_component.gd:test_on_tick_emits_snapshot_with_tick_state_and_actions -> CARRY kit tests/unit/core (drives a component node inside a tree)
+test_input_component.gd:test_before_tick_runs_gather_each_tick -> CARRY kit tests/unit/core (drives a component node inside a tree)
+test_input_component.gd:test_base_gather_is_noop_for_non_overriders -> CARRY kit tests/unit/core (drives a component node inside a tree)
+test_intake_security.gd:test_predict_command_rejects_a_non_controller_sender -> CARRY shell tests/unit/core (hostile carrier intake, decided by NetwMultiplayer's gate verdicts; MultiplayerTree is only the kit node that stands the session up)
+test_intake_security.gd:test_predict_ack_rejects_a_non_server_sender -> CARRY shell tests/unit/core (hostile carrier intake, decided by NetwMultiplayer's gate verdicts; MultiplayerTree is only the kit node that stands the session up)
+test_intake_security.gd:test_gate_verdict_preserves_the_legacy_drop_counter -> CARRY shell tests/unit/core (hostile carrier intake, decided by NetwMultiplayer's gate verdicts; MultiplayerTree is only the kit node that stands the session up)
+test_intake_security.gd:test_direct_tick_door_services_the_session -> CARRY shell tests/unit/core (hostile carrier intake, decided by NetwMultiplayer's gate verdicts; MultiplayerTree is only the kit node that stands the session up)
+test_intake_security.gd:test_gate_verdicts_are_partitioned_and_counted -> CARRY shell tests/unit/core (hostile carrier intake, decided by NetwMultiplayer's gate verdicts; MultiplayerTree is only the kit node that stands the session up)
+test_join_payload_serde.gd:test_round_trip_preserves_scalars -> join_payload_tests.cpp:"[Networked][Session][Hosted] K6 every scalar a request carries survives its own frame, including the ones a default would hide"
+test_join_payload_serde.gd:test_default_is_debug_is_false -> join_payload_tests.cpp:"[Networked][Session][Hosted] K7 a request that names only the required fields reads the absent ones as their defaults rather than as nothing"
+test_join_payload_serde.gd:test_empty_args_round_trip_to_empty -> join_payload_tests.cpp:"[Networked][Session][Hosted] K7 a request that names only the required fields reads the absent ones as their defaults rather than as nothing"
+test_join_payload_serde.gd:test_arg_bytes_and_hash_round_trip -> join_payload_tests.cpp:"[Networked][Session][Hosted] K6 every scalar a request carries survives its own frame, including the ones a default would hide"
+test_join_payload_serde.gd:test_arg_values_are_transient -> join_payload_tests.cpp:"[Networked][Session][Hosted] K1 the request is the bytes the GDScript form wrote, and the live args are not among them"
+test_multiplayer_extension.gd:test_make_constructs_an_explicit_extension -> CARRY shell tests/unit/core (extends the GDScript api, which is W6)
+test_multiplayer_extension.gd:test_make_reads_the_project_setting -> CARRY shell tests/unit/core (extends the GDScript api, which is W6)
+test_multiplayer_extension.gd:test_tree_api_script_overrides_the_project_setting -> CARRY shell tests/unit/core (extends the GDScript api, which is W6)
+test_multiplayer_extension.gd:test_callthrough_gate_preserves_the_stock_verdict -> CARRY shell tests/unit/core (extends the GDScript api, which is W6)
+test_multiplayer_extension.gd:test_flipping_gate_rejects_a_stock_accepted_frame -> CARRY shell tests/unit/core (extends the GDScript api, which is W6)
+test_netw_debug_scope.gd:test_noop_debug_facade_returns_callable_spans -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_discipline_lint.gd:test_entity_record_is_wire_free -> CARRY kit tests/unit/core (a source lint over res://, hosted-only either way)
+test_netw_discipline_lint.gd:test_no_addon_script_shadows_a_native_name -> CARRY kit tests/unit/core (a source lint over res://, hosted-only either way)
+test_netw_discipline_lint.gd:test_core_interfaces_never_query_the_service_registry -> CARRY kit tests/unit/core (a source lint over res://, hosted-only either way)
+test_netw_discipline_lint.gd:test_forcing_test_lines_carry_a_smell_tag -> CARRY kit tests/unit/core (a source lint over res://, hosted-only either way)
+test_netw_discipline_lint.gd:test_core_interfaces_never_name_a_connect_kit_class -> CARRY kit tests/unit/core (a source lint over res://, hosted-only either way)
+test_netw_discipline_lint.gd:test_the_connect_kit_never_reaches_a_core_private -> CARRY kit tests/unit/core (a source lint over res://, hosted-only either way)
+test_netw_log_scope.gd:test_profile_resource_cannot_silence_error -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_log_scope.gd:test_stack_scan_finds_the_addon_root_after_log_rename -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_log_scope.gd:test_scoped_global_level_applies_until_close -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_log_scope.gd:test_scoped_module_override_applies_until_close -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_log_scope.gd:test_double_close_is_harmless -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_log_scope.gd:test_nested_scopes_restore_previous_layer -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_log_scope.gd:test_out_of_order_close_fails_safely -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_log_scope.gd:test_enable_logs_uses_session_hook_for_current_test -> CARRY retiring:ZU-38 tests/unit/core (asserts on NetwLog's own output, and ZU-38 deletes NetwLog)
+test_netw_multiplayer_stats.gd:test_snapshot_preserves_legacy_keys_and_covers_every_stat -> CARRY shell tests/unit/core (reads a tree-bound counter)
+test_property_set_surface.gd:test_handle_ledger_is_kind_local_and_reversible -> CARRY shell tests/unit/core (drives MultiplayerTree and a script's own declarations)
+test_property_set_surface.gd:test_from_script_compiles_a_cached_sealed_rid_with_identical_bytes -> CARRY shell tests/unit/core (drives MultiplayerTree and a script's own declarations)
+test_property_set_surface.gd:test_a_manual_set_binds_the_schema_by_column_address -> CARRY shell tests/unit/core (drives MultiplayerTree and a script's own declarations)
+test_property_set_surface.gd:test_a_column_no_set_binds_rides_no_lane -> CARRY shell tests/unit/core (drives MultiplayerTree and a script's own declarations)
+test_property_set_surface.gd:test_a_strided_schema_cannot_create_a_property_set -> CARRY shell tests/unit/core (drives MultiplayerTree and a script's own declarations)
+test_settle_queue.gd:test_unkeyed_effects_run_in_enqueue_order -> CARRY shell tests/unit/core (drives the shell session's settle relay; the queue is NetwMultiplayerCore's)
+test_settle_queue.gd:test_a_key_coalesces_to_the_latest_position -> CARRY shell tests/unit/core (drives the shell session's settle relay; the queue is NetwMultiplayerCore's)
+test_settle_queue.gd:test_cancel_withdraws_a_pending_key -> CARRY shell tests/unit/core (drives the shell session's settle relay; the queue is NetwMultiplayerCore's)
+test_settle_queue.gd:test_an_effect_scheduled_during_a_drain_runs_in_the_same_drain -> CARRY shell tests/unit/core (drives the shell session's settle relay; the queue is NetwMultiplayerCore's)
+test_settle_queue.gd:test_a_self_rescheduling_effect_fails_loudly_rather_than_hanging -> CARRY shell tests/unit/core (awaits gdUnit's assert_error; the refusal itself is NetwMultiplayerCore.settle_drain's)
+test_settle_queue.gd:test_a_drained_queue_stays_drained -> CARRY shell tests/unit/core (drives the shell session's settle relay; the queue is NetwMultiplayerCore's)
+test_decision_seams.gd:test_a_stock_session_overrides_nothing                                                    -> CARRY shell tests/unit/core (the seam census over a GDScript override; netw::gd::script_method_count reads a script's method table in BOTH tiers, so what carries is the live GDScript body under test and not the reflection)
+test_decision_seams.gd:test_an_override_claims_only_its_own_seam                                                 -> CARRY shell tests/unit/core (the seam census over a GDScript override; netw::gd::script_method_count reads a script's method table in BOTH tiers, so what carries is the live GDScript body under test and not the reflection)
+test_decision_seams.gd:test_an_inherited_override_still_counts                                                   -> CARRY shell tests/unit/core (the seam census over a GDScript override; netw::gd::script_method_count reads a script's method table in BOTH tiers, so what carries is the live GDScript body under test and not the reflection)

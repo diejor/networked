@@ -35,7 +35,7 @@ func test_key_is_deterministic_and_namespaced() -> void:
 	var root := make_test_entity(mt, "PlayerBody", 0, false)
 	NetwEntity.bind(root, &"player", 7)
 
-	assert_that(api.effect_key(api.rid_of(root), 12, 3)) \
+	assert_that(api.effect_key(api.entity_of(root), 12, 3)) \
 			.is_equal(&"act__player__12__3")
 
 
@@ -46,7 +46,7 @@ func test_key_without_an_entity_is_session_scoped() -> void:
 func test_key_survives_entity_name_transport() -> void:
 	var root := make_test_entity(mt, "PlayerBody", 0, false)
 	NetwEntity.bind(root, &"player", 7)
-	var key := api.effect_key(api.rid_of(root), 12, 3)
+	var key := api.effect_key(api.entity_of(root), 12, 3)
 	var spawned := Node.new()
 	auto_free(spawned)
 

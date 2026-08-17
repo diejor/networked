@@ -65,25 +65,45 @@ func test_namespace_listing_deletion_and_registry_flow() -> void:
 
 	var seed_a: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	seed_a.base_dir = test_dir
-	assert_int(seed_a.initialize(schema, "slot_a")).is_equal(OK)
+	assert_int(await NetwDatabase.settled_error(
+		seed_a.initialize(schema, "slot_a"),
+	)).is_equal(OK)
 	seed_a.upsert(&"players", &"p1", { &"hp": 1 })
 
 	var seed_b: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	seed_b.base_dir = test_dir
-	assert_int(seed_b.initialize(schema, "slot_b")).is_equal(OK)
+	assert_int(await NetwDatabase.settled_error(
+		seed_b.initialize(schema, "slot_b"),
+	)).is_equal(OK)
 	seed_b.upsert(&"players", &"p2", { &"hp": 2 })
 	seed_a.upsert(&"players", &"shared", { &"hp": 10 })
 	seed_b.upsert(&"players", &"shared", { &"hp": 20 })
 
-	assert_int(seed_a.find_by_id(&"players", &"shared").get(&"hp")).is_equal(10)
-	assert_int(seed_b.find_by_id(&"players", &"shared").get(&"hp")).is_equal(20)
+	var shared_a: Dictionary = await NetwDatabase.settled_value(
+		seed_a.find_by_id(&"players", &"shared"),
+		{ },
+	)
+	assert_int(shared_a.get(&"hp")).is_equal(10)
+	var shared_b: Dictionary = await NetwDatabase.settled_value(
+		seed_b.find_by_id(&"players", &"shared"),
+		{ },
+	)
+	assert_int(shared_b.get(&"hp")).is_equal(20)
 
 	var browser: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	browser.base_dir = test_dir
-	var listed: Array[StringName] = browser.list_namespaces()
+	var listed: Array[StringName] = await NetwDatabase.settled_value(
+		browser.list_namespaces(),
+		[] as Array[StringName],
+	)
 	assert_array(listed).contains([&"slot_a", &"slot_b"])
 
-	assert_int(browser.delete_namespace("slot_a")).is_equal(OK)
-	var _after: Array[StringName] = browser.list_namespaces()
+	assert_int(await NetwDatabase.settled_error(
+		browser.delete_namespace("slot_a"),
+	)).is_equal(OK)
+	var _after: Array[StringName] = await NetwDatabase.settled_value(
+		browser.list_namespaces(),
+		[] as Array[StringName],
+	)
 	assert_array(_after).not_contains([&"slot_a"])
 	assert_array(_after).contains([&"slot_b"])

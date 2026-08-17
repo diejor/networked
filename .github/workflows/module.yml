@@ -6,8 +6,11 @@ name: Module
 # engine's own headers, which nothing else in CI covers.
 
 on:
-  # Path-gated rather than part of the CI DAG: this builds a whole engine, and
-  # only a change under extension/ can break the module build.
+  # Path-gated on push, because only a change under extension/ can break the
+  # module build. Scheduled as well, because a tier nothing schedules is a tier
+  # whose red nobody sees until the change that needed it.
+  schedule:
+    - cron: '17 5 * * 1'
   push:
     branches: [main]
     paths:

@@ -24,7 +24,7 @@ extends RefCounted
 var _api_ref: WeakRef
 
 # One engine per persistence-declaring entity, keyed by the RefCounted NetwEntity.
-var _engines: Dictionary[NetwEntity, NetwPersistenceEngine] = { }
+var _engines := NetwPersistenceBook.new()
 
 # Set once the close notification begins the drain, so a second WM_CLOSE is inert.
 var _shutting_down: bool = false
@@ -61,7 +61,7 @@ func _is_server() -> bool:
 func engine_for(entity: NetwEntity) -> NetwPersistenceEngine:
 	if not entity or not is_instance_valid(entity.owner):
 		return null
-	var existing := _engines.get(entity)
+	var existing := _engines.engine_of(entity.rid) as NetwPersistenceEngine
 	if existing:
 		return existing
 	var config := NetwScriptModel.get_persistence_config(entity.owner)
@@ -81,7 +81,7 @@ func engine_for(entity: NetwEntity) -> NetwPersistenceEngine:
 			[entity.owner.name],
 			func(m): push_warning(m),
 		)
-	_engines[entity] = engine
+	_engines.enroll(entity.rid, engine)
 	_lint_engine(engine)
 	_arm_shutdown_guard()
 	if not entity.owner.tree_exiting.is_connected(_on_owner_exiting):
@@ -106,10 +106,10 @@ func _arm_shutdown_guard() -> void:
 # Final flush and deregister when a persisted entity leaves the tree, so a despawn
 # never drops the last snapshot window.
 func _on_owner_exiting(entity: NetwEntity) -> void:
-	var engine := _engines.get(entity)
+	var engine := _engines.engine_of(entity.rid) as NetwPersistenceEngine
 	if engine and _is_server():
 		engine.flush()
-	_engines.erase(entity)
+	_engines.drop(entity.rid)
 
 
 ## Flushes every registered engine immediately. Server only in effect. Used before
@@ -117,9 +117,9 @@ func _on_owner_exiting(entity: NetwEntity) -> void:
 func flush_all() -> void:
 	if not _is_server():
 		return
-	for entity in _engines.keys():
-		var engine := _engines[entity]
-		if is_instance_valid(entity.owner):
+	for rid: RID in _engines.entities():
+		var engine := _engines.engine_of(rid) as NetwPersistenceEngine
+		if engine and engine.owner_node():
 			engine.flush()
 
 
@@ -130,40 +130,45 @@ func flush_all() -> void:
 ## The grouping is what makes the node path batch: the gather cost is unchanged,
 ## because Godot has no batch [method Object.get], but two hundred entities
 ## sharing one database cost one commit per tick instead of two hundred.
+##
+## The write goes through [method NetwDatabase.transaction_promise] and reports
+## back through the promise rather than being awaited here, which is the form a
+## caller that cannot suspend inside a pump needs.
 func tick(delta: float) -> void:
 	if not _is_server():
 		return
-	var writes: Dictionary[NetwDatabase, Array] = { }
-	for entity in _engines.keys():
-		var engine := _engines[entity]
-		if not is_instance_valid(entity.owner):
-			_engines.erase(entity)
+	var engines: Array[NetwPersistenceEngine] = []
+	var due_rows: Array[Dictionary] = []
+	for rid: RID in _engines.entities():
+		var engine := _engines.engine_of(rid) as NetwPersistenceEngine
+		if engine == null or engine.owner_node() == null:
+			_engines.drop(rid)
 			continue
 		var due: Dictionary = engine.snapshot_tick(delta)
 		if due.is_empty():
 			continue
-		var db: NetwDatabase = due[&"db"]
-		var queued: Array = writes.get(db, [])
-		queued.append([engine, due])
-		writes[db] = queued
-	for db: NetwDatabase in writes:
-		var queued: Array = writes[db]
-		@warning_ignore("redundant_await")
-		var err := await db.transaction(
+		engines.append(engine)
+		due_rows.append(due)
+	for batch: PackedInt32Array in NetwPersistenceBook.group_by_database(
+			due_rows,
+	):
+		var db: NetwDatabase = due_rows[batch[0]][&"db"]
+		db.transaction_promise(
 			func(tx: NetwDatabase.TransactionContext) -> void:
-				for row: Array in queued:
-					var due: Dictionary = row[1]
+				for at: int in batch:
+					var due: Dictionary = due_rows[at]
 					tx.queue_upsert(
 						due[&"table"],
 						due[&"id"],
 						due[&"values"],
 					)
+		).then(
+			func(result: Variant) -> void:
+				if int(result) != OK:
+					return
+				for at: int in batch:
+					engines[at].commit_snapshot(due_rows[at][&"values"])
 		)
-		if err != OK:
-			continue
-		for row: Array in queued:
-			var engine: NetwPersistenceEngine = row[0]
-			engine.commit_snapshot((row[1] as Dictionary)[&"values"])
 
 
 ## Broadcasts the shutdown notice, flushes every engine, drains write-behind
@@ -181,10 +186,9 @@ func handle_shutdown() -> void:
 		if scene_tree:
 			await scene_tree.create_timer(shutdown_notify_delay).timeout
 	var drained: Dictionary[NetwDatabase, bool] = { }
-	for entity in _engines.keys():
-		var engine := _engines[entity]
-		if is_instance_valid(entity.owner):
-			@warning_ignore("redundant_await")
+	for rid: RID in _engines.entities():
+		var engine := _engines.engine_of(rid) as NetwPersistenceEngine
+		if engine and engine.owner_node():
 			await engine.flush()
 			if engine.database():
 				drained[engine.database()] = true
@@ -200,7 +204,6 @@ func _drain_database(db: NetwDatabase) -> void:
 	if not db or not db.backend:
 		return
 	if db.backend.has_method("drain"):
-		@warning_ignore("redundant_await")
 		await db.backend.drain()
 
 

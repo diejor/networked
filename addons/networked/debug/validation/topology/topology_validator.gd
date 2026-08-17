@@ -9,7 +9,6 @@
 class_name TopologyValidator
 extends RefCounted
 
-const SynchronizersCache := preload("res://addons/networked/sync/state/synchronizers_cache.gd")
 
 
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
@@ -38,8 +37,8 @@ func validate_node(node: Node) -> Dictionary:
 	var errors: Array[String] = []
 	var expected_min := expected_sync_count(node)
 
-	SynchronizersCache.clear_cache(node)
-	var live := SynchronizersCache.get_synchronizers(node)
+	NetwSynchronizers.clear_cache(node)
+	var live := NetwSynchronizers.of_node(node)
 
 	if live.size() < expected_min:
 		errors.append(
@@ -83,15 +82,15 @@ func validate_node(node: Node) -> Dictionary:
 ## [/codeblock]
 func cache_diff(node: Node) -> Dictionary:
 	var cached_names: Array[String] = []
-	if node.has_meta(SynchronizersCache.META_KEY):
+	if node.has_meta(NetwSynchronizers.meta_key()):
 		var cached: Array[MultiplayerSynchronizer] = []
-		cached.assign(node.get_meta(SynchronizersCache.META_KEY))
+		cached.assign(node.get_meta(NetwSynchronizers.meta_key()))
 		for s in cached:
 			cached_names.append(s.name if is_instance_valid(s) else "<freed>")
 
-	SynchronizersCache.clear_cache(node)
+	NetwSynchronizers.clear_cache(node)
 	var live_names: Array[String] = []
-	for s in SynchronizersCache.get_synchronizers(node):
+	for s in NetwSynchronizers.of_node(node):
 		live_names.append(s.name)
 
 	var only_cached := cached_names.filter(

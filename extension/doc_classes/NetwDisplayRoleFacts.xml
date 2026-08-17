@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayRoleFacts" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		What a display role resolves to when the declaration asked for AUTO, as the facts it resolves from.
+	</brief_description>
+	<description>
+		Each fact is a reading of the entity, its owner, or the sync channels feeding it, and they are supplied rather than fetched: this class reaches no [Object], so the answer is a function of its inputs and of nothing else.
+		What it protects is the ORDER those facts are consulted in, which is not obvious and is where display faults live. Three rungs are worth stating outright, because each one outranks something a reader would expect to win:
+		[br][br]
+		[br]- A locally simulated entity displays what it predicts, before authority is asked at all.
+		[br]- A registered prediction that has stopped simulating displays as REMOTE rather than going dark, even on the peer holding its authority and its control.
+		[br]- Holding authority over what you also control disables the display, which outranks authoring the stream.
+		[codeblock]
+		var facts := NetwDisplayRoleFacts.new()
+		facts.simulates_locally = ...        # every field is one reading
+		facts.controlled_locally = ...
+		facts.owner_is_authority = ...
+		var role := facts.resolve()          # never AUTO
+		[/codeblock]
+		A registered prediction that has stopped simulating is exactly one that no longer simulates locally, so there is no separate fact for it. Two facts for one reading is how a caller comes to supply them disagreeing.
+		[b]Note:[/b] the declared override is not a fact here. A declaration naming anything but AUTO is the answer, and the caller returns it without reading the entity at all, which is what keeps an explicitly-roled entity from paying for the sync-channel walk.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="resolve" qualifiers="const">
+			<return type="int" />
+			<description>
+				The role these facts resolve to, one of [enum NetwDisplayDecl.Role] and never [constant NetwDisplayDecl.ROLE_AUTO]. The ladder is total: every state the six facts can be in names a real role.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="authors_streams" type="bool" setter="set_authors_streams" getter="get_authors_streams" default="false">
+			Every sync channel feeding this entity's tracked values is authored by this peer, so there is no receive stream to consume and the display samples the local simulation instead. At least one such channel must exist.
+		</member>
+		<member name="controlled_locally" type="bool" setter="set_controlled_locally" getter="get_controlled_locally" default="false">
+			This peer steers the entity. Paired with [member simulates_locally] it makes a prediction, and paired with [member owner_is_authority] it disables the display.
+		</member>
+		<member name="owner_is_authority" type="bool" setter="set_owner_is_authority" getter="get_owner_is_authority" default="false">
+			This peer holds the owner node's multiplayer authority. A null owner is not an authority, which is a reading and not an absence.
+		</member>
+		<member name="predicted_input" type="bool" setter="set_predicted_input" getter="get_predicted_input" default="false">
+			The entity's input source is predicted, which reaches the prediction rung without local control.
+		</member>
+		<member name="prediction_registered" type="bool" setter="set_prediction_registered" getter="get_prediction_registered" default="false">
+			A prediction engine is wired for this entity. It is what separates an entity that stopped simulating from one that never did.
+		</member>
+		<member name="simulates_locally" type="bool" setter="set_simulates_locally" getter="get_simulates_locally" default="false">
+			This peer advances the entity's simulation. A registered prediction simulates locally exactly while it is not running for display only.
+		</member>
+	</members>
+</class>

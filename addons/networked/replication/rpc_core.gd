@@ -4,7 +4,7 @@
 ## arrive before their target's route is live.
 ##
 ## Mirrors [ReplicationCore]: engine-free [RefCounted], node-flavored
-## operations (sending bytes, resolving [LivenessShell], reading the clock)
+## operations (sending bytes, resolving [NetwMultiplayerCore], reading the clock)
 ## reach it through the owning [NetwMultiplayer], and outgoing sends
 ## ride [ReplicationCore]'s aggregation and component-addressing so
 ## RPC and replication share one wire format.
@@ -25,24 +25,26 @@ const REQUEST_TIMEOUT_SECONDS_DEFAULT := 5.0
 var _api_ref: WeakRef
 var _replication: ReplicationCore
 
-var _drops_backlog_limit: int = 0
 # Sender: a verb targeted a node that belongs to no NetwEntity.
 var _sends_dropped_unroutable: int = 0
 # Sender: the target entity has no live route on this peer (spawning or dead).
 var _sends_dropped_not_live: int = 0
 
-# Deferral/backlog tracking
-var _deferred_calls: Array[Dictionary] = []
+# Calls parked until the route they address binds.
+var _park := NetwCallPark.new()
 
 var _call_router: _CallRouter
-var _txn_book: _TxnBook
+var _txns: NetwTxnBook
+# The settle waiting on each open transaction, a NetwPromise or a
+# NetwGroupPromise, keyed the way NetwTxnBook keys the transaction itself.
+var _settles: Dictionary[int, RefCounted] = { }
 
 
 func _init(api: NetwMultiplayer, replication: ReplicationCore) -> void:
 	_api_ref = weakref(api) if api else null
 	_replication = replication
 	_call_router = _CallRouter.new(self)
-	_txn_book = _TxnBook.new(self)
+	_txns = NetwTxnBook.new()
 
 
 func _api() -> NetwMultiplayer:
@@ -72,37 +74,18 @@ func _method_quantizers(node: Node, method: StringName) -> Array:
 
 ## Parks a callback safely, respecting the per-sender backlog limit.
 func defer_call(sender: int, route: int, cb: Callable) -> void:
-	var active_count := 0
-	for d in _deferred_calls:
-		if d.sender == sender:
-			active_count += 1
-	if active_count >= 100:
-		_drops_backlog_limit += 1
-		return
-
 	var api := _api()
 	var clock := _clock_interface()
 	var current := clock.tick if clock else (api._receive_tick() if api else 0)
 	var timeout := int(clock.tickrate) if clock else 30
-	var deadline := current + timeout
-
-	var info := {
-		"sender": sender,
-		"deadline": deadline,
-		"route": route,
-		"active": true,
-	}
-	_deferred_calls.append(info)
-
-	if not api:
+	var id := _park.park(sender, route, current + timeout)
+	if id < 0 or not api:
 		return
-	api._liveness.when_live(
+	api.when_live(
 		route,
 		func() -> void:
-			if info.active:
-				info.active = false
-				if cb.is_valid():
-					cb.call()
+			if _park.resolve(id) and cb.is_valid():
+				cb.call()
 	)
 
 
@@ -111,55 +94,74 @@ func sweep_deferred_calls() -> void:
 	var api := _api()
 	var clock := _clock_interface()
 	var current := clock.tick if clock else (api._receive_tick() if api else 0)
-	var remaining: Array[Dictionary] = []
-	for d in _deferred_calls:
-		if d.active and current < d.deadline:
-			remaining.append(d)
-	_deferred_calls = remaining
+	_park.sweep(current)
 
 
 ## Sweeps expired transactions.
 func sweep_transactions(current: int) -> void:
-	if _txn_book:
-		_txn_book.sweep(current)
+	if _txns == null:
+		return
+	for txn: int in _txns.expire(current):
+		var settle: RefCounted = _settles.get(txn)
+		_settles.erase(txn)
+		if settle:
+			settle.reject(ERR_TIMEOUT)
 
 
 ## Rejects every outstanding transaction whose reply can only come from
 ## [param peer_id], so a [method Netw.request] awaiting a peer that dropped
 ## fails at once instead of hanging until its timeout.
 func handle_disconnect(peer_id: int) -> void:
-	_txn_book.handle_disconnect(peer_id)
+	if _txns == null:
+		return
+	for txn: int in _txns.waiting_on(peer_id):
+		var settle: RefCounted = _settles.get(txn)
+		if settle is NetwPromise:
+			settle.reject(ERR_UNAVAILABLE, "Peer disconnected")
+			_close_txn(txn)
+		elif settle is NetwGroupPromise:
+			settle.remove_peer(peer_id)
+			if settle.is_completed:
+				_close_txn(txn)
 
 
 ## Drops all per-session state so no deferred call or transaction outlives its
 ## session.
 func clear_session() -> void:
-	_deferred_calls.clear()
+	_park.clear()
 	# The book is null after dispose(), and teardown clears arrive deferred.
-	if _txn_book:
-		_txn_book.reject_all(ERR_UNAVAILABLE, "Session ended")
+	if _txns == null:
+		return
+	var abandoned := _txns.drain()
+	var settles := _settles
+	_settles = { }
+	for txn: int in abandoned:
+		var settle: RefCounted = settles.get(txn)
+		if settle:
+			settle.reject(ERR_UNAVAILABLE, "Session ended")
 
 
-## Breaks the mutual strong references with the internal call router and
-## transaction book so all three can be released. Called from
+## Breaks the mutual strong reference with the internal call router and drops
+## the outstanding transactions so both can be released. Called from
 ## [method NetwEmbeddingHandle.dispose]. The interface is unusable afterward.
 func dispose() -> void:
 	_call_router = null
-	_txn_book = null
+	_txns = null
+	_settles.clear()
 
 
 ## Calls the RPC target on remote peers.
 func rpc_call(callable: Callable, args: Array, peer_id: int) -> void:
 	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	var native_core := api._native_core if api else null
+	if not native_core:
 		return
 	var node := callable.get_object() as Node
 	var entity := NetwEntity.of(node)
 	if not entity:
 		_sends_dropped_unroutable += 1
 		return
-	var route := liveness.route_of(entity)
+	var route := native_core.liveness_route_of(entity)
 	if route <= 0:
 		_sends_dropped_not_live += 1
 		if Netw.dbg.is_enabled():
@@ -187,7 +189,7 @@ func rpc_call(callable: Callable, args: Array, peer_id: int) -> void:
 			NetwScriptModel.get_method_reliable(script, method)
 			if script else true
 	)
-	var encoded_args := _encode_args(liveness, args)
+	var encoded_args := _encode_args(native_core, args)
 
 	var local_id := api.get_unique_id()
 	var local_targeted := peer_id == 0 or peer_id == local_id
@@ -256,15 +258,15 @@ func request_call(
 		timeout_seconds: float = REQUEST_TIMEOUT_SECONDS_DEFAULT,
 ) -> NetwPromise:
 	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	var native_core := api._native_core if api else null
+	if not native_core:
 		return null
 	var node := callable.get_object() as Node
 	var entity := NetwEntity.of(node)
 	if not entity:
 		_sends_dropped_unroutable += 1
 		return null
-	var route := liveness.route_of(entity)
+	var route := native_core.liveness_route_of(entity)
 	if route <= 0:
 		_sends_dropped_not_live += 1
 		if Netw.dbg.is_enabled():
@@ -288,16 +290,16 @@ func request_call(
 		return null
 
 	var method_val := _encode_method_val(entity, node, method)
-	var encoded_args := _encode_args(liveness, args)
+	var encoded_args := _encode_args(native_core, args)
 
-	var txn := _txn_book.make_id()
+	var txn := _txns.mint()
 	var promise := NetwPromise.new()
 
 	var clock := _clock_interface()
 	var current := clock.tick if clock else api._receive_tick()
 	var tickrate := int(clock.tickrate) if clock else 30
 	var timeout := int(timeout_seconds * tickrate)
-	_txn_book.register(txn, promise, peer_id, current + timeout)
+	_open_txn(txn, PackedInt64Array([peer_id]), promise, current + timeout)
 
 	var w := NetwBitBufferWriter.new()
 	var flag := 4
@@ -341,15 +343,15 @@ func request_call_group(
 		timeout_seconds: float = REQUEST_TIMEOUT_SECONDS_DEFAULT,
 ) -> NetwGroupPromise:
 	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	var native_core := api._native_core if api else null
+	if not native_core:
 		return null
 	var node := callable.get_object() as Node
 	var entity := NetwEntity.of(node)
 	if not entity:
 		_sends_dropped_unroutable += 1
 		return null
-	var route := liveness.route_of(entity)
+	var route := native_core.liveness_route_of(entity)
 	if route <= 0:
 		_sends_dropped_not_live += 1
 		if Netw.dbg.is_enabled():
@@ -373,17 +375,19 @@ func request_call_group(
 		return null
 
 	var method_val := _encode_method_val(entity, node, method)
-	var encoded_args := _encode_args(liveness, args)
+	var encoded_args := _encode_args(native_core, args)
 
 	var peers := api._replication.live_peers(entity)
-	var txn := _txn_book.make_id()
-	var promise := NetwGroupPromise.new(peers)
+	var txn := _txns.mint()
+	var promise := NetwGroupPromise.create(PackedInt32Array(peers))
+	if peers.is_empty():
+		api._settle_schedule(promise.resolve_all)
 
 	var clock := _clock_interface()
 	var current := clock.tick if clock else api._receive_tick()
 	var tickrate := int(clock.tickrate) if clock else 30
 	var timeout := int(timeout_seconds * tickrate)
-	_txn_book.register(txn, promise, peers, current + timeout)
+	_open_txn(txn, PackedInt64Array(peers), promise, current + timeout)
 
 	var w := NetwBitBufferWriter.new()
 	var flag := 4
@@ -419,8 +423,8 @@ func send_reply(peer_id: int, route: int, txn: int, value: Variant) -> void:
 	var w := NetwBitBufferWriter.new()
 	NetwCodec.put_varint(w, txn)
 	var api := _api()
-	var encoded: Variant = _encode_arg(api._liveness, value) if api else value
-	NetwScriptModel.write_values(w, [encoded], [], [])
+	var encoded: Variant = _encode_arg(api._native_core, value) if api else value
+	NetwCodec.write_values(w, [encoded], [], [])
 	_replication.send_to(peer_id, route, NetwFrameEnvelope.Channel.REPLY, w.to_bytes(), true)
 
 
@@ -442,14 +446,14 @@ func _encode_method_val(
 # Encodes each NetwEntity-bound node argument as a NetwNodeRef, leaving every
 # other argument untouched. A node reference is its own codec kind, so a user
 # value can never be mistaken for one and needs no escaping.
-func _encode_args(liveness: LivenessShell, args: Array) -> Array:
+func _encode_args(native_core: NetwMultiplayerCore, args: Array) -> Array:
 	var out: Array = []
 	for arg in args:
-		out.append(_encode_arg(liveness, arg))
+		out.append(_encode_arg(native_core, arg))
 	return out
 
 
-func _encode_arg(liveness: LivenessShell, arg: Variant) -> Variant:
+func _encode_arg(native_core: NetwMultiplayerCore, arg: Variant) -> Variant:
 	# A Node argument crosses by reference so the receiver rebinds it to its own
 	# instance. The entity root carries just its route, and a child component
 	# adds its addressing pair, so a whole entity or any node inside it can be
@@ -464,12 +468,12 @@ func _encode_arg(liveness: LivenessShell, arg: Variant) -> Variant:
 		entity = NetwEntity.of(arg)
 	if entity == null:
 		return arg
-	var route := liveness.route_of(entity)
+	var route := native_core.liveness_route_of(entity)
 	if route <= 0:
 		Netw.dbg.error("RpcCore.rpc_call: argument entity has no route")
 		return null
 	var target := _replication._resolve_comp(entity, node)
-	return NetwNodeRef.new(route, int(target["comp"]), String(target["path"]))
+	return NetwNodeRef.create(route, int(target["comp"]), String(target["path"]))
 
 
 ## Handles an incoming [constant NetwFrameEnvelope.Channel.CALL] frame.
@@ -477,15 +481,39 @@ func handle_call(entity: NetwEntity, comp_node: Node, payload: PackedByteArray, 
 	_call_router.handle_call(entity, comp_node, payload, sender)
 
 
+func _open_txn(
+		txn: int,
+		addressed: PackedInt64Array,
+		settle: RefCounted,
+		deadline: int,
+) -> void:
+	_txns.open(txn, addressed, deadline)
+	_settles[txn] = settle
+
+
+func _close_txn(txn: int) -> void:
+	_txns.close(txn)
+	_settles.erase(txn)
+
+
 ## Handles an incoming [constant NetwFrameEnvelope.Channel.REPLY] frame.
 func handle_reply(txn_id: int, sender: int, value: Variant) -> void:
-	_txn_book.handle_reply(txn_id, sender, value)
+	if _txns == null or not _txns.admits(txn_id, sender):
+		return
+	var settle: RefCounted = _settles.get(txn_id)
+	if settle is NetwPromise:
+		settle.resolve(value)
+		_close_txn(txn_id)
+	elif settle is NetwGroupPromise:
+		settle.resolve_peer(sender, value)
+		if settle.is_completed:
+			_close_txn(txn_id)
 
 
 ## Returns this interface's contribution to [method NetwMultiplayer.stats_snapshot].
 func counters() -> Dictionary:
 	return {
-		&"drops_backlog_limit": _drops_backlog_limit,
+		&"drops_backlog_limit": _park.refused(),
 		&"sends_dropped_unroutable": _sends_dropped_unroutable,
 		&"sends_dropped_not_live": _sends_dropped_not_live,
 	}
@@ -499,20 +527,6 @@ class _CallRouter:
 
 	func _init(rpc: RpcCore) -> void:
 		_rpc = rpc
-
-
-	# Rejects a path that is absolute, parent-relative, or a resource path
-	# before it is ever resolved. A shape-safe relative path can only reach
-	# descendants of the entity root, so resolution and subtree containment are
-	# checked separately by the caller to tell a hostile path (warn) from a
-	# sub-node that simply has not spawned yet (a self-healing race).
-	static func is_path_shape_safe(relative_path: String) -> bool:
-		return not (
-				relative_path.begins_with("/")
-				or relative_path.contains("..")
-				or relative_path.begins_with("res://")
-				or relative_path.begins_with("user://")
-		)
 
 
 	func handle_call(
@@ -599,18 +613,20 @@ class _CallRouter:
 		var api: NetwMultiplayer = _rpc._api()
 		if not api:
 			return
-		var liveness: LivenessShell = api._liveness
+		var native_core: NetwMultiplayerCore = api._native_core
 		var args: Array = []
 		for encoded in encoded_args:
 			if encoded is NetwNodeRef:
 				var ref: NetwNodeRef = encoded
-				var arg_entity: NetwEntity = liveness.entity_of(ref.route)
+				var arg_entity := native_core.wrapper_for_route(
+					ref.route,
+				) as NetwEntity
 				if (
 						arg_entity == null
-						and liveness.route_state(ref.route)
-						== LivenessShell.State.UNKNOWN
+						and native_core.liveness_route_state(ref.route)
+						== NetwLivenessCore.STATE_UNKNOWN
 				):
-					liveness.when_live(
+					api.when_live(
 						ref.route,
 						func() -> void:
 							handle_call(entity, comp_node, payload, sender)
@@ -797,92 +813,3 @@ class _CallRouter:
 		elif rpc_mode == 1:
 			return true
 		return false
-
-
-class _TxnBook:
-	extends RefCounted
-
-	var _rpc: RpcCore
-	var _active: Dictionary = { }
-	var _next_txn_id: int = 1
-
-
-	func _init(rpc: RpcCore) -> void:
-		_rpc = rpc
-
-
-	func make_id() -> int:
-		var id := _next_txn_id
-		_next_txn_id += 1
-		return id
-
-
-	func register(txn_id: int, promise: RefCounted, target: Variant, deadline: int) -> void:
-		_active[txn_id] = {
-			"promise": promise,
-			"target": target,
-			"deadline": deadline,
-		}
-
-
-	func handle_reply(txn_id: int, sender: int, value: Variant) -> void:
-		if not _active.has(txn_id):
-			return
-		var info: Dictionary = _active[txn_id]
-		var promise: RefCounted = info["promise"]
-		var target: Variant = info["target"]
-
-		if promise is NetwPromise:
-			if target != sender:
-				return
-			promise.resolve(value)
-			_active.erase(txn_id)
-		elif promise is NetwGroupPromise:
-			var expected: Array = target
-			if not expected.has(sender):
-				return
-			promise.resolve_peer(sender, value)
-			if promise.is_completed:
-				_active.erase(txn_id)
-
-
-	func sweep(current: int) -> void:
-		var expired: Array = []
-		for id in _active:
-			var info: Dictionary = _active[id]
-			if current >= info["deadline"]:
-				expired.append(id)
-		for id in expired:
-			var info: Dictionary = _active[id]
-			var promise: RefCounted = info["promise"]
-			promise.reject(ERR_TIMEOUT)
-			_active.erase(id)
-
-
-	func reject_all(err_code: Error, reason: String = "") -> void:
-		var pending := _active
-		_active = { }
-		for id in pending:
-			var info: Dictionary = pending[id]
-			var promise: RefCounted = info["promise"]
-			promise.reject(err_code, reason)
-
-
-	func handle_disconnect(peer_id: int) -> void:
-		var finished: Array = []
-		for id in _active:
-			var info: Dictionary = _active[id]
-			var promise: RefCounted = info["promise"]
-			var target: Variant = info["target"]
-			if promise is NetwPromise:
-				if target == peer_id:
-					promise.reject(ERR_UNAVAILABLE, "Peer disconnected")
-					finished.append(id)
-			elif promise is NetwGroupPromise:
-				var expected: Array = target
-				if expected.has(peer_id):
-					promise.remove_peer(peer_id)
-					if promise.is_completed:
-						finished.append(id)
-		for id in finished:
-			_active.erase(id)

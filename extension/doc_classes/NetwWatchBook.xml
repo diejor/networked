@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwWatchBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="clear_baselines">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="clear_peer">
+			<return type="void" />
+			<param index="0" name="peer" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="commit">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="is_inited" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="key" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="mask_for" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="poll">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="values" type="Array" />
+			<param index="2" name="readable" type="Array" default="[]" />
+			<description>
+			</description>
+		</method>
+		<method name="reset">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="retain_baselines">
+			<return type="void" />
+			<param index="0" name="key" type="int" />
+			<param index="1" name="recipients" type="PackedInt32Array" />
+			<description>
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="FIELD_LIMIT" value="64">
+		</constant>
+	</constants>
+</class>

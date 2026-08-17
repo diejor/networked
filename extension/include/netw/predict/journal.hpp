@@ -82,6 +82,11 @@ enum Row : uint8_t {
 enum WitnessState : uint8_t {
     WITNESS_SLEEPING = 1,
     WITNESS_WOKE = 2,
+    // Authority has answered for this row's witness. Distinct from
+    // ROW_WITNESS_MATCHED, which cannot tell a verdict of "differs" from a
+    // verdict that has not arrived, and a conditional operator waits on
+    // exactly that difference.
+    WITNESS_JUDGED = 4,
 };
 
 enum Evidence : uint8_t {
@@ -212,6 +217,7 @@ public:
     void mark_ack(int64_t p_transition, bool p_matched);
     void mark_divergent(int64_t p_transition);
     void mark_witness_match(int64_t p_transition, bool p_matched);
+    bool witness_judged(int64_t p_transition) const;
     void mark_substituted(int64_t p_transition);
     void mark_superseded(int64_t p_transition);
     void mark_domain(int64_t p_transition, Domain p_domain);

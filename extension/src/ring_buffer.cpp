@@ -111,7 +111,6 @@ Vector2i NetwRingBuffer::bracketing_ticks(int64_t tick) const {
     return Vector2i(previous, next);
 }
 
-// Ticks arrive in order, so the newest entry answers this without a scan.
 bool NetwRingBuffer::has_tick_after(int64_t tick) const {
     return newest_tick() > tick;
 }

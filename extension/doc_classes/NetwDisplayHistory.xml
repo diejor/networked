@@ -107,6 +107,17 @@
 				Returns what the channel shows at [param dt] plus [param factor].
 				Before the first recorded tick the channel has no stream to show and [param last_written] holds. Between two recorded ticks the value is their interpolation, unless the bracket is farther apart than [member snap_distance], which jumps to the newer sample instead. A bracket wider than twice [param expected_interval_ticks] is a hole rather than a slow channel, so the older sample holds and only the last interval is spent crossing.
 				Past the newest recorded tick the channel holds that sample, and sets [member sleeping] once the display already shows it. A [param forecast] playhead projects the tail instead, by [param explicit_velocity] when [param has_explicit_velocity] is set and by the finite difference of the last two samples otherwise, over an age clamped to [param max_forecast_ticks] and scaled by [param ticktime]. A velocity too small to move the display forfeits the projection and holds.
+				A quaternion walks the arc whichever mode its channel declares, because the engine's own lerp already dispatches a quaternion to the spherical walk.
+			</description>
+		</method>
+		<method name="pass_verdict" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="spec" type="NetwInterpolate" />
+			<param index="1" name="forecast" type="bool" />
+			<description>
+				What one display pass may do with this channel, one of [enum Pass].
+				[constant PASS_SKIP_SLEEPING] and [constant PASS_SKIP_EMPTY] both mean the channel is not written this pass, and they are distinct because only sleeping is a state worth counting: an empty channel has never been fed, where a sleeping one has caught up. Sleeping is answered first for that reason.
+				[constant PASS_SAMPLE_PROJECT] is [param forecast] granted, and [param spec] can refuse it: a [constant NetwInterpolate.TAIL_HOLD] channel never projects however hard the entity forecasts. A channel with no [param spec] at all takes the default and may.
 			</description>
 		</method>
 		<method name="smooth_toward">
@@ -130,4 +141,18 @@
 			Distance past which a move jumps instead of interpolating. [code]0.0[/code] disables it.
 		</member>
 	</members>
+	<constants>
+		<constant name="PASS_SKIP_SLEEPING" value="0" enum="Pass">
+			The channel has caught up and is not written, which leaves the property free for another writer.
+		</constant>
+		<constant name="PASS_SKIP_EMPTY" value="1" enum="Pass">
+			The channel has no stream to show at all, so the pass defers to whatever wrote the property instead of clobbering it with a stale value.
+		</constant>
+		<constant name="PASS_SAMPLE" value="2" enum="Pass">
+			The channel is sampled between its recorded ticks.
+		</constant>
+		<constant name="PASS_SAMPLE_PROJECT" value="3" enum="Pass">
+			The channel is sampled and may project past its newest sample.
+		</constant>
+	</constants>
 </class>

@@ -96,7 +96,7 @@ func test_flipping_gate_rejects_a_stock_accepted_frame() -> void:
 	mt.add_child(owner)
 	auto_free(owner)
 	var entity := NetwEntity.ensure(owner)
-	api.entity_bind_route(api.rid_of(owner), 7)
+	api.entity_bind_route(api.entity_of(owner), 7)
 
 	var verdict: Error = api._drive_carrier(
 		2,

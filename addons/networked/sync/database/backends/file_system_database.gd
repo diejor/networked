@@ -98,7 +98,11 @@ func _table_dir(table: StringName) -> String:
 ## Overrides [method NetwDatabaseBackend._initialize] to fold [param slot] into the
 ## storage root, create one subdirectory per schema table, and warn on any
 ## ghost-table directory the schema no longer claims.
-func _initialize(schema: Dictionary, slot: String = "") -> Error:
+func _initialize(schema: Dictionary, slot: String = "") -> NetwPromise:
+	return NetwPromise.resolved(_initialize_now(schema, slot))
+
+
+func _initialize_now(schema: Dictionary, slot: String = "") -> Error:
 	# Redirect res:// to user:// in exported builds.
 	if not OS.has_feature("editor") and base_dir.begins_with("res://"):
 		base_dir = base_dir.replace("res://", "user://")
@@ -176,7 +180,11 @@ func _initialize(schema: Dictionary, slot: String = "") -> Error:
 ## Array[StringName]
 ## └── slot_name
 ## [/codeblock]
-func _list_namespaces() -> Array[StringName]:
+func _list_namespaces() -> NetwPromise:
+	return NetwPromise.resolved(_list_namespaces_now())
+
+
+func _list_namespaces_now() -> Array[StringName]:
 	var out: Array[StringName] = []
 	var app_dir := _app_dir()
 	var dir := DirAccess.open(app_dir)
@@ -195,7 +203,11 @@ func _list_namespaces() -> Array[StringName]:
 ## Recursively removes the directory and all record files under [param slot].
 ##
 ## See [member NetwDatabase.slots] for the slot namespace model.
-func _delete_namespace(slot: String) -> Error:
+func _delete_namespace(slot: String) -> NetwPromise:
+	return NetwPromise.resolved(_delete_namespace_now(slot))
+
+
+func _delete_namespace_now(slot: String) -> Error:
 	if slot.is_empty():
 		return ERR_INVALID_PARAMETER
 	var slot_root := _root_for(slot)
@@ -228,7 +240,19 @@ func _remove_recursive(path: String) -> Error:
 
 ## Overrides [method NetwDatabaseBackend._upsert] to write a record to disk,
 ## merging the new fields with the existing file's contents.
-func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
+func _upsert(
+		table: StringName,
+		id: StringName,
+		data: Dictionary,
+) -> NetwPromise:
+	return NetwPromise.resolved(_upsert_now(table, id, data))
+
+
+func _upsert_now(
+		table: StringName,
+		id: StringName,
+		data: Dictionary,
+) -> Error:
 	var path := _path_for(table, id)
 
 	# Ensure the table directory exists (may have been added after initialize).
@@ -257,7 +281,11 @@ func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 ## └── column_name (StringName)
 ##     └── value (Variant)
 ## [/codeblock]
-func _find_by_id(table: StringName, id: StringName) -> Dictionary:
+func _find_by_id(table: StringName, id: StringName) -> NetwPromise:
+	return NetwPromise.resolved(_find_by_id_now(table, id))
+
+
+func _find_by_id_now(table: StringName, id: StringName) -> Dictionary:
 	var path := _path_for(table, id)
 	if not ResourceLoader.exists(path):
 		return { }
@@ -276,7 +304,17 @@ func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 ##     └── column_name (StringName)
 ##         └── value (Variant)
 ## [/codeblock]
-func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
+func _find_all(
+		table: StringName,
+		filter: Dictionary = { },
+) -> NetwPromise:
+	return NetwPromise.resolved(_find_all_now(table, filter))
+
+
+func _find_all_now(
+		table: StringName,
+		filter: Dictionary = { },
+) -> Array[Dictionary]:
 	var table_dir := _table_dir(table)
 	if not DirAccess.dir_exists_absolute(table_dir):
 		return []
@@ -306,7 +344,11 @@ func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
 
 ## Overrides [method NetwDatabaseBackend._delete] to permanently remove a
 ## record's file from disk.
-func _delete(table: StringName, id: StringName) -> Error:
+func _delete(table: StringName, id: StringName) -> NetwPromise:
+	return NetwPromise.resolved(_delete_now(table, id))
+
+
+func _delete_now(table: StringName, id: StringName) -> Error:
 	var path := _path_for(table, id)
 	if not ResourceLoader.exists(path):
 		return OK

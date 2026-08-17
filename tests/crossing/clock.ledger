@@ -100,9 +100,9 @@ test_multiplayer_clock.gd:test_stretch_nudge_and_synchronization_signal         
 test_multiplayer_clock.gd:test_pong_target_follows_the_server_phase_continuously        -> clock_core_tests.cpp:"[Networked][Clock][Hosted] L13 the calibration target follows the server's phase continuously"
 test_multiplayer_clock.gd:test_first_calibration_seeds_the_intra_tick_phase             -> clock_core_tests.cpp:"[Networked][Clock][Hosted] L12 the first calibration announces itself once and seeds the phase"
 test_multiplayer_clock.gd:test_physics_step_tick_loop                                   -> clock_core_tests.cpp:"[Networked][Clock][Hosted] L1 the schedule keeps what a short frame could not spend"
-test_multiplayer_clock.gd:test_for_node_lookup                                          -> CARRY tests/unit/clock (resolves a node through the tree)
-test_clock_config_lifetime.gd:test_config_survives_node_free                            -> CARRY tests/unit/clock (drives the api and the tree)
-test_clock_config_lifetime.gd:test_replacement_node_rebinds_after_free                  -> CARRY tests/unit/clock (drives the api and the tree)
-test_clock_config_lifetime.gd:test_poll_pumps_tick_after_node_free                      -> CARRY tests/unit/clock (drives the api and the tree)
-test_clock_config_lifetime.gd:test_poll_does_not_pump_while_node_drives                 -> CARRY tests/unit/clock (drives the api and the tree)
-test_clock_config_lifetime.gd:test_stale_exit_does_not_clobber_newer_node               -> CARRY tests/unit/clock (drives the api and the tree)
+test_multiplayer_clock.gd:test_for_node_lookup                                          -> CARRY kit tests/unit/clock (MultiplayerClock.for_node, a kit configurator node's own lookup through MultiplayerAPI metadata; plan of record 9.6 names the kit nodes)
+test_clock_config_lifetime.gd:test_config_survives_node_free                            -> CARRY shell tests/unit/clock (ClockCore's config surviving its configurator node's free; the node is kit but ClockCore is Ring-0 and crosses)
+test_clock_config_lifetime.gd:test_replacement_node_rebinds_after_free                  -> CARRY shell tests/unit/clock (ClockCore's config surviving its configurator node's free; the node is kit but ClockCore is Ring-0 and crosses)
+test_clock_config_lifetime.gd:test_poll_pumps_tick_after_node_free                      -> CARRY shell tests/unit/clock (ClockCore's config surviving its configurator node's free; the node is kit but ClockCore is Ring-0 and crosses)
+test_clock_config_lifetime.gd:test_poll_does_not_pump_while_node_drives                 -> CARRY shell tests/unit/clock (ClockCore's config surviving its configurator node's free; the node is kit but ClockCore is Ring-0 and crosses)
+test_clock_config_lifetime.gd:test_stale_exit_does_not_clobber_newer_node               -> CARRY shell tests/unit/clock (ClockCore's config surviving its configurator node's free; the node is kit but ClockCore is Ring-0 and crosses)

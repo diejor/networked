@@ -66,7 +66,8 @@
 			<param index="0" name="row" type="PackedInt64Array" />
 			<param index="1" name="words" type="int" />
 			<description>
-				A copy of [param row] holding exactly [param words] words. Widening sets nothing; narrowing drops whatever was above.
+				A copy of [param row] holding exactly [param words] words, every one of them written. Widening leaves the new words clear; narrowing drops whatever was above.
+				Writing them is the contract rather than a detail: a packed array of a trivially constructible type does not value-initialise the words it grows by in every build, so a word nobody wrote is whatever the allocator last left there, and a verdict folded over it would admit peers nothing declared.
 			</description>
 		</method>
 		<method name="subtract" qualifiers="static">

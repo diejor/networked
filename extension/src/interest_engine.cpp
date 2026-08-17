@@ -12,9 +12,6 @@ namespace netw {
 
 namespace {
 
-// A stable insertion sort over indexing and size alone. Stability is the
-// contract, not an implementation detail: it is what makes the bit order inside
-// one entity's transitions reproducible.
 template <typename T, typename Less>
 void insertion_sort(LocalVector<T> &values, Less less) {
     for (uint32_t index = 1; index < values.size(); ++index) {
@@ -52,6 +49,15 @@ bool same_names(
     return true;
 }
 
+bool contains_key(const LocalVector<int64_t> &values, int64_t value) {
+    for (uint32_t index = 0; index < values.size(); ++index) {
+        if (values[index] == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool contains(const PackedInt64Array &values, int64_t value) {
     for (int index = 0; index < values.size(); ++index) {
         if (values[index] == value) {
@@ -78,10 +84,6 @@ int NetwInterestBitSet::word_count(int bit_count) {
 }
 
 PackedInt64Array NetwInterestBitSet::empty(int bit_count) {
-    // Resizing is not enough. A packed array of a trivially constructible type
-    // does not value-initialise the words it grows by in every build, so an
-    // unwritten word is whatever the allocator last left there. Every row that
-    // is not fully overwritten afterwards has to be zeroed here.
     PackedInt64Array out;
     const int words = word_count(bit_count);
     out.resize(words);
@@ -121,7 +123,7 @@ PackedInt64Array NetwInterestBitSet::with_bit(
     int bit,
     bool value
 ) {
-    NETW_ERR_COND_V(bit < 0, row, "interest", "Peer bit must be non-negative.");
+    NETW_ERR_COND_V(bit < 0, row, sys::INTEREST, "Peer bit must be non-negative.");
     const int word = bit / BITS_PER_WORD;
     PackedInt64Array out
         = resized(row, row.size() > word + 1 ? row.size() : word + 1);
@@ -157,8 +159,6 @@ int widest(const PackedInt64Array &left, const PackedInt64Array &right) {
 
 } // namespace
 
-// The four set operations below write every word they resize to, so none of
-// them needs the zero-fill `empty` and `resized` carry.
 PackedInt64Array NetwInterestBitSet::union_of(
     const PackedInt64Array &left,
     const PackedInt64Array &right
@@ -570,7 +570,7 @@ void NetwInterestEngine::set_layer(
     NETW_ERR_COND(id.is_empty(), "interest", "Interest layer id is empty.");
     NETW_ERR_COND(
         policy != HIDE_FROM_OUTSIDERS && policy != HIDE_FROM_INSIDERS,
-        "interest",
+        sys::INTEREST,
         "Unknown interest policy %d.",
         policy
     );
@@ -598,10 +598,419 @@ void NetwInterestEngine::remove_layer(const StringName &id) {
     ++revision;
 }
 
+void NetwInterestEngine::declare_layer(const StringName &id) {
+    NETW_ERR_COND(id.is_empty(), "interest", "Interest layer id is empty.");
+    ensure_layer(id);
+}
+
+bool NetwInterestEngine::has_layer(const StringName &id) const {
+    return layers.has(id);
+}
+
+bool NetwInterestEngine::layer_add_viewer(
+    const StringName &id,
+    int64_t peer_id
+) {
+    NETW_ERR_COND_V(
+        id.is_empty(),
+        false,
+        sys::INTEREST,
+        "Interest layer id is empty."
+    );
+    const int bit = peer_bit_for(peer_id);
+    if (bit < 0) {
+        return false;
+    }
+    ensure_layer(id);
+    Layer &layer = layers[id];
+    if (NetwInterestBitSet::test(layer.viewers, bit)) {
+        return false;
+    }
+    layer.viewers = NetwInterestBitSet::with_bit(layer.viewers, bit, true);
+    dirty_layers.insert(id);
+    mark_layer_members_dirty(id);
+    ++revision;
+    return true;
+}
+
+bool NetwInterestEngine::layer_remove_viewer(
+    const StringName &id,
+    int64_t peer_id
+) {
+    const HashMap<StringName, Layer>::Iterator found = layers.find(id);
+    const int bit = peer_bit_of(peer_id);
+    if (found == layers.end() || bit < 0
+        || !NetwInterestBitSet::test(found->value.viewers, bit)) {
+        return false;
+    }
+    found->value.viewers
+        = NetwInterestBitSet::with_bit(found->value.viewers, bit, false);
+    dirty_layers.insert(id);
+    mark_layer_members_dirty(id);
+    ++revision;
+    return true;
+}
+
+bool NetwInterestEngine::layer_has_viewer(
+    const StringName &id,
+    int64_t peer_id
+) const {
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    const int bit = peer_bit_of(peer_id);
+    if (found == layers.end() || bit < 0) {
+        return false;
+    }
+    return NetwInterestBitSet::test(found->value.viewers, bit);
+}
+
+bool NetwInterestEngine::layer_set_policy(const StringName &id, int policy) {
+    NETW_ERR_COND_V(
+        id.is_empty(),
+        false,
+        sys::INTEREST,
+        "Interest layer id is empty."
+    );
+    NETW_ERR_COND_V(
+        policy != HIDE_FROM_OUTSIDERS && policy != HIDE_FROM_INSIDERS,
+        false,
+        sys::INTEREST,
+        "Unknown interest policy %d.",
+        policy
+    );
+    ensure_layer(id);
+    Layer &layer = layers[id];
+    if (layer.policy == Policy(policy)) {
+        return false;
+    }
+    layer.policy = Policy(policy);
+    dirty_layers.insert(id);
+    mark_layer_members_dirty(id);
+    ++revision;
+    return true;
+}
+
+namespace {
+
+constexpr int POLICY_CUSTOM = 2;
+
+} // namespace
+
+bool NetwInterestEngine::layer_set_leave_policy(
+    const StringName &id,
+    int policy
+) {
+    NETW_ERR_COND_V(
+        id.is_empty(),
+        false,
+        sys::INTEREST,
+        "Interest layer id is empty."
+    );
+    NETW_ERR_COND_V(
+        policy < 0 || policy > POLICY_CUSTOM,
+        false,
+        sys::INTEREST,
+        "Unknown interest leave policy %d.",
+        policy
+    );
+    ensure_layer(id);
+    Layer &layer = layers[id];
+    if (layer.leave_policy == policy) {
+        return false;
+    }
+    layer.leave_policy = int32_t(policy);
+    return true;
+}
+
+int NetwInterestEngine::layer_leave_policy(const StringName &id) const {
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    return found != layers.end() ? found->value.leave_policy : 0;
+}
+
+bool NetwInterestEngine::layer_set_perception_policy(
+    const StringName &id,
+    int policy
+) {
+    NETW_ERR_COND_V(
+        id.is_empty(),
+        false,
+        sys::INTEREST,
+        "Interest layer id is empty."
+    );
+    NETW_ERR_COND_V(
+        policy < 0 || policy > POLICY_CUSTOM,
+        false,
+        sys::INTEREST,
+        "Unknown interest perception policy %d.",
+        policy
+    );
+    ensure_layer(id);
+    Layer &layer = layers[id];
+    if (layer.perception_policy == policy) {
+        return false;
+    }
+    layer.perception_policy = int32_t(policy);
+    return true;
+}
+
+int NetwInterestEngine::layer_perception_policy(const StringName &id) const {
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    return found != layers.end() ? found->value.perception_policy : 0;
+}
+
+int NetwInterestEngine::layer_policy(const StringName &id) const {
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    return found != layers.end() ? int(found->value.policy)
+                                 : int(HIDE_FROM_OUTSIDERS);
+}
+
+bool NetwInterestEngine::layer_admits(
+    const StringName &id,
+    int64_t peer_id
+) const {
+    if (peer_id == 0) {
+        return false;
+    }
+    const int bit = peer_bit_of(peer_id);
+    if (bit < 0) {
+        return layer_policy(id) == HIDE_FROM_INSIDERS;
+    }
+    return layer_admits_bit(id, bit);
+}
+
+String NetwInterestEngine::layer_explain(
+    const StringName &id,
+    int64_t peer_id
+) const {
+    if (peer_id == 0) {
+        return "REJECT peer=0 (no peer context)";
+    }
+    const bool viewer = layer_has_viewer(id, peer_id);
+    const bool outsiders = layer_policy(id) == HIDE_FROM_OUTSIDERS;
+    return vformat(
+        "%s peer=%d %s viewers under %s",
+        layer_admits(id, peer_id) ? "ADMIT" : "REJECT",
+        peer_id,
+        viewer ? "in" : "not in",
+        outsiders ? "HIDE_FROM_OUTSIDERS" : "HIDE_FROM_INSIDERS"
+    );
+}
+
+PackedInt64Array NetwInterestEngine::layer_viewers(const StringName &id) const {
+    PackedInt64Array out;
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    if (found == layers.end()) {
+        return out;
+    }
+    const PackedInt32Array set = NetwInterestBitSet::bits(found->value.viewers);
+    for (int index = 0; index < set.size(); ++index) {
+        const int64_t peer_id = peer_of_bit(set[index]);
+        if (peer_id != 0) {
+            out.push_back(peer_id);
+        }
+    }
+    return out;
+}
+
+bool NetwInterestEngine::roster_add(const StringName &id, int64_t key) {
+    NETW_ERR_COND_V(
+        id.is_empty(),
+        false,
+        sys::INTEREST,
+        "Interest layer id is empty."
+    );
+    NETW_ERR_COND_V(
+        !is_key(key),
+        false,
+        sys::INTEREST,
+        "Interest entity key must be positive."
+    );
+    ensure_layer(id);
+    LocalVector<int64_t> &members = layers[id].members;
+    if (contains_key(members, key)) {
+        return false;
+    }
+    members.push_back(key);
+    return true;
+}
+
+bool NetwInterestEngine::roster_remove(const StringName &id, int64_t key) {
+    const HashMap<StringName, Layer>::Iterator found = layers.find(id);
+    if (found == layers.end()) {
+        return false;
+    }
+    LocalVector<int64_t> &members = found->value.members;
+    for (uint32_t index = 0; index < members.size(); ++index) {
+        if (members[index] == key) {
+            members.remove_at(index);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool NetwInterestEngine::roster_has(const StringName &id, int64_t key) const {
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    return found != layers.end() && contains_key(found->value.members, key);
+}
+
+bool NetwInterestEngine::set_exit_handler(
+    int64_t key,
+    const Callable &handler
+) {
+    if (exit_handlers.has(key)) {
+        return false;
+    }
+    exit_handlers.insert(key, handler);
+    return true;
+}
+
+Callable NetwInterestEngine::exit_handler(int64_t key) const {
+    const HashMap<int64_t, Callable>::ConstIterator found
+        = exit_handlers.find(key);
+    return found ? found->value : Callable();
+}
+
+Callable NetwInterestEngine::take_exit_handler(int64_t key) {
+    const HashMap<int64_t, Callable>::Iterator found = exit_handlers.find(key);
+    if (!found) {
+        return Callable();
+    }
+    const Callable handler = found->value;
+    exit_handlers.remove(found);
+    return handler;
+}
+
+StringName NetwInterestEngine::scene_membership(int64_t key) const {
+    const HashMap<int64_t, StringName>::ConstIterator found
+        = scene_memberships.find(key);
+    return found ? found->value : StringName();
+}
+
+bool NetwInterestEngine::set_scene_membership(
+    int64_t key,
+    const StringName &id
+) {
+    const HashMap<int64_t, StringName>::Iterator found
+        = scene_memberships.find(key);
+    if (id.is_empty()) {
+        if (!found) {
+            return false;
+        }
+        scene_memberships.remove(found);
+        return true;
+    }
+    if (found) {
+        if (found->value == id) {
+            return false;
+        }
+        found->value = id;
+        return true;
+    }
+    scene_memberships.insert(key, id);
+    return true;
+}
+
+int64_t NetwInterestEngine::transitions_total() const {
+    int64_t total = 0;
+    for (const KeyValue<StringName, Layer> &row : layers) {
+        total += row.value.transitions;
+    }
+    return total;
+}
+
+PackedInt64Array NetwInterestEngine::co_members(
+    int64_t key,
+    const Array &layer_ids
+) const {
+    PackedInt64Array out;
+    HashSet<int64_t> seen;
+    for (int64_t index = 0; index < layer_ids.size(); ++index) {
+        const HashMap<StringName, Layer>::ConstIterator found
+            = layers.find(layer_ids[index]);
+        if (!found) {
+            continue;
+        }
+        const LocalVector<int64_t> &members = found->value.members;
+        for (uint32_t at = 0; at < members.size(); ++at) {
+            if (members[at] == key || seen.has(members[at])) {
+                continue;
+            }
+            seen.insert(members[at]);
+            out.push_back(members[at]);
+        }
+    }
+    return out;
+}
+
+bool NetwInterestEngine::projection_admits(
+    int64_t key,
+    const Ref<NetwInterestDecl> &decl
+) const {
+    NETW_ERR_COND_V(
+        decl.is_null(),
+        false,
+        sys::INTEREST,
+        "NetwInterestEngine.projection_admits: entity %d declares nothing to "
+        "project from.",
+        key
+    );
+    const Array labels = decl->labels();
+    if (labels.is_empty()) {
+        return true;
+    }
+    for (int64_t index = 0; index < labels.size(); ++index) {
+        if (roster_has(labels[index], key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+PackedInt64Array NetwInterestEngine::roster(const StringName &id) const {
+    PackedInt64Array out;
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    if (found == layers.end()) {
+        return out;
+    }
+    for (uint32_t index = 0; index < found->value.members.size(); ++index) {
+        out.push_back(found->value.members[index]);
+    }
+    return out;
+}
+
+void NetwInterestEngine::note_transition(const StringName &id) {
+    if (id.is_empty()) {
+        return;
+    }
+    ensure_layer(id);
+    ++layers[id].transitions;
+}
+
+int64_t NetwInterestEngine::transitions(const StringName &id) const {
+    const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
+    return found != layers.end() ? found->value.transitions : 0;
+}
+
+PackedInt64Array NetwInterestEngine::viewer_peers() const {
+    PackedInt64Array seen;
+    for (const KeyValue<StringName, Layer> &entry : layers) {
+        seen = NetwInterestBitSet::union_of(seen, entry.value.viewers);
+    }
+    PackedInt64Array out;
+    const PackedInt32Array set = NetwInterestBitSet::bits(seen);
+    for (int index = 0; index < set.size(); ++index) {
+        const int64_t peer_id = peer_of_bit(set[index]);
+        if (peer_id != 0) {
+            out.push_back(peer_id);
+        }
+    }
+    return out;
+}
+
 void NetwInterestEngine::set_membership(int64_t key, const Array &layer_ids) {
     NETW_ERR_COND(
         !is_key(key),
-        "interest",
+        sys::INTEREST,
         "Interest entity key must be positive."
     );
     LocalVector<StringName> normalized;
@@ -622,15 +1031,113 @@ void NetwInterestEngine::set_membership(int64_t key, const Array &layer_ids) {
     ++revision;
 }
 
+bool NetwInterestEngine::membership_add(
+    int64_t key,
+    const StringName &layer_id
+) {
+    NETW_ERR_COND_V(
+        !is_key(key),
+        false,
+        sys::INTEREST,
+        "Interest entity key must be positive."
+    );
+    NETW_ERR_COND_V(
+        layer_id.is_empty(),
+        false,
+        sys::INTEREST,
+        "Interest layer id is empty."
+    );
+    Record &record = record_for(key);
+    if (contains(record.layers, layer_id)) {
+        return false;
+    }
+    record.layers.push_back(layer_id);
+    ensure_layer(layer_id);
+    mark_entity_tree_dirty(key);
+    ++revision;
+    return true;
+}
+
+bool NetwInterestEngine::membership_remove(
+    int64_t key,
+    const StringName &layer_id
+) {
+    const HashMap<int64_t, Record>::Iterator found = entities.find(key);
+    if (found == entities.end()) {
+        return false;
+    }
+    LocalVector<StringName> &layers = found->value.layers;
+    for (uint32_t index = 0; index < layers.size(); ++index) {
+        if (layers[index] != layer_id) {
+            continue;
+        }
+        layers.remove_at(index);
+        mark_entity_tree_dirty(key);
+        ++revision;
+        return true;
+    }
+    return false;
+}
+
+Array NetwInterestEngine::memberships(int64_t key) const {
+    Array out;
+    const HashMap<int64_t, Record>::ConstIterator found = entities.find(key);
+    if (!found) {
+        return out;
+    }
+    for (uint32_t index = 0; index < found->value.layers.size(); ++index) {
+        out.push_back(found->value.layers[index]);
+    }
+    return out;
+}
+
+bool NetwInterestEngine::has_memberships(int64_t key) const {
+    const HashMap<int64_t, Record>::ConstIterator found = entities.find(key);
+    return found && !found->value.layers.is_empty();
+}
+
+bool NetwInterestEngine::has_intent(int64_t key) const {
+    const HashMap<int64_t, Record>::ConstIterator found = entities.find(key);
+    return found && !found->value.intent_all;
+}
+
+bool NetwInterestEngine::had_committed_intent(int64_t key) const {
+    return committed_intents.has(key);
+}
+
+int NetwInterestEngine::dirty_count() const {
+    return int(dirty_entities.size());
+}
+
+PackedInt64Array NetwInterestEngine::intent_keys() const {
+    PackedInt64Array out;
+    for (const KeyValue<int64_t, Record> &entry : entities) {
+        if (!entry.value.intent_all) {
+            out.push_back(entry.key);
+        }
+    }
+    return out;
+}
+
+PackedInt64Array NetwInterestEngine::membership_keys() const {
+    PackedInt64Array out;
+    for (const KeyValue<int64_t, Record> &entry : entities) {
+        if (!entry.value.layers.is_empty()) {
+            out.push_back(entry.key);
+        }
+    }
+    return out;
+}
+
 void NetwInterestEngine::set_parent(int64_t key, int64_t parent_key) {
     NETW_ERR_COND(
         !is_key(key),
-        "interest",
+        sys::INTEREST,
         "Interest entity key must be positive."
     );
     NETW_ERR_COND(
         key == parent_key,
-        "interest",
+        sys::INTEREST,
         "An entity cannot be its own parent."
     );
     int64_t walk = parent_key;
@@ -642,7 +1149,7 @@ void NetwInterestEngine::set_parent(int64_t key, int64_t parent_key) {
         }
         NETW_ERR_COND(
             walk == key,
-            "interest",
+            sys::INTEREST,
             "Interest parent link closes a cycle."
         );
         walk = found->value.parent;
@@ -659,7 +1166,7 @@ void NetwInterestEngine::set_parent(int64_t key, int64_t parent_key) {
 void NetwInterestEngine::set_intent(int64_t key, const PackedInt64Array &mask) {
     NETW_ERR_COND(
         !is_key(key),
-        "interest",
+        sys::INTEREST,
         "Interest entity key must be positive."
     );
     Record &record = record_for(key);
@@ -675,7 +1182,7 @@ void NetwInterestEngine::set_intent(int64_t key, const PackedInt64Array &mask) {
 void NetwInterestEngine::set_intent_all(int64_t key) {
     NETW_ERR_COND(
         !is_key(key),
-        "interest",
+        sys::INTEREST,
         "Interest entity key must be positive."
     );
     Record &record = record_for(key);
@@ -691,11 +1198,11 @@ void NetwInterestEngine::set_intent_all(int64_t key) {
 void NetwInterestEngine::set_order_key(int64_t key, int depth, int route) {
     NETW_ERR_COND(
         !is_key(key),
-        "interest",
+        sys::INTEREST,
         "Interest entity key must be positive."
     );
-    NETW_ERR_COND(depth < 0, "interest", "Interest order depth is negative.");
-    NETW_ERR_COND(route < 0, "interest", "Interest order route is negative.");
+    NETW_ERR_COND(depth < 0, sys::INTEREST, "Interest order depth is negative.");
+    NETW_ERR_COND(route < 0, sys::INTEREST, "Interest order route is negative.");
     Record &record = record_for(key);
     if (record.depth == depth && record.route == route) {
         return;
@@ -723,16 +1230,12 @@ void NetwInterestEngine::set_live_peers(const PackedInt64Array &bits) {
 void NetwInterestEngine::remove_entity(int64_t key) {
     NETW_ERR_COND(
         !is_key(key),
-        "interest",
+        sys::INTEREST,
         "Interest entity key must be positive."
     );
     if (!entities.has(key) && !committed.has(key)) {
         return;
     }
-    // The order a removal is answered at is stored with the removal itself,
-    // so a key that never reached intake still has one. Keeping the marker and
-    // the order in separate tables lets two such removals be compared against
-    // an order nobody wrote.
     removed.insert(key, order_of(key));
     entities.erase(key);
     dirty_entities.erase(key);
@@ -753,9 +1256,6 @@ void NetwInterestEngine::recompute_layers(
     HashMap<StringName, PackedInt64Array> &rows_by_layer,
     const Ref<NetwInterestStats> &out_stats
 ) const {
-    // Zoned apart from the entity fold rather than inside it. Which of the two
-    // dominates is the question that decides whether either is worth splitting,
-    // and one zone over both cannot answer it.
     NETW_ZONE_NC("NetwInterestEngine layer fold", colors::INTEREST);
     NETW_ZONE_VALUE(dirty_layers.size());
     LocalVector<StringName> ids;
@@ -944,10 +1444,6 @@ Ref<NetwInterestDelta> NetwInterestEngine::recompute() {
     delta.instantiate();
     delta->commit_revision = revision;
 
-    // Direct-initialised, never copy-initialised: the engine's HashMap copy
-    // constructor is explicit and godot-cpp's is not, so copy-initialisation
-    // falls through to a move that cannot bind a const lvalue and only one of
-    // the two builds rejects it.
     HashMap<StringName, PackedInt64Array> rows_by_layer(layer_rows);
     recompute_layers(rows_by_layer, delta->stats);
 
@@ -990,9 +1486,6 @@ Ref<NetwInterestDelta> NetwInterestEngine::recompute() {
                 );
             }
 
-            // Attribution diffs memberships as well as rows, so joining a layer
-            // attributes the edges it already admitted and leaving one gives
-            // them back, both without the entity's own row moving.
             const Record &record = entities.find(key)->value;
             const HashMap<int64_t, LocalVector<StringName>>::ConstIterator was
                 = committed_memberships.find(key);
@@ -1156,6 +1649,9 @@ Ref<NetwInterestDelta> NetwInterestEngine::recompute() {
         delta->layer_rows = rows_by_layer;
         for (const KeyValue<int64_t, Record> &entry : entities) {
             delta->memberships.insert(entry.key, entry.value.layers);
+            if (!entry.value.intent_all) {
+                delta->intents.insert(entry.key);
+            }
         }
         delta->stats->words_per_row = live_peers.size();
         delta->stats->edges
@@ -1184,6 +1680,7 @@ void NetwInterestEngine::commit(const Ref<NetwInterestDelta> &delta) {
     }
     layer_rows = delta->layer_rows;
     committed_memberships = delta->memberships;
+    committed_intents = delta->intents;
     last_stats = delta->stats;
     if (revision == delta->commit_revision) {
         dirty_layers.clear();
@@ -1208,7 +1705,7 @@ PackedInt64Array NetwInterestEngine::row_after(
     NETW_ERR_COND_V(
         delta.is_null(),
         row_of(key),
-        "interest",
+        sys::INTEREST,
         "Interest delta is null."
     );
     for (int index = 0; index < delta->keys.size(); ++index) {
@@ -1298,12 +1795,76 @@ String NetwInterestEngine::explain(int64_t key, int bit) const {
     return "admitted";
 }
 
+int NetwInterestEngine::order_route_for(int64_t key) {
+    NETW_ERR_COND_V(
+        !is_key(key),
+        0,
+        sys::INTEREST,
+        "Interest entity key must be positive."
+    );
+    const HashMap<int64_t, int32_t>::ConstIterator found
+        = fallback_routes.find(key);
+    if (found) {
+        return found->value;
+    }
+    const int route = next_fallback_route++;
+    fallback_routes.insert(key, route);
+    return route;
+}
+
+int NetwInterestEngine::peer_bit_for(int64_t peer_id) {
+    NETW_ERR_COND_V(
+        peer_id == 0,
+        -1,
+        sys::INTEREST,
+        "Interest peer id must be non-zero."
+    );
+    const HashMap<int64_t, int32_t>::ConstIterator found
+        = peer_bits.find(peer_id);
+    if (found) {
+        return found->value;
+    }
+    const int bit = int(bit_peers.size());
+    peer_bits.insert(peer_id, bit);
+    bit_peers.push_back(peer_id);
+    return bit;
+}
+
+int NetwInterestEngine::peer_bit_of(int64_t peer_id) const {
+    const HashMap<int64_t, int32_t>::ConstIterator found
+        = peer_bits.find(peer_id);
+    return found ? found->value : -1;
+}
+
+int64_t NetwInterestEngine::peer_of_bit(int bit) const {
+    if (bit < 0 || bit >= int(bit_peers.size())) {
+        return 0;
+    }
+    return bit_peers[bit];
+}
+
+PackedInt64Array NetwInterestEngine::known_peers() const {
+    PackedInt64Array out;
+    out.resize(int(bit_peers.size()));
+    for (uint32_t at = 0; at < bit_peers.size(); ++at) {
+        out.set(int(at), bit_peers[at]);
+    }
+    return out;
+}
+
 void NetwInterestEngine::clear() {
     layers.clear();
+    peer_bits.clear();
+    bit_peers.clear();
+    exit_handlers.clear();
+    scene_memberships.clear();
+    fallback_routes.clear();
+    next_fallback_route = 1;
     entities.clear();
     layer_rows.clear();
     committed.clear();
     committed_memberships.clear();
+    committed_intents.clear();
     dirty_layers.clear();
     dirty_entities.clear();
     removed.clear();
@@ -1327,8 +1888,160 @@ void NetwInterestEngine::_bind_methods() {
         &NetwInterestEngine::remove_layer
     );
     ClassDB::bind_method(
+        D_METHOD("declare_layer", "id"),
+        &NetwInterestEngine::declare_layer
+    );
+    ClassDB::bind_method(
+        D_METHOD("has_layer", "id"),
+        &NetwInterestEngine::has_layer
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_add_viewer", "id", "peer_id"),
+        &NetwInterestEngine::layer_add_viewer
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_remove_viewer", "id", "peer_id"),
+        &NetwInterestEngine::layer_remove_viewer
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_has_viewer", "id", "peer_id"),
+        &NetwInterestEngine::layer_has_viewer
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_set_policy", "id", "policy"),
+        &NetwInterestEngine::layer_set_policy
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_policy", "id"),
+        &NetwInterestEngine::layer_policy
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_admits", "id", "peer_id"),
+        &NetwInterestEngine::layer_admits
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_explain", "id", "peer_id"),
+        &NetwInterestEngine::layer_explain
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_set_leave_policy", "id", "policy"),
+        &NetwInterestEngine::layer_set_leave_policy
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_leave_policy", "id"),
+        &NetwInterestEngine::layer_leave_policy
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_set_perception_policy", "id", "policy"),
+        &NetwInterestEngine::layer_set_perception_policy
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_perception_policy", "id"),
+        &NetwInterestEngine::layer_perception_policy
+    );
+    ClassDB::bind_method(
+        D_METHOD("layer_viewers", "id"),
+        &NetwInterestEngine::layer_viewers
+    );
+    ClassDB::bind_method(
+        D_METHOD("viewer_peers"),
+        &NetwInterestEngine::viewer_peers
+    );
+    ClassDB::bind_method(
+        D_METHOD("roster_add", "id", "key"),
+        &NetwInterestEngine::roster_add
+    );
+    ClassDB::bind_method(
+        D_METHOD("roster_remove", "id", "key"),
+        &NetwInterestEngine::roster_remove
+    );
+    ClassDB::bind_method(
+        D_METHOD("roster_has", "id", "key"),
+        &NetwInterestEngine::roster_has
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_exit_handler", "key", "handler"),
+        &NetwInterestEngine::set_exit_handler
+    );
+    ClassDB::bind_method(
+        D_METHOD("exit_handler", "key"),
+        &NetwInterestEngine::exit_handler
+    );
+    ClassDB::bind_method(
+        D_METHOD("take_exit_handler", "key"),
+        &NetwInterestEngine::take_exit_handler
+    );
+    ClassDB::bind_method(
+        D_METHOD("scene_membership", "key"),
+        &NetwInterestEngine::scene_membership
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_scene_membership", "key", "id"),
+        &NetwInterestEngine::set_scene_membership
+    );
+    ClassDB::bind_method(
+        D_METHOD("transitions_total"),
+        &NetwInterestEngine::transitions_total
+    );
+    ClassDB::bind_method(
+        D_METHOD("co_members", "key", "layer_ids"),
+        &NetwInterestEngine::co_members
+    );
+    ClassDB::bind_method(
+        D_METHOD("projection_admits", "key", "decl"),
+        &NetwInterestEngine::projection_admits
+    );
+    ClassDB::bind_method(
+        D_METHOD("roster", "id"),
+        &NetwInterestEngine::roster
+    );
+    ClassDB::bind_method(
+        D_METHOD("note_transition", "id"),
+        &NetwInterestEngine::note_transition
+    );
+    ClassDB::bind_method(
+        D_METHOD("transitions", "id"),
+        &NetwInterestEngine::transitions
+    );
+    ClassDB::bind_method(
         D_METHOD("set_membership", "key", "layer_ids"),
         &NetwInterestEngine::set_membership
+    );
+    ClassDB::bind_method(
+        D_METHOD("membership_add", "key", "layer_id"),
+        &NetwInterestEngine::membership_add
+    );
+    ClassDB::bind_method(
+        D_METHOD("membership_remove", "key", "layer_id"),
+        &NetwInterestEngine::membership_remove
+    );
+    ClassDB::bind_method(
+        D_METHOD("memberships", "key"),
+        &NetwInterestEngine::memberships
+    );
+    ClassDB::bind_method(
+        D_METHOD("has_memberships", "key"),
+        &NetwInterestEngine::has_memberships
+    );
+    ClassDB::bind_method(
+        D_METHOD("has_intent", "key"),
+        &NetwInterestEngine::has_intent
+    );
+    ClassDB::bind_method(
+        D_METHOD("had_committed_intent", "key"),
+        &NetwInterestEngine::had_committed_intent
+    );
+    ClassDB::bind_method(
+        D_METHOD("intent_keys"),
+        &NetwInterestEngine::intent_keys
+    );
+    ClassDB::bind_method(
+        D_METHOD("dirty_count"),
+        &NetwInterestEngine::dirty_count
+    );
+    ClassDB::bind_method(
+        D_METHOD("membership_keys"),
+        &NetwInterestEngine::membership_keys
     );
     ClassDB::bind_method(
         D_METHOD("set_parent", "key", "parent_key"),
@@ -1349,6 +2062,26 @@ void NetwInterestEngine::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("set_live_peers", "bits"),
         &NetwInterestEngine::set_live_peers
+    );
+    ClassDB::bind_method(
+        D_METHOD("order_route_for", "key"),
+        &NetwInterestEngine::order_route_for
+    );
+    ClassDB::bind_method(
+        D_METHOD("peer_bit_for", "peer_id"),
+        &NetwInterestEngine::peer_bit_for
+    );
+    ClassDB::bind_method(
+        D_METHOD("peer_bit_of", "peer_id"),
+        &NetwInterestEngine::peer_bit_of
+    );
+    ClassDB::bind_method(
+        D_METHOD("peer_of_bit", "bit"),
+        &NetwInterestEngine::peer_of_bit
+    );
+    ClassDB::bind_method(
+        D_METHOD("known_peers"),
+        &NetwInterestEngine::known_peers
     );
     ClassDB::bind_method(
         D_METHOD("remove_entity", "key"),

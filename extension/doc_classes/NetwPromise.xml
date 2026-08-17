@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPromise" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The pending result of a one-to-one network request, resolved once with the responder's return value.
+	</brief_description>
+	<description>
+		It settles exactly once: [method then] fires with the value the remote handler returned, or [method catch_error] fires with an [enum @GlobalScope.Error] code if the request times out or the target peer disconnects. Chaining before it settles is safe, and chaining after a settled promise fires the callback immediately, so there is no race between sending and subscribing.
+		[codeblock]
+		Netw.request(server.buy_item, item_id) \
+		    .then(func(receipt: Dictionary) -&gt; void: show_receipt(receipt)) \
+		    .catch_error(func(code: Error, detail: String) -&gt; void:
+		        show_error(error_string(code) if detail.is_empty() else detail)
+		    )
+		[/codeblock]
+		The settle vocabulary is closed. [constant @GlobalScope.ERR_TIMEOUT] means the deadline passed with no reply, [constant @GlobalScope.ERR_UNAVAILABLE] means the responder went away before it could answer, and [constant @GlobalScope.ERR_UNAUTHORIZED] means the responder refused. The [member detail] string carries the human-readable reason and is never the thing code branches on.
+		A returned [Node] arrives resolved to the live local instance, deferred until it spawns if the reply beats its spawn packet. See [NetwGroupPromise] for the one-to-many form.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="catch_error">
+			<return type="NetwPromise" />
+			<param index="0" name="cb" type="Callable" />
+			<description>
+				Chains [param cb] to run if the promise is rejected or timed out. It receives [member code] and [member detail]. A promise that already failed runs it immediately, and either way this answers the promise so calls chain.
+			</description>
+		</method>
+		<method name="reject">
+			<return type="void" />
+			<param index="0" name="err_code" type="int" />
+			<param index="1" name="err_detail" type="String" default="&quot;&quot;" />
+			<description>
+				Settles the promise as failed with [param err_code] and an optional human-readable [param err_detail]. Emits [signal failed] then [signal settled] and runs every chained [method catch_error]. A promise that already settled is unchanged, because a settled promise is an answer and a second answer would be a different one.
+				Rejecting with nothing listening warns, since a network failure nobody handles is the one a game finds out about from its players.
+			</description>
+		</method>
+		<method name="resolve">
+			<return type="void" />
+			<param index="0" name="val" type="Variant" />
+			<description>
+				Settles the promise as completed with [param val]. Emits [signal completed] then [signal settled] and runs every chained [method then]. A promise that already settled is unchanged.
+			</description>
+		</method>
+		<method name="then">
+			<return type="NetwPromise" />
+			<param index="0" name="cb" type="Callable" />
+			<description>
+				Chains [param cb] to run when the promise resolves. It receives [member result]. A promise that already completed runs it immediately, and either way this answers the promise so calls chain.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="code" type="int" setter="" getter="get_code" default="0">
+			The settle code when [member is_failed] is [code]true[/code], and [constant @GlobalScope.OK] otherwise.
+		</member>
+		<member name="detail" type="String" setter="" getter="get_detail" default="&quot;&quot;">
+			The human-readable reason behind [member code], empty when the code says it all. Diagnostics only, never a branch condition.
+		</member>
+		<member name="is_completed" type="bool" setter="" getter="get_is_completed" default="false">
+			Whether the promise resolved successfully.
+		</member>
+		<member name="is_failed" type="bool" setter="" getter="get_is_failed" default="false">
+			Whether the promise was rejected or timed out.
+		</member>
+		<member name="is_settled" type="bool" setter="" getter="get_is_settled" default="false">
+			Whether the promise has settled, whichever way it went. [member is_completed] alone means "succeeded", so code that only needs to know the operation is over asks this instead of testing both flags.
+		</member>
+		<member name="result" type="Variant" setter="" getter="get_result">
+			The resolved value when [member is_completed] is [code]true[/code].
+		</member>
+	</members>
+	<signals>
+		<signal name="completed">
+			<param index="0" name="value" type="Variant" />
+			<description>
+				Emitted when the promise resolves, carrying [member result].
+			</description>
+		</signal>
+		<signal name="failed">
+			<param index="0" name="code" type="int" />
+			<param index="1" name="detail" type="String" />
+			<description>
+				Emitted when the promise is rejected, carrying the settle [param code] and its human-readable [param detail].
+			</description>
+		</signal>
+		<signal name="settled">
+			<description>
+				Emitted once when the promise settles, whichever way it went.
+				Await this when the outcome matters less than the operation being over, and read [member code] afterwards. Guard the await with [member is_settled], because a signal that already fired never fires again.
+				[codeblock]
+				if not promise.is_settled:
+				    await promise.settled
+				if promise.code != OK:
+				    show_error(promise.detail)
+				[/codeblock]
+			</description>
+		</signal>
+	</signals>
+</class>

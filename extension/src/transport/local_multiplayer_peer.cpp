@@ -22,7 +22,7 @@ Error LocalMultiplayerPeer::create_server() {
     unique_id = 1;
     server_side = true;
     status = CONNECTION_CONNECTED;
-    NETW_INFO("transport", "peer is the server id=%d", unique_id);
+    NETW_INFO(sys::TRANSPORT, "peer is the server id=%d", unique_id);
     return Error::OK;
 }
 
@@ -31,7 +31,7 @@ Error LocalMultiplayerPeer::create_client(int p_client_id) {
     unique_id = p_client_id;
     server_side = false;
     status = CONNECTION_CONNECTING;
-    NETW_INFO("transport", "peer is a client id=%d", unique_id);
+    NETW_INFO(sys::TRANSPORT, "peer is a client id=%d", unique_id);
     return Error::OK;
 }
 
@@ -44,7 +44,7 @@ void LocalMultiplayerPeer::force_connect_peer(
     }
 
     links.insert(p_peer_id, gd::instance_id(p_peer));
-    NETW_TRACE("transport", "linked to peer=%d", p_peer_id);
+    NETW_TRACE(sys::TRANSPORT, "linked to peer=%d", p_peer_id);
 
     if (server_side) {
         peers_to_emit_connected.push_back(p_peer_id);
@@ -69,8 +69,12 @@ void LocalMultiplayerPeer::set_loopback_session(
     session = gd::instance_id(p_session);
 }
 
-LocalLoopbackSession *LocalMultiplayerPeer::get_loopback_session() const {
+LocalLoopbackSession *LocalMultiplayerPeer::loopback_session() const {
     return Object::cast_to<LocalLoopbackSession>(gd::instance_from_id(session));
+}
+
+Ref<LocalLoopbackSession> LocalMultiplayerPeer::get_loopback_session() const {
+    return Ref<LocalLoopbackSession>(loopback_session());
 }
 
 LocalMultiplayerPeer *LocalMultiplayerPeer::peer_at(int p_peer_id) const {
@@ -124,7 +128,7 @@ Error LocalMultiplayerPeer::send_to_peer(
     LocalMultiplayerPeer *target = peer_at(p_peer_id);
     if (target == nullptr || target->closed || target->closing) {
         links.erase(p_peer_id);
-        NETW_TRACE("transport", "send refused, peer gone=%d", p_peer_id);
+        NETW_TRACE(sys::TRANSPORT, "send refused, peer gone=%d", p_peer_id);
         return Error::ERR_UNAVAILABLE;
     }
 
@@ -144,7 +148,7 @@ void LocalMultiplayerPeer::receive_packet(const Packet &p_packet) {
         return;
     }
 
-    LocalLoopbackSession *owner = get_loopback_session();
+    LocalLoopbackSession *owner = loopback_session();
     if (owner != nullptr && owner->capture_incoming(this, p_packet)) {
         return;
     }
@@ -179,7 +183,7 @@ void LocalMultiplayerPeer::remote_closed(
     bool p_remote_was_server
 ) {
     purge_packets_from(p_remote_id);
-    LocalLoopbackSession *owner = get_loopback_session();
+    LocalLoopbackSession *owner = loopback_session();
     if (owner != nullptr) {
         owner->purge_packets_from(p_remote_id);
     }
@@ -210,7 +214,7 @@ void LocalMultiplayerPeer::finalize_close() {
     transfer_mode = TRANSFER_MODE_RELIABLE;
     server_side = false;
 
-    NETW_TRACE("transport", "peer fully closed");
+    NETW_TRACE(sys::TRANSPORT, "peer fully closed");
 }
 
 void LocalMultiplayerPeer::reset_state() {
@@ -265,7 +269,7 @@ void LocalMultiplayerPeer::NETW_PEER_VIRTUAL(close)() {
 
     const int my_id = unique_id;
     const PackedInt32Array peers = linked_peer_ids();
-    LocalLoopbackSession *owner = get_loopback_session();
+    LocalLoopbackSession *owner = loopback_session();
     if (owner != nullptr) {
         owner->purge_packets_from(my_id);
     }
@@ -293,7 +297,7 @@ void LocalMultiplayerPeer::NETW_PEER_VIRTUAL(disconnect_peer)(
 
     links.erase(p_peer);
     purge_packets_from(p_peer);
-    LocalLoopbackSession *owner = get_loopback_session();
+    LocalLoopbackSession *owner = loopback_session();
     if (owner != nullptr) {
         owner->purge_packets_from(p_peer);
     }

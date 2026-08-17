@@ -84,6 +84,19 @@ struct DissipateEvidence {
 
 // Every fact short of the corridor. The corridor is game code, so it is asked
 // only after this answers true.
+/* Which declared field's divergence a recovery is answering, or -1.
+ *
+ * Ranked by error over the field's own tolerance, so fields in different units
+ * are comparable. A field declaring a tolerance of zero triggers on any error
+ * and so has no scale to be ranked ON: it cannot be normalized, because any
+ * ratio against zero outranks every real field however small the error, so it
+ * ranks LAST and answers only when no field with a positive tolerance
+ * triggered. With nothing past its own tolerance the ranking falls back to raw
+ * magnitude, because there is still a delta with a sign and the overshoot test
+ * is entitled to see it.
+ */
+int escalation_field(const Wiring &p_wiring, const RecoveryRequest &p_request);
+
 bool transport_admissible(const TransportEvidence &p_evidence);
 
 bool dissipate_admissible(const DissipateEvidence &p_evidence);

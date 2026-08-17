@@ -74,7 +74,8 @@ func _resolve() -> SubViewport:
 
 	var player := _find_local_player()
 	if is_instance_valid(player):
-		var scene := NetwEntity.of(player).scene.level_container()
+		var handle: NetwSceneHandle = NetwEntity.of(player).scene
+		var scene := handle.level_container()
 		var viewport := scene as Node as SubViewport if scene else null
 		if viewport:
 			return viewport
@@ -226,7 +227,7 @@ func _watch_scene(scene: Node) -> void:
 	_watched_scenes.append(scene)
 	if _api:
 		_api.scene_observe(
-			_api.rid_of(scene),
+			_api.entity_of(scene),
 			NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
 			_on_scene_population_changed,
 		)
@@ -244,7 +245,7 @@ func _unwatch_scene(scene: Node) -> void:
 		return
 	if _api:
 		_api.scene_unobserve(
-			_api.rid_of(scene),
+			_api.entity_of(scene),
 			NetwMultiplayer.SceneEvent.SCENE_EVENT_ENTITY,
 			_on_scene_population_changed,
 		)

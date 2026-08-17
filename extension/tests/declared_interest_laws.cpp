@@ -2,20 +2,15 @@
 
 #if defined(NETW_TIER_HOSTED)
 
-#include <godot_cpp/classes/resource_loader.hpp>
-#include <godot_cpp/classes/script.hpp>
+#include "godot/script.hpp"
 
 namespace TestDeclaredInterestLaws {
 
 using namespace godot;
 using namespace netw_test;
 
-Ref<RefCounted> entity_of(Node *p_node) {
-    Ref<Script> script = ResourceLoader::get_singleton()->load(
-        "res://addons/networked/context/session/netw_entity.gd"
-    );
-    REQUIRE(script.is_valid());
-    return script->call("of", p_node);
+Ref<netw::NetwEntity> entity_of(Node *p_node) {
+    return netw::NetwEntity::of(p_node);
 }
 
 TEST_CASE(
@@ -27,7 +22,7 @@ TEST_CASE(
     rig.declare_entity(server_decl);
     const RID mirror = rig.declare_mirror(0, server_decl);
     Node *node = rig.node_of(mirror, 0);
-    Ref<RefCounted> entity = entity_of(node);
+    Ref<netw::NetwEntity> entity = entity_of(node);
 
     REQUIRE(node != nullptr);
     REQUIRE(entity.is_valid());
@@ -44,7 +39,7 @@ TEST_CASE(
     world.player("Player", 0);
     rig.declare_world(world);
 
-    Ref<RefCounted> entity = entity_of(
+    Ref<netw::NetwEntity> entity = entity_of(
         rig.node_of(rig.entity_of("Player", 0), 0)
     );
     REQUIRE(entity.is_valid());

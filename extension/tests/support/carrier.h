@@ -32,6 +32,7 @@ class Carrier : public godot::Node2D {
     int rewind_visits = 0;
     bool count_replay_effects = false;
     double last_simulated_x = 0.0;
+    double carry_gain = 1.0;
 
 protected:
     static void _bind_methods() {
@@ -46,6 +47,14 @@ protected:
         godot::ClassDB::bind_method(
             godot::D_METHOD("sum_into_speed", "delta", "tick", "fresh"),
             &Carrier::sum_into_speed
+        );
+        godot::ClassDB::bind_method(
+            godot::D_METHOD("carry_speed", "value", "ctx"),
+            &Carrier::carry_speed
+        );
+        godot::ClassDB::bind_method(
+            godot::D_METHOD("carry_speed_and_write", "value", "ctx"),
+            &Carrier::carry_speed_and_write
         );
     }
 
@@ -105,6 +114,34 @@ public:
     // applied and writes the state the port is about to capture.
     void sum_into_speed(double, int64_t, bool) {
         set("speed", double(get("speed")) + double(get("throttle")));
+    }
+
+    // Restates sum_into_speed off the recorded transition rather than off the
+    // live node, which is what lets the pool replay it against the past.
+    godot::Variant carry_speed(
+        const godot::Variant &p_value,
+        godot::Object *p_ctx
+    ) {
+        const godot::Dictionary input = p_ctx->get("input");
+        return double(p_value)
+            + double(input.get("throttle", 0.0)) * carry_gain;
+    }
+
+    // The same rule, plus the write to the body it describes that disqualifies
+    // it whatever it computed.
+    godot::Variant carry_speed_and_write(
+        const godot::Variant &p_value,
+        godot::Object *p_ctx
+    ) {
+        const godot::Variant out = carry_speed(p_value, p_ctx);
+        set("speed", double(get("speed")) + 1.0);
+        return out;
+    }
+
+    // Anything but 1.0 takes the rule off the arithmetic the body ran, which
+    // is the one fault a replay can see without being told.
+    void set_carry_gain(double p_gain) {
+        carry_gain = p_gain;
     }
 
     void network_tick(double p_delta, int64_t, bool p_fresh) {

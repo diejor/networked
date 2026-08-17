@@ -16,8 +16,10 @@
 #include "godot/project_settings.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/predict/frames.hpp"
 #include "netw/profile.hpp"
 #include "netw/tests.hpp"
+#include "netw/wire/registry.hpp"
 #include "support/netw_cells.h"
 #include "support/netw_reset.h"
 
@@ -352,6 +354,7 @@ void NetwNativeTests::_bind_methods() {
         D_METHOD("instrumentation_probe", "value"),
         &NetwNativeTests::instrumentation_probe
     );
+    ClassDB::bind_method(D_METHOD("wire_spec"), &NetwNativeTests::wire_spec);
 }
 
 Dictionary NetwNativeTests::run(
@@ -367,6 +370,115 @@ Dictionary NetwNativeTests::run(
         = run_native_tests(filter, report_path, cells_path);
     result[StringName("cells")] = netw_test::Cells::count();
     return result;
+}
+
+namespace {
+
+const char *kind_name(wire::ChannelKind value) {
+    switch (value) {
+        case wire::ChannelKind::KEYED: return "KEYED";
+        case wire::ChannelKind::SESSION: return "SESSION";
+        case wire::ChannelKind::ROUTED: return "ROUTED";
+    }
+    return "?";
+}
+
+const char *reliability_name(wire::Reliability value) {
+    switch (value) {
+        case wire::Reliability::UNRELIABLE: return "UNRELIABLE";
+        case wire::Reliability::UNRELIABLE_ACKED: return "UNRELIABLE_ACKED";
+        case wire::Reliability::RELIABLE: return "RELIABLE";
+    }
+    return "?";
+}
+
+const char *freshness_name(wire::Freshness value) {
+    switch (value) {
+        case wire::Freshness::NONE: return "NONE";
+        case wire::Freshness::FRESHEST_WINS: return "FRESHEST_WINS";
+    }
+    return "?";
+}
+
+const char *delivery_name(wire::Delivery value) {
+    switch (value) {
+        case wire::Delivery::IMMEDIATE: return "IMMEDIATE";
+        case wire::Delivery::FITTED: return "FITTED";
+    }
+    return "?";
+}
+
+const char *direction_name(wire::Direction value) {
+    switch (value) {
+        case wire::Direction::EITHER: return "EITHER";
+        case wire::Direction::SERVER_TO_CLIENT: return "SERVER_TO_CLIENT";
+        case wire::Direction::CLIENT_TO_SERVER: return "CLIENT_TO_SERVER";
+        case wire::Direction::OWNER_TO_SERVER: return "OWNER_TO_SERVER";
+        case wire::Direction::SERVER_TO_OWNER: return "SERVER_TO_OWNER";
+    }
+    return "?";
+}
+
+const char *payload_name(wire::PayloadContract value) {
+    switch (value) {
+        case wire::PayloadContract::RAW: return "RAW";
+        case wire::PayloadContract::PLANNED: return "PLANNED";
+        case wire::PayloadContract::DELTA: return "DELTA";
+    }
+    return "?";
+}
+
+// The channel table as the build actually holds it, so a reader compares
+// against the registry rather than against its own copy of the prose.
+Array spec_channels() {
+    const wire::WireRegistry reg = wire::WireRegistry::create_default();
+    Array out;
+    for (int id = 0; id < wire::WireRegistry::MAX_CHANNELS; ++id) {
+        const wire::ChannelDecl *decl = reg.find_channel(uint8_t(id));
+        if (decl == nullptr || decl->is_reserved) {
+            continue;
+        }
+        Dictionary row;
+        row[StringName("id")] = int64_t(id);
+        row[StringName("name")] = String(decl->name);
+        row[StringName("kind")] = String(kind_name(decl->kind));
+        row[StringName("reliability")]
+            = String(reliability_name(decl->reliability));
+        row[StringName("freshness")] = String(freshness_name(decl->freshness));
+        row[StringName("delivery")] = String(delivery_name(decl->delivery));
+        row[StringName("direction")] = String(direction_name(decl->direction));
+        row[StringName("payload")] = String(payload_name(decl->payload));
+        out.push_back(row);
+    }
+    return out;
+}
+
+// The ids a build refuses to reclaim. A retired carrier that read as merely
+// absent could be handed to a new family, and two versions would then agree
+// on an id and disagree on everything under it.
+Array spec_reserved() {
+    const wire::WireRegistry reg = wire::WireRegistry::create_default();
+    Array out;
+    for (int id = 0; id < wire::WireRegistry::MAX_CHANNELS; ++id) {
+        const wire::ChannelDecl *decl = reg.find_channel(uint8_t(id));
+        if (decl != nullptr && decl->is_reserved) {
+            out.push_back(int64_t(id));
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+Dictionary NetwNativeTests::wire_spec() const {
+    Dictionary out;
+    out[StringName("records")] = predict::spec_records();
+    out[StringName("channels")] = spec_channels();
+    out[StringName("reserved")] = spec_reserved();
+    out[StringName("identity")]
+        = int64_t(wire::WireRegistry::create_default().identity_hash()
+                  & 0x7FFFFFFFFFFFFFFFULL);
+    return out;
 }
 
 void NetwNativeTests::instrumentation_probe(int64_t value) const {

@@ -2,13 +2,9 @@
 
 #include "netw/predict/engine.hpp"
 #include "netw/predict/sensors.hpp"
+#include "netw/prediction_core.hpp"
 
-#include <godot_cpp/classes/animatable_body2d.hpp>
-#include <godot_cpp/classes/character_body2d.hpp>
-#include <godot_cpp/classes/rigid_body2d.hpp>
-#include <godot_cpp/classes/static_body2d.hpp>
-#include <godot_cpp/classes/static_body3d.hpp>
-#include <godot_cpp/classes/tile_map_layer.hpp>
+#include "godot/physics_body.hpp"
 
 namespace TestNetwPredictSensorLaws {
 
@@ -142,8 +138,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Hosted] static geometry is what every peer holds "
-    "identically, which a body that moves is not"
+    "[Networked][Predict][Hosted][SceneTree] static geometry is what every "
+    "peer holds identically, which a body that moves is not"
 ) {
     StaticBody2D *wall = memnew(StaticBody2D);
     StaticBody3D *floor_3d = memnew(StaticBody3D);
@@ -171,8 +167,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Hosted] the declared support outranks what the "
-    "collider is, and everything unshared is a dynamic entity"
+    "[Networked][Predict][Hosted][SceneTree] the declared support outranks "
+    "what the collider is, and everything unshared is a dynamic entity"
 ) {
     Ref<NetwPredictionEngine> pool;
     pool.instantiate();
@@ -596,6 +592,118 @@ TEST_CASE(
         true,
         true
     ));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted] a witness verdict that never arrived is not "
+    "a verdict of differs"
+) {
+    Ref<NetwPredictionEngine> pool;
+    pool.instantiate();
+    const int64_t slot = witnessing_slot(pool);
+    pool->record_input(slot, 1, 1);
+    const Ref<NetwPredictDrive> drive = pool->open_drive(
+        slot, Dictionary(), 1, 1, 1.0 / 60.0, 1, true, 0, 0, 0, 0
+    );
+    REQUIRE(drive.is_valid());
+    const int64_t at = drive->transition();
+    pool->close_drive(slot, at, 0, 0, 0, 0);
+
+    // A conditional operator waits on "has authority answered", and both
+    // answers are answers. Reading the matched flag alone cannot tell an
+    // unanswered row from one authority disagreed about, so the ladder would
+    // stop waiting the moment the row existed.
+    CHECK_FALSE(pool->witness_judged(slot, at));
+    CHECK_FALSE(pool->witness_row_clean(slot, at, true));
+
+    pool->mark_witness_match(slot, at, false);
+    CHECK(pool->witness_judged(slot, at));
+    CHECK_FALSE(pool->witness_row_clean(slot, at, true));
+
+    pool->mark_witness_match(slot, at, true);
+    CHECK(pool->witness_judged(slot, at));
+
+    // A transition the journal never held is unanswered, not answered false.
+    CHECK_FALSE(pool->witness_judged(slot, 900));
+    CHECK_FALSE(pool->witness_judged(slot + 9000, at));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted] a recorded state that is not a drive result "
+    "bars the two transitions it bounds from judging a rule"
+) {
+    Ref<NetwPredictionEngine> pool;
+    pool.instantiate();
+    const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
+    // A rule is never invoked from here. What the book needs is a slot that
+    // declares one, and any valid callable declares it.
+    pool->set_carry(
+        slot,
+        StringName("spin"),
+        Callable(pool.ptr(), "carry_retired")
+    );
+
+    CHECK(pool->carry_judgeable(slot, 4));
+
+    pool->mark_carry_dirty(slot, 5);
+    // A rule is judged from one recorded state to the next, so the mark bars
+    // the transition ENDING at it as well as the one starting there.
+    CHECK_FALSE(pool->carry_judgeable(slot, 4));
+    CHECK_FALSE(pool->carry_judgeable(slot, 5));
+    CHECK(pool->carry_judgeable(slot, 6));
+
+    for (int at = 0; at < TAPE_HISTORY_LIMIT; ++at) {
+        pool->mark_carry_dirty(slot, 100 + at);
+    }
+    CHECK(pool->carry_judgeable(slot, 5));
+
+    pool->mark_carry_dirty(slot, 500);
+    CHECK_FALSE(pool->carry_judgeable(slot, 500));
+    pool->rewire(slot, carry_field("spin"), carry_field("throttle"));
+    CHECK(pool->carry_judgeable(slot, 500));
+
+    CHECK_FALSE(pool->carry_judgeable(slot + 9000, 1));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted] a slot declaring no rule records no mark"
+) {
+    Ref<NetwPredictionEngine> pool;
+    pool.instantiate();
+    const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
+
+    pool->mark_carry_dirty(slot, 5);
+    CHECK(pool->carry_judgeable(slot, 5));
+}
+
+TEST_CASE("[Networked][Predict][Hosted] the bound topology fingerprint is the "
+          "core's, folding the quantum in and nothing else") {
+    Dictionary facts;
+    facts[StringName("floor")] = true;
+
+    Dictionary folded = facts.duplicate();
+    folded[StringName("quantum")] = 7;
+
+    NETW_CHECK_EQ(
+        netw::NetwPredictionCore::topology_fingerprint(facts, 7),
+        netw::NetwPredictionCore::fact_fingerprint(folded)
+    );
+    NETW_CHECK_EQ(
+        netw::NetwPredictionCore::topology_fingerprint(facts, 7),
+        int64_t(netw::predict::topology_fingerprint(facts, 7))
+    );
+}
+
+TEST_CASE("[Networked][Predict][Hosted] a different quantum is a different "
+          "topology, which is the whole reason it is folded in") {
+    Dictionary facts;
+    facts[StringName("floor")] = true;
+
+    NETW_CHECK_ORDER(
+        netw::NetwPredictionCore::topology_fingerprint(facts, 7),
+        netw::NetwPredictionCore::topology_fingerprint(facts, 8),
+        !=
+    );
 }
 
 } // namespace TestNetwPredictSensorLaws

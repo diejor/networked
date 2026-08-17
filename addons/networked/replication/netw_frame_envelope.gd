@@ -41,31 +41,13 @@ const RpcCore := preload("res://addons/networked/replication/rpc_core.gd")
 # in [code]debug/telemetry/netw_envelope.gd[/code].
 
 ## First datagram byte marking Networked V9 framing sent reliable.
-const CARRIER_MAGIC_RELIABLE := 0x56
+const CARRIER_MAGIC_RELIABLE := NetwCarrierFrame.MAGIC_RELIABLE
 
 ## First datagram byte marking Networked V9 framing sent unreliable.
-const CARRIER_MAGIC_UNRELIABLE := 0x76
+const CARRIER_MAGIC_UNRELIABLE := NetwCarrierFrame.MAGIC_UNRELIABLE
 
 ## First datagram byte marking an unreliable Networked V9 datagram that echoes sequence.
-const CARRIER_MAGIC_UNRELIABLE_ACKED := 0x96
-
-## The SYNC frame flags [code]u8[/code] bit layout, the extension point that
-## keeps a plain (flags [code]0[/code]) frame byte-identical while stamped,
-## acked, windowed, and masked variants ride the same channel. A receiver drops
-## a frame carrying a bit it does not implement.
-## [codeblock]
-## bit0 SYNC_FLAG_STAMPED   a tick varint follows
-## bit1 SYNC_FLAG_ACKED     a reconciliation ack varint follows (requires bit0)
-## bit2 SYNC_FLAG_WINDOWED  a count varint and windowed rows follow (requires bit0)
-## bit3 SYNC_FLAG_TAPED     a trailing prediction tape block follows
-## bit4 SYNC_FLAG_MASKED    a mask varint follows (per-peer volatile diff)
-## bit5-7 reserved
-## [/codeblock]
-const SYNC_FLAG_STAMPED := 1 << 0
-const SYNC_FLAG_ACKED := 1 << 1
-const SYNC_FLAG_WINDOWED := 1 << 2
-const SYNC_FLAG_TAPED := 1 << 3
-const SYNC_FLAG_MASKED := 1 << 4
+const CARRIER_MAGIC_UNRELIABLE_ACKED := NetwCarrierFrame.MAGIC_UNRELIABLE_ACKED
 
 ## Payload families multiplexed over the one carrier pair. The channel byte in
 ## the frame names which handler a payload reaches on the receiver.
@@ -250,6 +232,31 @@ enum Channel {
 	## [method NetwMultiplayer.interest_admits], so a peer can only ever
 	## subscribe to what it may already see.
 	PREDICT_RELAY_REQUEST = 38,
+	## One declared property set's volatile row, diffed per recipient against
+	## what that peer is known to hold and carried as a
+	## [NetwReplicationSend] row frame. The frame is self-addressing: it
+	## carries its own route, its row address within that route, its tick and
+	## its reconciliation ack, so the envelope's component byte is the address
+	## the receiver resolves the binding by.
+	SYNC_ROW = 39,
+	## One declared property set's retained row, carried as a
+	## [NetwReplicationSend] row frame masked to the columns that changed since
+	## the recipient last held it. Reliable and entity-routed, self-addressing
+	## exactly as [constant SYNC_ROW] is.
+	##
+	## The lane it rides is ordered and guaranteed, so the send is its own
+	## proof: the sender advances what it believes the peer holds when the
+	## frame leaves, and no acknowledgement settles it afterward.
+	SYNC_ROW_DELTA = 40,
+	## One declared property set's windowed input row, carried as a
+	## [NetwReplicationSend] row frame that repeats every recent tick still in
+	## flight rather than the newest one alone. Unreliable and entity-routed,
+	## self-addressing exactly as [constant SYNC_ROW] is.
+	##
+	## An input tick is not superseded by a fresher one: the simulation still
+	## owes it a step. Repeating the range heals a loss inside the next frame,
+	## where a retransmit would arrive a round trip after the step it was for.
+	SYNC_ROW_WINDOW = 41,
 }
 
 
@@ -313,201 +320,4 @@ static func unpack_all(framed_bytes: PackedByteArray) -> Array[Dictionary]:
 		if frame.is_empty():
 			break
 		out.append(frame)
-	return out
-
-
-## Encodes one [constant Channel.SYNC] payload per the [constant SYNC_FLAG_STAMPED]
-## flags grammar, the single source of truth for the frame layout every consumed,
-## state, and input set shares. A plain frame ([code]flags[/code] 0) is
-## byte-identical to the bare positional payload, so activating a flag bit extends
-## the frame without re-cutting it.
-##
-## [param frame] carries the fields the [param frame]'s [code]flags[/code] select:
-## [codeblock]
-## ordinal     int     the set ordinal under the route
-## flags       int     SYNC_FLAG_* bits
-## values      Array   positional field values in wire order (the masked subset
-##                     when SYNC_FLAG_MASKED is set)
-## quantizers  Array   parallel bit-packers, aligned to values, null = raw
-## types       Array   parallel Variant types, aligned to values
-## tick        int     authoring tick, written when SYNC_FLAG_STAMPED
-## ack         int     reconciliation ack, written value-plus-one when
-##                     SYNC_FLAG_ACKED so the no-input sentinel -1 rides as zero
-## mask        int     field bitmask, written when SYNC_FLAG_MASKED
-## samples     Array   [[age, row_values], ...] newest first, written when
-##                     SYNC_FLAG_WINDOWED, each row sharing quantizers and types
-## tape        Dictionary {epoch, entries}, written after the value payload when
-##                     SYNC_FLAG_TAPED. Entry indices must be contiguous. Each
-##                     label delta is zigzag encoded with fresh in its low bit.
-## [/codeblock]
-## A [constant SYNC_FLAG_WINDOWED] frame carries its sample rows in place of the
-## top-level [code]values[/code], and the two never combine with each other or
-## with [constant SYNC_FLAG_MASKED].
-static func encode_sync_frame(frame: Dictionary) -> PackedByteArray:
-	var flags: int = frame.get("flags", 0)
-	var quantizers: Array = frame.get("quantizers", [])
-	var types: Array = frame.get("types", [])
-	var w := NetwBitBufferWriter.new()
-	NetwCodec.put_varint(w, int(frame.get("ordinal", 0)))
-	w.put_aligned_u8(flags)
-	if flags & SYNC_FLAG_STAMPED:
-		NetwCodec.put_varint(w, int(frame.get("tick", -1)))
-	if flags & SYNC_FLAG_ACKED:
-		NetwCodec.put_varint(w, int(frame.get("ack", -1)) + 1)
-	if flags & SYNC_FLAG_MASKED:
-		NetwCodec.put_varint(w, int(frame.get("mask", 0)))
-	if flags & SYNC_FLAG_WINDOWED:
-		var samples: Array = frame.get("samples", [])
-		NetwCodec.put_varint(w, samples.size())
-		for sample: Array in samples:
-			NetwCodec.put_varint(w, int(sample[0]))
-			var row: Array = sample[1]
-			var row_types: Array = _value_types(row, types)
-			NetwScriptModel.write_values(w, row, quantizers, row_types)
-	else:
-		var values: Array = frame.get("values", [])
-		NetwScriptModel.write_values(w, values, quantizers, _value_types(values, types))
-	if flags & SYNC_FLAG_TAPED:
-		_encode_tape(w, frame.get("tape", { }))
-	return w.to_bytes()
-
-
-## Decodes one [constant Channel.SYNC] payload written by
-## [method encode_sync_frame]. [param quantizers] and [param types] are the full
-## set's parallel arrays in wire order, so a [constant SYNC_FLAG_MASKED] frame
-## reads only the fields named by the mask against the matching subset. Returns
-## the decoded frame:
-## [codeblock]
-## ordinal  int            the set ordinal
-## flags    int            the raw flags byte
-## tick     int            authoring tick, or -1 when not stamped
-## ack      int            reconciliation ack, or -1 when not acked
-## mask     int            field bitmask, or 0 when not masked
-## indices  Array[int]     the masked field positions, empty when not masked
-## values   Array          decoded values (the masked subset when masked)
-## samples  Array          [[age, row_values], ...] when windowed, else empty
-## tape_epoch int          prediction tape epoch, or -1 when not taped
-## entries  Array          [{index, label, fresh}, ...] when taped, else empty
-## [/codeblock]
-static func decode_sync_frame(
-		payload: PackedByteArray,
-		quantizers: Array,
-		types: Array,
-) -> Dictionary:
-	var r := NetwBitBufferReader.create(payload)
-	var out := {
-		"ordinal": NetwCodec.get_safe_varint(r),
-		"flags": r.get_aligned_u8(),
-		"tick": -1,
-		"ack": -1,
-		"mask": 0,
-		"indices": [] as Array[int],
-		"values": [] as Array,
-		"samples": [] as Array,
-		"tape_epoch": -1,
-		"entries": [] as Array,
-	}
-	var flags: int = out["flags"]
-	if flags & SYNC_FLAG_STAMPED:
-		out["tick"] = NetwCodec.get_safe_varint(r)
-	if flags & SYNC_FLAG_ACKED:
-		out["ack"] = NetwCodec.get_safe_varint(r) - 1
-	if flags & SYNC_FLAG_MASKED:
-		out["mask"] = NetwCodec.get_safe_varint(r)
-	if flags & SYNC_FLAG_WINDOWED:
-		var count := NetwCodec.get_safe_varint(r)
-		var samples: Array = []
-		for _i in count:
-			var age := NetwCodec.get_safe_varint(r)
-			samples.append([age, NetwScriptModel.read_values(r, quantizers, types)])
-		out["samples"] = samples
-	elif flags & SYNC_FLAG_MASKED:
-		var indices: Array[int] = []
-		var sel_q: Array = []
-		var sel_t: Array = []
-		var mask: int = out["mask"]
-		for i in quantizers.size():
-			if mask & (1 << i):
-				indices.append(i)
-				sel_q.append(quantizers[i])
-				sel_t.append(types[i] if i < types.size() else TYPE_NIL)
-		out["indices"] = indices
-		out["values"] = NetwScriptModel.read_values(r, sel_q, sel_t)
-	else:
-		out["values"] = NetwScriptModel.read_values(r, quantizers, types)
-	if flags & SYNC_FLAG_TAPED:
-		_decode_tape(r, out)
-	return out
-
-
-# Writes a contiguous entry window after the ordinary SYNC payload.
-static func _encode_tape(
-		w: NetwBitBufferWriter,
-		tape: Dictionary,
-) -> void:
-	var entries: Array = tape.get("entries", [])
-	var count := mini(entries.size(), 255)
-	var first := maxi(0, entries.size() - count)
-	w.put_aligned_u8(int(tape.get("epoch", 0)))
-	var base_index := 0
-	if count > 0:
-		base_index = int((entries[first] as Dictionary).get("index", 0))
-	NetwCodec.put_varint(w, base_index)
-	w.put_aligned_u8(count)
-	var previous_label := 0
-	for i in range(first, entries.size()):
-		var entry := entries[i] as Dictionary
-		var label := int(entry.get("label", -1))
-		var encoded_delta := _encode_zigzag(label - previous_label)
-		var tagged_delta := encoded_delta << 1
-		if bool(entry.get("fresh", false)):
-			tagged_delta |= 1
-		NetwCodec.put_varint(w, tagged_delta)
-		previous_label = label
-
-
-# Reads the contiguous entry window written by [_encode_tape].
-static func _decode_tape(
-		r: NetwBitBufferReader,
-		out: Dictionary,
-) -> void:
-	var epoch := r.get_aligned_u8()
-	var base_index := NetwCodec.get_safe_varint(r)
-	var count := r.get_aligned_u8()
-	var entries: Array = []
-	var previous_label := 0
-	for offset in count:
-		var tagged_delta := NetwCodec.get_safe_varint(r)
-		if tagged_delta < 0:
-			break
-		var encoded_delta := tagged_delta >> 1
-		var label := previous_label + _decode_zigzag(encoded_delta)
-		entries.append(
-			{
-				"index": base_index + offset,
-				"label": label,
-				"fresh": bool(tagged_delta & 1),
-			},
-		)
-		previous_label = label
-	out["tape_epoch"] = epoch
-	out["entries"] = entries
-
-
-static func _encode_zigzag(value: int) -> int:
-	return (value << 1) if value >= 0 else ((-value << 1) - 1)
-
-
-static func _decode_zigzag(value: int) -> int:
-	return (value >> 1) if value & 1 == 0 else -((value >> 1) + 1)
-
-
-# Fills a per-value type array when the caller passed none, so raw values still
-# self-describe on the wire the way write_values reads them back.
-static func _value_types(values: Array, types: Array) -> Array:
-	if not types.is_empty():
-		return types
-	var out: Array = []
-	for v in values:
-		out.append(typeof(v))
 	return out

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayPlayhead" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Where one entity's display is looking, and the jitter buffer that decides it.
+	</brief_description>
+	<description>
+		[member display_lag] is carried signed, so a forecasting playhead leads the newest tick the same way a dilating one trails it.
+		Two rules make the buffer settle instead of chasing. [member smoothed_floor] eases toward what the link currently needs rather than taking it whole, and [member display_lag] only grows at the starvation rate once starvation has outlasted [member NetwDisplayDecl.starvation_grace_frames], so one late frame costs nothing.
+		[codeblock]
+		var dt := playhead.effective_tick(timing.display_tick)
+		var starving := not history.has_tick_after(dt)
+		playhead.dilate(decl, timing.frame_ticks, offset, recommended, starving)
+		[/codeblock]
+		Whether a history holds a sample is not this record's business, which is why [method dilate] is told that it starves rather than asked to find out.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="dilate">
+			<return type="void" />
+			<param index="0" name="decl" type="NetwDisplayDecl" />
+			<param index="1" name="frame_ticks" type="float" />
+			<param index="2" name="display_offset" type="int" />
+			<param index="3" name="recommended_offset" type="int" />
+			<param index="4" name="starving" type="bool" />
+			<description>
+				Takes one control step: eases [member smoothed_floor] toward [method min_lag], counts the starvation, and moves [member display_lag]. Under the grace window the lag adapts toward the floor at [member NetwDisplayDecl.lag_adapt_rate]; past it the lag grows by [member NetwDisplayDecl.starvation_growth] of the frame, bounded by the floor plus [member NetwDisplayDecl.max_extra_dilation], so a starving stream buys margin without unbounded delay. Dilating without [param decl] is refused.
+			</description>
+		</method>
+		<method name="effective_tick" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="clock_display_tick" type="int" />
+			<description>
+				The newest tick a history must hold for this playhead not to be starving, which is the clock's display tick moved back by the whole ticks of [member display_lag].
+			</description>
+		</method>
+		<method name="place">
+			<return type="float" />
+			<param index="0" name="clock_display_tick" type="int" />
+			<param index="1" name="tick_factor" type="float" />
+			<param index="2" name="bracketed" type="bool" />
+			<description>
+				Moves [member display_tick] to where this pump samples, and answers the fractional position inside that tick. A [param bracketed] playhead follows the clock one whole tick behind and drops its [member display_lag], because the peer that authors the stream has nothing to wait for. Every other playhead samples [member display_lag] behind the clock, fraction and all.
+			</description>
+		</method>
+		<method name="min_lag" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="decl" type="NetwDisplayDecl" />
+			<param index="1" name="display_offset" type="int" />
+			<param index="2" name="recommended_offset" type="int" />
+			<description>
+				The lag the link currently needs, in ticks: one snapshot interval plus a tick, less what the clock already trails by, plus whatever the clock recommends beyond that. A [constant NetwDisplayDecl.TIMELINE_FORECAST] timeline needs none, because it targets the newest sample and its tail projection covers the gaps a jitter buffer would have covered by waiting.
+			</description>
+		</method>
+		<method name="settle">
+			<return type="void" />
+			<param index="0" name="decl" type="NetwDisplayDecl" />
+			<param index="1" name="display_offset" type="int" />
+			<param index="2" name="recommended_offset" type="int" />
+			<description>
+				Places the playhead at [method min_lag] rather than easing onto it, and forgets the starvation. This is what a reset means: there is no history left to be late.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="display_lag" type="float" setter="set_display_lag" getter="get_display_lag" default="0.0">
+			Ticks this display trails the clock's display tick by, signed.
+		</member>
+		<member name="display_tick" type="int" setter="set_display_tick" getter="get_display_tick" default="-1">
+			The tick the last pump sampled at, or [code]-1[/code] before the first one.
+		</member>
+		<member name="expected_interval_ticks" type="int" setter="set_expected_interval_ticks" getter="get_expected_interval_ticks" default="3">
+			Ticks between snapshots this stream expects, the width [method min_lag] buffers.
+		</member>
+		<member name="smoothed_floor" type="float" setter="set_smoothed_floor" getter="get_smoothed_floor" default="0.0">
+			The lag floor the buffer is easing toward, so it settles rather than chasing every sample.
+		</member>
+		<member name="starvation_ticks" type="int" setter="set_starvation_ticks" getter="get_starvation_ticks" default="0">
+			Consecutive dilations that found nothing new to show, reset by the first that does.
+		</member>
+	</members>
+</class>

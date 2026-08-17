@@ -147,8 +147,8 @@ func test_a_manager_less_harness_declares_and_spawns_a_scene() -> void:
 
 func _wait_for_mirror(route: int, frames: int = 120) -> Node:
 	for i in frames:
-		if client0.api.route_get_state(route) \
+		if client0.api.entity_get_state(client0.api.entity_from_route(route)) \
 				== NetwMultiplayer.EntityState.LIVE:
-			return client0.api.entity_get_node(client0.api.rid_from_route(route))
+			return client0.api.entity_get_node(client0.api.entity_from_route(route))
 		await get_tree().process_frame
 	return null

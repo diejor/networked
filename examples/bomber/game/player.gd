@@ -37,8 +37,8 @@ var current_anim: String = ""
 # [TestBomberGameHarness] asserts its answers.
 func _init() -> void:
 	var entity := NetwEntity.resolve(self)
-	entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
-	entity.on_controller_disconnect = NetwEntity.DisconnectRule.DESPAWN
+	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+	entity.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 
 	var position_quantizer := NetwQuantizeFixed.new()
 	position_quantizer.resolution_step = 5.0
@@ -81,7 +81,7 @@ func _init() -> void:
 # disagree with the history it is replayed against.
 func _advance_position(
 		value: Vector2,
-		ctx: NetwPredictionHandle.CarryContext,
+		ctx: NetwPredictCarryContext,
 ) -> Vector2:
 	return value + (ctx.state.get(&"velocity", Vector2.ZERO) as Vector2) \
 			* ctx.delta

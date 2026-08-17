@@ -97,7 +97,8 @@ func _client_stale_drops() -> int:
 func test_state_stream_applies_strictly_forward_under_reorder() -> void:
 	await _setup_pair()
 
-	var server_binding := NetwEntity.of(server_root).state_binding
+	var server_binding: NetwPropertySetBinding = NetwEntity.of(server_root) \
+			.state_binding
 	server_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			server_binding.authored_tick = t
@@ -146,7 +147,8 @@ func test_masked_state_stream_never_corrupts_under_loss_and_converges() -> void:
 	# merges a masked field onto a baseline it never actually held.
 	await _setup_pair(MaskedStateSyncBody)
 
-	var server_binding := NetwEntity.of(server_root).state_binding
+	var server_binding: NetwPropertySetBinding = NetwEntity.of(server_root) \
+			.state_binding
 	var received: Array[int] = []
 	# GDScript lambdas capture outer locals by value: a plain int/float mutated
 	# inside a closure never propagates back to the enclosing scope. Box the
@@ -183,11 +185,9 @@ func test_masked_state_stream_never_corrupts_under_loss_and_converges() -> void:
 	# The lane still healed some frames despite the impairment.
 	assert_int(_client_stale_drops()).is_greater(0)
 
-	# The masked lane's own counters observed real sends, and some of them were
-	# full-row heals (the gain edge, or the impaired link forcing a re-heal).
 	var server_snap := server.api.stats_snapshot()
-	assert_int(int(server_snap[&"masked_frames_out"])).is_greater(0)
-	assert_int(int(server_snap[&"masked_frames_full"])).is_greater(0)
+	assert_int(int(server_snap[&"row_frames_out"])).is_greater(0)
+	assert_int(int(server_snap[&"row_frames_full"])).is_greater(0)
 
 	# Converges to the exact final authored value once the link heals, proving
 	# the confirmed baseline eventually catches up rather than staying stuck on

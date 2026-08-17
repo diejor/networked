@@ -296,17 +296,34 @@ peers.
 ### 8.1 Bit-stream vocabulary and alignment
 
 All data streams sequentially through `WriteStream` and `ReadStream` bit by
-bit, using little-endian bit packing.
+bit, using little-endian bit packing: within a byte the first bit written is
+bit 0, and a value wider than the space left in the current byte continues
+into the next byte from its own low end.
 
-- **`bits(value, width)`**: Writes or reads `width` bits (1 to 64) for unsigned
-  integer representations.
-- **`int_range(value, min, max)`**: Encodes `value - min` in
-  `ceil(log2(max - min + 1))` bits.
+- **`bits(value, width)`**: Writes or reads `width` bits (0 to 64) of an
+  unsigned value, low bit first. A value with any bit set above `width`
+  poisons the stream rather than truncating.
+- **`int_range(value, min, max)`**: `bits(value - min, w)` where `w` is the
+  number of bits needed to hold `max - min`, which is
+  `ceil(log2(max - min + 1))` and is **0 when `min == max`**: a range of one
+  value occupies no bits at all.
 - **`bool1(flag)`**: 1 bit (0 or 1).
-- **`bytes_capped(data, max_len)`**: Varint-length prefix followed by byte
-  payload.
+- **`varuint(value, max_bytes)`**: Byte-aligns the stream first, then base-128
+  little-endian groups: each byte carries seven value bits low-first and its
+  top bit set on every byte but the last. At most `max_bytes` groups, 1 to 10.
+  The encoding is **canonical**: a final group of zero after a first group is
+  a redundant spelling and a reader refuses it rather than accepting a second
+  encoding of one number.
+- **`svarint(value, max_bytes)`**: `varuint` of the zigzag fold,
+  `(value << 1) ^ (value >> 63)`, so a small negative costs what a small
+  positive costs.
+- **`bytes_capped(data, cap)`**: `int_range(length, 0, cap)`, then
+  `align_verify()`, then the raw bytes. The length prefix is a **range, not a
+  varint**: the cap is known to both peers, so the prefix costs
+  `ceil(log2(cap + 1))` bits rather than a whole byte.
 - **`align_verify()`**: Flushes trailing bits to the next byte boundary and
-  verifies strict byte alignment.
+  verifies strict byte alignment. `varuint`, `svarint` and the payload half of
+  `bytes_capped` are byte-aligned by construction; nothing else is.
 
 ### 8.2 DeltaMode::AUTO and ladder selection
 

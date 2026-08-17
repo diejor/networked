@@ -23,6 +23,18 @@ bool encode_scalar_row(
     CodeRow &r_row
 );
 
+/* Encodes into a row sized for `p_plan`, leaving `r_row` alone on refusal.
+ *
+ * A half-gathered row is worse than no row: it diffs as though the columns the
+ * encode never reached had not moved, so the lane stops sending them.
+ */
+bool gather_scalar_row(
+    const godot::Ref<SchemaRecord> &p_schema,
+    const WirePlan &p_plan,
+    const godot::Array &p_values,
+    CodeRow &r_row
+);
+
 bool decode_scalar_row(
     const godot::Ref<SchemaRecord> &p_schema,
     const CodeRow &p_row,

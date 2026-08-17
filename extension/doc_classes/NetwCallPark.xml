@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwCallPark" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The calls that arrived before the route they address, and the budget one sender may hold there.
+	</brief_description>
+	<description>
+		A parked call is identified by an id rather than by its position, because [method sweep] moves rows and the thing that resolves a call is a closure written when it was parked. [method resolve] answers whether the call was still waiting, so a call that already ran or already timed out cannot run a second time.
+		The per-sender budget of 100 is what keeps a peer naming routes nobody has from growing the book without bound. A refused park is counted by [method refused], never queued, so the refusal is visible as a number rather than as a delay.
+		[codeblock]
+		var id := park.park(sender, route, tick + timeout)
+		if id &lt; 0:
+		    return                       # this sender is at its budget
+		api.when_live(route, func():
+		    if park.resolve(id):
+		        run_the_call())
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="active_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="sender" type="int" />
+			<description>
+				How many rows [param sender] holds, whether or not they have run. A row stops counting when [method sweep] drops it.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Drops every row and the refusal count with them. The count is a session statistic, and one carried across sessions would attribute one session's budget pressure to the next.
+			</description>
+		</method>
+		<method name="park">
+			<return type="int" />
+			<param index="0" name="sender" type="int" />
+			<param index="1" name="route" type="int" />
+			<param index="2" name="deadline" type="int" />
+			<description>
+				Parks one call against [param route] and answers its id, or [code]-1[/code] when [param sender] is at its budget. The deadline is a tick the caller reads from its own clock, because this book has none.
+			</description>
+		</method>
+		<method name="refused" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many parks the budget refused this session.
+			</description>
+		</method>
+		<method name="resolve">
+			<return type="bool" />
+			<param index="0" name="id" type="int" />
+			<description>
+				Marks the call [param id] names as run, and answers whether it was still waiting. It answers [code]true[/code] exactly once, which is what stops a route that binds twice from running one call twice.
+			</description>
+		</method>
+		<method name="route_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="id" type="int" />
+			<description>
+				The route [param id] was parked against, or [code]0[/code] once its row is gone.
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Rows still in the book, run and waiting alike, until the next [method sweep].
+			</description>
+		</method>
+		<method name="sweep">
+			<return type="void" />
+			<param index="0" name="now" type="int" />
+			<description>
+				Drops every row that has run and every row whose deadline [param now] has reached, so the budget counts only calls that are still owed an answer.
+			</description>
+		</method>
+	</methods>
+</class>

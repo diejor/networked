@@ -64,8 +64,7 @@ func test_flush_now_leaves_nothing_for_the_settle() -> void:
 
 # How many interest flushes the session has queued for its next settle.
 func _queued_flushes() -> int:
-	var queued := 0
-	for row: Dictionary in mt.api._settle_queue:
-		if row["key"] == InterestCore.VISIBILITY_SETTLE_KEY:
-			queued += 1
-	return queued
+	var pending := mt.api._native_core.settle_has_key(
+		InterestCore.VISIBILITY_SETTLE_KEY,
+	)
+	return 1 if pending else 0

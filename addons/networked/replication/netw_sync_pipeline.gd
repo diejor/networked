@@ -3,7 +3,8 @@
 ## [NetwPropertySetBinding], the on-demand [method Netw.sync_property] and
 ## [method Netw.emit_entity_signal] sends, and the receive-side apply for the
 ## [constant NetwFrameEnvelope.Channel.SYNC],
-## [constant NetwFrameEnvelope.Channel.SYNC_DELTA],
+## [constant NetwFrameEnvelope.Channel.SYNC_ROW],
+## [constant NetwFrameEnvelope.Channel.SYNC_ROW_DELTA],
 ## [constant NetwFrameEnvelope.Channel.PROPERTY_SYNC], and
 ## [constant NetwFrameEnvelope.Channel.SIGNAL] channels.
 ##
@@ -15,8 +16,8 @@
 ## through [method clear_route] and never outlives the node it tracked.
 ## [codeblock]
 ## two cadences over one carrier, both leaving on the tick flush:
-##   TICK       on_clock_tick -> pump -> each authored set's SYNC frame
-##              (volatile row) and SYNC_DELTA frames (retained lane)
+##   TICK       on_clock_tick -> pump -> each authored set's SYNC_ROW frame
+##              (volatile row) and SYNC_ROW_DELTA frames (retained lane)
 ##   ON_DEMAND  sync_property / emit_entity_signal -> one PROPERTY_SYNC /
 ##              SIGNAL frame; the server broadcasts, a client asks the server
 ## [/codeblock]
@@ -50,6 +51,8 @@ extends RefCounted
 
 const CodeTap := preload("res://addons/networked/replication/code_tap.gd")
 
+const _CONTRACT_CHECK_KEY_PREFIX := "sync-prediction-contract?"
+
 # The owning NetwMultiplayer. A weakref because the owner holds this pipeline
 # strongly through ReplicationCore and both are reference counted.
 var _api_ref: WeakRef
@@ -65,23 +68,17 @@ var _derived_bindings: Array[NetwPropertySetBinding] = []
 # component contract. Kept across rewires so one unchanged mistake warns once.
 var _prediction_contract_hashes: Dictionary[int, int] = { }
 
-# Engine-owned freshness and pending masked-send books.
+# Engine-owned datagram freshness books.
 var _progress := NetwSyncProgress.new()
 
-# route -> { ordinal: schema hash } decoded from a SPAWN frame's derived-set
-# descriptor section, validated lazily against a binding the first frame it
-# receives. Ordinals are the unified space, so a derived ordinal is offset above
-# the route's consumed set count.
-var _derived_pending_schema: Dictionary = { }
-
-# Receiver: a SYNC or SYNC_DELTA ordinal above the consumed count named no
-# derived binding on this peer.
+# Receiver: a frame's own row address named no derived binding on this peer, or
+# a SYNC ordinal above the consumed count named none.
 var _drops_derived_no_set: int = 0
 # Receiver: a derived frame's sender is not the set's authorized author.
 var _drops_derived_bad_sender: int = 0
 # Receiver: a derived set's schema hash disagreed with the spawn descriptor.
 var _drops_derived_schema: int = 0
-# Receiver: a derived volatile or delta frame applied.
+# Receiver: a derived frame applied, on either lane.
 var _derived_frames_in: int = 0
 
 # Receiver: an unreliable frame arrived in a datagram staler than one already
@@ -102,15 +99,15 @@ var _pump_skips_no_recipients: int = 0
 
 var _property_signal_router: _PropertySignalRouter
 
-# Sender: a masked-lane frame actually sent this pass (mask != 0). A caught-up
-# peer that costs nothing this pass is not counted.
-var _masked_frames_out: int = 0
-# Sender: of the above, a frame where every field masked in -- the gain edge
-# (an absent baseline) or a coincidental all-fields-changed pass. A high ratio
-# against masked_frames_out means the lane is spending mostly on full-row
-# heals, the signal that loss or churn is defeating the bandwidth win.
-var _masked_frames_full: int = 0
+var _row_sender: NetwReplicationSend = null
 
+var _row_frames_out: int = 0
+var _row_frames_full: int = 0
+var _row_frames_refused_by_stage: int = 0
+var _row_frames_ungathered: int = 0
+var _retained_frames_out: int = 0
+var _window_frames_out: int = 0
+var _window_samples_out: int = 0
 
 func _init(api: NetwMultiplayer) -> void:
 	_api_ref = weakref(api) if api else null
@@ -128,6 +125,34 @@ func _api() -> NetwMultiplayer:
 func _repl() -> ReplicationCore:
 	var api := _api()
 	return api._replication if api else null
+
+
+func _row_send() -> NetwReplicationSend:
+	if _row_sender == null:
+		_row_sender = NetwReplicationSend.new()
+		_row_sender.declare_channel(
+			NetwFrameEnvelope.Channel.SYNC_ROW,
+			&"SYNC_ROW",
+			true,
+		)
+		_row_sender.set_encode_stage(_stage_row_frame)
+	return _row_sender
+
+
+func _stage_row_frame(
+		peer: int,
+		frame_tick: int,
+		_route: int,
+		_comp: int,
+		_mask: int,
+		bytes: PackedByteArray,
+) -> PackedByteArray:
+	return _run_encode_stage(
+		peer,
+		frame_tick,
+		func(_peer: int, _tick: int) -> PackedByteArray:
+			return bytes,
+	)
 
 
 ## Registers the derived state and input bindings [param node]'s script declares
@@ -237,10 +262,15 @@ func _queue_prediction_contract_check(
 	if _prediction_contract_hashes.get(instance_id, 0) == config_hash:
 		return
 	_prediction_contract_hashes[instance_id] = config_hash
-	_report_missing_prediction_component.call_deferred(
-		weakref(node),
-		config_hash,
-	)
+	var api := _api()
+	if api:
+		api._settle_schedule(
+			_report_missing_prediction_component.bind(
+				weakref(node),
+				config_hash,
+			),
+			StringName("%s%d" % [_CONTRACT_CHECK_KEY_PREFIX, instance_id]),
+		)
 
 
 # Reports the contradiction only after code-first registration and scene child
@@ -286,7 +316,7 @@ func _register_state_timeline(node: Node) -> void:
 		return
 	var entity := NetwEntity.of(node)
 	if entity:
-		api.timeline_declare(api.rid_of(entity.owner))
+		api.timeline_declare(api.entity_of(entity.owner))
 
 
 # Drops the entity's rewind history when its state set unregisters, unless it is
@@ -298,7 +328,7 @@ func _unregister_state_timeline(node: Node) -> void:
 	var entity := NetwEntity.of(node)
 	if not entity or (entity.reparenting and entity.reparenting.preserve_history):
 		return
-	api.timeline_undeclare(api.rid_of(entity.owner))
+	api.timeline_undeclare(api.entity_of(entity.owner))
 
 
 ## Returns the derived [NetwPropertySetBinding] [param node] declares for
@@ -338,35 +368,34 @@ func _prune_derived() -> void:
 
 
 ## Pumps every derived [constant NetwPropertySet.Cadence.TICK] binding for
-## [param tick] onto the shared [constant NetwFrameEnvelope.Channel.SYNC] and
-## [constant NetwFrameEnvelope.Channel.SYNC_DELTA] lanes. The per-peer flush
-## that follows is a carrier concern owned by [ReplicationCore].
+## [param tick] onto the [constant NetwFrameEnvelope.Channel.SYNC_ROW] and
+## [constant NetwFrameEnvelope.Channel.SYNC_ROW_DELTA] lanes. The per-peer
+## flush that follows is a carrier concern owned by [ReplicationCore].
 func pump(tick: int) -> void:
 	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	var native_core := api._native_core if api else null
+	if not native_core:
 		return
 	var repl := _repl()
 	if not repl:
 		return
-	_pump_derived(tick, liveness, repl)
+	_pump_derived(tick, native_core, repl)
 
 
-# Pumps every active derived binding: each set's volatile row on the shared
-# SYNC frame and its retained lane on the per-recipient SYNC_DELTA. A set's
-# ordinal comes from the registration-time declaration model, where consumed
-# rows precede derived rows. The author gate follows the set's record and policy.
-# The server authors state sets and controllers author input sets. Recipients
-# follow its audience (every admitted peer for a public set, the server alone
-# for a server-only input set).
+# Pumps every active derived binding: both of a set's lanes are offered whole
+# to NetwReplicationSend, which decides what each recipient is owed. The row a
+# binding declared answers both gates, through
+# [method NetwSyncModel.authors] and [method NetwSyncModel.recipients].
 func _pump_derived(
 		tick: int,
-		liveness: LivenessShell,
+		native_core: NetwMultiplayerCore,
 		repl: ReplicationCore,
 ) -> void:
 	var api := _api()
 	if not api:
 		return
+	var row_send := _row_send()
+	var offers: Array = []
 	_prune_derived()
 	for binding: NetwPropertySetBinding in _derived_bindings.duplicate():
 		var node := binding.node()
@@ -383,17 +412,9 @@ func _pump_derived(
 		if route <= 0:
 			_pump_skips_no_route += 1
 			continue
-		if not _derived_author_ok(binding, entity, node):
-			_pump_skips_not_author += 1
-			continue
-		var recipients := _derived_recipients(binding, entity)
-		if recipients.is_empty():
-			_pump_skips_no_recipients += 1
-			continue
-
 		var row := repl.sync_model.row_for(
 			route,
-			NetwSyncModel.Kind.DERIVED,
+			NetwSyncModel.Kind.KIND_DERIVED,
 			binding.order_key,
 			binding.set.record,
 		)
@@ -402,105 +423,123 @@ func _pump_derived(
 			continue
 		var ordinal := row.ordinal
 
+		var local_id := api.get_unique_id()
+		if not repl.sync_model.authors(
+				route,
+				ordinal,
+				local_id,
+				node.is_multiplayer_authority(),
+				entity.controller,
+		):
+			_pump_skips_not_author += 1
+			continue
+		var recipients := repl.sync_model.recipients(
+			route,
+			ordinal,
+			local_id,
+			PackedInt32Array(api._replication.live_peers(entity)),
+		)
+		if recipients.is_empty():
+			_pump_skips_no_recipients += 1
+			continue
+
 		# A prediction engine authors the frame's tick and reconciliation ack
 		# through the binding. Absent an engine, the frame stamps the pump's tick
 		# and the -1 no-input sentinel, the plain-state cadence.
 		var frame_tick := binding.authored_tick if binding.authored_tick >= 0 else tick
 		if CodeTap.armed():
 			CodeTap.record(binding, route, frame_tick)
-		if binding.set.masked:
-			# A masked set's mask differs by recipient (each peer's own confirmed
-			# baseline), so the frame cannot be shared like the plain volatile row
-			# below; it is computed and sent per recipient. The row those masks
-			# are diffed against does not differ, so the node is read once for the
-			# whole loop, the way the retained lane below polls once.
-			if not binding.volatile_external:
-				binding.poll_masked()
-				if binding.has_masked_row():
-					for peer_id in recipients:
-						var masked_bytes := _run_encode_stage(
-							peer_id,
-							frame_tick,
-							func(_peer: int, _tick: int) -> PackedByteArray:
-								var result := binding.masked_delta_for(
-									ordinal,
-									peer_id,
-									frame_tick,
-									binding.reconcile_ack,
-								)
-								api._sync_encode_meta = result
-								return result.get(
-									&"bytes",
-									PackedByteArray(),
-								),
-						)
-						if masked_bytes.is_empty():
-							continue
-						var masked := api._sync_encode_meta
-						repl.send_to(
-							peer_id,
-							route,
-							NetwFrameEnvelope.Channel.SYNC,
-							masked_bytes,
-							false,
-							0,
-							"",
-							true,
-						)
-						_stage_pending_masked(peer_id, binding, masked["row"])
-						_masked_frames_out += 1
-						if masked["full"]:
-							_masked_frames_full += 1
-			# A confirmed baseline (or in-flight row) held against a peer no longer
-			# a recipient must not survive to its next admission, so absence heals
-			# the full masked row on gain, matching the retained lane's rule below.
-			binding.retain_masked_baselines(recipients)
-		elif not binding.volatile_external:
-			for peer_id in recipients:
-				var bytes := _run_encode_stage(
-					peer_id,
-					frame_tick,
-					func(_peer: int, _tick: int) -> PackedByteArray:
-						return binding.encode_volatile(
-							ordinal,
-							frame_tick,
-							binding.reconcile_ack,
-						),
-				)
-				if not bytes.is_empty():
-					repl.send_to(
-						peer_id,
-						route,
-						NetwFrameEnvelope.Channel.SYNC,
-						bytes,
-						false,
-						0,
-						"",
-						true,
-					)
+		if not binding.volatile_external:
+			var values := binding.volatile_row()
+			if not values.is_empty():
+				var windowed := binding.is_windowed() and not binding.set.masked
+				offers.append({
+					"route": route,
+					"comp": ordinal,
+					"channel": NetwFrameEnvelope.Channel.SYNC_ROW_WINDOW \
+					if windowed else NetwFrameEnvelope.Channel.SYNC_ROW,
+					"schema": binding.set.volatile_schema,
+					"values": values,
+					"recipients": recipients,
+					"tick": frame_tick,
+					"ack": binding.reconcile_ack,
+					"masked": binding.set.masked and not windowed,
+					"windowed": windowed,
+					"window": binding.set.window,
+					"priority": 1.0,
+				})
 
-		binding.poll_retained()
-		for peer_id in recipients:
-			var delta := _run_encode_stage(
-				peer_id,
-				frame_tick,
-				func(_peer: int, _tick: int) -> PackedByteArray:
-					return binding.retained_delta(ordinal, peer_id),
-			)
-			if not delta.is_empty():
-				repl.send_to(
-					peer_id,
-					route,
-					NetwFrameEnvelope.Channel.SYNC_DELTA,
-					delta,
-					true,
-					0,
-					"",
-					true,
-				)
-		# A baseline held against a peer no longer a recipient must not survive to
-		# its next admission, so absence heals the full retained row.
-		binding.retain_baselines(recipients)
+		var retained := binding.retained_row()
+		if not retained.is_empty():
+			offers.append({
+				"route": route,
+				"comp": ordinal,
+				"channel": NetwFrameEnvelope.Channel.SYNC_ROW_DELTA,
+				"schema": binding.set.retained_schema,
+				"values": retained,
+				"recipients": recipients,
+				"tick": -1,
+				"ack": -1,
+				"reliable": true,
+				"priority": 1.0,
+			})
+		# A baseline held against a peer no longer a recipient must not survive
+		# to its next admission, so absence heals the full retained row.
+		row_send.retain_row(route, ordinal, recipients)
+
+	_flush_row_offers(offers, repl)
+
+
+func _flush_row_offers(offers: Array, repl: ReplicationCore) -> void:
+	if offers.is_empty():
+		return
+	var result: Dictionary = _row_send().run_deferred(offers)
+	var sends: Array = result["sends"]
+	var api := _api()
+	if api:
+		api.report_event(
+			NetwMultiplayerCore.GATHER,
+			0,
+			{ offers = offers.size(), sends = sends.size() },
+		)
+	for at in sends.size():
+		var send: Dictionary = sends[at]
+		var reliable := bool(send.get("reliable", false))
+		repl.send_to(
+			int(send["peer"]),
+			int(send["route"]),
+			_lane_channel(send),
+			send["bytes"],
+			reliable,
+			0,
+			"",
+			true,
+		)
+		# The frame is in the carrier now, so this row waits for the datagram
+		# it is actually in. A run that overflowed during the hand-off above
+		# already went out, and the rows it carried were bound to it there.
+		_row_send().confirm(at)
+		if reliable:
+			_retained_frames_out += 1
+			continue
+		if bool(send.get("windowed", false)):
+			_window_frames_out += 1
+			_window_samples_out += int(send.get("samples", 0))
+			continue
+		_row_frames_out += 1
+		if bool(send.get("whole", false)):
+			_row_frames_full += 1
+	_row_frames_refused_by_stage += int(result.get("staged_out", 0))
+	_row_frames_ungathered += int(result.get("ungathered", 0))
+
+
+# The channel one send rides, which is the lane shape the pass answered with.
+func _lane_channel(send: Dictionary) -> NetwFrameEnvelope.Channel:
+	if bool(send.get("reliable", false)):
+		return NetwFrameEnvelope.Channel.SYNC_ROW_DELTA
+	if bool(send.get("windowed", false)):
+		return NetwFrameEnvelope.Channel.SYNC_ROW_WINDOW
+	return NetwFrameEnvelope.Channel.SYNC_ROW
 
 
 # Routes one encode through the installed independent virtual stage.
@@ -516,76 +555,29 @@ func _run_encode_stage(
 	api._sync_encode_meta = { }
 	var bytes := api._sync_encode(peer, tick)
 	api._sync_encoder = Callable()
+	api.report_event(
+		NetwMultiplayerCore.SYNC_ENCODE,
+		0,
+		{ bytes = bytes.size() },
+		peer,
+	)
 	return bytes
-
-
-# True when the local peer may author [param binding]'s stream this pass: the
-# node authority for a set policed by the authority, the entity controller for a
-# set policed by the controller, any peer for an open set. A RECORD_STATE set is
-# always server-authored regardless of policy because it sits inside the rewind
-# boundary: it feeds the server-authoritative state timeline, and entity control
-# stamps the controller's authority onto the body, so following node authority
-# would hand the state stream to the controlling client (the invariant the state
-# synchronizer's forced authority 1 used to hold). A RECORD_BROADCAST set is
-# outside that boundary, a stream trusted outright, so it falls to its policy.
-func _derived_author_ok(
-		binding: NetwPropertySetBinding,
-		entity: NetwEntity,
-		node: Node,
-) -> bool:
-	var api := _api()
-	if binding.set.record == NetwPropertySet.Record.RECORD_STATE:
-		return api != null and api.get_unique_id() == 1
-	match binding.set.policy:
-		NetwScriptModel.Policy.AUTHORITY:
-			return node.is_multiplayer_authority()
-		NetwScriptModel.Policy.CONTROLLER:
-			return api != null and api.get_unique_id() == entity.controller
-		NetwScriptModel.Policy.ANY_PEER:
-			return true
-	return false
-
-
-# The recipients for [param binding] this pass. A server-only set reaches the
-# server alone (nothing when the server itself authors it), a public set reaches
-# every peer the entity is live for, both excluding the local author.
-func _derived_recipients(
-		binding: NetwPropertySetBinding,
-		entity: NetwEntity,
-) -> Array[int]:
-	var api := _api()
-	if not api:
-		return []
-	var local_id := api.get_unique_id()
-	var out: Array[int] = []
-	if binding.set.audience == NetwPropertySet.Audience.AUDIENCE_SERVER_ONLY:
-		if local_id != 1:
-			out.append(1)
-		return out
-	for peer_id in api._replication.live_peers(entity):
-		if peer_id != local_id:
-			out.append(peer_id)
-	return out
 
 
 ## A route's derived bindings in captured wire-ordinal order.
 func derived_group(
 		route: int,
-		_liveness: LivenessShell = null,
+		_native_core: NetwMultiplayerCore = null,
 ) -> Array[NetwPropertySetBinding]:
 	var out: Array[NetwPropertySetBinding] = []
 	var repl := _repl()
 	if not repl:
 		return out
-	for row: NetwSyncModel.SetRow in repl.sync_model.route_rows(route):
-		if row.kind != NetwSyncModel.Kind.DERIVED:
-			continue
-		for binding: NetwPropertySetBinding in _derived_bindings:
-			if binding.route == route \
-					and binding.order_key == row.key \
-					and binding.set.record == row.record:
-				out.append(binding)
-				break
+	for binding in repl.sync_model.route_bindings(
+			route,
+			NetwSyncModel.Kind.KIND_DERIVED,
+	):
+		out.append(binding as NetwPropertySetBinding)
 	return out
 
 
@@ -617,12 +609,21 @@ func _bind_declaration(binding: NetwPropertySetBinding) -> void:
 	binding.route = route
 	repl.sync_model.declare(
 		route,
-		NetwSyncModel.Kind.DERIVED,
+		NetwSyncModel.Kind.KIND_DERIVED,
 		binding.order_key,
 		binding.comp,
 		binding.set.rid,
 		binding.set.record,
 		binding.set.wire_hash(),
+		binding.set.policy,
+		binding.set.audience,
+	)
+	repl.sync_model.attach(
+		route,
+		NetwSyncModel.Kind.KIND_DERIVED,
+		binding.order_key,
+		binding.set.record,
+		binding,
 	)
 
 
@@ -630,9 +631,15 @@ func _bind_declaration(binding: NetwPropertySetBinding) -> void:
 func _drop_declaration(binding: NetwPropertySetBinding) -> void:
 	var repl := _repl()
 	if repl and binding.route > 0 and not binding.order_key.is_empty():
+		repl.sync_model.detach(
+			binding.route,
+			NetwSyncModel.Kind.KIND_DERIVED,
+			binding.order_key,
+			binding.set.record,
+		)
 		repl.sync_model.drop(
 			binding.route,
-			NetwSyncModel.Kind.DERIVED,
+			NetwSyncModel.Kind.KIND_DERIVED,
 			binding.order_key,
 			binding.set.record,
 		)
@@ -650,60 +657,22 @@ func _on_entity_live(route: int, entity: NetwEntity) -> void:
 			_bind_declaration(binding)
 
 
-# Stages [param row] for [param binding]'s masked send to [param peer_id] this
-# pass, pending the seq the tick's flush assigns.
-func _stage_pending_masked(peer_id: int, binding: NetwPropertySetBinding, row: Dictionary) -> void:
-	_progress.stage_masked(
-		peer_id,
-		binding.route,
-		binding.order_key,
-		binding.set.record,
-		row,
-	)
-
-
-## Commits every masked row staged for [param peer_id] this pass into its
-## binding's in-flight ring under [param seq], the datagram seq
-## [method ReplicationCore._flush_buffer] just assigned to the send
-## that carries it. Called once per unreliable flush, so an overflow-triggered
-## early flush mid-pump and the tick's final flush each commit only the rows
-## staged since the last flush for that peer.
+## Binds every row the pass staged for [param peer_id] to [param seq], the
+## datagram seq [method ReplicationCore.flush_all_buffers] just assigned to the
+## send that carries it. Called once per unreliable flush, so an
+## overflow-triggered early flush mid-pump and the tick's final flush each bind
+## only the rows sent since the last flush for that peer.
 func commit_pending_masked(peer_id: int, seq: int) -> void:
-	for entry: Dictionary in _progress.take_masked(peer_id):
-		var binding := _binding_by_key(
-			int(entry[&"route"]),
-			entry[&"key"],
-			int(entry[&"record"]),
-		)
-		if binding == null:
-			continue
-		binding.commit_masked_pending(
-			peer_id,
-			seq,
-			entry[&"row"],
-		)
+	if _row_sender:
+		_row_sender.commit(peer_id, seq)
 
 
-# Resolves one value progress key at the shell edge.
-func _binding_by_key(
-		route: int,
-		key: StringName,
-		record: int,
-) -> NetwPropertySetBinding:
-	for binding: NetwPropertySetBinding in _derived_bindings:
-		if binding.route == route \
-				and binding.order_key == key \
-				and binding.set.record == record:
-			return binding
-	return null
-
-
-## Promotes [param peer_id]'s confirmed masked baseline on every derived binding
-## when the session's tracked ack for it advances. A binding that
-## never staged a masked send for this peer no-ops.
+## Advances every derived lane's confirmed baseline for [param peer_id] when the
+## session's tracked ack for it advances. A lane that sent that peer nothing
+## no-ops.
 func note_peer_ack(peer_id: int, acked_seq: int) -> void:
-	for binding in _derived_bindings:
-		binding.advance_masked_ack(peer_id, acked_seq)
+	if _row_sender:
+		_row_sender.acknowledge(peer_id, acked_seq)
 
 
 ## Sends an on-demand property sync for [param property] on [param node].
@@ -777,7 +746,7 @@ func send_property(node: Node, property: StringName) -> void:
 	var val: Variant = values[0]
 	var quantizer: NetwQuantize = set.columns[0].quantizer
 	var type := NetwScriptModel.get_node_property_type(node, property)
-	NetwScriptModel.write_values(w, [val], [quantizer], [type])
+	NetwCodec.write_values(w, [val], [quantizer], [type])
 
 	_send_entity_event(frame, set.channel, w.to_bytes(), reliable)
 
@@ -853,7 +822,7 @@ func send_signal(
 			if script
 			else []
 	)
-	NetwScriptModel.write_values(w, args, quantizers, types)
+	NetwCodec.write_values(w, args, quantizers, types)
 
 	_send_entity_event(frame, NetwFrameEnvelope.Channel.SIGNAL, w.to_bytes(), reliable)
 
@@ -866,10 +835,10 @@ func _resolve_send(node: Node) -> Dictionary:
 		_sends_dropped_unroutable += 1
 		return { }
 	var api := _api()
-	var liveness := api._liveness if api else null
-	if not liveness:
+	var native_core := api._native_core if api else null
+	if not native_core:
 		return { }
-	var route := liveness.route_of(entity)
+	var route := native_core.liveness_route_of(entity)
 	if route <= 0:
 		_sends_dropped_not_live += 1
 		return { }
@@ -893,22 +862,22 @@ func _send_entity_event(
 	var repl := _repl()
 	if not repl:
 		return
-	if api and api.is_host:
-		var liveness := api._liveness
-		for recipient in api._replication.live_peers(frame["entity"]):
-			repl.send_to(recipient, frame["route"], channel, payload, reliable, frame["comp"], frame["path"])
-	else:
-		var local_id := api.get_unique_id() if api else 0
-		if local_id != 1:
-			repl.send_to(
-				1,
-				frame["route"],
-				channel,
-				payload,
-				reliable,
-				frame["comp"],
-				frame["path"],
-			)
+	var recipients := NetwSyncModel.event_recipients(
+		api != null and api.is_host,
+		api.get_unique_id() if api else 0,
+		0,
+		PackedInt32Array(repl.live_peers(frame["entity"])),
+	)
+	for recipient in recipients:
+		repl.send_to(
+			recipient,
+			frame["route"],
+			channel,
+			payload,
+			reliable,
+			frame["comp"],
+			frame["path"],
+		)
 
 
 # Returns the wire property token: a 1-byte id when the table is intact,
@@ -970,132 +939,6 @@ func accept_unreliable(
 
 #region Derived-set frames
 
-## Gathers [param node]'s [constant NetwPropertySet.Lane.VOLATILE] field values for
-## [param set] and encodes the [constant NetwFrameEnvelope.Channel.SYNC] frame for
-## [param ordinal], stamping [param tick] and [param ack] per the set's
-## [member NetwPropertySet.stamp]. A state set frames [code]STAMPED | ACKED[/code], a
-## plain tick set frames [code]STAMPED[/code], and a set with no stamp frames the
-## bare positional row. Returns an empty array when a field is missing on the
-## node, so a half row never crosses the wire.
-static func encode_volatile_frame(
-		node: Node,
-		set: NetwPropertySet,
-		ordinal: int,
-		tick: int,
-		ack: int,
-) -> PackedByteArray:
-	var gathered := gather_volatile(node, set)
-	if not gathered[0]:
-		return PackedByteArray()
-	return NetwSyncKernel.encode_volatile(
-		ordinal,
-		volatile_flags(set),
-		gathered[1],
-		gathered[2],
-		gathered[3],
-		tick,
-		ack,
-	)
-
-
-## Reads [param node]'s [constant NetwPropertySet.Lane.VOLATILE] field values for
-## [param set], returning [code][ok, values, quantizers, types][/code] with
-## [code]ok[/code] false when a field is missing on the node, so a caller drops
-## the whole pass rather than send a half row. The volatile-frame encoder and the
-## windowed input gather both walk the row through here.
-static func gather_volatile(node: Node, set: NetwPropertySet) -> Array:
-	var values: Array = []
-	var quantizers: Array = []
-	var types: Array = []
-	for field in set.columns:
-		if field.lane != NetwPropertySet.Lane.VOLATILE:
-			continue
-		if not (field.key in node):
-			return [false, [], [], []]
-		var value = node.get(field.key)
-		values.append(value)
-		quantizers.append(field.quantizer)
-		types.append(typeof(value))
-	return [true, values, quantizers, types]
-
-
-## Returns the scalar-header SYNC flags for [param set]'s
-## [member NetwPropertySet.stamp]: [code]0[/code] plain, [code]STAMPED[/code] for a
-## tick set, [code]STAMPED | ACKED[/code] for a state set. The windowed input
-## flag is added by the binding, which owns the sample ring.
-static func volatile_flags(set: NetwPropertySet) -> int:
-	match set.stamp:
-		NetwPropertySet.Stamp.STAMP_TICK:
-			return NetwFrameEnvelope.SYNC_FLAG_STAMPED
-		NetwPropertySet.Stamp.STAMP_TICK_ACK:
-			return NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_ACKED
-	return 0
-
-
-## Decodes a [constant NetwFrameEnvelope.Channel.SYNC] frame's [param payload]
-## against [param set] and, when [param write] is true, writes each decoded
-## [constant NetwPropertySet.Lane.VOLATILE] value onto [param node]. Returns the
-## decoded header [code]{ordinal, tick, ack, payload}[/code] where
-## [code]payload[/code] is the [code]{key: value}[/code] row, so the caller can
-## feed the timeline and the prediction stream, or an empty dictionary when the
-## frame is malformed. A predicting client passes [param write] false so the
-## authoritative row reconciles rather than snapping the predicted body.
-## [br][br]
-## A [constant NetwFrameEnvelope.SYNC_FLAG_MASKED] frame carries only the
-## fields that differ from the recipient's confirmed baseline, so [param last_row]
-## supplies the rest: the caller's own last-decoded row, merged with the
-## frame's masked subset to rebuild a complete row. This must be the caller's
-## remembered row rather than the live node, because a reconciling client
-## ([param write] false) may hold a diverging prediction on the node. A key
-## [param last_row] has never seen (only possible on a malformed stream, since
-## the gain edge always sends a full mask first) falls back to the live node.
-## [br][br]
-## This merge is what carries the masked lane's reconstruction invariant. After
-## an accepted frame the merged row equals the sender's full row for that frame's
-## tick, under arbitrary loss, duplication, and reorder, save for the rows before
-## the gain edge. Loss and duplication are absorbed because the sender diffs
-## against a confirmed baseline and so re-carries every field that changed since
-## it. Reorder is absorbed because a stale frame is dropped at
-## [method accept_unreliable] and never reaches this merge. The one hole a naive
-## diff leaves, a value that changes away from the baseline and back before its
-## send is acked, is closed on the sender by
-## [method NetwPropertySetBinding.masked_delta_for] keeping the field sticky until
-## the ack.
-static func apply_volatile_frame(
-		node: Node,
-		set: NetwPropertySet,
-		payload: PackedByteArray,
-		write: bool = true,
-		last_row: Dictionary = { },
-) -> Dictionary:
-	var keys: Array[StringName] = []
-	var quantizers: Array = []
-	var types: Array = []
-	for field in set.columns:
-		if field.lane != NetwPropertySet.Lane.VOLATILE:
-			continue
-		keys.append(field.key)
-		quantizers.append(field.quantizer)
-		types.append(NetwScriptModel.get_node_property_type(node, field.key))
-	var fallback: Dictionary = { }
-	for key: StringName in keys:
-		fallback[key] = node.get(key) if key in node else null
-	var staged := NetwSyncKernel.decode_volatile(
-		payload,
-		keys,
-		quantizers,
-		types,
-		last_row,
-		fallback,
-	)
-	if staged == null:
-		return { }
-	if write:
-		for key: StringName in staged.row:
-			node.set(key, staged.row[key])
-	return staged.header()
-
-
 ## Reads every field of [param set] off [param node] into a
 ## [code]{key: value}[/code] [Dictionary], the plain-payload counterpart of
 ## [method gather_volatile] with no wire encoding. This is the snapshot a
@@ -1129,29 +972,47 @@ static func apply_payload(node: Node, set: NetwPropertySet, payload: Dictionary)
 
 #region Derived-set receive
 
-## Applies one [constant NetwFrameEnvelope.Channel.SYNC] frame whose
-## [param ordinal] addresses a derived set. The dispatch resolves the ordinal
-## against the route's consumed count and delegates here when it names a derived
-## binding, so a mixed route splits cleanly. The frame's sender must be the set's
+## Applies one [constant NetwFrameEnvelope.Channel.SYNC_ROW] frame to the
+## derived set its own header addresses. The frame's sender must be the set's
 ## authorized author, and its schema must match the spawn descriptor.
-func handle_derived_sync(
+##
+## The address is read off the frame rather than off the envelope because the
+## envelope's component byte names a node in the entity's component table, and a
+## row address is not one: a route carries one row per declared set, and a set
+## and its siblings share the node they were declared on.
+func handle_derived_row(
 		entity: NetwEntity,
-		ordinal: int,
 		payload: PackedByteArray,
 		sender: int,
 ) -> void:
 	var api := _api()
 	if not api:
 		return
-	var route := api._liveness.route_of(entity)
-	var binding := _derived_binding_for(route, ordinal, api._liveness)
+	var header: Dictionary = _row_send().peek(payload)
+	if header.is_empty():
+		_drops_derived_no_set += 1
+		return
+	var ordinal := int(header["comp"])
+	var route := api._native_core.liveness_route_of(entity)
+	var binding := _derived_binding_for(route, ordinal, api._native_core)
 	if not binding:
 		_drops_derived_no_set += 1
 		return
-	if not _derived_sender_ok(binding, entity, sender):
+	var node := binding.node()
+	if not is_instance_valid(node):
+		_drops_derived_no_set += 1
+		return
+	var model := api._replication.sync_model
+	if not model.admits_sender(
+			route,
+			ordinal,
+			sender,
+			node.get_multiplayer_authority(),
+			entity.controller,
+	):
 		_drops_derived_bad_sender += 1
 		return
-	if not _derived_schema_ok(binding, route, ordinal):
+	if not model.admits_schema(route, ordinal):
 		_drops_derived_schema += 1
 		return
 	var decoded: Array[Dictionary] = [{ }]
@@ -1162,42 +1023,54 @@ func handle_derived_sync(
 		-1,
 		payload,
 		func() -> Error:
-			decoded[0] = binding.apply_volatile(payload)
+			decoded[0] = binding.apply_row_frame(_row_send(), payload)
 			return OK if not decoded[0].is_empty() else ERR_INVALID_DATA,
 	)
-	if verdict != OK:
-		return
-	var header := decoded[0]
-	if header.is_empty():
+	if verdict != OK or decoded[0].is_empty():
 		return
 	_derived_frames_in += 1
-	_feed_derived_interpolation(binding, header)
+	_feed_derived_interpolation(binding, decoded[0])
 
 
-## Applies one reliable [constant NetwFrameEnvelope.Channel.SYNC_DELTA] frame whose
-## [param ordinal] addresses a derived set's retained lane. Same ordinal split,
-## sender, and schema rules as [method handle_derived_sync].
-func handle_derived_delta(
+## Applies one [constant NetwFrameEnvelope.Channel.SYNC_ROW_WINDOW] frame to
+## the derived set its own header addresses, delivering every tick it repeats.
+## Same self addressing, sender and schema rules as [method handle_derived_row].
+func handle_window_row(
 		entity: NetwEntity,
-		ordinal: int,
 		payload: PackedByteArray,
 		sender: int,
 ) -> void:
 	var api := _api()
 	if not api:
 		return
-	var route := api._liveness.route_of(entity)
-	var binding := _derived_binding_for(route, ordinal, api._liveness)
+	var header: Dictionary = _row_send().peek(payload)
+	if header.is_empty():
+		_drops_derived_no_set += 1
+		return
+	var ordinal := int(header["comp"])
+	var route := api._native_core.liveness_route_of(entity)
+	var binding := _derived_binding_for(route, ordinal, api._native_core)
 	if not binding:
 		_drops_derived_no_set += 1
 		return
-	if not _derived_sender_ok(binding, entity, sender):
+	var node := binding.node()
+	if not is_instance_valid(node):
+		_drops_derived_no_set += 1
+		return
+	var model := api._replication.sync_model
+	if not model.admits_sender(
+			route,
+			ordinal,
+			sender,
+			node.get_multiplayer_authority(),
+			entity.controller,
+	):
 		_drops_derived_bad_sender += 1
 		return
-	if not _derived_schema_ok(binding, route, ordinal):
+	if not model.admits_schema(route, ordinal):
 		_drops_derived_schema += 1
 		return
-	var applied := [false]
+	var decoded: Array[Dictionary] = [{ }]
 	var verdict := _run_decode_stage(
 		entity.rid,
 		binding.comp,
@@ -1205,12 +1078,68 @@ func handle_derived_delta(
 		-1,
 		payload,
 		func() -> Error:
-			applied[0] = binding.apply_retained_delta(payload)
-			return OK if applied[0] else ERR_INVALID_DATA,
+			decoded[0] = binding.apply_window_frame(_row_send(), payload)
+			return OK if not decoded[0].is_empty() else ERR_INVALID_DATA,
 	)
-	if verdict == OK and applied[0]:
-		_derived_frames_in += 1
-		_feed_derived_interpolation(binding, { })
+	if verdict != OK or decoded[0].is_empty():
+		return
+	_derived_frames_in += 1
+	_feed_derived_interpolation(binding, decoded[0])
+
+
+## Applies one [constant NetwFrameEnvelope.Channel.SYNC_ROW_DELTA] frame to the
+## retained half of the derived set its own header addresses. Same self
+## addressing, sender and schema rules as [method handle_derived_row].
+func handle_retained_row(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		sender: int,
+) -> void:
+	var api := _api()
+	if not api:
+		return
+	var header: Dictionary = _row_send().peek(payload)
+	if header.is_empty():
+		_drops_derived_no_set += 1
+		return
+	var ordinal := int(header["comp"])
+	var route := api._native_core.liveness_route_of(entity)
+	var binding := _derived_binding_for(route, ordinal, api._native_core)
+	if not binding:
+		_drops_derived_no_set += 1
+		return
+	var node := binding.node()
+	if not is_instance_valid(node):
+		_drops_derived_no_set += 1
+		return
+	var model := api._replication.sync_model
+	if not model.admits_sender(
+			route,
+			ordinal,
+			sender,
+			node.get_multiplayer_authority(),
+			entity.controller,
+	):
+		_drops_derived_bad_sender += 1
+		return
+	if not model.admits_schema(route, ordinal):
+		_drops_derived_schema += 1
+		return
+	var decoded: Array[Dictionary] = [{ }]
+	var verdict := _run_decode_stage(
+		entity.rid,
+		binding.comp,
+		0,
+		-1,
+		payload,
+		func() -> Error:
+			decoded[0] = binding.apply_retained_row(_row_send(), payload)
+			return OK if not decoded[0].is_empty() else ERR_INVALID_DATA,
+	)
+	if verdict != OK or decoded[0].is_empty():
+		return
+	_derived_frames_in += 1
+	_feed_derived_interpolation(binding, decoded[0])
 
 
 # Routes one decode through the installed independent virtual stage.
@@ -1228,6 +1157,15 @@ func _run_decode_stage(
 	api._sync_decoder = decoder
 	var verdict := api._sync_decode(entity, comp, flags, tick, payload)
 	api._sync_decoder = Callable()
+	api.report_event(
+		NetwMultiplayerCore.SYNC_DECODE,
+		api._native_core.liveness_core.route_of(entity),
+		{ comp = comp },
+		0,
+		&"",
+		{ },
+		verdict,
+	)
 	return verdict
 
 
@@ -1282,54 +1220,15 @@ func _feed_derived_interpolation(
 func _derived_binding_for(
 		route: int,
 		ordinal: int,
-		_liveness: LivenessShell,
+		_native_core: NetwMultiplayerCore,
 ) -> NetwPropertySetBinding:
 	var repl := _repl()
 	if not repl:
 		return null
 	var row := repl.sync_model.row(route, ordinal)
-	if row == null or row.kind != NetwSyncModel.Kind.DERIVED:
+	if row == null or row.kind != NetwSyncModel.Kind.KIND_DERIVED:
 		return null
-	for binding: NetwPropertySetBinding in _derived_bindings:
-		if binding.route == route \
-				and binding.order_key == row.key \
-				and binding.set.record == row.record:
-			return binding
-	return null
-
-
-# A received derived frame validates its sender against the set's policy the same
-# way the property router does: the server is always trusted, an authority set
-# accepts only the node authority, a controller set only the entity controller.
-# A RECORD_STATE frame accepts the server alone, mirroring the send gate, so a
-# controller-stamped node authority never smuggles client-authored state.
-func _derived_sender_ok(
-		binding: NetwPropertySetBinding,
-		entity: NetwEntity,
-		sender: int,
-) -> bool:
-	if sender == 1:
-		return true
-	if binding.set.record == NetwPropertySet.Record.RECORD_STATE:
-		return false
-	var node := binding.node()
-	if not is_instance_valid(node):
-		return false
-	return _repl().policy_admits(binding.set.policy, sender, node, entity)
-
-
-# Validates a derived binding's schema hash against the spawn descriptor once, so
-# two peers whose declarations disagree drop the stream instead of misreading it.
-# Absent descriptors accept, matching the consumed lazy-validation stance.
-func _derived_schema_ok(
-		binding: NetwPropertySetBinding,
-		route: int,
-		ordinal: int,
-) -> bool:
-	var pending: Dictionary = _derived_pending_schema.get(route, { })
-	if not pending.has(ordinal):
-		return true
-	return int(pending[ordinal]) == binding.set.wire_hash()
+	return repl.sync_model.binding_of(route, ordinal) as NetwPropertySetBinding
 
 
 ## Appends the [constant NetwFrameEnvelope.Channel.SPAWN] frame's derived-set
@@ -1342,12 +1241,12 @@ func encode_derived_descriptors(w: NetwBitBufferWriter, route: int) -> void:
 	if not repl:
 		NetwCodec.put_varint(w, 0)
 		return
-	var rows: Array[NetwSyncModel.SetRow] = []
-	for row: NetwSyncModel.SetRow in repl.sync_model.route_rows(route):
-		if row.kind == NetwSyncModel.Kind.DERIVED:
+	var rows: Array[NetwSyncSetRow] = []
+	for row: NetwSyncSetRow in repl.sync_model.route_rows(route):
+		if row.kind == NetwSyncModel.Kind.KIND_DERIVED:
 			rows.append(row)
 	NetwCodec.put_varint(w, rows.size())
-	for row: NetwSyncModel.SetRow in rows:
+	for row: NetwSyncSetRow in rows:
 		NetwCodec.put_varint(w, row.ordinal)
 		w.put_aligned_u16(row.schema_hash)
 
@@ -1356,10 +1255,9 @@ func encode_derived_descriptors(w: NetwBitBufferWriter, route: int) -> void:
 ## [constant NetwFrameEnvelope.Channel.SPAWN] frame, validated lazily against this
 ## peer's derived bindings as their frames arrive.
 func note_derived_schema(route: int, descriptors: Dictionary) -> void:
-	if descriptors.is_empty():
-		_derived_pending_schema.erase(route)
-	else:
-		_derived_pending_schema[route] = descriptors
+	var repl := _repl()
+	if repl:
+		repl.sync_model.note_descriptors(route, descriptors)
 
 #endregion
 
@@ -1368,7 +1266,7 @@ func note_derived_schema(route: int, descriptors: Dictionary) -> void:
 func clear_session() -> void:
 	_derived_bindings.clear()
 	_progress.clear()
-	_derived_pending_schema.clear()
+	_row_sender = null
 
 
 ## Drops [param route]'s datagram freshness books when its [NetwEntity]
@@ -1376,7 +1274,8 @@ func clear_session() -> void:
 ## tracks.
 func clear_route(route: int) -> void:
 	_progress.clear_route(route)
-	_derived_pending_schema.erase(route)
+	if _row_sender:
+		_row_sender.close_route(route)
 	for binding: NetwPropertySetBinding in _derived_bindings:
 		if binding.route == route:
 			binding.route = 0
@@ -1384,14 +1283,15 @@ func clear_route(route: int) -> void:
 
 ## Drops the datagram freshness state held against [param peer_id], so a
 ## reconnecting peer's restarted sequence is accepted fresh on every stream.
-## Also drops any masked-lane state held against [param peer_id]: its pending
-## rows (never flushed before it left) and, on every derived binding, its
-## confirmed baseline and in-flight ring, so a reconnecting peer's masked lane
-## heals with a full row instead of diffing against a stale one.
+## Also drops every derived lane's baseline for it, so a reconnecting peer heals
+## with a whole row instead of diffing against a row the last peer at that id
+## held.
 func clear_peer(peer_id: int) -> void:
 	_progress.clear_peer(peer_id)
 	for binding in _derived_bindings:
 		binding.clear_peer(peer_id)
+	if _row_sender:
+		_row_sender.forget_peer(peer_id)
 
 
 ## Breaks the mutual strong reference with the internal property and signal
@@ -1415,8 +1315,13 @@ func counters() -> Dictionary:
 		&"drops_derived_no_set": _drops_derived_no_set,
 		&"drops_derived_bad_sender": _drops_derived_bad_sender,
 		&"drops_derived_schema": _drops_derived_schema,
-		&"masked_frames_out": _masked_frames_out,
-		&"masked_frames_full": _masked_frames_full,
+		&"row_frames_out": _row_frames_out,
+		&"row_frames_full": _row_frames_full,
+		&"row_frames_stage_refused": _row_frames_refused_by_stage,
+		&"row_frames_ungathered": _row_frames_ungathered,
+		&"retained_frames_out": _retained_frames_out,
+		&"window_frames_out": _window_frames_out,
+		&"window_samples_out": _window_samples_out,
 		&"sync_pump_skips_invalid_node": _pump_skips_invalid_node,
 		&"sync_pump_skips_no_entity": _pump_skips_no_entity,
 		&"sync_pump_skips_no_route": _pump_skips_no_route,
@@ -1468,7 +1373,7 @@ class _PropertySignalRouter:
 		# Decode value using types and quantizers
 		var quantizer: NetwQuantize = set.columns[0].quantizer
 		var type := NetwScriptModel.get_node_property_type(comp_node, prop)
-		var decoded_vals := NetwScriptModel.read_values(r, [quantizer], [type])
+		var decoded_vals := NetwCodec.read_values(r, [quantizer], [type])
 		if decoded_vals.is_empty():
 			return
 		var val = decoded_vals[0]
@@ -1523,11 +1428,14 @@ class _PropertySignalRouter:
 				)
 
 		if api and api.is_host:
-			var liveness := api._liveness
-			var route := liveness.route_of(entity)
+			var route := api._native_core.liveness_route_of(entity)
 			var repl := _sync._repl()
-			var recipients := repl.live_peers(entity)
-			recipients.erase(sender)
+			var recipients := NetwSyncModel.event_recipients(
+				true,
+				api.get_unique_id(),
+				sender,
+				PackedInt32Array(repl.live_peers(entity)),
+			)
 			for recipient in recipients:
 				repl.send_to(
 					recipient,
@@ -1574,7 +1482,7 @@ class _PropertySignalRouter:
 				if script
 				else []
 		)
-		var args := NetwScriptModel.read_values(r, quantizers, types)
+		var args := NetwCodec.read_values(r, quantizers, types)
 
 		# Server-Only Zero Setup Check:
 		# Clients cannot emit unregistered signals, even if they have authority.
@@ -1596,11 +1504,14 @@ class _PropertySignalRouter:
 
 		var api := _sync._api()
 		if api and api.is_host:
-			var liveness := api._liveness
-			var route := liveness.route_of(entity)
+			var route := api._native_core.liveness_route_of(entity)
 			var repl := _sync._repl()
-			var recipients := repl.live_peers(entity)
-			recipients.erase(sender)
+			var recipients := NetwSyncModel.event_recipients(
+				true,
+				api.get_unique_id(),
+				sender,
+				PackedInt32Array(repl.live_peers(entity)),
+			)
 			for recipient in recipients:
 				repl.send_to(
 					recipient,

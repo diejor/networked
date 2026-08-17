@@ -1,59 +1,82 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDatabaseBackend" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		The storage contract every [NetwDatabase] backend implements: nine verbs, each answering a [NetwPromise].
 	</brief_description>
 	<description>
+		Coroutines are allowed ABOVE this boundary and never THROUGH it. Every verb here answers a [NetwPromise] straight away, and the script-facing layer above ([NetwDatabase.TableRepository]) is the coroutine that waits on it.
+		That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot answer a record on the calling frame, and a verb that promised the record directly would hand its caller whatever a suspended GDScript call coerces to, which is an empty one: a miss no error anywhere reports.
+		[codeblock]
+		# A backend that answers on the spot.
+		func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
+		    return NetwPromise.resolved(_read(table, id))
+
+		# A backend that answers later. The promise IS how the caller waits, so
+		# the coroutine is deliberately not awaited here.
+		func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
+		    var settling := NetwPromise.new()
+		    _settle_later(settling, table, id)
+		    return settling
+
+		func _settle_later(settling: NetwPromise, table, id) -&gt; void:
+		    settling.resolve(await _service.read(table, id))
+		[/codeblock]
+		A verb whose value is an [enum @GlobalScope.Error] resolves WITH that code: [constant @GlobalScope.OK] and a storage failure are both answers the operation reached. A rejection means the operation could not run at all.
+		Two refusals ship from the dispatcher rather than from any backend, and both are observable:
+		[br][br]
+		[br]- An override that answers no promise is rejected with [constant @GlobalScope.ERR_INVALID_DATA], because a null would be waited on forever.
+		[br]- The default [method commit], the one a backend gets when it overrides no [method _commit], refuses with [constant @GlobalScope.ERR_UNAVAILABLE] when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
 		<method name="_commit" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="operations" type="Array" />
 			<description>
 			</description>
 		</method>
 		<method name="_delete" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
 			</description>
 		</method>
 		<method name="_delete_namespace" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="slot" type="String" />
 			<description>
 			</description>
 		</method>
 		<method name="_find_all" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="filter" type="Dictionary" />
 			<description>
 			</description>
 		</method>
 		<method name="_find_by_id" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
 			</description>
 		</method>
 		<method name="_initialize" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="schema" type="Dictionary" />
 			<param index="1" name="slot" type="String" />
 			<description>
 			</description>
 		</method>
 		<method name="_list_namespaces" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<description>
 			</description>
 		</method>
 		<method name="_upsert" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="data" type="Dictionary" />
@@ -61,58 +84,58 @@
 			</description>
 		</method>
 		<method name="_warm" qualifiers="virtual">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="directives" type="Array" />
 			<description>
 			</description>
 		</method>
 		<method name="commit">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="operations" type="Array" default="[]" />
 			<description>
 			</description>
 		</method>
 		<method name="delete_namespace">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="slot" type="String" />
 			<description>
 			</description>
 		</method>
 		<method name="erase">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
 			</description>
 		</method>
 		<method name="find_all">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="filter" type="Dictionary" default="{}" />
 			<description>
 			</description>
 		</method>
 		<method name="find_by_id">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
 			</description>
 		</method>
 		<method name="initialize">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="schema" type="Dictionary" />
 			<param index="1" name="slot" type="String" default="&quot;&quot;" />
 			<description>
 			</description>
 		</method>
 		<method name="list_namespaces">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<description>
 			</description>
 		</method>
 		<method name="upsert">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="data" type="Dictionary" />
@@ -120,7 +143,7 @@
 			</description>
 		</method>
 		<method name="warm">
-			<return type="Variant" />
+			<return type="NetwPromise" />
 			<param index="0" name="directives" type="Array" default="[]" />
 			<description>
 			</description>

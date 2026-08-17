@@ -81,63 +81,83 @@ signal entity_removed(entity: NetwEntity)
 var layer_id: StringName
 
 ## Composition policy. See [enum Policy].
-var policy: Policy = Policy.HIDE_FROM_OUTSIDERS
+var policy: Policy:
+	get:
+		return _engine.layer_policy(layer_id) as Policy
 
 ## Wire behavior when this layer stops admitting an entity and the entity has
 ## no [method NetwInterestHandle.on_leave_policy] override.
-var default_leave_policy: NetwMultiplayer.LeavePolicy = \
-		NetwMultiplayer.LeavePolicy.DESPAWN
+var default_leave_policy: NetwMultiplayer.LeavePolicy:
+	get:
+		return _engine.layer_leave_policy(layer_id) \
+				as NetwMultiplayer.LeavePolicy
+	set(value):
+		_engine.layer_set_leave_policy(layer_id, value)
 
 ## Local presentation behavior when this layer stops admitting an entity and
 ## no per-entity override is configured.
-var default_perception_policy: NetwMultiplayer.PerceptionPolicy = \
-		NetwMultiplayer.PerceptionPolicy.HIDE:
+var default_perception_policy: NetwMultiplayer.PerceptionPolicy:
+	get:
+		return _engine.layer_perception_policy(layer_id) \
+				as NetwMultiplayer.PerceptionPolicy
 	set(value):
-		# Range check, so the enum's ordering is contract. Renumbering
-		# PerceptionPolicy so HIDE and CUSTOM stop bounding it breaks this.
-		assert(
-			value >= NetwMultiplayer.PerceptionPolicy.HIDE
-			and value <= NetwMultiplayer.PerceptionPolicy.CUSTOM,
-			"NetwInterestLayer: invalid default_perception_policy",
-		)
-		if default_perception_policy == value:
+		if not _engine.layer_set_perception_policy(layer_id, value):
 			return
-		default_perception_policy = value
 		var s := _service()
 		if s:
 			s._on_layer_perception_policy_changed(self)
 
-## Peer ids participating in this layer.
-var viewers: Dictionary[int, bool] = { }
-
-var _entities: Dictionary[NetwEntity, bool] = { }
+## Peer ids participating in this layer, keyed for membership tests.
+##
+## Read-only. The set lives in [NetwInterestEngine], so writing through this
+## member mutates the copy it just built. Use [method add_viewer] and
+## [method remove_viewer].
+var viewers: Dictionary[int, bool]:
+	get:
+		var out: Dictionary[int, bool] = { }
+		for peer_id: int in _engine.layer_viewers(layer_id):
+			out[peer_id] = true
+		return out
 
 ## Entity set for this layer.
 ##
 ## On the server, this is every entity registered through
 ## [method add_entity]. On a client, this is every entity currently
 ## admitted to this layer for the local peer.
+##
+## Read-only. The roster lives in [NetwInterestEngine], so writing through this
+## member mutates the copy it just built. Use [method add_entity] and
+## [method remove_entity].
 var entities: Dictionary[NetwEntity, bool]:
 	get:
-		return _entities
+		var out: Dictionary[NetwEntity, bool] = { }
+		var s := _service()
+		if s == null:
+			return out
+		for slot: int in _engine.roster(layer_id):
+			var member := s._entity_for_slot(slot)
+			if member:
+				out[member] = true
+		return out
 
 var _service_ref: WeakRef
-# Cumulative show plus hide transitions emitted by this layer, read as a delta by
-# the debug monitor to surface per-layer visibility churn.
-var _transition_count: int = 0
+var _engine: NetwInterestEngine
 
 
 func _init(id: StringName = &"", service: Object = null) -> void:
 	layer_id = id
 	if service != null:
 		_service_ref = weakref(service)
+	var s := _service()
+	_engine = s._engine if s else NetwInterestEngine.new()
+	if not layer_id.is_empty():
+		_engine.declare_layer(layer_id)
 
 
 ## Replaces [member policy]. Returns [code]true[/code] when changed.
 func set_policy(value: Policy) -> bool:
-	if policy == value:
+	if not _engine.layer_set_policy(layer_id, value):
 		return false
-	policy = value
 	var s := _service()
 	if s:
 		s._on_layer_policy_changed(self)
@@ -149,13 +169,8 @@ func set_policy(value: Policy) -> bool:
 ##
 ## [param peer_id] must be non-zero.
 func add_viewer(peer_id: int) -> bool:
-	assert(
-		peer_id != 0,
-		"NetwInterestLayer.add_viewer: peer_id must be non-zero",
-	)
-	if viewers.has(peer_id):
+	if not _engine.layer_add_viewer(layer_id, peer_id):
 		return false
-	viewers[peer_id] = true
 	viewer_added.emit(peer_id)
 	var s := _service()
 	if s:
@@ -165,9 +180,8 @@ func add_viewer(peer_id: int) -> bool:
 
 ## Removes [param peer_id] from [member viewers]. Idempotent.
 func remove_viewer(peer_id: int) -> bool:
-	if not viewers.has(peer_id):
+	if not _engine.layer_remove_viewer(layer_id, peer_id):
 		return false
-	viewers.erase(peer_id)
 	viewer_removed.emit(peer_id)
 	var s := _service()
 	if s:
@@ -177,7 +191,7 @@ func remove_viewer(peer_id: int) -> bool:
 
 ## Returns [code]true[/code] when [param peer_id] is a viewer.
 func has_viewer(peer_id: int) -> bool:
-	return viewers.has(peer_id)
+	return _engine.layer_has_viewer(layer_id, peer_id)
 
 
 ## Enrolls [param entity] in this layer. Idempotent. Server authoritative.
@@ -196,9 +210,8 @@ func add_entity(entity: NetwEntity) -> bool:
 	var s := _service()
 	if s and not s._is_server():
 		return false
-	if _entities.has(entity):
+	if not _engine.roster_add(layer_id, _slot(entity)):
 		return false
-	_entities[entity] = true
 	entity_added.emit(entity)
 	if s:
 		s._on_layer_entity_changed(self, entity, true)
@@ -219,9 +232,8 @@ func remove_entity(entity: NetwEntity) -> bool:
 	var s := _service()
 	if s and not s._is_server():
 		return false
-	if not _entities.has(entity):
+	if not _engine.roster_remove(layer_id, _slot(entity)):
 		return false
-	_entities.erase(entity)
 	entity_removed.emit(entity)
 	if s:
 		s._on_layer_entity_changed(self, entity, false)
@@ -230,38 +242,17 @@ func remove_entity(entity: NetwEntity) -> bool:
 
 ## Returns [code]true[/code] when [param entity] is in this layer.
 func has_entity(entity: NetwEntity) -> bool:
-	return _entities.has(entity)
+	return _engine.roster_has(layer_id, _slot(entity))
 
 
-# Idempotent client-side membership path that also updates interface tracking.
-func _client_track_entity(entity: NetwEntity) -> void:
-	assert(
-		entity != null,
-		"NetwInterestLayer._client_track_entity: entity is null",
-	)
-	if _entities.has(entity):
-		return
-	_entities[entity] = true
-	entity_added.emit(entity)
-	var s := _service()
-	if s:
-		s._on_layer_entity_changed(self, entity, true)
-	entity.interest._client_join_label(layer_id)
-	entity.interest._dispatch_enter(layer_id, _local_peer_id())
-	entity_visible.emit(entity)
-	if s:
-		s._refresh_local_perception(entity, [layer_id])
-
-
-# Idempotent client-side counterpart to [method _client_track_entity].
+# Idempotent client-side drop, run when the entity leaves the tree.
 func _client_untrack_entity(entity: NetwEntity) -> void:
 	assert(
 		entity != null,
 		"NetwInterestLayer._client_untrack_entity: entity is null",
 	)
-	if not _entities.has(entity):
+	if not _engine.roster_remove(layer_id, _slot(entity)):
 		return
-	_entities.erase(entity)
 	entity_removed.emit(entity)
 	var s := _service()
 	if s:
@@ -279,9 +270,8 @@ func _client_admit(entity: NetwEntity) -> void:
 		entity != null,
 		"NetwInterestLayer._client_admit: entity is null",
 	)
-	if _entities.has(entity):
+	if not _engine.roster_add(layer_id, _slot(entity)):
 		return
-	_entities[entity] = true
 	entity.interest._client_join_label(layer_id)
 	entity.interest._dispatch_enter(layer_id, _local_peer_id())
 	entity_visible.emit(entity)
@@ -297,9 +287,8 @@ func _client_revoke(entity: NetwEntity) -> void:
 		entity != null,
 		"NetwInterestLayer._client_revoke: entity is null",
 	)
-	if not _entities.has(entity):
+	if not _engine.roster_remove(layer_id, _slot(entity)):
 		return
-	_entities.erase(entity)
 	entity.interest._dispatch_leave(layer_id, _local_peer_id())
 	entity_hidden.emit(entity)
 	var s := _service()
@@ -315,9 +304,10 @@ func is_visible_to(entity: NetwEntity, peer_id: int) -> bool:
 	return has_entity(entity) and verdict_for(peer_id)
 
 
-## Returns the current policy verdict for [param peer_id].
+## Returns the current policy verdict for [param peer_id], per
+## [method NetwInterestEngine.layer_admits].
 func verdict_for(peer_id: int) -> bool:
-	return InterestPolicy.verdict(policy, viewers, peer_id)
+	return _engine.layer_admits(layer_id, peer_id)
 
 
 ## Returns aggregate occupancy counters for [InterestMonitor].
@@ -337,10 +327,10 @@ func verdict_for(peer_id: int) -> bool:
 func monitor_snapshot() -> Dictionary:
 	var service := _service()
 	return {
-		&"viewers": viewers.size(),
-		&"entities": _entities.size(),
+		&"viewers": _engine.layer_viewers(layer_id).size(),
+		&"entities": _engine.roster(layer_id).size(),
 		&"visible_edges": service.layer_visible_edges(layer_id) if service else 0,
-		&"transitions_total": _transition_count,
+		&"transitions_total": _engine.transitions(layer_id),
 	}
 
 
@@ -353,14 +343,14 @@ func debug_dump(peer_id: int = 0) -> Dictionary:
 		"entities": entities.size(),
 		"peer_id": peer_id,
 		"verdict": verdict_for(peer_id),
-		"explanation": InterestPolicy.explain(policy, viewers, peer_id),
+		"explanation": _engine.layer_explain(layer_id, peer_id),
 	}
 
 
 ## Returns current viewer peer ids.
 func viewer_ids() -> Array[int]:
 	var out: Array[int] = []
-	out.assign(viewers.keys())
+	out.assign(_engine.layer_viewers(layer_id))
 	return out
 
 
@@ -369,7 +359,7 @@ func _apply_server_transition(
 		peer_id: int,
 		visible: bool,
 ) -> void:
-	_transition_count += 1
+	_engine.note_transition(layer_id)
 	if visible:
 		interest_enter.emit(entity, peer_id)
 		entity.interest_enter.emit(peer_id)
@@ -384,83 +374,14 @@ func _service() -> InterestCore:
 	return _service_ref.get_ref() as InterestCore if _service_ref else null
 
 
+# The key the engine knows [param entity] by, which is its handle's integer
+# form.
+func _slot(entity: NetwEntity) -> int:
+	return entity.rid.get_id() if entity else 0
+
+
 # Returns the participant id used by client-side handle callbacks.
 func _local_peer_id() -> int:
 	var service := _service()
 	var api := service._api() if service else null
 	return api.get_unique_id() if api and api.has_multiplayer_peer() else 1
-
-
-## Stateless verdict resolver for [NetwInterestLayer].
-##
-## Given a [enum NetwInterestLayer.Policy] and a viewer set, returns the
-## per-peer layer verdict. The committed [NetwInterestEngine] matrix composes these
-## verdicts across layer membership and entity ancestry.
-##
-## [method explain] returns a human-readable reason and is the first
-## tool to reach for when a peer is visible or hidden when it should
-## not be.
-##
-## [codeblock]
-##     var k := NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS
-##     InterestPolicy.verdict(k, viewers, peer_id)
-##     print(InterestPolicy.explain(k, viewers, peer_id))
-## [/codeblock]
-class InterestPolicy:
-	extends RefCounted
-
-	## Returns the per-peer visibility verdict.
-	##
-	## [param kind] is one of [enum NetwInterestLayer.Policy].
-	## [param viewers] is the layer's viewer set. Peer id [code]0[/code] is
-	## always rejected. The listen host is evaluated like every participant.
-	static func verdict(
-			kind: NetwInterestLayer.Policy,
-			viewers: Dictionary,
-			peer_id: int,
-	) -> bool:
-		if peer_id == 0:
-			return false
-		match kind:
-			NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
-				return viewers.has(peer_id)
-			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
-				return not viewers.has(peer_id)
-		return true
-
-
-	## Returns a one-line description of why [param peer_id] resolved the
-	## way it did. Intended for log lines and debugger inspection.
-	static func explain(
-			kind: NetwInterestLayer.Policy,
-			viewers: Dictionary,
-			peer_id: int,
-	) -> String:
-		if peer_id == 0:
-			return "REJECT peer=0 (no peer context)"
-		var in_viewers := viewers.has(peer_id)
-		var label := _kind_label(kind)
-		match kind:
-			NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
-				if in_viewers:
-					return "ADMIT peer=%d in viewers under %s" \
-							% [peer_id, label]
-				return "REJECT peer=%d not in viewers under %s" \
-						% [peer_id, label]
-			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
-				if in_viewers:
-					return "REJECT peer=%d in viewers under %s" \
-							% [peer_id, label]
-				return "ADMIT peer=%d not in viewers under %s" \
-						% [peer_id, label]
-		return "ADMIT peer=%d (unknown kind=%d defaults true)" \
-				% [peer_id, kind]
-
-
-	static func _kind_label(kind: NetwInterestLayer.Policy) -> String:
-		match kind:
-			NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
-				return "HIDE_FROM_OUTSIDERS"
-			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
-				return "HIDE_FROM_INSIDERS"
-		return "kind=%d" % kind

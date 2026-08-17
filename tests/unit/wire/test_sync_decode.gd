@@ -21,7 +21,7 @@ class DecodeProbe:
 
 var mt: MultiplayerTree
 var api: NetwMultiplayer
-var liveness: LivenessShell
+var native_core: NetwMultiplayerCore
 var root: DecodeProbe
 var sync: MultiplayerSynchronizer
 var entity: NetwEntity
@@ -34,7 +34,7 @@ func before_test() -> void:
 	add_child(mt)
 	auto_free(mt)
 	api = mt.api
-	liveness = api._liveness
+	native_core = api._native_core
 	root = DecodeProbe.new()
 	root.name = "DecodeProbe"
 	sync = MultiplayerSynchronizer.new()
@@ -60,7 +60,7 @@ func before_test() -> void:
 	entity = NetwEntity.ensure(root)
 	mt.add_child(root)
 	auto_free(root)
-	liveness.bind_route(ROUTE, entity)
+	native_core.liveness_bind_route(ROUTE, entity)
 	api.object_configuration_add(root, sync)
 
 
@@ -89,7 +89,7 @@ func _sync_payload(ordinal: int, flags: int, values: Array) -> PackedByteArray:
 	var types: Array = []
 	for v in values:
 		types.append(typeof(v))
-	NetwScriptModel.write_values(w, values, [], types)
+	NetwCodec.write_values(w, values, [], types)
 	return w.to_bytes()
 
 
@@ -100,7 +100,7 @@ func _delta_payload(ordinal: int, mask: int, values: Array) -> PackedByteArray:
 	var types: Array = []
 	for v in values:
 		types.append(typeof(v))
-	NetwScriptModel.write_values(w, values, [], types)
+	NetwCodec.write_values(w, values, [], types)
 	return w.to_bytes()
 
 
@@ -136,7 +136,7 @@ func test_unknown_ordinal_drops() -> void:
 	)
 
 	assert_int(root.synced).is_equal(0)
-	assert_int(_counter("drops_derived_no_set")).is_equal(1)
+	assert_int(_counter("drops_sync_no_set")).is_equal(1)
 	assert_int(_counter("sync_frames_in")).is_equal(0)
 
 

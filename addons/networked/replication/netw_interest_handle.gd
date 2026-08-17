@@ -24,16 +24,11 @@ const PerceptionPolicy := NetwMultiplayer.PerceptionPolicy
 
 var _entity_ref: WeakRef
 var _service_ref: WeakRef
-var _layer_ids: Array[StringName] = []
+var _decl := NetwInterestDecl.new()
 var _enter_callbacks: Dictionary[StringName, Array] = { }
 var _leave_callbacks: Dictionary[StringName, Array] = { }
 var _observed_callbacks: Array[Callable] = []
 var _unobserved_callbacks: Array[Callable] = []
-var _leave_policies: Dictionary[StringName, int] = { }
-var _custom_leave_callbacks: Dictionary[StringName, Callable] = { }
-var _perception_policies: Dictionary[StringName, int] = { }
-var _custom_perception_callbacks: Dictionary[StringName, Callable] = { }
-var _report_observers := false
 
 
 # Binds the handle once and installs its entity lifecycle hooks.
@@ -67,26 +62,20 @@ func _bind(entity: NetwEntity) -> void:
 ## The declaration is safe in [method Object._init] on every peer. Only
 ## server authority mutates the live [NetwInterestLayer] entity set.
 func join(layer_id: StringName) -> NetwInterestHandle:
-	assert(
-		not layer_id.is_empty(),
-		"NetwInterestHandle.join: layer_id is empty",
-	)
-	if layer_id in _layer_ids:
+	if not _decl.join(layer_id):
 		return self
-	_layer_ids.append(layer_id)
 	var api := _flat_api()
 	var entity := _entity()
 	if api and api.is_server() and entity:
 		var layer := api.layer_create(layer_id)
-		api.layer_add_entity(layer, api.rid_of(entity.owner))
+		api.layer_add_entity(layer, api.entity_of(entity.owner))
 	return self
 
 
 ## Removes the entity from [param layer_id]. Idempotent.
 func leave(layer_id: StringName) -> NetwInterestHandle:
-	if layer_id not in _layer_ids:
+	if not _decl.leave(layer_id):
 		return self
-	_layer_ids.erase(layer_id)
 	var api := _flat_api()
 	var entity := _entity()
 	if api and api.is_server() and entity:
@@ -97,7 +86,9 @@ func leave(layer_id: StringName) -> NetwInterestHandle:
 
 ## Returns a copy of the locally known layer labels.
 func layer_ids() -> Array[StringName]:
-	return _layer_ids.duplicate()
+	var out: Array[StringName] = []
+	out.assign(_decl.labels())
+	return out
 
 
 ## Returns whether [param peer_id] currently sees this entity.
@@ -142,7 +133,7 @@ func on_leave(
 ## owner-awareness relay.
 func on_observed(callback: Callable) -> NetwInterestHandle:
 	_assert_callback("on_observed", callback)
-	_report_observers = true
+	_decl.reports_observers = true
 	if callback not in _observed_callbacks:
 		_observed_callbacks.append(callback)
 	return self
@@ -153,7 +144,7 @@ func on_observed(callback: Callable) -> NetwInterestHandle:
 ## owner-awareness relay.
 func on_unobserved(callback: Callable) -> NetwInterestHandle:
 	_assert_callback("on_unobserved", callback)
-	_report_observers = true
+	_decl.reports_observers = true
 	if callback not in _unobserved_callbacks:
 		_unobserved_callbacks.append(callback)
 	return self
@@ -169,27 +160,7 @@ func on_leave_policy(
 		policy: LeavePolicy,
 		custom_callback: Callable = Callable(),
 ) -> NetwInterestHandle:
-	assert(
-		not layer_id.is_empty(),
-		"NetwInterestHandle.on_leave_policy: layer_id is empty",
-	)
-	assert(
-		policy >= LeavePolicy.DESPAWN and policy <= LeavePolicy.CUSTOM,
-		"NetwInterestHandle.on_leave_policy: invalid policy",
-	)
-	if policy == LeavePolicy.CUSTOM:
-		assert(
-			custom_callback.is_valid(),
-			"NetwInterestHandle.on_leave_policy: CUSTOM requires a callback",
-		)
-		_custom_leave_callbacks[layer_id] = custom_callback
-	else:
-		assert(
-			not custom_callback.is_valid(),
-			"NetwInterestHandle.on_leave_policy: callback requires CUSTOM",
-		)
-		_custom_leave_callbacks.erase(layer_id)
-	_leave_policies[layer_id] = policy
+	_decl.set_leave_policy(layer_id, policy, custom_callback)
 	return self
 
 
@@ -203,28 +174,8 @@ func on_perception_policy(
 		policy: PerceptionPolicy,
 		custom_callback: Callable = Callable(),
 ) -> NetwInterestHandle:
-	assert(
-		not layer_id.is_empty(),
-		"NetwInterestHandle.on_perception_policy: layer_id is empty",
-	)
-	assert(
-		policy >= PerceptionPolicy.HIDE
-		and policy <= PerceptionPolicy.CUSTOM,
-		"NetwInterestHandle.on_perception_policy: invalid policy",
-	)
-	if policy == PerceptionPolicy.CUSTOM:
-		assert(
-			custom_callback.is_valid(),
-			"NetwInterestHandle.on_perception_policy: CUSTOM requires a callback",
-		)
-		_custom_perception_callbacks[layer_id] = custom_callback
-	else:
-		assert(
-			not custom_callback.is_valid(),
-			"NetwInterestHandle.on_perception_policy: callback requires CUSTOM",
-		)
-		_custom_perception_callbacks.erase(layer_id)
-	_perception_policies[layer_id] = policy
+	if not _decl.set_perception_policy(layer_id, policy, custom_callback):
+		return self
 	var service := _service()
 	var entity := _entity()
 	if service and entity:
@@ -234,22 +185,22 @@ func on_perception_policy(
 
 # Enables or disables observer carriage for builder and migration paths.
 func _set_report_observers(enabled: bool) -> void:
-	_report_observers = enabled
+	_decl.reports_observers = enabled
 
 
 # Returns whether the server should carry observer-awareness events.
 func _reports_observers() -> bool:
-	return _report_observers
+	return _decl.reports_observers
 
 
 # Resolves the entity override before a layer default.
 func _leave_policy_for(layer_id: StringName, fallback: LeavePolicy) -> int:
-	return int(_leave_policies.get(layer_id, fallback))
+	return _decl.leave_policy_for(layer_id, fallback)
 
 
 # Returns the callback configured for one CUSTOM layer.
 func _custom_leave_for(layer_id: StringName) -> Callable:
-	return _custom_leave_callbacks.get(layer_id, Callable())
+	return _decl.custom_leave_for(layer_id)
 
 
 # Resolves the entity perception override before a layer default.
@@ -257,18 +208,17 @@ func _perception_policy_for(
 		layer_id: StringName,
 		fallback: PerceptionPolicy,
 ) -> int:
-	return int(_perception_policies.get(layer_id, fallback))
+	return _decl.perception_policy_for(layer_id, fallback)
 
 
 # Returns the callback configured for one CUSTOM perception layer.
 func _custom_perception_for(layer_id: StringName) -> Callable:
-	return _custom_perception_callbacks.get(layer_id, Callable())
+	return _decl.custom_perception_for(layer_id)
 
 
 # Adds a server-authored label learned from an unbound-layer relay.
 func _client_join_label(layer_id: StringName) -> void:
-	if layer_id not in _layer_ids:
-		_layer_ids.append(layer_id)
+	_decl.join(layer_id)
 
 
 # Dispatches a layer-specific enter transition for this entity.
@@ -286,16 +236,16 @@ func _activate() -> void:
 	var entity := _entity()
 	if not entity or not is_instance_valid(entity.owner):
 		return
-	var api := entity.multiplayer
+	var api: NetwMultiplayer = entity.multiplayer
 	if not api:
 		api = NetwMultiplayer.of(entity.owner)
 	if not api:
 		return
 	_service_ref = weakref(api._interest)
-	for layer_id in _layer_ids:
+	for layer_id: StringName in _decl.labels():
 		var layer := api.layer_create(layer_id)
 		if api.is_server():
-			api.layer_add_entity(layer, api.rid_of(entity.owner))
+			api.layer_add_entity(layer, api.entity_of(entity.owner))
 
 
 # Removes live memberships and session signal bindings on tree exit.
@@ -303,7 +253,7 @@ func _deactivate() -> void:
 	var api := _flat_api()
 	var entity := _entity()
 	if api and api.is_server() and entity:
-		for layer_id in _layer_ids:
+		for layer_id: StringName in _decl.labels():
 			var layer := api.layer_find(layer_id)
 			api.layer_remove_entity(layer, entity.rid)
 	_service_ref = null

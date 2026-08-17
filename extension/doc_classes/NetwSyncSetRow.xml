@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSyncSetRow" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One declared property set, addressed by the wire ordinal a sync frame carries.
+	</brief_description>
+	<description>
+		A row crosses out of [NetwSyncModel] as its own object rather than as a dictionary, because a caller reads four of its eight fields and a fixed-key dictionary across this seam is the shape that drifts.
+		[member ordinal] is the row's whole wire address and is assigned by [NetwSyncModel], never by the declaring caller. Every other member is what the declaration said.
+		[member policy] and [member audience] are the declaration's own gate columns, resolved once at registration rather than read from the set on every pass, so a sender that is native can decide who authors a row and who receives it without reaching a GDScript object.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="audience" type="int" setter="" getter="get_audience">
+			Who the row's frames are for: [code]0[/code] every admitted peer, [code]1[/code] the server alone. Matches [code]NetwPropertySet.Audience[/code].
+		</member>
+		<member name="comp" type="int" setter="" getter="get_comp">
+			The component address the declaring node resolved to inside its entity.
+		</member>
+		<member name="key" type="StringName" setter="" getter="get_key">
+			The structural registration key, the declaring node's path relative to its entity owner. One half of what makes a declaration distinct inside a route.
+		</member>
+		<member name="kind" type="int" setter="" getter="get_kind">
+			[constant NetwSyncModel.KIND_CONSUMED] or [constant NetwSyncModel.KIND_DERIVED]. Every consumed row holds a lower [member ordinal] than every derived one.
+		</member>
+		<member name="ordinal" type="int" setter="" getter="get_ordinal">
+			The row's address on the wire, assigned by sorting the route's declarations rather than by the order they arrived.
+		</member>
+		<member name="policy" type="int" setter="" getter="get_policy">
+			Who may author the row's stream: [code]0[/code] the node's multiplayer authority, [code]1[/code] the entity's controller, [code]2[/code] any peer. Matches [code]NetwScriptModel.Policy[/code].
+		</member>
+		<member name="record" type="int" setter="" getter="get_record">
+			The set's record kind. Matches [code]NetwPropertySet.Record[/code], and a state row is server-authored whatever [member policy] says.
+		</member>
+		<member name="route" type="int" setter="" getter="get_route">
+			The entity route the declaration belongs to.
+		</member>
+		<member name="set" type="RID" setter="" getter="get_set">
+			The declared set itself, as the session knows it.
+		</member>
+		<member name="schema_hash" type="int" setter="" getter="get_schema_hash">
+			The wire hash of the set's column shape, which is what a receiver checks a frame against before decoding it.
+		</member>
+	</members>
+</class>

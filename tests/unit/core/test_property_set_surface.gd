@@ -56,11 +56,7 @@ func test_from_script_compiles_a_cached_sealed_rid_with_identical_bytes() -> voi
 	assert_int(mt.api.property_set_get_wire_hash(rid)).is_equal(
 		new_set.wire_hash(),
 	)
-	assert_array(
-		NetwSyncPipeline.encode_volatile_frame(node, new_set, 3, 12, 9),
-	).is_equal(
-		NetwSyncPipeline.encode_volatile_frame(node, old_set, 3, 12, 9),
-	)
+	assert_array(_row_bytes(new_set, node)).is_equal(_row_bytes(old_set, node))
 	var cached := NetwPropertySet.from_script(
 		script,
 		NetwPropertySet.Record.RECORD_STATE,
@@ -78,7 +74,7 @@ func test_a_manual_set_binds_the_schema_by_column_address() -> void:
 	mt.add_child(node)
 	auto_free(node)
 	var entity := NetwEntity.ensure(node)
-	mt.api._liveness.bind_route(7, entity)
+	mt.api._native_core.liveness_bind_route(7, entity)
 
 	var schema := mt.api.schema_create(&"ManualBody")
 	var health := mt.api.schema_add_column(
@@ -162,6 +158,25 @@ func test_a_strided_schema_cannot_create_a_property_set() -> void:
 			NetwMultiplayer.RecordKind.STATE,
 		).is_valid(),
 	).is_false()
+
+
+# The frame one pass of the volatile lane makes of this set's row on this node.
+func _row_bytes(set: NetwPropertySet, node: Node) -> PackedByteArray:
+	var send := NetwReplicationSend.new()
+	send.declare_channel(NetwFrameEnvelope.Channel.SYNC_ROW, &"SYNC_ROW", false)
+	var result: Dictionary = send.run_deferred([{
+		"route": 1,
+		"comp": 0,
+		"channel": NetwFrameEnvelope.Channel.SYNC_ROW,
+		"schema": set.volatile_schema,
+		"values": NetwPropertySetBinding.new(set, node).volatile_row(),
+		"recipients": PackedInt32Array([2]),
+		"tick": 12,
+		"ack": 9,
+		"priority": 1.0,
+	}])
+	var sends: Array = result["sends"]
+	return sends[0]["bytes"] if not sends.is_empty() else PackedByteArray()
 
 
 func _set_shape(set: NetwPropertySet) -> Array:

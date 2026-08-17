@@ -4,6 +4,7 @@
 #include "godot/utility.hpp"
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
+#include "netw/subsystems.hpp"
 
 using namespace godot;
 
@@ -96,12 +97,32 @@ void configure() {
     threshold.store(configured, std::memory_order_relaxed);
 }
 
+namespace {
+
+void note_unlisted(const char *system) {
+    if (subsystem_of(system) != SUBSYSTEM_NONE) {
+        return;
+    }
+    static std::atomic_bool told = false;
+    if (told.exchange(true, std::memory_order_relaxed)) {
+        return;
+    }
+    gd::push_warning(
+        String("[warn][log] subsystem \"") + String(system)
+        + String("\" is not in netw/subsystems.hpp, so nothing can select ")
+        + String("it: add a row there or use one that exists")
+    );
+}
+
+} // namespace
+
 bool enabled(Level level) {
     const Level configured = threshold.load(std::memory_order_relaxed);
     return int(level) >= int(configured) && configured != Level::NONE;
 }
 
 void write(Level level, const char *system, const String &message) {
+    note_unlisted(system);
     const String line = line_for(level, system, message);
     profile_line(level, line);
     if (level == Level::ERROR) {
@@ -121,6 +142,7 @@ void write_at(
     const char *file,
     int line
 ) {
+    note_unlisted(system);
     const String text = line_for(level, system, message);
     profile_line(level, text);
     if (level == Level::ERROR) {

@@ -39,15 +39,10 @@ protected:
     static void _bind_methods();
 
 public:
-    // An empty frame planned against `p_schema`, or null when the schema
-    // declares no fixed-width row.
     static Ref<NetwPredictCommandFrame> create(
         const Ref<SchemaRecord> &p_schema
     );
 
-    // The frame `p_bytes` states, or null when the bytes are not a complete
-    // frame of this plan. A caller counts the refusal and drops the datagram,
-    // because a partial window has no honest reading.
     static Ref<NetwPredictCommandFrame> from_bytes(
         const Ref<SchemaRecord> &p_schema,
         const PackedByteArray &p_bytes

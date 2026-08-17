@@ -23,7 +23,6 @@
 set -eu
 
 HELD_OUT="
-addons/networked/context/session/netw_entity.gd
 addons/networked/replication/prediction_core.gd
 "
 

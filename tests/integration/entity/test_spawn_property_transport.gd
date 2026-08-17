@@ -96,7 +96,7 @@ func test_template_state_stays_unbound_without_identity_packet() -> void:
 	assert_that(probe.identity_packet.is_empty()).is_true()
 	# A bare instance with no bound identity and no editor owner stays UNBOUND
 	# and inert. It never becomes a live entity, and it is not a template.
-	assert_that(NetwEntity.of(template).stage).is_equal(NetwEntity.Stage.UNBOUND)
+	assert_that(NetwEntity.of(template).stage).is_equal(NetwEntity.STAGE_UNBOUND)
 	assert_that(NetwEntity.of(template).is_template).is_false()
 
 
