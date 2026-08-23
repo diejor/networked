@@ -27,8 +27,8 @@ func before_test() -> void:
 # Steps until the sweep has been handed [param tick], which is the tick a
 # deadline is measured against.
 func _sweep_through(tick: int) -> void:
-	while api._clock.tick <= tick:
-		api._clock.force_step(1)
+	while api._native_core.clock_handle.tick <= tick:
+		api._native_core.clock_handle.force_step(1)
 
 
 func test_key_is_deterministic_and_namespaced() -> void:
@@ -171,7 +171,7 @@ func test_observer_adopts_already_bound_entity() -> void:
 			seen[&"confirmed"] = true,
 		Callable(),
 	)
-	api._lagcomp._observe_node_entity_ref(weakref(node))
+	api._observe_node_entity_ref(weakref(node))
 
 	assert_bool(seen[&"confirmed"]).is_true()
 
@@ -192,7 +192,7 @@ func test_observer_adopts_from_entity_child() -> void:
 			seen[&"confirmed"] = true,
 		Callable(),
 	)
-	api._lagcomp._observe_node_entity_ref(weakref(child))
+	api._observe_node_entity_ref(weakref(child))
 
 	assert_bool(seen[&"confirmed"]).is_true()
 

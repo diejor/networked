@@ -1,24 +1,3 @@
-// Which fields of a channel declaration protocol identity covers, field by
-// field, so a new one cannot be added silently on either side of the line.
-//
-// The identity hash is what decides whether two builds may talk. A field that
-// changes the BYTES must be inside it, or two peers that disagree about that
-// field consider themselves compatible and then desynchronize on the first
-// frame that uses it. A field that is local scheduling must stay outside it, or
-// a peer that merely tunes its own send order is locked out of a session it
-// could have joined.
-//
-// So neither direction is the safe default and the line has to be stated. This
-// suite states it: every field is asserted IN or OUT by name, and adding a
-// field to `ChannelDecl` without deciding which it is leaves this suite
-// describing a declaration that no longer exists.
-//
-// `cap_bytes` is the one to watch. It is outside the identity and has no
-// consumer at all today, which is the only reason that is safe: the moment it
-// is wired to a `bytes_capped` cap it decides how many bits a length prefix
-// occupies, and it becomes wire-affecting while this suite still says it is
-// not. The law below is written to red at that moment rather than after it.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -104,20 +83,10 @@ TEST_CASE(
 ) {
     const uint64_t base = identity_of(probe());
 
-    // Priority orders this sender's own candidates and reaches no byte. A peer
-    // that tunes it must not be locked out of a session it could have joined.
     ChannelDecl priority = probe();
     priority.priority = 9.0f;
     NETW_CHECK_EQ(identity_of(priority), base);
 
-    // `cap_bytes` is outside identity and has NO CONSUMER, which is the only
-    // thing making that safe. Wiring it to a `bytes_capped` cap would make it
-    // decide the width of a length prefix, and two peers disagreeing about it
-    // would then desynchronize while this hash called them compatible.
-    //
-    // If this assertion ever reds, the field has been brought into the hash
-    // and this comment is the reason: check that it was brought in because it
-    // became wire-affecting, and delete this paragraph.
     ChannelDecl cap = probe();
     cap.cap_bytes = 4096;
     NETW_CHECK_EQ(identity_of(cap), base);
@@ -126,9 +95,6 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Wire][Hosted] one declaration hashes the same twice"
 ) {
-    // The hash walks a fixed-size array of slots rather than a container whose
-    // order depends on insertion, so identity is a function of what is
-    // declared and not of the order it was declared in.
     WireRegistry first;
     WireRegistry second;
     ChannelDecl a = probe();

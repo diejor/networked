@@ -23,7 +23,7 @@ signal action_changed(action: StringName, pressed: bool)
 ## is the multiplayer authority). Carries the tick number and a snapshot of the current state.
 signal tick_snapshot(tick: int, state: Dictionary)
 
-## When [code]true[/code], connects to [signal ClockCore.on_tick] and
+## When [code]true[/code], connects to [signal NetwMultiplayer.on_tick] and
 ## emits [signal tick_snapshot] each tick. Requires a [MultiplayerClock]
 ## registered on this node's multiplayer API.
 @export var tick_mode: bool = false
@@ -60,10 +60,9 @@ func _ready() -> void:
 		return
 	if tick_mode:
 		var api := NetwMultiplayer.of(self)
-		var clock := api._clock if api and api.clock.is_configured() else null
-		if clock:
-			clock.before_tick.connect(_on_before_tick)
-			clock.on_tick.connect(_on_tick)
+		if api and api.clock.is_configured:
+			api.before_tick.connect(_on_before_tick)
+			api.on_tick.connect(_on_tick)
 		else:
 			_dbg.warn("tick_mode=true but no MultiplayerClock found on this node's multiplayer API.", func(m): push_warning(m))
 
@@ -71,7 +70,7 @@ func _ready() -> void:
 ## Override to refresh this component's replicated input exports from the current
 ## [member state] before each tick is simulated.
 ##
-## Runs at [signal ClockCore.before_tick] on the controlling peer only, so
+## Runs at [signal NetwMultiplayer.before_tick] on the controlling peer only, so
 ## the values the input set ships and a [PredictionComponent] snapshots are
 ## the tick's gathered input, never a stale poll. The base is a no-op, so a
 ## subclass that only emits [signal tick_snapshot] needs no override.

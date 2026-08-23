@@ -4,8 +4,8 @@
 
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
-#include "netw/interpolate.hpp"
-#include "netw/ring_buffer.hpp"
+#include "netw/api/ring_buffer.hpp"
+#include "netw/api/interpolate.hpp"
 
 namespace netw {
 

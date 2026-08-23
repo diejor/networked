@@ -224,15 +224,15 @@ func server_scene_manager() -> MultiplayerSceneManager:
 
 
 ## Creates a [MultiplayerClock] on [method server] and every client, returning
-## the server's [ClockCore] tick engine.
+## the server's [NetwClockHandle] tick engine.
 ##
 ## Clients created after this call receive the same clock before joining.
-## Existing clients are awaited until [signal ClockCore.clock_synchronized]
+## Existing clients are awaited until [signal NetwMultiplayer.clock_synchronized]
 ## fires.
 func add_clock(
 		tickrate: int = 30,
 		display_offset: int = 3,
-) -> ClockCore:
+) -> NetwClockHandle:
 	_clock_enabled = true
 	_clock_tickrate = tickrate
 	_clock_display_offset = display_offset
@@ -249,11 +249,11 @@ func add_clock(
 
 
 ## Mounts a [LagCompensation] node on [method server] and every client,
-## returning the server's [LagCompCore] engine.
+## returning the server's [NetwMultiplayer] engine.
 ##
 ## The node is no longer auto-created, so a rewind or prediction test must mount it
 ## explicitly. Clients created after this call receive one before joining.
-func add_lag_compensation() -> LagCompCore:
+func add_lag_compensation() -> NetwMultiplayer:
 	_lag_comp_enabled = true
 	var server_iface := _ensure_lag_compensation(_server)
 	for client in _clients:
@@ -646,8 +646,8 @@ func register_spawnable_scene(scene: PackedScene, initial: bool = true) -> void:
 
 
 # Authors the session's declaration the way [MultiplayerSceneManager] does:
-# register one config, then edit its rows in place, which the session reads back
-# because it holds this same resource rather than a copy.
+# register one config, then declare further rows on it, which republish to the
+# session rather than waiting to be read back.
 func _declare_without_manager(scene: PackedScene, initial: bool) -> void:
 	var state := scene.get_state()
 	if state.get_node_count() == 0:
@@ -655,9 +655,11 @@ func _declare_without_manager(scene: PackedScene, initial: bool) -> void:
 	if _scene_config == null:
 		_scene_config = NetwSceneConfig.new()
 		server().api.object_configuration_add(self, _scene_config)
-	_scene_config.scenes[StringName(state.get_node_name(0))] = scene
-	if initial and not _scene_config.initial_scenes.has(scene):
-		_scene_config.initial_scenes.append(scene)
+	_scene_config.declare_scene(
+		StringName(state.get_node_name(0)),
+		scene,
+		initial,
+	)
 
 #endregion
 
@@ -851,11 +853,11 @@ func _make_service_tree(
 	return tree
 
 
-func _ensure_clock(mt: MultiplayerTree) -> ClockCore:
+func _ensure_clock(mt: MultiplayerTree) -> NetwClockHandle:
 	var existing := mt.get_service(MultiplayerClock) as MultiplayerClock
 	if not existing:
 		_add_clock_node(mt)
-	return mt.api._clock
+	return mt.api._native_core.clock_handle
 
 
 func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
@@ -867,13 +869,13 @@ func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
 	return clock
 
 
-func _ensure_lag_compensation(mt: MultiplayerTree) -> LagCompCore:
+func _ensure_lag_compensation(mt: MultiplayerTree) -> NetwMultiplayer:
 	var existing := mt.get_service(LagCompensation) as LagCompensation
 	if not existing:
 		existing = mt.find_service_node(LagCompensation) as LagCompensation
 	if not existing:
 		_add_lag_comp_node(mt)
-	return mt.api._lagcomp
+	return mt.api
 
 
 func _add_lag_comp_node(mt: MultiplayerTree) -> LagCompensation:

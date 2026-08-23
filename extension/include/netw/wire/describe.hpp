@@ -9,32 +9,6 @@
 
 namespace netw::wire {
 
-// A frame's layout, written once beside the struct it describes, and read three
-// ways: to write the frame, to read it, and to price it.
-//
-// A hand-written serialize body states the same facts with less structure, and
-// the difference is what a description can be asked. The layout is a value, so
-// the same list that drives the streams also emits the frame's machine-readable
-// spec entry, and a decoder built from that entry is an independent witness to
-// the encoder rather than a second copy of it.
-//
-// A description also carries the staging a hand-written body would repeat: a
-// member is whatever width its struct declares, while the stream vocabulary
-// speaks int64 and uint64, so a field converts at exactly one place.
-//
-//     struct ClockPing {
-//         uint32_t probe_id;
-//         uint64_t client_time_usec;
-//
-//         static constexpr auto wire = describe(
-//             field<&ClockPing::probe_id>("probe_id", int_range(0, 4095)),
-//             field<&ClockPing::client_time_usec>("client_time", bits(48)));
-//     };
-//
-// The member pointer is a template argument rather than a stored value so the
-// indirection resolves at compile time and a derived serializer is a straight
-// line of the same calls a hand-written one would make.
-
 enum class SpecKind {
     BITS,
     INT_RANGE,
@@ -44,9 +18,6 @@ enum class SpecKind {
     BYTES_CAPPED,
 };
 
-// The two numbers mean what the kind says they mean: a width, a pair of
-// bounds, or a cap. A tagged union of three shapes this small is more machinery
-// than the shapes are worth.
 struct Spec {
     SpecKind kind = SpecKind::BOOL1;
     int64_t low = 0;
@@ -93,9 +64,6 @@ namespace detail {
 template <class Owner, class Member>
 constexpr Member member_type_of(Member Owner::*);
 
-// The member's declared type decides which verb can carry it, so a bool field
-// cannot be described as a bit count by accident and a blob cannot be staged
-// through an integer.
 template <auto MemberPtr, class Stream, class Owner>
 bool apply_field(const Spec &spec, Stream &stream, Owner &value) {
     using Member = decltype(member_type_of(MemberPtr));
@@ -144,8 +112,6 @@ godot::Dictionary dump_field(const char *name, const Spec &spec);
 template <class... Fields> struct Description {
     std::tuple<Fields...> fields;
 
-    // Stops at the first field that fails, so a poisoned read does not walk the
-    // rest of the layout and a caller sees the failure at its own call site.
     template <class Stream, class Owner>
     bool run(Stream &stream, Owner &value) const {
         bool healthy = true;

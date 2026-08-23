@@ -1,27 +1,14 @@
-// What the gather boundary refuses, and why each refusal is a refusal rather
-// than a best effort.
-//
-// `encode_scalar_row` is the one place a Godot value becomes code-row
-// currency, and everything below it reads codes without re-deriving what they
-// meant. So a value this boundary lets through wrongly is not caught later: it
-// is transmitted, decoded against the same declaration, and lands on the
-// receiver as a confident wrong number. Every guard here answers false and
-// writes nothing, because a partially gathered row is the one outcome that
-// would put a torn value on the wire.
-//
-// The sibling suite covers what the boundary ACCEPTS. This covers what it must
-// not, which is the half a shadow of this stage rests on: a shadow can only
-// report that two implementations agreed, and two implementations that both
-// accept a malformed row agree about nothing worth having.
 
 #include "support/netw_test.h"
 
 #include "godot/variant.hpp"
-#include "netw/quantize.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/quantize.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/wire/code_row.hpp"
 #include "netw/wire/plan.hpp"
 #include "netw/wire/value_row.hpp"
+
+using namespace godot;
 
 namespace TestNetwWireGatherRefusal {
 
@@ -99,9 +86,6 @@ TEST_CASE(
     packer.instantiate();
     packer->bits(8);
     packer->limits(0.0, 1.0);
-    // A bit packer grids a real number. Handing it a bool is a declaration
-    // error, and the boundary is where it has to surface: below here the row
-    // is codes and nothing remembers what they were made from.
     REQUIRE_FALSE(packer->supports_type(godot::Variant::BOOL));
     schema->at(0)->quantizer = packer;
     SchemaCore::fix(schema);
@@ -118,9 +102,6 @@ TEST_CASE(
     const Ref<SchemaRecord> schema = sealed(SchemaCore::I32, 4);
     CodeRow row = CodeRow::for_plan(WirePlan::compile(schema));
 
-    // One Variant does not declare how its elements are indexed, so a strided
-    // column's gather belongs to the column store that owns that mapping. The
-    // refusal is what keeps the two from both claiming it.
     ERR_PRINT_OFF;
     CHECK_FALSE(encode_scalar_row(schema, one(1), row));
     ERR_PRINT_ON;
@@ -133,9 +114,6 @@ TEST_CASE(
     const Ref<SchemaRecord> schema = sealed(SchemaCore::VARIANT);
     const WirePlan plan = WirePlan::compile(schema);
 
-    // A fixed-width plan cannot hold a column whose width is a property of the
-    // value. The plan says so first, and the gather has to agree rather than
-    // inventing a size.
     CHECK_FALSE(plan.valid());
 
     CodeRow row;
@@ -155,9 +133,6 @@ TEST_CASE(
     REQUIRE(encode_scalar_row(schema, one(1234), row));
     const uint64_t kept = row.read(plan.column(0), 0);
 
-    // The row a caller hands in is usually the one it will send. A refusal
-    // that half-wrote it would put a torn value on the wire under a mask that
-    // says the column moved.
     ERR_PRINT_OFF;
     CHECK_FALSE(encode_scalar_row(schema, one(godot::Vector2(1, 2)), row));
     ERR_PRINT_ON;

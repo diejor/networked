@@ -1,9 +1,11 @@
 #include "netw/predict/wiring.hpp"
 
-#include "netw/bit_buffer.hpp"
-#include "netw/codec.hpp"
+#include "netw/api/bit_buffer.hpp"
+#include "netw/api/codec.hpp"
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
+
+using namespace godot;
 
 namespace netw {
 

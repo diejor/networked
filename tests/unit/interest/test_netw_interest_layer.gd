@@ -1,5 +1,5 @@
 ## Unit tests for [NetwInterestLayer]. Covers the canonical mutation
-## API exercised standalone (no [InterestCore]) so the data model
+## API exercised standalone (no session) so the data model
 ## is testable in isolation.
 class_name TestNetwInterestLayer
 extends NetwTestSuite
@@ -8,7 +8,8 @@ var layer: NetwInterestLayer
 
 
 func before_test() -> void:
-	layer = NetwInterestLayer.new(&"test")
+	layer = NetwInterestLayer.new()
+	layer.layer_id = &"test"
 
 
 func _make_entity(entity_name: String = "ent") -> NetwEntity:
@@ -48,7 +49,7 @@ func test_entity_transitions_emit_at_service_flush() -> void:
 	mt.name = "TestTransitionTree"
 	add_child(mt)
 	auto_free(mt)
-	var owned := mt.api._interest.layer(&"test")
+	var owned := mt.api._native_core.interest_layer(&"test")
 	var entity := _make_entity()
 	var enters: Array = []
 	var exits: Array = []
@@ -91,8 +92,69 @@ func test_idempotent_mutations_do_not_duplicate_signals() -> void:
 	layer.entity_added.disconnect(on_entity_add)
 
 
+func test_client_admit_dispatches_enter_before_visible() -> void:
+	var entity := _make_entity("client_ent")
+	var events: Array[StringName] = []
+	var on_enter := func(_layer_id: StringName, _peer: int) -> void:
+		events.append(&"enter")
+	var on_visible := func(_entity: NetwEntity) -> void:
+		events.append(&"visible")
+	entity.interest.on_enter(&"test", on_enter)
+	layer.entity_visible.connect(on_visible)
+
+	layer.client_admit(entity)
+
+	assert_bool(layer.has_entity(entity)).is_true()
+	assert_that(events).contains_exactly([&"enter", &"visible"])
+	layer.entity_visible.disconnect(on_visible)
+
+
+func test_client_revoke_dispatches_leave_before_hidden() -> void:
+	var entity := _make_entity("client_ent")
+	var events: Array[StringName] = []
+	var on_leave := func(_layer_id: StringName, _peer: int) -> void:
+		events.append(&"leave")
+	var on_hidden := func(_entity: NetwEntity) -> void:
+		events.append(&"hidden")
+	entity.interest.on_leave(&"test", on_leave)
+	layer.entity_hidden.connect(on_hidden)
+	layer.client_admit(entity)
+	events.clear()
+
+	layer.client_revoke(entity)
+
+	assert_bool(layer.has_entity(entity)).is_false()
+	assert_that(events).contains_exactly([&"leave", &"hidden"])
+	layer.entity_hidden.disconnect(on_hidden)
+
+
+func test_client_untrack_removes_then_dispatches_leave_and_hidden() -> void:
+	var entity := _make_entity("client_ent")
+	var events: Array[StringName] = []
+	var on_removed := func(_entity: NetwEntity) -> void:
+		events.append(&"removed")
+	var on_leave := func(_layer_id: StringName, _peer: int) -> void:
+		events.append(&"leave")
+	var on_hidden := func(_entity: NetwEntity) -> void:
+		events.append(&"hidden")
+	entity.interest.on_leave(&"test", on_leave)
+	layer.entity_removed.connect(on_removed)
+	layer.entity_hidden.connect(on_hidden)
+	layer.client_admit(entity)
+	events.clear()
+
+	layer.client_untrack_entity(entity)
+
+	assert_bool(layer.has_entity(entity)).is_false()
+	assert_that(events).contains_exactly(
+		[&"removed", &"leave", &"hidden"],
+	)
+	layer.entity_removed.disconnect(on_removed)
+	layer.entity_hidden.disconnect(on_hidden)
+
+
 func test_layer_with_service_broadcasts_through_hooks() -> void:
-	# When a layer is owned by a [InterestCore] (i.e., obtained
+	# When a layer is owned by a session (i.e., obtained
 	# from [member NetwMultiplayer.interest]), its mutators flow through the
 	# interface hooks. Without a peer the broadcast is a no-op; this just
 	# verifies the layer remains usable in that mode.
@@ -101,7 +163,7 @@ func test_layer_with_service_broadcasts_through_hooks() -> void:
 	add_child(mt)
 	auto_free(mt)
 
-	var owned := mt.api._interest.layer(&"owned")
+	var owned := mt.api._native_core.interest_layer(&"owned")
 	var entity := _make_entity("owned_ent")
 	owned.add_entity(entity)
 	owned.add_viewer(11)

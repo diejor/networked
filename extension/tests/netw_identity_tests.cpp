@@ -12,8 +12,8 @@
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
-#include "netw/netw_identity.hpp"
-#include "netw/netw_multiplayer.hpp"
+#include "netw/api/netw_identity.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 
 namespace TestNetwIdentity {
 

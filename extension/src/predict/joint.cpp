@@ -5,6 +5,8 @@
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
 
+using namespace godot;
+
 namespace netw::predict {
 
 namespace {

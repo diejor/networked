@@ -79,7 +79,7 @@
 ##
 ## [br][br]
 ## A fan-out is not a true broadcast. [method rpc] and [method request_all] reach
-## only the peers that currently see the entity through [InterestCore], so a
+## only the peers that currently see the entity through the session interest plane, so a
 ## peer the interest layer does not admit never receives the call.
 ##
 ## [br][br][b]Configure in _init[/b]
@@ -296,7 +296,7 @@ static func configure_join(handler: Callable) -> NetwScriptModel.ConnectConfig:
 
 
 ## Returns the project-wide join handler, or an invalid [Callable] when none was
-## registered. [SessionCore] consults it after a per-session override
+## registered. [NetwMultiplayer] consults it after a per-session override
 ## and before the built-in [NetwDefaultJoin].
 static func resolve_join_handler() -> Callable:
 	return _join_handler
@@ -339,7 +339,7 @@ static func configure_auth(factory: Callable) -> void:
 
 
 ## Returns the project-wide auth-flow factory, or an invalid [Callable] when none
-## was registered. [SessionCore] consults it after a per-session
+## was registered. [NetwMultiplayer] consults it after a per-session
 ## override to construct the session's flow.
 static func resolve_auth_factory() -> Callable:
 	return _auth_factory
@@ -351,14 +351,14 @@ static func resolve_auth_factory() -> Callable:
 ## Server authority runs the change for the session. A client turns it into a
 ## request the server policy decides. The returned [NetwPromise] carries the
 ## outcome, the one thing the native call cannot. See
-## [method SceneCore.change_scene_to_file].
+## [method NetwMultiplayer.scene_change_to_file].
 ## [codeblock]
 ## var promise := Netw.change_scene_to_file(self, "res://match.tscn")
 ## if await promise.completed != OK:
 ##     status.text = "Could not start the match."
 ## [/codeblock]
 static func change_scene_to_file(node: Node, path: String) -> NetwPromise:
-	return _scenes_of(node).change_scene_to_file(node, path)
+	return _scenes_of(node).scene_change_to_file(node, path)
 
 
 ## Changes scene from a file-backed [PackedScene], mirroring
@@ -367,13 +367,13 @@ static func change_scene_to_packed(
 		node: Node,
 		packed: PackedScene,
 ) -> NetwPromise:
-	return _scenes_of(node).change_scene_to_packed(node, packed)
+	return _scenes_of(node).scene_change_to_packed(node, packed)
 
 
 ## Re-enters the scene this peer presents, mirroring
 ## [method SceneTree.reload_current_scene]. See [method change_scene_to_file].
 static func reload_current_scene(node: Node) -> NetwPromise:
-	return _scenes_of(node).reload_current_scene(node)
+	return _scenes_of(node).scene_reload_current(node)
 
 
 ## Spawns a scene and returns its [NetwSceneHandle].
@@ -398,11 +398,12 @@ static func spawn_multiplayer_scene(
 	return api.scene_spawn(recipe, isolation)
 
 
-# Resolves the scene interface owning [param node]'s session.
-static func _scenes_of(node: Node) -> SceneCore:
+# Resolves the session owning [param node], which is what answers a scene
+# change.
+static func _scenes_of(node: Node) -> NetwMultiplayer:
 	var api := NetwMultiplayer.of(node)
 	assert(api != null, "A scene change requires an active session.")
-	return api._scenes
+	return api
 
 
 ## Marks [param scene_type]'s root script as a multiplayer scene, so
@@ -458,7 +459,7 @@ static func is_multiplayer_scene(script: Script) -> bool:
 ## [method SceneTree.change_scene_to_file] or
 ## [method SceneTree.change_scene_to_packed]. On a native change during a live
 ## session the hook detaches the local instance and issues a
-## [method SceneCore.request_change_path]; a framework spawn is
+## [method NetwMultiplayer.scene_request]; a framework spawn is
 ## recognized through [member ReplicationCore.is_applying_remote_frame]
 ## and left alone. The server still decides the request through a
 ## [method NetwMultiplayer.scene_set_request_handler]. The instance must be
@@ -507,7 +508,7 @@ static func _on_marked_scene_entered(node: Node) -> void:
 		return
 	if api.state != NetwMultiplayer.SessionState.ONLINE:
 		return
-	api._scenes._handle_native_scene_entry(node)
+	api._scene_handle_native_entry(node)
 
 
 # Resolves a scene root script from a class, a script, or a scripted instance.
@@ -695,7 +696,7 @@ static func configure_property(
 
 
 ## Declares interest layers for [param node]'s entity and returns a fluent
-## [InterestCore.InterestConfig] builder.
+## [NetwInterestHandle.Config] builder.
 ##
 ## Call from [method Object._init] so every peer constructs the same local
 ## labels and callbacks. Server authority applies the real layer membership.
@@ -713,9 +714,9 @@ static func configure_property(
 ## [/codeblock]
 static func configure_interest(
 		node: Node,
-) -> InterestCore.InterestConfig:
+) -> NetwInterestHandle.Config:
 	var entity := NetwEntity.ensure(node)
-	return InterestCore.InterestConfig.new(entity.interest)
+	return NetwInterestHandle.Config.new(entity.interest)
 
 
 # Registers a property-configured node's derived state and input sets with its
@@ -855,7 +856,7 @@ static func configure_signal(sig: Signal) -> NetwScriptModel.SyncConfig:
 
 
 ## Calls [param callable]'s [code]@rpc[/code] method on every peer that currently
-## sees the entity through [InterestCore], with the given flat arguments.
+## sees the entity through the session interest plane, with the given flat arguments.
 ##
 ## Reliable or unreliable follows the method's [code]@rpc[/code] transfer mode. A
 ## [NetwEntity] or entity root [Node] argument crosses as its route and arrives
@@ -908,7 +909,7 @@ static func request(callable: Callable, args: Array = []) -> NetwPromise:
 
 
 ## Broadcasts a two-way request to every peer that currently sees the entity
-## through [InterestCore] and returns a [NetwGroupPromise] that aggregates
+## through the session interest plane and returns a [NetwGroupPromise] that aggregates
 ## their replies.
 ##
 ## The awaited set is fixed at send time. See [NetwGroupPromise] for per-peer and

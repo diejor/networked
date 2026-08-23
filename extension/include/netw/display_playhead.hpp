@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "godot/ref_counted.hpp"
-#include "netw/display_decl.hpp"
+#include "netw/api/display_decl.hpp"
 
 namespace netw {
 

@@ -1,15 +1,12 @@
 #include "netw/display_channel.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/log.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
 
 namespace netw {
-
-NetwDisplayChannel::NetwDisplayChannel() {
-    offset.instantiate();
-}
 
 void NetwDisplayChannel::copy_shape_from(
     const Ref<NetwDisplayChannel> &p_other
@@ -26,16 +23,52 @@ void NetwDisplayChannel::copy_shape_from(
     authoring_ticks = authoring_ticks || p_other->authoring_ticks;
 }
 
-void NetwDisplayChannel::snap(const Variant &p_value) {
-    if (output.is_valid()) {
-        output->call("write", p_value);
+void NetwDisplayChannel::write(const Variant &p_value) {
+    if (door.is_valid()) {
+        const Variant verdict = door.call(entity, target_prop, p_value);
+        if (int64_t(verdict) != ERR_DOES_NOT_EXIST) {
+            return;
+        }
     }
+    if (output.is_valid()) {
+        output.call(p_value);
+        return;
+    }
+    if (port.is_null()) {
+        return;
+    }
+    if (port->write(p_value) != NetwDisplayPort::WRITE_REFUSED) {
+        return;
+    }
+    NETW_WARN_COND(
+        !refused_global,
+        sys::INTERPOLATION,
+        "'%s' is a global-space channel with no global setter for %s, so it "
+        "is written locally and composes with the body",
+        String(port->get_target_prop()),
+        String(Variant::get_type_name(p_value.get_type()))
+    );
+    refused_global = true;
+}
+
+Variant NetwDisplayChannel::current_source_value() {
+    Object *from = source.resolve(sys::INTERPOLATION);
+    if (from != nullptr) {
+        return from->get(source_prop);
+    }
+    Object *to = target.resolve(sys::INTERPOLATION);
+    if (to != nullptr) {
+        return to->get(target_prop);
+    }
+    return Variant();
+}
+
+void NetwDisplayChannel::snap(const Variant &p_value) {
+    write(p_value);
     if (history.is_valid()) {
         history->clear();
     }
-    if (offset.is_valid()) {
-        offset->clear();
-    }
+    offset.clear();
     last_written = p_value;
 }
 
@@ -61,6 +94,14 @@ void NetwDisplayChannel::_bind_methods() {
         &NetwDisplayChannel::copy_shape_from
     );
     ClassDB::bind_method(D_METHOD("snap", "value"), &NetwDisplayChannel::snap);
+    ClassDB::bind_method(
+        D_METHOD("write", "value"),
+        &NetwDisplayChannel::write
+    );
+    ClassDB::bind_method(
+        D_METHOD("current_source_value"),
+        &NetwDisplayChannel::current_source_value
+    );
 
 #define NETW_CHANNEL_PROPERTY(m_type, m_name) \
     ClassDB::bind_method( \
@@ -81,8 +122,10 @@ void NetwDisplayChannel::_bind_methods() {
     NETW_CHANNEL_PROPERTY(Variant::STRING_NAME, state_key);
     NETW_CHANNEL_PROPERTY(Variant::OBJECT, spec);
     NETW_CHANNEL_PROPERTY(Variant::OBJECT, history);
-    NETW_CHANNEL_PROPERTY(Variant::OBJECT, offset);
-    NETW_CHANNEL_PROPERTY(Variant::OBJECT, output);
+    NETW_CHANNEL_PROPERTY(Variant::RID, entity);
+    NETW_CHANNEL_PROPERTY(Variant::CALLABLE, door);
+    NETW_CHANNEL_PROPERTY(Variant::CALLABLE, output);
+    NETW_CHANNEL_PROPERTY(Variant::OBJECT, port);
     NETW_CHANNEL_PROPERTY(Variant::OBJECT, source_obj);
     NETW_CHANNEL_PROPERTY(Variant::STRING_NAME, source_prop);
     NETW_CHANNEL_PROPERTY(Variant::OBJECT, target_obj);

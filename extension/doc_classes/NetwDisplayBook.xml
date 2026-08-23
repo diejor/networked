@@ -147,6 +147,19 @@
 				How many rows the book holds, counting a row that carries only a declaration.
 			</description>
 		</method>
+		<method name="get_stats" qualifiers="const">
+			<return type="NetwPumpStats" />
+			<description>
+				Returns the aggregate [NetwPumpStats] accumulated across display pumps.
+			</description>
+		</method>
+		<method name="set_stats">
+			<return type="void" />
+			<param index="0" name="stats" type="NetwPumpStats" />
+			<description>
+				Sets the [NetwPumpStats] instance used for pump metrics aggregation.
+			</description>
+		</method>
 		<method name="take_dirty">
 			<return type="RID[]" />
 			<description>
@@ -166,6 +179,11 @@
 			</description>
 		</method>
 	</methods>
+	<members>
+		<member name="stats" type="NetwPumpStats" setter="set_stats" getter="get_stats">
+			The aggregate [NetwPumpStats] instance.
+		</member>
+	</members>
 	<signals>
 		<signal name="went_dirty">
 			<param index="0" name="entity" type="RID" />

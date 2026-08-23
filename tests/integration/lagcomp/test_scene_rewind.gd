@@ -22,7 +22,7 @@ func test_linger_keeps_target_rewindable_until_freed() -> void:
 
 	# Registered by state-set presence on the server. Seed a known
 	# authoritative state so the rewind query is meaningful after despawn.
-	var tl := s.server.api._lagcomp.timeline_of(entity)
+	var tl := s.server.api.timeline_of(entity)
 	assert_that(tl).is_not_null()
 	tl.record_state(5, { &"position": Vector2(40.0, 0.0) })
 
@@ -39,7 +39,7 @@ func test_linger_keeps_target_rewindable_until_freed() -> void:
 	# During the window the entity lingers (deactivated, not freed) and stays
 	# rewindable, so a late shooter still validates against where the target was.
 	assert_bool(is_instance_valid(node)).is_true()
-	assert_that(s.server.api._lagcomp.timeline_of(entity)).is_not_null()
+	assert_that(s.server.api.timeline_of(entity)).is_not_null()
 	var rid := s.server.api.entity_of(node)
 	var during := s.server.api.lagcomp_sample(rid, 5)
 	assert_vector(during.position).is_equal_approx(Vector2(40.0, 0.0), Vector2.ONE * 0.001)
@@ -48,5 +48,5 @@ func test_linger_keeps_target_rewindable_until_freed() -> void:
 	s.run(1)
 	await (Engine.get_main_loop() as SceneTree).process_frame
 	assert_bool(is_instance_valid(node)).is_false()
-	assert_that(s.server.api._lagcomp.timeline_of(entity)).is_null()
+	assert_that(s.server.api.timeline_of(entity)).is_null()
 	assert_bool(s.server.api.lagcomp_sample(rid, 5).is_empty()).is_true()

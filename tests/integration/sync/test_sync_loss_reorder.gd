@@ -19,8 +19,9 @@ const TICKRATE := 30
 var harness: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: ClockCore
-var client_clock: ClockCore
+var server_api: NetwMultiplayer
+var server_clock: NetwClockHandle
+var client_clock: NetwClockHandle
 var server_root: Node2D
 var client_root: Node2D
 var _stepper: LockstepStepper
@@ -34,6 +35,7 @@ func after_test() -> void:
 	server = null
 	client = null
 	server_clock = null
+	server_api = null
 	client_clock = null
 	server_root = null
 	client_root = null
@@ -49,7 +51,8 @@ func _setup_pair(root_type: Variant = StateSyncBody) -> void:
 	client = await harness.add_client()
 	server = harness.server()
 	server_clock = await harness.add_clock(TICKRATE)
-	client_clock = client.api._clock
+	server_api = harness.server().api
+	client_clock = client.api._native_core.clock_handle
 	server_clock.manual_tick = true
 	client_clock.manual_tick = true
 
@@ -65,7 +68,7 @@ func _setup_pair(root_type: Variant = StateSyncBody) -> void:
 	await get_tree().process_frame
 
 	_stepper = LockstepStepper.new(
-		[server_clock, client_clock] as Array[ClockCore],
+		[server_clock, client_clock] as Array[NetwClockHandle],
 		[server.multiplayer, client.multiplayer] as Array[MultiplayerAPI],
 		harness.session(),
 		TICKRATE,
@@ -99,7 +102,7 @@ func test_state_stream_applies_strictly_forward_under_reorder() -> void:
 
 	var server_binding: NetwPropertySetBinding = NetwEntity.of(server_root) \
 			.state_binding
-	server_clock.on_tick.connect(
+	server_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			server_binding.authored_tick = t
 			server_root.position = Vector2(t, -t),
@@ -161,7 +164,7 @@ func test_masked_state_stream_never_corrupts_under_loss_and_converges() -> void:
 		server_binding.authored_tick = t
 		server_root.position = Vector2(t, -t)
 		last_authored_tick[0] = t
-	server_clock.on_tick.connect(on_tick_conn)
+	server_api.on_tick.connect(on_tick_conn)
 	NetwEntity.of(client_root).state_binding.on_applied = (
 			func(header: Dictionary) -> void:
 				var tick := int(header.get("tick", -1))
@@ -193,7 +196,7 @@ func test_masked_state_stream_never_corrupts_under_loss_and_converges() -> void:
 	# the confirmed baseline eventually catches up rather than staying stuck on
 	# a stale row. The authoring stops here so healing ticks never move the
 	# target the assertion below checks against.
-	server_clock.on_tick.disconnect(on_tick_conn)
+	server_api.on_tick.disconnect(on_tick_conn)
 	harness.clear_links()
 	_stepper.sync_ticks(4)
 	var t: int = last_authored_tick[0]

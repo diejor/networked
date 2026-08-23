@@ -1,8 +1,31 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictWritePlan" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		The recovery staged for one authoritative comparison: the state to
+		restore, the row to publish, and whether either is owed at all.
 	</brief_description>
 	<description>
+		A recovery mutates the engine's own dense state and separately
+		publishes the same values as a row a shell can drain. [method restore_at]
+		and [method restore_has] answer what was written into the engine's
+		state directly. [method write_at] and [method write_has] answer
+		the published copy: a shell drains it onto its bound nodes, while
+		a shell-less driver reads the engine state instead and leaves it
+		undrained. The two agree in value whenever both are present, and
+		exist separately because they serve two different readers.
+		[br][br][method skip] is [code]true[/code] by default and stays
+		[code]true[/code] whenever no recovery was owed for this
+		comparison; every other member then answers its zero default
+		rather than a real plan.
+		[codeblock]
+		if plan.skip():
+		    return
+		for field in range(field_count):
+		    if plan.restore_has(field):
+		        engine_state[field] = plan.restore_at(field)
+		    if plan.write_has(field):
+		        node.set(field_name, plan.write_at(field))
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,60 +33,96 @@
 		<method name="basis" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition this plan's correction was computed
+				against, or [code]-1[/code] when [method skip] is
+				[code]true[/code].
 			</description>
 		</method>
 		<method name="escalated" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this correction escalated to a stronger policy
+				than the one already in effect. A caller that sees this
+				[code]true[/code] closes out any still-pending write on
+				the episode as a non-contraction rather than waiting for
+				its own verify run to elapse, since an escalation means
+				that pending write was superseded before it could settle.
 			</description>
 		</method>
 		<method name="operator_kind" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [enum NetwPredictJournal.Operator] this plan applies,
+				meaningless while [method skip] is [code]true[/code].
 			</description>
 		</method>
 		<method name="replay_from" qualifiers="const">
 			<return type="int" />
 			<description>
+				The oldest transition this plan owes a replay from, or
+				[code]-1[/code] when it owes no replay. Set only under
+				replay-mode correction, where the restore alone is not
+				enough to bring the state back in sync.
 			</description>
 		</method>
 		<method name="replay_through" qualifiers="const">
 			<return type="int" />
 			<description>
+				The newest transition this plan's replay covers, or
+				[code]-1[/code] when it owes no replay.
 			</description>
 		</method>
 		<method name="restore_at" qualifiers="const">
 			<return type="Variant" />
 			<param index="0" name="field" type="int" />
 			<description>
+				The value this plan writes into the engine's own state for
+				[param field], meaningless unless [method restore_has] is
+				[code]true[/code] for the same field.
 			</description>
 		</method>
 		<method name="restore_has" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="field" type="int" />
 			<description>
+				Whether this plan's engine-state restore captured
+				[param field] at all. A restore is sparse, so a field
+				this answers [code]false[/code] for is left untouched.
 			</description>
 		</method>
 		<method name="skip" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this plan owes no correction at all. When
+				[code]true[/code], every other member answers its zero
+				default rather than a real value, and a caller returns
+				without touching state.
 			</description>
 		</method>
 		<method name="teleport" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this plan's restore is a discontinuous teleport
+				rather than a value a caller may blend toward smoothly.
 			</description>
 		</method>
 		<method name="write_at" qualifiers="const">
 			<return type="Variant" />
 			<param index="0" name="field" type="int" />
 			<description>
+				The value this plan publishes for a shell to drain onto
+				[param field]'s bound node, meaningless unless
+				[method write_has] is [code]true[/code] for the same
+				field.
 			</description>
 		</method>
 		<method name="write_has" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="field" type="int" />
 			<description>
+				Whether this plan's published row captured [param field]
+				at all. Sparse in the same way as [method restore_has],
+				and usually true for exactly the same fields.
 			</description>
 		</method>
 	</methods>

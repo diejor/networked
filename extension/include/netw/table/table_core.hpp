@@ -6,8 +6,8 @@
 #include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
-#include "netw/bit_buffer.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/bit_buffer.hpp"
+#include "netw/api/schema_core.hpp"
 
 namespace netw {
 

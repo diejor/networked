@@ -1,10 +1,10 @@
 @tool
-## Editor authoring shell for [DisplayCore].
+## Editor authoring shell for an entity's display.
 ##
 ## [MultiplayerInterpolator] writes entity display settings into
 ## [member NetwEntity.interpolation] and per property [NetwInterpolate]
 ## resources into [method Netw.configure_property]. Runtime interpolation is
-## owned by [DisplayCore].
+## owned by the session.
 ## [codeblock]
 ## # Inspector:
 ## # interp/position = NetwInterpolate.new().lerp()
@@ -196,9 +196,9 @@ func _apply_property_interpolators() -> void:
 		var property := source[1] as StringName
 		Netw.configure_property(node, property, false).interpolate(spec)
 	_applying = false
-	var iface := DisplayCore.for_node(target_owner)
-	if iface and _entity:
-		iface._mark_runtime_dirty(_entity.rid)
+	var core := NetwMultiplayer.core_of(target_owner)
+	if core and _entity:
+		core.display_book.mark_dirty(_entity.rid, NetwDisplayDecl.DIRT_RUNTIME)
 
 
 func set_property_interpolator(

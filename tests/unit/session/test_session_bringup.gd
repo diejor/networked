@@ -54,12 +54,12 @@ func test_host_reports_one_outcome_for_the_whole_verb() -> void:
 	pump.call()
 
 	var guard := 0
-	while api.state != SessionCore.State.ONLINE and guard < 40:
+	while api.state != NetwMultiplayer.SessionState.ONLINE and guard < 40:
 		api.poll()
 		await get_tree().process_frame
 		guard += 1
 
-	assert_int(api.state).is_equal(SessionCore.State.ONLINE)
+	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
 	assert_bool(entered[0]).is_true()
 	assert_int(outcomes.size()).is_equal(1)
 	assert_bool(outcomes[0].is_ok()).is_true()
@@ -140,7 +140,7 @@ func test_a_timed_out_attempt_hands_the_machine_its_cancel_edge() -> void:
 	var peer := LocalMultiplayerPeer.new()
 	peer.create_client(7)
 	api.multiplayer_peer = peer
-	assert_int(api.state).is_equal(SessionCore.State.CONNECTING)
+	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.CONNECTING)
 
 	var attempt := connector._begin_attempt()
 	connector._connecting_attempt = attempt
@@ -150,5 +150,5 @@ func test_a_timed_out_attempt_hands_the_machine_its_cancel_edge() -> void:
 
 	assert_int(attempt.result.status) \
 			.is_equal(NetwConnectResult.Status.TIMED_OUT)
-	assert_int(api.state).is_equal(SessionCore.State.OFFLINE)
+	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.OFFLINE)
 	api.embedding.dispose()

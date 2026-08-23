@@ -56,24 +56,24 @@ func test_retain_freezes_and_readmission_resumes_same_node() -> void:
 			left.append([layer_id, peer_id])
 	)
 
-	var interest := host.tree.api._interest
-	var layer := interest.layer(&"stealth")
+	var interest := host.tree.api
+	var layer := interest._native_core.interest_layer(&"stealth")
 	layer.default_leave_policy = NetwMultiplayer.LeavePolicy.RETAIN
 	layer.add_viewer(observer.peer_id)
 	layer.add_viewer(actor.peer_id)
 	layer.add_entity(entity)
-	interest.flush()
+	interest.interest_flush()
 	await game.sync_ticks(8)
 	entered.clear()
 	left.clear()
 
 	layer.remove_viewer(observer.peer_id)
-	interest.flush()
+	interest.interest_flush()
 	await game.sync_ticks(8)
 	assert_array(left).contains_exactly([[&"stealth", observer.peer_id]])
-	assert_bool(interest.has_filter(entity)).is_true()
+	assert_bool(interest._native_core.interest_entity_has_filter(entity)).is_true()
 	assert_bool(
-		interest.participant_sees(observer.peer_id, entity),
+		interest._native_core.interest_participant_sees(observer.peer_id, entity),
 	).is_false()
 	assert_int(remote_probe.get_instance_id()).is_equal(remote_instance)
 	server_probe.marker = "after"
@@ -82,7 +82,7 @@ func test_retain_freezes_and_readmission_resumes_same_node() -> void:
 	assert_str(actor_probe.marker).is_equal("after")
 
 	layer.add_viewer(observer.peer_id)
-	interest.flush()
+	interest.interest_flush()
 	await game.sync_ticks(24)
 	assert_array(entered).contains_exactly([[&"stealth", observer.peer_id]])
 	assert_int(remote_probe.get_instance_id()).is_equal(remote_instance)

@@ -10,8 +10,8 @@
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
-#include "netw/entity.hpp"
-#include "netw/netw_multiplayer.hpp"
+#include "netw/api/entity.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 
 namespace TestNetwEntityFacade {
 

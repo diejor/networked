@@ -9,15 +9,22 @@ was the ClassDB census, and registrations grew without anyone deciding
 their retirement.
 
 `classdb_census.txt` is the disposition ledger: one row per registered
-class, `<Class> stay` or `<Class> retire:<unit>`, where the unit is the
-schedule row (`ZU-n`) whose landing deletes the registration. This tool
-diffs `register_types.cpp` against it.
+class, `<Class> stay`, `<Class> stay <argument>`, `<Class> retire:<unit>`,
+or `<Class> internal <reason>`. `stay` is the published surface, and its
+optional argument names what holds it there, which is required of a class
+the permanent keep set reaches (ZD-34). `retire:<unit>` names the track
+(`ZT-n`) whose crossing deletes the registration. `internal`
+(ZD-26) is `GDREGISTER_INTERNAL_CLASS`: the class stays registered for a
+C++ core to construct but is never named from GDScript, so it carries no
+XML and is off the books for `--strict`. This tool diffs
+`register_types.cpp` against the ledger.
 
     check_classdb_census.py              # the census, grouped by disposition
     check_classdb_census.py --check      # exit 1 on an unlisted registration
                                          # or a classless retire row
-    check_classdb_census.py --strict     # exit 1 unless registered == stay
-                                         # exactly (the ZU-39/Z7 gate)
+    check_classdb_census.py --strict     # exit 1 unless every EXPOSED
+                                         # registration (registered minus
+                                         # internal) is in the stay set
     check_classdb_census.py --self-test  # proves itself red, then green
 
 A registration ABSENT from the ledger is a refusal, not a default: a class
@@ -37,7 +44,9 @@ MACRO = re.compile(
     r"^\s*(GDREGISTER_(?:ABSTRACT_|INTERNAL_|RUNTIME_|VIRTUAL_)?CLASS)\s*"
     r"\(\s*([A-Za-z0-9_:]+)\s*\)"
 )
-ROW = re.compile(r"^([A-Za-z0-9_]+)\s+(stay|retire:ZU-\d+)\s*$")
+ROW = re.compile(
+    r"^([A-Za-z0-9_]+)\s+(stay(?:\s+\S.*)?|retire:ZT-\d+|internal\s+\S.*)\s*$"
+)
 
 
 def registered(text):
@@ -65,45 +74,59 @@ def ledger(text):
     return rows, bad
 
 
+def is_stay(verdict):
+    return verdict == "stay" or verdict.startswith("stay ")
+
+
 def census(reg, rows):
-    stay = sorted(n for n in reg if rows.get(n) == "stay")
+    stay = sorted(n for n in reg if is_stay(rows.get(n, "")))
     retire = {}
+    internal = []
     for name in reg:
         verdict = rows.get(name, "")
         if verdict.startswith("retire:"):
             retire.setdefault(verdict.split(":", 1)[1], []).append(name)
+        elif verdict.startswith("internal"):
+            internal.append(name)
+    internal.sort()
     unlisted = sorted(n for n in reg if n not in rows)
     stale = sorted(n for n in rows if n not in reg)
-    return stay, retire, unlisted, stale
+    return stay, retire, internal, unlisted, stale
 
 
 def report(reg, rows, bad):
-    stay, retire, unlisted, stale = census(reg, rows)
+    stay, retire, internal, unlisted, stale = census(reg, rows)
     retiring = sum(len(v) for v in retire.values())
     print(
-        "CLASSDB registered=%d stay=%d retiring=%d unlisted=%d stale=%d"
-        % (len(reg), len(stay), retiring, len(unlisted), len(stale))
+        "CLASSDB registered=%d stay=%d retiring=%d internal=%d unlisted=%d"
+        " stale=%d"
+        % (len(reg), len(stay), retiring, len(internal), len(unlisted), len(stale))
     )
     for unit in sorted(retire):
         print("  retire at %s: %d" % (unit, len(retire[unit])))
         for name in sorted(retire[unit]):
             print("    %s" % name)
+    if internal:
+        print("  internal: %d" % len(internal))
+        for name in internal:
+            print("    %s (%s)" % (name, rows[name]))
     for name in unlisted:
         print("  UNLISTED %s (%s)" % (name, reg[name]))
     for name in stale:
         print("  STALE %s: row without a registration" % name)
     for at, line in bad:
         print("  UNPARSED %s:%d: %s" % (CENSUS.name, at, line))
-    return stay, retire, unlisted, stale
+    return stay, retire, internal, unlisted, stale
 
 
 def run_check(reg, rows, bad):
-    _, _, unlisted, _ = census(reg, rows)
+    _, _, _, unlisted, _ = census(reg, rows)
     refused = len(unlisted) + len(bad)
     for name in unlisted:
         print(
             "REFUSED %s is registered with no disposition: add a"
-            " `stay` or `retire:ZU-n` row to %s" % (name, CENSUS.name)
+            " `stay`, `retire:ZT-n` or `internal <reason>` row to %s"
+            % (name, CENSUS.name)
         )
     for at, line in bad:
         print("REFUSED %s:%d is not a disposition row: %s" % (CENSUS.name, at, line))
@@ -111,7 +134,7 @@ def run_check(reg, rows, bad):
 
 
 def run_strict(reg, rows, bad):
-    stay, retire, unlisted, _ = census(reg, rows)
+    stay, retire, internal, unlisted, _ = census(reg, rows)
     refused = len(unlisted) + len(bad)
     for unit in sorted(retire):
         for name in sorted(retire[unit]):
@@ -127,16 +150,28 @@ def self_test():
         "void f() {\n"
         "\tGDREGISTER_CLASS(netw::NetwKept);\n"
         "\tGDREGISTER_ABSTRACT_CLASS(netw::NetwGoing);\n"
+        "\tGDREGISTER_INTERNAL_CLASS(netw::NetwHidden);\n"
         "\tGDREGISTER_CLASS(netw_test::Stray);\n"
         "}\n"
     )
-    rows, bad = ledger("NetwKept stay\nNetwGoing retire:ZU-39\nNetwGone stay\nnot a row\n")
-    stay, retire, unlisted, stale = census(reg, rows)
+    rows, bad = ledger(
+        "NetwKept stay held by context/networked.gd, which never dies\n"
+        "NetwGoing retire:ZT-6\n"
+        "NetwHidden internal held by NetwSessionCore, never named\n"
+        "NetwGone stay\n"
+        "not a row\n"
+    )
+    stay, retire, internal, unlisted, stale = census(reg, rows)
     checks = [
-        ("three registrations parse", len(reg) == 3),
+        ("four registrations parse", len(reg) == 4),
         ("the abstract macro is kept apart", reg["NetwGoing"].startswith("GDREGISTER_ABSTRACT")),
-        ("stay resolves", stay == ["NetwKept"]),
-        ("retire groups by unit", retire == {"ZU-39": ["NetwGoing"]}),
+        ("the internal macro is kept apart", reg["NetwHidden"] == "GDREGISTER_INTERNAL_CLASS"),
+        ("stay resolves through its argument", stay == ["NetwKept"]),
+        ("retire groups by unit", retire == {"ZT-6": ["NetwGoing"]}),
+        (
+            "internal resolves and carries a reason",
+            internal == ["NetwHidden"] and rows["NetwHidden"].startswith("internal "),
+        ),
         ("an unlisted registration refuses", unlisted == ["Stray"]),
         ("a stale row reports without a registration", stale == ["NetwGone"]),
         ("a malformed row is refused", len(bad) == 1),
@@ -145,6 +180,21 @@ def self_test():
         (
             "--strict passes a pure stay tree",
             run_strict({"NetwKept": "GDREGISTER_CLASS"}, {"NetwKept": "stay"}, []) == 0,
+        ),
+        (
+            "--strict takes an internal row off the books",
+            run_strict(
+                {
+                    "NetwKept": "GDREGISTER_CLASS",
+                    "NetwHidden": "GDREGISTER_INTERNAL_CLASS",
+                },
+                {
+                    "NetwKept": "stay",
+                    "NetwHidden": "internal held by a core",
+                },
+                [],
+            )
+            == 0,
         ),
     ]
     failed = [name for name, ok in checks if not ok]

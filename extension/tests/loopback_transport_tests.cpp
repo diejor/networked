@@ -17,7 +17,7 @@
 
 #include <cstring>
 
-#include "netw/transport/loopback.hpp"
+#include "netw/api/loopback.hpp"
 
 namespace TestNetwLoopbackTransport {
 

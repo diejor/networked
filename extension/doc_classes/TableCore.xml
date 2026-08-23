@@ -17,6 +17,7 @@
 		[br][br]Reads are the mirror image: they answer the store itself, which is what makes reading a 2,000-row column free. Treat a returned array as read-only and duplicate it to keep history, which is also the render-side interpolation pattern.
 		[br][br]Births and deaths are derived here rather than decoded, so a dropped datagram can delay a row's data but can never lose a cohort. A birth is a route this table held no row for. A death is a row a removal took away.
 		[br][br]A table declares nothing of its own. [method declare] binds a [SchemaRecord] that is already sealed, which is what makes the column order the wire order and [member SchemaRecord.shape_hash] the value every frame carries.
+		[br][br][method apply_frame] absorbs ordinary datagram reordering rather than trusting arrival order. A frame older than the applied tick by more than a bounded window is skipped outright as stale, and inside that window a removed route is remembered a while after: an upsert for it that arrives late, having lost the race to its own removal, is dropped rather than resurrecting the row. [method begin_intake] opens a fresh wave, and every table [method apply_frame] touches accumulates its births and deaths across every frame of that wave rather than resetting between them, so a session reading [method read_births] and [method read_deaths] after several frames sees the wave's net cohort, not just the last frame's.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -387,7 +388,7 @@
 			<param index="2" name="data" type="Variant" />
 			<description>
 				Records one column's buffer for the next [method commit].
-				[br][br]The buffer is held by reference and copied at [method commit], so writing is a slot store rather than a copy. [param data] must be the storage array [method SchemaCore.storage_type] names for that column's type.
+				[br][br]The buffer is held by reference and copied at [method commit], so writing is a slot store rather than a copy. [param data] must be the storage array [method SchemaCore.storage_type] names for that column's type. A [constant SchemaCore.QUATERNION] column stores as a [PackedVector4Array]; its [method column_quantizer], if any, still reads and writes actual [Quaternion] values, converted at the boundary.
 			</description>
 		</method>
 		<method name="write_routes">

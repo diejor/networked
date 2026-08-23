@@ -93,7 +93,7 @@ func _spawn_tp_player(
 
 func _set_player_database(player: Node) -> void:
 	player.set_meta(
-		NetwPersistenceEngine.META_DATABASE,
+		NetwPersistenceEngine.meta_database(),
 		db,
 	)
 

@@ -1,11 +1,11 @@
 ## Synchronises simulation time between server and clients with drift and stall protection.
 ##
-## The [MultiplayerClock] node is the authoring surface and protocol endpoint
-## holder for the tick engine that lives in [ClockCore], owned by
-## [NetwMultiplayer]. [method NetwMultiplayer.service_install] pushes this
-## node's export snapshot into the session's clock core and starts the engine.
-## The engine handles RTT smoothing, clock drift correction, and frame stall
-## detection to prevent "spiral of death" scenarios.
+## The [MultiplayerClock] node is the authoring surface and the physics pump
+## for the clock the session holds, which is [NetwClockHandle].
+## [method NetwMultiplayer.service_install] pushes this node's export snapshot
+## into that clock as a [NetwClockConfig] and starts it. The clock handles RTT
+## smoothing, drift correction, and frame stall detection to prevent "spiral of
+## death" scenarios.
 ## [codeblock]
 ## # The clock registers itself automatically on the MultiplayerTree.
 ## var api := NetwMultiplayer.of(self)
@@ -74,8 +74,8 @@ signal pong_received(data: Dictionary)
 	set(v):
 		sync_mode = v
 		if _interface:
-			# Widen to int across the seam: the engine still types this slot as
-			# its own enum, and the two are mirrored value for value.
+			# Widen to int across the seam: the clock types this slot as
+			# NetwClockHandle.SyncMode, and the two are mirrored value for value.
 			_interface.sync_mode = int(v)
 
 ## The maximum allowed divergence before a hard Snap is forced.
@@ -151,10 +151,9 @@ signal pong_received(data: Dictionary)
 
 #region ── Public API ──────────────────────────────────────────────────────────
 
-## The [ClockCore] engine this node configures, or [code]null[/code]
-## before registration. Consumers should read the clock through
-## [member NetwMultiplayer.clock] rather than this node.
-var _interface: ClockCore
+# The session clock this node configures and pumps, or null before
+# registration. Consumers read the clock through NetwMultiplayer.clock.
+var _interface: NetwClockHandle
 
 # The typed payload registered with the API on entry, snapshotting the exports.
 var _config: NetwClockConfig
@@ -176,10 +175,16 @@ func _service_type() -> Script:
 
 
 func _service_entered(api: NetwMultiplayer) -> void:
-	_interface = api._clock
+	_interface = api._native_core.clock_handle
 	_config = _build_config()
 	api.service_install(_config)
-	_interface._attach_node(self)
+	_interface.node_pumped = true
+	var core := api._native_core
+	core.set_clock_mismatch_action(tickrate_mismatch_action)
+	if not core.clock_tickrate_mismatch.is_connected(tickrate_mismatch.emit):
+		core.clock_tickrate_mismatch.connect(tickrate_mismatch.emit)
+	if not core.clock_pong_received.is_connected(pong_received.emit):
+		core.clock_pong_received.connect(pong_received.emit)
 
 	if not api.session_entered.is_connected(_on_tree_configured):
 		api.session_entered.connect(_on_tree_configured)
@@ -200,7 +205,12 @@ func _service_entered(api: NetwMultiplayer) -> void:
 func _service_exiting(api: NetwMultiplayer) -> void:
 	# Detaching keeps the config registered, so freeing this node never stops
 	# the clock.
-	api._clock.detach_node(self)
+	api._native_core.clock_handle.node_pumped = false
+	var core := api._native_core
+	if core.clock_tickrate_mismatch.is_connected(tickrate_mismatch.emit):
+		core.clock_tickrate_mismatch.disconnect(tickrate_mismatch.emit)
+	if core.clock_pong_received.is_connected(pong_received.emit):
+		core.clock_pong_received.disconnect(pong_received.emit)
 
 	if api.session_entered.is_connected(_on_tree_configured):
 		api.session_entered.disconnect(_on_tree_configured)
@@ -243,16 +253,13 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if delta > stall_threshold and not multiplayer.is_server():
-		_interface.request_handshake()
+		multiplayer._native_core.clock_request_handshake()
 
 	_interface.physics_step(delta)
 
 	if not multiplayer.is_server() and _interface.is_synchronized:
 		if _interface.consume_ping_due(delta):
-			_interface.send_ping()
-
-		if enable_drift_logging and _interface.consume_drift_log_due(delta):
-			_interface.log_drift()
+			multiplayer._native_core.clock_send_ping()
 
 
 func _on_tree_configured() -> void:
@@ -267,12 +274,12 @@ func _on_tree_configured() -> void:
 	if not multiplayer.is_server() and _interface:
 		if multiplayer.multiplayer_peer.get_connection_status() == \
 				MultiplayerPeer.CONNECTION_CONNECTED:
-			_interface.request_handshake()
+			multiplayer._native_core.clock_request_handshake()
 		elif not multiplayer.connected_to_server.is_connected(
-			_interface.request_handshake,
+			multiplayer._native_core.clock_request_handshake,
 		):
 			multiplayer.connected_to_server.connect(
-				_interface.request_handshake,
+				multiplayer._native_core.clock_request_handshake,
 				CONNECT_ONE_SHOT,
 			)
 

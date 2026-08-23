@@ -1,12 +1,8 @@
 #include "netw/entity_stage.hpp"
 
-#include "godot/class_db.hpp"
-
 namespace netw {
 
-using namespace godot;
-
-bool NetwEntityStage::edge_is_legal(int64_t p_from, int64_t p_to) {
+bool stage_edge_is_legal(int64_t p_from, int64_t p_to) {
     switch (EntityStage(p_from)) {
         case EntityStage::UNBOUND:
             return p_to == int(EntityStage::TEMPLATE)
@@ -29,23 +25,10 @@ bool NetwEntityStage::edge_is_legal(int64_t p_from, int64_t p_to) {
     return false;
 }
 
-bool NetwEntityStage::can_begin_despawn(int64_t p_stage) {
+bool stage_can_begin_despawn(int64_t p_stage) {
     return p_stage == int(EntityStage::UNBOUND)
         || p_stage == int(EntityStage::ARMED)
         || p_stage == int(EntityStage::LIVE);
-}
-
-void NetwEntityStage::_bind_methods() {
-    ClassDB::bind_static_method(
-        "NetwEntityStage",
-        D_METHOD("edge_is_legal", "from", "to"),
-        &NetwEntityStage::edge_is_legal
-    );
-    ClassDB::bind_static_method(
-        "NetwEntityStage",
-        D_METHOD("can_begin_despawn", "stage"),
-        &NetwEntityStage::can_begin_despawn
-    );
 }
 
 } // namespace netw

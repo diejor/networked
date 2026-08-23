@@ -8,6 +8,8 @@
 #include "netw/predict/journal.hpp"
 #include "netw/prediction_core.hpp"
 
+using namespace godot;
+
 namespace TestNetwPredictDomain {
 
 using godot::Dictionary;

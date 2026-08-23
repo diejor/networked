@@ -57,14 +57,14 @@ func test_parent_row_blocks_child_layer_until_scene_admits() -> void:
 		NodePath(client_player.name),
 	) as Node2D
 	var entity := NetwEntity.of(server_player)
-	var service := harness.server().api._interest
-	var own_layer := service.layer(&"always")
+	var service := harness.server().api
+	var own_layer := service._native_core.interest_layer(&"always")
 	assert_bool(server_scene.layer.has_entity(entity)).is_true()
 	own_layer.add_entity(entity)
 	own_layer.add_viewer(peer_b)
-	service.flush()
+	service.interest_flush()
 
-	assert_bool(service.participant_sees(peer_b, entity)).is_false()
+	assert_bool(service._native_core.interest_participant_sees(peer_b, entity)).is_false()
 	var client1_scene := client1.api.scene(
 		level_builder.scene_name,
 	)
@@ -72,10 +72,10 @@ func test_parent_row_blocks_child_layer_until_scene_admits() -> void:
 			.is_null()
 
 	server_scene.admit(peer_b)
-	service.flush()
+	service.interest_flush()
 	await drain_frames(get_tree(), 5)
 
-	assert_bool(service.participant_sees(peer_b, entity)).is_true()
+	assert_bool(service._native_core.interest_participant_sees(peer_b, entity)).is_true()
 	var visible_player := await harness.wait_for_player(
 		client1,
 		level_builder.scene_name,

@@ -29,9 +29,6 @@ func _enter_tree() -> void:
 	api.object_configuration_add(self, session)
 
 	var scenes := NetwSceneConfig.new()
-	scenes.initial_scenes = [LOBBY_LEVEL]
-	scenes.scenes = {
-		&"World": WORLD,
-		&"Lobby": LOBBY_LEVEL,
-	}
+	scenes.declare_scene(&"Lobby", LOBBY_LEVEL, true)
+	scenes.declare_scene(&"World", WORLD)
 	api.object_configuration_add(self, scenes)

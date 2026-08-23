@@ -12,7 +12,9 @@
 #include <initializer_list>
 
 #include "godot/variant.hpp"
-#include "netw/comp_table.hpp"
+#include "netw/api/comp_table.hpp"
+
+using namespace godot;
 
 namespace TestNetwCompTable {
 

@@ -9,24 +9,25 @@
 
 namespace netw {
 
-using namespace godot;
-
-class NetwDisplayPort : public RefCounted {
-    GDCLASS(NetwDisplayPort, RefCounted)
+class NetwDisplayPort : public godot::RefCounted {
+    GDCLASS(NetwDisplayPort, godot::RefCounted)
 
 private:
     ObjectPort target;
     ObjectPort host;
-    StringName target_prop;
-    StringName source_prop;
+    godot::StringName target_prop;
+    godot::StringName source_prop;
     bool global_space = false;
 
-    int64_t write_global(Object *p_target, const Variant &p_value);
-    Node *host_parent();
-    Vector2 host_position_2d(const Vector2 &p_host_local);
-    Vector3 host_position_3d(const Vector3 &p_host_local);
+    int64_t write_global(
+        godot::Object *p_target,
+        const godot::Variant &p_value
+    );
+    godot::Node *host_parent();
+    godot::Vector2 host_position_2d(const godot::Vector2 &p_host_local);
+    godot::Vector3 host_position_3d(const godot::Vector3 &p_host_local);
     double host_rotation_2d(double p_host_local);
-    Vector3 host_rotation_3d(const Vector3 &p_host_local);
+    godot::Vector3 host_rotation_3d(const godot::Vector3 &p_host_local);
 
 protected:
     static void _bind_methods();
@@ -39,21 +40,21 @@ public:
         WRITE_REFUSED,
     };
 
-    void bind(Object *p_target, Object *p_host);
+    void bind(godot::Object *p_target, godot::Object *p_host);
     void unbind();
     bool is_bound() const;
 
     void declare(
-        const StringName &p_target_prop,
-        const StringName &p_source_prop,
+        const godot::StringName &p_target_prop,
+        const godot::StringName &p_source_prop,
         bool p_global_space
     );
 
-    StringName get_target_prop() const;
+    godot::StringName get_target_prop() const;
     bool get_global_space() const;
     int64_t get_lost() const;
 
-    int64_t write(const Variant &p_value);
+    int64_t write(const godot::Variant &p_value);
 };
 
 } // namespace netw

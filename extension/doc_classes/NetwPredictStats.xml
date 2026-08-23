@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictStats" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Everything a prediction engine counted, on one object with one name per fact.
+	</brief_description>
+	<description>
+		This is the demoted half of the evidence surface. What a game is meant to react to -- the six signals, the verdict reason, the per-field divergence and recovery rows, [code]reachability()[/code] -- stays on the handle and is contract. What is here is diagnostic: counters, histograms, tape bookkeeping, fingerprint tallies. Read it, print it, chart it; do not build a rule on it, because the freeze table does not protect it.
+		[member authoring_clamped], [member speculation_held], [member drive_seq], [member last_drive_label], [member last_drive_kind], [member chain_breaks], [member joint_passes], [member joint_floor], [member joint_present], [member joint_members], [member cells_relayed], [member cells_substituted], and [member floor_moves_by_source] read the pool row [method bind_slot] wires up: [method NetwPredictionEngine.drive_stats] or [method NetwPredictionEngine.joint_stats] for the entity's slot. Assigning any of them is a no-op, because the engine is the only writer and this object only relays its columns. Before [method bind_slot] is called, or once the pool no longer holds the slot, each answers its fallback instead. Every other member holds its value on this object and is ordinary read-write state a caller or the engine sets directly.
+		[codeblock]
+		var stats := NetwEntity.of(self).prediction.stats
+		print("%d corrections, %d skipped" % [stats.corrections, stats.skipped])
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bind_slot">
+			<return type="void" />
+			<param index="0" name="pool" type="NetwPredictionEngine" />
+			<param index="1" name="entity" type="RefCounted" />
+			<description>
+				Points this object at [param entity]'s row in [param pool], the slot the pool-backed members listed in [NetwPredictStats]'s [b]Description[/b] read from. Before this call, and after the pool stops holding the slot, those members answer their fallback rather than a stale value.
+			</description>
+		</method>
+		<method name="to_dictionary" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns every fact on this object, by name, for an instrument that serializes rather than reads one thing.
+				Built from the same table [method bind_slot] and every property getter read from, so a fact that exists on [NetwPredictStats] is in the returned [Dictionary] by existing, with no second list to keep in step.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="ack_confirmed" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			The highest transition the owner has received an acknowledgement for, or [code]-1[/code] before any. This is the authority lane's confirmation frontier, and it is what floors both lanes' redundancy windows, so a value stuck at [code]-1[/code] means the lane is not arriving rather than that it has nothing to say.
+		</member>
+		<member name="ack_frontier" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			The transition authority's acknowledgement lane is currently able to ship, [code]-1[/code] on an owner. It is the lesser of the consumed transition and the journal's closed prefix, so a value trailing the consumed one names the closed prefix as what is holding the lane back.
+		</member>
+		<member name="arrivals" type="PackedInt32Array" setter="set_buckets_fact" getter="get_buckets_fact" default="PackedInt32Array()">
+			New transitions the owner lane delivered to authority, bucketed by how many arrived in one frame. [constant NetwPredict.Schedule.FRAME] consume only.
+			Arrival shape, not arrival total, sets consume health: a lane delivering one transition every frame and a lane delivering six every sixth frame have the same total and nothing else in common. Authority replays at most one per frame, so the second lane leaves five frames dry for every burst and no buffer setting changes that. Read it beside [member replay_depth] to tell a lane defect from a rate one.
+			Indexed by arrival count, saturating at [constant ARRIVAL_BUCKETS] minus one.
+		</member>
+		<member name="authoring_clamped" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Physics-frame callbacks folded into their tick's existing command record. A growing value means this peer produces frame callbacks faster than the shared network clock advances, but it cannot grow the command queue.
+		</member>
+		<member name="cells_relayed" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Cells the joint pass drove from a relayed command.
+		</member>
+		<member name="cells_substituted" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Cells the joint pass drove from a local predictor standing in for an author whose command never arrived.
+		</member>
+		<member name="chain_breaks" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Rows whose pre-state did not chain from the preceding post-state and carried no operator provenance. Any nonzero value names an out-of-transition write.
+		</member>
+		<member name="client_fp_verified" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Transitions authority reached a verdict on for the owner's claimed post-state, the denominator [member client_mismatches] is unreadable without.
+			The authority-side mirror of [member fp_verified]. Authority judges a claim only once its own row for that transition has closed, so a claim that arrives before authority has run the transition waits rather than counting.
+		</member>
+		<member name="client_mismatches" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Transitions where the owner's claimed post-state disagreed with the one authority reached, counted out of [member client_fp_verified] and reported through [signal NetwMultiplayer.peer_divergence].
+			This counts what authority found, never what it did about it. Authority pushes nothing back on the strength of a mismatch, so a run of these is evidence for a game to weigh rather than a correction already applied.
+		</member>
+		<member name="command_frames_received" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Owner-lane frames authority decoded, whether or not they carried anything new. Counts frames rather than transitions, so it pairs directly with the owner's [member command_frames_sent].
+		</member>
+		<member name="command_frames_sent" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Owner-lane frames this peer handed to the transport, counted where the bytes were produced rather than where they left.
+			The owner writes one on every frame it drives and on every frame it holds, because a held frame still owes its commands. Read against the consuming peer's [member command_frames_received], the pair says how much of the lane survives the trip, which is the one lane fact neither peer can state alone.
+			[codeblock]
+			sent == received      the lane delivers what it is given
+			sent >  received      frames are lost or coalesced under the engine, and
+			                      the redundancy window is healing it silently
+			[/codeblock]
+		</member>
+		<member name="command_queue_depth" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Transitions authority holds with their commands, decoded off the owner lane and waiting to be replayed.
+		</member>
+		<member name="comparisons_ran" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Authoritative frames this owner reached a divergence verdict on.
+			Read it beside [member comparisons_skipped]: a divergence of zero means the peers agreed only when this is the counter that moved. A predicted entity whose skipped count climbs while this one stands still is speculating with no reconciliation at all, however healthy its divergence reads.
+		</member>
+		<member name="comparisons_skipped" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Authoritative frames this owner acknowledged without reaching a verdict, because the masked stream had not reconstructed a whole row to compare against. Every one of them reports a zero divergence it did not measure.
+		</member>
+		<member name="consume_shape" type="Dictionary" setter="set_dict_fact" getter="get_dict_fact" default="{}">
+			Authority frames bucketed by [code]"consumed,quantum_steps"[/code]: how many transitions the frame ran against how much simulated time the last of them measured. [constant NetwPredict.Schedule.FRAME] consume only.
+			[code]"1,1"[/code] is the healthy shape, one transition per solve. Every other key names a frame that spent simulated time no single transition accounts for, which is the divergence [member quantum_faults] totals. This histogram is that total broken down by how each frame misspent.
+		</member>
+		<member name="consumed" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Inputs the server consumed into authoritative state.
+		</member>
+		<member name="corrections" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Total corrections applied since spawn.
+		</member>
+		<member name="drive_seq" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Monotone count of scheduled drive applications. This fingerprints their ordering without changing simulation behavior.
+		</member>
+		<member name="first_divergent_transition" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			The first transition [member fp_mismatches] counted, or [code]-1[/code] while none has. This is the transition to inspect, since every later mismatch may be the propagation of this one.
+		</member>
+		<member name="floor_moves_by_source" type="Dictionary" setter="set_dict_fact" getter="get_dict_fact" default="{}">
+			What moved the floor, as source -&gt; moves.
+			[br]- [code]ack[/code]: an acknowledgement lane row
+			[br]- [code]state[/code]: an authoritative state row
+			[br]- [code]relay[/code]: a relayed command older than the present
+			[br]- [code]epoch[/code]: an epoch bump nothing replays across
+		</member>
+		<member name="folded" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Older eligible inputs skipped by a FRAME-scheduled backlog fold. The newest eligible input drives once, so this count never represents extra simulation applications.
+		</member>
+		<member name="fp_mismatches" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Acknowledged transitions whose prediction fingerprinted unequal to the authority state, counted out of [member fp_verified]. On a run where every antecedent of the recurrence matched this stays zero, so a nonzero count names a broken antecedent rather than a tolerance that wants widening.
+			The verdict is the correction trigger for a transition labeled [constant NetwPredictJournal.Domain.IN_DOMAIN], and a report for one that is not. Which label a transition earns is decided by the entity's island membership, so an entity that declares no island keeps the tolerance compare it always had.
+			It is the trigger only where it arrives in time to be one. The verdict rides the acknowledgement lane while the comparison runs when the authoritative state arrives, so a transition compared before its acknowledgement is judged by tolerance and this counter reports a divergence nothing acted on. A set that ships whole rows can be judged on arrival. A [method NetwScriptModel.PropertyConfig.masked] set cannot, because a masked frame carries only the fields that changed and the authority row it belongs to cannot be fingerprinted from it. Read this counter as what the peers disagreed about, never as what was corrected.
+		</member>
+		<member name="fp_verified" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Acknowledged transitions the owner reached a fingerprint verdict on, the denominator [member fp_mismatches] is unreadable without.
+			Once the acknowledgement lane is live every acknowledged transition counts here, because authority sends the fingerprint of the state its own replay produced. While the lane is dark the owner must reassemble the state from authority frames instead, so a row merged from several frames describes no single moment and is left unverified rather than charged as a divergence.
+		</member>
+		<member name="frames_dropped_invalid" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Owner-lane frames authority dropped whole because they were malformed or carried a fresh transition without its command. A frame is never parsed into a shorter one, so this counts frames rather than transitions.
+		</member>
+		<member name="heal_snaps" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Passes that found a basis older than history and snapped to the newest recorded state instead of replaying.
+		</member>
+		<member name="held" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Consume passes that declined a transition they were holding, because the queue had not risen above the tier's standing buffer.
+			A hold is a frame the world solved without running a transition, so it costs one [member quantum_faults] on the next drive and nothing on the wire tells the owner it happened. Unlike [member starved] there was a transition available, which is why the FRAME tier's replay buffer depth defaults to zero and never produces one.
+		</member>
+		<member name="island_members" type="PackedStringArray" setter="set_names_fact" getter="get_names_fact" default="PackedStringArray()">
+			The island roster this engine last committed, by entity id, sorted.
+			Sorted because the roster is an antecedent of the fingerprint both peers compute, and two peers that agree on the members but not on their order would disagree on the digest.
+		</member>
+		<member name="journal_closed" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			The newest transition whose journal row is closed with every earlier retained row also closed, [code]-1[/code] when none is. One row left open caps this for as long as the ring retains it, which caps [member ack_frontier] with it.
+		</member>
+		<member name="joint_depth" type="Dictionary" setter="set_dict_fact" getter="get_dict_fact" default="{}">
+			Transitions replayed per joint pass, as depth -&gt; passes.
+			The span a pass covered, which is not the deepest single member re-run: a member the pass skipped every transition of contributes zero to that depth while contributing the full span here.
+		</member>
+		<member name="joint_floor" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			The transition the last joint pass restored its members to, or -1 before a pass has run.
+			Published with [member joint_present] because the two bound the replay a consumer is watching, and a consumer that had to infer them would be reading the loop's own state to do it.
+		</member>
+		<member name="joint_members" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Members the last joint pass stepped, lingering ones included.
+		</member>
+		<member name="joint_passes" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Joint passes this group has run, one per tick whose floor moved.
+			A group coalesces every basis it received into one pass, so this counts ticks that replayed rather than authoritative rows that arrived.
+		</member>
+		<member name="joint_present" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			The transition the last joint pass replayed forward to, or -1 before a pass has run.
+		</member>
+		<member name="last_drive_kind" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Selection kind of the most recent scheduled drive, a [enum NetwPredict.DriveKind] value.
+		</member>
+		<member name="last_drive_label" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			Input label applied by the most recent scheduled drive.
+		</member>
+		<member name="linger_held" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Members held past their tenure because the group's replay horizon has not passed their departure yet.
+		</member>
+		<member name="max_replay_depth" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Deepest replay window walked by any correction.
+		</member>
+		<member name="missing" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Input ticks the server stepped over as lost.
+		</member>
+		<member name="quantum_declared" type="int" setter="set_int_fact" getter="get_int_fact" default="1">
+			Physics steps one transition is declared to advance, from the clock's [member NetwClockHandle.physics_factor].
+		</member>
+		<member name="quantum_faults" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Transitions whose measured [member quantum_steps] differed from [member quantum_declared].
+			Any nonzero value means this peer advanced its solver by an amount no transition accounts for, so its predictions carry an error the compared columns cannot describe and no recovery can repair. It is measurable on one peer alone, before any comparison disagrees.
+		</member>
+		<member name="quantum_steps" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Physics steps the world advanced across the newest transition.
+			A transition is a fixed quantum of simulated time, and a solver body is integrated by the physics server on its own cadence rather than by the drive, so two peers only compare a transition meaningfully when they spend the same number of steps on it. This is that number, measured rather than assumed, and [member quantum_declared] is what it is supposed to be.
+		</member>
+		<member name="relayed_dropped_late" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Relayed transitions dropped for naming a transition older than the matrix retains.
+			A steady climb here means the relay is arriving later than the window is wide, so the subscriber is reconstructing a past its floor has already moved past.
+		</member>
+		<member name="relayed_recorded" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Relayed transitions this peer filed into the command matrix.
+			Counts cells rather than frames, so the redundancy window's re-sends do not inflate it and the value is how much of another peer's authorship this one actually learned.
+		</member>
+		<member name="replay_depth" type="PackedInt32Array" setter="set_buckets_fact" getter="get_buckets_fact" default="PackedInt32Array()">
+			Standing queued-transition depth at each authority frame's consume boundary, bucketed by depth. [constant NetwPredict.Schedule.FRAME] consume only.
+			Depth is the owner's lead over authority measured in transitions, so this reads the clock relationship rather than a queue: a distribution parked near zero says the two peers run at the same rate, and one that ratchets upward says the owner is authoring faster than authority is solving. Neither is answered by a replay buffer depth setting, which shifts this whole distribution and changes its shape not at all.
+			Indexed by depth, saturating at [constant REPLAY_DEPTH_BUCKETS] minus one.
+		</member>
+		<member name="resync" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Times the consume cursor gave up walking and re-opened at the live edge, bounded by the session's max consume lag. A healthy session resyncs once at most, when the controller's clock first anchors. A rising count means input is arriving too far ahead of the cursor to consume in order.
+		</member>
+		<member name="simulated_members" type="PackedStringArray" setter="set_names_fact" getter="get_names_fact" default="PackedStringArray()">
+			The subset of [member island_members] this peer steps locally rather than displaying as a received proxy.
+		</member>
+		<member name="skipped" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Input ticks a [member resync] jump passed over without simulating. They were already stale by more than the session's max consume lag, so the authoritative body skips them rather than replaying second-old intent.
+		</member>
+		<member name="speculation_held" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Prediction passes held because their unacknowledged horizon reached the structural ceiling. Input capture continues while the simulated body holds.
+		</member>
+		<member name="starved" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Server ticks that consumed nothing because the queue was empty, the input stream running dry under the consume cursor. A healthy link holds this at zero once the standing consume buffer is holding, so a rising count is the de-jitter buffer being too shallow for the peers' clock phase drift.
+		</member>
+		<member name="substituted" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Transitions authority ran with a command the owner never authored, as declared on the acknowledgement lane. A silent substitution is the fault this counter exists to make impossible.
+		</member>
+		<member name="tape_epoch" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			Epoch of the active prediction tape, or [code]-1[/code] before one is authored or received. Rewiring starts a new client-authored epoch.
+		</member>
+		<member name="tape_index" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
+			Index of the newest prediction tape transition authored or received. A [constant NetwPredict.Schedule.TICK] entity's transitions are its ticks, so this tracks the newest driven tick there.
+		</member>
+		<member name="tape_queue_depth" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
+			Contiguous owner-lane transitions currently queued on the consuming server at or beyond its replay cursor.
+		</member>
+	</members>
+	<constants>
+		<constant name="ARRIVAL_BUCKETS" value="9">
+			Buckets [member arrivals] holds, so its size is a declared fact rather than a shape a writer grew.
+		</constant>
+		<constant name="REPLAY_DEPTH_BUCKETS" value="33">
+			Buckets [member replay_depth] holds.
+		</constant>
+	</constants>
+</class>

@@ -2,11 +2,11 @@
 
 #include <cstring>
 
-#include "netw/bit_buffer.hpp"
+#include "netw/api/bit_buffer.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
-#include "netw/quantize.hpp"
+#include "netw/api/quantize.hpp"
 #include "netw/wire/plan.hpp"
 
 namespace netw::wire {

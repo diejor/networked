@@ -1,9 +1,9 @@
 #include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
-#include "netw/display_book.hpp"
+#include "netw/api/display_book.hpp"
 #include "netw/display_runtime.hpp"
-#include "netw/liveness_core.hpp"
+#include "netw/api/liveness_core.hpp"
 
 namespace TestNetwDisplayBook {
 

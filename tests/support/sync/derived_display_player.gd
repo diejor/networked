@@ -1,10 +1,10 @@
 ## A derived-set node whose public state field is also a displayed track.
 ##
-## The two declarations together are what makes this the one shape that reaches
-## [code]DisplayCore._authors_derived_stream[/code]: the display runtime tracks
-## [code]position[/code], and the only stream feeding it is a derived set rather
-## than a synchronizer, so the display's authorship question can only be
-## answered by asking the set.
+## The two declarations together are what makes this the one shape that
+## reaches [method NetwMultiplayerCore.display_authors_streams]: the display
+## runtime tracks [code]position[/code], and the only stream feeding it is a
+## derived set rather than a synchronizer, so the display's authorship
+## question can only be answered by asking the set.
 extends Node2D
 
 func _init() -> void:

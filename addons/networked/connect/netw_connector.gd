@@ -80,8 +80,8 @@ var _api_ref: WeakRef
 ##
 ## One session has one connector for its whole life, so two callers can never
 ## drive competing attempts against the same machine. It hangs off the api
-## rather than off [SessionCore], which is what keeps a rig that substitutes the
-## machine from stranding it.
+## rather than off [NetwSessionHandle], because the api is what outlives any one
+## session: the same connector hosts, leaves, and hosts again.
 static func of(api: NetwMultiplayer) -> NetwConnector:
 	if api == null:
 		return null
@@ -588,32 +588,32 @@ func _admit_host_player(payload: JoinPayload) -> void:
 		return
 	if api.state != NetwMultiplayer.SessionState.ONLINE:
 		return
-	if api._scenes.has_declaration():
+	if api._scene_core.declaration_is_published():
 		# Startup scenes spawn deferred on becoming server. Wait for them so the
 		# host player spawns into a live scene. Bounded so a session that already
 		# spawned never hangs.
-		await _await_startup_scenes(api._scenes)
+		await _await_startup_scenes(api)
 	if api.state == NetwMultiplayer.SessionState.ONLINE and api.is_server():
 		api.session.submit_join(payload)
 
 
 # Waits until the session has spawned its startup scenes, capped so a session
 # that never spawns cannot hang the host.
-func _await_startup_scenes(scene_api: SceneCore) -> void:
-	if not scene_api.scenes.is_empty():
+func _await_startup_scenes(api: NetwMultiplayer) -> void:
+	if not api.scene_list().is_empty():
 		return
 	var loop := Engine.get_main_loop() as SceneTree
 	if loop == null:
 		return
 	var fired := [false]
 	var cb := func() -> void: fired[0] = true
-	scene_api._startup_scenes_spawned.connect(cb, CONNECT_ONE_SHOT)
+	api._startup_scenes_spawned.connect(cb, CONNECT_ONE_SHOT)
 	var guard := 0
-	while not fired[0] and scene_api.scenes.is_empty() and guard < 600:
+	while not fired[0] and api.scene_list().is_empty() and guard < 600:
 		await loop.process_frame
 		guard += 1
-	if scene_api._startup_scenes_spawned.is_connected(cb):
-		scene_api._startup_scenes_spawned.disconnect(cb)
+	if api._startup_scenes_spawned.is_connected(cb):
+		api._startup_scenes_spawned.disconnect(cb)
 
 
 # Runs the PREPARING stage, awaiting the session's credential preparation.

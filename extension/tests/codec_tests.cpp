@@ -17,7 +17,7 @@
 #include <cmath>
 #include <cstdint>
 
-#include "netw/codec.hpp"
+#include "netw/api/codec.hpp"
 
 namespace TestNetwCodec {
 

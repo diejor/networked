@@ -4,7 +4,13 @@ extends RefCounted
 # Per-peer authentication buckets. They hold script-side objects, so they stay
 # here while the joins and the name policy live in the engine book.
 var _peer_contexts: Dictionary[int, NetwPeerContext] = { }
-var _joins := NetwJoinRoster.new()
+# The session whose engine book holds the joins, so a native reader answering
+# about an accepted join reads the same rows this does rather than a copy.
+var _core: NetwMultiplayerCore
+
+
+func _init(core: NetwMultiplayerCore) -> void:
+	_core = core
 
 
 ## Returns the [NetwPeerContext] for [param peer_id], creating one on first access.
@@ -22,43 +28,36 @@ func has_peer_context(peer_id: int) -> bool:
 ## Returns accepted participant join records known by this peer.
 func get_accepted_joins() -> Array[ResolvedJoin]:
 	var joins: Array[ResolvedJoin] = []
-	joins.assign(_joins.accepted_joins())
+	joins.assign(_core.session_accepted_joins())
 	return joins
 
 
 ## Returns the accepted join record for [param peer_id], or [code]null[/code].
 func get_accepted_join(peer_id: int) -> ResolvedJoin:
-	return _joins.accepted_join(peer_id)
+	return _core.session_accepted_join(peer_id)
 
 
 ## Stores resolved join data. Returns [code]true[/code] if it was newly added,
 ## or enriched from an argless state to an arg-carrying state.
 func remember_accepted_join(rj: ResolvedJoin) -> bool:
-	return _joins.remember(rj)
-
-
-## Serializes the locally known accepted participant roster.
-func serialize_accepted_joins() -> Array[PackedByteArray]:
-	var payloads: Array[PackedByteArray] = []
-	payloads.assign(_joins.serialize_accepted())
-	return payloads
+	return _core.session_remember_join(rj)
 
 
 ## Erases a peer from the roster.
 func forget_peer(peer_id: int) -> void:
 	_peer_contexts.erase(peer_id)
-	_joins.forget(peer_id)
+	_core.session_forget_peer(peer_id)
 
 
 ## Clears all state.
 func clear() -> void:
 	_peer_contexts.clear()
-	_joins.clear()
+	_core.session_clear_roster()
 
 
 ## Sets the authentication rejection reason for a peer.
 func set_auth_rejection_reason(peer_id: int, reason: String) -> void:
-	_joins.refuse(peer_id, reason)
+	_core.session_refuse(peer_id, reason)
 
 
 ## Returns [code]true[/code] if the join should proceed, [code]false[/code]
@@ -70,23 +69,23 @@ func resolve_username_collision(
 ) -> bool:
 	var taken := _taken_names(existing_players)
 	var original_name := rj.username
-	match _joins.name_verdict(
+	match _core.session_name_verdict(
 		original_name,
 		taken,
 		rj.is_debug,
 		_has_identity(rj.peer_id),
 	):
-		NetwJoinRoster.RENAME:
-			var new_name := _joins.free_name(original_name, taken)
+		NetwMultiplayerCore.NAME_RENAME:
+			var new_name := _core.session_free_name(original_name, taken)
 			Netw.dbg.info(
 				"Debug name collision: renaming %s to %s",
 				[original_name, new_name],
 			)
 			rj.username = new_name
 			return true
-		NetwJoinRoster.REFUSE:
+		NetwMultiplayerCore.NAME_REFUSE:
 			var reason := "Username '%s' is already in use" % original_name
-			_joins.refuse(rj.peer_id, reason)
+			_core.session_refuse(rj.peer_id, reason)
 			Netw.dbg.error(
 				"Authenticated username collision for '%s'. Rejecting join.",
 				[original_name],

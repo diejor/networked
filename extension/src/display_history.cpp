@@ -6,10 +6,10 @@
 #include "godot/class_db.hpp"
 #include "godot/math.hpp"
 #include "netw/colors.hpp"
-#include "netw/interpolate.hpp"
+#include "netw/api/interpolate.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
-#include "netw/project.hpp"
+#include "netw/api/project.hpp"
 
 namespace netw {
 

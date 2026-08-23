@@ -16,6 +16,7 @@
 		  +1.0  ──&gt; +1.0    the declared ceiling
 		[/codeblock]
 		A quantizer whose endpoints do not round-trip is invisible to every comparison, because both peers encode the same code, while the two games read values a whole step apart. Nothing downstream can attribute that, which is why exactness here is a wire property rather than a tuning preference.
+		The per-axis error is at most half the grid spacing, [code]span / (2^bit_count - 2)[/code], following from the layout's [code]2^bit_count - 1[/code] levels. At [code]bit_count = 1[/code] there are too few levels for a rest point, so the range degenerates to its two endpoints.
 	</description>
 	<tutorials>
 	</tutorials>

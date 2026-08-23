@@ -5,20 +5,6 @@
 
 namespace netw {
 
-using namespace godot;
-
-// The prediction vocabulary, owned by NetwPredict and NetwPredictJournal in
-// GDScript until those shells cross. Every value here is that enum's value: a
-// kernel answering a number of its own would agree with any case written
-// against it and disagree with the engine, which is how the first crossing of
-// `domain_of` shipped answering 1 and 2 for a Domain that reads 0 and 1. These
-// cross ClassDB as plain ints, so a bound method returns `int` and casts at the
-// boundary rather than exposing a second enum beside the GDScript one.
-//
-// TODO: delete the mirror and bind these as owned enums, with VARIANT_ENUM_CAST
-// and BIND_ENUM_CONSTANT, once NetwPredictJournal and NetwPredict cross and
-// stop publishing these values from GDScript.
-
 enum class Domain : int {
     IN_DOMAIN = 0,
     OUT_OF_DOMAIN = 1,
@@ -36,8 +22,6 @@ enum class Schedule : int {
     STEPPED = 2,
 };
 
-// FRAME buys a step count the frame decides rather than the schedule, so a
-// replay of it is a different run and a joint group cannot share a floor.
 inline bool rerunnable(int p_schedule) {
     return p_schedule == int(Schedule::TICK)
         || p_schedule == int(Schedule::STEPPED);
@@ -109,9 +93,6 @@ enum class StateFamily : int {
     CONTROLLER_LATCH = 3,
 };
 
-// One comparison of a predicted transition against the payload that judged it.
-// `max_error` is the worst per-field error behind the verdict, so a caller that
-// only reports magnitude never has to re-walk the fields to find it.
 struct PredictionVerdict {
     int domain = 0;
     int verdict = 0;
@@ -119,30 +100,17 @@ struct PredictionVerdict {
     double max_error = 0.0;
 };
 
-/* The one drive a pass applies, as the decision itself rather than as a
- * Dictionary of it.
- *
- * A drive path reaches this once per entity per tick, which is where the
- * Dictionary the seam still speaks would be paid for.
- */
 struct Fold {
     int64_t label = -1;
     bool fresh = false;
     DriveKind kind = DriveKind::NONE;
 };
 
-/* The single write that corrects one settled divergence, staged whole.
- *
- * Minted rather than read back, because the seam it crosses is overridable and
- * a game deciding for itself has to answer in the currency the engine does.
- * `restore` and `write` are keyed by property name, which is the altitude the
- * seam speaks: the engine's own plan is keyed by field slot.
- */
-class NetwPredictRecovery : public RefCounted {
-    GDCLASS(NetwPredictRecovery, RefCounted)
+class NetwPredictRecovery : public godot::RefCounted {
+    GDCLASS(NetwPredictRecovery, godot::RefCounted)
 
-    Dictionary restored;
-    Dictionary written;
+    godot::Dictionary restored;
+    godot::Dictionary written;
     bool teleported = false;
     bool skipped = true;
 
@@ -150,18 +118,18 @@ protected:
     static void _bind_methods();
 
 public:
-    static Ref<NetwPredictRecovery> of(
-        const Dictionary &p_restore,
-        const Dictionary &p_write,
+    static godot::Ref<NetwPredictRecovery> of(
+        const godot::Dictionary &p_restore,
+        const godot::Dictionary &p_write,
         bool p_teleport,
         bool p_skip
     );
 
-    Dictionary restore() const {
+    godot::Dictionary restore() const {
         return restored;
     }
 
-    Dictionary write() const {
+    godot::Dictionary write() const {
         return written;
     }
 
@@ -174,24 +142,13 @@ public:
     }
 };
 
-/* What one acknowledged transition was judged to be worth.
- *
- * `divergence` is a magnitude and `corrected` is not a threshold over it: in
- * domain the two peers claimed reproducibility, so an exact predicate decides
- * and the magnitude is only ever reported.
- */
 struct Judgement {
     double divergence = 0.0;
     bool corrected = false;
 };
 
-/* One judgement, as the record the seam answers with.
- *
- * Minted rather than read back, because the seam it crosses is overridable and
- * a game deciding for itself has to answer in the currency the engine does.
- */
-class NetwPredictJudgement : public RefCounted {
-    GDCLASS(NetwPredictJudgement, RefCounted)
+class NetwPredictJudgement : public godot::RefCounted {
+    GDCLASS(NetwPredictJudgement, godot::RefCounted)
 
     Judgement judged;
 
@@ -199,7 +156,10 @@ protected:
     static void _bind_methods();
 
 public:
-    static Ref<NetwPredictJudgement> of(double p_divergence, bool p_corrected);
+    static godot::Ref<NetwPredictJudgement> of(
+        double p_divergence,
+        bool p_corrected
+    );
 
     double divergence() const {
         return judged.divergence;
@@ -210,13 +170,8 @@ public:
     }
 };
 
-/* One drive choice, as the record the seam answers with.
- *
- * Minted rather than read back, because the seam it crosses is overridable and
- * a game deciding for itself has to answer in the currency the engine does.
- */
-class NetwPredictFold : public RefCounted {
-    GDCLASS(NetwPredictFold, RefCounted)
+class NetwPredictFold : public godot::RefCounted {
+    GDCLASS(NetwPredictFold, godot::RefCounted)
 
     Fold decided;
 
@@ -224,7 +179,11 @@ protected:
     static void _bind_methods();
 
 public:
-    static Ref<NetwPredictFold> of(int64_t p_label, bool p_fresh, int p_kind);
+    static godot::Ref<NetwPredictFold> of(
+        int64_t p_label,
+        bool p_fresh,
+        int p_kind
+    );
 
     int64_t label() const {
         return decided.label;
@@ -239,21 +198,20 @@ public:
     }
 };
 
-// Whole-engine simulation and prediction calculations for replicated entities.
-class NetwPredictionCore : public RefCounted {
-    GDCLASS(NetwPredictionCore, RefCounted)
+class NetwPredictionCore : public godot::RefCounted {
+    GDCLASS(NetwPredictionCore, godot::RefCounted)
 
 protected:
     static void _bind_methods();
 
 public:
-    static Ref<NetwPredictJudgement> evaluate(
+    static godot::Ref<NetwPredictJudgement> evaluate(
         int domain,
         int verdict,
-        const Dictionary &predicted,
-        const Dictionary &payload,
-        const Dictionary &wiring,
-        Dictionary field_sink
+        const godot::Dictionary &predicted,
+        const godot::Dictionary &payload,
+        const godot::Dictionary &wiring,
+        godot::Dictionary field_sink
     );
 
     static int domain_of(
@@ -269,7 +227,7 @@ public:
         int64_t frame_tick
     );
 
-    static Ref<NetwPredictFold> predict_fold(
+    static godot::Ref<NetwPredictFold> predict_fold(
         int64_t latest_input_tick,
         int64_t last_driven_input_tick,
         int64_t frame_tick
@@ -277,38 +235,38 @@ public:
 
     static int consume_action(int depth, int buffer);
 
-    static Dictionary compared_state(
-        const Dictionary &payload,
-        const Dictionary &causal
+    static godot::Dictionary compared_state(
+        const godot::Dictionary &payload,
+        const godot::Dictionary &causal
     );
 
-    static Dictionary project_payload(
-        const Dictionary &payload,
-        const Dictionary &projection,
+    static godot::Dictionary project_payload(
+        const godot::Dictionary &payload,
+        const godot::Dictionary &projection,
         double age
     );
 
-    static Dictionary converge_toward(
-        const Dictionary &restore,
-        const Dictionary &current,
-        const Dictionary &rules,
-        const Dictionary &angles
+    static godot::Dictionary converge_toward(
+        const godot::Dictionary &restore,
+        const godot::Dictionary &current,
+        const godot::Dictionary &rules,
+        const godot::Dictionary &angles
     );
 
-    static Ref<NetwPredictRecovery> recover(
-        const Dictionary &payload,
+    static godot::Ref<NetwPredictRecovery> recover(
+        const godot::Dictionary &payload,
         int policy,
         int correction,
         int snap_restore,
-        const Dictionary &projection,
-        const Dictionary &current,
-        const Dictionary &pose_errors,
-        const Dictionary &wiring,
-        const Dictionary &verdict,
+        const godot::Dictionary &projection,
+        const godot::Dictionary &current,
+        const godot::Dictionary &pose_errors,
+        const godot::Dictionary &wiring,
+        const godot::Dictionary &verdict,
         double tick_delta
     );
 
-    static Dictionary escalation_after(
+    static godot::Dictionary escalation_after(
         int streak,
         int last_sign,
         double last_divergence,
@@ -317,8 +275,8 @@ public:
     );
 
     static int measure(
-        const Dictionary &field_sink,
-        const Dictionary &tolerances
+        const godot::Dictionary &field_sink,
+        const godot::Dictionary &tolerances
     );
 
     static int attribute(
@@ -333,17 +291,20 @@ public:
         bool evidence_complete
     );
 
-    static int64_t raw_state_fingerprint(const Dictionary &payload);
+    static int64_t raw_state_fingerprint(const godot::Dictionary &payload);
 
-    static int64_t fact_fingerprint(const Dictionary &facts);
+    static int64_t fact_fingerprint(const godot::Dictionary &facts);
 
-    static int64_t topology_fingerprint(const Dictionary &facts, int quantum);
+    static int64_t topology_fingerprint(
+        const godot::Dictionary &facts,
+        int quantum
+    );
 
     static int contact_count_bucket(int count);
 
     static int differing_family(
-        const PackedInt32Array &local,
-        const PackedInt32Array &peer
+        const godot::PackedInt32Array &local,
+        const godot::PackedInt32Array &peer
     );
 
     static int64_t window_after(
@@ -352,54 +313,57 @@ public:
         int64_t window_until
     );
 
-    static int64_t environment_digest(int64_t epoch, const Dictionary &samples);
-
-    static Dictionary delta_direction(
-        const StringName &field,
-        const Variant &delta
+    static int64_t environment_digest(
+        int64_t epoch,
+        const godot::Dictionary &samples
     );
 
-    static Dictionary guard_projection(
-        const Dictionary &projection,
-        const Dictionary &field_divergence,
+    static godot::Dictionary delta_direction(
+        const godot::StringName &field,
+        const godot::Variant &delta
+    );
+
+    static godot::Dictionary guard_projection(
+        const godot::Dictionary &projection,
+        const godot::Dictionary &field_divergence,
         double epsilon,
-        const Dictionary &epsilon_overrides,
+        const godot::Dictionary &epsilon_overrides,
         int max_restore_ticks,
         int ack_age_ticks,
         double tick_delta
     );
 
-    static Dictionary transport(
-        const Dictionary &predicted,
-        const Dictionary &authority,
-        const Dictionary &current,
-        const Dictionary &pose_fields,
-        const Dictionary &angles
+    static godot::Dictionary transport(
+        const godot::Dictionary &predicted,
+        const godot::Dictionary &authority,
+        const godot::Dictionary &current,
+        const godot::Dictionary &pose_fields,
+        const godot::Dictionary &angles
     );
 
-    static Variant pose_delta(
-        const Variant &target,
-        const Variant &current,
+    static godot::Variant pose_delta(
+        const godot::Variant &target,
+        const godot::Variant &current,
         bool is_angle
     );
 
     static bool teleport_reached(
-        const Dictionary &pose_errors,
-        const Dictionary &thresholds,
+        const godot::Dictionary &pose_errors,
+        const godot::Dictionary &thresholds,
         double default_threshold
     );
 
     static PredictionVerdict evaluate_struct_verdict(
         int domain,
         int verdict,
-        const Dictionary &predicted,
-        const Dictionary &payload,
-        const Dictionary &wiring
+        const godot::Dictionary &predicted,
+        const godot::Dictionary &payload,
+        const godot::Dictionary &wiring
     );
 
-    static Dictionary calculate_joint_floor(
-        const Dictionary &bases,
-        const Dictionary &relay_floors,
+    static godot::Dictionary calculate_joint_floor(
+        const godot::Dictionary &bases,
+        const godot::Dictionary &relay_floors,
         int64_t epoch_floor,
         int64_t history_floor,
         int64_t present

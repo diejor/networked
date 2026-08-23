@@ -28,10 +28,12 @@ const DISPLAY_OFFSET := 3
 var inner: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: ClockCore
-var client_clock: ClockCore
-var server_sim: LagCompCore
-var client_sim: LagCompCore
+var server_api: NetwMultiplayer
+var client_api: NetwMultiplayer
+var server_clock: NetwClockHandle
+var client_clock: NetwClockHandle
+var server_sim: NetwMultiplayer
+var client_sim: NetwMultiplayer
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -74,20 +76,22 @@ func setup(
 	client = await inner.add_client()
 	server = inner.server()
 	server_clock = await inner.add_clock(tickrate, display_offset)
-	client_clock = client.api._clock
+	client_clock = client.api._native_core.clock_handle
+	server_api = inner.server().api
+	client_api = client.api
 	server_clock.manual_tick = true
 	client_clock.manual_tick = true
 	_client_peer_id = client.multiplayer_peer.get_unique_id()
 
 	# The service is no longer auto-created, so mount the node on both peers.
 	server_sim = inner.add_lag_compensation()
-	client_sim = client.api._lagcomp
+	client_sim = client.api
 	await _tree.process_frame
 
 	# Freeze both clocks under lockstep so every tick is driven by run(), with no
 	# stray physics-frame ticks polluting the deterministic schedule.
 	_stepper = LockstepStepper.new(
-		[server_clock, client_clock] as Array[ClockCore],
+		[server_clock, client_clock] as Array[NetwClockHandle],
 		[server.multiplayer, client.multiplayer] as Array[MultiplayerAPI],
 		inner.session(),
 		tickrate,
@@ -390,6 +394,8 @@ func teardown() -> void:
 	server = null
 	client = null
 	server_clock = null
+	server_api = null
+	client_api = null
 	client_clock = null
 	server_sim = null
 	client_sim = null

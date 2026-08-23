@@ -4,6 +4,8 @@
 #include <cmath>
 #include <limits>
 
+using namespace godot;
+
 namespace netw {
 
 namespace predict {
@@ -307,8 +309,10 @@ StateVerdict compare_state(
     out.exact = exact_of(p_journal.flags_of(p_transition));
     out.attribution = p_journal.attribution_of(p_transition);
     out.field_errors.resize(uint32_t(p_wiring.count()));
+    out.all_field_errors.resize(uint32_t(p_wiring.count()));
     for (uint32_t at = 0; at < out.field_errors.size(); ++at) {
         out.field_errors[at] = -1.0;
+        out.all_field_errors[at] = -1.0;
     }
     if (!p_stream_reconstructed) {
         return out;
@@ -320,11 +324,9 @@ StateVerdict compare_state(
     bool compared_any = false;
     bool tolerance_diverged = false;
     for (int at = 0; at < p_wiring.count(); ++at) {
-        if ((causal_only && p_wiring.causal[uint32_t(at)] == 0)
-            || !p_authority.has(at)) {
+        if (!p_authority.has(at)) {
             continue;
         }
-        compared_any = true;
         const double error = p_predicted.has(at)
             ? value_error(
                   p_predicted.values[uint32_t(at)],
@@ -332,6 +334,11 @@ StateVerdict compare_state(
                   p_wiring.angle[uint32_t(at)] != 0
               )
             : std::numeric_limits<double>::infinity();
+        out.all_field_errors[uint32_t(at)] = error;
+        if (causal_only && p_wiring.causal[uint32_t(at)] == 0) {
+            continue;
+        }
+        compared_any = true;
         out.field_errors[uint32_t(at)] = error;
         out.divergence = std::max(out.divergence, error);
         if (p_wiring.vote_exclude[uint32_t(at)] == 0

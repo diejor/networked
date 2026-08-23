@@ -19,7 +19,7 @@ struct RecoveryRequest {
     StateRow predicted;
     StateRow authority;
     StateRow current;
-    LocalVector<double> field_errors;
+    godot::LocalVector<double> field_errors;
     int64_t basis = -1;
     int64_t current_label = -1;
     int policy = 0;

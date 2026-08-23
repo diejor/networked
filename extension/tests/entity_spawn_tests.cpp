@@ -8,7 +8,7 @@
 
 #include "godot/node.hpp"
 #include "godot/packed_scene.hpp"
-#include "netw/netw_multiplayer.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "support/entity_facets.h"
 #include "support/netw_call_log.h"
 

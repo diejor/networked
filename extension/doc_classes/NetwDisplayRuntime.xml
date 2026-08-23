@@ -51,6 +51,24 @@
 			<param index="0" name="name" type="StringName" />
 			<description>
 				The channel [param name] addresses, or [code]null[/code] when no channel claimed it. Addressed by NAME through [member tracks], which is the property a caller holds, never by the channel's own key.
+				A name two channels declared answers whichever declared first, and says so once. Two channels answering to one name is an authoring mistake, not a lookup mode.
+			</description>
+		</method>
+		<method name="reset">
+			<return type="void" />
+			<param index="0" name="display_offset" type="int" />
+			<param index="1" name="recommended_offset" type="int" />
+			<description>
+				Restarts every channel from the live source: the playhead settles to [param display_offset], each channel forgets its recorded samples and held offset, and the value on the source right now is shown and taken as the value the next pass eases from.
+				This is what a teleport of the whole entity is. A reset that kept the history would glide back through the poses it just left, one channel at a time.
+			</description>
+		</method>
+		<method name="snap_named">
+			<return type="void" />
+			<param index="0" name="name" type="StringName" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				Snaps the channel [param name] addresses to [param value], through [method NetwDisplayChannel.snap]. A name no channel claimed is a no-op, because a display that shows nothing under that name has nothing to teleport.
 			</description>
 		</method>
 		<method name="entity">
@@ -99,7 +117,7 @@
 			The control-changed and reparented subscriptions, held for the runtime's life.
 		</member>
 		<member name="playhead" type="NetwDisplayPlayhead" setter="set_playhead" getter="get_playhead">
-			Where in recorded time this entity is being shown.
+			Where in recorded time this entity is being shown. Minted with the runtime, so no caller has to remember to and no pass can meet a runtime that has nowhere to read from.
 		</member>
 		<member name="pump_mode" type="int" setter="set_pump_mode" getter="get_pump_mode" default="-1">
 			Which pump drives this runtime, one of [NetwDisplayDecl]'s [code]PUMP_*[/code] values. [constant NetwDisplayDecl.PUMP_UNRESOLVED] until a role resolution answers, which is what makes the resolve event-driven rather than per frame.

@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		A record answers "what happened" without a second query: [member event] names the act, [member detail] carries the decision's own inputs, and [member model] carries the subject's projection where the event is the last one its subject will ever raise.
-		The record is minted per delivered hit and per drained ring row, never per emit, so a session nobody watches allocates none of them. Nothing a sink does to a record is read back, because observation cannot alter behavior: a sink is called for its effect and its return value is discarded.
+		The record is minted per delivered hit and per drained ring row, never per emit, so a session nobody watches allocates none of them. Nothing a sink does to a record is read back, because observation cannot alter behavior: a sink is called for its effect and its return value is discarded. Which watchers see one act is decided before the first sink runs, so a sink that installs or withdraws a watch mid-delivery changes only the next act, never the one it is currently handling. [member detail] and [member model] are each sink's own copy, so one sink mutating either never reaches another sink's record of the same act.
 		[member event] is one value of a closed taxonomy, grouped in reserved ranges so a later addition appends inside its group and never renumbers a value a saved row already holds.
 		[codeblock]
 		lifecycle    0..15    SPAWNING SPAWNED DESPAWNING DESPAWNED REPARENTED
@@ -43,6 +43,7 @@
 		</member>
 		<member name="entity_id" type="StringName" setter="" getter="get_entity_id" default="&amp;&quot;&quot;">
 			The subject's identity, empty when it is unresolved or when the event has no entity subject. It exists because a watcher can name an entity before that entity has a route.
+			A death knows only its route, so the plane remembers the last identity seen on that route and carries it forward onto the terminal event, the same way it carries the last [member model] forward. A watch targeting an entity by id therefore still matches the one event that ends that entity's life.
 		</member>
 		<member name="event" type="int" setter="" getter="get_event" default="0">
 			Which act this is, as one value of the closed taxonomy described above.

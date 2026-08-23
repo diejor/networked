@@ -66,6 +66,7 @@
 			<param index="0" name="target" type="Object" />
 			<description>
 				The subset of [method of_node] that [param target] also owns, which is what separates a synchronizer belonging to this scene from one an inner scene brought with it.
+				In the editor a node's owner is the scene root rather than [param target] itself, so a synchronizer is also counted as owned when its owner is [param target]'s own owner.
 			</description>
 		</method>
 		<method name="resolve_value" qualifiers="static">

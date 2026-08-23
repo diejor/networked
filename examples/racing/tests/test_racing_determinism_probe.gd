@@ -490,9 +490,9 @@ func test_reports_divergence_step_response_at_schedule_faults() -> void:
 	# re-applied once the link settles.
 	_silence_triggers(handle)
 
-	var clocks: Array[ClockCore] = [
-		host.tree.api._clock,
-		client.tree.api._clock,
+	var clocks: Array[NetwClockHandle] = [
+		host.tree.api._native_core.clock_handle,
+		client.tree.api._native_core.clock_handle,
 	]
 	var initial_tick_delta := clocks[1].tick - clocks[0].tick
 	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
@@ -612,9 +612,9 @@ func _run_fault_ratio(period: int) -> Dictionary:
 	# re-applied once the link settles.
 	_silence_triggers(handle)
 
-	var clocks: Array[ClockCore] = [
-		host.tree.api._clock,
-		client.tree.api._clock,
+	var clocks: Array[NetwClockHandle] = [
+		host.tree.api._native_core.clock_handle,
+		client.tree.api._native_core.clock_handle,
 	]
 	var initial_tick_delta := clocks[1].tick - clocks[0].tick
 	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
@@ -869,9 +869,9 @@ func _run_integration_ratio(
 	# re-applied once the link settles.
 	_silence_triggers(handle)
 
-	var clocks: Array[ClockCore] = [
-		host.tree.api._clock,
-		client.tree.api._clock,
+	var clocks: Array[NetwClockHandle] = [
+		host.tree.api._native_core.clock_handle,
+		client.tree.api._native_core.clock_handle,
 	]
 	var initial_tick_delta := clocks[1].tick - clocks[0].tick
 	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)

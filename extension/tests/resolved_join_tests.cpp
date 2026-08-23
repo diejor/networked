@@ -8,7 +8,7 @@
 #include "support/netw_test.h"
 
 #include "godot/utility.hpp"
-#include "netw/resolved_join.hpp"
+#include "netw/api/resolved_join.hpp"
 
 namespace TestResolvedJoin {
 

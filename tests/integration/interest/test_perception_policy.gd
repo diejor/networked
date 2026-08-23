@@ -44,30 +44,30 @@ func test_host_and_retained_client_share_hide_applier() -> void:
 	var observer_visual := observer_probe.get_node("Visual") as Node2D
 	var actor_visual := actor_probe.get_node("Visual") as Node2D
 
-	var interest := host.tree.api._interest
-	var layer := interest.layer(&"stealth")
+	var interest := host.tree.api
+	var layer := interest._native_core.interest_layer(&"stealth")
 	layer.default_leave_policy = NetwMultiplayer.LeavePolicy.RETAIN
 	layer.add_viewer(observer.peer_id)
 	layer.add_viewer(actor.peer_id)
 	layer.add_entity(entity)
-	interest.flush_now()
+	interest.interest_flush()
 	await game.sync_ticks(8)
 
-	assert_bool(interest.wire_admits(host.peer_id, entity)).is_true()
-	assert_bool(interest.participant_sees(host.peer_id, entity)).is_false()
+	assert_bool(interest._native_core.interest_wire_admits(host.peer_id, entity)).is_true()
+	assert_bool(interest._native_core.interest_participant_sees(host.peer_id, entity)).is_false()
 	assert_bool(server_visual.visible).is_false()
 	assert_bool(observer_visual.visible).is_true()
 	assert_bool(actor_visual.visible).is_true()
 
 	layer.add_viewer(host.peer_id)
-	interest.flush_now()
+	interest.interest_flush()
 	await game.sync_ticks(4)
-	assert_bool(interest.participant_sees(host.peer_id, entity)).is_true()
+	assert_bool(interest._native_core.interest_participant_sees(host.peer_id, entity)).is_true()
 	assert_bool(server_visual.visible).is_true()
 
 	var observer_instance := observer_probe.get_instance_id()
 	layer.remove_viewer(observer.peer_id)
-	interest.flush_now()
+	interest.interest_flush()
 	await game.sync_ticks(8)
 
 	assert_int(observer_probe.get_instance_id()).is_equal(observer_instance)
@@ -76,7 +76,7 @@ func test_host_and_retained_client_share_hide_applier() -> void:
 	assert_bool(actor_visual.visible).is_true()
 
 	layer.add_viewer(observer.peer_id)
-	interest.flush_now()
+	interest.interest_flush()
 	await game.sync_ticks(8)
 	assert_int(observer_probe.get_instance_id()).is_equal(observer_instance)
 	assert_bool(observer_visual.visible).is_true()
@@ -96,15 +96,15 @@ func test_a_changed_layer_default_reapplies_to_every_local_member() -> void:
 	assert_that(await _wait_probe(observer, entity.route)).is_not_null()
 	var server_visual := server_probe.get_node("Visual") as Node2D
 
-	var interest := host.tree.api._interest
-	var layer := interest.layer(&"stealth")
+	var interest := host.tree.api
+	var layer := interest._native_core.interest_layer(&"stealth")
 	layer.default_leave_policy = NetwMultiplayer.LeavePolicy.RETAIN
 	layer.add_viewer(observer.peer_id)
 	layer.add_entity(entity)
-	interest.flush_now()
+	interest.interest_flush()
 	await game.sync_ticks(8)
 
-	assert_bool(interest.participant_sees(host.peer_id, entity)).is_false()
+	assert_bool(interest._native_core.interest_participant_sees(host.peer_id, entity)).is_false()
 	assert_bool(server_visual.visible) \
 			.override_failure_message(
 				"the host is not a viewer, so HIDE should have hidden it",
@@ -114,7 +114,7 @@ func test_a_changed_layer_default_reapplies_to_every_local_member() -> void:
 	# restored visual is the reapplication and nothing else.
 	layer.default_perception_policy = NetwMultiplayer.PerceptionPolicy.SHOW
 
-	assert_bool(interest.participant_sees(host.peer_id, entity)).is_false()
+	assert_bool(interest._native_core.interest_participant_sees(host.peer_id, entity)).is_false()
 	assert_bool(server_visual.visible) \
 			.override_failure_message(
 				"a changed layer default must reapply to the members it holds",

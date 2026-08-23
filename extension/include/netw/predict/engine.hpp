@@ -1,26 +1,5 @@
 #pragma once
 
-/* The session's prediction engines, one pool keyed by an opaque slot.
- *
- * A predicting entity's engine has identity and memory, and there is one per
- * predicting entity rather than one per session. Registering an object per
- * entity would hand GDScript a class that has to dissolve into slot-keyed
- * storage when the shell goes native, so the pool is registered and the
- * engines are rows in it, which is the shape `NetwInterestEngine` already
- * ships.
- *
- * [codeblock]
- * const int64_t slot = pool->open(declaration);
- * pool->rewire(slot, declaration);
- * pool->close(slot);
- * [/codeblock]
- *
- * `supports` is the flip axis. The pool declares which CONFIGURATIONS it can
- * drive, a caller asks before handing it a tick, and outside the declared set
- * it refuses rather than answering. That is what keeps an engine wholly native
- * or wholly GDScript while the port is in flight: there is never a mixed
- * engine, so no per-region hop is paid at runtime.
- */
 
 #include <cstdint>
 
@@ -29,56 +8,44 @@
 #include "godot/variant.hpp"
 #include "netw/predict/drive.hpp"
 #include "netw/predict/episode_report.hpp"
+#include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/predict/wiring.hpp"
 
 namespace netw {
 
-using namespace godot;
-
-/* One declaration, built field by field by a shell that still speaks
- * `NetwPropertySetBinding`.
- *
- * Bound rather than passed as a Dictionary because a fixed-key Dictionary
- * across a seam is a second spelling of a record, and this one is read on
- * every rewire.
- */
-class NetwPredictDeclaration : public RefCounted {
-    GDCLASS(NetwPredictDeclaration, RefCounted)
+class NetwPredictDeclaration : public godot::RefCounted {
+    GDCLASS(NetwPredictDeclaration, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
-    LocalVector<predict::FieldDecl> fields;
+    godot::LocalVector<predict::FieldDecl> fields;
 
 protected:
     static void _bind_methods();
 
 public:
     void append_field(
-        const StringName &p_key,
+        const godot::StringName &p_key,
         int p_property_class,
-        const StringName &p_carry_channel,
+        const godot::StringName &p_carry_channel,
         double p_converge_stiffness,
         bool p_teleport_only,
         bool p_reconcile_only,
         double p_epsilon_override,
         double p_teleport_at,
         bool p_angle,
-        const Ref<NetwQuantize> &p_quantizer = Ref<NetwQuantize>(),
-        int p_type = int(Variant::NIL)
+        const godot::Ref<NetwQuantize> &p_quantizer
+        = godot::Ref<NetwQuantize>(),
+        int p_type = int(godot::Variant::NIL)
     );
 
     int field_count() const;
-    StringName field_at(int p_index) const;
+    godot::StringName field_at(int p_index) const;
     void clear();
 };
 
-/* One input-consume decision, typed across the binding boundary.
- *
- * The command payload remains the shell's property row. This record decides
- * whether that row is eligible, missing, repeated, or driven.
- */
-class NetwPredictConsumePlan : public RefCounted {
-    GDCLASS(NetwPredictConsumePlan, RefCounted)
+class NetwPredictConsumePlan : public godot::RefCounted {
+    GDCLASS(NetwPredictConsumePlan, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -95,14 +62,8 @@ public:
     int kind() const;
 };
 
-/* What one pass did, as the record the GDScript arm reads it back through.
- *
- * Bound rather than returned as a Dictionary for the reason every other record
- * in this family is: a fixed-key Dictionary across a seam is a second spelling
- * of a struct, and this one is read once per entity per tick.
- */
-class NetwPredictDrive : public RefCounted {
-    GDCLASS(NetwPredictDrive, RefCounted)
+class NetwPredictDrive : public godot::RefCounted {
+    GDCLASS(NetwPredictDrive, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -141,13 +102,13 @@ public:
     }
 };
 
-class NetwPredictCarryContext : public RefCounted {
-    GDCLASS(NetwPredictCarryContext, RefCounted)
+class NetwPredictCarryContext : public godot::RefCounted {
+    GDCLASS(NetwPredictCarryContext, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
-    Dictionary state_at;
-    Dictionary input_at;
+    godot::Dictionary state_at;
+    godot::Dictionary input_at;
     double step_delta = 0.0;
     int64_t authored_label = -1;
 
@@ -155,11 +116,11 @@ protected:
     static void _bind_methods();
 
 public:
-    Dictionary get_state() const {
+    godot::Dictionary get_state() const {
         return state_at;
     }
 
-    Dictionary get_input() const {
+    godot::Dictionary get_input() const {
         return input_at;
     }
 
@@ -172,8 +133,8 @@ public:
     }
 };
 
-class NetwPredictCarryAttempt : public RefCounted {
-    GDCLASS(NetwPredictCarryAttempt, RefCounted)
+class NetwPredictCarryAttempt : public godot::RefCounted {
+    GDCLASS(NetwPredictCarryAttempt, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -183,7 +144,7 @@ protected:
     static void _bind_methods();
 
 public:
-    Variant value() const {
+    godot::Variant value() const {
         return record.value;
     }
 
@@ -220,8 +181,8 @@ public:
     }
 };
 
-class NetwPredictReplayEntry : public RefCounted {
-    GDCLASS(NetwPredictReplayEntry, RefCounted)
+class NetwPredictReplayEntry : public godot::RefCounted {
+    GDCLASS(NetwPredictReplayEntry, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -239,13 +200,13 @@ public:
         return record.label;
     }
 
-    Dictionary input() const {
+    godot::Dictionary input() const {
         return record.input;
     }
 };
 
-class NetwPredictEvidence : public RefCounted {
-    GDCLASS(NetwPredictEvidence, RefCounted)
+class NetwPredictEvidence : public godot::RefCounted {
+    GDCLASS(NetwPredictEvidence, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -274,13 +235,8 @@ public:
     );
 };
 
-/* A detached typed journal row.
- *
- * The pool remains the only owner. A reader receives one immutable snapshot,
- * so no per-entity object or fixed-key Dictionary becomes a second journal.
- */
-class NetwPredictJournalRow : public RefCounted {
-    GDCLASS(NetwPredictJournalRow, RefCounted)
+class NetwPredictJournalRow : public godot::RefCounted {
+    GDCLASS(NetwPredictJournalRow, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -296,9 +252,9 @@ class NetwPredictJournalRow : public RefCounted {
     int witness_class_bits_value = 0;
     double aligned_error_value = 0.0;
     int evidence_mask_value = 0;
-    PackedInt32Array pre_families_value;
+    godot::PackedInt32Array pre_families_value;
     int64_t post_fp_value = 0;
-    PackedInt32Array post_families_value;
+    godot::PackedInt32Array post_families_value;
     int episode_id_value = 0;
     int write_id_value = 0;
     int operator_value = 0;
@@ -324,9 +280,9 @@ public:
     int witness_class_bits() const;
     double aligned_error() const;
     int evidence_mask() const;
-    PackedInt32Array pre_families() const;
+    godot::PackedInt32Array pre_families() const;
     int64_t post_fp() const;
-    PackedInt32Array post_families() const;
+    godot::PackedInt32Array post_families() const;
     int episode_id() const;
     int write_id() const;
     int op() const;
@@ -337,15 +293,15 @@ public:
     int flags() const;
 };
 
-class NetwPredictRecoveryRequest : public RefCounted {
-    GDCLASS(NetwPredictRecoveryRequest, RefCounted)
+class NetwPredictRecoveryRequest : public godot::RefCounted {
+    GDCLASS(NetwPredictRecoveryRequest, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
-    Array predicted;
-    Array authority;
-    Array current;
-    PackedFloat64Array field_errors;
+    godot::Array predicted;
+    godot::Array authority;
+    godot::Array current;
+    godot::PackedFloat64Array field_errors;
     int64_t basis = -1;
     int64_t current_label = -1;
     int policy = 0;
@@ -367,10 +323,10 @@ protected:
 public:
     predict::RecoveryRequest build(int p_width) const;
     void fill(
-        const Array &p_predicted,
-        const Array &p_authority,
-        const Array &p_current,
-        const PackedFloat64Array &p_field_errors,
+        const godot::Array &p_predicted,
+        const godot::Array &p_authority,
+        const godot::Array &p_current,
+        const godot::PackedFloat64Array &p_field_errors,
         int64_t p_basis,
         int64_t p_current_label,
         int p_policy,
@@ -388,8 +344,8 @@ public:
     );
 };
 
-class NetwPredictWritePlan : public RefCounted {
-    GDCLASS(NetwPredictWritePlan, RefCounted)
+class NetwPredictWritePlan : public godot::RefCounted {
+    GDCLASS(NetwPredictWritePlan, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -407,13 +363,13 @@ public:
     bool skip() const;
     bool escalated() const;
     bool restore_has(int p_field) const;
-    Variant restore_at(int p_field) const;
+    godot::Variant restore_at(int p_field) const;
     bool write_has(int p_field) const;
-    Variant write_at(int p_field) const;
+    godot::Variant write_at(int p_field) const;
 };
 
-class NetwPredictVerdict : public RefCounted {
-    GDCLASS(NetwPredictVerdict, RefCounted)
+class NetwPredictVerdict : public godot::RefCounted {
+    GDCLASS(NetwPredictVerdict, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -437,11 +393,11 @@ public:
     bool settled() const;
     double divergence() const;
     int meter() const;
-    PackedFloat64Array field_errors() const;
+    godot::PackedFloat64Array field_errors() const;
 };
 
-class NetwPredictJointPlan : public RefCounted {
-    GDCLASS(NetwPredictJointPlan, RefCounted)
+class NetwPredictJointPlan : public godot::RefCounted {
+    GDCLASS(NetwPredictJointPlan, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -458,149 +414,137 @@ public:
     int restore_count() const;
     int64_t restore_slot(int p_index) const;
     bool restore_has(int p_index, int p_field) const;
-    Variant restore_at(int p_index, int p_field) const;
+    godot::Variant restore_at(int p_index, int p_field) const;
     int step_count() const;
     int64_t step_slot(int p_index) const;
     int64_t step_transition(int p_index) const;
-    Variant step_command(int p_index) const;
+    godot::Variant step_command(int p_index) const;
     int step_provenance(int p_index) const;
 };
 
-/* The pool. One registered object, N engines, keyed by an opaque slot.
- *
- * A slot is minted here and never reused, so a late row naming a closed slot
- * resolves to nothing rather than to whichever engine took its number.
- */
-class NetwPredictionEngine : public RefCounted {
-    GDCLASS(NetwPredictionEngine, RefCounted)
+class NetwPredictionEngine : public godot::RefCounted {
+    GDCLASS(NetwPredictionEngine, godot::RefCounted)
 
-    HashMap<int64_t, predict::Slot> rows;
+    godot::HashMap<int64_t, predict::Slot> rows;
+    godot::HashMap<uint64_t, int64_t> slot_by_entity;
+    godot::HashMap<int64_t, godot::Ref<godot::RefCounted>> entity_by_slot;
     int64_t next_slot = 1;
     int depth = 0;
     int64_t mutations_refused = 0;
 
     bool roster_open(const char *p_verb);
 
-    static Ref<NetwPredictEpisodeReport> report_of(
+    static godot::Ref<NetwPredictEpisodeReport> report_of(
         const predict::Episode &p_episode
     );
-    static Ref<NetwPredictWritePlan> plan_of(const predict::WritePlan &p_plan);
-    static Ref<NetwPredictJointPlan> joint_plan_of(
+    static godot::Ref<NetwPredictWritePlan> plan_of(
+        const predict::WritePlan &p_plan
+    );
+    static godot::Ref<NetwPredictJointPlan> joint_plan_of(
         const predict::JointPassPlan &p_plan
     );
     const predict::Slot *row_of(int64_t p_slot) const;
     predict::Slot *mutable_row_of(int64_t p_slot);
 
-    static Object *resolve_owner(predict::Slot &p_row);
-    static void resolve_reach(predict::Slot &p_row, const Object *p_owner);
-    // The fingerprint the purity bracket compares, over the causal scope alone:
-    // a rule is forbidden to write the state a comparison judges, and nothing
-    // else about the body is its business.
+    static godot::Object *resolve_owner(predict::Slot &p_row);
+    static void resolve_reach(
+        predict::Slot &p_row,
+        const godot::Object *p_owner
+    );
     static int32_t compared_fingerprint(
         predict::Slot &p_row,
-        const Dictionary &p_payload
+        const godot::Dictionary &p_payload
     );
-    // Invokes p_rule once under the run_step discipline and refuses a
-    // non-finite result rather than folding it forward. Answers a null Variant
-    // for the refusal, which no rule can return by itself.
-    Variant call_carry(
+    godot::Variant call_carry(
         int64_t p_slot,
-        const Callable &p_rule,
-        const Variant &p_value,
+        const godot::Callable &p_rule,
+        const godot::Variant &p_value,
         const predict::ReplayEntry &p_entry,
-        const Dictionary &p_state
+        const godot::Dictionary &p_state
     );
-    /* Replays the rule over one transition the owner already recorded and asks
-     * whether it reaches the state that transition actually reached.
-     *
-     * This is the only check that can see a rule reading the live world instead
-     * of the transition's, or one whose arithmetic is simply wrong, because
-     * both reproduce the recorded past incorrectly while looking entirely
-     * reasonable at the moment of the write. One transition per recovery is
-     * enough: a rule that disagrees does so on most of them, and the retirement
-     * counter integrates.
-     */
     void replay_carry(
         predict::CarryAttempt &r_attempt,
         int64_t p_slot,
-        const Callable &p_rule,
-        const StringName &p_field,
+        const godot::Callable &p_rule,
+        const godot::StringName &p_field,
         int p_field_slot,
-        const LocalVector<predict::ReplayEntry> &p_entries,
+        const godot::LocalVector<predict::ReplayEntry> &p_entries,
         bool p_angle,
         double p_divergence_epsilon
     );
-    /* Folds the rule across every entry onto the acknowledged value.
-     *
-     * A step that returns the wrong type, a non-finite value, or lands further
-     * from the acknowledged value than a teleport would move the body is not
-     * advancing it, whatever it computed. The envelope is THIS field's declared
-     * distance, because the rule advances one field in one unit and the entity
-     * default is only the right number for it by coincidence.
-     */
     void fold_carry(
         predict::CarryAttempt &r_attempt,
         int64_t p_slot,
-        const Callable &p_rule,
+        const godot::Callable &p_rule,
         int p_field_slot,
-        const Variant &p_start,
-        const LocalVector<predict::ReplayEntry> &p_entries,
+        const godot::Variant &p_start,
+        const godot::LocalVector<predict::ReplayEntry> &p_entries,
         bool p_angle,
         double p_teleport_default
     );
-    static Dictionary capture_through(
+    static godot::Dictionary capture_through(
         predict::Slot &p_row,
         const predict::FieldCodec &p_codec,
-        const LocalVector<uint8_t> &p_reach
+        const godot::LocalVector<uint8_t> &p_reach
     );
     static bool apply_through(
         predict::Slot &p_row,
         const predict::FieldCodec &p_codec,
-        const LocalVector<uint8_t> &p_reach,
-        const Dictionary &p_payload
+        const godot::LocalVector<uint8_t> &p_reach,
+        const godot::Dictionary &p_payload
     );
 
 protected:
     static void _bind_methods();
 
 public:
-    int64_t open(const Ref<NetwPredictDeclaration> &p_declaration);
+    int64_t open(const godot::Ref<NetwPredictDeclaration> &p_declaration);
     void rewire(
         int64_t p_slot,
-        const Ref<NetwPredictDeclaration> &p_declaration,
-        const Ref<NetwPredictDeclaration> &p_input
-        = Ref<NetwPredictDeclaration>()
+        const godot::Ref<NetwPredictDeclaration> &p_declaration,
+        const godot::Ref<NetwPredictDeclaration> &p_input
+        = godot::Ref<NetwPredictDeclaration>()
     );
     void close(int64_t p_slot);
 
-    bool bind_owner(int64_t p_slot, Object *p_owner);
+    int64_t slot_register(const godot::Ref<godot::RefCounted> &p_entity);
+    int64_t slot_of(const godot::Ref<godot::RefCounted> &p_entity) const;
+    void slot_unregister(const godot::Ref<godot::RefCounted> &p_entity);
+    int64_t slot_registered() const;
+    bool slot_bind_owner(
+        const godot::Ref<godot::RefCounted> &p_entity,
+        godot::Object *p_owner
+    );
+    void slot_unbind_owner(const godot::Ref<godot::RefCounted> &p_entity);
+
+    bool bind_owner(int64_t p_slot, godot::Object *p_owner);
     void unbind_owner(int64_t p_slot);
     bool owner_bound(int64_t p_slot) const;
     bool owner_solves(int64_t p_slot) const;
 
-    Dictionary capture_state(int64_t p_slot);
-    Dictionary capture_input(int64_t p_slot);
-    bool apply_state(int64_t p_slot, const Dictionary &p_payload);
-    bool apply_input(int64_t p_slot, const Dictionary &p_payload);
+    godot::Dictionary capture_state(int64_t p_slot);
+    godot::Dictionary capture_input(int64_t p_slot);
+    bool apply_state(int64_t p_slot, const godot::Dictionary &p_payload);
+    bool apply_input(int64_t p_slot, const godot::Dictionary &p_payload);
 
-    void set_simulate(int64_t p_slot, const Callable &p_callable);
-    void set_witness(int64_t p_slot, const Callable &p_callable);
-    void set_corridor(int64_t p_slot, const Callable &p_callable);
+    void set_simulate(int64_t p_slot, const godot::Callable &p_callable);
+    void set_witness(int64_t p_slot, const godot::Callable &p_callable);
+    void set_corridor(int64_t p_slot, const godot::Callable &p_callable);
     void set_sensor(
         int64_t p_slot,
-        const StringName &p_name,
-        const Callable &p_callable
+        const godot::StringName &p_name,
+        const godot::Callable &p_callable
     );
     void set_carry(
         int64_t p_slot,
-        const StringName &p_field,
-        const Callable &p_callable
+        const godot::StringName &p_field,
+        const godot::Callable &p_callable
     );
     bool has_simulate(int64_t p_slot) const;
 
     void set_order_key(int64_t p_slot, int64_t p_order_key);
     int64_t order_key_of(int64_t p_slot) const;
-    PackedInt64Array ordered_slots() const;
+    godot::PackedInt64Array ordered_slots() const;
 
     enum PassPhase {
         PASS_ISLAND_TICK = 0,
@@ -611,11 +555,11 @@ public:
         PASS_FINALIZE_FRAME = 5,
     };
 
-    PackedInt64Array pass_slots(int p_phase) const;
+    godot::PackedInt64Array pass_slots(int p_phase) const;
 
-    Dictionary run_step(
+    godot::Dictionary run_step(
         int64_t p_slot,
-        const Dictionary &p_input,
+        const godot::Dictionary &p_input,
         double p_delta,
         int64_t p_tick,
         bool p_fresh
@@ -624,25 +568,25 @@ public:
     int pass_depth() const;
     int64_t mutations_refused_count() const;
 
-    Dictionary canonicalize_state(
+    godot::Dictionary canonicalize_state(
         int64_t p_slot,
-        const Dictionary &p_payload
+        const godot::Dictionary &p_payload
     ) const;
-    Dictionary canonicalize_input(
+    godot::Dictionary canonicalize_input(
         int64_t p_slot,
-        const Dictionary &p_payload
+        const godot::Dictionary &p_payload
     ) const;
-    Dictionary coast_command(int64_t p_slot) const;
+    godot::Dictionary coast_command(int64_t p_slot) const;
 
     int64_t sample_environment(int64_t p_slot, int64_t p_epoch);
-    Dictionary sensor_samples(int64_t p_slot) const;
-    PackedByteArray canonical_state_bytes(
+    godot::Dictionary sensor_samples(int64_t p_slot) const;
+    godot::PackedByteArray canonical_state_bytes(
         int64_t p_slot,
-        const Dictionary &p_payload
+        const godot::Dictionary &p_payload
     ) const;
-    PackedByteArray canonical_input_bytes(
+    godot::PackedByteArray canonical_input_bytes(
         int64_t p_slot,
-        const Dictionary &p_payload
+        const godot::Dictionary &p_payload
     ) const;
 
     bool is_open(int64_t p_slot) const;
@@ -658,6 +602,10 @@ public:
         bool p_witness = false
     ) const;
 
+    static godot::Dictionary archetype_axes(int p_archetype);
+    static int role_for_axes(int p_input_source, int p_sim_mode);
+    static int correction_for_recovery_policy(int p_policy);
+
     bool configure(
         int64_t p_slot,
         int p_schedule,
@@ -667,14 +615,34 @@ public:
         int p_max_restore_ticks = 6,
         int p_island = 0,
         bool p_carry = false,
-        bool p_witness = false
+        bool p_witness = false,
+        bool p_island_declared = false,
+        bool p_island_approximate = false
     );
 
     int schedule_of(int64_t p_slot) const;
     int role_of(int64_t p_slot) const;
     int island_of(int64_t p_slot) const;
+    bool island_declared(int64_t p_slot) const;
+    bool island_approximate(int64_t p_slot) const;
 
-    Ref<NetwPredictConsumePlan> plan_consume_input(
+    int64_t out_of_domain_until(int64_t p_slot) const;
+    bool out_of_domain_at(int64_t p_slot, int64_t p_label) const;
+    void open_out_of_domain_window(
+        int64_t p_slot,
+        int64_t p_label,
+        int p_cooldown
+    );
+    void clear_out_of_domain_window(int64_t p_slot);
+
+    godot::Dictionary pending_provenance(int64_t p_slot) const;
+    void set_pending_provenance(
+        int64_t p_slot,
+        const godot::Dictionary &p_provenance
+    );
+    void stamp_pending_provenance(int64_t p_slot, int64_t p_transition);
+
+    godot::Ref<NetwPredictConsumePlan> plan_consume_input(
         int p_schedule,
         bool p_has_input,
         bool p_has_later_input,
@@ -683,8 +651,17 @@ public:
     ) const;
 
     int field_count(int64_t p_slot) const;
-    int field_slot(int64_t p_slot, const StringName &p_key) const;
-    StringName field_name(int64_t p_slot, int p_field) const;
+    int field_slot(int64_t p_slot, const godot::StringName &p_key) const;
+    godot::StringName field_name(int64_t p_slot, int p_field) const;
+
+    int32_t state_fingerprint(
+        int64_t p_slot,
+        const godot::Dictionary &p_payload
+    );
+    godot::PackedInt32Array state_family_fingerprints(
+        int64_t p_slot,
+        const godot::Dictionary &p_payload
+    );
 
     int projection_of(int64_t p_slot, int p_field) const;
     int state_family_of(int64_t p_slot, int p_field) const;
@@ -700,9 +677,9 @@ public:
 
     void record_input(int64_t p_slot, int64_t p_tick, int64_t p_c_hash);
 
-    Ref<NetwPredictDrive> open_drive(
+    godot::Ref<NetwPredictDrive> open_drive(
         int64_t p_slot,
-        const Dictionary &p_topology,
+        const godot::Dictionary &p_topology,
         int64_t p_tick,
         int64_t p_frame,
         double p_ticktime,
@@ -716,9 +693,9 @@ public:
         int p_evidence_mask = 0
     );
 
-    Ref<NetwPredictDrive> replay_drive(
+    godot::Ref<NetwPredictDrive> replay_drive(
         int64_t p_slot,
-        const Dictionary &p_topology,
+        const godot::Dictionary &p_topology,
         int64_t p_transition,
         int64_t p_label,
         int p_kind,
@@ -739,12 +716,12 @@ public:
         int64_t p_slot,
         int64_t p_transition,
         int64_t p_environment_epoch,
-        const Dictionary &p_environment,
-        const Dictionary &p_topology,
-        const PackedStringArray &p_contact_ids,
-        const PackedInt32Array &p_witness_classes,
-        const PackedInt32Array &p_realizations,
-        const PackedByteArray &p_outside_boundary,
+        const godot::Dictionary &p_environment,
+        const godot::Dictionary &p_topology,
+        const godot::PackedStringArray &p_contact_ids,
+        const godot::PackedInt32Array &p_witness_classes,
+        const godot::PackedInt32Array &p_realizations,
+        const godot::PackedByteArray &p_outside_boundary,
         bool p_sleeping
     );
 
@@ -756,21 +733,21 @@ public:
         int64_t p_basis,
         bool p_eligible,
         bool p_applied,
-        const Dictionary &p_eligibility
+        const godot::Dictionary &p_eligibility
     );
 
     bool open_episode(int64_t p_slot, int64_t p_transition, int p_attribution);
     void record_episode_divergence(int64_t p_slot, int64_t p_transition);
     int escalation_field_of(
         int64_t p_slot,
-        const Array &p_predicted,
-        const Array &p_authority,
-        const PackedFloat64Array &p_field_errors,
+        const godot::Array &p_predicted,
+        const godot::Array &p_authority,
+        const godot::PackedFloat64Array &p_field_errors,
         double p_fallback_epsilon
     ) const;
     int trigger_shape_of(
         int64_t p_slot,
-        const PackedFloat64Array &p_field_errors,
+        const godot::PackedFloat64Array &p_field_errors,
         double p_fallback_epsilon
     ) const;
     void record_episode_escalation(int64_t p_slot, int p_trigger_shape);
@@ -780,7 +757,7 @@ public:
         int p_operator,
         int64_t p_basis,
         int p_delta_fp,
-        const StringName &p_target,
+        const godot::StringName &p_target,
         int p_ack_age,
         int p_trigger_shape,
         bool p_evidence_free,
@@ -814,7 +791,7 @@ public:
         STAT_EPISODE_COUNT = 20,
     };
 
-    PackedInt64Array episode_stats(int64_t p_slot) const;
+    godot::PackedInt64Array episode_stats(int64_t p_slot) const;
     bool episode_budget_exhausted(int64_t p_slot) const;
     bool episode_operator_pending(int64_t p_slot, int p_operator) const;
 
@@ -849,42 +826,44 @@ public:
 
     bool dissipate_declared(int64_t p_slot) const;
 
-    bool static_geometry(Object *p_collider) const;
-    int witness_class(Object *p_collider, bool p_declared_support) const;
+    bool static_geometry(godot::Object *p_collider) const;
+    int witness_class(godot::Object *p_collider, bool p_declared_support) const;
 
     int judge_carry(
         int64_t p_slot,
-        const StringName &p_field,
+        const godot::StringName &p_field,
         bool p_same_type,
         bool p_finite,
         bool p_within_envelope,
         bool p_pure,
         bool p_faithful
     );
-    int decline_carry(int64_t p_slot, const StringName &p_field);
+    int decline_carry(int64_t p_slot, const godot::StringName &p_field);
 
-    bool carry_eligible(int64_t p_slot, const StringName &p_field) const;
-    bool carry_retired(int64_t p_slot, const StringName &p_field) const;
-    PackedInt64Array carry_stats(int64_t p_slot, const StringName &p_field)
-        const;
+    bool carry_eligible(int64_t p_slot, const godot::StringName &p_field) const;
+    bool carry_retired(int64_t p_slot, const godot::StringName &p_field) const;
+    godot::PackedInt64Array carry_stats(
+        int64_t p_slot,
+        const godot::StringName &p_field
+    ) const;
 
     void mark_carry_dirty(int64_t p_slot, int64_t p_transition);
     bool carry_judgeable(int64_t p_slot, int64_t p_transition) const;
 
-    Ref<NetwPredictCarryAttempt> attempt_carry(
+    godot::Ref<NetwPredictCarryAttempt> attempt_carry(
         int64_t p_slot,
-        const StringName &p_field,
-        const Variant &p_acknowledged,
+        const godot::StringName &p_field,
+        const godot::Variant &p_acknowledged,
         int64_t p_basis,
         double p_teleport_default,
         double p_divergence_epsilon
     );
 
-    TypedArray<NetwPredictReplayEntry> replay_entries(
+    godot::TypedArray<NetwPredictReplayEntry> replay_entries(
         int64_t p_slot,
         int64_t p_basis
     ) const;
-    Dictionary state_before(int64_t p_slot, int64_t p_transition) const;
+    godot::Dictionary state_before(int64_t p_slot, int64_t p_transition) const;
 
     void close_drive(
         int64_t p_slot,
@@ -939,32 +918,32 @@ public:
 
     void acknowledge(int64_t p_slot, int64_t p_transition, bool p_matched);
 
-    Ref<NetwPredictVerdict> admit_ack(
+    godot::Ref<NetwPredictVerdict> admit_ack(
         int64_t p_slot,
         int64_t p_transition,
-        const Ref<NetwPredictEvidence> &p_evidence,
+        const godot::Ref<NetwPredictEvidence> &p_evidence,
         bool p_substituted
     );
 
-    Ref<NetwPredictVerdict> compare_state(
+    godot::Ref<NetwPredictVerdict> compare_state(
         int64_t p_slot,
         int64_t p_recv_tick,
         int64_t p_transition,
-        const Array &p_predicted,
-        const Array &p_authority,
-        const PackedFloat64Array &p_correction_tolerances,
-        const PackedFloat64Array &p_meter_tolerances,
+        const godot::Array &p_predicted,
+        const godot::Array &p_authority,
+        const godot::PackedFloat64Array &p_correction_tolerances,
+        const godot::PackedFloat64Array &p_meter_tolerances,
         double p_fallback_epsilon,
         bool p_stream_reconstructed,
         bool p_ack_domain_confirmed
     );
 
-    void set_state(int64_t p_slot, const Array &p_state);
+    void set_state(int64_t p_slot, const godot::Array &p_state);
     bool state_has(int64_t p_slot, int p_field) const;
-    Variant state_at(int64_t p_slot, int p_field) const;
-    Ref<NetwPredictWritePlan> recover(
+    godot::Variant state_at(int64_t p_slot, int p_field) const;
+    godot::Ref<NetwPredictWritePlan> recover(
         int64_t p_slot,
-        const Ref<NetwPredictRecoveryRequest> &p_request
+        const godot::Ref<NetwPredictRecoveryRequest> &p_request
     );
     void open_recovery_window(int64_t p_slot, int64_t p_label, int p_cooldown);
     void suppress_recovery_until(
@@ -975,7 +954,7 @@ public:
     bool escalation_pending(int64_t p_slot) const;
     int64_t recovery_window_until(int64_t p_slot) const;
     int64_t recovery_cooldown_until(int64_t p_slot) const;
-    Ref<NetwPredictEpisodeReport> episode(int64_t p_slot) const;
+    godot::Ref<NetwPredictEpisodeReport> episode(int64_t p_slot) const;
     void enter_quarantine(
         int64_t p_slot,
         int64_t p_transition,
@@ -983,23 +962,23 @@ public:
         int p_attribution,
         bool p_demoted
     );
-    Ref<NetwPredictWritePlan> quarantine_state(
+    godot::Ref<NetwPredictWritePlan> quarantine_state(
         int64_t p_slot,
         int64_t p_tick,
         int64_t p_basis,
-        const Array &p_payload,
+        const godot::Array &p_payload,
         bool p_whole
     );
-    Ref<NetwPredictWritePlan> quarantine_witness(
+    godot::Ref<NetwPredictWritePlan> quarantine_witness(
         int64_t p_slot,
         int64_t p_basis,
         int p_bits
     );
     void confirm_reseed_epoch(int64_t p_slot);
-    Ref<NetwPredictWritePlan> align_reseed(
+    godot::Ref<NetwPredictWritePlan> align_reseed(
         int64_t p_slot,
         int64_t p_transition,
-        const Array &p_payload,
+        const godot::Array &p_payload,
         int64_t p_ignore_through
     );
     bool admit_post_reseed(int64_t p_slot, int64_t p_basis);
@@ -1017,15 +996,15 @@ public:
     bool probation_pending(int64_t p_slot) const;
     int64_t reseed_ignore_through(int64_t p_slot) const;
 
-    PackedInt64Array island_commit(
+    godot::PackedInt64Array island_commit(
         int64_t p_slot,
         int64_t p_owner_order_key,
-        const PackedInt64Array &p_members,
-        const PackedInt64Array &p_order_keys,
-        const PackedFloat64Array &p_distance_squared,
-        const PackedInt32Array &p_fidelities,
-        const PackedByteArray &p_eligible,
-        const PackedByteArray &p_contact,
+        const godot::PackedInt64Array &p_members,
+        const godot::PackedInt64Array &p_order_keys,
+        const godot::PackedFloat64Array &p_distance_squared,
+        const godot::PackedInt32Array &p_fidelities,
+        const godot::PackedByteArray &p_eligible,
+        const godot::PackedByteArray &p_contact,
         int p_promotion,
         int p_promotion_count,
         double p_promotion_meters,
@@ -1038,18 +1017,21 @@ public:
     void joint_record(
         int64_t p_slot,
         int64_t p_transition,
-        const Array &p_state,
-        const Variant &p_command,
+        const godot::Array &p_state,
+        const godot::Variant &p_command,
         bool p_authored,
         bool p_relayed,
         bool p_predictor_valid
     );
     void joint_note_basis(int64_t p_slot, int64_t p_basis, int p_source);
     void joint_clear(int64_t p_slot);
-    Variant joint_command_at(int64_t p_slot, int64_t p_transition) const;
+    godot::Variant joint_command_at(int64_t p_slot, int64_t p_transition) const;
     int joint_provenance_at(int64_t p_slot, int64_t p_transition) const;
-    Ref<NetwPredictJointPlan> joint_pass(int64_t p_slot, int64_t p_present);
-    PackedInt64Array joint_stats(int64_t p_slot) const;
+    godot::Ref<NetwPredictJointPlan> joint_pass(
+        int64_t p_slot,
+        int64_t p_present
+    );
+    godot::PackedInt64Array joint_stats(int64_t p_slot) const;
 
     enum IslandMode {
         ISLAND_NONE = 0,
@@ -1092,9 +1074,21 @@ public:
     };
 
     int journal_size(int64_t p_slot) const;
+    godot::Ref<NetwPredictJournal> journal_snapshot(
+        int64_t p_slot,
+        const godot::Dictionary &p_witness_details
+    ) const;
+
+    godot::Dictionary field_divergence(
+        int64_t p_slot,
+        const godot::Ref<NetwPredictVerdict> &p_verdict
+    ) const;
+
+    int transition_span(int64_t p_slot, int64_t p_basis) const;
+
     int64_t journal_epoch(int64_t p_slot) const;
-    PackedInt64Array journal_transitions(int64_t p_slot) const;
-    Ref<NetwPredictJournalRow> journal_row(
+    godot::PackedInt64Array journal_transitions(int64_t p_slot) const;
+    godot::Ref<NetwPredictJournalRow> journal_row(
         int64_t p_slot,
         int64_t p_transition
     ) const;
@@ -1112,11 +1106,11 @@ public:
     int64_t journal_raw_at(int64_t p_slot, int p_index) const;
     int64_t journal_witness_at(int64_t p_slot, int p_index) const;
     int journal_witness_class_at(int64_t p_slot, int p_index) const;
-    PackedInt32Array journal_pre_families_at(
+    godot::PackedInt32Array journal_pre_families_at(
         int64_t p_slot,
         int p_index
     ) const;
-    PackedInt32Array journal_post_families_at(
+    godot::PackedInt32Array journal_post_families_at(
         int64_t p_slot,
         int p_index
     ) const;
@@ -1135,7 +1129,7 @@ public:
     int64_t journal_first_chain_break(int64_t p_slot) const;
     void journal_clear(int64_t p_slot, int64_t p_epoch);
     void tape_reset(int64_t p_slot, int64_t p_epoch);
-    PackedByteArray build_ack_frame(
+    godot::PackedByteArray build_ack_frame(
         int64_t p_slot,
         int p_epoch,
         int64_t p_ack,
@@ -1143,14 +1137,17 @@ public:
     ) const;
 
     int tape_size(int64_t p_slot) const;
-    PackedInt64Array tape_span(int64_t p_slot) const;
+    godot::PackedInt64Array tape_span(int64_t p_slot) const;
     int64_t tape_label_of(int64_t p_slot, int64_t p_index) const;
     bool tape_is_fresh(int64_t p_slot, int64_t p_index) const;
     void tape_prepare_tick(int64_t p_slot, int64_t p_tick);
     void tape_author(int64_t p_slot, int64_t p_label, bool p_fresh);
 
-    void bind_timeline(int64_t p_slot, const Ref<NetwTimeline> &p_timeline);
-    Ref<NetwTimeline> entry_history(int64_t p_slot) const;
+    void bind_timeline(
+        int64_t p_slot,
+        const godot::Ref<NetwTimeline> &p_timeline
+    );
+    godot::Ref<NetwTimeline> entry_history(int64_t p_slot) const;
     void trim_history(int64_t p_slot, int64_t p_ack);
 
     bool command_admit(
@@ -1158,21 +1155,18 @@ public:
         int64_t p_transition,
         int64_t p_label,
         bool p_fresh,
-        const Dictionary &p_command
+        const godot::Dictionary &p_command
     );
     bool command_has(int64_t p_slot, int64_t p_transition) const;
     int64_t command_label_of(int64_t p_slot, int64_t p_transition) const;
     bool command_is_fresh(int64_t p_slot, int64_t p_transition) const;
-    Dictionary command_payload_of(int64_t p_slot, int64_t p_transition) const;
+    godot::Dictionary command_payload_of(
+        int64_t p_slot,
+        int64_t p_transition
+    ) const;
     int command_depth_from(int64_t p_slot, int64_t p_cursor) const;
-    PackedInt64Array command_transitions(int64_t p_slot) const;
+    godot::PackedInt64Array command_transitions(int64_t p_slot) const;
 
-    /* The drive counters, in one array a law and a plot both index by
-     * [enum DriveStat].
-     *
-     * A verb per counter would be nine verbs answering one question, and the
-     * telemetry reader wants them together anyway.
-     */
     enum DriveStat {
         STAT_DRIVE_SEQ = 0,
         STAT_LAST_DRIVE_LABEL = 1,
@@ -1186,8 +1180,6 @@ public:
         STAT_QUANTUM_STEPS = 9,
         STAT_QUANTUM_DECLARED = 10,
         STAT_QUANTUM_FAULTS = 11,
-        // A resolve that found its owner gone. The slot unbound itself and the
-        // pass continued without property I/O, so this is the only trace.
         STAT_OWNER_LOST = 12,
         STAT_COUNT = 13,
     };
@@ -1208,8 +1200,8 @@ public:
     };
 
     bool journal_has(int64_t p_slot, int64_t p_transition) const;
-    PackedInt64Array drive_cursors(int64_t p_slot) const;
-    PackedInt64Array drive_stats(int64_t p_slot) const;
+    godot::PackedInt64Array drive_cursors(int64_t p_slot) const;
+    godot::PackedInt64Array drive_stats(int64_t p_slot) const;
 
     enum CompareStat {
         STAT_COMPARISONS_RAN = 0,
@@ -1220,7 +1212,7 @@ public:
         STAT_COMPARE_COUNT = 5,
     };
 
-    PackedInt64Array compare_stats(int64_t p_slot) const;
+    godot::PackedInt64Array compare_stats(int64_t p_slot) const;
 };
 
 } // namespace netw

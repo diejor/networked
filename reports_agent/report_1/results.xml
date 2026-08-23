@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites id="2026-08-22" name="report_1" tests="27" failures="0" skipped="0" flaky="0" time="0.000">
+	<testsuite id="0" name="test_session_assignment_edge" package="tests/unit/session" timestamp="2026-08-22T15:51:03" hostname="localhost" tests="27" failures="0" errors="0" skipped="0" flaky="0" time="0.946">
+		<testcase name="test_service_registry_works_tree_less" classname="test_session_assignment_edge" time="0.026">
+		</testcase>
+		<testcase name="test_get_services_is_subclass_aware" classname="test_session_assignment_edge" time="0.021">
+		</testcase>
+		<testcase name="test_offline_at_construction" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_scene_multiplayer_surface_is_mirrored" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_scene_multiplayer_properties_forward_both_ways" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_auth_dispatcher_arms_tree_less" classname="test_session_assignment_edge" time="0.021">
+		</testcase>
+		<testcase name="test_auth_config_rearms_dispatcher_tree_less" classname="test_session_assignment_edge" time="0.020">
+		</testcase>
+		<testcase name="test_auth_provider_prepares_and_synthesizes_host_tree_less" classname="test_session_assignment_edge" time="0.013">
+		</testcase>
+		<testcase name="test_application_auth_callback_is_composed_tree_less" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_client_assignment_waits_in_connecting" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_cancelled_connect_returns_offline" classname="test_session_assignment_edge" time="0.021">
+		</testcase>
+		<testcase name="test_prepared_client_auto_submits_once_on_online" classname="test_session_assignment_edge" time="0.020">
+		</testcase>
+		<testcase name="test_failed_preparation_never_auto_submits" classname="test_session_assignment_edge" time="0.034">
+		</testcase>
+		<testcase name="test_cancelled_connect_discards_prepared_join" classname="test_session_assignment_edge" time="0.021">
+		</testcase>
+		<testcase name="test_reconnect_auto_submits_newly_prepared_join" classname="test_session_assignment_edge" time="0.013">
+		</testcase>
+		<testcase name="test_bare_client_assignment_stays_unenriched" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_listen_server_waits_for_explicit_join_submission" classname="test_session_assignment_edge" time="0.013">
+		</testcase>
+		<testcase name="test_session_pause_and_unpause_work_tree_less" classname="test_session_assignment_edge" time="0.021">
+		</testcase>
+		<testcase name="test_session_kick_disconnects_peer_tree_less" classname="test_session_assignment_edge" time="0.020">
+		</testcase>
+		<testcase name="test_session_leave_returns_offline_tree_less" classname="test_session_assignment_edge" time="0.035">
+		</testcase>
+		<testcase name="test_auth_provider_path_auto_submits" classname="test_session_assignment_edge" time="0.020">
+		</testcase>
+		<testcase name="test_application_auth_path_auto_submits" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_server_crash_ends_session_tree_less" classname="test_session_assignment_edge" time="0.013">
+		</testcase>
+		<testcase name="test_connected_peer_is_a_row_before_it_joins" classname="test_session_assignment_edge" time="0.014">
+		</testcase>
+		<testcase name="test_dispose_suppresses_crash_teardown" classname="test_session_assignment_edge" time="0.020">
+		</testcase>
+		<testcase name="test_join_args_round_trip_through_the_session" classname="test_session_assignment_edge" time="0.021">
+		</testcase>
+		<testcase name="test_join_args_schema_mismatch_rejects" classname="test_session_assignment_edge" time="0.013">
+		</testcase>
+	</testsuite>
+</testsuites>

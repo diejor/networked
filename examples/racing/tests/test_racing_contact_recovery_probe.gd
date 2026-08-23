@@ -43,7 +43,7 @@ func after_test() -> void:
 class Recording:
 	extends RefCounted
 
-	var clock: ClockCore
+	var clock: NetwClockHandle
 
 	# recovered: one row per recovery.
 	var recovery_ticks: Array[int] = []
@@ -108,7 +108,7 @@ class Recording:
 
 
 func _attribution_name(value: int) -> String:
-	var keys := NetwPredictJournal.Attribution.keys()
+	var keys := NetwPredictJournal.attribution_names().keys()
 	return String(keys[value]) if value >= 0 and value < keys.size() else str(value)
 
 
@@ -244,7 +244,7 @@ func _setup_collision() -> Array:
 	var target := await client.await_player(&"mario", 2.0)
 	await game.sync_ticks(12)
 	var rec := Recording.new()
-	rec.clock = client.tree.api._clock
+	rec.clock = client.tree.api._native_core.clock_handle
 	rec.attach(own.entity.prediction)
 	return [own, target, rec]
 

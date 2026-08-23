@@ -67,7 +67,7 @@ func _spawn_save_player() -> void:
 	)
 
 	player.set_meta(
-		NetwPersistenceEngine.META_DATABASE,
+		NetwPersistenceEngine.meta_database(),
 		db,
 	)
 

@@ -23,7 +23,7 @@ func test_discord_instance_state_flow() -> void:
 	auto_free(tree)
 	auto_free(service)
 	service._service_entered(tree.api)
-	assert_object(tree.api._session.auth_flow).is_null()
+	assert_object(tree.api.session_auth_flow).is_null()
 	assert_object(service.rendezvous).is_null()
 
 	tree = MultiplayerTree.new()
@@ -99,7 +99,7 @@ func test_nakama_auth_identity_flow() -> void:
 	tree.api.session.set_auth_flow(auth)
 	service._service_entered(tree.api)
 	await get_tree().process_frame
-	assert_object(tree.api._session.auth_flow).is_same(auth)
+	assert_object(tree.api.session_auth_flow).is_same(auth)
 	assert_object(auth._session).is_same(tree.get_nakama_session())
 	assert_object(auth._tree).is_same(tree)
 

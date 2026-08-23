@@ -14,6 +14,8 @@
 #include "godot/variant.hpp"
 #include "netw/repl/watch_book.hpp"
 
+using namespace godot;
+
 namespace TestNetwReplWatchBook {
 
 using godot::Array;

@@ -9,7 +9,9 @@
 #include <cstdint>
 
 #include "netw/repl/retained_lane.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
+
+using namespace godot;
 
 namespace TestNetwReplRetainedLane {
 

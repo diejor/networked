@@ -1,8 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwWatchBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		The dirty-poll engine behind every on-change retained stream.
 	</brief_description>
 	<description>
+		Values in, per-recipient masks out, and nothing about nodes. A retained
+		field replicates only when it changes, so [method poll] remembers what
+		it last saw, and [method mask_for] heals a peer that just gained the
+		stream with the whole row rather than with what moved since a baseline
+		it never had: an absent baseline reads as zero, so every stamp is newer
+		than it and the first mask is the full row for free.
+		Stamps are a monotonic counter rather than a tick, because what a peer
+		is owed is everything that changed since [method commit] last ran for
+		it, and no clock answers that. The counter advances per changed field,
+		never per poll, so two fields changing in one poll are still ordered
+		against a baseline taken between them.
+		Streams are keyed by an integer the caller owns rather than by this
+		object, so a caller can drop its own key without this book outliving
+		it. The book reads no node, which is what lets one implementation
+		serve every front door that replicates on change.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,18 +26,22 @@
 		<method name="clear">
 			<return type="void" />
 			<description>
+				Drops every stream: its stamps and every peer's baselines.
 			</description>
 		</method>
 		<method name="clear_baselines">
 			<return type="void" />
 			<param index="0" name="key" type="int" />
 			<description>
+				Drops [param key]'s baselines while keeping its polled row, the
+				session-restart counterpart of [method reset].
 			</description>
 		</method>
 		<method name="clear_peer">
 			<return type="void" />
 			<param index="0" name="peer" type="int" />
 			<description>
+				Drops [param peer]'s baseline from every stream.
 			</description>
 		</method>
 		<method name="commit">
@@ -29,12 +49,15 @@
 			<param index="0" name="key" type="int" />
 			<param index="1" name="peer" type="int" />
 			<description>
+				Advances [param peer]'s baseline on [param key]'s stream to the
+				stream's change counter, once per recipient per poll.
 			</description>
 		</method>
 		<method name="is_inited" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="key" type="int" />
 			<description>
+				Whether [param key] has ever been polled.
 			</description>
 		</method>
 		<method name="mask_for" qualifiers="const">
@@ -42,6 +65,7 @@
 			<param index="0" name="key" type="int" />
 			<param index="1" name="peer" type="int" />
 			<description>
+				What [param peer] is owed of [param key]: [code][mask, values][/code], the mask over the stream's field order of every field stamped newer than that peer's baseline, and those fields' values in set-bit order. A stream never polled owes nothing.
 			</description>
 		</method>
 		<method name="poll">
@@ -50,12 +74,14 @@
 			<param index="1" name="values" type="Array" />
 			<param index="2" name="readable" type="Array" default="[]" />
 			<description>
+				Stamps every field of [param key] that changed since the previous poll. [param readable] is parallel to [param values], and a field marked unreadable keeps its previous stamp, so a target that is momentarily unresolvable never reads as a change. An empty [param readable] treats every field as readable. The first poll seeds the row, stamping every readable field so the first recipient heals fully. A stored value must not alias a container the caller keeps mutating, or the poll compares a value against itself forever and the field never changes again.
 			</description>
 		</method>
 		<method name="reset">
 			<return type="void" />
 			<param index="0" name="key" type="int" />
 			<description>
+				Drops [param key]'s stamps and every baseline, so the next [method poll] reseeds and the next [method mask_for] heals every recipient with the whole new row.
 			</description>
 		</method>
 		<method name="retain_baselines">
@@ -63,11 +89,13 @@
 			<param index="0" name="key" type="int" />
 			<param index="1" name="recipients" type="PackedInt32Array" />
 			<description>
+				Drops [param key]'s baselines against any peer not in [param recipients], because a baseline outliving a peer's visibility would suppress the full-row heal it is owed on re-admission.
 			</description>
 		</method>
 	</methods>
 	<constants>
 		<constant name="FIELD_LIMIT" value="64">
+			The ceiling on watched fields a stream can carry, one bit each of the mask [method mask_for] answers. A caller asserts its field count against this before polling.
 		</constant>
 	</constants>
 </class>

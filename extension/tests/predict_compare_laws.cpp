@@ -4,6 +4,8 @@
 
 #include "netw/predict/compare.hpp"
 
+using namespace godot;
+
 namespace TestNetwPredictCompareLaws {
 
 using namespace netw;
@@ -50,6 +52,63 @@ LocalVector<double> tolerances(double p_x, double p_derived = -1.0) {
     out[0] = p_x;
     out[1] = p_derived;
     return out;
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Compare] a derived field is absent from the "
+    "causal field errors the vote reads and present in the unfiltered ones "
+    "the published per-field divergence is built from"
+) {
+    const Wiring declared = wiring();
+    Journal unequal = journal_with(4, 99);
+    unequal.mark_ack(4, false);
+    const StateVerdict verdict = compare_state(
+        declared,
+        unequal,
+        8,
+        4,
+        state(1.0, 10.0),
+        state(5.0, 1000.0),
+        tolerances(1000.0),
+        tolerances(1000.0),
+        1000.0,
+        true
+    );
+
+    NETW_CHECK_EQ(int(verdict.field_errors.size()), 2);
+    NETW_CHECK_EQ(int(verdict.all_field_errors.size()), 2);
+    NETW_CHECK_CLOSE(verdict.field_errors[0], 4.0, 0.0001);
+    NETW_CHECK_CLOSE(verdict.all_field_errors[0], 4.0, 0.0001);
+    NETW_CHECK_CLOSE(verdict.field_errors[1], -1.0, 0.0001);
+    NETW_CHECK_CLOSE(verdict.all_field_errors[1], 990.0, 0.0001);
+    NETW_CHECK_CLOSE(verdict.divergence, 4.0, 0.0001);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Compare] a field the authority row omits is "
+    "absent from both the causal and the unfiltered field errors"
+) {
+    const Wiring declared = wiring();
+    Journal unequal = journal_with(4, 99);
+    unequal.mark_ack(4, false);
+    StateRow partial;
+    partial.resize(2);
+    partial.set(0, 5.0);
+    const StateVerdict verdict = compare_state(
+        declared,
+        unequal,
+        8,
+        4,
+        state(1.0, 10.0),
+        partial,
+        tolerances(1000.0),
+        tolerances(1000.0),
+        1000.0,
+        true
+    );
+
+    NETW_CHECK_CLOSE(verdict.all_field_errors[0], 4.0, 0.0001);
+    NETW_CHECK_CLOSE(verdict.all_field_errors[1], -1.0, 0.0001);
 }
 
 TEST_CASE(

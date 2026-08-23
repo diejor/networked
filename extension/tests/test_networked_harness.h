@@ -10,10 +10,12 @@
 #include "support/netw_test.h"
 
 #include "modules/multiplayer/scene_multiplayer.h"
-#include "netw/transport/loopback.hpp"
+#include "netw/api/loopback.hpp"
 #include "scene/main/node.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
+
+using namespace godot;
 
 namespace TestNetworkedHarness {
 

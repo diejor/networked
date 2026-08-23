@@ -9,7 +9,7 @@
 #include "support/netw_test.h"
 
 #include "godot/utility.hpp"
-#include "netw/join_payload.hpp"
+#include "netw/api/join_payload.hpp"
 
 namespace TestJoinPayload {
 

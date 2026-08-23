@@ -36,8 +36,7 @@ func _enter_tree() -> void:
 	api.object_configuration_add(self, session)
 
 	var scenes := NetwSceneConfig.new()
-	scenes.initial_scenes = [TRACK]
-	scenes.scenes = { &"Track": TRACK }
+	scenes.declare_scene(&"Track", TRACK, true)
 	api.object_configuration_add(self, scenes)
 
 

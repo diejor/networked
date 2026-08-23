@@ -1,6 +1,5 @@
 #include "netw/interest_perception.hpp"
 
-#include "godot/class_db.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -19,7 +18,7 @@ StringName custom_key() {
 
 } // namespace
 
-bool NetwInterestPerception::set_visible(int64_t key, bool p_visible) {
+bool InterestPerception::set_visible(int64_t key, bool p_visible) {
     const HashMap<int64_t, bool>::Iterator found = visible.find(key);
     if (found != visible.end() && found->value == p_visible) {
         return false;
@@ -28,27 +27,27 @@ bool NetwInterestPerception::set_visible(int64_t key, bool p_visible) {
     return true;
 }
 
-bool NetwInterestPerception::is_known(int64_t key) const {
+bool InterestPerception::is_known(int64_t key) const {
     return visible.has(key);
 }
 
-void NetwInterestPerception::forget(int64_t key) {
+void InterestPerception::forget(int64_t key) {
     visible.erase(key);
 }
 
-void NetwInterestPerception::clear() {
+void InterestPerception::clear() {
     visible.clear();
     armed.clear();
 }
 
-void NetwInterestPerception::arm(int64_t key, const Array &p_actions) {
+void InterestPerception::arm(int64_t key, const Array &p_actions) {
     if (p_actions.is_empty()) {
         return;
     }
     armed[key] = p_actions;
 }
 
-Array NetwInterestPerception::disarm(int64_t key) {
+Array InterestPerception::disarm(int64_t key) {
     const HashMap<int64_t, Array>::ConstIterator found = armed.find(key);
     if (!found) {
         return Array();
@@ -58,7 +57,7 @@ Array NetwInterestPerception::disarm(int64_t key) {
     return out;
 }
 
-PackedInt64Array NetwInterestPerception::armed_keys() const {
+PackedInt64Array InterestPerception::armed_keys() const {
     PackedInt64Array out;
     for (const KeyValue<int64_t, Array> &entry : armed) {
         out.push_back(entry.key);
@@ -66,18 +65,16 @@ PackedInt64Array NetwInterestPerception::armed_keys() const {
     return out;
 }
 
-Dictionary NetwInterestPerception::resolve(
+Dictionary InterestPerception::resolve(
     const Array &p_layers,
     const Ref<NetwInterestDecl> &p_decl,
-    const Ref<NetwInterestEngine> &p_engine
+    const InterestEngine &p_engine
 ) const {
     bool hide = false;
     Array custom;
     for (int index = 0; index < p_layers.size(); ++index) {
         const StringName layer_id = p_layers[index];
-        const int fallback = p_engine.is_valid()
-            ? p_engine->layer_perception_policy(layer_id)
-            : int(HIDE);
+        const int fallback = p_engine.layer_perception_policy(layer_id);
         const int policy = p_decl.is_valid()
             ? p_decl->perception_policy_for(layer_id, fallback)
             : fallback;
@@ -112,36 +109,5 @@ Dictionary NetwInterestPerception::resolve(
     return out;
 }
 
-void NetwInterestPerception::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("set_visible", "key", "visible"),
-        &NetwInterestPerception::set_visible
-    );
-    ClassDB::bind_method(
-        D_METHOD("is_known", "key"),
-        &NetwInterestPerception::is_known
-    );
-    ClassDB::bind_method(
-        D_METHOD("forget", "key"),
-        &NetwInterestPerception::forget
-    );
-    ClassDB::bind_method(D_METHOD("clear"), &NetwInterestPerception::clear);
-    ClassDB::bind_method(
-        D_METHOD("arm", "key", "actions"),
-        &NetwInterestPerception::arm
-    );
-    ClassDB::bind_method(
-        D_METHOD("disarm", "key"),
-        &NetwInterestPerception::disarm
-    );
-    ClassDB::bind_method(
-        D_METHOD("armed_keys"),
-        &NetwInterestPerception::armed_keys
-    );
-    ClassDB::bind_method(
-        D_METHOD("resolve", "layers", "decl", "engine"),
-        &NetwInterestPerception::resolve
-    );
-}
 
 } // namespace netw

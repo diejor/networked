@@ -6,7 +6,9 @@
 #include "support/netw_test.h"
 
 #include "godot/class_db.hpp"
-#include "netw/bit_buffer.hpp"
+#include "netw/api/bit_buffer.hpp"
+
+using namespace godot;
 
 namespace NetwTests {
 

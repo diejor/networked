@@ -1,14 +1,13 @@
 #include "netw/interest_leave.hpp"
 
-#include "godot/class_db.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
 
 namespace netw {
 
-using LayerExits = NetwInterestLeave::LayerExits;
-using PerPeer = NetwInterestLeave::PerPeer;
+using LayerExits = InterestLeave::LayerExits;
+using PerPeer = InterestLeave::PerPeer;
 
 namespace {
 
@@ -31,7 +30,7 @@ Dictionary verdict(bool p_despawn, const Array &p_custom) {
 
 } // namespace
 
-void NetwInterestLeave::record(
+void InterestLeave::record(
     int64_t key,
     int64_t peer,
     const StringName &layer_id
@@ -48,7 +47,7 @@ void NetwInterestLeave::record(
     layers.push_back(layer_id);
 }
 
-Array NetwInterestLeave::pending_layers(int64_t key, int64_t peer) const {
+Array InterestLeave::pending_layers(int64_t key, int64_t peer) const {
     Array out;
     const HashMap<int64_t, PerPeer>::ConstIterator by_entity
         = pending.find(key);
@@ -65,17 +64,17 @@ Array NetwInterestLeave::pending_layers(int64_t key, int64_t peer) const {
     return out;
 }
 
-void NetwInterestLeave::finish_sweep() {
+void InterestLeave::finish_sweep() {
     pending.clear();
 }
 
-bool NetwInterestLeave::is_retained(int64_t key, int64_t peer) const {
+bool InterestLeave::is_retained(int64_t key, int64_t peer) const {
     const HashMap<int64_t, HashSet<int64_t>>::ConstIterator found
         = retained.find(key);
     return found && found->value.has(peer);
 }
 
-void NetwInterestLeave::release(int64_t key, int64_t peer) {
+void InterestLeave::release(int64_t key, int64_t peer) {
     const HashMap<int64_t, HashSet<int64_t>>::Iterator found
         = retained.find(key);
     if (found == retained.end()) {
@@ -87,12 +86,12 @@ void NetwInterestLeave::release(int64_t key, int64_t peer) {
     }
 }
 
-void NetwInterestLeave::forget_entity(int64_t key) {
+void InterestLeave::forget_entity(int64_t key) {
     pending.erase(key);
     retained.erase(key);
 }
 
-void NetwInterestLeave::forget_peer(int64_t peer) {
+void InterestLeave::forget_peer(int64_t peer) {
     for (KeyValue<int64_t, PerPeer> &entry : pending) {
         entry.value.erase(peer);
     }
@@ -101,16 +100,16 @@ void NetwInterestLeave::forget_peer(int64_t peer) {
     }
 }
 
-void NetwInterestLeave::clear() {
+void InterestLeave::clear() {
     pending.clear();
     retained.clear();
 }
 
-Dictionary NetwInterestLeave::resolve(
+Dictionary InterestLeave::resolve(
     int64_t key,
     int64_t peer,
     const Ref<NetwInterestDecl> &p_decl,
-    const Ref<NetwInterestEngine> &p_engine
+    const InterestEngine &p_engine
 ) const {
     const Array layers = pending_layers(key, peer);
     if (layers.is_empty()) {
@@ -119,16 +118,14 @@ Dictionary NetwInterestLeave::resolve(
     Array custom;
     for (int index = 0; index < layers.size(); ++index) {
         const StringName layer_id = layers[index];
-        const int fallback
-            = p_engine.is_valid() ? p_engine->layer_leave_policy(layer_id)
-                                  : int(DESPAWN);
+        const int fallback = p_engine.layer_leave_policy(layer_id);
         const int policy = p_decl.is_valid()
             ? p_decl->leave_policy_for(layer_id, fallback)
             : fallback;
-        if (policy == DESPAWN) {
+        if (policy == NetwInterestDecl::LEAVE_DESPAWN) {
             return verdict(true, Array());
         }
-        if (policy != CUSTOM) {
+        if (policy != NetwInterestDecl::LEAVE_CUSTOM) {
             continue;
         }
         const Callable callback = p_decl.is_valid()
@@ -151,7 +148,7 @@ Dictionary NetwInterestLeave::resolve(
     return verdict(false, custom);
 }
 
-void NetwInterestLeave::commit(
+void InterestLeave::commit(
     int64_t key,
     int64_t peer,
     const Dictionary &p_decision,
@@ -188,44 +185,5 @@ void NetwInterestLeave::commit(
     }
 }
 
-void NetwInterestLeave::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("record", "key", "peer", "layer_id"),
-        &NetwInterestLeave::record
-    );
-    ClassDB::bind_method(
-        D_METHOD("pending_layers", "key", "peer"),
-        &NetwInterestLeave::pending_layers
-    );
-    ClassDB::bind_method(
-        D_METHOD("finish_sweep"),
-        &NetwInterestLeave::finish_sweep
-    );
-    ClassDB::bind_method(
-        D_METHOD("is_retained", "key", "peer"),
-        &NetwInterestLeave::is_retained
-    );
-    ClassDB::bind_method(
-        D_METHOD("release", "key", "peer"),
-        &NetwInterestLeave::release
-    );
-    ClassDB::bind_method(
-        D_METHOD("forget_entity", "key"),
-        &NetwInterestLeave::forget_entity
-    );
-    ClassDB::bind_method(
-        D_METHOD("forget_peer", "peer"),
-        &NetwInterestLeave::forget_peer
-    );
-    ClassDB::bind_method(D_METHOD("clear"), &NetwInterestLeave::clear);
-    ClassDB::bind_method(
-        D_METHOD("resolve", "key", "peer", "decl", "engine"),
-        &NetwInterestLeave::resolve
-    );
-    ClassDB::bind_method(
-        D_METHOD("commit", "key", "peer", "decision", "forced"),
-        &NetwInterestLeave::commit
-    );
-}
 
 } // namespace netw

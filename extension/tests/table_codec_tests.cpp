@@ -10,7 +10,7 @@
 
 #include "godot/math.hpp"
 #include "netw/handle_ledger.hpp"
-#include "netw/quantize.hpp"
+#include "netw/api/quantize.hpp"
 #include "netw/table/table_core.hpp"
 
 namespace TestTableCodec {

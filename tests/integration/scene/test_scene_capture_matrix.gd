@@ -3,11 +3,11 @@
 ## Each test asserts one (role, mode) cell of the capture decision table: a
 ## native [method SceneTree.change_scene_to_file] or
 ## [method SceneTree.change_scene_to_packed] during a live session resolves to
-## the same [SceneCore] verb the tier-2 door would call. Both funnel
+## the same [NetwMultiplayer] verb the tier-2 door would call. Both funnel
 ## through one instance-entry hook, so the tests drive it with an instantiated
 ## [PackedScene], the shape both native calls produce. The capture gate
 ## ([method Netw.configure_multiplayer_scene]) stays off in a multiplexed
-## process, so the decision-table method [method SceneCore] runs on the
+## process, so the decision-table method runs on the
 ## server and client interfaces directly, the way the mark hook would once
 ## exactly one session owns the presentation.
 class_name TestSceneCaptureMatrix
@@ -56,12 +56,14 @@ func test_server_single_active_captures_change_to() -> void:
 	await h.setup_factory(_single_manager())
 	h.register_spawnable_scene(source.packed)
 	await h.add_client()
-	var scenes := h.server().api._scenes
+	var scenes := h.server().api
 	assert_object(scenes.scene(source.scene_name)).is_not_null()
 
 	# A native change while a SINGLE scene is active replaces the whole session.
-	scenes.request_reach = NetwMultiplayer.SceneReach.SCENE_REACH_SESSION
-	scenes._handle_native_scene_entry(_native_instance(dest.packed))
+	scenes.scene_set_request_reach(
+		NetwMultiplayer.SceneReach.SCENE_REACH_SESSION,
+	)
+	scenes._scene_handle_native_entry(_native_instance(dest.packed))
 	await drain_frames(get_tree(), 3)
 
 	assert_object(scenes.scene(dest.scene_name)).is_not_null()
@@ -76,11 +78,11 @@ func test_server_single_idle_captures_activate() -> void:
 	# No initial scene: the server presents nothing until the native change.
 	h.register_spawnable_scene(dest.packed, false)
 	await h.add_client()
-	var scenes := h.server().api._scenes
+	var scenes := h.server().api
 	assert_object(scenes.scene(dest.scene_name)).is_null()
 
 	# With no active scene the native change activates the first one.
-	scenes._handle_native_scene_entry(_native_instance(dest.packed))
+	scenes._scene_handle_native_entry(_native_instance(dest.packed))
 	await drain_frames(get_tree(), 3)
 
 	assert_object(scenes.scene(dest.scene_name)).is_not_null()
@@ -95,10 +97,10 @@ func test_server_concurrent_captures_activate() -> void:
 	await h.setup_factory(NetwTestSuite.create_scene_manager)
 	h.register_spawnable_scene(source.packed)
 	await h.add_client()
-	var scenes := h.server().api._scenes
+	var scenes := h.server().api
 
 	# A native change under CONCURRENT activates a second world; the first stays.
-	scenes._handle_native_scene_entry(_native_instance(dest.packed))
+	scenes._scene_handle_native_entry(_native_instance(dest.packed))
 	await drain_frames(get_tree(), 3)
 
 	assert_object(scenes.scene(dest.scene_name)).is_not_null()
@@ -114,19 +116,19 @@ func test_client_single_captures_request_and_admits_marked() -> void:
 	var marked := _marked_scene()
 	h.register_spawnable_scene(marked, false)
 	var client := await h.add_client()
-	var scenes := client.api._scenes
+	var scenes := client.api
 	var settled: Array[int] = []
-	scenes.native_change_settled.connect(settled.append)
+	scenes._scene_core.native_change_settled.connect(settled.append)
 
 	# A client's native change detaches and becomes a server request. The marked
 	# destination admits it with no server-side policy code.
-	scenes._handle_native_scene_entry(_native_instance(marked))
-	var promise := scenes._pending_request
+	scenes._scene_handle_native_entry(_native_instance(marked))
+	var promise: NetwPromise = scenes._scene_core.pending_request
 	assert_object(promise).is_not_null()
 	await _wait_scene_promise(promise)
 
 	assert_int(promise.code).is_equal(OK)
-	assert_object(h.server().api._scenes.scene(MARKED_SCENE_NAME)).is_not_null()
+	assert_object(h.server().api.scene(MARKED_SCENE_NAME)).is_not_null()
 	# The capture completion signal fires so a loading screen can tear down.
 	assert_array(settled).is_equal([OK])
 	await h.teardown()
@@ -139,15 +141,15 @@ func test_client_concurrent_captures_move_me() -> void:
 	var marked := _marked_scene()
 	h.register_spawnable_scene(marked, false)
 	var client := await h.add_client()
-	var scenes := client.api._scenes
+	var scenes := client.api
 
-	scenes._handle_native_scene_entry(_native_instance(marked))
-	var promise := scenes._pending_request
+	scenes._scene_handle_native_entry(_native_instance(marked))
+	var promise: NetwPromise = scenes._scene_core.pending_request
 	assert_object(promise).is_not_null()
 	await _wait_scene_promise(promise)
 
 	assert_int(promise.code).is_equal(OK)
-	var server_scenes := h.server().api._scenes
+	var server_scenes := h.server().api
 	assert_object(server_scenes.scene(MARKED_SCENE_NAME)).is_not_null()
 	var participant := h.server().api.peer_get_participant(
 		client.multiplayer_peer.get_unique_id(),
@@ -169,8 +171,8 @@ func test_unmarked_native_change_is_not_hijacked() -> void:
 	await h.setup_factory(NetwTestSuite.create_scene_manager)
 	h.register_spawnable_scene(source.packed)
 	await h.add_client()
-	var scenes := h.server().api._scenes
-	var before := scenes.scenes.size()
+	var scenes := h.server().api
+	var before := scenes.scene_list().size()
 
 	var instance := _native_instance(unmarked.packed)
 	auto_free(instance)
@@ -181,8 +183,8 @@ func test_unmarked_native_change_is_not_hijacked() -> void:
 	assert_bool(is_instance_valid(instance)).is_true()
 	assert_int(instance.process_mode).is_not_equal(Node.PROCESS_MODE_DISABLED)
 	assert_object(scenes.scene(unmarked.scene_name)).is_null()
-	assert_int(scenes.scenes.size()).is_equal(before)
-	assert_int(h.server().api.state).is_equal(SessionCore.State.ONLINE)
+	assert_int(scenes.scene_list().size()).is_equal(before)
+	assert_int(h.server().api.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
 	await h.teardown()
 
 
@@ -203,5 +205,5 @@ func test_capture_disabled_under_multiplexed_sessions() -> void:
 
 	assert_bool(is_instance_valid(marked)).is_true()
 	assert_int(marked.process_mode).is_not_equal(Node.PROCESS_MODE_DISABLED)
-	assert_object(h.server().api._scenes.scene(MARKED_SCENE_NAME)).is_null()
+	assert_object(h.server().api.scene(MARKED_SCENE_NAME)).is_null()
 	await h.teardown()

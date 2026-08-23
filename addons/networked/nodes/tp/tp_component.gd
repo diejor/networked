@@ -289,8 +289,7 @@ func _request_teleport(
 	)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
 
-	var scenes := get_scenes()
-	if not scenes:
+	if Netw.of(self) == null:
 		_fail(&"no_scene_manager", "Cannot teleport, scene interface not found.")
 		return
 
@@ -347,10 +346,9 @@ func _request_teleport(
 
 
 func _activate_destination(to_scene_path: String) -> NetwSceneHandle:
-	var scenes := get_scenes()
 	var api := Netw.of(self)
 	var to_scene_name := _resolve_scene_name(to_scene_path)
-	await scenes.activate_scene(StringName(to_scene_name))
+	api._scene_activate_named(StringName(to_scene_name))
 	var to_scene := api.scene_handle(api.scene_find(StringName(to_scene_name)))
 	if not to_scene or not to_scene.is_declared:
 		_fail(
@@ -490,9 +488,9 @@ func is_settling() -> bool:
 	return Time.get_ticks_msec() < _settle_until_msec
 
 
-## Adds [member owner] to the active scene named by this component in
-## [param scenes].
-func spawn(scenes: SceneCore) -> void:
+## Adds [member owner] to the scene named by this component, looked up in
+## [param session] through [method NetwMultiplayer.scene].
+func spawn(session: NetwMultiplayer) -> void:
 	_dbg.trace("spawn called.")
 	ensure_current_scene_path()
 
@@ -500,7 +498,7 @@ func spawn(scenes: SceneCore) -> void:
 		_dbg.error("Does not have a scene to tp into.", func(m): push_error(m))
 		return
 
-	var scene := scenes.scene(current_scene_name)
+	var scene := session.scene(current_scene_name)
 	if scene and scene.is_declared:
 		_dbg.info("Spawning player into scene %s", [current_scene_name])
 		scene.add_player(NetwEntity.of(owner))

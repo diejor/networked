@@ -1,0 +1,12 @@
+# The hosted native tier's case floor, as one number.
+#
+# A run that discovers FEWER cases than this reads green from the exit
+# code alone: a case file the recursive glob missed, a filter that matched
+# nothing, and a crash that ended the run early all report as "fewer
+# cases" rather than as an error. CI holds the discovered count to this
+# floor so that shrinkage fails.
+#
+# Raise it in the slice that lands the cases, and never lower it without
+# naming what was deleted.
+
+1323

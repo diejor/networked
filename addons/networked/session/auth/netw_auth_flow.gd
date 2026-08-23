@@ -1,4 +1,4 @@
-## Per-session authentication flow for [SessionCore].
+## Per-session authentication flow for [NetwMultiplayer].
 ##
 ## Registered as a factory through [method Netw.configure_auth] so every session
 ## (including a debugger-cloned tree) constructs its own flow and owns its

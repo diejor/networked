@@ -57,11 +57,11 @@ func _record_session_order(tree: MultiplayerTree) -> Array[String]:
 
 func _assert_session_teardown_empty(tree: MultiplayerTree) -> void:
 	var api := tree.api
-	var interest := tree.api._interest
-	assert_int(tree.state).is_equal(SessionCore.State.OFFLINE)
-	assert_int(tree.role).is_equal(SessionCore.Role.NONE)
+	var interest := tree.api
+	assert_int(tree.state).is_equal(NetwMultiplayer.SessionState.OFFLINE)
+	assert_int(tree.role).is_equal(NetwMultiplayer.Role.NONE)
 	assert_bool(api.scene_instances().is_empty()).is_true()
-	assert_bool(interest.all_layers().is_empty()).is_true()
+	assert_bool(interest._native_core.interest_layers().is_empty()).is_true()
 
 
 func _rehost_with_spawned_player(
@@ -108,8 +108,8 @@ func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:
 	var err := await _rehost_with_spawned_player(tree, "valeria")
 	assert_int(err).is_equal(OK)
 
-	assert_int(tree.state).is_equal(SessionCore.State.ONLINE)
-	assert_int(tree.role).is_equal(SessionCore.Role.LISTEN_SERVER)
+	assert_int(tree.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
+	assert_int(tree.role).is_equal(NetwMultiplayer.Role.LISTEN_SERVER)
 	assert_bool(api.scene_instances().is_empty()).is_false()
 	assert_int(api.scene_instances().size()).is_equal(first_scene_count)
 	assert_array(order).is_equal(["ended", "entered"])
@@ -117,8 +117,8 @@ func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:
 
 func test_server_crash_converges_to_offline_and_no_role() -> void:
 	var client := await harness.add_client()
-	assert_int(client.state).is_equal(SessionCore.State.ONLINE)
-	assert_int(client.role).is_equal(SessionCore.Role.CLIENT)
+	assert_int(client.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
+	assert_int(client.role).is_equal(NetwMultiplayer.Role.CLIENT)
 
 	var ended := [0]
 	client.api.session_ended.connect(func() -> void: ended[0] += 1)
@@ -127,8 +127,8 @@ func test_server_crash_converges_to_offline_and_no_role() -> void:
 	# session machine on the api reacts to this edge, not the tree.
 	client.api.server_disconnected.emit()
 
-	assert_int(client.state).is_equal(SessionCore.State.OFFLINE)
-	assert_int(client.role).is_equal(SessionCore.Role.NONE)
+	assert_int(client.state).is_equal(NetwMultiplayer.SessionState.OFFLINE)
+	assert_int(client.role).is_equal(NetwMultiplayer.Role.NONE)
 	assert_int(ended[0]).is_equal(1)
 
 	# A second crash signal while already offline is a no-op, never a re-tear.
@@ -145,6 +145,6 @@ func test_disconnect_then_join_different_backend_on_same_tree() -> void:
 	var err := await _join_shared_backend_without_spawn(tree, "valeria")
 	assert_int(err).is_equal(OK)
 
-	assert_int(tree.state).is_equal(SessionCore.State.ONLINE)
-	assert_int(tree.role).is_equal(SessionCore.Role.CLIENT)
+	assert_int(tree.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
+	assert_int(tree.role).is_equal(NetwMultiplayer.Role.CLIENT)
 	assert_bool(tree.api.scene_instances().is_empty()).is_true()

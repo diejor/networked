@@ -9,7 +9,9 @@
 
 #include "support/netw_test.h"
 
-#include "netw/entity_options.hpp"
+#include "netw/api/entity_options.hpp"
+
+using namespace godot;
 
 namespace TestNetwEntityOptions {
 

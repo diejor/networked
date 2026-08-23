@@ -8,8 +8,6 @@
 
 namespace netw {
 
-// A kind-local RID mint for GDScript-owned records. Each ledger owns one
-// handle kind, so a handle from another ledger is invalid by construction.
 class NetwHandleLedger : public godot::RefCounted {
     GDCLASS(NetwHandleLedger, godot::RefCounted)
 

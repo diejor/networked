@@ -6,6 +6,8 @@
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 
+using namespace godot;
+
 namespace netw::predict {
 
 namespace {

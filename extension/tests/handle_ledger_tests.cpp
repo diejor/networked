@@ -1,5 +1,3 @@
-// Laws for the kind-local RID mint used by field sets and layers.
-
 #include "support/netw_test.h"
 
 #include "netw/handle_ledger.hpp"

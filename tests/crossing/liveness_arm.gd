@@ -227,7 +227,7 @@ func _pending_live_flush(scenario: StringName) -> void:
 # frame counter and the timeout callback runs in its place.
 func _pending_live_timeout(scenario: StringName) -> void:
 	var route := _api._native_core.liveness_reserve_route() + 5
-	_row(scenario, "clock", { &"configured": _api._clock.is_configured() })
+	_row(scenario, "clock", { &"configured": _api._native_core.clock_handle.is_configured })
 
 	_api.when_live(
 		route,

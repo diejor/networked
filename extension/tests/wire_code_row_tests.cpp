@@ -1,19 +1,12 @@
-// A code row against the property the whole store rests on: two rows of one
-// plan are comparable by arithmetic, and the comparison names the columns that
-// moved rather than the words that differ.
-//
-// The straddling cases are the ones that matter. A column is a run of bits at
-// whatever offset the columns before it left, so runs cross word boundaries as
-// a matter of course, and a reader that only handled the aligned case would
-// pass every small schema and corrupt the first wide one.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
 
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/wire/code_row.hpp"
 #include "netw/wire/plan.hpp"
+
+using namespace godot;
 
 namespace TestNetwWireCodeRow {
 
@@ -99,8 +92,6 @@ TEST_CASE(
     CHECK(CodeRow::from_bytes(plan, clean).valid_for(plan));
 }
 
-// Seals `count` columns each quantized to `bits`, so a width that does not
-// divide 64 puts columns across word boundaries on purpose.
 Ref<SchemaRecord> sealed_at(
     const godot::StringName &name,
     int count,
@@ -128,9 +119,6 @@ Ref<SchemaRecord> sealed_at(
 }
 
 TEST_CASE("[Networked][Wire][Hosted] a column that straddles a word survives") {
-    // Seven bits does not divide 64, so column 9 spans bits 63 to 69 and every
-    // column after it sits at a different offset within its word. A width that
-    // divided 64 would exercise only the aligned path.
     const WirePlan plan = WirePlan::compile(sealed_at("Straddle", 20, 7));
     REQUIRE(plan.valid());
     NETW_CHECK_EQ(plan.column(9).offset, 63);
@@ -144,8 +132,6 @@ TEST_CASE("[Networked][Wire][Hosted] a column that straddles a word survives") {
         NETW_CHECK_EQ(row.read(plan.column(index), 0), 0x55 & 0x7F);
     }
 
-    // A straddling column must not be reported unchanged when only the half
-    // living in the second word moved.
     CodeRow moved = row;
     REQUIRE(moved.write(plan.column(9), 0, 0x7F));
     NETW_CHECK_EQ(CodeRow::changed_mask(plan, row, moved), uint64_t(1) << 9);
@@ -162,7 +148,6 @@ TEST_CASE("[Networked][Wire][Hosted] a write stays inside its own column") {
     NETW_CHECK_EQ(row.read(plan.column(1), 0), 0);
     NETW_CHECK_EQ(row.read(plan.column(3), 0), 0);
 
-    // Overwriting with a smaller value must clear the bits the old one set.
     REQUIRE(row.write(plan.column(0), 0, 1));
     NETW_CHECK_EQ(row.read(plan.column(0), 0), 1);
     NETW_CHECK_EQ(row.read(plan.column(1), 0), 0);
@@ -199,8 +184,6 @@ TEST_CASE("[Networked][Wire][Hosted] a mask names the column that moved") {
 }
 
 TEST_CASE("[Networked][Wire][Hosted] a mask does not blame a column's word") {
-    // Four 16-bit columns share one word. A mask built by XOR-ing words would
-    // report every column in that word when one of them moved.
     const WirePlan plan
         = WirePlan::compile(sealed("Shared", 4, SchemaCore::I16));
     REQUIRE(plan.valid());
@@ -224,7 +207,6 @@ TEST_CASE("[Networked][Wire][Hosted] a strided column moves as one column") {
     CodeRow before = CodeRow::for_plan(plan);
     CodeRow after = CodeRow::for_plan(plan);
 
-    // The third element of the second column, which is one bit of one mask.
     REQUIRE(after.write(plan.column(1), 2, 77));
     NETW_CHECK_EQ(CodeRow::changed_mask(plan, before, after), 1 << 1);
     NETW_CHECK_EQ(after.read(plan.column(1), 2), 77);
@@ -263,8 +245,6 @@ TEST_CASE("[Networked][Wire][Hosted] an invalid plan yields an empty row") {
 TEST_CASE(
     "[Networked][Wire][Hosted] a schema wider than the mask has no plan"
 ) {
-    // The mask is one word, so a plan that admitted a 65th column would mask
-    // it short and report it unchanged forever.
     CHECK(WirePlan::compile(sealed("Wide", 64, SchemaCore::BOOL)).valid());
     CHECK_FALSE(
         WirePlan::compile(sealed("Wider", 65, SchemaCore::BOOL)).valid()
@@ -282,12 +262,6 @@ TEST_CASE(
     REQUIRE(good.write(plan.column(0), 0, 11));
     CodeRow foreign;
 
-    // A row that is not this plan's cannot be diffed, and the answer decides
-    // what the lane does about it. Zero reads as a caught-up peer and costs
-    // the pass nothing, so a row the sender cannot interpret would strand the
-    // receiver silently and for good. Every column is the answer the baseline
-    // book already gives a peer whose baseline it does not hold: when the diff
-    // is unknown, send the row.
     NETW_CHECK_EQ(
         CodeRow::changed_mask(plan, foreign, good),
         plan.full_mask()

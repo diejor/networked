@@ -19,7 +19,7 @@
 #include "support/entity_decl.h"
 #include "support/loopback_rig.h"
 #include "support/netw_call_log.h"
-#include "netw/interpolate.hpp"
+#include "netw/api/interpolate.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 

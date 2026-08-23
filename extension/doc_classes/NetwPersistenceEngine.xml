@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPersistenceEngine" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One entity's persistence: a frozen persisted-column set over the live scene, and the reads and writes it owes its archetype's database.
+	</brief_description>
+	<description>
+		The scene IS the record. There is no shadow store to keep coherent: you assign a property in plain GDScript and [method gather] reads it at flush time. A column reads and writes the live property on the node that declared it, so a sibling component's persisted field lands in the same row as the root's.
+		The column set is frozen once, at [method create], by walking the entity's own subtree and stopping at nested entity roots. Freezing is what makes a flush a fixed cost: a snapshot pass is a census over a known set rather than a re-scan of a live tree.
+		[codeblock]
+		# server, in the orphan window Netw.replicate leaves open:
+		var player := PlayerScene.instantiate()
+		var entity := Netw.replicate(player, participant)
+		entity.persistence.hydrate().then(
+		    func(_code: Error) -&gt; void:
+		        scene.add_child(player)
+
+		        player.gold += 100      # a plain assignment IS the record; the
+		)                               # snapshot loop's next due window
+		                                # upserts the changed column
+		[/codeblock]
+		[b]Every read and write answers a [NetwPromise], and none of them is a coroutine.[/b] A storage verb cannot answer on the calling frame, and a native caller cannot resume a script coroutine, so the wait lives above this class and never inside it. That is the same boundary [NetwDatabaseBackend] states for the backend it eventually reaches.
+		The engine reads the archetype's declaration through three installed readers rather than naming the declaration classes itself, so what a persisted field MEANS stays where a game declares it:
+		[br][br]
+		[br]- [method set_config_reader] answers the archetype's persistence declaration for one entity root.
+		[br]- [method set_property_configs_reader] answers the per-property declarations on one node.
+		[br]- [method set_schema_declarer] declares the table, with its column types, into the database.
+		[NetwEntity] hands one engine out through [member NetwEntity.persistence], and the session's snapshot loop drives every engine through [method snapshot_tick] and [method commit_snapshot].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="apply">
+			<return type="void" />
+			<param index="0" name="data" type="Dictionary" />
+			<description>
+				Writes the values in [param data] onto the live scene properties, ignoring any key that is not a declared column. A column whose node is gone is skipped rather than refused, because an entity that is being torn down still has a coherent row.
+			</description>
+		</method>
+		<method name="columns_empty" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether the archetype declared no persisted field at all. An engine in that state saves nothing and is worth a warning at construction, because a declaration with no columns is almost always a forgotten [code]persisted()[/code] mark rather than an intent.
+			</description>
+		</method>
+		<method name="commit_snapshot">
+			<return type="void" />
+			<param index="0" name="values" type="Dictionary" />
+			<description>
+				Adopts [param values] as the last flushed state and emits [signal flushed]. The snapshot loop calls this after ITS transaction committed, which is what lets one transaction cover every entity due on a tick while each engine still learns its own write landed.
+			</description>
+		</method>
+		<method name="config_of" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="owner" type="Object" />
+			<description>
+				The persistence declaration for [param owner], read through the reader [method set_config_reader] installed, or an EMPTY [Dictionary] when the archetype declares none. Empty is how a caller learns an entity is not persisted at all, so it is the test that decides whether an engine is built.
+				[codeblock]
+				Dictionary
+				┠╴default_interval    (float)       seconds a column waits by default
+				┠╴database            (NetwDatabase)
+				┠╴table               (StringName)
+				┠╴record_id_provider  (StringName)  a method on the entity root
+				┖╴hydrate_on_spawn    (bool)
+				[/codeblock]
+				It is plain data rather than the declaration object because [method create] FREEZES it, the same way it freezes the column set: an engine that re-read a live declaration could change what it saves halfway through a session.
+			</description>
+		</method>
+		<method name="create" qualifiers="static">
+			<return type="NetwPersistenceEngine" />
+			<param index="0" name="entity" type="Object" />
+			<param index="1" name="declaration" type="Dictionary" />
+			<description>
+				Builds the engine for [param entity] against [param declaration], in the shape [method config_of] answers, freezing both the declaration and the persisted-column set by walking the entity's subtree once.
+				Answers [code]null[/code], with an error, when the entity is missing or the declaration is empty. Construction is a static rather than [code]new()[/code] because an engine with no entity has no scene to read and no row to write, so there is no default worth minting.
+			</description>
+		</method>
+		<method name="database" qualifiers="const">
+			<return type="Variant" />
+			<description>
+				The effective [NetwDatabase]: the instance override in the [method meta_database] metadata when the entity root carries one, otherwise the archetype's declaration, otherwise [code]null[/code]. The override is what lets one packed scene save into a different database per instance, which is how a test gives each case its own storage.
+			</description>
+		</method>
+		<method name="flush">
+			<return type="NetwPromise" />
+			<param index="0" name="keys" type="Array" default="[]" />
+			<description>
+				Gathers the persisted columns, or the subset named in [param keys], writes them as one merged upsert, and answers a [NetwPromise] resolving with the [enum @GlobalScope.Error] the write reached. Emits [signal flushed] once a write lands.
+				An entity with nothing to write resolves [constant @GlobalScope.OK] without touching the database, so a caller that chains on the answer runs either way. An archetype naming no database or no table resolves [constant @GlobalScope.ERR_UNCONFIGURED], and a database that answers no promise is REJECTED with [constant @GlobalScope.ERR_INVALID_DATA] rather than left pending, because a caller waiting on a promise that never settles waits forever.
+				[br][br][b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="forget_claims" qualifiers="static">
+			<return type="void" />
+			<description>
+				Drops every record-id claim. The claims are what let [method create] warn that two live entities save into one row, and they are process-wide, so a rig that builds many sessions in one process clears them between runs rather than accumulating warnings about entities that are long gone.
+			</description>
+		</method>
+		<method name="gather" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="keys" type="Array" default="[]" />
+			<description>
+				Reads the persisted columns off the live scene, or the subset named in [param keys], as the row they would be written as. An empty [param keys] means every declared column.
+			</description>
+		</method>
+		<method name="hydrate">
+			<return type="NetwPromise" />
+			<description>
+				Fetches the saved row by [method record_id], applies it with [method apply], emits [signal hydrated], and answers a [NetwPromise] resolving with the [enum @GlobalScope.Error] the read reached.
+				It always settles, including on the paths that apply nothing, so a caller that subscribes is never waiting on an edge that will not come. A missing row resolves [constant @GlobalScope.OK] with the scene defaults intact, because a first play has nothing saved and that is an answer rather than a failure.
+				[br][br][b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="is_dirty" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether the live values differ from the last flushed ones. This is the question the snapshot loop asks before spending a write, so a scene nobody touched costs a comparison rather than a transaction.
+			</description>
+		</method>
+		<method name="lint">
+			<return type="void" />
+			<description>
+				Warns about the two ways a persisted client-owned field cannot mean what its author intended, at the moment the column set freezes.
+				[br][br]
+				[br]- A field that rides no lane never reaches the server, so every flush can only save stale server-side data.
+				[br]- A field a synchronizer also governs is double authority, which is usually a write policy that should have been authority-written.
+				Neither is load-bearing: the declaration is already frozen, so this reports rather than refuses.
+			</description>
+		</method>
+		<method name="meta_columns" qualifiers="static">
+			<return type="StringName" />
+			<description>
+				The metadata key naming extra persisted columns on a scriptless entity root, an [Array] of [code]{property, interval}[/code] entries joining the same row. It is the declaration form that survives packing a scene, which is why the test builders use it in place of a script.
+			</description>
+		</method>
+		<method name="meta_database" qualifiers="static">
+			<return type="StringName" />
+			<description>
+				The metadata key naming a per-instance [NetwDatabase] override on the entity root, read by [method database] ahead of the archetype's own declaration.
+			</description>
+		</method>
+		<method name="meta_table" qualifiers="static">
+			<return type="StringName" />
+			<description>
+				The metadata key naming a per-instance table override on the entity root, read ahead of the archetype's own declaration.
+			</description>
+		</method>
+		<method name="owner_node" qualifiers="const">
+			<return type="Node" />
+			<description>
+				The live root of the entity this engine persists, or [code]null[/code] once that entity or its owner is gone. The snapshot loop reads this to decide whether a row still has a body to gather from, so an engine whose owner left the tree drops out of the loop instead of flushing a freed node.
+			</description>
+		</method>
+		<method name="record_id" qualifiers="const">
+			<return type="StringName" />
+			<description>
+				The stable key this entity's row is saved under: the archetype's record-id provider method, else [member NetwEntity.entity_id], else the node name.
+				The node name is the last resort and not a good one, because a scene renames nodes freely and a second instance collides, which is why [method create] warns when it is what an entity fell back to.
+			</description>
+		</method>
+		<method name="set_config_reader" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="reader" type="Callable" />
+			<description>
+				Installs the reader [method config_of] answers from, [code]func(owner: Node) -&gt; Dictionary[/code]. It is installed rather than named because the declaration types belong to the layer where a game writes them, and this class only has to be handed the facts.
+			</description>
+		</method>
+		<method name="set_property_configs_reader" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="reader" type="Callable" />
+			<description>
+				Installs the reader for one node's per-property declarations, [code]func(node: Node) -&gt; Dictionary[/code] keyed by property. It is read twice: once to freeze the column set, and once by [method lint].
+			</description>
+		</method>
+		<method name="set_schema_declarer" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="declarer" type="Callable" />
+			<description>
+				Installs the declarer that registers the table before the first read or write, [code]func(db: Object, table: StringName, columns: Array) -&gt; void[/code], where each entry of [code]columns[/code] carries a [code]property[/code] and the [code]node[/code] that owns it.
+				The node travels with the property because the column's TYPE is reflected off it, and a type is what lets the database keep a scene default instead of assigning a stored value of the wrong shape.
+			</description>
+		</method>
+		<method name="snapshot_tick">
+			<return type="Dictionary" />
+			<param index="0" name="delta" type="float" />
+			<description>
+				Advances every column's accumulator by [param delta] and answers the write the columns whose interval elapsed are owed, or an empty [Dictionary] when nothing came due or nothing changed.
+				The write is RETURNED rather than issued, so the session's loop can group every engine due this tick into one transaction per database. One transaction per engine per tick is the same bytes and N times the commits.
+				[codeblock]
+				Dictionary
+				┠╴db      (NetwDatabase)
+				┠╴table   (StringName)
+				┠╴id      (StringName)
+				┖╴values  (Dictionary)  column -&gt; value
+				[/codeblock]
+				[br][br][b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="wants_spawn_hydration" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether the archetype asks the server to hydrate before the spawn frame is snapshotted, so persisted spawn state rides the spawn rather than arriving as a correction after it.
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="flushed">
+			<description>
+				Emitted after a write landed and its values were adopted as the last flushed state, whether the write came from [method flush] or from the session's snapshot loop through [method commit_snapshot].
+			</description>
+		</signal>
+		<signal name="hydrated">
+			<description>
+				Emitted after a row is fetched and applied, INCLUDING when no row existed. A first-play entity keeps its scene defaults and still emits, so a listener that places a player on hydration runs on the first play too.
+			</description>
+		</signal>
+	</signals>
+</class>

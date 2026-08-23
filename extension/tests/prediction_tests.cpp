@@ -1,12 +1,3 @@
-// Laws for the prediction kernels: the pure calculations a predicting engine
-// makes about one transition, with no engine, session or clock behind them.
-//
-// Floating-point comparisons are spelled through NETW_CHECK_CLOSE or a named
-// bool rather than handed to CHECK directly. doctest stringifies both sides of
-// a failing comparison, and streaming a double out of this shared object
-// crashes the host process, so a raw double comparison reports a segfault
-// instead of the value that missed.
-
 #include "support/netw_test.h"
 
 #include <cmath>
@@ -94,8 +85,6 @@ TEST_CASE(
 ) {
     const int64_t until = 6;
 
-    // The two labels either side of `until` are what makes this a boundary
-    // rather than two arbitrary points, so both are asserted.
     NETW_CHECK_EQ(
         NetwPredictionCore::domain_of(true, false, until - 1, until), DOMAIN_OUT
     );
@@ -167,8 +156,6 @@ TEST_CASE(
     NETW_CHECK_EQ(joint_cell(false, false, true), 1);
     NETW_CHECK_EQ(joint_cell(false, false, false), 0);
 
-    // Precedence is the whole content of the chain, so each rank is asserted
-    // against the ranks it must outrank rather than alone.
     NETW_CHECK_EQ(joint_cell(true, true, true), 3);
     NETW_CHECK_EQ(joint_cell(false, true, true), 2);
 }
@@ -233,8 +220,6 @@ TEST_CASE(
         one_field(StringName("A"), (int64_t)2), Dictionary(), -1, 8, 20
     );
 
-    // Healing is what the caller acts on, and the floor it hands back has to be
-    // reachable history rather than the base that was out of reach.
     CHECK(bool(res[StringName("heal")]));
     NETW_CHECK_EQ((int64_t)res[StringName("floor")], 20);
 }
@@ -358,8 +343,6 @@ TEST_CASE(
         DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, wiring, sink
     );
 
-    // The field still counts toward the reported divergence, because excluding
-    // it from the vote is not a claim that it agreed.
     CHECK_FALSE(res->corrected());
     NETW_CHECK_CLOSE(res->divergence(), 90.0, 1e-9);
 }
@@ -394,10 +377,6 @@ TEST_CASE(
     const Dictionary payload = one_field(StringName("pos"), 1.0);
     Dictionary sink;
 
-    // A hair of error corrects when authority called it unequal, and a chasm
-    // does not when authority called it equal. That inversion is the whole
-    // point of judging in domain, and epsilon spans both errors here so only
-    // the verdict can explain the difference.
     const Ref<NetwPredictJudgement> unequal
         = NetwPredictionCore::evaluate(
         DOMAIN_IN, VERDICT_UNEQUAL, predicted, predicted, wiring, sink
@@ -449,7 +428,6 @@ TEST_CASE(
         sink
     );
 
-    // Straight subtraction would read this pair as nearly a full turn apart.
     NETW_CHECK_CLOSE(res->divergence(), 0.2, 1e-6);
 }
 
@@ -474,7 +452,6 @@ TEST_CASE(
     NETW_CHECK_CLOSE(double(sink[StringName("a")]), 3.0, 1e-9);
     NETW_CHECK_CLOSE(double(sink[StringName("b")]), 1.0, 1e-9);
 
-    // The reported divergence is the worst field rather than their sum.
     NETW_CHECK_CLOSE(res->divergence(), 3.0, 1e-9);
 }
 
@@ -499,8 +476,6 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Predict] A run that will not shrink escalates on the third"
 ) {
-    // A negative last divergence is the run's first sample, which has nothing
-    // to have shrunk from.
     Dictionary state = NetwPredictionCore::escalation_after(0, 0, -1.0, 1.0, 1);
     NETW_CHECK_EQ((int)state[StringName("streak")], 1);
     CHECK_FALSE(bool(state[StringName("escalate")]));
@@ -518,8 +493,6 @@ TEST_CASE("[Networked][Predict] Escalating closes the run it escalated on") {
     const Dictionary escalated
         = NetwPredictionCore::escalation_after(2, 1, 1.0, 2.0, 1);
 
-    // The streak is spent rather than carried, so the next disturbance is
-    // counted from nothing and cannot escalate on the strength of this one.
     CHECK(bool(escalated[StringName("escalate")]));
     NETW_CHECK_EQ((int)escalated[StringName("streak")], 0);
 }
@@ -556,8 +529,6 @@ TEST_CASE(
     NETW_CHECK_EQ((int)steady[StringName("sign")], 0);
     CHECK_FALSE(bool(steady[StringName("escalate")]));
 
-    // Converging is what a recovery is for, so a run that is shrinking must not
-    // escalate on a sign that would otherwise have carried it there alone.
     const Dictionary flipped
         = NetwPredictionCore::escalation_after(2, 1, 5.0, 1.0, -1);
     CHECK_FALSE(bool(flipped[StringName("escalate")]));
@@ -577,8 +548,6 @@ TEST_CASE(
     sink[StringName("position")] = 1.0;
     NETW_CHECK_EQ(NetwPredictionCore::measure(sink, tolerances), 1);
 
-    // A non-positive bound is an exact field, where any error at all measures
-    // one rather than dividing by a zero-width region.
     Dictionary exact_sink;
     Dictionary exact_tolerances;
     exact_sink[StringName("raw")] = 0.000001;
@@ -638,8 +607,6 @@ TEST_CASE(
         int(Attribution::UNKNOWN)
     );
 
-    // A peer that witnessed nothing cannot be charged with a contact it never
-    // reported, so the absent witness outranks the unequal one.
     NETW_CHECK_EQ(
         NetwPredictionCore::attribute(
             true, true, true, true, true, false, witness, 0, true
@@ -737,8 +704,6 @@ TEST_CASE(
         int(StateFamily::MOMENTUM)
     );
 
-    // Incomplete evidence names no family rather than guessing POSE from the
-    // truncation itself.
     PackedInt32Array short_peer;
     short_peer.push_back(9);
     NETW_CHECK_EQ(
@@ -753,10 +718,8 @@ TEST_CASE(
 ) {
     NETW_CHECK_EQ(NetwPredictionCore::window_after(10, 2, -1), (int64_t)13);
 
-    // A negative cooldown still covers the disturbing transition itself.
     NETW_CHECK_EQ(NetwPredictionCore::window_after(10, -5, -1), (int64_t)11);
 
-    // A nearer disturbance cannot cut short a window already reaching further.
     const int64_t wide = NetwPredictionCore::window_after(10, 20, -1);
     NETW_CHECK_EQ(NetwPredictionCore::window_after(11, 1, wide), wide);
 }
@@ -796,7 +759,6 @@ TEST_CASE(
     CHECK(bool(String(along[StringName("key")]) == String("position:2")));
     NETW_CHECK_EQ((int)along[StringName("sign")], -1);
 
-    // A type with no axis names none rather than defaulting to the first.
     const Dictionary none
         = NetwPredictionCore::delta_direction(StringName("flag"), true);
     NETW_CHECK_EQ((int)none[StringName("sign")], 0);
@@ -843,8 +805,6 @@ TEST_CASE(
     const Dictionary restore = moved[StringName("restore")];
     NETW_CHECK_EQ(double(restore[StringName("position")]), 7.0);
 
-    // A field the caller never predicted has no delta to align, and a partial
-    // composition would rewind the fields it did carry.
     const Dictionary refused = NetwPredictionCore::transport(
         Dictionary(), authority, current, pose_fields, Dictionary()
     );

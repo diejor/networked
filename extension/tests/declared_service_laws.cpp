@@ -65,27 +65,23 @@ TEST_CASE(
     clock_node->set("display_offset", 6);
     clock_node->call("_service_entered", rig.client(0));
 
-    Object *server_clock = rig.server()->get("_clock");
-    Object *client_clock = rig.client(0)->get("_clock");
-    Object *server_lag = rig.server()->get("_lagcomp");
-    Object *client_lag = rig.client(0)->get("_lagcomp");
+    const Ref<netw::NetwClockHandle> server_clock = rig.clock_of(rig.server());
+    const Ref<netw::NetwClockHandle> client_clock = rig.clock_of(rig.client(0));
+    Object *server_lag = rig.server();
+    Object *client_lag = rig.client(0);
     REQUIRE(server_clock != nullptr);
     REQUIRE(client_clock != nullptr);
     REQUIRE(server_lag != nullptr);
     REQUIRE(client_lag != nullptr);
 
-    NETW_CHECK_EQ(int(server_clock->get("tickrate")), 47);
-    NETW_CHECK_EQ(int(client_clock->get("tickrate")), 47);
+    NETW_CHECK_EQ(server_clock->get_tickrate(), 47);
+    NETW_CHECK_EQ(client_clock->get_tickrate(), 47);
     NETW_CHECK_EQ(int(server_clock->get("display_offset")), 6);
     NETW_CHECK_EQ(int(client_clock->get("display_offset")), 6);
     NETW_CHECK_EQ(int(server_lag->get("max_future_action_ticks")), 11);
     NETW_CHECK_EQ(int(client_lag->get("max_future_action_ticks")), 11);
     NETW_CHECK_EQ(int(server_lag->get("input_gate_deadline_ticks")), 17);
     NETW_CHECK_EQ(int(client_lag->get("input_gate_deadline_ticks")), 17);
-    Object *server_bound_clock = server_lag->get("_clock");
-    Object *client_bound_clock = client_lag->get("_clock");
-    CHECK(server_bound_clock == server_clock);
-    CHECK(client_bound_clock == client_clock);
 
     const int server_frame = server_lag->get("_physics_frame");
     const int client_frame = client_lag->get("_physics_frame");
@@ -138,10 +134,9 @@ TEST_CASE("[Networked][Services] a config class with no row installs nothing") {
         int(ERR_INVALID_PARAMETER)
     );
 
-    Object *clock = api->get("_clock");
-    REQUIRE(clock != nullptr);
-    CHECK(!bool(clock->get("_configured")));
-    NETW_CHECK_EQ(int(bool(int(clock->get("tickrate")) == 41)), 0);
+    const Ref<netw::NetwClockHandle> clock = rig.clock_of(api);
+    CHECK_FALSE(clock->get_is_configured());
+    NETW_CHECK_EQ(int(bool(clock->get_tickrate() == 41)), 0);
 }
 
 TEST_CASE("[Networked][Services] a declared world installs both services") {
@@ -150,21 +145,13 @@ TEST_CASE("[Networked][Services] a declared world installs both services") {
     world.clocked(53, 4).lag_compensated();
     rig.declare_world(world);
 
-    Object *server_clock = rig.server()->get("_clock");
-    Object *client_clock = rig.client(0)->get("_clock");
-    Object *server_lag = rig.server()->get("_lagcomp");
-    Object *client_lag = rig.client(0)->get("_lagcomp");
-    REQUIRE(server_clock != nullptr);
-    REQUIRE(client_clock != nullptr);
-    REQUIRE(server_lag != nullptr);
-    REQUIRE(client_lag != nullptr);
+    const Ref<netw::NetwClockHandle> server_clock = rig.clock_of(rig.server());
+    const Ref<netw::NetwClockHandle> client_clock = rig.clock_of(rig.client(0));
 
-    NETW_CHECK_EQ(int(server_clock->get("tickrate")), 53);
-    NETW_CHECK_EQ(int(client_clock->get("tickrate")), 53);
-    Object *server_bound_clock = server_lag->get("_clock");
-    Object *client_bound_clock = client_lag->get("_clock");
-    CHECK(server_bound_clock == server_clock);
-    CHECK(client_bound_clock == client_clock);
+    NETW_CHECK_EQ(server_clock->get_tickrate(), 53);
+    NETW_CHECK_EQ(client_clock->get_tickrate(), 53);
+    CHECK(bool(rig.server()->call("is_configured")));
+    CHECK(bool(rig.client(0)->call("is_configured")));
 }
 
 } // namespace TestDeclaredServiceLaws

@@ -2,7 +2,7 @@
 ## costs in physics frames.
 ##
 ## A frame-tier transition is a declared quantum of physics frames, and the
-## declaration is the clock's own [member ClockCore.physics_factor]. A run that
+## declaration is the clock's own [member NetwClockHandle.physics_factor]. A run that
 ## drives at any other cadence is measuring a body the game would never see.
 class_name TestFrameSchedule
 extends NetwTestSuite
@@ -67,7 +67,8 @@ func test_a_pair_driven_off_its_declaration_charges_the_fault_on_both_books() \
 	# the DECLARATION rather than the measurement: handed the measurement, its
 	# declared and measured values are the same number and it can never charge
 	# a fault at all.
-	var pool := s.client_sim.native_drive_stats(p.client_entity)
+	var engine := s.client.api._native_core.prediction_engine
+	var pool := engine.drive_stats(engine.slot_of(p.client_entity))
 	assert_int(pool[NetwPredictionEngine.STAT_QUANTUM_DECLARED]) \
 			.override_failure_message(
 				"the pool was told %d where the clock declares %d"

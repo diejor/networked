@@ -125,15 +125,7 @@ var layer: NetwInterestLayer:
 		var api := _api()
 		if api == null:
 			return null
-		return api._interest.get_layer(api._scene_layer_id(entity))
-
-## Whether the scene hosts its own world.
-var isolation: NetwMultiplayer.SceneIsolation:
-	get:
-		var node := _scene_node()
-		var record := NetwEntity.of(node) if node else null
-		return record.scene_isolation if record \
-		else NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_NONE
+		return api._native_core.scene_layer_view(entity) as NetwInterestLayer
 
 ## Every peer the scene admits.
 var peers: PackedInt32Array:
@@ -233,43 +225,35 @@ func release(who: Variant) -> void:
 ## The returned [NetwGroupPromise] reports each arrival through
 ## [signal NetwGroupPromise.completed_single] and settles once the last one has
 ## landed, which is the same one-to-many handle every other group operation
-## answers with.
+## answers with. The arrivals report at the session's next pump rather than
+## here, so a caller chaining [method NetwGroupPromise.then] on what this
+## returns is subscribed before the group settles.
 ## [codeblock]
 ## arena.move_participants(squad) \
 ##     .then(func(_arrivals: Dictionary) -> void: start_round())
 ## [/codeblock]
+##
+## The decision is [method NetwMultiplayerCore.scene_move_participants]: which
+## seats move, in what order the boundaries are crossed, and what a refused
+## mover still owes its caller. Off a session there is nobody to pump, so the
+## group is answered unsettled and stays that way.
 ## [br][br][b]Server Only.[/b]
 func move_participants(moving: Array[NetwParticipant]) -> NetwGroupPromise:
-	var peers: Array[int] = []
+	var peers := PackedInt32Array()
 	for participant: NetwParticipant in moving:
 		if participant:
 			peers.append(participant.peer_id)
-	var batch := NetwGroupPromise.create(PackedInt32Array(peers))
-	for participant: NetwParticipant in moving:
-		if participant:
-			participant.move_to(self)
-	# Arrivals report at the next settle, so a caller chaining on the returned
-	# promise is subscribed before the group settles, and unkeyed, so two moves
-	# in one cascade each report their own batch.
 	var api := _api()
-	if api:
-		api._settle_schedule(_resolve_moved.bind(batch, moving))
+	if api == null:
+		return NetwGroupPromise.create(peers)
+	assert(api.is_server(), "NetwSceneHandle.move_participants is server-only")
+	var batch: NetwGroupPromise = api._native_core.scene_move_participants(
+		entity,
+		peers,
+	)
+	if not peers.is_empty():
+		api.interest_flush()
 	return batch
-
-
-# Reports each moved participant onto the group promise, settling it once the
-# last one lands.
-func _resolve_moved(
-		batch: NetwGroupPromise,
-		moved: Array[NetwParticipant],
-) -> void:
-	for participant: NetwParticipant in moved:
-		if participant:
-			batch.resolve_peer(participant.peer_id, participant)
-	# A move nobody was waiting on settles here, because the last arrival is
-	# what settles every other one and there is no arrival to be last.
-	if not batch.is_completed:
-		batch.resolve_all()
 
 
 # The peer id [param who] names, as a participant or an id already. Zero when it
@@ -312,7 +296,7 @@ func add_player(player: NetwEntity) -> Error:
 
 ## Moves [param moved] into this scene, settling once the move has landed.
 ## [br][br][b]Server Only.[/b]
-func move_in(moved: NetwEntity, opts: SceneMoveOpts = null) -> NetwPromise:
+func move_in(moved: NetwEntity, opts: NetwReparentOpts = null) -> NetwPromise:
 	var api := _api()
 	if api == null or moved == null or not is_instance_valid(moved.owner):
 		var refused := NetwPromise.new()
@@ -386,9 +370,9 @@ func _observe(
 
 
 # Re-types one edge's subject from an id back into the wrapper the caller asked
-# in terms of, dropping the direction it did not register for. A callback whose
-# object is gone retires its own registration, so a scene outliving its
-# observers does not accumulate them.
+# in terms of, dropping the direction it did not register for. Answering true
+# retires this registration, which is how a scene outliving its observers stops
+# accumulating them. See [method NetwMultiplayerCore.scene_observe].
 func _relay(
 		present: bool,
 		subject: Variant,
@@ -396,28 +380,24 @@ func _relay(
 		event: NetwMultiplayer.SceneEvent,
 		want: bool,
 		callback: Callable,
-) -> void:
+) -> bool:
 	var api := _api()
 	if api == null:
-		return
+		return false
 	if not callback.is_valid():
-		api.scene_unobserve(
-			scene,
-			event,
-			_relay.bind(scene, event, want, callback),
-		)
-		return
+		return true
 	if present != want:
-		return
+		return false
 	if event == NetwMultiplayer.SceneEvent.SCENE_EVENT_PARTICIPANT:
 		var participant := api.peer_get_participant(int(subject))
 		if participant:
 			callback.call(participant)
-		return
+		return false
 	var node := api.entity_get_node(subject as RID)
 	var record := NetwEntity.of(node) if node else null
 	if record:
 		callback.call(record)
+	return false
 
 
 ## Returns the resolved scene's container node, or [code]null[/code].

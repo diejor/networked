@@ -81,7 +81,11 @@ func test_upsert_flush_then_cold_read_round_trips() -> void:
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(&"players", &"p1", { &"hp": 7, &"pname": "valeria" })
 	)
-	assert_int(await (db.backend as NakamaDatabase).drain()).is_equal(OK)
+	assert_int(
+		await NetwDatabase.settled_error(
+			(db.backend as NakamaDatabase).drain(),
+		),
+	).is_equal(OK)
 
 	# A fresh backend has a cold cache and must read from Nakama.
 	var db2 := await _make_db(&"slot_a")
@@ -97,14 +101,18 @@ func test_subset_upsert_preserves_untouched_columns() -> void:
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(&"players", &"p2", { &"hp": 1, &"pname": "jose" })
 	)
-	assert_int(await backend.drain()).is_equal(OK)
+	assert_int(
+		await NetwDatabase.settled_error(backend.drain()),
+	).is_equal(OK)
 
 	# Subset upsert: the cache still holds pname, so the next flush keeps it.
 	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(&"players", &"p2", { &"hp": 99 })
 	)
-	assert_int(await backend.drain()).is_equal(OK)
+	assert_int(
+		await NetwDatabase.settled_error(backend.drain()),
+	).is_equal(OK)
 
 	var db2 := await _make_db(&"slot_a")
 	var record: Dictionary = await db2._find_by_id(&"players", &"p2")
@@ -119,10 +127,14 @@ func test_delete_removes_record() -> void:
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(&"players", &"p3", { &"hp": 3 })
 	)
-	assert_int(await backend.drain()).is_equal(OK)
+	assert_int(
+		await NetwDatabase.settled_error(backend.drain()),
+	).is_equal(OK)
 
 	await db.delete(&"players", &"p3")
-	assert_int(await backend.drain()).is_equal(OK)
+	assert_int(
+		await NetwDatabase.settled_error(backend.drain()),
+	).is_equal(OK)
 
 	var db2 := await _make_db(&"slot_a")
 	var record: Dictionary = await db2._find_by_id(&"players", &"p3")
@@ -135,7 +147,11 @@ func test_slots_do_not_see_each_other() -> void:
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(&"players", &"shared", { &"hp": 5 })
 	)
-	assert_int(await (db_a.backend as NakamaDatabase).drain()).is_equal(OK)
+	assert_int(
+		await NetwDatabase.settled_error(
+			(db_a.backend as NakamaDatabase).drain(),
+		),
+	).is_equal(OK)
 
 	var db_b := await _make_db(&"slot_b")
 	var record: Dictionary = await db_b._find_by_id(&"players", &"shared")

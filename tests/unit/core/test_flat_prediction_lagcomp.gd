@@ -33,11 +33,11 @@ func test_prediction_declaration_and_parameters_are_flat() -> void:
 			NetwMultiplayer.PredictParam.PREDICT_PARAM_SCHEDULE,
 		),
 	).is_equal(NetwPredict.Schedule.FRAME)
-	assert_object(api._lagcomp.engine_for(NetwEntity.of(root))) \
+	assert_object(api.engine_for(NetwEntity.of(root))) \
 			.is_not_null()
 
 	api.predict_undeclare(entity)
-	assert_object(api._lagcomp.engine_for(NetwEntity.of(root))) \
+	assert_object(api.engine_for(NetwEntity.of(root))) \
 			.is_null()
 
 

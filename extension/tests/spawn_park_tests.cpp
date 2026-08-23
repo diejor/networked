@@ -1,6 +1,6 @@
 #include "support/netw_test.h"
 
-#include "netw/liveness_core.hpp"
+#include "netw/api/liveness_core.hpp"
 #include "netw/spawn_park.hpp"
 
 namespace TestNetwSpawnPark {

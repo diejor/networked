@@ -5,6 +5,8 @@
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
 
+using namespace godot;
+
 namespace netw {
 
 namespace predict {

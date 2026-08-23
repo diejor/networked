@@ -6,9 +6,9 @@
 #include "godot/callable.hpp"
 #include "godot/variant.hpp"
 #include "netw/carrier_frame.hpp"
-#include "netw/event_plane.hpp"
-#include "netw/netw_multiplayer.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/event_plane.hpp"
+#include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/schema_core.hpp"
 
 namespace TestNetwEventSessionLaws {
 
@@ -183,7 +183,7 @@ class SessionRun {
     void drive(bool p_armed, Evidence &r_evidence) {
         Ref<NetwMultiplayerCore> core;
         core.instantiate();
-        core->get_clock_core()->set_tick(COMMIT_TICK);
+        core->get_clock_handle()->engine.set_tick(COMMIT_TICK);
         Variant answer;
         if (p_armed) {
             core->event_arm(true);

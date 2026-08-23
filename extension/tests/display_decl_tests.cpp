@@ -1,6 +1,6 @@
 #include "support/netw_test.h"
 
-#include "netw/display_decl.hpp"
+#include "netw/api/display_decl.hpp"
 
 namespace TestNetwDisplayDecl {
 

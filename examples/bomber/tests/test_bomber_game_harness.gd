@@ -76,7 +76,7 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var host_runtime = NetwEntity.of(jose_on_host).interpolation._runtime()
 	assert_int(host_runtime.pump_mode).override_failure_message(
 		"the host must sample the client player it simulates authoritatively",
-	).is_equal(DisplayCore._PUMP_BRACKETED)
+	).is_equal(NetwDisplayDecl.PUMP_BRACKETED)
 	# And only its own: the host's player never saw the input.
 	assert_float(valeria_player.position.x).is_equal_approx(valeria_held, 1.0)
 

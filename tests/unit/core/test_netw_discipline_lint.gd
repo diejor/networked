@@ -47,7 +47,6 @@ const CORE_PRIVATE_REACHES: Array[String] = [
 	"._clock",
 	"._embedding",
 	"._persistence",
-	"._lagcomp",
 	"._display.",
 	"._rpc_core",
 ]

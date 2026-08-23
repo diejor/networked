@@ -20,7 +20,7 @@ func _chase_runtime(self_feedback: bool) -> Dictionary:
 	var rt := NetwDisplayRuntime.new()
 	rt.config = NetwDisplayDecl.new()
 	rt.playhead = NetwDisplayPlayhead.new()
-	rt.pump_mode = DisplayCore._PUMP_CHASE
+	rt.pump_mode = NetwDisplayDecl.PUMP_CHASE
 
 	var body := _Body.new()
 	body.value = 5.0
@@ -35,7 +35,7 @@ func _chase_runtime(self_feedback: bool) -> Dictionary:
 	state.history.mode = state.spec.mode
 	state.self_feedback = self_feedback
 	var writer := NetwInterpRecordingWriter.new()
-	state.output = writer
+	state.output = writer.write
 	state.last_written = 0.0
 
 	rt.states.append(state)
@@ -61,7 +61,7 @@ func _history_runtime(self_feedback: bool, pump_mode: int) -> Dictionary:
 	state.history.record(2, 2.0, false)
 	state.self_feedback = self_feedback
 	var writer := NetwInterpRecordingWriter.new()
-	state.output = writer
+	state.output = writer.write
 	state.last_written = 0.0
 
 	rt.states.append(state)
@@ -80,36 +80,36 @@ func _timing() -> NetwDisplayTiming:
 
 
 func test_chase_skips_a_self_feedback_channel() -> void:
-	var iface := DisplayCore.new()
+	var core := NetwMultiplayerCore.new()
 	var scene := _chase_runtime(true)
-	iface._pump_chase(scene.rt, _timing(), NetwPumpStats.new())
+	core.display_pump_runtime(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
 			.override_failure_message("a self-feedback CHASE channel must not write") \
 			.is_empty()
 
 
 func test_chase_writes_a_redirected_channel() -> void:
-	var iface := DisplayCore.new()
+	var core := NetwMultiplayerCore.new()
 	var scene := _chase_runtime(false)
-	iface._pump_chase(scene.rt, _timing(), NetwPumpStats.new())
+	core.display_pump_runtime(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
 			.override_failure_message("a redirected CHASE channel must still write") \
 			.is_not_empty()
 
 
 func test_bracketed_skips_a_self_feedback_channel() -> void:
-	var iface := DisplayCore.new()
-	var scene := _history_runtime(true, DisplayCore._PUMP_BRACKETED)
-	iface._pump_history(scene.rt, _timing(), NetwPumpStats.new())
+	var core := NetwMultiplayerCore.new()
+	var scene := _history_runtime(true, NetwDisplayDecl.PUMP_BRACKETED)
+	core.display_pump_runtime(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
 			.override_failure_message("a self-feedback BRACKETED (authority) channel must not write") \
 			.is_empty()
 
 
 func test_bracketed_writes_a_redirected_channel() -> void:
-	var iface := DisplayCore.new()
-	var scene := _history_runtime(false, DisplayCore._PUMP_BRACKETED)
-	iface._pump_history(scene.rt, _timing(), NetwPumpStats.new())
+	var core := NetwMultiplayerCore.new()
+	var scene := _history_runtime(false, NetwDisplayDecl.PUMP_BRACKETED)
+	core.display_pump_runtime(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
 			.override_failure_message("a redirected BRACKETED channel must still write") \
 			.is_not_empty()
@@ -118,9 +118,9 @@ func test_bracketed_writes_a_redirected_channel() -> void:
 # The frozen REMOTE display legitimately writes the sampled property: there is no
 # live simulation to corrupt, so self-feedback is harmless and must not be skipped.
 func test_remote_writes_even_a_self_feedback_channel() -> void:
-	var iface := DisplayCore.new()
-	var scene := _history_runtime(true, DisplayCore._PUMP_REMOTE)
-	iface._pump_history(scene.rt, _timing(), NetwPumpStats.new())
+	var core := NetwMultiplayerCore.new()
+	var scene := _history_runtime(true, NetwDisplayDecl.PUMP_REMOTE)
+	core.display_pump_runtime(scene.rt, _timing(), NetwPumpStats.new())
 	assert_array((scene.writer as NetwInterpRecordingWriter).samples) \
 			.override_failure_message("a REMOTE display writes the sampled property, frozen body") \
 			.is_not_empty()

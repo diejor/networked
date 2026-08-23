@@ -8,7 +8,8 @@
 
 #include "support/netw_test.h"
 
-#include "netw/display_decl.hpp"
+#include "netw/api/display_decl.hpp"
+#include "netw/display_role_facts.hpp"
 
 namespace TestNetwDisplayRole {
 

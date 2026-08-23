@@ -1,13 +1,12 @@
 #include "netw/persistence_book.hpp"
 
-#include "godot/class_db.hpp"
 #include "godot/local_vector.hpp"
 
 using namespace godot;
 
 namespace netw {
 
-bool NetwPersistenceBook::enroll(
+bool PersistenceBook::enroll(
     const RID &entity,
     const Ref<RefCounted> &engine
 ) {
@@ -22,16 +21,16 @@ bool NetwPersistenceBook::enroll(
     return fresh;
 }
 
-Ref<RefCounted> NetwPersistenceBook::engine_of(const RID &entity) const {
+Ref<RefCounted> PersistenceBook::engine_of(const RID &entity) const {
     HashMap<RID, Ref<RefCounted>>::ConstIterator held = rows.find(entity);
     return held == rows.end() ? Ref<RefCounted>() : held->value;
 }
 
-bool NetwPersistenceBook::has(const RID &entity) const {
+bool PersistenceBook::has(const RID &entity) const {
     return rows.has(entity);
 }
 
-bool NetwPersistenceBook::drop(const RID &entity) {
+bool PersistenceBook::drop(const RID &entity) {
     if (!rows.erase(entity)) {
         return false;
     }
@@ -44,7 +43,7 @@ bool NetwPersistenceBook::drop(const RID &entity) {
     return true;
 }
 
-TypedArray<RID> NetwPersistenceBook::entities() const {
+TypedArray<RID> PersistenceBook::entities() const {
     TypedArray<RID> out;
     for (const RID &entity : order) {
         out.push_back(entity);
@@ -52,11 +51,11 @@ TypedArray<RID> NetwPersistenceBook::entities() const {
     return out;
 }
 
-int NetwPersistenceBook::size() const {
+int PersistenceBook::size() const {
     return int(rows.size());
 }
 
-TypedArray<PackedInt32Array> NetwPersistenceBook::group_by_database(
+TypedArray<PackedInt32Array> PersistenceBook::group_by_database(
     const Array &due_rows
 ) {
     TypedArray<PackedInt32Array> out;
@@ -83,36 +82,9 @@ TypedArray<PackedInt32Array> NetwPersistenceBook::group_by_database(
     return out;
 }
 
-void NetwPersistenceBook::clear() {
+void PersistenceBook::clear() {
     rows.clear();
     order.clear();
-}
-
-void NetwPersistenceBook::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("enroll", "entity", "engine"),
-        &NetwPersistenceBook::enroll
-    );
-    ClassDB::bind_method(
-        D_METHOD("engine_of", "entity"),
-        &NetwPersistenceBook::engine_of
-    );
-    ClassDB::bind_method(D_METHOD("has", "entity"), &NetwPersistenceBook::has);
-    ClassDB::bind_method(
-        D_METHOD("drop", "entity"),
-        &NetwPersistenceBook::drop
-    );
-    ClassDB::bind_method(
-        D_METHOD("entities"),
-        &NetwPersistenceBook::entities
-    );
-    ClassDB::bind_method(D_METHOD("size"), &NetwPersistenceBook::size);
-    ClassDB::bind_static_method(
-        "NetwPersistenceBook",
-        D_METHOD("group_by_database", "due_rows"),
-        &NetwPersistenceBook::group_by_database
-    );
-    ClassDB::bind_method(D_METHOD("clear"), &NetwPersistenceBook::clear);
 }
 
 } // namespace netw

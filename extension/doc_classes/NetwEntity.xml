@@ -408,7 +408,7 @@
 			The entity's [NetwPersistenceEngine], or [code]null[/code] when its archetype declared no [method Netw.configure_persistence]. The engine reads and writes the persisted columns on the live scene, so flush and hydrate operate on the same saved state. Resolves through the session, so it is [code]null[/code] before the owner is in a [MultiplayerTree] branch.
 		</member>
 		<member name="prediction" type="Variant" setter="" getter="get_prediction">
-			The entity-level prediction handle. It holds the prediction and reconciliation config a [PredictionComponent] declares in a scene or a caller sets in code, plus the live counters [method LagCompCore.metrics] reads. The stepping kernel lives in [LagCompCore]. Never [code]null[/code], and it reports itself unregistered until an engine wires.
+			The entity-level prediction handle. It holds the prediction and reconciliation config a [PredictionComponent] declares in a scene or a caller sets in code, plus the live counters [method NetwMultiplayer.lagcomp_metrics] reads. The stepping kernel lives in [NetwMultiplayer]. Never [code]null[/code], and it reports itself unregistered until an engine wires.
 		</member>
 		<member name="reparenting" type="NetwReparentOpts" setter="set_reparenting" getter="get_reparenting">
 			The [method reparent_to] in flight, or [code]null[/code]. Set before the move and cleared after it, so an [code]_exit_tree[/code] consumer can tell a reparent from a despawn.
@@ -449,7 +449,7 @@
 			The entity's derived state property-set binding, the registry set handle a script declares with [method NetwScriptModel.PropertyConfig.state]. Resolves through the session, so it is [code]null[/code] before the owner is in a [MultiplayerTree] branch or when the owner marks no state set. This is the set handle a prediction engine gathers and reconciles through.
 		</member>
 		<member name="timeline" type="NetwTimeline" setter="set_timeline" getter="get_timeline">
-			The entity's per-entity tick-keyed [NetwTimeline] of state and input snapshots, published by [LagCompCore], or [code]null[/code]. Held by instance id, so it clears when the timeline frees.
+			The entity's per-entity tick-keyed [NetwTimeline] of state and input snapshots, published by [NetwMultiplayer], or [code]null[/code]. Held by instance id, so it clears when the timeline frees.
 		</member>
 		<member name="transfer" type="int" setter="set_transfer" getter="get_transfer" default="0">
 			The player request policy for control transfer, as a [enum Transfer]. An archetype config field written in the entity root's [code]_init[/code] alongside [member initial_controller] and read while the record is [constant STAGE_UNBOUND]. [constant TRANSFER_REQUESTABLE] lets peers call [method request_control], and the server emits [signal control_requested] before granting.

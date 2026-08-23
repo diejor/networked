@@ -133,7 +133,6 @@ func test_revival_binds_the_same_record_one_life_higher() -> void:
 	assert_bool(api._native_core.liveness_bind_route(route, second_entity)).is_true()
 
 	assert_that(second_entity.rid).is_equal(first_rid)
-	assert_bool(NetwEntityIds.is_minted(birth)).is_false()
 	assert_int(api.entity_get_epoch(first_rid)).is_equal(1)
 	assert_int(api.entity_get_state(
 			api.entity_from_route(route))).is_equal(NetwMultiplayer.EntityState.LIVE)
@@ -301,7 +300,7 @@ func test_a_clocked_when_live_deadline_is_measured_in_clock_ticks() -> void:
 	var config := NetwClockConfig.new()
 	config.tickrate = 4
 	assert_int(api.service_install(config)).is_equal(OK)
-	var clock := api._native_core.clock_core
+	var clock := api._native_core.clock_handle
 	clock.tick = 100
 
 	var timed_out := [false]
@@ -344,5 +343,4 @@ func test_session_ended_leaves_no_residue() -> void:
 	assert_int(api.live_routes().size()).is_equal(0)
 	assert_int(api._native_core.liveness_reserve_route()).is_equal(1)
 	assert_bool(entity.rid.is_valid()).is_true()
-	assert_bool(NetwEntityIds.is_minted(entity.rid)).is_true()
 	assert_bool(api._native_core.liveness_core.entity_is_valid(entity.rid)).is_false()

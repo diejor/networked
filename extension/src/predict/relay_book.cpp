@@ -3,6 +3,8 @@
 #include "godot/class_db.hpp"
 #include "netw/predict/frames.hpp"
 
+using namespace godot;
+
 namespace netw {
 
 void NetwPredictRelayBook::set_subscribed(

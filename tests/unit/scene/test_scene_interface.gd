@@ -1,4 +1,5 @@
-## Unit coverage for [SceneCore] and the positional lookups it answers.
+## Unit coverage for the session scene machine and the positional lookups it
+## answers.
 class_name TestSceneInterface
 extends NetwTestSuite
 
@@ -24,7 +25,7 @@ func _api() -> NetwMultiplayer:
 func test_interface_exists_without_a_tree() -> void:
 	var api := _api()
 
-	assert_object(api._scenes).is_not_null()
+	assert_object(api._scene_core).is_not_null()
 	assert_object(api.get_service(MultiplayerSceneManager)).is_null()
 
 
@@ -34,13 +35,15 @@ func test_scene_config_registration_is_api_owned() -> void:
 	var config := NetwSceneConfig.new()
 	config.isolation = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
 
-	assert_bool(api._scenes.has_declaration()).is_false()
+	assert_bool(api._scene_core.declaration_is_published()).is_false()
 	api.object_configuration_add(source, config)
-	assert_bool(api._scenes.has_declaration()).is_true()
-	assert_int(api._scenes._default_isolation()).is_equal(NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD)
+	assert_bool(api._scene_core.declaration_is_published()).is_true()
+	assert_int(api._scene_core.declared_isolation()).is_equal(
+		NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD,
+	)
 
 	api.object_configuration_remove(source, config)
-	assert_bool(api._scenes.has_declaration()).is_false()
+	assert_bool(api._scene_core.declaration_is_published()).is_false()
 
 
 func test_active_registry_answers_scene_lookups() -> void:
@@ -48,8 +51,8 @@ func test_active_registry_answers_scene_lookups() -> void:
 	var scene: Node = auto_free(_scene(&"Arena"))
 	_activate(api, scene)
 
-	assert_object(api._scenes.scene(&"Arena").level_container()).is_same(scene)
-	assert_object(api._scenes.scene(&"Missing")).is_null()
+	assert_object(api.scene(&"Arena").level_container()).is_same(scene)
+	assert_object(api.scene(&"Missing")).is_null()
 
 
 func test_scene_lookup_and_entity_scene_share_one_answer() -> void:
@@ -69,28 +72,29 @@ func test_single_scene_drives_current_scene() -> void:
 	var scene: Node = auto_free(_scene(&"Arena"))
 	_activate(api, scene)
 
-	api._scenes.refresh_current_scene()
+	api._scene_refresh_current()
 
-	assert_object(api._scenes.current_scene).is_same(scene)
+	assert_object(api._scene_current_node()).is_same(scene)
 
 
 func test_native_scene_change_tripwire_names_networked_verbs() -> void:
 	var api := _api()
-	var scenes := SceneCore.new(api)
-	api._session.state = SessionCore.State.ONLINE
+	var scenes := api
+	api._native_core.session_set_state(NetwMultiplayer.SessionState.ONLINE)
 	var native_scene: Node = auto_free(Node.new())
 	var expected := (
-			"Native change_scene_to_* to an unmarked scene during an online "
+			"Native change_scene_to_* to a scene with no on-ramp during an online "
 			+ "session. The replicated session is intact, but this client left the "
-			+ "presented game locally. Mark the scene with "
-			+ "Netw.configure_multiplayer_scene() to make the change a server "
-			+ "request, or change scenes with Netw.change_scene_to_file(), which "
-			+ "applies on authority and asks from a client."
+			+ "presented game locally. Add "
+			+ "Netw.configure_multiplayer_scene(self).captured() to the scene root "
+			+ "to make the change a server request, or change scenes with "
+			+ "Netw.change_scene_to_file(), which applies on authority and asks "
+			+ "from a client."
 	)
 
 	await assert_error(
 		func() -> void:
-			scenes._on_native_scene_changed(native_scene)
+			scenes._scene_on_native_changed(native_scene)
 	).is_push_error(expected)
 	api.embedding.dispose()
 
@@ -127,7 +131,7 @@ func test_pathless_native_entry_errors_without_requesting() -> void:
 	# path, so it cannot become a path request. The hook teaches the fix and
 	# sends nothing rather than desyncing.
 	var api := _api()
-	var scenes := SceneCore.new(api)
+	var scenes := api
 	var node: Node = auto_free(Node.new())
 	var expected := (
 			"A marked scene entered natively has no resource_path, so it "
@@ -137,9 +141,9 @@ func test_pathless_native_entry_errors_without_requesting() -> void:
 
 	await assert_error(
 		func() -> void:
-			scenes._handle_native_scene_entry(node)
+			scenes._scene_handle_native_entry(node)
 	).is_push_error(expected)
-	assert_object(scenes._pending_request).is_null()
+	assert_object(api._scene_core.pending_request).is_null()
 	api.embedding.dispose()
 
 
@@ -147,7 +151,7 @@ func test_pending_hook_is_a_side_effect_callback() -> void:
 	# on_pending is a side-effect hook: the framework calls the method and
 	# ignores its return, leaving the game to present its own loading UI.
 	var api := _api()
-	var scenes := SceneCore.new(api)
+	var scenes := api
 	var scr := GDScript.new()
 	scr.source_code = (
 			"extends Node\n"
@@ -158,10 +162,7 @@ func test_pending_hook_is_a_side_effect_callback() -> void:
 	scr.reload()
 	var node: Node = auto_free(Node.new())
 	node.set_script(scr)
-	var config := NetwScriptModel.SceneMarkConfig.new()
-	config.pending_method = &"_show_loading"
-
-	scenes._invoke_pending_hook(node, config)
+	scenes._scene_invoke_pending_hook(node, &"_show_loading")
 	assert_bool(node.get(&"shown")).is_true()
 	api.embedding.dispose()
 
@@ -169,17 +170,14 @@ func test_pending_hook_is_a_side_effect_callback() -> void:
 func test_pending_hook_absent_without_on_pending() -> void:
 	# No mark method, or a missing one, is a silent no-op rather than an error.
 	var api := _api()
-	var scenes := SceneCore.new(api)
+	var scenes := api
 	var node: Node = auto_free(Node.new())
 	node.set_script(_marked_script())
 
 	await assert_error(
 		func() -> void:
-			scenes._invoke_pending_hook(node, NetwScriptModel.SceneMarkConfig.new())
-			var missing := NetwScriptModel.SceneMarkConfig.new()
-			missing.pending_method = &"_absent"
-			scenes._invoke_pending_hook(node, missing)
-			scenes._invoke_pending_hook(node, null)
+			scenes._scene_invoke_pending_hook(node, &"")
+			scenes._scene_invoke_pending_hook(node, &"_absent")
 	).is_success()
 	api.embedding.dispose()
 
@@ -208,14 +206,16 @@ func test_a_packed_destination_answers_the_stem_the_book_is_keyed_by() -> void:
 	assert_str(String(stem)).is_not_equal(
 		packed.resource_path.get_file().get_basename(),
 	)
-	assert_object(api._scenes._existing_destination(packed)).is_same(scene)
-	assert_bool(api._scenes._packed_scene_active(packed)).is_true()
+	assert_object(api._scene_existing_destination(packed)).is_same(scene)
+	assert_object(
+		api._scene_container_named(NetwMultiplayerCore.scene_packed_stem(packed)),
+	).is_same(scene)
 
 
 # Registers [param scene] as live under its level's stem, which is what a
 # spawned container's tree entry does.
 func _activate(api: NetwMultiplayer, scene: Node) -> void:
-	api._scenes.core.scene_enter(
+	api._scene_core.scene_enter(
 		api.entity_of(scene),
 		StringName(scene.get_child(0).name),
 		false,

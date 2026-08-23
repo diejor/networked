@@ -37,8 +37,8 @@ enum TimingMode {
 	##
 	## This mode is owner-anchored. It guarantees only that the action owner's
 	## recorded state is ready at the view tick. It does not gate other entities.
-	## Cross-entity validation must use [method LagCompCore.sample] or
-	## [method LagCompCore.rewind] for those targets.
+	## Cross-entity validation must use [method NetwMultiplayer.sample] or
+	## [method NetwMultiplayer.lagcomp_rewind] for those targets.
 	##
 	## Determinism is a precondition, not a toggle. The placement agrees with the
 	## client only when consuming the same input yields the same state. Resolution
@@ -78,7 +78,7 @@ var timeout_ticks: int = 0
 ## assumptions. Opt into stricter modes per action.
 var timing_mode := TimingMode.IMMEDIATE
 
-var _lag: LagCompCore
+var _lag: NetwMultiplayer
 var _authority: Callable
 var _entity: NetwEntity
 var _target_path := NodePath("")
@@ -87,7 +87,7 @@ var _slot := 0
 
 
 func _init(
-		lag: LagCompCore,
+		lag: NetwMultiplayer,
 		authority: Callable,
 		slot: int,
 ) -> void:
@@ -121,7 +121,7 @@ func request(view_tick: int, data: Variant = null) -> void:
 	if _target_path.is_empty():
 		return
 
-	var api := _lag._api()
+	var api := _lag
 	if not api:
 		return
 
@@ -226,7 +226,7 @@ class Context extends RefCounted:
 
 
 	func _init(
-			service: LagCompCore,
+			service: NetwMultiplayer,
 			p_requester: int,
 			p_view_tick: int,
 			p_requested_tick: int,
@@ -262,8 +262,8 @@ class Context extends RefCounted:
 			service._deny_action_to(requester, _key)
 
 
-	func _service() -> LagCompCore:
+	func _service() -> NetwMultiplayer:
 		return (
-				_service_ref.get_ref() as LagCompCore
+				_service_ref.get_ref() as NetwMultiplayer
 				if _service_ref else null
 		)

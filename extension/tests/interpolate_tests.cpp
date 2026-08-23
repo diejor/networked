@@ -7,7 +7,7 @@
 
 #include "support/netw_test.h"
 
-#include "netw/interpolate.hpp"
+#include "netw/api/interpolate.hpp"
 
 namespace TestNetwInterpolate {
 

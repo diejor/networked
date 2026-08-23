@@ -5,6 +5,16 @@
 class_name TestInterestHandle
 extends NetwTestSuite
 
+# The awareness kinds the session's relay encodes, as it reads them off the
+# wire row.
+const AWARENESS_EXIT := 0
+const AWARENESS_ENTER := 1
+
+# The edge kinds the same wire row carries: a layer edge names no observer,
+# an observer edge names the peer that gained or lost sight.
+const AWARENESS_LAYER := 0
+const AWARENESS_OBSERVER := 1
+
 var mt: MultiplayerTree
 
 
@@ -20,11 +30,11 @@ func _make_entity(entity_name: String = "Ent") -> Node:
 
 
 func _layer(layer_id: StringName) -> NetwInterestLayer:
-	return mt.api._interest.layer(layer_id)
+	return mt.api._native_core.interest_layer(layer_id)
 
 
-func _service() -> InterestCore:
-	return mt.api._interest
+func _service() -> NetwMultiplayer:
+	return mt.api
 
 
 func test_interest_handle_is_cached() -> void:
@@ -78,12 +88,12 @@ func test_configure_interest_dispatches_layer_callbacks() -> void:
 
 	var layer := _layer(&"arena")
 	layer.add_viewer(7)
-	_service().flush_now()
+	_service().interest_flush()
 	assert_array(entered).contains_exactly([[&"arena", 7]])
 	assert_that(entity.interest.is_visible_to(7)).is_true()
 
 	layer.remove_viewer(7)
-	_service().flush_now()
+	_service().interest_flush()
 	assert_array(left).contains_exactly([[&"arena", 7]])
 	assert_that(entity.interest.is_visible_to(7)).is_false()
 
@@ -173,22 +183,22 @@ func test_perception_builder_and_custom_guard() -> void:
 
 
 func test_wire_admission_does_not_override_host_participant_row() -> void:
-	mt.api._session.role = SessionCore.Role.LISTEN_SERVER
+	mt.api._native_core.session_set_role(NetwMultiplayer.Role.LISTEN_SERVER)
 	var entity := NetwEntity.of(_make_entity())
 	var layer := _layer(&"stealth")
 	layer.add_entity(entity)
-	_service().flush_now()
+	_service().interest_flush()
 
-	assert_bool(_service().wire_admits(1, entity)).is_true()
-	assert_bool(_service().participant_sees(1, entity)).is_false()
+	assert_bool(_service()._native_core.interest_wire_admits(1, entity)).is_true()
+	assert_bool(_service()._native_core.interest_participant_sees(1, entity)).is_false()
 
 	layer.add_viewer(1)
-	_service().flush_now()
-	assert_bool(_service().participant_sees(1, entity)).is_true()
+	_service().interest_flush()
+	assert_bool(_service()._native_core.interest_participant_sees(1, entity)).is_true()
 
 
 func test_hide_perception_restores_visual_and_audio_state() -> void:
-	mt.api._session.role = SessionCore.Role.LISTEN_SERVER
+	mt.api._native_core.session_set_role(NetwMultiplayer.Role.LISTEN_SERVER)
 	var root := Node2D.new()
 	root.name = "PerceptionRoot"
 	var audio := AudioStreamPlayer.new()
@@ -200,22 +210,22 @@ func test_hide_perception_restores_visual_and_audio_state() -> void:
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 	layer.add_viewer(1)
 	layer.add_entity(entity)
-	_service().flush_now()
+	_service().interest_flush()
 
-	assert_bool(_service().wire_admits(1, entity)).is_true()
-	assert_bool(_service().participant_sees(1, entity)).is_false()
+	assert_bool(_service()._native_core.interest_wire_admits(1, entity)).is_true()
+	assert_bool(_service()._native_core.interest_participant_sees(1, entity)).is_false()
 	assert_bool(root.visible).is_false()
 	assert_float(audio.volume_db).is_equal(-80.0)
 
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS)
-	_service().flush_now()
-	assert_bool(_service().participant_sees(1, entity)).is_true()
+	_service().interest_flush()
+	assert_bool(_service()._native_core.interest_participant_sees(1, entity)).is_true()
 	assert_bool(root.visible).is_true()
 	assert_float(audio.volume_db).is_equal(-12.0)
 
 
 func test_custom_perception_receives_both_local_edges() -> void:
-	mt.api._session.role = SessionCore.Role.LISTEN_SERVER
+	mt.api._native_core.session_set_role(NetwMultiplayer.Role.LISTEN_SERVER)
 	var root := Node2D.new()
 	root.name = "CustomPerceptionRoot"
 	mt.add_child(root)
@@ -231,13 +241,13 @@ func test_custom_perception_receives_both_local_edges() -> void:
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 	layer.add_viewer(1)
 	layer.add_entity(entity)
-	_service().flush_now()
+	_service().interest_flush()
 
 	assert_array(events).contains_exactly([[false, 1, &"stealth"]])
 	assert_bool(root.visible).is_true()
 
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS)
-	_service().flush_now()
+	_service().interest_flush()
 	assert_array(events).contains_exactly(
 		[[false, 1, &"stealth"], [true, 1, &"stealth"]],
 	)
@@ -250,15 +260,15 @@ func test_awareness_enter_waits_for_delayed_node() -> void:
 	layer.entity_visible.connect(callable)
 	var route := 42
 
-	_service()._handle_awareness_events(
+	_service()._native_core.interest_receive_awareness(
 		var_to_bytes(
 			[
 				[
-					NetwInterestAwareness.LAYER,
+					AWARENESS_LAYER,
 					route,
 					&"sight",
 					0,
-					InterestCore.Kind.ENTER,
+					AWARENESS_ENTER,
 				],
 			],
 		),
@@ -300,22 +310,22 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 			left.append([layer_id, peer_id])
 	)
 
-	_service()._handle_awareness_events(
+	_service()._native_core.interest_receive_awareness(
 		var_to_bytes(
 			[
 				[
-					NetwInterestAwareness.OBSERVER,
+					AWARENESS_OBSERVER,
 					route,
 					&"sight",
 					7,
-					InterestCore.Kind.ENTER,
+					AWARENESS_ENTER,
 				],
 				[
-					NetwInterestAwareness.OBSERVER,
+					AWARENESS_OBSERVER,
 					^"Observed",
 					&"sight",
 					9,
-					InterestCore.Kind.ENTER,
+					AWARENESS_ENTER,
 				],
 			],
 		),
@@ -324,15 +334,15 @@ func test_observer_awareness_resolves_route_and_rejects_paths() -> void:
 	await drain_frames(get_tree(), 2)
 	assert_array(entered).contains_exactly([[&"sight", 7]])
 
-	_service()._handle_awareness_events(
+	_service()._native_core.interest_receive_awareness(
 		var_to_bytes(
 			[
 				[
-					NetwInterestAwareness.OBSERVER,
+					AWARENESS_OBSERVER,
 					route,
 					&"sight",
 					7,
-					InterestCore.Kind.EXIT,
+					AWARENESS_EXIT,
 				],
 			],
 		),
@@ -351,10 +361,10 @@ func test_off_tree_entity_keeps_admission_until_driven() -> void:
 
 	layer.add_viewer(7)
 	layer.add_entity(entity)
-	_service().flush()
-	assert_that(_service().participant_sees(7, entity)).is_true()
+	_service().interest_flush()
+	assert_that(_service()._native_core.interest_participant_sees(7, entity)).is_true()
 
 	mt.add_child(root)
-	_service().flush()
-	assert_that(_service().participant_sees(7, entity)).is_true()
+	_service().interest_flush()
+	assert_that(_service()._native_core.interest_participant_sees(7, entity)).is_true()
 	layer.remove_entity(entity)

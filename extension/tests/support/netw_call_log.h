@@ -1,29 +1,5 @@
 #pragma once
 
-/* Which callbacks ran, in what order.
- *
- * The recorder's counterpart. `Recorder` captures what an object EMITTED;
- * this captures what a `Callable` handed to the subject was CALLED with, which
- * is the only observation available for a surface whose whole contract is
- * "I will call you back". A queue that answered the wrong waiter, answered one
- * twice, or answered in the wrong order is indistinguishable from a correct one
- * by any amount of polled state.
- *
- * Every callable a log mints writes into the same ordered list, so order across
- * DIFFERENT callbacks is recorded the same way order across different signals
- * is.
- *
- * [codeblock]
- * CallLog log;
- * core->when_live(7, log.callable("live"), 4, false, log.callable("expired"));
- * core->flush_live(7);
- * NETW_CHECK_EQ(log.count("live"), 1);
- * CHECK(log.order() == Vector<StringName>({ "live" }));
- * [/codeblock]
- */
-
-// A sibling under `support/`, so the prelude is reached by its bare name here.
-// A case file, which sits one directory up, writes `support/netw_test.h`.
 #include "netw_test.h"
 
 #include <memory>
@@ -35,26 +11,16 @@
 
 namespace netw_test {
 
-// Held through a shared pointer because a callable handed to a subject is owned
-// by whatever holds it and may outlive the log that minted it.
 struct CallLogEntries {
     godot::Vector<godot::StringName> tags;
-    // Parallel to tags, so a call's arguments are found under the same index
-    // that gives its order. An observation noted by the case carries none.
     godot::Vector<godot::Array> args;
 };
 
-// One per minted callable. It knows its own tag, so the shared list records
-// arrival order across all of them.
 class CallLogSink final : public godot::CallableCustom {
     std::shared_ptr<CallLogEntries> entries;
     godot::StringName tag;
     godot::ObjectID anchor;
-    // What the sink answers. A driver callback is read for its return value,
-    // so a sink that always answered nil could not stand in for one.
     godot::Variant answer;
-    // A factory answers a NEW object per call, which is what makes "minted
-    // once" observable: a fixed answer passes that law without holding it.
     bool mints = false;
 
     static bool same(
@@ -100,10 +66,6 @@ public:
         return &CallLogSink::before;
     }
 
-    // A custom callable with no object reads as INVALID, and a subject that
-    // skips invalid callbacks then skips every one of these silently. The
-    // anchor is the log's own object, so a minted callable is valid for exactly
-    // as long as the log that answers questions about it.
     godot::ObjectID get_object() const override {
         return anchor;
     }
@@ -140,23 +102,17 @@ public:
         anchor.instantiate();
     }
 
-    // A fresh callable that writes p_tag into this log when it is called.
     godot::Callable callable(const godot::StringName &p_tag) const {
         return godot::Callable(
             memnew(CallLogSink(entries, p_tag, anchor.ptr()))
         );
     }
 
-    // An observation the case makes itself, recorded in line with the
-    // callbacks rather than beside them. Order across the two is exactly what
-    // a callback contract is, so they cannot be two lists.
     void note(const godot::StringName &p_tag) const {
         entries->tags.push_back(p_tag);
         entries->args.push_back(godot::Array());
     }
 
-    // A callable that records its call and answers p_answer, for a subject that
-    // reads its callback's return value rather than only calling it.
     godot::Callable answering(
         const godot::StringName &p_tag,
         const godot::Variant &p_answer
@@ -166,17 +122,12 @@ public:
         );
     }
 
-    // A callable that records its call and answers a FRESH object each time,
-    // for a subject whose contract is that it asks for one only once.
     godot::Callable minting(const godot::StringName &p_tag) const {
         return godot::Callable(memnew(
             CallLogSink(entries, p_tag, anchor.ptr(), godot::Variant(), true)
         ));
     }
 
-    // The arguments the p_index'th call under p_tag carried, empty when there
-    // was no such call. What the callback was called WITH is half the contract
-    // and a count cannot state it.
     godot::Array args(const godot::StringName &p_tag, int p_index = 0) const {
         int seen = 0;
         for (int at = 0; at < entries->tags.size(); ++at) {
@@ -199,8 +150,6 @@ public:
         return total;
     }
 
-    // Call order ACROSS callbacks, which is what a per-callback count cannot
-    // say.
     godot::Vector<godot::StringName> order() const {
         return entries->tags;
     }

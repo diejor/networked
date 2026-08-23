@@ -35,8 +35,6 @@
 class_name NetwPredictionHandle
 extends RefCounted
 
-const PredictionCore := preload("res://addons/networked/replication/prediction_core.gd")
-
 
 ## One state field's running account of the recoveries it asked for against
 ## the ones that answered it, a row of
@@ -152,7 +150,9 @@ var recovery_policy: int = -1:
 		# declaring one settles the other. This ran inside recovery().policy()
 		# and a direct write skipped it; with the verb gone there is one
 		# source for the fact and it cannot be skipped.
-		correction_mode = _correction_mode_for_policy(value)
+		correction_mode = NetwPredictionEngine.correction_for_recovery_policy(
+			value,
+		)
 		var engine := _engine()
 		if engine:
 			engine.rewire()
@@ -168,9 +168,8 @@ var breach_response: NetwPredict.BreachResponse = \
 		breach_response = value
 		# Who chose it, for the report. DEMOTE is the one recovery fact a
 		# player feels directly, so a reader must be able to tell a game that
-		# asked for it from a default that arrived. This stamping lived in the
-		# deleted on_breach() verb; the property carries it now, and the scene
-		# path re-stamps after _push_config.
+		# asked for it from a default that arrived. The scene path re-stamps
+		# this after PredictionComponent pushes its config.
 		_breach_source = &"code"
 
 ## The entities this one claims to simulate the way authority does.
@@ -617,11 +616,10 @@ signal recovered(
 ## divergence reports it here whether or not anything was written for it, and
 ## several exits deliberately write nothing -- the evidence ran out, an
 ## operator is waiting on a witness, a transport or dissipate is pending.
-## Those rows used to report false, which made this flag mean "a write
-## happened" on some paths and "a divergence was judged" on others, and left
-## an observe-only reader unable to see a divergence the engine had decided
-## not to act on. [member last_verdict_reason] names why a judged divergence
-## wrote nothing. The write has its own signal, [signal recovered].
+## Those rows still report true here, so an observe-only reader can see a
+## divergence the engine decided not to act on.
+## [member last_verdict_reason] names why a judged divergence wrote nothing.
+## The write has its own signal, [signal recovered].
 ##
 ## This is the per-receive companion to [signal divergence_detected], which
 ## fires only when a transition actually disagrees and names the transition and
@@ -663,17 +661,16 @@ var _simulation_subjects: Dictionary[int, Callable] = { }
 var archetype: NetwPredict.Archetype = NetwPredict.Archetype.NONE:
 	set(value):
 		archetype = value
-		match value:
-			NetwPredict.Archetype.KINEMATIC:
-				schedule = NetwPredict.Schedule.TICK
-				missing_policy = NetwPredict.MissingInput.STALL
-				recovery_policy = NetwPredict.RecoveryPolicy.REBASE_REPLAY
-			NetwPredict.Archetype.SOLVER_BODY:
-				schedule = NetwPredict.Schedule.FRAME
-				missing_policy = NetwPredict.MissingInput.REPEAT_LAST
-				recovery_policy = NetwPredict.RecoveryPolicy.REBASE_RECOVER
-				snap_restore = NetwPredict.RestoreMode.EXTRAPOLATED
-				teleport_threshold = 3.0
+		var axes: Dictionary = NetwPredictionEngine.archetype_axes(value)
+		if not bool(axes[&"declared"]):
+			return
+		schedule = int(axes[&"schedule"]) as NetwPredict.Schedule
+		missing_policy = int(axes[&"missing_policy"])
+		recovery_policy = int(axes[&"recovery_policy"])
+		if bool(axes[&"declares_snap_restore"]):
+			snap_restore = int(axes[&"snap_restore"])
+		if bool(axes[&"declares_teleport_threshold"]):
+			teleport_threshold = float(axes[&"teleport_threshold"])
 
 
 ## Reads back the value the engine sampled for the declared sensor
@@ -698,7 +695,7 @@ func sensor(name: StringName, default: Variant = null) -> Variant:
 	if not engine:
 		return default
 	var iface := engine._iface()
-	var api := iface._api() if iface else null
+	var api := iface if iface else null
 	return api.predict_sensor_sample(
 		api.entity_of(engine._entity.owner),
 		name,
@@ -719,24 +716,6 @@ func resolved_recovery_policy() -> NetwPredict.RecoveryPolicy:
 	)
 
 
-# The correction mechanism a policy runs through. A policy names a strategy
-# and the mechanism is how it is carried out, so several policies can share
-# one mechanism without sharing a meaning.
-func _correction_mode_for_policy(
-		policy: NetwPredict.RecoveryPolicy,
-) -> NetwPredict.CorrectionMode:
-	match policy:
-		NetwPredict.RecoveryPolicy.REBASE_REPLAY:
-			return NetwPredict.CorrectionMode.REPLAY
-		NetwPredict.RecoveryPolicy.REBASE_RECOVER, NetwPredict.RecoveryPolicy.DELAY_CLOSED:
-			return NetwPredict.CorrectionMode.SNAP
-		NetwPredict.RecoveryPolicy.OBSERVE:
-			# Nothing is written under OBSERVE, so the mechanism named here
-			# only decides what the recovery would have run had it written.
-			return NetwPredict.CorrectionMode.SNAP
-	return NetwPredict.CorrectionMode.SNAP
-
-
 ## Returns the [enum NetwPredict.Role] named by [param source] and [param mode], the
 ## compatibility view over the two axes.
 ##
@@ -753,20 +732,7 @@ static func role_for_axes(
 		source: NetwPredict.InputSource,
 		mode: NetwPredict.SimMode,
 ) -> NetwPredict.Role:
-	# The simulation axis is asked first. A peer running none needs no
-	# command, so where it would have read one cannot change what it is.
-	if mode == NetwPredict.SimMode.DISPLAY:
-		return NetwPredict.Role.REMOTE
-	if source == NetwPredict.InputSource.LOCAL:
-		return NetwPredict.Role.HOST_LOCAL if mode == NetwPredict.SimMode.AUTHORITATIVE \
-		else NetwPredict.Role.PREDICT
-	if source == NetwPredict.InputSource.RECEIVED \
-			and mode == NetwPredict.SimMode.AUTHORITATIVE:
-		return NetwPredict.Role.CONSUME
-	if source == NetwPredict.InputSource.PREDICTED \
-			and mode == NetwPredict.SimMode.SPECULATIVE:
-		return NetwPredict.Role.SIMULATE
-	return NetwPredict.Role.REMOTE
+	return NetwPredictionEngine.role_for_axes(source, mode) as NetwPredict.Role
 
 
 ## Returns the [NetwEntity] this handle configures.
@@ -798,7 +764,7 @@ func simulate_tick(delta: float, tick: int) -> void:
 ## engine is wired.
 ##
 ## The transition it authors is labeled from the clock the way
-## [method LagCompCore.frame_step] labels one, so driving an
+## [method NetwMultiplayer.frame_step] labels one, so driving an
 ## entity directly and letting the pump drive it produce the same transition.
 func simulate_frame(delta: float) -> void:
 	var engine := _engine()
@@ -953,7 +919,7 @@ func episode() -> Dictionary:
 	var engine := _engine()
 	if engine:
 		return engine.episode()
-	return _episode_report(_episode_snapshot)
+	return _episode_snapshot.duplicate(true)
 
 
 ## Returns the episode's present-time scalars without copying its evidence.
@@ -1045,7 +1011,7 @@ func episode_digest() -> Dictionary:
 			),
 		},
 		&"last_operator": attempt,
-		&"disposition": _episode_disposition(raw),
+		&"disposition": raw.get(&"disposition", { }),
 		&"evidence": {
 			&"comparisons": comparisons.size(),
 			&"writes": writes.size(),
@@ -1059,128 +1025,8 @@ func episode_digest() -> Dictionary:
 	}
 
 
-# The scalar half of the report, shared by the detached report and the digest
-# so one projection serves both and they can never drift apart.
-func _episode_disposition(raw: Dictionary) -> Dictionary:
-	return {
-		&"state": int(raw.get(&"state", NetwPredict.EpisodeState.OPEN)),
-		&"non_contraction_used": int(raw.get(&"non_contraction_used", 0)),
-		# Non-contractions the budget did NOT charge, because every field
-		# that triggered them was one the recovery may not write. Reported
-		# beside the spend rather than folded into it: the count is how a
-		# game sees that its declarations, not the ladder, are what the
-		# episode kept meeting.
-		&"withheld_non_contractions": int(
-			raw.get(&"withheld_non_contractions", 0),
-		),
-		# Exempt for a different reason: the write was never evidence, so it
-		# had nothing to spend. Kept apart from the withheld count so that
-		# count means only what K1 claims for it.
-		&"evidence_free_non_contractions": int(
-			raw.get(&"evidence_free_non_contractions", 0),
-		),
-		# The charged breakdown. These two sum to non_contraction_used.
-		&"nc_no_trigger": int(raw.get(&"nc_no_trigger", 0)),
-		&"nc_mixed_trigger": int(raw.get(&"nc_mixed_trigger", 0)),
-		&"closure_used": int(raw.get(&"closure_used", 0)),
-		&"closed_transition": int(raw.get(&"closed_transition", -1)),
-		&"fallback_transition": int(raw.get(&"fallback_transition", -1)),
-		&"demoted": bool(raw.get(&"demoted", false)),
-		&"breach_transition": int(raw.get(&"breach_transition", -1)),
-		&"breach_witness": (
-				raw.get(&"breach_witness", { }) as Dictionary
-		).duplicate(true),
-		&"resume_ack_age": int(raw.get(&"resume_ack_age", 0)),
-		&"quarantine_target": int(raw.get(&"quarantine_target", 0)),
-		&"quarantine_clean_run": int(raw.get(&"quarantine_clean_run", 0)),
-		&"reseed_transition": int(raw.get(&"reseed_transition", -1)),
-		&"aligned_transition": int(raw.get(&"aligned_transition", -1)),
-		&"evidence_dropped": int(raw.get(&"evidence_dropped", 0)),
-	}
 
 
-# Projects raw resumable episode state into the stable public report.
-func _episode_report(raw: Dictionary) -> Dictionary:
-	if raw.is_empty():
-		return { }
-	var report := raw.duplicate(true)
-	var row: Dictionary = report.get(&"generator_row_copy", { })
-	report[&"generator"] = {
-		&"transition": int(
-			row.get(
-				&"transition",
-				report.get(&"opened_transition", -1),
-			),
-		),
-		&"boundary": int(
-			report.get(
-				&"attribution",
-				NetwPredictJournal.Attribution.UNKNOWN,
-			),
-		),
-		&"row": row,
-	}
-	report[&"operators"] = _episode_operator_attempts(report)
-	report[&"contraction"] = (
-			report.get(&"comparisons", []) as Array
-	).duplicate(true)
-	report[&"disposition"] = _episode_disposition(report)
-	var chain: Array = report.get(&"reopen_chain", [])
-	if chain.is_empty():
-		var reopened_from := int(report.get(&"reopened_from", 0))
-		if reopened_from > 0:
-			chain.append(reopened_from)
-		chain.append(int(report.get(&"id", 0)))
-	report[&"reopen_chain"] = chain.duplicate()
-	return report
-
-
-# Joins eligibility decisions to applied writes without losing refusals.
-func _episode_operator_attempts(report: Dictionary) -> Array[Dictionary]:
-	var attempts: Array[Dictionary] = []
-	var writes: Array = report.get(&"writes", [])
-	var used_writes := { }
-	for value: Variant in report.get(&"decisions", []):
-		var decision := (value as Dictionary).duplicate(true)
-		var matched_write := { }
-		for index in writes.size():
-			if used_writes.has(index):
-				continue
-			var candidate := writes[index] as Dictionary
-			if int(candidate.get(&"operator", -1)) \
-					== int(decision.get(&"operator", -2)) \
-					and int(candidate.get(&"basis", -1)) \
-							== int(decision.get(&"basis", -2)):
-				matched_write = candidate.duplicate(true)
-				used_writes[index] = true
-				break
-		decision[&"outcome"] = int(matched_write.get(&"outcome", -1))
-		decision[&"write"] = matched_write
-		attempts.append(decision)
-	for index in writes.size():
-		if used_writes.has(index):
-			continue
-		var write := (writes[index] as Dictionary).duplicate(true)
-		attempts.append(
-			{
-				&"operator": int(write.get(&"operator", -1)),
-				&"basis": int(write.get(&"basis", -1)),
-				&"eligible": true,
-				&"applied": true,
-				&"eligibility": { },
-				&"outcome": int(write.get(&"outcome", -1)),
-				&"write": write,
-			},
-		)
-	return attempts
-
-
-# Keeps episode evidence available when the engine rewires or unregisters.
-#
-# The handle adopts the engine's record rather than copying it. A copy per
-# evidence mutation costs the whole record once per entry added to it, which
-# is quadratic in the age of an open episode, and every public read detaches
-# anyway.
 func _store_episode(report: Dictionary) -> void:
 	_episode_snapshot = report
 	_episode_revision += 1
@@ -1225,7 +1071,7 @@ func has_consumed_state_tick(state_tick: int) -> bool:
 func notify_contact() -> void:
 	var engine := _engine()
 	var iface := engine._iface() if engine else null
-	var api := iface._api() if iface else null
+	var api := iface if iface else null
 	if api and engine._entity:
 		api.predict_notify_contact(api.entity_of(engine._entity.owner))
 
@@ -1318,14 +1164,9 @@ static func divergence_by_field(
 
 # Whether [param error] on one field demands a recovery at [param tolerance].
 #
-# THE one predicate for that question. Six places used to ask it inline and one
-# of them answered differently: [method PredictionCore._PredictionEngine._escalation_field]
-# read a declared tolerance of 0.0 as "skip this field" where every other
-# reader reads it as "any error triggers", so a field could raise a
-# correction and then be absent
-# from the ranking that decides which divergence the recovery answers. Two
-# functions written together for one purpose, reading one declaration in
-# opposite ways.
+# THE one predicate for that question, so the ranking that decides which
+# divergence a recovery answers cannot read a declared tolerance differently
+# from the test that raised the correction.
 #
 # Strictly greater, so a tolerance is the largest error a field is allowed to
 # hold rather than the smallest it is corrected for, and a declared 0.0 means
@@ -1454,5 +1295,6 @@ func _predicted_command_callable() -> Callable:
 	return Callable()
 
 
-func _engine() -> PredictionCore._PredictionEngine:
-	return _engine_ref.get_ref() as PredictionCore._PredictionEngine if _engine_ref else null
+func _engine() -> NetwPredictEngine._PredictionEngine:
+	return _engine_ref.get_ref() as NetwPredictEngine._PredictionEngine \
+			if _engine_ref else null

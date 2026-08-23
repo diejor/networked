@@ -26,8 +26,8 @@ const DISPLAY_OFFSET := 3
 
 var inner: NetwTestHarness
 var server: MultiplayerTree
-var clock: ClockCore
-var sim: LagCompCore
+var clock: NetwClockHandle
+var sim: NetwMultiplayer
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -60,7 +60,7 @@ func setup(
 
 	# Freeze the clock under lockstep so every tick is driven by run() / move_along().
 	_stepper = LockstepStepper.new(
-		[clock] as Array[ClockCore],
+		[clock] as Array[NetwClockHandle],
 		[server.multiplayer] as Array[MultiplayerAPI],
 		inner.session(),
 		tickrate,

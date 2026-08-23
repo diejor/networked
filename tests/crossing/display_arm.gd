@@ -6,9 +6,8 @@
 ## its GDScript arm is a trace recorded from that arm BEFORE its replacement
 ## existed. Recording it afterwards would describe what the port produced rather
 ## than what it must reproduce, and no amount of later work recovers that. The
-## golden below was recorded at c4f11bda, when the history was still
-## [code]DisplayCore._History[/code], and the arm now drives
-## [NetwDisplayHistory] against it.
+## golden below was recorded at c4f11bda, when the history was still a
+## GDScript class, and the arm now drives [NetwDisplayHistory] against it.
 ##
 ## [br][br]
 ## Every scenario drives [NetwDisplayHistory] alone, with no runtime, no clock

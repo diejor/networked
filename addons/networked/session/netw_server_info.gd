@@ -27,7 +27,7 @@ static func from_session(api: NetwMultiplayer) -> NetwServerInfo:
 	if api:
 		info.players = api.participants.size()
 		info.app_id = api.session.app_id
-		info.max_players = api._session.advertised_max_players
+		info.max_players = api.session_advertised_max_players
 	return info
 
 

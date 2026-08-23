@@ -1,31 +1,10 @@
 #pragma once
 
-/* The packed-column ring recording every transition an engine drove.
- *
- * A row opens when a transition is authored and closes when its produced state
- * is fingerprinted, so a closed row names one drive completely. Evidence is
- * immutable after close while the verdict overlay, attribution and domain may
- * settle later, which is what makes the fingerprint an acceptance test rather
- * than a tolerance.
- *
- * [codeblock]
- * journal.open(transition, Open{ ... });
- * journal.close(transition, post_fp, post_families);
- * const int slot = journal.slot_of(transition);
- * [/codeblock]
- *
- * Every column is addressed by ring slot and a slot is resolved once, so a
- * reader that wants several columns of one row pays one scan rather than one
- * per column.
- */
-
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
 
 namespace netw {
-
-using namespace godot;
 
 namespace predict {
 
@@ -76,16 +55,9 @@ enum Row : uint8_t {
     ROW_WITNESS_MATCHED = 128,
 };
 
-// A solve the body slept through witnessed nothing, and one that woke into it
-// witnessed a transition the solver started rather than continued. Neither is
-// evidence a conditional operator may build on.
 enum WitnessState : uint8_t {
     WITNESS_SLEEPING = 1,
     WITNESS_WOKE = 2,
-    // Authority has answered for this row's witness. Distinct from
-    // ROW_WITNESS_MATCHED, which cannot tell a verdict of "differs" from a
-    // verdict that has not arrived, and a conditional operator waits on
-    // exactly that difference.
     WITNESS_JUDGED = 4,
 };
 
@@ -96,22 +68,14 @@ enum Evidence : uint8_t {
 
 constexpr int JOURNAL_CAPACITY_DEFAULT = 256;
 
-// The fingerprint the journal, the wire and every later comparison share. The
-// result is signed because that is the width the columns and the wire both
-// carry, so a fingerprint never changes representation between being computed,
-// stored and sent.
 int32_t fnv1a(const uint8_t *p_bytes, int p_size);
 
-// Pose, momentum, then controller and latch, which is the order every family
-// column pair is written and read in.
 struct FamilyFingerprints {
     int32_t pose = 0;
     int32_t momentum = 0;
     int32_t controller = 0;
 };
 
-// The operator write that accounts for a state-chain discontinuity ahead of
-// this row, or `NONE` with a `-1` basis when nothing wrote the body.
 struct Provenance {
     int32_t episode = 0;
     int32_t write_id = 0;
@@ -119,12 +83,6 @@ struct Provenance {
     int64_t basis = -1;
 };
 
-/* What a row carries at the moment it opens, before its drive runs.
- *
- * Grouped rather than passed as ten arguments because every field is written
- * in one place and read in one place, and a call site naming them positionally
- * is a call site where two ints of the same type can be swapped silently.
- */
 struct JournalOpen {
     int64_t label = 0;
     uint8_t kind = 0;
@@ -157,45 +115,43 @@ class Journal {
     int count = 0;
     int start = 0;
 
-    LocalVector<int64_t> transitions;
-    LocalVector<int64_t> labels;
-    LocalVector<int32_t> c_hashes;
-    LocalVector<int32_t> e_digests;
-    LocalVector<int32_t> pre_fps;
-    LocalVector<int32_t> topo_fps;
-    LocalVector<int32_t> raw_fps;
-    LocalVector<int32_t> witness_fps;
-    LocalVector<uint8_t> witness_class_bits;
-    LocalVector<uint8_t> witness_realization_bits;
-    LocalVector<uint8_t> witness_states;
-    LocalVector<float> aligned_errors;
-    LocalVector<int32_t> post_fps;
-    LocalVector<int32_t> pre_pose_fps;
-    LocalVector<int32_t> pre_momentum_fps;
-    LocalVector<int32_t> pre_controller_fps;
-    LocalVector<int32_t> post_pose_fps;
-    LocalVector<int32_t> post_momentum_fps;
-    LocalVector<int32_t> post_controller_fps;
-    LocalVector<int32_t> episode_ids;
-    LocalVector<int32_t> write_ids;
-    LocalVector<uint8_t> operators;
-    LocalVector<int64_t> bases;
-    LocalVector<uint8_t> differing_families;
-    LocalVector<uint8_t> evidence_masks;
-    LocalVector<uint8_t> kinds;
-    LocalVector<uint8_t> domains;
-    LocalVector<uint8_t> attributions;
-    LocalVector<uint8_t> flags;
+    godot::LocalVector<int64_t> transitions;
+    godot::LocalVector<int64_t> labels;
+    godot::LocalVector<int32_t> c_hashes;
+    godot::LocalVector<int32_t> e_digests;
+    godot::LocalVector<int32_t> pre_fps;
+    godot::LocalVector<int32_t> topo_fps;
+    godot::LocalVector<int32_t> raw_fps;
+    godot::LocalVector<int32_t> witness_fps;
+    godot::LocalVector<uint8_t> witness_class_bits;
+    godot::LocalVector<uint8_t> witness_realization_bits;
+    godot::LocalVector<uint8_t> witness_states;
+    godot::LocalVector<float> aligned_errors;
+    godot::LocalVector<int32_t> post_fps;
+    godot::LocalVector<int32_t> pre_pose_fps;
+    godot::LocalVector<int32_t> pre_momentum_fps;
+    godot::LocalVector<int32_t> pre_controller_fps;
+    godot::LocalVector<int32_t> post_pose_fps;
+    godot::LocalVector<int32_t> post_momentum_fps;
+    godot::LocalVector<int32_t> post_controller_fps;
+    godot::LocalVector<int32_t> episode_ids;
+    godot::LocalVector<int32_t> write_ids;
+    godot::LocalVector<uint8_t> operators;
+    godot::LocalVector<int64_t> bases;
+    godot::LocalVector<uint8_t> differing_families;
+    godot::LocalVector<uint8_t> evidence_masks;
+    godot::LocalVector<uint8_t> kinds;
+    godot::LocalVector<uint8_t> domains;
+    godot::LocalVector<uint8_t> attributions;
+    godot::LocalVector<uint8_t> flags;
 
     int next_slot();
 
 public:
     explicit Journal(int p_capacity = JOURNAL_CAPACITY_DEFAULT);
 
-    // Newest first, because every caller addresses a recent transition.
     int slot_of(int64_t p_transition) const;
 
-    // Oldest-first index shared by every public column reader.
     int index_of(int64_t p_transition) const;
 
     void open(int64_t p_transition, const JournalOpen &p_row);
@@ -233,8 +189,6 @@ public:
     void mark_aligned_error(int64_t p_transition, double p_error);
     void mark_differing_family(int64_t p_transition, DifferingFamily p_family);
 
-    // The frontier an acknowledgement may claim: an open row holds a zero
-    // fingerprint, so claiming it would assert a state no drive has produced.
     int64_t last_closed() const;
     int64_t first_unmatched() const;
     int64_t first_chain_break() const;
@@ -253,8 +207,6 @@ public:
         return ring_epoch;
     }
 
-    // Oldest first, which is the order every column read shares, so index `i`
-    // names one row across all of them.
     int64_t transition_at(int p_index) const;
     int64_t label_at(int p_index) const;
     uint8_t kind_at(int p_index) const;
@@ -281,8 +233,6 @@ public:
     uint8_t differing_family_at(int p_index) const;
     float aligned_error_at(int p_index) const;
 
-    // A transition nobody retained is one nobody can show was entitled to
-    // exactness, so a forgotten row reads as the label that claims nothing.
     Domain domain_of(int64_t p_transition) const;
     uint8_t flags_of(int64_t p_transition) const;
     Attribution attribution_of(int64_t p_transition) const;

@@ -6,6 +6,8 @@
 #include "netw/profile.hpp"
 #include "netw/wire/stream.hpp"
 
+using namespace godot;
+
 namespace netw::predict {
 
 namespace {

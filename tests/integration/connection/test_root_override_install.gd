@@ -73,7 +73,7 @@ func test_tree_less_session_is_ready_to_arm() -> void:
 	# No MultiplayerTree: the session runs on its defaults, offline until a peer
 	# is assigned and a listen host once one connects.
 	assert_that(api.root as MultiplayerTree).is_null()
-	assert_that(api.state).is_equal(SessionCore.State.OFFLINE)
-	assert_that(api._session.desired_role).is_equal(
-		SessionCore.Role.LISTEN_SERVER,
+	assert_that(api.state).is_equal(NetwMultiplayer.SessionState.OFFLINE)
+	assert_that(api._authored_desired_role()).is_equal(
+		NetwMultiplayer.Role.LISTEN_SERVER,
 	)

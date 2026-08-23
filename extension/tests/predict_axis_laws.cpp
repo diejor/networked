@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "netw/predict/axes.hpp"
 #include "netw/predict/engine.hpp"
 
 namespace TestNetwPredictAxisLaws {
@@ -154,9 +155,6 @@ TEST_CASE(
     }
 }
 
-// The refusal has to be loud at the one place a caller can read it, because
-// `configure` answers false and stores nothing rather than raising. A shell
-// that ignored the answer would run an entity the pool never configured.
 TEST_CASE(
     "[Networked][Predict][Hosted][Law] a slot holds an axis point exactly "
     "when the pool admits it"
@@ -183,6 +181,155 @@ TEST_CASE(
             NETW_CHECK_EQ(pool->schedule_of(slot), row.schedule);
         }
     }
+}
+
+struct RoleRow {
+    const char *label;
+    int input_source;
+    int sim_mode;
+    int role;
+};
+
+const RoleRow ROLES[] = {
+    {"a local controller that is also authority",
+     int(InputSource::LOCAL),
+     int(SimMode::AUTHORITATIVE),
+     int(Role::HOST_LOCAL)},
+    {"a local controller speculating ahead of authority",
+     int(InputSource::LOCAL),
+     int(SimMode::SPECULATIVE),
+     int(Role::PREDICT)},
+    {"a local controller that runs no simulation",
+     int(InputSource::LOCAL),
+     int(SimMode::DISPLAY),
+     int(Role::REMOTE)},
+    {"authority consuming a received command",
+     int(InputSource::RECEIVED),
+     int(SimMode::AUTHORITATIVE),
+     int(Role::CONSUME)},
+    {"a received command speculated on, which no peer reaches",
+     int(InputSource::RECEIVED),
+     int(SimMode::SPECULATIVE),
+     int(Role::REMOTE)},
+    {"a received command nothing simulates",
+     int(InputSource::RECEIVED),
+     int(SimMode::DISPLAY),
+     int(Role::REMOTE)},
+    {"a predicted command taken as authority, which no peer reaches",
+     int(InputSource::PREDICTED),
+     int(SimMode::AUTHORITATIVE),
+     int(Role::REMOTE)},
+    {"a predicted command stepping a replicated member",
+     int(InputSource::PREDICTED),
+     int(SimMode::SPECULATIVE),
+     int(Role::SIMULATE)},
+    {"a predicted command nothing simulates",
+     int(InputSource::PREDICTED),
+     int(SimMode::DISPLAY),
+     int(Role::REMOTE)},
+    {"no command and authority anyway",
+     int(InputSource::NONE),
+     int(SimMode::AUTHORITATIVE),
+     int(Role::REMOTE)},
+    {"no command and speculation anyway",
+     int(InputSource::NONE),
+     int(SimMode::SPECULATIVE),
+     int(Role::REMOTE)},
+    {"no command and no simulation",
+     int(InputSource::NONE),
+     int(SimMode::DISPLAY),
+     int(Role::REMOTE)},
+};
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Law] every command and simulation pair "
+    "names one role, and a contradictory pair names REMOTE"
+) {
+    for (const RoleRow &row : ROLES) {
+        NETW_FORMAT_TEXT(label_text, row.label);
+        CAPTURE(label_text);
+        NETW_CHECK_EQ(
+            NetwPredictionEngine::role_for_axes(
+                row.input_source,
+                row.sim_mode
+            ),
+            row.role
+        );
+    }
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Law] an archetype declares a whole axis "
+    "point and NONE declares nothing"
+) {
+    const ArchetypeAxes none = archetype_axes(int(Archetype::NONE));
+    CHECK_FALSE(none.declared);
+    CHECK_FALSE(none.declares_snap_restore);
+    CHECK_FALSE(none.declares_teleport_threshold);
+
+    const ArchetypeAxes kinematic = archetype_axes(int(Archetype::KINEMATIC));
+    CHECK(kinematic.declared);
+    NETW_CHECK_EQ(kinematic.schedule, int(Schedule::TICK));
+    NETW_CHECK_EQ(kinematic.missing_policy, int(MissingInput::STALL));
+    NETW_CHECK_EQ(
+        kinematic.recovery_policy,
+        int(RecoveryPolicy::REBASE_REPLAY)
+    );
+    CHECK_FALSE(kinematic.declares_snap_restore);
+    CHECK_FALSE(kinematic.declares_teleport_threshold);
+
+    const ArchetypeAxes solver = archetype_axes(int(Archetype::SOLVER_BODY));
+    CHECK(solver.declared);
+    NETW_CHECK_EQ(solver.schedule, int(Schedule::FRAME));
+    NETW_CHECK_EQ(solver.missing_policy, int(MissingInput::REPEAT_LAST));
+    NETW_CHECK_EQ(solver.recovery_policy, int(RecoveryPolicy::REBASE_RECOVER));
+    CHECK(solver.declares_snap_restore);
+    NETW_CHECK_EQ(solver.snap_restore, int(RestoreMode::EXTRAPOLATED));
+    CHECK(solver.declares_teleport_threshold);
+    NETW_CHECK_CLOSE(solver.teleport_threshold, 3.0, 1e-9);
+
+    Dictionary published
+        = NetwPredictionEngine::archetype_axes(int(Archetype::SOLVER_BODY));
+    const bool published_declared = published[StringName("declared")];
+    const int64_t published_schedule = published[StringName("schedule")];
+    const int64_t published_policy
+        = published[StringName("recovery_policy")];
+    const bool published_teleports
+        = published[StringName("declares_teleport_threshold")];
+    CHECK(published_declared);
+    NETW_CHECK_EQ(published_schedule, solver.schedule);
+    NETW_CHECK_EQ(published_policy, solver.recovery_policy);
+    CHECK(published_teleports);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Law] a recovery policy runs through REPLAY "
+    "only when it rebases by replaying"
+) {
+    NETW_CHECK_EQ(
+        NetwPredictionEngine::correction_for_recovery_policy(
+            int(RecoveryPolicy::REBASE_REPLAY)
+        ),
+        int(CorrectionMode::REPLAY)
+    );
+    NETW_CHECK_EQ(
+        NetwPredictionEngine::correction_for_recovery_policy(
+            int(RecoveryPolicy::REBASE_RECOVER)
+        ),
+        int(CorrectionMode::SNAP)
+    );
+    NETW_CHECK_EQ(
+        NetwPredictionEngine::correction_for_recovery_policy(
+            int(RecoveryPolicy::DELAY_CLOSED)
+        ),
+        int(CorrectionMode::SNAP)
+    );
+    NETW_CHECK_EQ(
+        NetwPredictionEngine::correction_for_recovery_policy(
+            int(RecoveryPolicy::OBSERVE)
+        ),
+        int(CorrectionMode::SNAP)
+    );
 }
 
 } // namespace TestNetwPredictAxisLaws

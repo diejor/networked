@@ -11,9 +11,11 @@
 
 #include <cstdint>
 
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/wire/plan.hpp"
 #include "netw/wire/stream.hpp"
+
+using namespace godot;
 
 namespace TestNetwWirePlan {
 

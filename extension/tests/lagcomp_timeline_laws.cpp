@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "netw/api/entity.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "support/carrier.h"
 #include "support/loopback_rig.h"
@@ -9,6 +10,7 @@ namespace TestNetwLagCompTimelineLaws {
 #if defined(NETW_TIER_HOSTED)
 
 using namespace godot;
+using netw::NetwEntity;
 using netw::NetwLagCompCore;
 using netw_test::Carrier;
 using netw_test::EntityDecl;
@@ -263,9 +265,8 @@ TEST_CASE(
     REQUIRE(body != nullptr);
 
     rig.step_ticks(3);
-    Object *clock = api->get("_clock");
-    REQUIRE(clock != nullptr);
-    const int64_t view = int64_t(clock->get("tick"));
+    const Ref<netw::NetwClockHandle> clock = rig.clock_of(api);
+    const int64_t view = int64_t(clock->get_tick());
     const Variant past = api->call("lagcomp_sample", entity, view);
     REQUIRE(past.get_type() == Variant::OBJECT);
     CHECK_FALSE(bool(Object::cast_to<Object>(past)->call("is_empty")));
@@ -284,6 +285,108 @@ TEST_CASE(
     NETW_CHECK_EQ(body->rewind_visit_count(), 1);
     NETW_CHECK_EQ(double(body->observed_x()), 10.0);
     NETW_CHECK_EQ(double(body->get_position().x), 99.0);
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Timeline] registering by entity seats one slot per "
+    "entity and gives the same slot back to a repeat"
+) {
+    const Ref<NetwLagCompCore> history = core();
+    Ref<RefCounted> first;
+    first.instantiate();
+    Ref<RefCounted> second;
+    second.instantiate();
+
+    const int64_t seat = history->timeline_register(first, 8);
+    CHECK(seat >= 0);
+    NETW_CHECK_EQ(history->timeline_register(first, 8), seat);
+    NETW_CHECK_EQ(history->timeline_registered(), int64_t(1));
+
+    const int64_t other = history->timeline_register(second, 8);
+    CHECK(other != seat);
+    NETW_CHECK_EQ(history->timeline_registered(), int64_t(2));
+    NETW_CHECK_EQ(history->timeline_slot_of(first), seat);
+    NETW_CHECK_EQ(history->timeline_slot_of(second), other);
+
+    history->timeline_record(seat, 10, at(1.0));
+    NETW_CHECK_EQ(x_of(history->timeline_sample(seat, 10)), 1.0);
+
+    const Dictionary seated = history->timeline_entities();
+    NETW_CHECK_EQ(int64_t(seated.size()), int64_t(2));
+    CHECK(seated.has(first));
+    CHECK(seated[first] == history->timeline_history(seat));
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Timeline] an unregistered entity is unseated by "
+    "either door, and an entity that never registered is not an error"
+) {
+    const Ref<NetwLagCompCore> history = core();
+    Ref<RefCounted> seated;
+    seated.instantiate();
+    Ref<RefCounted> stranger;
+    stranger.instantiate();
+
+    const int64_t slot = history->timeline_register(seated, 8);
+
+    history->timeline_unregister(stranger);
+    NETW_CHECK_EQ(history->timeline_registered(), int64_t(1));
+
+    history->timeline_unregister(seated);
+    NETW_CHECK_EQ(history->timeline_registered(), int64_t(0));
+    NETW_CHECK_EQ(history->timeline_slot_of(seated), int64_t(-1));
+    CHECK(!history->timeline_is_open(slot));
+
+    const int64_t reseated = history->timeline_register(seated, 8);
+    CHECK(reseated >= 0);
+    history->timeline_close(reseated);
+    NETW_CHECK_EQ(history->timeline_registered(), int64_t(0));
+    NETW_CHECK_EQ(history->timeline_slot_of(seated), int64_t(-1));
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Timeline] sampling by entity reads that entity's own "
+    "history, and an unregistered entity is an absence"
+) {
+    const Ref<NetwLagCompCore> history = core();
+    Ref<RefCounted> seated;
+    seated.instantiate();
+    Ref<RefCounted> stranger;
+    stranger.instantiate();
+
+    Ref<RefCounted> other;
+    other.instantiate();
+
+    const int64_t slot = history->timeline_register(seated, 8);
+    const int64_t elsewhere = history->timeline_register(other, 8);
+    history->timeline_record(slot, 10, at(3.0));
+    history->timeline_record(elsewhere, 10, at(77.0));
+
+    NETW_CHECK_EQ(x_of(history->timeline_sample_entity(seated, 10)), 3.0);
+    NETW_CHECK_EQ(x_of(history->timeline_sample_entity(other, 10)), 77.0);
+    NETW_CHECK_EQ(x_of(history->timeline_sample_entity(seated, 900)), 3.0);
+    CHECK(history->timeline_sample_entity(seated, 9).is_empty());
+    CHECK(history->timeline_sample_entity(stranger, 10).is_empty());
+
+    history->timeline_unregister(seated);
+    CHECK(history->timeline_sample_entity(seated, 10).is_empty());
+    NETW_CHECK_EQ(x_of(history->timeline_sample_entity(other, 10)), 77.0);
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Timeline] registering publishes the history onto the "
+    "entity, so a reader never has to know the slot"
+) {
+    const Ref<NetwLagCompCore> history = core();
+    Node2D *body = memnew(Node2D);
+    const Ref<NetwEntity> entity = NetwEntity::ensure(body);
+
+    const int64_t slot = history->timeline_register(entity, 8);
+
+    CHECK(entity->get_timeline() == Variant(history->timeline_history(slot)));
+
+    history->timeline_unregister(entity);
+    memdelete(body);
 }
 
 #endif

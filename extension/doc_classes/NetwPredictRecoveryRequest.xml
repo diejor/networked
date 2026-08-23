@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictRecoveryRequest" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		A write-only staging area for the facts one recovery decision is
+		computed from, filled once and handed to the call that plans a
+		[NetwPredictWritePlan] from it.
 	</brief_description>
 	<description>
+		Holds no accessors of its own: [method fill] is the entire public
+		surface, and the fields it fills are read only by whichever call
+		consumes it. A caller gathers everything a recovery decision needs
+		about one out-of-sync field set into a single request rather than
+		threading eighteen loose arguments through the call that plans
+		the correction.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -28,6 +37,33 @@
 			<param index="16" name="suppressed" type="bool" />
 			<param index="17" name="pose_unmeasured" type="bool" />
 			<description>
+				Stages one recovery request. [param predicted],
+				[param authority], and [param current] are per-field state
+				rows: what the local prediction held at [param basis],
+				what authority held there, and what the field holds right
+				now. [param field_errors] is the divergence already
+				measured per field. [param policy] is a
+				[code]RecoveryPolicy[/code]: [code]0[/code] rebase by
+				replay, [code]1[/code] rebase by direct recovery,
+				[code]2[/code] delay because the owner declared it never
+				speculates and is closed to rebase, or [code]3[/code]
+				observe without correcting at all. [param fallback_epsilon] and
+				[param fallback_teleport] are the divergence and teleport
+				thresholds a field without its own override inherits.
+				[param max_restore_ticks] caps how long a restore may
+				stretch, [param ack_age_ticks] is the acknowledgment age
+				the correction is priced against, and
+				[param collision_cooldown_ticks] is how long a further
+				collision-triggered recovery is suppressed after this one.
+				[param tick_delta] converts tick counts to seconds for
+				that pricing. [param domain] and [param attribution] carry
+				this divergence's classification, [param contact_window]
+				marks whether it fell inside a contact window,
+				[param suppressed] forces the recovery to skip outright,
+				and [param pose_unmeasured] marks that pose evidence was
+				missing, which forces an escalation regardless of the
+				measured error. Calling this again overwrites the
+				previous fill entirely.
 			</description>
 		</method>
 	</methods>

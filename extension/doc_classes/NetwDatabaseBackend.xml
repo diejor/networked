@@ -34,6 +34,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="operations" type="Array" />
 			<description>
+				Override to sequence a batch of writes as one unit. Each entry of [param operations] is a [Dictionary] with [code]table[/code], [code]id[/code], and [code]data[/code] keys. The default [method commit] calls this if overridden, otherwise it plays the batch through [method upsert] one entry at a time.
 			</description>
 		</method>
 		<method name="_delete" qualifiers="virtual">
@@ -41,12 +42,14 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
+				Override to remove one record. [method erase] calls this.
 			</description>
 		</method>
 		<method name="_delete_namespace" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="String" />
 			<description>
+				Override to drop every table stored under [param slot]. [method delete_namespace] calls this.
 			</description>
 		</method>
 		<method name="_find_all" qualifiers="virtual">
@@ -54,6 +57,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="filter" type="Dictionary" />
 			<description>
+				Override to answer every record of [param table] whose fields match [param filter]. [method find_all] calls this.
 			</description>
 		</method>
 		<method name="_find_by_id" qualifiers="virtual">
@@ -61,6 +65,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
+				Override to answer one record by its [param id]. [method find_by_id] calls this.
 			</description>
 		</method>
 		<method name="_initialize" qualifiers="virtual">
@@ -68,11 +73,13 @@
 			<param index="0" name="schema" type="Dictionary" />
 			<param index="1" name="slot" type="String" />
 			<description>
+				Override to prepare the backend for [param slot] against [param schema], creating whatever storage the backend needs before any other verb runs. [method initialize] calls this.
 			</description>
 		</method>
 		<method name="_list_namespaces" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<description>
+				Override to answer every slot the backend currently holds. [method list_namespaces] calls this.
 			</description>
 		</method>
 		<method name="_upsert" qualifiers="virtual">
@@ -81,24 +88,28 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="data" type="Dictionary" />
 			<description>
+				Override to write [param data] into the record named by [param id] in [param table], creating the record if it does not exist and merging fields into it if it does. [method upsert] calls this.
 			</description>
 		</method>
 		<method name="_warm" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<param index="0" name="directives" type="Array" />
 			<description>
+				Override to preload records the backend expects to need soon, as a caching hint rather than a correctness requirement. [method warm] calls this.
 			</description>
 		</method>
 		<method name="commit">
 			<return type="NetwPromise" />
 			<param index="0" name="operations" type="Array" default="[]" />
 			<description>
+				Writes a batch of [param operations] as one unit. Calls [method _commit] when a backend overrides it. Otherwise plays the batch through [method upsert] in order and refuses with [constant @GlobalScope.ERR_UNAVAILABLE] the instant a write has not settled by the time its [NetwPromise] is checked, since a backend whose writes settle later owns its own [method _commit] to sequence them.
 			</description>
 		</method>
 		<method name="delete_namespace">
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="String" />
 			<description>
+				Drops every table stored under [param slot]. Calls [method _delete_namespace].
 			</description>
 		</method>
 		<method name="erase">
@@ -106,6 +117,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
+				Removes the record named by [param id] from [param table]. Calls [method _delete].
 			</description>
 		</method>
 		<method name="find_all">
@@ -113,6 +125,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="filter" type="Dictionary" default="{}" />
 			<description>
+				Answers every record of [param table] whose fields match [param filter]. Calls [method _find_all].
 			</description>
 		</method>
 		<method name="find_by_id">
@@ -120,6 +133,14 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
+				Answers one record of [param table] by its [param id]. Calls [method _find_by_id].
+			</description>
+		</method>
+		<method name="in_memory" qualifiers="static">
+			<return type="NetwDatabaseBackend" />
+			<description>
+				A backend that keeps every namespace in memory and writes no file, which is what a test wants when two databases would otherwise contend for one path on disk.
+				Nothing it holds survives the process, so a game that means to keep a save uses a backend with storage behind it.
 			</description>
 		</method>
 		<method name="initialize">
@@ -127,11 +148,13 @@
 			<param index="0" name="schema" type="Dictionary" />
 			<param index="1" name="slot" type="String" default="&quot;&quot;" />
 			<description>
+				Prepares the backend for [param slot] against [param schema] before any other verb runs on it. Calls [method _initialize].
 			</description>
 		</method>
 		<method name="list_namespaces">
 			<return type="NetwPromise" />
 			<description>
+				Answers every slot the backend currently holds. Calls [method _list_namespaces].
 			</description>
 		</method>
 		<method name="upsert">
@@ -140,12 +163,14 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="data" type="Dictionary" />
 			<description>
+				Writes [param data] into the record named by [param id] in [param table], creating it if it does not exist and merging fields into it if it does. Calls [method _upsert].
 			</description>
 		</method>
 		<method name="warm">
 			<return type="NetwPromise" />
 			<param index="0" name="directives" type="Array" default="[]" />
 			<description>
+				Preloads records the backend expects to need soon, as a caching hint rather than a correctness requirement. Calls [method _warm].
 			</description>
 		</method>
 	</methods>

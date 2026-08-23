@@ -49,13 +49,13 @@ func test_a_child_with_no_membership_inherits_the_scene_row() -> void:
 	assert_bool(child.interest.layer_ids().is_empty()).is_true()
 
 	# Not admitted: the parent clamp must hide the child.
-	assert_bool(api._interest.participant_sees(peer_id, child)).is_false()
+	assert_bool(api._native_core.interest_participant_sees(peer_id, child)).is_false()
 
 	scene.admit(peer_id)
 	api.interest_flush()
 
 	# Admitted: the child rides the scene's row without ever joining its layer.
-	assert_bool(api._interest.participant_sees(peer_id, child)).is_true()
+	assert_bool(api._native_core.interest_participant_sees(peer_id, child)).is_true()
 
 
 func test_the_child_follows_the_scene_it_is_reparented_into() -> void:
@@ -68,7 +68,7 @@ func test_the_child_follows_the_scene_it_is_reparented_into() -> void:
 	# Only the second scene admits the peer, so the child is hidden where it is.
 	second_scene.admit(peer_id)
 	api.interest_flush()
-	assert_bool(api._interest.participant_sees(peer_id, child)).is_false()
+	assert_bool(api._native_core.interest_participant_sees(peer_id, child)).is_false()
 
 	child.owner.get_parent().remove_child(child.owner)
 	second_scene.level.add_child(child.owner)
@@ -76,7 +76,7 @@ func test_the_child_follows_the_scene_it_is_reparented_into() -> void:
 	api.interest_flush()
 
 	# Membership followed the tree, with nothing re-enrolling the child.
-	assert_bool(api._interest.participant_sees(peer_id, child)).is_true()
+	assert_bool(api._native_core.interest_participant_sees(peer_id, child)).is_true()
 
 
 

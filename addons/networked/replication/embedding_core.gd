@@ -85,9 +85,9 @@ func _run_settle_resolve() -> void:
 	var api := _api()
 	if api == null:
 		return
-	api._scenes._adopt_bare_level(_bare_level_candidate)
+	api._scene_adopt_bare_level(_bare_level_candidate)
 	_bare_level_candidate = null
-	api._scenes._ensure_host_scene_view()
+	api._scene_ensure_host_view()
 
 
 ## Sends and receives one batch of datagrams, then sweeps what arriving traffic
@@ -117,7 +117,7 @@ func adopt_inner(new_inner: SceneMultiplayer) -> void:
 	api._unbind_inner_signals()
 	api.inner = new_inner
 	api._bind_inner_signals()
-	api._session.adopt_inner(api.inner)
+	api._session_adopt_inner(api.inner)
 
 
 ## Releases the whole graph the session owns, and is the one teardown call an

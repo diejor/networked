@@ -5,6 +5,8 @@
 #include "godot/local_vector.hpp"
 #include "netw/wire/ack_book.hpp"
 
+using namespace godot;
+
 namespace TestNetwWireAckBook {
 
 using godot::LocalVector;

@@ -9,7 +9,9 @@
 #include "netw/predict/frames.hpp"
 #include "netw/predict/journal.hpp"
 #include "netw/predict/relay_book.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
+
+using namespace godot;
 
 namespace TestNetwPredictFrames {
 

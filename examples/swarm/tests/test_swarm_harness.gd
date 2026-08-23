@@ -51,7 +51,7 @@ func _pair(wave: int) -> void:
 	server = harness.server()
 	var server_clock := await harness.add_clock(TICKRATE)
 	stepper = LockstepStepper.new(
-		[server_clock, client.api._clock],
+		[server_clock, client.api._native_core.clock_handle],
 		[server.api, client.api],
 		harness.session(),
 		TICKRATE,

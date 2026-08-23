@@ -91,7 +91,7 @@ func _sample(elapsed: float) -> void:
 	for mt in _trees:
 		if not is_instance_valid(mt):
 			continue
-		if not mt.api or not mt.api._lagcomp.is_configured():
+		if not mt.api or not mt.api.is_configured():
 			continue
 		_sample_tree(_category(mt), mt.api.stats_snapshot(), elapsed)
 

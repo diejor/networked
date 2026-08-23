@@ -13,6 +13,8 @@
 #include "godot/local_vector.hpp"
 #include "netw/repl/send_pass.hpp"
 
+using namespace godot;
+
 namespace TestNetwReplSendPass {
 
 using godot::LocalVector;

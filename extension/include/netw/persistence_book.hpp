@@ -7,14 +7,9 @@
 
 namespace netw {
 
-class NetwPersistenceBook : public godot::RefCounted {
-    GDCLASS(NetwPersistenceBook, godot::RefCounted)
-
+class PersistenceBook {
     godot::HashMap<godot::RID, godot::Ref<godot::RefCounted>> rows;
     godot::LocalVector<godot::RID> order;
-
-protected:
-    static void _bind_methods();
 
 public:
     bool enroll(

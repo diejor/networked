@@ -1,27 +1,5 @@
 #pragma once
 
-/* One entity declared as a record, so a case says what it wants and never how
- * a session assembles it.
- *
- * An entity is a row first and a wrapper second: `entity_create` mints the row,
- * and an owner node is plumbing only the facets that need one demand. Declaring
- * it this way is what lets a case that only needs interest membership skip the
- * node entirely, and a case that needs a display track get one without ever
- * authoring it.
- *
- * [codeblock]
- * const RID alice = rig.declare_entity(
- *     EntityDecl().named("Alice").on_route(31).controlled_by(rig.peer_id(0))
- * );
- * const RID row = rig.declare_entity(EntityDecl().named("Row").wrapperless());
- * [/codeblock]
- *
- * The record names no session and stands nothing up, which is what lets a
- * driver with no session read it. `LoopbackRig::declare_entity` is where a
- * declaration meets an API, and it is hosted-only because the API it composes
- * is a script.
- */
-
 #include "netw_test.h"
 
 #include "godot/templates.hpp"
@@ -47,15 +25,11 @@ class EntityDecl {
     godot::Variant decl_initial_pose;
 
 public:
-    // The name the owner node carries, which is what a failure message can be
-    // read by and what a client looks the entity up under.
     EntityDecl &named(const godot::StringName &p_name) {
         decl_name = p_name;
         return *this;
     }
 
-    // Pins the wire route rather than drawing one. A law that asserts over a
-    // route has to name it; anything else lets the session allocate.
     EntityDecl &on_route(int p_route) {
         decl_route = p_route;
         return *this;
@@ -66,9 +40,6 @@ public:
         return *this;
     }
 
-    // Names a field the entity replicates, in declaration order. A predicting
-    // driver compares exactly these fields, so a field left undeclared is one
-    // no law about this entity can be broken by.
     EntityDecl &synced(const godot::StringName &p_column) {
         decl_synced.push_back(p_column);
         return *this;
@@ -79,9 +50,6 @@ public:
         return *this;
     }
 
-    // The value every synced field starts at. One value rather than one per
-    // field, because a lane whose fields start apart is a scenario about the
-    // starting spread and says so by perturbing instead.
     EntityDecl &placed_at(const godot::Variant &p_pose) {
         decl_initial_pose = p_pose;
         return *this;
@@ -98,17 +66,11 @@ public:
         return *this;
     }
 
-    // Transitions authority keeps standing behind the one it consumes, so an
-    // arrival that lands late is covered by one that landed early. A depth of
-    // zero consumes at the live edge and starves the moment nothing arrives.
     EntityDecl &buffered(int p_depth) {
         decl_replay_buffer_depth = p_depth;
         return *this;
     }
 
-    // How far behind the live edge authority will walk before it gives up on
-    // the transitions between and jumps. A lane that declares none never
-    // strands, whatever its stream does.
     EntityDecl &consume_lag(int p_ticks) {
         decl_consume_lag = p_ticks;
         return *this;
@@ -119,9 +81,6 @@ public:
         return *this;
     }
 
-    // The correction axis, declared rather than left to AUTO. A carrier is no
-    // solver body, so AUTO resolves it to REPLAY, and a lane about SNAP has to
-    // say so.
     EntityDecl &corrected_by(netw::CorrectionMode p_correction) {
         decl_correction = p_correction;
         return *this;
@@ -131,8 +90,6 @@ public:
         return decl_correction;
     }
 
-    // Declares the row alone. The facets that need a node refuse afterwards,
-    // which for a law about the record plane is the point rather than a limit.
     EntityDecl &wrapperless() {
         decl_wants_owner = false;
         return *this;
@@ -146,7 +103,6 @@ public:
         return decl_name;
     }
 
-    // Zero means the declaration draws no route and lets the session allocate.
     int route() const {
         return decl_route;
     }

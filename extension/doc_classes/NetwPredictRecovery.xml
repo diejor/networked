@@ -6,6 +6,7 @@
 	<description>
 		[method NetwMultiplayer._predict_recover] answers with one of these, and a game overriding that seam mints its own through [method of].
 		The whole recovery is decided here and applied by the shell in one write, so a correction has no tail: nothing is left outstanding to ease in over later frames, and the state recorded after a recovery is exactly what was staged. Deciding it and performing it are separate for that reason, and a record is what carries the decision between them.
+		[method restore] and [method write] are keyed by property name, which is the altitude the seam speaks: the engine's own plan is keyed by field slot.
 		[codeblock]
 		var staged := NetwPredictRecovery.of(restore, restore, false, false)
 		staged.restore()    the payload to apply, by property name

@@ -261,9 +261,15 @@ func _delete_namespace_now(slot: String) -> Error:
 ## otherwise drop the last [member flush_interval] window. The
 ## [method NetwMultiplayer.persist_shutdown] calls this so that final batch
 ## lands.
-## Returns [constant OK] when the queue drained or [constant ERR_TIMEOUT] when it
-## did not within the bound.
-func drain(timeout_s: float = 5.0) -> Error:
+## Answers a [NetwPromise] resolving [constant OK] when the queue drained or
+## [constant ERR_TIMEOUT] when it did not within the bound. It is a promise for
+## the same reason every other verb on this backend is one: the wait belongs
+## above the boundary, never through it.
+func drain(timeout_s: float = 5.0) -> NetwPromise:
+	return _settling(func() -> Variant: return await _drain_now(timeout_s))
+
+
+func _drain_now(timeout_s: float) -> Error:
 	var loop := Engine.get_main_loop() as SceneTree
 	var deadline := Time.get_ticks_msec() + int(timeout_s * 1000.0)
 	while not _queue_empty() and Time.get_ticks_msec() < deadline:

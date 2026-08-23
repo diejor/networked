@@ -2,9 +2,8 @@
 
 #include <cmath>
 
-#include "godot/class_db.hpp"
 #include "netw/display_history.hpp"
-#include "netw/interpolate.hpp"
+#include "netw/api/interpolate.hpp"
 
 using namespace godot;
 
@@ -80,7 +79,7 @@ bool spent(const Variant &p_delta) {
     }
 }
 
-Variant residual(
+Variant residual_of(
     const Variant &p_displayed,
     const Variant &p_target,
     int64_t p_mode
@@ -106,37 +105,25 @@ Variant residual(
 
 } // namespace
 
-void NetwDisplayOffset::clear() {
-    offset = Variant();
+void DisplayOffset::clear() {
+    residual = Variant();
     armed = false;
 }
 
-void NetwDisplayOffset::arm(bool p_pending) {
-    armed = p_pending;
+bool DisplayOffset::is_held() const {
+    return residual.get_type() != Variant::NIL;
 }
 
-bool NetwDisplayOffset::is_armed() const {
-    return armed;
-}
-
-bool NetwDisplayOffset::is_held() const {
-    return offset.get_type() != Variant::NIL;
-}
-
-Variant NetwDisplayOffset::held() const {
-    return offset;
-}
-
-void NetwDisplayOffset::absorb(const Variant &p_recovery, double p_limit) {
+void DisplayOffset::absorb(const Variant &p_recovery, double p_limit) {
     Variant absorbed = scaled(p_recovery, -1.0);
     if (is_held() && absorbed.get_type() != Variant::NIL) {
-        absorbed = composed(offset, absorbed);
+        absorbed = composed(residual, absorbed);
     }
-    offset = clamped(absorbed, p_limit);
+    residual = clamped(absorbed, p_limit);
     armed = false;
 }
 
-Variant NetwDisplayOffset::apply(
+Variant DisplayOffset::apply(
     const Variant &p_target,
     double p_glide,
     double p_limit,
@@ -145,33 +132,17 @@ Variant NetwDisplayOffset::apply(
 ) {
     if (armed) {
         armed = false;
-        offset = clamped(residual(p_displayed, p_target, p_mode), p_limit);
+        residual = clamped(residual_of(p_displayed, p_target, p_mode), p_limit);
     }
     if (!is_held()) {
         return p_target;
     }
-    offset = scaled(offset, p_glide);
-    if (!is_held() || spent(offset)) {
-        offset = Variant();
+    residual = scaled(residual, p_glide);
+    if (!is_held() || spent(residual)) {
+        residual = Variant();
         return p_target;
     }
-    return composed(p_target, offset);
-}
-
-void NetwDisplayOffset::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("clear"), &NetwDisplayOffset::clear);
-    ClassDB::bind_method(D_METHOD("arm", "pending"), &NetwDisplayOffset::arm);
-    ClassDB::bind_method(D_METHOD("is_armed"), &NetwDisplayOffset::is_armed);
-    ClassDB::bind_method(D_METHOD("is_held"), &NetwDisplayOffset::is_held);
-    ClassDB::bind_method(D_METHOD("held"), &NetwDisplayOffset::held);
-    ClassDB::bind_method(
-        D_METHOD("absorb", "recovery", "limit"),
-        &NetwDisplayOffset::absorb
-    );
-    ClassDB::bind_method(
-        D_METHOD("apply", "target", "glide", "limit", "displayed", "mode"),
-        &NetwDisplayOffset::apply
-    );
+    return composed(p_target, residual);
 }
 
 } // namespace netw

@@ -1,8 +1,37 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictEpisodeReport" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		A by-value snapshot of one prediction episode: its generator, writes,
+		comparisons, and decisions, addressed by series and index.
 	</brief_description>
 	<description>
+		A copy of one recovery episode's evidence, taken at a moment in time
+		so it keeps answering after the episode that produced it closes,
+		reopens under a new [method id], or is overwritten in its slot.
+		[method active] is the only member that can read differently between
+		two reports of the same episode; every other member reads whatever
+		was true when the snapshot was made.
+		[br][br]Evidence that repeats per row, writes, comparisons,
+		decisions, secondary generators, taint, and the reopen chain, is
+		addressed by series and index rather than boxed into a
+		[Dictionary], so a caller walks a count against per-index accessors
+		instead of unpacking a fixed key set.
+		[codeblock]
+		for i in report.write_count():
+		    var op = report.write_operator(i)
+		    var outcome = report.write_outcome(i)
+		[/codeblock]
+		[method to_dictionary] rebuilds a fixed-key payload from the same
+		series, for a signal or a tool that wants one value to pass along
+		rather than a typed walk.
+		[br][br]The generator is the journal row whose divergence opened
+		the episode. [method generator_present] is [code]false[/code] only
+		when that row had already aged out of the journal ring before it
+		could be pinned, the one case where the [code]generator_*[/code]
+		fingerprint accessors answer zero rather than the pinned value.
+		[method secondary_generator_count] counts further divergences the
+		episode attributes independently of the generator, evidence that
+		widens the episode without becoming what it is about.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -16,478 +45,809 @@
 		<method name="agreement_run" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many trailing comparisons in a row agreed under the
+				current [method agreement_write_id]. A disagreement resets
+				it to [code]0[/code], and a comparison that starts judging a
+				different write restarts it at [code]1[/code] rather than
+				extending the previous write's count. The episode closes
+				once this reaches the ack-age-derived run length, so the run
+				always belongs to one write's attempt.
 			</description>
 		</method>
 		<method name="agreement_write_id" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [method write_id] [method agreement_run] is currently
+				counted against, or [code]0[/code] before any comparison has
+				agreed.
 			</description>
 		</method>
 		<method name="aligned_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition an alignment reseed last matched against, or
+				[code]-1[/code] before one has landed. Set when a fallback
+				episode's alignment operator succeeds, which is also what
+				closes the fallback.
 			</description>
 		</method>
 		<method name="attribution" qualifiers="const">
 			<return type="int" />
 			<description>
+				This episode's [enum NetwPredictJournal.Attribution],
+				the cause the generator's divergence was assigned. Set at
+				[code]open[/code] and updated whenever the episode's
+				generator is repinned.
 			</description>
 		</method>
 		<method name="breach_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition whose realized contact demoted this
+				episode's owner out of speculation, or [code]-1[/code] when
+				no contact has. The contact itself stays with the caller
+				that sampled it, since a peer compares only a witness
+				fingerprint and never the contact detail.
 			</description>
 		</method>
 		<method name="closed_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition at which this episode closed, either by
+				agreement or by leaving fallback, or [code]-1[/code] while
+				it is still open.
 			</description>
 		</method>
 		<method name="closure_used" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many [constant NetwPredictJournal.FULL_CLOSURE]
+				writes this episode has recorded. The episode is forced
+				into fallback once this reaches its budget, a budget
+				[method non_contraction_used] counts against separately
+				and does not share.
 			</description>
 		</method>
 		<method name="comparison_agrees" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Whether the comparison at [param index] agreed with the
+				episode's live prediction. A run of these driving
+				[method agreement_run] to its threshold is what closes the
+				episode.
 			</description>
 		</method>
 		<method name="comparison_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many comparisons this episode has recorded, the bound
+				for [param index] on every [code]comparison_*[/code]
+				accessor.
 			</description>
 		</method>
 		<method name="comparison_meter" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The divergence meter the comparison at [param index]
+				measured. A write's outcome contracts against the meter
+				trending toward [code]0[/code], not against a single
+				comparison agreeing.
 			</description>
 		</method>
 		<method name="comparison_transition" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The transition the comparison at [param index] judged, or
+				[code]-1[/code] past [method comparison_count].
 			</description>
 		</method>
 		<method name="comparison_write_id" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The [method write_id] that was outstanding when the
+				comparison at [param index] was recorded, [code]0[/code]
+				when none was.
 			</description>
 		</method>
 		<method name="decision_applied" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Whether the decision at [param index] was carried out
+				rather than merely judged eligible. A decision can be
+				[method decision_eligible] and still not applied when a
+				later constraint withdrew it.
 			</description>
 		</method>
 		<method name="decision_basis" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The transition the decision at [param index] was made
+				against, or [code]-1[/code] when it names none.
 			</description>
 		</method>
 		<method name="decision_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many operator decisions this episode has recorded, the
+				bound for [param index] on every [code]decision_*[/code]
+				accessor.
 			</description>
 		</method>
 		<method name="decision_eligibility" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="index" type="int" />
 			<description>
+				A duplicated [Dictionary] of the eligibility facts that
+				were weighed for the decision at [param index], the detail
+				behind [method decision_eligible] rather than the verdict
+				itself. Its keys are the operator's own eligibility
+				checks and are not part of this class's contract.
 			</description>
 		</method>
 		<method name="decision_eligible" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Whether the operator named by the decision at [param index]
+				was judged eligible to run, independent of whether it was
+				[method decision_applied].
 			</description>
 		</method>
 		<method name="decision_operator" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The [enum NetwPredictJournal.Operator] the decision at
+				[param index] weighed.
 			</description>
 		</method>
 		<method name="demoted" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this episode's owner lost speculative authority
+				when it entered fallback, as opposed to entering fallback
+				while still predicting. Set once, at
+				[method fallback_transition].
 			</description>
 		</method>
 		<method name="dissipate_decided" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this episode has ever recorded a decision for
+				[constant NetwPredictJournal.DISSIPATE]. Unlike
+				[method write_count], a decision can be recorded without
+				producing a write, so this is the only record that the
+				operator was ever weighed at all.
 			</description>
 		</method>
 		<method name="evidence_dropped" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many evidence rows, across writes, comparisons,
+				decisions, taint, and secondary generators, this episode
+				has discarded to stay within its retention bounds. A
+				nonzero count means an older row was silently trimmed
+				before a caller could read it, never that evidence was
+				refused outright.
 			</description>
 		</method>
 		<method name="evidence_free_non_contractions" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many non-contractions this episode has recorded for a
+				write whose divergence carried no evidence to trigger on.
+				Counted separately from [method non_contraction_used]
+				because an evidence-free non-contraction never spends the
+				episode's contraction budget.
 			</description>
 		</method>
 		<method name="fallback_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition at which this episode entered fallback, or
+				[code]-1[/code] if it never has. Distinct from
+				[method opened_transition]: an episode can run its writes
+				to exhaustion before falling back.
 			</description>
 		</method>
 		<method name="generator_attribution" qualifiers="const">
 			<return type="int" />
 			<description>
+				The generator row's own
+				[enum NetwPredictJournal.Attribution], pinned at the
+				moment the journal recorded it. Can differ from
+				[method attribution] after a repin moves the episode's
+				generator without moving its cause.
 			</description>
 		</method>
 		<method name="generator_beyond_retention" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether the generator row aged out of the journal ring
+				before this episode could pin it. When [code]true[/code],
+				every [code]generator_*[/code] fingerprint accessor answers
+				its zero default rather than a pinned value, and
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_c_hash" qualifiers="const">
 			<return type="int" />
 			<description>
+				The command hash the journal recorded for the generator
+				transition, [code]0[/code] when [method generator_present]
+				is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_domain" qualifiers="const">
 			<return type="int" />
 			<description>
+				The generator row's [enum NetwPredictJournal.Domain],
+				pinned at the moment it was recorded.
 			</description>
 		</method>
 		<method name="generator_e_digest" qualifiers="const">
 			<return type="int" />
 			<description>
+				The environment digest the journal recorded for the
+				generator transition, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_evidence_mask" qualifiers="const">
 			<return type="int" />
 			<description>
+				The bitmask of which evidence kinds the generator row
+				carried, [constant NetwPredictJournal.EVIDENCE_WITNESS]
+				and [constant NetwPredictJournal.EVIDENCE_RAW] combined.
+				Reads [code]0[/code] whenever
+				[method generator_present] is [code]false[/code], which is
+				indistinguishable from an evidence-free row, so pair it
+				with [method generator_present] before trusting a zero.
 			</description>
 		</method>
 		<method name="generator_flags" qualifiers="const">
 			<return type="int" />
 			<description>
+				The generator row's flag bits, an
+				[constant NetwPredictJournal.ROW_DIVERGENT]-style
+				combination pinned at the moment it was recorded.
 			</description>
 		</method>
 		<method name="generator_label" qualifiers="const">
 			<return type="int" />
 			<description>
+				The command label the generator transition carried, or
+				[code]-1[/code] when [method generator_present] is
+				[code]false[/code].
 			</description>
 		</method>
 		<method name="generator_post_controller_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The controller-latch fingerprint the journal recorded after
+				the generator transition closed, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_post_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The combined post-state fingerprint the journal recorded
+				after the generator transition closed, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_post_momentum_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The momentum-family fingerprint the journal recorded after
+				the generator transition closed, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_post_pose_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The pose-family fingerprint the journal recorded after the
+				generator transition closed, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_pre_controller_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The controller-latch fingerprint the journal recorded
+				before the generator transition ran, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_pre_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The combined pre-state fingerprint the journal recorded
+				before the generator transition ran, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_pre_momentum_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The momentum-family fingerprint the journal recorded before
+				the generator transition ran, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_pre_pose_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The pose-family fingerprint the journal recorded before the
+				generator transition ran, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_present" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether the generator row was successfully pinned from the
+				journal. [code]false[/code] means the row had already aged
+				out of the ring by the time this episode tried to pin it,
+				and every [code]generator_*[/code] fingerprint accessor
+				then answers a zero default rather than real evidence.
 			</description>
 		</method>
 		<method name="generator_raw_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The unclassified raw fingerprint the journal recorded for
+				the generator transition, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_topology_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The topology fingerprint the journal recorded for the
+				generator transition, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="generator_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition the journal pinned as this episode's
+				generator, or [code]-1[/code] when
+				[method generator_present] is [code]false[/code]. Usually
+				equal to [method opened_transition], but a repin can move
+				it forward without opening a new episode.
 			</description>
 		</method>
 		<method name="generator_witness_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The witness fingerprint the journal recorded for the
+				generator transition, [code]0[/code] when
+				[method generator_present] is [code]false[/code].
 			</description>
 		</method>
 		<method name="id" qualifiers="const">
 			<return type="int" />
 			<description>
+				This episode's id, unique within its slot and increasing
+				across every episode the slot has ever opened. [code]0[/code]
+				identifies no episode; a real id is always positive.
 			</description>
 		</method>
 		<method name="last_comparison_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition of the most recent comparison this episode
+				recorded, or [code]-1[/code] before its first one. A
+				comparison naming a transition at or before this one is
+				refused as stale rather than recorded twice.
 			</description>
 		</method>
 		<method name="last_write_id" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [method write_id] of the most recent write this episode
+				recorded, or [code]0[/code] before its first one.
 			</description>
 		</method>
 		<method name="mixed_trigger_non_contractions" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many of this episode's non-contractions were judged
+				against a mixed trigger shape, some evidence triggering and
+				some withheld, as opposed to
+				[method no_trigger_non_contractions]. Both are counted
+				within [method non_contraction_used] and never within
+				[method withheld_non_contractions] or
+				[method evidence_free_non_contractions].
 			</description>
 		</method>
 		<method name="no_trigger_non_contractions" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many of this episode's non-contractions were judged
+				with no evidence triggering at all, as opposed to
+				[method mixed_trigger_non_contractions]. Both are counted
+				within [method non_contraction_used].
 			</description>
 		</method>
 		<method name="non_contraction_used" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many writes this episode has failed to contract,
+				excluding the withheld and evidence-free cases counted
+				separately by [method withheld_non_contractions] and
+				[method evidence_free_non_contractions]. The episode is
+				forced into fallback once this reaches its budget.
 			</description>
 		</method>
 		<method name="opened_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition at which this episode was opened, the
+				divergence its generator was pinned against.
 			</description>
 		</method>
 		<method name="quarantine_clean_run" qualifiers="const">
 			<return type="int" />
 			<description>
+				The consecutive clean run this episode's quarantine has
+				accumulated toward [method quarantine_target], while the
+				episode sits in fallback.
 			</description>
 		</method>
 		<method name="quarantine_target" qualifiers="const">
 			<return type="int" />
 			<description>
+				The consecutive clean run this episode's quarantine must
+				reach before authority is trusted enough to resume
+				prediction. Scaled by the episode's flap history, so a slot
+				that keeps re-entering fallback for conflicting reasons is
+				held to a longer proof each time.
 			</description>
 		</method>
 		<method name="reopen_at" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The episode id at position [param index] of the reopen
+				chain, oldest first, [code]0[/code] past
+				[method reopen_count].
 			</description>
 		</method>
 		<method name="reopen_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many ids the reopen chain carries, the bound for
+				[param index] on [method reopen_at]. A chain of length one
+				is an episode that has never reopened.
 			</description>
 		</method>
 		<method name="reopened_from" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [method id] of the episode this one reopened from, or
+				[code]0[/code] when this episode opened fresh rather than
+				within the flap window of a prior closure.
 			</description>
 		</method>
 		<method name="reseed_transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The basis transition the most recent accepted quarantine
+				reseed selected, or [code]-1[/code] before one has landed.
 			</description>
 		</method>
 		<method name="resume_ack_age" qualifiers="const">
 			<return type="int" />
 			<description>
+				The acknowledgment age, in ticks, that was in effect when
+				this episode entered quarantine. [method quarantine_target]
+				is derived from it, so a resume proof is priced against how
+				stale acknowledgment was at the moment authority was lost.
 			</description>
 		</method>
 		<method name="secondary_generator_attribution" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The [enum NetwPredictJournal.Attribution] pinned for the
+				secondary generator at [param index].
 			</description>
 		</method>
 		<method name="secondary_generator_beyond_retention" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Whether the secondary generator at [param index] had
+				already aged out of the journal ring before it could be
+				pinned, mirroring [method generator_beyond_retention] for a
+				row that is not this episode's primary generator.
 			</description>
 		</method>
 		<method name="secondary_generator_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many independent divergences this episode has recorded
+				beyond its generator, the bound for [param index] on every
+				[code]secondary_generator_*[/code] accessor. Capped at
+				16 rows; further ones are dropped and counted in
+				[method evidence_dropped].
 			</description>
 		</method>
 		<method name="secondary_generator_domain" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The [enum NetwPredictJournal.Domain] pinned for the
+				secondary generator at [param index].
 			</description>
 		</method>
 		<method name="secondary_generator_flags" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The flag bits pinned for the secondary generator at
+				[param index], the same bit layout as
+				[method generator_flags].
 			</description>
 		</method>
 		<method name="secondary_generator_label" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The command label pinned for the secondary generator at
+				[param index], or [code]-1[/code] past
+				[method secondary_generator_count].
 			</description>
 		</method>
 		<method name="secondary_generator_transition" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The transition pinned as the secondary generator at
+				[param index], or [code]-1[/code] past
+				[method secondary_generator_count].
 			</description>
 		</method>
 		<method name="state" qualifiers="const">
 			<return type="int" />
 			<description>
+				This episode's [enum State]: [constant EPISODE_OPEN] while
+				comparisons are still being judged,
+				[constant EPISODE_FALLBACK] while it waits on a quarantine
+				proof, or [constant EPISODE_CLOSED] once it has closed by
+				either path.
 			</description>
 		</method>
 		<method name="taint_at" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The transition recorded as taint at [param index], a
+				divergence this episode observed but could not attribute
+				independently of its generator, [code]-1[/code] past
+				[method taint_count].
 			</description>
 		</method>
 		<method name="taint_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many taint transitions this episode has recorded, the
+				bound for [param index] on [method taint_at].
 			</description>
 		</method>
 		<method name="transport_decided" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this episode has ever recorded a decision for
+				[constant NetwPredictJournal.TRANSPORT_DELTA],
+				independent of whether that decision was
+				[method decision_applied].
 			</description>
 		</method>
 		<method name="withheld_non_contractions" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many non-contractions this episode has recorded for a
+				write whose triggering evidence was entirely withheld.
+				Counted separately from [method non_contraction_used]
+				because a withheld non-contraction never spends the
+				episode's contraction budget.
 			</description>
 		</method>
 		<method name="write_basis" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The transition the write at [param index] was computed
+				against, or [code]-1[/code] when it names none.
 			</description>
 		</method>
 		<method name="write_best_meter" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The lowest divergence meter any comparison has measured
+				against the write at [param index] so far. Tracked
+				separately from [method write_meter_before] because a
+				[constant NetwPredictJournal.DISSIPATE] write judges
+				improvement against its own best rather than against its
+				starting meter.
 			</description>
 		</method>
 		<method name="write_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many writes this episode has recorded, the bound for
+				[param index] on every [code]write_*[/code] accessor.
 			</description>
 		</method>
 		<method name="write_delta_fp" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The fingerprint of the correction the write at
+				[param index] applied, stamped after the fact by
+				[code]stamp_write_delta[/code] once the correction's shape
+				is known.
 			</description>
 		</method>
 		<method name="write_episode" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The [method id] of the episode that recorded the write at
+				[param index]. Always equal to this report's own
+				[method id], since a report never carries another
+				episode's writes.
 			</description>
 		</method>
 		<method name="write_evidence_free" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Whether the write at [param index] was recorded against a
+				divergence that carried no triggering evidence at all.
+				Governs whether a non-contraction on this write counts
+				toward [method evidence_free_non_contractions] instead of
+				[method non_contraction_used].
 			</description>
 		</method>
 		<method name="write_id" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The write id of the write at [param index], unique within
+				this episode and increasing with every write it records.
 			</description>
 		</method>
 		<method name="write_judged_transition" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The transition whose comparison settled the write at
+				[param index]'s outcome, or [code]-1[/code] while the
+				write is still pending judgement.
 			</description>
 		</method>
 		<method name="write_meter_after" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The divergence meter measured at
+				[method write_judged_transition] for the write at
+				[param index], or [code]-1[/code] while it is still
+				pending.
 			</description>
 		</method>
 		<method name="write_meter_before" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The divergence meter measured just before the write at
+				[param index] was recorded, the baseline
+				[method write_meter_after] must beat for the write to
+				count as a contraction.
 			</description>
 		</method>
 		<method name="write_null_operator" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Whether the write at [param index] recorded a deliberate
+				no-op rather than a corrective operator. A null operator's
+				[method write_verify_run] is stretched to the maximum
+				close run, since a no-op earns no shortened proof.
 			</description>
 		</method>
 		<method name="write_operator" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The [enum NetwPredictJournal.Operator] the write at
+				[param index] applied.
 			</description>
 		</method>
 		<method name="write_outcome" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The outcome the write at [param index] has reached:
+				[code]-1[/code] refused, [code]0[/code] pending,
+				[code]1[/code] contracted, [code]2[/code] failed to
+				contract, [code]3[/code] introduced a boundary, or
+				[code]4[/code] withheld. Also [code]-1[/code] past
+				[method write_count], indistinguishable there from a
+				refused write, so bound [param index] against
+				[method write_count] first.
 			</description>
 		</method>
 		<method name="write_target" qualifiers="const">
 			<return type="StringName" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The name of the entity or component the write at
+				[param index] addressed, or an empty name when the
+				operator named none.
 			</description>
 		</method>
 		<method name="write_trigger_shape" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The trigger shape recorded for the write at [param index]:
+				[code]0[/code] none of its evidence triggered, [code]1[/code]
+				a mixed set triggered, or [code]2[/code] every field that
+				triggered was withheld. Decides whether a later
+				non-contraction on this write counts toward
+				[method no_trigger_non_contractions],
+				[method mixed_trigger_non_contractions], or
+				[method withheld_non_contractions].
 			</description>
 		</method>
 		<method name="write_verdicts" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				How many comparisons have judged the write at
+				[param index] without contracting it. The write's outcome
+				settles once this reaches
+				[method write_verify_run].
 			</description>
 		</method>
 		<method name="write_verify_run" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				How many non-contracting verdicts the write at
+				[param index] tolerates before it is judged failed, derived
+				from the ack age in effect when the write was recorded and
+				stretched to the maximum for a
+				[method write_null_operator] write.
 			</description>
 		</method>
 	</methods>
 	<constants>
 		<constant name="EPISODE_OPEN" value="0" enum="State">
+			The episode is actively judging comparisons against its writes.
 		</constant>
 		<constant name="EPISODE_CLOSED" value="1" enum="State">
+			The episode has closed, either by a sustained comparison
+			agreement or by leaving fallback, and records no further writes.
 		</constant>
 		<constant name="EPISODE_FALLBACK" value="2" enum="State">
+			The episode's owner has left speculation and is waiting on a
+			quarantine proof before it may resume.
 		</constant>
 	</constants>
 </class>

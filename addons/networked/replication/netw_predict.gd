@@ -2,7 +2,7 @@
 ## an engine to read.
 ##
 ## These twenty-three names were members of the PredictionHandle inside
-## [LagCompCore], so a game, a component or a sibling subsystem
+## [NetwMultiplayer], so a game, a component or a sibling subsystem
 ## naming one -- and they are named 407 times across this repository -- pulled an
 ## 11,488-line file in behind it. The island leaf and the property layer both
 ## need this vocabulary and neither can afford that dependency, so the vocabulary
@@ -523,7 +523,7 @@ class Timing:
 	var frame: int
 
 	## Physics steps one transition is declared to advance, from the clock's
-	## [member ClockCore.physics_factor]. A pass that measures a
+	## [member NetwClockHandle.physics_factor]. A pass that measures a
 	## different number advanced its solver by an amount no transition accounts
 	## for, which no compared column can describe and no recovery can repair.
 	var quantum: int

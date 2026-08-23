@@ -6,7 +6,7 @@ var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var client_mgr: MultiplayerSceneManager
 var server_api: NetwMultiplayer
-var server_core: SceneCore
+var server_core: NetwMultiplayer
 var level_builder: LevelBuilder
 var level_2_builder: LevelBuilder
 
@@ -26,7 +26,7 @@ func before_test() -> void:
 	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
 	server_api = harness.server().api
-	server_core = server_api._scenes
+	server_core = server_api
 	var client := await harness.add_client()
 	client_mgr = harness.scene_manager_for(client)
 
@@ -80,10 +80,13 @@ func test_activate_scene_uses_spawn_data_wakes_level_and_is_idempotent() -> void
 			received[0] = data
 			return level_builder.packed.instantiate()
 	)
-	server_mgr.scene_spawn_data[level_builder.scene_name] = { "round": 3 }
+	server_mgr.declare_scene_spawn_data(
+		level_builder.scene_name,
+		{ "round": 3 },
+	)
 
-	server_core.activate_scene(level_builder.scene_name)
-	server_core.activate_scene(level_builder.scene_name)
+	server_core._scene_activate_named(level_builder.scene_name)
+	server_core._scene_activate_named(level_builder.scene_name)
 
 	var scene := server_api.scene(level_builder.scene_name)
 	assert_that(received[0]).is_equal({ "round": 3 })
@@ -100,7 +103,7 @@ func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
 			return level_builder.packed.instantiate()
 	)
 
-	server_core.activate_scene(level_builder.scene_name)
+	server_core._scene_activate_named(level_builder.scene_name)
 
 	assert_that(received[0]).is_equal(level_builder.scene_name)
 	assert_that(server_api.scene(level_builder.scene_name) != null).is_true()

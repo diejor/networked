@@ -1,41 +1,5 @@
 #pragma once
 
-/* Drives a `Scenario` and holds what can be read afterwards.
- *
- * Two drivers exist, and they answer two altitudes of one question.
- *
- * `kernel` composes the prediction kernels by hand: one predicting side and
- * one authoritative side of the same closed-form body, with no link, no peers
- * and no session. It is the altitude at which the kernels COMPOSE, which is a
- * different question from the one `prediction_tests.cpp` answers about each
- * kernel alone.
- *
- * `lanes` drives the same scenario through two engine slots of a real pool, so
- * the tape, the cursors and the journal are the engine's rather than the
- * driver's. A law that holds under `kernel` and breaks under `lanes` is a law
- * about the engine's memory rather than about its arithmetic, which is the
- * whole reason the second driver exists.
- *
- * The two sides advance identically and diverge only where a scenario says so,
- * so every divergence a run reports was either declared by a `perturb` or
- * produced by a kernel. That is what makes a law over a run a statement about
- * the kernels rather than about the driver.
- *
- * A run refuses to hand out a lane before `regime_reached()`, and a law loop
- * refuses a run whose `decisions()` is zero. A pass over no decisions is the
- * failure this altitude is most able to hide.
- *
- * [codeblock]
- * const ScenarioRun run = ScenarioRun::kernel(perturbed_lane());
- * REQUIRE(run.decisions() > 0);
- * const Lane p = run.lane("P");
- * [/codeblock]
- *
- * `Plant` is the red-proof axis. Each value is a named defect in how the driver
- * composes the kernels, and a law that cannot be broken by any of them is a law
- * that is not reading what it claims to read.
- */
-
 #include "netw_test.h"
 
 #include "lane.h"
@@ -60,77 +24,35 @@ namespace netw_test {
 
 enum Plant {
     PLANT_NONE,
-    // The restore plan is computed and thrown away.
     PLANT_NO_RECOVER,
-    // Every tick counts as freshly driven, whatever the fold answered.
     PLANT_DRIVE_EVERY_TICK,
-    // The escalation streak survives the escalation that spent it, and every
-    // divergence is reported to the kernel as non-shrinking.
     PLANT_CARRY_STREAK,
-    // Authority takes an impulse the scenario never declared.
     PLANT_PHANTOM_PERTURB,
-    // The drive opens its journal row and never closes it.
     PLANT_SKIP_CLOSE,
-    // The pre-state handed to a drive is not the state the previous drive
-    // closed, and no operator accounts for the write between them.
     PLANT_FORGE_PRE,
-    // Authority's acknowledgements reach the owner whatever the scenario did
-    // to the inbound link, so the speculative horizon can never fill.
     PLANT_ALWAYS_ACK,
-    // A missing TICK input always repeats the prior command.
     PLANT_REPEAT_MISSING,
-    // A replay is presented to the body as fresh input.
     PLANT_REPLAY_FRESH,
-    // A lane that declared SNAP is corrected by replay anyway.
     PLANT_REPLAY_UNDER_SNAP,
-    // Replay depth is reported as the whole run rather than the replay window.
     PLANT_FORGE_REPLAY_DEPTH,
-    // A zero-tick frame is driven as though it bought one tick.
     PLANT_DRIVE_HELD_FRAME,
-    // Authority consumes at the live edge whatever replay buffer the scenario
-    // declared.
     PLANT_UNBUFFERED,
-    // The lane's authoritative history is dropped before the run starts, so
-    // nothing it recorded can be read back.
     PLANT_NO_HISTORY,
-    // A declared undeclare is never performed, so history outlives the tick
-    // the scenario retired it at.
     PLANT_KEEP_HISTORY,
-    // A rewind to a tick nothing was retained at is served from the nearest
-    // tick that was, so an unanswerable past answers anyway.
     PLANT_RETAINED_REWIND,
-    // A SAMPLE of a tick older than anything retained is clamped into the
-    // window instead of answering nothing, so a compensator that should have
-    // declined is handed a position the history never held.
     PLANT_RETAINED_SAMPLE,
-    // A peer that records no authoritative history is asked AUTHORITY's
-    // timeline, so a client answers a sample it has no history behind.
     PLANT_PEER_READS_AUTHORITY,
-    // Authority is granted the owner's clock whatever the scenario declared
-    // for it, so no stream can ever stand ahead of what authority consumed.
     PLANT_LOCKSTEP_AUTHORITY,
-    // Membership is read from a book taken when the world was declared rather
-    // than from the tree, so a seat that moved an entity is never seen.
     PLANT_ENROLLED_MEMBERSHIP,
-    // The walk into a scene does not stop at a nested one, so an inner scene's
-    // members report against the outer scene as well.
     PLANT_TRANSPARENT_NESTING,
-    // An admission reaches every scene sharing the admitted one's stem, so two
-    // instances of one level share a boundary.
     PLANT_SHARED_ADMISSION,
 };
 
 class ScenarioRun {
-    // NetwPredictJournal.Domain, NetwPredict.ExactVerdict and
-    // NetwPredict.DriveKind, which cross as plain ints and must keep the values
-    // their GDScript enums assign. A driver that spelled them differently would
-    // agree with the port and disagree with the engine.
     static constexpr int DOMAIN_IN = 0;
     static constexpr int VERDICT_UNJUDGED = 0;
     static constexpr int DRIVE_FRESH = 1;
 
-    // Neither OBSERVE nor REPLAY, so `recover` reaches the convergence path
-    // rather than returning at its first two gates.
     static constexpr int POLICY_RECOVER = 0;
     static constexpr int CORRECTION_SNAP = 0;
     static constexpr int RESTORE_EXACT = 0;
@@ -138,13 +60,8 @@ class ScenarioRun {
     static constexpr double DELTA = 1.0 / 60.0;
     static constexpr double SPEED = 60.0;
 
-    // Half the gap per correction, so a settling lane's divergence is strictly
-    // shrinking and an escalation over one is a defect rather than a race.
     static constexpr double CONVERGE_RATE = 0.5;
 
-    // Wide enough that no scenario here reaches the teleport tier, because a
-    // teleport re-bases the whole closure and no convergence law would be
-    // reading convergence afterwards.
     static constexpr double TELEPORT_THRESHOLD = 1.0e6;
 
     static constexpr int PHANTOM_TICK = 12;
@@ -177,9 +94,6 @@ class ScenarioRun {
     Occupancy held;
     bool reached_regime = false;
     int judged = 0;
-    // What a second run of the same scenario reduced to. Absent until a run is
-    // handed its replica, which is what makes reproduction readable as a
-    // property of ONE run the way every other law reads one run.
     int64_t witnessed = 0;
     bool has_witness = false;
 
@@ -246,19 +160,10 @@ public:
         return judged;
     }
 
-    // What the session held at the end of the run. A driver that never asked
-    // leaves it untaken, which a law reads as a question this run cannot
-    // answer rather than as an empty session.
     const Occupancy &occupancy() const {
         return held;
     }
 
-    /* The whole run's evidence, reduced to one number.
-     *
-     * The lanes fold in declaration order, so two runs of one scenario agree
-     * here exactly when they agree on every counter and every position a law
-     * could compare.
-     */
     int64_t digest() const {
         int64_t hash = 1469598103934665603LL;
         for (int index = 0; index < tracks.size(); ++index) {
@@ -267,8 +172,6 @@ public:
         return hash;
     }
 
-    // Hands this run what a second run of the same scenario answered, so a law
-    // over the pair reads one run the way every other law does.
     void witness(const ScenarioRun &p_replica) {
         witnessed = p_replica.digest();
         has_witness = true;
@@ -282,8 +185,6 @@ public:
         return witnessed;
     }
 
-    // What one declared scene ended the run holding. A scene the run never
-    // asked about comes back untaken rather than empty.
     Membership membership(const godot::StringName &p_name) const {
         for (int index = 0; index < scene_rows.size(); ++index) {
             if (scene_rows[index].scene_name == p_name) {
@@ -334,8 +235,6 @@ private:
 #endif
     static godot::Vector2 motion_of(const godot::Variant &p_command);
 
-    // The body a lane advances is a value, so fingerprinting it is the same
-    // reduction a binding performs before the engine ever sees a state.
     static int32_t stamp(const godot::Vector2 &p_value);
 };
 
@@ -518,8 +417,6 @@ inline void ScenarioRun::seed_tracks(const Scenario &p_scenario) {
         track.name = decl.name();
         track.field = decl.synced_columns()[0];
         const int player_client = p_scenario.world.player_client_at(index);
-        // A hosted lane's owner and its authority are the same peer, so both
-        // sides of every reader below resolve to the server.
         track.hosted = p_scenario.world.is_hosted_at(index);
         track.client = p_scenario.world.is_hosted_at(index)
             ? -1
@@ -538,16 +435,10 @@ inline void ScenarioRun::seed_tracks(const Scenario &p_scenario) {
 }
 
 inline void ScenarioRun::settle_regime(const Scenario &p_scenario) {
-    // The third condition is what refuses a scenario whose perturbation falls
-    // past `run_ticks`: it reads as a clean lane and would pass every law
-    // about clean lanes.
     bool disturbed = !p_scenario.declares(godot::StringName("perturb"));
     for (int at = 0; at < tracks.size() && !disturbed; ++at) {
         disturbed = tracks[at].lane.tail_divergence(p_scenario.run_ticks) > 0.0;
     }
-    // A lane with nobody to answer it produces no verdict: a hosted lane has no
-    // second peer, and a deafened one cannot hear the peer it has. Each proves
-    // it ran by driving instead. Every other lane owes a verdict.
     const bool deafened = p_scenario.inbound_conditions.is_valid();
     bool evidenced = judged > 0;
     if (!evidenced) {
@@ -600,8 +491,6 @@ inline void ScenarioRun::engine_drive(int p_tick, Plant p_plant) {
         timing.ticktime = DELTA;
 
         netw::predict::StateStamp pre;
-        // A forged pre-state is the one antecedent the chain check reads, so
-        // the plant moves it and nothing else.
         pre.fp = p_plant == PLANT_FORGE_PRE
             ? stamp(track.predicted + godot::Vector2(1.0, 0.0))
             : stamp(track.predicted);
@@ -1028,13 +917,6 @@ inline ScenarioRun ScenarioRun::session(
 }
 
 
-/* Drives a declared world server-side and reads what its history retained.
- *
- * Nobody predicts here and no client mirrors anything, so what a lane answers
- * is what the authoritative recorder wrote and what a rewind query can read
- * back. The lane advances by the input the scenario holds for it, one step per
- * tick, which is the same vocabulary a predicting lane's carrier uses.
- */
 inline ScenarioRun ScenarioRun::record(
     LoopbackRig &p_rig,
     const Scenario &p_scenario,
@@ -1134,9 +1016,6 @@ inline ScenarioRun ScenarioRun::record(
             track.lane.lane_sample_x
                 = godot::Vector2(past->get(track.field)).x;
         }
-        // The same question put to a peer that records no authoritative
-        // history. A client's facade must degrade to an empty snapshot rather
-        // than fabricate a position or refuse.
         if (p_rig.client_count() > 0) {
             const godot::RID peer_entity
                 = p_rig.client_entity_of(0, track.name);
@@ -1191,22 +1070,11 @@ inline ScenarioRun ScenarioRun::record(
     run.held.occupancy_timelines
         = int(metrics.get(godot::StringName("timelines"), 0));
 
-    // A run whose body never left the origin cannot tell where it was from
-    // where it is, so no law over it would be reading history.
     run.reached_regime = run.judged > 0 && moved;
     return run;
 }
 
 
-/* Drives the scene plane of a declared world and reads what each scene holds.
- *
- * Nothing here simulates or predicts. A scene answers two questions, who it
- * encloses and whom it admits, and both are edges the scenario declares: a
- * seat moves an entity between scenes, an admission moves a peer across a
- * boundary. It settles its own regime on "every declared scene answered",
- * because a scene that reports nothing cannot tell an empty scene from an
- * absent one.
- */
 inline ScenarioRun ScenarioRun::scenes(
     LoopbackRig &p_rig,
     const Scenario &p_scenario,
@@ -1280,8 +1148,6 @@ inline ScenarioRun ScenarioRun::scenes(
     return run;
 }
 
-// Admits the step's client, and under a shared-admission plant every other
-// scene whose stem matches the admitted one's.
 inline void ScenarioRun::admit_declared(
     LoopbackRig &p_rig,
     const Scenario &p_scenario,

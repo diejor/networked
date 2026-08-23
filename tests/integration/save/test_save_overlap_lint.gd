@@ -24,9 +24,9 @@ var level_2_builder: LevelBuilder
 
 func before_test() -> void:
 	db = auto_free(NetwDatabase.new())
-	# Dict backend: no FileSystemDatabase path-registry collision when the packed
+	# In-memory: no FileSystemDatabase path-registry collision when the packed
 	# scene embeds (duplicates) the database resource.
-	db.backend = NetwDatabaseBackendDict.new()
+	db.backend = NetwDatabaseBackend.in_memory()
 
 	var player_path := NetwPathNamespace.next_path("player", "OverlapPlayer")
 	var level_path := NetwPathNamespace.next_path("level", "TestLevel")

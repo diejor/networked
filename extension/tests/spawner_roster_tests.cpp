@@ -1,7 +1,7 @@
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
-#include "netw/spawner_roster.hpp"
+#include "netw/api/spawner_roster.hpp"
 
 namespace TestNetwSpawnerRoster {
 

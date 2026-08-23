@@ -41,6 +41,17 @@ var _body: Node
 var _prior_mode: int
 var _prior_layer: int = _UNSET
 var _prior_mask: int = _UNSET
+# The open flush_then window: the tree its frames are counted in, how many are
+# left, and who it answers. Held here rather than bound into the connection,
+# because disconnecting has to name the same Callable and a bound one is a
+# fresh object every time it is built.
+var _window_tree: SceneTree
+var _window_frames: int = 0
+var _window_answer: Callable
+# The guard owns itself while a window is open, because nothing else has to: the
+# caller handed its continuation over and went on, and a signal connection does
+# not keep a RefCounted alive. Closing the window is what lets the guard go.
+var _window_self: RefCounted
 
 
 func _init(body: Node) -> void:
@@ -64,6 +75,66 @@ func flush(frames: int = 2) -> void:
 		return
 	for i in frames:
 		await tree.physics_frame
+
+
+## Calls [param answered] after [param frames] [signal SceneTree.physics_frame]s
+## have passed, or right away when the body has no [SceneTree] to count them in.
+##
+## The window [method flush] awaits, offered to a caller that cannot await one.
+## The count stays on [signal SceneTree.physics_frame] because only a physics
+## step makes the physics server drop the suppressed body from its area overlap
+## caches, so a window counted in any other cadence would let the reparent land
+## while the source areas still track the body, which is the phantom
+## enter/exit pair this whole class exists to suppress.
+## One window is open at a time: opening a second replaces the first, which
+## then never answers.
+## [codeblock]
+##     var guard := AreaReparentGuard.new(body)
+##     guard.flush_then(func() -> void:
+##         body.reparent(destination)
+##         guard.flush_then(guard.release)
+##     )
+## [/codeblock]
+func flush_then(answered: Callable, frames: int = 2) -> void:
+	_close_window()
+	var tree := _body.get_tree() if is_instance_valid(_body) else null
+	if not tree or frames <= 0:
+		answered.call()
+		return
+	_window_tree = tree
+	_window_frames = frames
+	_window_answer = answered
+	_window_self = self
+	tree.physics_frame.connect(_spend_window_frame)
+
+
+# Spends one physics frame of the open window, answering on the last of them.
+# The answer runs after the window is closed, so answering by opening the next
+# window is what the second flush_then of a reparent is. Closing drops the
+# guard's hold on itself, which is why the hold is retaken as a local first: an
+# answer that opens no further window would otherwise free the guard while this
+# call is still inside it.
+func _spend_window_frame() -> void:
+	_window_frames -= 1
+	if _window_frames > 0:
+		return
+	@warning_ignore("unused_variable")
+	var held: RefCounted = self
+	var answered := _window_answer
+	_close_window()
+	answered.call()
+
+
+# Ends the open window without answering it.
+func _close_window() -> void:
+	if _window_tree and _window_tree.physics_frame.is_connected(
+			_spend_window_frame,
+	):
+		_window_tree.physics_frame.disconnect(_spend_window_frame)
+	_window_tree = null
+	_window_frames = 0
+	_window_answer = Callable()
+	_window_self = null
 
 
 ## Restores the body's [member Node.process_mode] while keeping its collision

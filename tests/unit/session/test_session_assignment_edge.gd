@@ -1,4 +1,4 @@
-## Unit tests for [SessionCore] driven straight from the peer
+## Unit tests for [NetwMultiplayer] driven straight from the peer
 ## assignment edge, with no [MultiplayerTree] and no host or join verb.
 ##
 ## Proves the drop-in contract: a bare [code]multiplayer_peer = peer[/code] moves
@@ -22,20 +22,20 @@ class _FailingAuth extends NetwAuthFlow:
 		return ERR_UNAUTHORIZED
 
 
-class _RecordingSession extends SessionCore:
+class _RecordingApi extends NetwMultiplayer:
 	var submissions: Array[JoinPayload] = []
 
 
-	func submit_join(payload: JoinPayload) -> void:
+	func session_submit_join(payload: JoinPayload) -> void:
 		submissions.append(payload)
-		super.submit_join(payload)
+		super.session_submit_join(payload)
 
 
 var _apis: Array[NetwMultiplayer] = []
 
 
-# A bare NetwMultiplayer holds a reference cycle with its session, so it never
-# frees on refcount alone. Disposing it after each test breaks that cycle.
+# A bare NetwMultiplayer reaches itself through its own auth coordinator, so it
+# never frees on refcount alone. Disposing it after each test breaks that cycle.
 func after_test() -> void:
 	for api in _apis:
 		if is_instance_valid(api) and not api._disposing:
@@ -50,14 +50,9 @@ func _bare_api() -> NetwMultiplayer:
 	return api
 
 
-func _recording_api() -> NetwMultiplayer:
-	var api := _bare_api()
-	var prior := api._session
-	api.connected_to_server.disconnect(prior._on_inner_connected)
-	api.connection_failed.disconnect(prior._on_inner_connect_failed)
-	api.server_disconnected.disconnect(prior._on_server_dropped)
-	prior.dispose()
-	api._session = _RecordingSession.new(api)
+func _recording_api() -> _RecordingApi:
+	var api := _RecordingApi.new(SceneMultiplayer.new())
+	_apis.append(api)
 	return api
 
 
@@ -181,7 +176,7 @@ func test_scene_multiplayer_properties_forward_both_ways() -> void:
 func test_auth_dispatcher_arms_tree_less() -> void:
 	var api := _bare_api()
 
-	api._session.configure(NetwSessionConfig.new())
+	api._session_configure(NetwSessionConfig.new())
 
 	assert_bool(api.inner.auth_callback.is_valid()).is_true()
 
@@ -191,26 +186,26 @@ func test_auth_config_rearms_dispatcher_tree_less() -> void:
 	var config := NetwSessionConfig.new()
 	config.app_id = &"assignment-edge-auth"
 
-	api._session.configure(config)
+	api._session_configure(config)
 
 	assert_bool(api.inner.auth_callback.is_valid()).is_true()
 	api.connected_to_server.emit()
 	assert_bool(api.inner.auth_callback.is_valid()).is_true()
 	var payload := JoinPayload.new()
 	payload.username = &"reconnect"
-	assert_int(await api._session.prepare_join(payload)).is_equal(OK)
+	assert_int(await api.session_prepare_join(payload)).is_equal(OK)
 	assert_bool(api.inner.auth_callback.is_valid()).is_true()
 
 
 func test_auth_provider_prepares_and_synthesizes_host_tree_less() -> void:
 	var api := _bare_api()
 	var config := NetwSessionConfig.new()
-	api._session.configure(config)
+	api._session_configure(config)
 	api.session.set_auth_flow(DummyAuth.new())
 	var payload := JoinPayload.new()
 	payload.username = &"host"
 
-	var prepare_err := await api._session.prepare_join(payload)
+	var prepare_err := await api.session_prepare_join(payload)
 	var peer := LocalMultiplayerPeer.new()
 	peer.create_server()
 	api.multiplayer_peer = peer
@@ -229,14 +224,14 @@ func test_application_auth_callback_is_composed_tree_less() -> void:
 		received.append([peer_id, data])
 	api.auth_callback = user_callback
 	var config := NetwSessionConfig.new()
-	api._session.configure(config)
+	api._session_configure(config)
 	api.session.set_auth_flow(_FailingAuth.new())
 
 	assert_that(api.inner.auth_callback).is_not_equal(user_callback)
 	assert_that(api.auth_callback).is_equal(user_callback)
 	var payload := JoinPayload.new()
 	payload.username = &"application-auth"
-	assert_int(await api._session.prepare_join(payload)).is_equal(OK)
+	assert_int(await api.session_prepare_join(payload)).is_equal(OK)
 	var packet := AuthProtocol.encode_client_hello(
 		PackedByteArray([1, 2, 3]),
 	)
@@ -246,7 +241,7 @@ func test_application_auth_callback_is_composed_tree_less() -> void:
 	assert_array(received[0][1]).is_equal(packet)
 	api.connected_to_server.emit()
 	assert_bool(api.inner.auth_callback.is_valid()).is_true()
-	api._session.deconfigure()
+	api._session_deconfigure()
 	assert_that(api.auth_callback).is_equal(user_callback)
 	assert_bool(api.inner.auth_callback.is_valid()).is_true()
 
@@ -278,31 +273,29 @@ func test_cancelled_connect_returns_offline() -> void:
 
 func test_prepared_client_auto_submits_once_on_online() -> void:
 	var api := _recording_api()
-	var session := api._session as _RecordingSession
 	var payload := _payload(&"prepared")
-	assert_int(await api._session.prepare_join(payload)).is_equal(OK)
+	assert_int(await api.session_prepare_join(payload)).is_equal(OK)
 	api.multiplayer_peer = _client_peer()
 
 	api.connected_to_server.emit()
 
 	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
-	assert_int(session.submissions.size()).is_equal(1)
-	assert_object(session.submissions[0]).is_same(payload)
+	assert_int(api.submissions.size()).is_equal(1)
+	assert_object(api.submissions[0]).is_same(payload)
 	api.connected_to_server.emit()
-	assert_int(session.submissions.size()).is_equal(1)
+	assert_int(api.submissions.size()).is_equal(1)
 
 
 func test_failed_preparation_never_auto_submits() -> void:
 	var api := _recording_api()
-	var session := api._session as _RecordingSession
 	var config := NetwSessionConfig.new()
-	api._session.configure(config)
+	api._session_configure(config)
 	api.session.set_auth_flow(_FailingAuth.new())
 	var result := [OK]
 
 	await assert_error(
 		func() -> void:
-			result[0] = await api._session.prepare_join(
+			result[0] = await api.session_prepare_join(
 				_payload(&"rejected"),
 			)
 	).is_push_error("Auth prepare failed: Unauthorized")
@@ -310,13 +303,12 @@ func test_failed_preparation_never_auto_submits() -> void:
 	api.multiplayer_peer = _client_peer()
 	api.connected_to_server.emit()
 
-	assert_int(session.submissions.size()).is_equal(0)
+	assert_int(api.submissions.size()).is_equal(0)
 
 
 func test_cancelled_connect_discards_prepared_join() -> void:
 	var api := _recording_api()
-	var session := api._session as _RecordingSession
-	assert_int(await api._session.prepare_join(_payload(&"cancelled"))) \
+	assert_int(await api.session_prepare_join(_payload(&"cancelled"))) \
 			.is_equal(OK)
 	api.multiplayer_peer = _client_peer()
 	api.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -324,34 +316,32 @@ func test_cancelled_connect_discards_prepared_join() -> void:
 	api.multiplayer_peer = _client_peer()
 	api.connected_to_server.emit()
 
-	assert_int(session.submissions.size()).is_equal(0)
+	assert_int(api.submissions.size()).is_equal(0)
 
 
 func test_reconnect_auto_submits_newly_prepared_join() -> void:
 	var api := _recording_api()
-	var session := api._session as _RecordingSession
-	assert_int(await api._session.prepare_join(_payload(&"stale"))).is_equal(OK)
+	assert_int(await api.session_prepare_join(_payload(&"stale"))).is_equal(OK)
 	api.multiplayer_peer = _client_peer()
 	api.multiplayer_peer = OfflineMultiplayerPeer.new()
 
 	var replacement := _payload(&"replacement")
-	assert_int(await api._session.prepare_join(replacement)).is_equal(OK)
+	assert_int(await api.session_prepare_join(replacement)).is_equal(OK)
 	api.multiplayer_peer = _client_peer()
 	api.connected_to_server.emit()
 
-	assert_int(session.submissions.size()).is_equal(1)
-	assert_object(session.submissions[0]).is_same(replacement)
+	assert_int(api.submissions.size()).is_equal(1)
+	assert_object(api.submissions[0]).is_same(replacement)
 
 
 func test_bare_client_assignment_stays_unenriched() -> void:
 	var api := _recording_api()
-	var session := api._session as _RecordingSession
 	api.multiplayer_peer = _client_peer()
 
 	api.connected_to_server.emit()
 
 	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
-	assert_int(session.submissions.size()).is_equal(0)
+	assert_int(api.submissions.size()).is_equal(0)
 	assert_int(api.participants.size()).is_equal(0)
 
 
@@ -363,7 +353,7 @@ func test_listen_server_waits_for_explicit_join_submission() -> void:
 		func(participant: NetwParticipant) -> void:
 			local_joins.append(participant)
 	)
-	assert_int(await api._session.prepare_join(payload)).is_equal(OK)
+	assert_int(await api.session_prepare_join(payload)).is_equal(OK)
 	var peer := LocalMultiplayerPeer.new()
 	peer.create_server()
 
@@ -373,7 +363,7 @@ func test_listen_server_waits_for_explicit_join_submission() -> void:
 		NetwMultiplayer.Role.LISTEN_SERVER,
 	)
 	assert_object(api.peer_get_participant(1)).is_null()
-	api._session.submit_join(payload)
+	api.session_submit_join(payload)
 
 	assert_object(api.peer_get_participant(1)).is_not_null()
 	assert_object(api.local_participant).is_same(api.peer_get_participant(1))
@@ -430,34 +420,32 @@ func test_session_leave_returns_offline_tree_less() -> void:
 
 func test_auth_provider_path_auto_submits() -> void:
 	var api := _recording_api()
-	var session := api._session as _RecordingSession
 	var config := NetwSessionConfig.new()
-	api._session.configure(config)
+	api._session_configure(config)
 	api.session.set_auth_flow(DummyAuth.new())
-	assert_int(await api._session.prepare_join(_payload(&"provider"))) \
+	assert_int(await api.session_prepare_join(_payload(&"provider"))) \
 			.is_equal(OK)
 	api.multiplayer_peer = _client_peer()
 
 	api.connected_to_server.emit()
 
-	assert_int(session.submissions.size()).is_equal(1)
+	assert_int(api.submissions.size()).is_equal(1)
 
 
 func test_application_auth_path_auto_submits() -> void:
 	var api := _recording_api()
-	var session := api._session as _RecordingSession
 	api.auth_callback = func(_peer_id: int, _data: PackedByteArray) -> void:
 		pass
 	var config := NetwSessionConfig.new()
-	api._session.configure(config)
+	api._session_configure(config)
 	api.session.set_auth_flow(_FailingAuth.new())
-	assert_int(await api._session.prepare_join(_payload(&"application"))) \
+	assert_int(await api.session_prepare_join(_payload(&"application"))) \
 			.is_equal(OK)
 	api.multiplayer_peer = _client_peer()
 
 	api.connected_to_server.emit()
 
-	assert_int(session.submissions.size()).is_equal(1)
+	assert_int(api.submissions.size()).is_equal(1)
 
 
 func test_server_crash_ends_session_tree_less() -> void:

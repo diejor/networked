@@ -19,8 +19,8 @@ class FrameProbe:
 
 	var visual: Node2D
 	var body: Node2D
-	var clock: ClockCore
-	var iface: DisplayCore
+	var clock: NetwClockHandle
+	var core: NetwMultiplayerCore
 	var handle: RefCounted
 	var label := ""
 	var visual_xs := PackedFloat64Array()
@@ -42,7 +42,9 @@ class FrameProbe:
 		body_xs.append(body.global_position.x)
 		display_times.append(float(clock.display_tick) + clock.tick_factor)
 		ticks.append(clock.tick)
-		var runtime: RefCounted = iface._runtime_for_handle(handle)
+		var runtime: NetwDisplayRuntime = core.display_book.runtime_of(
+			handle.entity().rid,
+		)
 		pump_modes.append(runtime.pump_mode if runtime else -1)
 		var newest := -1
 		if runtime:
@@ -151,12 +153,11 @@ func test_bracketed_local_visuals_move_monotonically(
 			],
 		)
 		print(
-			"DIAG %s liveness_connected=%s runtimes=%s route=%s wants=%s predicted_mode=%s" % [
+			"DIAG %s runtimes=%s route=%s wants=%s predicted_mode=%s" % [
 				probe.label,
-				probe.iface._liveness_connected,
-				probe.iface._runtimes.keys(),
-				probe.iface._route_of(entity),
-				probe.iface._entity_wants_runtime(entity),
+				probe.core.display_book.runtimes().size(),
+				probe.core.display_book.route_of(entity.rid),
+				probe.core.display_wants_runtime(entity.owner),
 				probe.handle.predicted_mode,
 			],
 		)
@@ -198,8 +199,8 @@ func _make_probe(label: String, player: Node2D) -> FrameProbe:
 	probe.label = label
 	probe.body = player
 	probe.visual = player.get_node("sprite")
-	probe.clock = NetwMultiplayer.of(player)._clock
-	probe.iface = DisplayCore.for_node(player)
+	probe.clock = NetwMultiplayer.of(player)._native_core.clock_handle
+	probe.core = NetwMultiplayer.core_of(player)
 	probe.handle = NetwEntity.of(player).interpolation
 	probe.handle.predicted_mode = (
 			NetwDisplayHandle.PredictedMode.BRACKETED

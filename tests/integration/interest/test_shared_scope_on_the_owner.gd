@@ -1,4 +1,4 @@
-## Live coverage for [method InterestCore.shared_entities] off the
+## Live coverage for [method NetwMultiplayerCore.interest_shared_entities] off the
 ## server.
 class_name TestSharedScopeOnTheOwner
 extends NetwTestSuite
@@ -61,7 +61,7 @@ func test_the_owner_resolves_the_same_shared_scope_the_server_committed() -> voi
 	await game.sync_ticks(8)
 
 	# The server's own view, which is the roster being matched against.
-	var server_scope := host.tree.api._interest.shared_entities(
+	var server_scope := host.tree.api._native_core.interest_shared_entities(
 		client_car,
 		&"arena",
 	)
@@ -70,7 +70,7 @@ func test_the_owner_resolves_the_same_shared_scope_the_server_committed() -> voi
 	# the rosters compare by entity id.
 	var owner_car := _local_entity(client)
 	assert_that(owner_car).is_not_null()
-	var owner_scope := client.tree.api._interest.shared_entities(
+	var owner_scope := client.tree.api._native_core.interest_shared_entities(
 		owner_car,
 		&"arena",
 	)

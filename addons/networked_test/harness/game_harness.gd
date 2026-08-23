@@ -140,13 +140,13 @@ func sync_ticks(n: int) -> void:
 		return
 	_guard_wall_clock()
 
-	var clocks: Array[ClockCore] = []
+	var clocks: Array[NetwClockHandle] = []
 	for runner in _runners:
 		if not runner or not runner.tree:
 			continue
 		var api := runner.tree.api
-		if api and api.clock.is_configured():
-			clocks.append(api._clock)
+		if api and api.clock.is_configured:
+			clocks.append(api._native_core.clock_handle)
 
 	if clocks.is_empty():
 		for i in n:
@@ -158,7 +158,7 @@ func sync_ticks(n: int) -> void:
 
 
 ## Game ticks spanning [param game_seconds] of game time at the host clock's
-## [member ClockCore.tickrate].
+## [member NetwClockHandle.tickrate].
 ##
 ## Stepping is deterministic, so a budget can only be expressed in ticks, never
 ## in real seconds. Sizing the budget from game seconds keeps a test's intent
@@ -175,7 +175,7 @@ func seconds_to_ticks(game_seconds: float) -> int:
 func _tickrate() -> int:
 	if host and host.tree:
 		var api := host.tree.api
-		if api and api.clock.is_configured():
+		if api and api.clock.is_configured:
 			return api.clock.tickrate
 	return DEFAULT_TICKRATE
 

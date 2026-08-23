@@ -18,8 +18,10 @@ var player_type: Variant = PLAYER
 
 var inner: NetwTestHarness
 var client: MultiplayerTree
-var server_clock: ClockCore
-var client_clock: ClockCore
+var server_api: NetwMultiplayer
+var client_api: NetwMultiplayer
+var server_clock: NetwClockHandle
+var client_clock: NetwClockHandle
 
 var server_node: Node2D
 var client_node: Node2D
@@ -52,7 +54,9 @@ func setup(
 	await inner.setup()
 	client = await inner.add_client()
 	server_clock = await inner.add_clock(tickrate, 3)
-	client_clock = client.api._clock
+	client_clock = client.api._native_core.clock_handle
+	server_api = inner.server().api
+	client_api = client.api
 
 	server_node = _build_node()
 	# A bound entity_id declares a real entity, so the rig activates LIVE rather
@@ -117,10 +121,10 @@ func delay_server_to_client(
 ## Advances every clock by [param n] network ticks in-process, no real frames.
 func sync_ticks(n: int) -> void:
 	if _stepper == null:
-		var clocks: Array[ClockCore] = [server_clock, client_clock]
+		var clocks: Array[NetwClockHandle] = [server_clock, client_clock]
 		var apis: Array[MultiplayerAPI] = [inner.server().multiplayer, client.multiplayer]
 		if observer:
-			clocks.append(observer.api._clock)
+			clocks.append(observer.api._native_core.clock_handle)
 			apis.append(observer.multiplayer)
 		_stepper = LockstepStepper.new(clocks, apis, inner.session(), _tickrate)
 	_stepper.sync_ticks(n)
@@ -134,6 +138,8 @@ func teardown() -> void:
 	client = null
 	server_clock = null
 	client_clock = null
+	server_api = null
+	client_api = null
 	server_node = null
 	client_node = null
 	_tree = null

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSceneMark" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Everything one scene root [Script] declares about how a session may reach it.
+	</brief_description>
+	<description>
+		A mark is authored on a [Script], never on a node and never on a session, because [method Netw.mark_multiplayer_scene] runs from [method Object._static_init] and [method Netw.configure_multiplayer_scene] runs from [method Object._init]. Only script-tier code can key by [Script], so the reading stays in GDScript and is installed once through [method NetwMultiplayerCore.set_scene_mark_reader]; every door then asks [method NetwMultiplayerCore.scene_mark_of] and gets this record.
+		A door reads facts here and never re-derives them. [method is_deny_default] is the one rule the record itself owns, and a door that spells [code]gated or session_wide[/code] for itself has forked that rule.
+		[method NetwMultiplayerCore.scene_mark_of] always answers a record, so an unmarked or scriptless destination reads as every field at its default rather than as [code]null[/code], and no door branches on absence.
+		[codeblock]
+		func _read_scene_mark(script: Script) -> NetwSceneMark:
+		    var mark := NetwSceneMark.new()
+		    mark.marked = Netw.is_multiplayer_scene(script)
+		    var config := NetwScriptModel.get_scene_config(script)
+		    if config:
+		        mark.gated = config.is_gated
+		        mark.session_wide = config.is_session_wide
+		        mark.captured = config.is_captured
+		        mark.pending_method = config.pending_method
+		        mark.deadline = config.deadline
+		    return mark
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="deadline_or" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="fallback" type="float" />
+			<description>
+				Seconds a request for this scene waits for authority: [member deadline] when the mark declared one, otherwise [param fallback]. Zero is the unset spelling rather than an instant timeout, so an author who never called [method NetwScriptModel.SceneMarkConfig.timeout] gets the caller's default.
+			</description>
+		</method>
+		<method name="is_deny_default" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether a request for this scene must be admitted explicitly by a [method NetwMultiplayer.scene_set_request_handler] rather than admitted by the default.
+				[member session_wide] is deny-default on its own, without [member gated]: a request that replaces every peer's presentation is never one a default admits.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="captured" type="bool" setter="set_captured" getter="get_captured" default="false">
+			When [code]true[/code], a native [method SceneTree.change_scene_to_file] onto this scene root is converted into a server request instead of stranding the peer. Declared through [method NetwScriptModel.SceneMarkConfig.captured].
+		</member>
+		<member name="deadline" type="float" setter="set_deadline" getter="get_deadline" default="0.0">
+			Seconds a captured request for this scene waits before it resolves [constant @GlobalScope.ERR_TIMEOUT], or [code]0.0[/code] when the mark declared none. Read through [method deadline_or] rather than directly, because [code]0.0[/code] means unset. Declared through [method NetwScriptModel.SceneMarkConfig.timeout].
+		</member>
+		<member name="gated" type="bool" setter="set_gated" getter="get_gated" default="false">
+			The [method NetwScriptModel.SceneMarkConfig.gated] opt-in exactly as authored. Ask [method is_deny_default] for the admission rule, which also covers [member session_wide].
+		</member>
+		<member name="marked" type="bool" setter="set_marked" getter="get_marked" default="false">
+			Whether the script is a registered multiplayer scene root, by either [method Netw.mark_multiplayer_scene] or [method Netw.configure_multiplayer_scene]. An unmarked destination is not reachable by request at all, so this is the outer bound on admission and never a grant.
+		</member>
+		<member name="pending_method" type="StringName" setter="set_pending_method" getter="get_pending_method" default="&amp;&quot;&quot;">
+			Method the capture calls on the scene root it is about to detach, so the game can present its own loading UI. Empty leaves the pending window unhandled. The game undoes it on [signal NetwSceneCore.native_change_settled], because a refused or timed-out request never delivers the scene that would clear it. Declared through [method NetwScriptModel.SceneMarkConfig.on_pending].
+		</member>
+		<member name="session_wide" type="bool" setter="set_session_wide" getter="get_session_wide" default="false">
+			When [code]true[/code], an admitted request for this scene replaces the whole session's presentation rather than moving the one requester. Declared through [method NetwScriptModel.SceneMarkConfig.session_wide].
+		</member>
+	</members>
+</class>

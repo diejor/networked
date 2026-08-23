@@ -3,6 +3,8 @@
 #include "godot/class_db.hpp"
 #include "netw/wire/value_row.hpp"
 
+using namespace godot;
+
 namespace netw {
 
 namespace {

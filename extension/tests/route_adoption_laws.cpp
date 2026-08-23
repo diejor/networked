@@ -2,7 +2,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
-#include "netw/entity.hpp"
+#include "netw/api/entity.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestRouteAdoptionLaws {
@@ -18,7 +18,7 @@ Object *native_core(Object *p_api) {
 }
 
 TEST_CASE(
-    "[Networked][Liveness][Hosted] a wrapper the rig mints carries no record "
+    "[Networked][Liveness] a wrapper the rig mints carries no record "
     "until a route adopts it"
 ) {
     LoopbackRig rig(0);
@@ -36,7 +36,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Liveness][Hosted] a route the data door minted and a wrapper "
+    "[Networked][Liveness] a route the data door minted and a wrapper "
     "that arrives after it converge on one record"
 ) {
     LoopbackRig rig(0);
@@ -69,7 +69,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Liveness][Hosted] a second wrapper is refused a route another "
+    "[Networked][Liveness] a second wrapper is refused a route another "
     "wrapper still holds"
 ) {
     LoopbackRig rig(0);
@@ -107,7 +107,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Liveness][Hosted] a caller parked on a route is answered "
+    "[Networked][Liveness] a caller parked on a route is answered "
     "once when a wrapper is what makes the route live"
 ) {
     LoopbackRig rig(0);
@@ -134,7 +134,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Liveness][Hosted] an adopted record answers by route with the "
+    "[Networked][Liveness] an adopted record answers by route with the "
     "wrapper that adopted it"
 ) {
     LoopbackRig rig(0);

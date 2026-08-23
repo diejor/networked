@@ -1,33 +1,5 @@
 #pragma once
 
-/* What happened, in what order.
- *
- * A recorder connects to a set of signals on one object and keeps every
- * emission: how many times each fired, the arguments each carried, and the
- * order they arrived across signals. Order across signals is the thing polled
- * state cannot express and the thing a session assertion almost always means.
- *
- * One spelling for both tiers. The module tier has `SIGNAL_WATCH` /
- * `SIGNAL_CHECK` and the hosted tier has nothing, so a recorder that delegated
- * would be two surfaces wearing one name. This is one implementation over a
- * custom callable, which both tiers bind identically.
- *
- * A recorder on a signal that does not exist FAILS THE CASE where it is
- * constructed. That is the whole reason it is a type and not a helper
- * function: a recorder wired to a misspelled signal is silently empty forever,
- * and an empty recorder reads exactly like a correct one that saw nothing.
- *
- * [codeblock]
- * Recorder r(api, { "peer_joined", "peer_left" });
- * rig.pump(4);
- * NETW_CHECK_EQ(r.count("peer_joined"), 1);
- * CHECK(r.args("peer_joined")[0] == Variant(7));
- * CHECK(r.order() == Vector<StringName>({ "peer_joined", "peer_left" }));
- * [/codeblock]
- */
-
-// A sibling under `support/`, so the prelude is reached by its bare name here.
-// A case file, which sits one directory up, writes `support/netw_test.h`.
 #include "netw_test.h"
 
 #include <memory>
@@ -39,9 +11,6 @@
 
 namespace netw_test {
 
-// Every emission the recorder saw, in arrival order across all its signals.
-// Held through a shared pointer because a connected callable is owned by the
-// engine and may outlive the recorder that made it.
 struct RecorderLog {
     struct Emission {
         godot::StringName signal;
@@ -51,8 +20,6 @@ struct RecorderLog {
     godot::Vector<Emission> emissions;
 };
 
-// One per watched signal. It knows which signal it is, so the shared log can
-// record arrival order across all of them.
 class RecorderSink final : public godot::CallableCustom {
     std::shared_ptr<RecorderLog> log;
     godot::StringName signal;
@@ -118,8 +85,6 @@ public:
     }
 };
 
-// Connects at construction, disconnects at destruction, and never leaks a
-// connection into the next case.
 class Recorder {
     godot::Object *source = nullptr;
     std::shared_ptr<RecorderLog> log;
@@ -134,8 +99,6 @@ public:
         : source(p_object), log(std::make_shared<RecorderLog>()) {
         REQUIRE(p_object != nullptr);
         for (const godot::StringName &name : p_signals) {
-            // The one failure a recorder must never absorb. An unconnected
-            // recorder answers zero to every question and looks correct.
             REQUIRE_MESSAGE(
                 p_object->has_signal(name),
                 "no such signal on the recorded object"
@@ -174,8 +137,6 @@ public:
         return total;
     }
 
-    // The arguments of the nth emission of one signal. An out-of-range nth is
-    // an empty array rather than a crash, so a wrong count fails on the count.
     godot::Array args(const godot::StringName &p_signal, int p_nth = 0) const {
         int seen = 0;
         for (const RecorderLog::Emission &emission : log->emissions) {
@@ -190,7 +151,6 @@ public:
         return godot::Array();
     }
 
-    // Emission order ACROSS signals, which is what polled state cannot say.
     godot::Vector<godot::StringName> order() const {
         godot::Vector<godot::StringName> names;
         for (const RecorderLog::Emission &emission : log->emissions) {

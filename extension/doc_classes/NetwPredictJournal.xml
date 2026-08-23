@@ -1,0 +1,460 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictJournal" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Packed-column snapshot of the transitions a prediction engine drove.
+	</brief_description>
+	<description>
+		Production ownership stays in the native engine. A caller never builds
+		one up: [method NetwPredictionEngine.journal_snapshot] and [method
+		NetwPredictionHandle.journal] each materialize this tooling-cadence
+		view without changing the retained native rows, and [method
+		NetwPredictJournal.new] itself yields an empty snapshot with [method
+		size] zero. A closed row names one drive completely.
+		Two peers that ran the same transition closure agree on [method
+		post_fps] at every acked transition, and the first transition where
+		they disagree is the one that broke, not the one where the error grew
+		visible.
+		A native enum is not a [Dictionary] at runtime the way a GDScript enum
+		is, so [method attribution_names], [method operator_names], [method
+		domain_names], and [method state_family_names] exist for a caller that
+		wants a name for a stored value rather than the bare [enum
+		Attribution], [enum Operator], [enum Domain], or [enum StateFamily].
+		[codeblock]
+		var journal := entity.prediction.journal()
+		var transitions := journal.transitions()
+		var flags := journal.flags()
+		for i in transitions.size():
+		    if flags[i] &amp; NetwPredictJournal.ROW_DIVERGENT:
+		        print("diverged at transition ", transitions[i])
+		        break
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="attribution_at" qualifiers="const">
+			<return type="int" enum="Attribution" />
+			<param index="0" name="transition" type="int" />
+			<description>
+				Returns the [enum Attribution] charged to [param transition], or
+				[constant Attribution.UNKNOWN] when nothing charged it or the row
+				has fallen out of the ring.
+			</description>
+		</method>
+		<method name="attribution_names" qualifiers="static">
+			<return type="Dictionary" />
+			<description>
+				Returns [enum Attribution] member names mapped to their values, for
+				looking a value up by name where a bare enum offers no such lookup.
+			</description>
+		</method>
+		<method name="attributions" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns the retained divergence charges, ordered by [method
+				transitions].
+			</description>
+		</method>
+		<method name="c_hashes" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained command fingerprints, ordered by [method
+				transitions].
+			</description>
+		</method>
+		<method name="capacity" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns how many rows the journal retains before the oldest falls
+				off.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<param index="0" name="epoch" type="int" />
+			<description>
+				Drops every retained row and adopts [param epoch].
+				Transitions are injective only within one epoch, so a journal
+				that outlives an epoch would hold two rows claiming the same
+				transition. Clearing is how a rewire keeps [method row_at]
+				unambiguous.
+			</description>
+		</method>
+		<method name="domain_at" qualifiers="const">
+			<return type="int" enum="Domain" />
+			<param index="0" name="transition" type="int" />
+			<description>
+				Returns the [enum Domain] recorded for [param transition], or
+				[constant Domain.OUT_OF_DOMAIN] when the row has fallen out of
+				the ring.
+				A transition nobody retained is one nobody can show was
+				entitled to exactness, so the forgotten row reads as the label
+				that claims nothing.
+			</description>
+		</method>
+		<method name="domain_names" qualifiers="static">
+			<return type="Dictionary" />
+			<description>
+				Returns [enum Domain] member names mapped to their values, for
+				looking a value up by name where a bare enum offers no such
+				lookup.
+			</description>
+		</method>
+		<method name="domains" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns the retained [enum Domain] values, ordered by [method
+				transitions].
+			</description>
+		</method>
+		<method name="e_digests" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained environment digests, ordered by [method
+				transitions]. A row whose engine declares no environment facts
+				carries [code]0[/code].
+			</description>
+		</method>
+		<method name="epoch" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the epoch [method clear] last adopted, or [code]-1[/code]
+				before any.
+			</description>
+		</method>
+		<method name="evidence_masks" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns the retained evidence-completeness masks, ordered by
+				[method transitions].
+			</description>
+		</method>
+		<method name="first_chain_break" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the first retained transition marked [constant
+				ROW_CHAIN_BROKEN], or [code]-1[/code] when the retained chain is
+				intact.
+			</description>
+		</method>
+		<method name="first_unmatched" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the oldest transition whose row is not [constant
+				ROW_MATCHED], or [code]-1[/code] when every retained row matched.
+				This is the transition a recovery rebases at.
+			</description>
+		</method>
+		<method name="flags" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns the retained [code]ROW_[/code] bitfields, ordered by
+				[method transitions].
+			</description>
+		</method>
+		<method name="flags_at" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="transition" type="int" />
+			<description>
+				Returns the [code]ROW_*[/code] bitfield recorded for [param
+				transition], or [code]0[/code] when the row has fallen out of the
+				ring.
+				This and [method domain_at] are the per-transition reads the
+				compare path makes on every authoritative frame, which is why
+				they answer with a scalar instead of going through [method
+				row_at]. Materializing a row dictionary to read one byte out of
+				it allocates once per frame per predicted entity.
+			</description>
+		</method>
+		<method name="fnv1a" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Returns the fingerprint of [param bytes] as fnv1a-32, the one
+				hash the journal, the wire, and every later comparison share.
+				The result is a signed 32-bit integer because that is the
+				width the columns and the wire both carry, so a fingerprint
+				never changes representation between being computed, stored,
+				and sent.
+			</description>
+		</method>
+		<method name="kinds" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns the retained [enum NetwPredict.DriveKind] values, ordered
+				by [method transitions].
+			</description>
+		</method>
+		<method name="labels" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				Returns the retained clock labels, ordered by [method
+				transitions].
+			</description>
+		</method>
+		<method name="last_closed" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the newest transition whose row is [constant ROW_CLOSED]
+				with every older retained row closed too, or [code]-1[/code]
+				when none is.
+				This is the frontier an acknowledgement may claim. A row that
+				is open holds a zero fingerprint, so acknowledging it would
+				assert a state the drive has not produced yet.
+			</description>
+		</method>
+		<method name="operator_names" qualifiers="static">
+			<return type="Dictionary" />
+			<description>
+				Returns [enum Operator] member names mapped to their values, for
+				looking a value up by name where a bare enum offers no such
+				lookup.
+			</description>
+		</method>
+		<method name="post_family_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<param index="0" name="family" type="int" enum="StateFamily" />
+			<description>
+				Returns [param family]'s retained post-state fingerprint
+				column, ordered by [method transitions]. An open row carries
+				[code]0[/code] until the drive closes.
+			</description>
+		</method>
+		<method name="pre_family_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<param index="0" name="family" type="int" enum="StateFamily" />
+			<description>
+				Returns [param family]'s retained pre-state fingerprint
+				column, ordered by [method transitions].
+			</description>
+		</method>
+		<method name="pre_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained pre-state fingerprints, ordered by [method
+				transitions].
+			</description>
+		</method>
+		<method name="post_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained post-solve state fingerprints, ordered by
+				[method transitions]. An open row carries [code]0[/code] until
+				the drive closes.
+			</description>
+		</method>
+		<method name="raw_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained raw pre-state fingerprints, ordered by
+				[method transitions]. A row without [constant EVIDENCE_RAW]
+				carries zero.
+			</description>
+		</method>
+		<method name="row_at" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="transition" type="int" />
+			<description>
+				Returns the row recorded for [param transition], or an empty
+				[Dictionary] when it has fallen out of the ring.
+				This is the tooling-cadence read. Bulk readers take the
+				columns through [method transitions] and its siblings instead
+				of materializing a row per transition.
+				[codeblock]
+				{
+				 ┠╴transition (int)     the recurrence index, injective within an epoch
+				 ┠╴label (int)          the clock label the drive carried
+				 ┠╴kind (int)           a DriveKind value naming the command selection
+				 ┠╴c_hash (int)         fingerprint of the canonical command bytes
+				 ┠╴e_digest (int)       fingerprint of the declared environment facts
+				 ┠╴post_fp (int)        fingerprint of the state the drive produced
+				 ┠╴domain (int)         a Domain value
+				 ┠╴attribution (int)    an Attribution value
+				 ┖╴flags (int)          the ROW_ bitfield
+				}
+				[/codeblock]
+				The row also exposes [code]pre_fp[/code], the pre and post
+				[code]pose_fp[/code], [code]momentum_fp[/code], and
+				[code]controller_fp[/code] families, plus the preceding
+				operator's [code]episode_id[/code], [code]write_id[/code],
+				[code]operator[/code], and [code]basis[/code]. Settled rows
+				expose [code]aligned_error[/code], and witnessed rows expose
+				[code]witness_class_bits[/code].
+			</description>
+		</method>
+		<method name="size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns how many rows the journal currently retains, at most
+				[method capacity].
+			</description>
+		</method>
+		<method name="state_family_names" qualifiers="static">
+			<return type="Dictionary" />
+			<description>
+				Returns [enum StateFamily] member names mapped to their values,
+				for looking a value up by name where a bare enum offers no such
+				lookup.
+			</description>
+		</method>
+		<method name="topo_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained execution-topology fingerprints, ordered by
+				[method transitions].
+			</description>
+		</method>
+		<method name="transitions" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				Returns the retained transitions oldest first. Every other
+				column accessor returns values in this same order, so index
+				[code]i[/code] names one row across all of them.
+			</description>
+		</method>
+		<method name="witness_class_bits" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns authority witness-class summaries ordered by [method
+				transitions].
+			</description>
+		</method>
+		<method name="witness_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained realized-witness fingerprints, ordered by
+				[method transitions]. A row without [constant EVIDENCE_WITNESS]
+				carries zero.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="CAPACITY_DEFAULT" value="256">
+			How many transitions a journal retains before the oldest row falls
+			off when none is given explicitly.
+		</constant>
+		<constant name="ROW_ACKED" value="1">
+			The row has been acknowledged by authority. Set by
+			[code]mark_ack[/code] on the native engine.
+		</constant>
+		<constant name="ROW_MATCHED" value="2">
+			The acknowledged authority state fingerprinted equal to [method
+			post_fps].
+		</constant>
+		<constant name="ROW_SUBSTITUTED" value="4">
+			Authority ran a command the owner never authored for this
+			transition.
+		</constant>
+		<constant name="ROW_SUPERSEDED" value="8">
+			A later acknowledgement replaced this row's verdict with a truer
+			one.
+		</constant>
+		<constant name="ROW_DIVERGENT" value="16">
+			The acknowledged authority state fingerprinted unequal to [method
+			post_fps].
+		</constant>
+		<constant name="ROW_CLOSED" value="32">
+			The row's drive has produced its state, so [method post_fps]
+			carries a real fingerprint rather than the zero an open row
+			holds.
+		</constant>
+		<constant name="ROW_CHAIN_BROKEN" value="64">
+			The row's [method pre_fps] did not chain from the preceding
+			produced state and no operator provenance accounts for the
+			intervening write.
+		</constant>
+		<constant name="ROW_WITNESS_MATCHED" value="128">
+			Both peers declared a realized witness for the row and its
+			fingerprint matched. The local witness detail may therefore
+			describe the peer's stable witness facts too.
+		</constant>
+		<constant name="EVIDENCE_WITNESS" value="1">
+			The row carries a declared realized-transition witness.
+		</constant>
+		<constant name="EVIDENCE_RAW" value="2">
+			The row carries the optional raw pre-state fingerprint.
+		</constant>
+		<constant name="UNKNOWN" value="0" enum="Attribution">
+			Required peer evidence was absent, so no boundary is blamed.
+		</constant>
+		<constant name="PRE_STATE" value="1" enum="Attribution">
+			The peers entered the transition with different declared state.
+		</constant>
+		<constant name="COMMAND" value="2" enum="Attribution">
+			The command differed. Authority ran input the owner did not
+			author.
+		</constant>
+		<constant name="ENVIRONMENT" value="3" enum="Attribution">
+			The environment differed. The transition ran against unequal
+			world facts.
+		</constant>
+		<constant name="TOPOLOGY" value="4" enum="Attribution">
+			The execution topology or body mode differed.
+		</constant>
+		<constant name="EXECUTION" value="5" enum="Attribution">
+			Canonical state agreed but optional raw execution bits differed.
+		</constant>
+		<constant name="CONTACT" value="6" enum="Attribution">
+			Equal observed antecedents produced a different contact witness.
+		</constant>
+		<constant name="CLOSURE" value="7" enum="Attribution">
+			Every observed antecedent agreed but the produced state differed.
+		</constant>
+		<constant name="NONE" value="0" enum="Operator">
+			No operator wrote the body since the preceding row.
+		</constant>
+		<constant name="REBASE_PROJECTED" value="1" enum="Operator">
+			A projected authoritative basis was restored.
+		</constant>
+		<constant name="REBASE_EXACT" value="2" enum="Operator">
+			An exact authoritative basis was restored.
+		</constant>
+		<constant name="FULL_CLOSURE" value="3" enum="Operator">
+			The teleport tier restored the full declared closure.
+		</constant>
+		<constant name="TRANSPORT_DELTA" value="4" enum="Operator">
+			Present-time moving transport composed an aligned delta.
+		</constant>
+		<constant name="RESEED" value="5" enum="Operator">
+			Fallback seeded the body from authority.
+		</constant>
+		<constant name="RESEED_ALIGN" value="6" enum="Operator">
+			The first post-reseed comparison aligned the acknowledgement
+			horizon.
+		</constant>
+		<constant name="DEMOTE" value="7" enum="Operator">
+			A witnessed boundary breach closed speculation without closing
+			input.
+		</constant>
+		<constant name="DISSIPATE" value="8" enum="Operator">
+			A clean momentum-only divergence was left to contract without a
+			write.
+		</constant>
+		<constant name="JOINT_REBASE" value="9" enum="Operator">
+			A joint pass restored the whole replay group to its shared floor.
+		</constant>
+		<constant name="FAMILY_NONE" value="0" enum="StateFamily">
+			No family differed or the peer evidence was unavailable. Named
+			[code]FAMILY_NONE[/code] rather than [code]NONE[/code] because a
+			bound enum's members flatten into the class namespace alongside
+			[enum Operator], which already claims [code]NONE[/code].
+		</constant>
+		<constant name="POSE" value="1" enum="StateFamily">
+			Position and orientation fields.
+		</constant>
+		<constant name="MOMENTUM" value="2" enum="StateFamily">
+			Declared derivative and velocity fields.
+		</constant>
+		<constant name="CONTROLLER_LATCH" value="3" enum="StateFamily">
+			Remaining controller state and latches.
+		</constant>
+		<constant name="IN_DOMAIN" value="0" enum="Domain">
+			Every antecedent of the transition is declared equal on both
+			peers, so its fingerprints must match exactly.
+		</constant>
+		<constant name="OUT_OF_DOMAIN" value="1" enum="Domain">
+			An antecedent is declared unequal or unknown, so the transition
+			is compared by tolerance rather than by fingerprint.
+		</constant>
+	</constants>
+</class>

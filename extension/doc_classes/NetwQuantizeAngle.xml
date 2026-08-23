@@ -11,6 +11,7 @@
 		var e := NetwQuantizeAngle.new().bits(16).centered()  # -PI &lt; angle &lt;= PI
 		[/codeblock]
 		Exactly PI stays positive, so the centered range is half-open the same way a Godot Euler component is and both peers agree on the boundary code.
+		The error is at most half the angular resolution, [code]TAU / 2^bit_count[/code].
 	</description>
 	<tutorials>
 	</tutorials>

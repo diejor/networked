@@ -1,14 +1,8 @@
-// Laws for NetwLivenessCore.
-//
-// The mint is the substrate every other family's laws quantify over, so it
-// carries its own: monotonic routes, a forward-only state machine with one
-// sanctioned backward door, tombstones that outlive their entities, and a
-// bridge that agrees with itself in both directions.
 
 #include "support/netw_test.h"
 
 #include "netw/entity_ids.hpp"
-#include "netw/liveness_core.hpp"
+#include "netw/api/liveness_core.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwLivenessCore {
@@ -23,7 +17,6 @@ Ref<NetwLivenessCore> make_core() {
     return core;
 }
 
-// A bound, live entity on a freshly reserved route.
 RID spawn(const Ref<NetwLivenessCore> &core, int *out_route) {
     const RID entity = core->entity_create();
     const int route = core->reserve_route();
@@ -388,7 +381,6 @@ TEST_CASE(
     CallLog log;
     const int route = core->reserve_route() + 1;
 
-    // Armed on the frame counter, which poll is what advances.
     core->when_live(
         route,
         log.callable("live"),
@@ -404,9 +396,6 @@ TEST_CASE(
 
     const PackedInt32Array expired = core->poll(0);
     NETW_CHECK_EQ(expired.size(), 1);
-    // Guarded rather than asserted: a failing size followed by an unguarded
-    // index reads out of bounds, and this tier answers that by taking the whole
-    // runner down, so one wrong count would erase every later case's result.
     if (expired.size() == 1) {
         NETW_CHECK_EQ(expired[0], route);
     }
@@ -476,7 +465,6 @@ TEST_CASE(
 
     core->when_live(route, log.callable("live"), 10, true, log.callable("out"));
 
-    // Six frames at a clock that never advanced past its arming tick.
     for (int i = 0; i < 6; i++) {
         CHECK(core->poll(1).is_empty());
     }
@@ -529,21 +517,16 @@ TEST_CASE(
     const RID loose = netw::entity_ids::mint();
     Ref<NetwLivenessCore> core = make_core();
 
-    // A handle exists before any session knows it, which is the whole reason
-    // the mint is not a session service.
     CHECK(netw::entity_ids::minted(loose));
     CHECK_FALSE(core->entity_is_valid(loose));
 
     CHECK(core->adopt(loose));
     CHECK(core->entity_is_valid(loose));
 
-    // Adoption is idempotent, because a route rebinding an entity it already
-    // knows must not reset the record it is about to read.
     CHECK(core->set_state(loose, NetwLivenessCore::STATE_LIVE));
     CHECK(core->adopt(loose));
     NETW_CHECK_EQ(core->state_of(loose), NetwLivenessCore::STATE_LIVE);
 
-    // The plane lets go of what it adopted, and the minter still holds.
     core->clear();
     CHECK_FALSE(core->entity_is_valid(loose));
     CHECK(netw::entity_ids::minted(loose));
@@ -561,8 +544,6 @@ TEST_CASE(
     CHECK_FALSE(core->adopt(RID()));
     CHECK_FALSE(core->entity_is_valid(RID()));
 
-    // A handle this plane released is exactly as forged as one from nowhere,
-    // so a late message naming a retired entity opens nothing.
     const RID retired = core->entity_create();
     core->clear();
     CHECK_FALSE(netw::entity_ids::minted(retired));
@@ -587,8 +568,6 @@ TEST_CASE(
     const RID reborn = a->entity_create();
     CHECK(reborn != from_a);
 
-    // The other plane is untouched by its neighbour's teardown, which is what
-    // a shared mint has to keep true to be usable at all.
     CHECK(b->entity_is_valid(from_b));
 
     a->clear();
@@ -607,8 +586,6 @@ TEST_CASE(
     core->bind_route(routed, core->reserve_route());
     NETW_CHECK_EQ(netw::entity_ids::outstanding(), before + 2);
 
-    // The unrouted one is the whole point: walking the route table to release
-    // would strand whatever never bound.
     core->clear();
     NETW_CHECK_EQ(netw::entity_ids::outstanding(), before);
 }
@@ -619,8 +596,6 @@ TEST_CASE(
 ) {
     const int before = netw::entity_ids::outstanding();
 
-    // The shape a wrapper has: it mints at construction and holds until it is
-    // finalized, which is later than any one session's teardown.
     const RID carried = netw::entity_ids::mint();
     NETW_CHECK_EQ(netw::entity_ids::holders(carried), 1);
 

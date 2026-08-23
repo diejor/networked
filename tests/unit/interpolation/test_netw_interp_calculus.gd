@@ -364,21 +364,6 @@ func test_p7_a_teleport_snaps_the_chase() -> void:
 	).is_greater(4.5)
 
 
-# The absorbed offset is clamped by magnitude with its direction preserved, so
-# a huge correction can never wind the visual further from the body than a
-# teleport would have moved it.
-func test_p7_the_chase_offset_clamps_by_magnitude() -> void:
-	var spatial := NetwDisplayOffset.new()
-	spatial.absorb(Vector3(-10.0, 0.0, 0.0), 2.0)
-	var clamped: Vector3 = spatial.held()
-	assert_float(clamped.length()).is_equal_approx(2.0, 0.0001)
-	assert_float(clamped.x).is_greater(0.0)
-
-	var scalar := NetwDisplayOffset.new()
-	scalar.absorb(9.0, 2.0)
-	assert_float(float(scalar.held())).is_equal_approx(-2.0, 0.0001)
-
-
 # P6 Loss robustness. Under heavy loss and jitter the display still holds P1, P2,
 # and P4: monotonic, continuous, no regressions, no stalls. Starvation grows lag,
 # it never tears the output. The bounded-lag check rides P3's degraded floor.
@@ -634,7 +619,7 @@ func test_p7_server_never_forecasts() -> void:
 	h.fps = 60.0
 	h.send_period = _FORECAST_SEND_PERIOD
 	h.timeline_mode = NetwDisplayHandle.TimelineMode.FORECAST
-	h.pump_mode = DisplayCore._PUMP_BRACKETED
+	h.pump_mode = NetwDisplayDecl.PUMP_BRACKETED
 	h.configure(
 		NetwInterpolate.new().lerp().smooth(0.0).to(&"value"),
 		_linear().value_at(0.0),

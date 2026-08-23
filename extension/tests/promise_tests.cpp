@@ -1,6 +1,6 @@
 #include "support/netw_test.h"
 
-#include "netw/promise.hpp"
+#include "netw/api/promise.hpp"
 #include "support/netw_call_log.h"
 #include "support/netw_recorder.h"
 

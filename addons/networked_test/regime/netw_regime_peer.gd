@@ -174,7 +174,7 @@ func run() -> void:
 		gesture,
 		seconds,
 	])
-	if api and api.clock.is_configured():
+	if api and api.clock.is_configured:
 		_cadence_baseline = api.clock.cadence()
 	_sample_cadence_loop.call_deferred()
 	await gestures[gesture].call(seconds)
@@ -224,8 +224,8 @@ func _finish(code: int, exit_kind: String) -> void:
 		return
 	_completed = true
 	_write_summary(exit_kind)
-	if api and api._lagcomp:
-		api._lagcomp.flush_tap()
+	if api and api:
+		api.flush_tap()
 	print("[regime] %s %s" % [role, exit_kind])
 	get_tree().quit(code)
 
@@ -247,7 +247,7 @@ func _arm_watchdog() -> void:
 func _sample_cadence_loop() -> void:
 	while not _completed:
 		await get_tree().create_timer(CADENCE_SAMPLE_SECONDS).timeout
-		if api and api.clock.is_configured():
+		if api and api.clock.is_configured:
 			_cadence_samples.append(api.clock.cadence())
 		_snapshot_entities()
 
@@ -327,7 +327,7 @@ func _write_summary(exit_kind: String) -> void:
 # whole-process mean dilutes the run with boot and asset load.
 func _condition_report() -> Dictionary:
 	var cadence: Dictionary = api.clock.cadence() \
-	if api and api.clock.is_configured() else { }
+	if api and api.clock.is_configured else { }
 	var wall := float(cadence.get(&"wall_seconds", 0.0)) \
 			- float(_cadence_baseline.get(&"wall_seconds", 0.0))
 	var physics_frames := int(cadence.get(&"physics_frames", 0)) \
@@ -351,7 +351,7 @@ func _condition_report() -> Dictionary:
 
 
 func _clock_report() -> Dictionary:
-	if not api or not api.clock.is_configured():
+	if not api or not api.clock.is_configured:
 		return { }
 	return {
 		"tick": api.clock.tick,
@@ -374,8 +374,8 @@ func _instrument_report() -> Dictionary:
 						FileAccess.READ,
 					).get_length()
 	return {
-		"tap": api._lagcomp.tap_cost() \
-				if api and api._lagcomp else { },
+		"tap": api.tap_cost() \
+				if api and api else { },
 		"netlog_bytes": netlog_bytes,
 	}
 

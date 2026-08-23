@@ -8,7 +8,7 @@
 ## [LagCompensation] node cleanly opts out, so the per-entity prediction engine,
 ## the state-set timeline registration, and the [NetwAction] transport all degrade
 ## to no-ops.
-## The engine lives in [LagCompCore], owned by
+## The engine lives in [NetwMultiplayer], owned by
 ## [NetwMultiplayer]. [method NetwMultiplayer.service_install] pushes this
 ## node's export snapshot into the session's lag-compensation core and
 ## activates it.
@@ -28,7 +28,7 @@
 ## ├── MultiplayerClock
 ## └── LagCompensation              # drop this node to enable rewind + prediction
 ##
-## # per tick, driven by ClockCore.on_tick:
+## # per tick, driven by NetwMultiplayer.on_tick:
 ## step every registered prediction engine    # predict or consume, per role
 ## if server: record authoritative state       # snapshot into each NetwTimeline
 ## [/codeblock]
@@ -36,9 +36,9 @@
 ## A server-authored state set registers its entity through
 ## [method NetwMultiplayer.timeline_declare] when it registers, so
 ## an entity is rewindable by default without a [PredictionComponent].
-## [method LagCompCore.timeline_of] is the query seam, and
-## [method LagCompCore.sample] and
-## [method LagCompCore.rewind] read it.
+## [method NetwMultiplayer.timeline_of] is the query seam, and
+## [method NetwMultiplayer.sample] and
+## [method NetwMultiplayer.lagcomp_rewind] read it.
 ##
 ## Registered through [NetwService] per [MultiplayerTree], like
 ## [MultiplayerClock], so several trees in one [SceneTree] each get their own
@@ -56,17 +56,17 @@ extends NetwService
 
 ## Ticks a [constant NetwAction.TimingMode.TICK_ALIGNED_STATE_READY] action waits
 ## for input-backed state at its view tick before it resolves best-effort. See
-## [member LagCompCore.input_gate_deadline_ticks].
+## [member NetwMultiplayer.input_gate_deadline_ticks].
 @export_custom(0, "suffix:ticks") var input_gate_deadline_ticks: int = 12:
 	set(v):
 		input_gate_deadline_ticks = v
 		if _interface:
 			_interface.input_gate_deadline_ticks = v
 
-## The [LagCompCore] engine this node configures, or
+## The [NetwMultiplayer] engine this node configures, or
 ## [code]null[/code] before registration. Consumers should reach the engine
 ## through [method NetwMultiplayer.lagcomp_sample] rather than this node.
-var _interface: LagCompCore
+var _interface: NetwMultiplayer
 
 # The typed payload registered with the API on entry, snapshotting the exports.
 var _config: NetwLagCompensationConfig
@@ -77,7 +77,7 @@ func _service_type() -> Script:
 
 
 func _service_entered(api: NetwMultiplayer) -> void:
-	_interface = api._lagcomp
+	_interface = api
 	_config = _build_config()
 	api.service_install(_config)
 	var tree := get_tree() if is_inside_tree() else null

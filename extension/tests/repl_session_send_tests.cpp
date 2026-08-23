@@ -1,13 +1,3 @@
-// One pass through the whole send side, and the sequencing it makes
-// impossible.
-//
-// Every component under this is already law-covered. What only the sequence
-// can be held to is the set of mistakes a plausible caller makes while every
-// component it calls behaves perfectly: staging a row for a peer that was not
-// sent one, staging a row the fitter deferred, and acking one lane when the
-// datagram carried several. Each leaves the books internally consistent and
-// the session wrong.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -15,7 +5,9 @@
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
 #include "netw/repl/session_send.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
+
+using namespace godot;
 
 namespace TestNetwReplSessionSend {
 
@@ -54,10 +46,6 @@ Ref<SchemaRecord> body() {
     return record;
 }
 
-// One deferred pass whose every frame reached the carrier, which is the
-// ordinary shape: nothing was dropped between the pass and the wire, and the
-// peer's run did not split. The cases that are about the other shapes call
-// `run_deferred` and `defer` themselves.
 SessionResult carried(
     SessionSend &session,
     const LocalVector<RowOffer> &p_offers
@@ -91,9 +79,6 @@ Ref<SchemaRecord> banner() {
     return record;
 }
 
-// The retained half of the SAME address: one route, one ordinal, its own
-// schema. A collision with the volatile half would refuse the gather, because
-// neither row is valid for the other's plan.
 RowOffer retained_offer(
     int64_t route,
     int64_t hp,
@@ -112,9 +97,6 @@ RowOffer retained_offer(
     return out;
 }
 
-// A windowed offer at its own address. The offer hands over ONE tick and the
-// lane answers with the range still in flight, which is the whole difference
-// between this shape and the other three.
 RowOffer window_offer(
     int64_t route,
     int64_t tick,
@@ -174,9 +156,6 @@ TEST_CASE(
     again.push_back(offer(1, 10, peers(PEER)));
     const SessionResult result = session.run(reg, again, 10000, 2, 501);
 
-    // Nothing sent, and the result says WHY. A pass that reported only an
-    // empty send list reads the same whether the session was caught up or
-    // whether every gather refused.
     NETW_CHECK_EQ(result.sends.size(), 0);
     NETW_CHECK_EQ(result.caught_up, 1);
     NETW_CHECK_EQ(result.ungathered, 0);
@@ -216,17 +195,12 @@ TEST_CASE(
     offers.push_back(offer(2, 20, peers(PEER)));
     offers.push_back(offer(3, 30, peers(PEER)));
 
-    // A budget that admits one row of the three.
     const SessionResult first = session.run(reg, offers, 16, 1, 500);
     REQUIRE(first.sends.size() == 1);
     const int64_t rode = first.sends[0].route;
 
     session.acknowledge(PEER, 1);
 
-    // Every row is offered again, unchanged. The two the fitter deferred were
-    // never sent, so the peer still owes them in full; staging them last pass
-    // would have told the book the peer already holds them and this pass would
-    // send nothing at all.
     LocalVector<RowOffer> again;
     again.push_back(offer(1, 10, peers(PEER)));
     again.push_back(offer(2, 20, peers(PEER)));
@@ -252,10 +226,6 @@ TEST_CASE(
 
     session.acknowledge(PEER, 1);
 
-    // A datagram carries frames from many lanes and an ack names the datagram,
-    // so an ack that reached one lane would leave the others diffing against a
-    // row the peer has already superseded, and every pass after would resend
-    // columns that never moved.
     LocalVector<RowOffer> again;
     again.push_back(offer(1, 10, peers(PEER)));
     again.push_back(offer(2, 20, peers(PEER)));
@@ -411,7 +381,6 @@ TEST_CASE(
     CHECK(first.sends[0].reliable);
     NETW_CHECK_EQ(session.retained_lane_count(), 1);
 
-    // Nothing waits on a seq, so there is nothing a commit could bind.
     NETW_CHECK_EQ(session.pending_count(PEER), 0);
 
     LocalVector<RowOffer> again;
@@ -440,7 +409,6 @@ TEST_CASE(
     NETW_CHECK_EQ(session.lane_count(), 1);
     NETW_CHECK_EQ(session.retained_lane_count(), 1);
 
-    // Only the volatile half is waiting on the seq it rides.
     NETW_CHECK_EQ(session.pending_count(PEER), 1);
 }
 
@@ -453,10 +421,6 @@ TEST_CASE(
     offers.push_back(offer(1, 10, peers(PEER)));
     offers.push_back(retained_offer(2, 30, 40, peers(PEER)));
 
-    // A budget too small for either row. The volatile one waits for the next
-    // pass, which costs nothing because its baseline did not move. The
-    // reliable one already advanced when its mask was taken, so a deferral
-    // would drop those columns with no later frame to carry them.
     const SessionResult result = session.run(reg, offers, 1, 1, 500);
     REQUIRE(result.sends.size() == 1);
     CHECK(result.sends[0].reliable);
@@ -535,7 +499,6 @@ TEST_CASE(
     }
     NETW_CHECK_EQ(session.window_lane_count(), 1);
 
-    // The ring is bounded, so a fourth tick does not make a fourth sample.
     LocalVector<RowOffer> fourth;
     fourth.push_back(window_offer(1, 43, 99, peers(PEER)));
     const SessionResult result = carried(session, fourth);
@@ -556,8 +519,6 @@ TEST_CASE(
     REQUIRE(result.sends.size() == 2);
     NETW_CHECK_EQ(result.sends[0].samples.size(), 1);
     NETW_CHECK_EQ(result.sends[1].samples.size(), 1);
-    // Nothing waits on a seq: a windowed lane holds no per-peer baseline, so
-    // there is no book a commit could advance.
     NETW_CHECK_EQ(session.pending_count(PEER), 0);
 }
 
@@ -570,9 +531,6 @@ TEST_CASE(
     LocalVector<RowOffer> deferred;
     deferred.push_back(window_offer(1, 40, 10, peers(PEER)));
 
-    // Unlike a reliable row, a deferred windowed row costs nothing: the ring
-    // still holds tick 40, so the next pass carries it beside tick 41. This is
-    // why this lane may be fitted and the retained one may not.
     NETW_CHECK_EQ(session.run(reg, deferred, 1, 1, 500).sends.size(), 0);
 
     LocalVector<RowOffer> next;
@@ -616,8 +574,6 @@ TEST_CASE(
     reused.push_back(window_offer(1, 40, 10, peers(PEER)));
     const SessionResult result = carried(session, reused);
     REQUIRE(result.sends.size() == 1);
-    // The next entity at this address starts with an empty ring rather than
-    // repeating the last one's ticks at it.
     NETW_CHECK_EQ(result.sends[0].samples.size(), 1);
 }
 
@@ -635,17 +591,11 @@ TEST_CASE(
         return;
     }
 
-    // The carrier took the first frame, overflowed on the second, and sent
-    // what it held as datagram 5. Only the first row rode in it.
     session.defer(pass.sends[0]);
     session.commit(PEER, 5);
     session.defer(pass.sends[1]);
     session.commit(PEER, 6);
 
-    // Datagram 6 is lost and 5 is acknowledged. Binding both rows to 5 would
-    // advance the second row's baseline to a value the peer never received,
-    // and every later pass would diff against it with no frame left to
-    // correct it.
     session.acknowledge(PEER, 5);
     LocalVector<RowOffer> again;
     again.push_back(offer(1, 10, peers(PEER)));
@@ -667,13 +617,10 @@ TEST_CASE(
     offers.push_back(offer(1, 10, peers(PEER)));
     NETW_CHECK_EQ(session.run_deferred(offers).sends.size(), 1);
 
-    // The frame was dropped between the pass and the wire, so nothing is owed
-    // a sequence and the commit that follows has nothing of it to bind.
     NETW_CHECK_EQ(session.pending_count(PEER), 0);
     session.commit(PEER, 5);
     session.acknowledge(PEER, 5);
 
-    // The peer holds nothing, so the row is owed again whole.
     LocalVector<RowOffer> again;
     again.push_back(offer(1, 10, peers(PEER)));
     const SessionResult result = session.run_deferred(again);

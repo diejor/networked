@@ -6,7 +6,7 @@
 
 #include "support/netw_test.h"
 
-#include "netw/project.hpp"
+#include "netw/api/project.hpp"
 
 namespace TestNetwProject {
 

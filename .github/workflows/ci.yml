@@ -131,11 +131,11 @@ jobs:
           # The floor the corpus was last counted at. A case file the recursive
           # glob missed reads as "fewer cases", never as an error.
           floor = 0
-          with open("tests/crossing/baseline.census") as handle:
+          with open("tests/native/hosted_floor.txt") as handle:
               for line in handle:
-                  parts = line.split()
-                  if len(parts) == 3 and parts[0] == "hosted" and parts[1] == "all":
-                      floor = int(parts[2])
+                  line = line.split("#", 1)[0].strip()
+                  if line:
+                      floor = int(line)
 
           print("tests=%d rows=%d fail=%d err=%d floor=%d"
                 % (claimed, rows, failures, errors, floor))

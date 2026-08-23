@@ -83,16 +83,16 @@ func test_clients_admit_each_other_replicas() -> void:
 	)
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
-	var service0 := client0.api._interest
-	var service1 := client1.api._interest
+	var service0 := client0.api
+	var service1 := client1.api
 	assert_that(
-		service0.participant_sees(
+		service0._native_core.interest_participant_sees(
 			peer_id_0,
 			NetwEntity.of(client0_player1),
 		),
 	).is_true()
 	assert_that(
-		service1.participant_sees(
+		service1._native_core.interest_participant_sees(
 			peer_id_1,
 			NetwEntity.of(client1_player0),
 		),

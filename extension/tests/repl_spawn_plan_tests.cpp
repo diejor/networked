@@ -16,6 +16,8 @@
 #include "godot/variant.hpp"
 #include "netw/repl/spawn_plan.hpp"
 
+using namespace godot;
+
 namespace TestNetwReplSpawnPlan {
 
 using godot::LocalVector;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <cstdlib>
 
 #include "godot/variant.hpp"
@@ -86,6 +87,32 @@ inline godot::Variant bytes_to_var(const godot::PackedByteArray &bytes) {
 #else
     return godot::UtilityFunctions::bytes_to_var(bytes);
 #endif
+}
+
+inline void encode_u8(godot::PackedByteArray &bytes, int at, uint8_t value) {
+    ERR_FAIL_INDEX(at, bytes.size());
+    bytes.ptrw()[at] = value;
+}
+
+inline void encode_u32(godot::PackedByteArray &bytes, int at, uint32_t value) {
+    ERR_FAIL_INDEX(at + 3, bytes.size());
+    uint8_t *out = bytes.ptrw() + at;
+    out[0] = uint8_t(value & 0xFF);
+    out[1] = uint8_t((value >> 8) & 0xFF);
+    out[2] = uint8_t((value >> 16) & 0xFF);
+    out[3] = uint8_t((value >> 24) & 0xFF);
+}
+
+inline uint8_t decode_u8(const godot::PackedByteArray &bytes, int at) {
+    ERR_FAIL_INDEX_V(at, bytes.size(), 0);
+    return bytes.ptr()[at];
+}
+
+inline uint32_t decode_u32(const godot::PackedByteArray &bytes, int at) {
+    ERR_FAIL_INDEX_V(at + 3, bytes.size(), 0);
+    const uint8_t *in = bytes.ptr() + at;
+    return uint32_t(in[0]) | (uint32_t(in[1]) << 8) | (uint32_t(in[2]) << 16)
+        | (uint32_t(in[3]) << 24);
 }
 
 inline godot::String hex_of(const godot::PackedByteArray &bytes) {

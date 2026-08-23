@@ -2,7 +2,7 @@
 ## with no frame.
 ##
 ## A node enters the tree before whatever stamps a [NetwEntity] onto it has run,
-## so [LagCompCore] reads it twice: once on the spot and once after the cascade
+## so [NetwMultiplayer] reads it twice: once on the spot and once after the cascade
 ## that added it. These cases pin the second read to the session's own settle,
 ## with nothing awaited and no frame driven, and pin its key to the node,
 ## because a second look keyed by anything less drops every node in a batch but
@@ -11,7 +11,7 @@ class_name TestLagcompObserveSettle
 extends NetwTestSuite
 
 var mt: MultiplayerTree
-var engine: LagCompCore
+var engine: NetwMultiplayer
 
 
 func before_test() -> void:
@@ -21,7 +21,7 @@ func before_test() -> void:
 	auto_free(mt)
 	mt.add_child(MultiplayerClock.new())
 	mt.add_child(LagCompensation.new())
-	engine = mt.api._lagcomp
+	engine = mt.api
 
 
 ## An entity stamped after its node entered the tree is picked up by the settle,

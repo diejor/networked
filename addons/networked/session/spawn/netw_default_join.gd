@@ -46,8 +46,8 @@ func spawn(
 	var api := _api_ref.get_ref() as NetwMultiplayer
 	if api == null:
 		return null
-	var container := await api._scenes.activate_scene(scene_name)
-	assert(container, "activate_scene must guarantee scene presence")
+	var container := api._scene_activate_named(scene_name)
+	assert(container, "scene activation must guarantee scene presence")
 	var scene := NetwEntity.of(container).scene
 
 	var node: Node = scene.level.get_node(spawner_path)
@@ -59,10 +59,9 @@ func spawn(
 	var participant := api.peer_get_participant(rj.peer_id)
 	assert(participant, "spawn requires an accepted participant")
 	var player := entity.instantiate_player(participant)
-	var target_scene := await api._scenes.resolve_hydrated_spawn_scene(
-		player,
-		container,
-	)
-	var entered := NetwEntity.of(target_scene).scene
+	var resolving := api.scene_resolve_hydrated_spawn(player, container)
+	if not resolving.is_settled:
+		await resolving.settled
+	var entered := NetwEntity.of(resolving.result as Node).scene
 	entered.add_player(NetwEntity.of(player))
 	return entered

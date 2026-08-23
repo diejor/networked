@@ -1,25 +1,13 @@
-// What the apply boundary refuses, and the fixed point it has to reach.
-//
-// Decoding is where a receiver decides what the sender meant, and it has no
-// second opinion available: there are no type tags on the wire, so a row read
-// against the wrong declaration produces values rather than an error. The
-// guards here are the only thing standing between a mismatched declaration and
-// a confident wrong number in the game.
-//
-// The last law is the one the masked lane rests on. A masked send diffs
-// against what the sender believes the receiver holds, so sender and receiver
-// have to agree about what a row MEANS after one trip through the grid. If
-// re-encoding a decoded row moved it, the two would drift by one grid step per
-// pass and the diff would name columns that never changed.
-
 #include "support/netw_test.h"
 
 #include "godot/variant.hpp"
-#include "netw/quantize.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/quantize.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/wire/code_row.hpp"
 #include "netw/wire/plan.hpp"
 #include "netw/wire/value_row.hpp"
+
+using namespace godot;
 
 namespace TestNetwWireApplyRefusal {
 
@@ -76,8 +64,6 @@ TEST_CASE(
     out.push_back(godot::StringName("sentinel"));
     CHECK_FALSE(decode_scalar_row(wide, row, out));
 
-    // The caller's array is left as it was. A partly written one would be a
-    // set of values that never existed together on the sender.
     NETW_CHECK_EQ(out.size(), 1);
     CHECK(godot::String(out[0]) == godot::String("sentinel"));
 }
@@ -98,9 +84,6 @@ TEST_CASE(
     CodeRow empty;
     Array out;
 
-    // A row nobody built decodes to nothing rather than to a plausible zero.
-    // Zero is a value a column can legitimately hold, so answering it here
-    // would hand the game a reading it never received.
     CHECK_FALSE(decode_scalar_row(schema, empty, out));
     NETW_CHECK_EQ(out.size(), 0);
 }
@@ -113,8 +96,6 @@ TEST_CASE(
     const WirePlan plan = WirePlan::compile(schema);
     REQUIRE(plan.valid());
 
-    // Values deliberately off the grid, since a value already on it would
-    // reach the fixed point without the round trip proving anything.
     const double offered[] = { 0.0, 1.0 / 3.0, -7.77, 511.4, -511.9 };
     for (double value : offered) {
         CodeRow first = CodeRow::for_plan(plan);
@@ -129,10 +110,6 @@ TEST_CASE(
         CodeRow second = CodeRow::for_plan(plan);
         REQUIRE(encode_scalar_row(schema, decoded, second));
 
-        // One trip through the grid reaches the fixed point, so sender and
-        // receiver agree about what the row means from the first pass. Without
-        // this the masked diff would name a column every pass and the two
-        // would walk apart one step at a time.
         CHECK(first.equals(second));
 
         Array again;
@@ -148,9 +125,6 @@ TEST_CASE(
     const Ref<SchemaRecord> schema = gridded(-4.0, 4.0, 8);
     const WirePlan plan = WirePlan::compile(schema);
 
-    // A caller can offer a value outside the range it declared. Whatever the
-    // grid does with it, sender and receiver have to do the SAME thing, or the
-    // clamp itself becomes a source of drift.
     for (double value : { -9.0, 9.0 }) {
         CodeRow first = CodeRow::for_plan(plan);
         Array values;
@@ -170,10 +144,6 @@ TEST_CASE(
     "[Networked][WireValue][Hosted] a decode that fails partway writes none of "
     "the row"
 ) {
-    // Three columns, and the middle one carries a quantizer that cannot answer
-    // for its declared type. The refusal is therefore discovered AFTER the
-    // first column has already been read, which is the case a top-of-function
-    // guard does not reach.
     Ref<SchemaRecord> schema;
     schema.instantiate();
     schema->name = godot::StringName("Partial");
@@ -199,10 +169,6 @@ TEST_CASE(
     CHECK_FALSE(decode_scalar_row(schema, row, out));
     ERR_PRINT_ON;
 
-    // The caller keeps exactly what it had. A row applied up to the column
-    // that failed would put a state on the receiver that never existed on the
-    // sender, and nothing later would correct it: the sender believes it sent
-    // a whole row and diffs against that belief.
     NETW_CHECK_EQ(out.size(), 1);
     CHECK(godot::String(out[0]) == godot::String("sentinel"));
 }

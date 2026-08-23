@@ -7,7 +7,7 @@
 #include "support/netw_cells.h"
 
 #include "godot/variant.hpp"
-#include "netw/event_plane.hpp"
+#include "netw/api/event_plane.hpp"
 
 namespace TestNetwEventPlaneLaws {
 

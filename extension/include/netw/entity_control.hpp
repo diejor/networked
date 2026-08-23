@@ -1,22 +1,5 @@
 #pragma once
 
-/* Who steers one entity, and what happens to that when a peer leaves.
- *
- * The three policies are data: an entity declares who starts in control,
- * whether control may transfer at all, and what a controller's disconnect
- * does. Every question the rest of the system asks about control is answered
- * from those three plus the peer the entity represents, so this core takes the
- * representing peer and the local peer as arguments rather than reaching for a
- * node or a session.
- *
- * The one rule that is not obvious from the fields: the controller is resolved
- * LAZILY. An entity nobody wrote a controller onto is not uncontrolled, it is
- * controlled by whatever its initial rule says, and reading it before arm has
- * to answer what arm will. `configured` is what tells a pre-arm write apart
- * from the absence of one, so arm cannot overwrite a caller's explicit choice
- * with the rule's default.
- */
-
 #include <cstdint>
 
 #include "godot/ref_counted.hpp"

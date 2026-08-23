@@ -1,7 +1,3 @@
-// The runner is the one translation unit that carries doctest's implementation.
-// It reaches doctest through the prelude like every case file does, so the two
-// agree on doctest's configuration: a config macro set in one place and not the
-// other is a silent ODR violation.
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "support/netw_test.h"
 
@@ -18,7 +14,7 @@
 #include "netw/log.hpp"
 #include "netw/predict/frames.hpp"
 #include "netw/profile.hpp"
-#include "netw/tests.hpp"
+#include "netw/api/tests.hpp"
 #include "netw/wire/registry.hpp"
 #include "support/netw_cells.h"
 #include "support/netw_reset.h"
@@ -88,27 +84,6 @@ std::string escape_xml(const char *text) {
     return escaped;
 }
 
-/* Writes one JUnit row per test case, whatever happened inside it.
- *
- * Three properties this reporter has to hold, each of which it once got wrong
- * and each of which reads as a green run rather than as a broken report:
- *
- *   one row per case      A case with subcases is executed once per subcase,
- *                         and doctest announces the repeats through
- *                         `test_case_reenter`. Opening a row there duplicates
- *                         the case in every count that reads the XML.
- *   every failure kept    A row carries the text of EVERY failed assertion,
- *                         appended in order. Overwriting keeps only the last,
- *                         so the assertion a reader needs is the one that is
- *                         gone.
- *   severity respected    `MESSAGE()` is informational. Only a message that
- *                         doctest itself scores as a failure — `FAIL` and
- *                         `FAIL_CHECK` — fails the case.
- *
- * The detail of a failure carries the active `INFO` and `CAPTURE` context, so
- * a `NETW_CHECK_CLOSE` that missed names the two values it compared rather
- * than reporting that a bool was false.
- */
 class NetwJunitReporter final : public doctest::IReporter {
     struct Case {
         std::string file;
@@ -121,12 +96,8 @@ class NetwJunitReporter final : public doctest::IReporter {
 
     const doctest::ContextOptions &options;
     std::vector<Case> cases;
-    // The subcase path currently being executed, so one row can still say
-    // which of its subcases failed.
     std::vector<std::string> subcases;
 
-    // A reporter callback can arrive before any case opened only if doctest
-    // changes its call order, and dropping the text beats indexing off the end.
     Case *current() {
         return cases.empty() ? nullptr : &cases.back();
     }
@@ -151,8 +122,6 @@ class NetwJunitReporter final : public doctest::IReporter {
         return prefix;
     }
 
-    // The INFO and CAPTURE scopes live on doctest's own stack and are gone by
-    // the time the run ends, so they are read here, at the failure.
     std::string active_context() const {
         const int count = get_num_active_contexts();
         if (count == 0) {
@@ -230,8 +199,6 @@ public:
         subcases.clear();
     }
 
-    // A re-entry is the same case running another of its subcases, not a new
-    // case. The row stays open and accumulates.
     void test_case_reenter(const doctest::TestCaseData &) override {
         subcases.clear();
     }
@@ -286,8 +253,6 @@ public:
         append_detail(text + active_context());
     }
 
-    // A warn-severity message is `MESSAGE()`, which reports without failing.
-    // Only `FAIL` and `FAIL_CHECK` reach the row.
     void log_message(const doctest::MessageData &message) override {
         if ((message.m_severity & doctest::assertType::is_warn) != 0) {
             return;
@@ -428,8 +393,6 @@ const char *payload_name(wire::PayloadContract value) {
     return "?";
 }
 
-// The channel table as the build actually holds it, so a reader compares
-// against the registry rather than against its own copy of the prose.
 Array spec_channels() {
     const wire::WireRegistry reg = wire::WireRegistry::create_default();
     Array out;
@@ -453,9 +416,6 @@ Array spec_channels() {
     return out;
 }
 
-// The ids a build refuses to reclaim. A retired carrier that read as merely
-// absent could be handed to a new family, and two versions would then agree
-// on an id and disagree on everything under it.
 Array spec_reserved() {
     const wire::WireRegistry reg = wire::WireRegistry::create_default();
     Array out;

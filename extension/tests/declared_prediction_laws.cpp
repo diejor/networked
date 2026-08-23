@@ -11,8 +11,6 @@ namespace TestNetwDeclaredPredictionLaws {
 
 using namespace netw_test;
 
-// Far enough into the run that the buffer has filled and the stream is
-// steady, so the gap is the only thing the lane is short of.
 constexpr int GAP_FRAME = 15;
 
 EntityDecl predicted_player(netw::Schedule p_schedule) {
@@ -25,7 +23,6 @@ EntityDecl predicted_player(netw::Schedule p_schedule) {
         .scheduled(p_schedule);
 }
 
-// One frame that authors, two the clock held, then nine that author again.
 godot::PackedInt32Array held_twice() {
     godot::PackedInt32Array ticks;
     ticks.push_back(1);
@@ -67,9 +64,6 @@ Scenario perturbed_lane() {
     return scenario.until(100);
 }
 
-// The correction a solver body earns, declared rather than resolved, because
-// a carrier is no RigidBody and the lane is about what SNAP does rather than
-// about which owners get it.
 Scenario snap_lane() {
     Scenario scenario;
     scenario.label = "snap-lane";
@@ -85,9 +79,6 @@ Scenario snap_lane() {
     return scenario.until(100);
 }
 
-// One client's player owns an island holding a second client's player, which
-// reaches it as a remote it simulates. A divergence then replays the group
-// from a shared floor rather than each member from its own.
 Scenario joint_lane() {
     Scenario scenario;
     scenario.label = "joint-lane";
@@ -128,8 +119,6 @@ Scenario held_frame_lane() {
     return scenario.until(scenario.frame_ticks.size());
 }
 
-// The listen-server host owns and holds authority over one entity, so its
-// authoring obeys the same governor a remote owner's does.
 Scenario hosted_frame_lane() {
     Scenario scenario;
     scenario.label = "hosted-frame";
@@ -142,9 +131,6 @@ Scenario hosted_frame_lane() {
     return scenario.until(scenario.frame_ticks.size());
 }
 
-// Authority keeps one transition standing behind the one it consumes, so the
-// run holds once while the buffer fills and starves only where the owner's
-// stream has not reached it yet.
 Scenario buffered_frame_lane() {
     Scenario scenario;
     scenario.label = "buffered-frame";
@@ -165,8 +151,6 @@ Scenario buffered_frame_lane() {
     return scenario.until(ticks.size());
 }
 
-// One frame the clock held, so the owner authors nothing across it and
-// authority reaches a frame with the stream one transition short.
 Scenario gapped_frame_lane() {
     Scenario scenario = buffered_frame_lane();
     scenario.label = "gapped-frame";
@@ -176,8 +160,6 @@ Scenario gapped_frame_lane() {
     return scenario;
 }
 
-// A clock that grants nothing, one and two ticks in turn, so the owner meets
-// every frame shape one run can hold and authority replays each entry once.
 Scenario varied_frame_lane() {
     Scenario scenario = buffered_frame_lane();
     scenario.label = "varied-frame";
@@ -195,8 +177,6 @@ Scenario varied_frame_lane() {
     return scenario.until(ticks.size());
 }
 
-// Nothing authority sends reaches the owner, so the owner speculates until its
-// horizon is full and then declines to author at all.
 Scenario deaf_frame_lane() {
     Scenario scenario = buffered_frame_lane();
     scenario.label = "deaf-frame";
@@ -212,9 +192,6 @@ Scenario deaf_frame_lane() {
     return scenario.until(ticks.size());
 }
 
-// Six frames authority never reaches while the owner keeps authoring, so the
-// stream stands past the lag bound by the time authority runs again, and the
-// frames after are shared so the owner is told what the jump stepped over.
 Scenario stranded_frame_lane() {
     Scenario scenario;
     scenario.label = "stranded-frame";
@@ -313,12 +290,6 @@ LawVerdict law_snap_adopts_without_replay(const ScenarioRun &p_run) {
             lane.corrections()
         );
     }
-    // The one behavioural split from the kinematic path: SNAP restores
-    // authority and stops, so the window behind the restore is never walked.
-    // It follows that a snapping lane does NOT reconverge under epsilon the
-    // way L-CONV requires, because what it leaves behind is the whole
-    // acknowledgement lag rather than a replayed window. Judging it against
-    // L-CONV's claim would convict SNAP of doing what it is for.
     if (lane.max_replay_depth() != 0) {
         return law_broken(
             "a snapping lane walked %d tick(s) of replay",
@@ -590,10 +561,6 @@ const LawRow L_FRAME_ONCE = {
     law_frame_authors_once,
 };
 
-// A declared JOINT island is ADMITTED rather than silently refused. The
-// refusal path is real: _admitted_reconcile_mode drops the group to
-// INDEPENDENT when any member sits on a tier it cannot re-run, and a group
-// that never passes reconciles its members separately whatever it declared.
 LawVerdict law_joint_group_replays(const ScenarioRun &p_run) {
     const Lane owner = p_run.lane("P");
     if (owner.joint_passes() < 1) {

@@ -9,6 +9,8 @@ namespace TestNetwSessionJoinLaws {
 using namespace godot;
 using netw_test::LoopbackRig;
 
+constexpr const char *LABELS = "_scene_nodes_by_label";
+
 Object *participant_of(Object *p_api, int p_peer) {
     return Object::cast_to<Object>(
         p_api->call("peer_get_participant", p_peer)
@@ -78,14 +80,14 @@ TEST_CASE("[Networked][Session] a declared scene is not a live one until it "
     rig.declare_scene(StringName("Arena"));
     rig.pump(4);
 
-    Object *scenes = rig.server()->get("_scenes");
+    Object *scenes = rig.server();
     REQUIRE(scenes != nullptr);
-    NETW_CHECK_EQ(int(Dictionary(scenes->get("scenes")).size()), 0);
+    NETW_CHECK_EQ(int(Dictionary(scenes->call(LABELS)).size()), 0);
 
     rig.enter_scene(StringName("Arena"));
 
-    NETW_CHECK_EQ(int(Dictionary(scenes->get("scenes")).size()), 1);
-    CHECK(Dictionary(scenes->get("scenes")).has(StringName("Arena")));
+    NETW_CHECK_EQ(int(Dictionary(scenes->call(LABELS)).size()), 1);
+    CHECK(Dictionary(scenes->call(LABELS)).has(StringName("Arena")));
 }
 
 TEST_CASE("[Networked][Session] two instances of one stem are two live "
@@ -98,11 +100,11 @@ TEST_CASE("[Networked][Session] two instances of one stem are two live "
     rig.enter_scene(StringName("first"));
     rig.enter_scene(StringName("second"));
 
-    Object *scenes = rig.server()->get("_scenes");
-    Object *core = Object::cast_to<Object>(scenes->get("core"));
+    Object *scenes = rig.server();
+    Object *core = Object::cast_to<Object>(scenes->get("_scene_core"));
     REQUIRE(core != nullptr);
     NETW_CHECK_EQ(int(Array(core->call("live_scenes")).size()), 2);
-    NETW_CHECK_EQ(int(Dictionary(scenes->get("scenes")).size()), 1);
+    NETW_CHECK_EQ(int(Dictionary(scenes->call(LABELS)).size()), 1);
     CHECK(
         RID(core->call("scene_named", StringName("Arena")))
         == rig.entity_of(StringName("second"))
@@ -120,14 +122,14 @@ TEST_CASE("[Networked][Session] a client mirrors a scene without being "
     rig.mirror_scene(0, StringName("Arena"));
     rig.pump(8);
 
-    Object *client_scenes = rig.client(0)->get("_scenes");
+    Object *client_scenes = rig.client(0);
     REQUIRE(client_scenes != nullptr);
     Object *seated
         = Object::cast_to<Object>(rig.client(0)->get("local_participant"));
     REQUIRE(seated != nullptr);
 
-    NETW_CHECK_EQ(int(Dictionary(client_scenes->get("scenes")).size()), 1);
-    CHECK(Dictionary(client_scenes->get("scenes")).has(StringName("Arena")));
+    NETW_CHECK_EQ(int(Dictionary(client_scenes->call(LABELS)).size()), 1);
+    CHECK(Dictionary(client_scenes->call(LABELS)).has(StringName("Arena")));
     CHECK(Object::cast_to<Object>(seated->get("current_scene")) == nullptr);
 }
 

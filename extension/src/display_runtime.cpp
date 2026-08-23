@@ -3,6 +3,8 @@
 #include <limits>
 
 #include "godot/class_db.hpp"
+#include "netw/display_history.hpp"
+#include "netw/log.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
@@ -11,6 +13,7 @@ namespace netw {
 
 NetwDisplayRuntime::NetwDisplayRuntime() {
     tracks.instantiate();
+    playhead.instantiate();
     display_offset_limit = std::numeric_limits<double>::infinity();
 }
 
@@ -35,11 +38,45 @@ Ref<NetwDisplayChannel> NetwDisplayRuntime::channel_named(
     if (tracks.is_null()) {
         return Ref<NetwDisplayChannel>();
     }
+    NETW_WARN_COND(
+        tracks->is_ambiguous(p_name),
+        sys::INTERPOLATION,
+        "'%s' names more than one channel on this entity, so a lookup by "
+        "name answers whichever declared first",
+        String(p_name)
+    );
     const int at = tracks->by_name(p_name);
     if (at < 0 || at >= states.size()) {
         return Ref<NetwDisplayChannel>();
     }
     return states[at];
+}
+
+void NetwDisplayRuntime::snap_named(
+    const StringName &p_name,
+    const Variant &p_value
+) {
+    const Ref<NetwDisplayChannel> channel = channel_named(p_name);
+    if (channel.is_valid()) {
+        channel->snap(p_value);
+    }
+}
+
+void NetwDisplayRuntime::reset(
+    int p_display_offset,
+    int p_recommended_display_offset
+) {
+    playhead->settle(config, p_display_offset, p_recommended_display_offset);
+    for (int at = 0; at < states.size(); ++at) {
+        const Ref<NetwDisplayChannel> channel = states[at];
+        const Ref<NetwDisplayHistory> history = channel->get_history();
+        if (history.is_valid()) {
+            history->clear();
+        }
+        channel->render_offset().clear();
+        channel->set_last_written(channel->current_source_value());
+        channel->write(channel->get_last_written());
+    }
 }
 
 int64_t NetwDisplayRuntime::authoring_tick() const {
@@ -88,6 +125,12 @@ Variant NetwDisplayRuntime::track_stat(
         return channel.is_valid() && channel->get_history().is_valid()
             && channel->get_history()->is_sleeping();
     }
+    if (p_stat == StringName("offset_armed")) {
+        return channel.is_valid() && channel->render_offset().armed;
+    }
+    if (p_stat == StringName("offset_held")) {
+        return channel.is_valid() && channel->render_offset().is_held();
+    }
     if (p_stat == StringName("buffer")) {
         return buffer_of(p_track);
     }
@@ -123,6 +166,14 @@ void NetwDisplayRuntime::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("channel_named", "name"),
         &NetwDisplayRuntime::channel_named
+    );
+    ClassDB::bind_method(
+        D_METHOD("snap_named", "name", "value"),
+        &NetwDisplayRuntime::snap_named
+    );
+    ClassDB::bind_method(
+        D_METHOD("reset", "display_offset", "recommended_offset"),
+        &NetwDisplayRuntime::reset
     );
     ClassDB::bind_method(
         D_METHOD("authoring_tick"),

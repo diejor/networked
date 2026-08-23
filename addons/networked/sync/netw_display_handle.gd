@@ -4,7 +4,7 @@
 ## to the whole entity instead of one stream lives here, so there is one answer
 ## per entity to which node receives the smoothed write, which timeline it
 ## renders on, and how far behind the newest snapshot the playhead sits.
-## [DisplayCore] pumps what this declares.
+## The session pumps what this declares.
 ## [br][br]Every setting below is a view, not a store. A write goes out through
 ## [method NetwMultiplayer.display_set_param] and a read comes back through
 ## [method NetwMultiplayer.display_get_param], so the two spellings can never
@@ -291,18 +291,20 @@ func snap_property(property: StringName, value: Variant) -> void:
 	if api:
 		api.display_snap(_entity_rid(), property, value)
 		return
-	var iface := _interface()
 	var runtime := _runtime()
-	if iface and runtime:
-		iface._snap_state(runtime, property, value)
+	if runtime:
+		runtime.snap_named(property, value)
 
 
 ## Clears history and applies the live source values to the display target.
 func reset() -> void:
-	var iface := _interface()
+	var core := _core()
 	var runtime := _runtime()
-	if iface and runtime:
-		iface._reset_runtime(runtime)
+	if core and runtime:
+		runtime.reset(
+			core.clock_handle.display_offset,
+			core.clock_handle.recommended_display_offset,
+		)
 
 
 ## Returns whether [param property]'s channel has parked itself on its newest
@@ -322,11 +324,10 @@ func is_sleeping(property: StringName) -> bool:
 				&"sleeping",
 			),
 		)
-	var iface := _interface()
 	var runtime := _runtime()
-	if not iface or not runtime:
+	if not runtime:
 		return false
-	var state := iface._named_state(runtime, property)
+	var state := runtime.channel_named(property)
 	return state.history.sleeping if state else false
 
 
@@ -340,11 +341,10 @@ func displayed_value(property: StringName) -> Variant:
 	var api := _flat_api()
 	if api:
 		return api.display_get_value(_entity_rid(), property)
-	var iface := _interface()
 	var runtime := _runtime()
-	if not iface or not runtime:
+	if not runtime:
 		return null
-	var state := iface._named_state(runtime, property)
+	var state := runtime.channel_named(property)
 	return state.last_written if state else null
 
 
@@ -353,9 +353,8 @@ func displayed_authoring_tick() -> int:
 	var api := _flat_api()
 	if api:
 		return api.display_get_tick(_entity_rid())
-	var iface := _interface()
 	var runtime := _runtime()
-	if not iface or not runtime:
+	if not runtime:
 		return -1
 	return runtime.authoring_tick()
 
@@ -369,9 +368,8 @@ func get_buffer(property: StringName) -> NetwRingBuffer:
 			property,
 			&"buffer",
 		) as NetwRingBuffer
-	var iface := _interface()
 	var runtime := _runtime()
-	if not iface or not runtime:
+	if not runtime:
 		return null
 	return runtime.buffer_of(property)
 
@@ -383,13 +381,13 @@ func get_buffer(property: StringName) -> NetwRingBuffer:
 ## [member NetwDisplayTiming.display_tick] instead of a [SceneTreeTimer] bound
 ## to the scene tree.
 func disable_for(duration: float) -> void:
-	var iface := _interface()
+	var core := _core()
 	var runtime := _runtime()
-	if not iface or not runtime:
+	if not core or not runtime:
 		return
 	runtime.disabled = true
 	reset()
-	var timing := iface._capture_timing()
+	var timing := NetwDisplayTiming.capture(core.clock_handle, 0.0)
 	var ticks := 1
 	if timing.ticktime > 0.0:
 		ticks = maxi(1, ceili(duration / timing.ticktime))
@@ -404,11 +402,9 @@ func entity() -> NetwEntity:
 	return _entity_ref.get_ref() as NetwEntity if _entity_ref else null
 
 
-func _interface() -> DisplayCore:
-	var ent := entity()
-	if not ent or not ent.owner:
-		return null
-	return DisplayCore.for_node(ent.owner)
+func _core() -> NetwMultiplayerCore:
+	var api := _flat_api()
+	return api._native_core if api else null
 
 
 func _flat_api() -> NetwMultiplayer:
@@ -424,8 +420,11 @@ func _entity_rid() -> RID:
 
 
 func _runtime() -> NetwDisplayRuntime:
-	var iface := _interface()
-	return iface._runtime_for_handle(self) if iface else null
+	var core := _core()
+	var ent := entity()
+	if not core or not ent:
+		return null
+	return core.display_book.runtime_of(ent.rid)
 
 
 # Writes one setting through the flat verb, which repairs whatever the write

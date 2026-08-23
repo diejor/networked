@@ -32,7 +32,7 @@ func test_host_join_kick_rejoin_and_leave() -> void:
 	await leaving_client.api.session.leave()
 
 	assert_int(leaving_client.api.state) \
-			.is_equal(SessionCore.State.OFFLINE)
+			.is_equal(NetwMultiplayer.SessionState.OFFLINE)
 	assert_bool(await _wait_peer_absent(host_tree.api, leaving_id)).is_true()
 
 	await EnetTestSupport.stop_tree(leaving_client)

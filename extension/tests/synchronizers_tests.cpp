@@ -9,7 +9,7 @@
 
 #include "godot/multiplayer_synchronizer.hpp"
 #include "godot/node.hpp"
-#include "netw/synchronizers.hpp"
+#include "netw/api/synchronizers.hpp"
 
 namespace TestNetwSynchronizers {
 

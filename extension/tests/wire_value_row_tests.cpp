@@ -5,8 +5,8 @@
 
 #include <cmath>
 
-#include "netw/quantize.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/quantize.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/wire/plan.hpp"
 #include "netw/wire/value_row.hpp"
 

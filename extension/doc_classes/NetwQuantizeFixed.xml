@@ -9,6 +9,7 @@
 		var q := NetwQuantizeFixed.new().step(0.5).limits(-2048.0, 2048.0)
 		[/codeblock]
 		A value on the grid round-trips exactly, so a game that authors positions in multiples of its step pays no quantization error at all.
+		The per-axis error is at most half [member resolution_step].
 	</description>
 	<tutorials>
 	</tutorials>

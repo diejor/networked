@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterestLayer" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Server-owned membership and per-peer visibility for one interest slice.
+	</brief_description>
+	<description>
+		A layer combines [member entities], [member viewers] and [member policy] into one per-peer verdict. It holds no state of its own: every read and every mutation lands in the session's interest engine, so two handles on the same [member layer_id] are the same layer, and a layer outlives nothing the session does not.
+		Membership never crosses the wire. The committed rows gate the spawn and synchronization pipelines directly, and a client learns only the attribution for its own row.
+		Pick the signal by the gameplay question. [signal interest_enter] and [signal interest_exit] answer server authority, [signal entity_visible] and [signal entity_hidden] answer what the local peer sees, and [signal NetwEntity.observer_entered] answers who can see one entity.
+		[codeblock]
+		# Server: decide who can see the target.
+		var sight := server_tree.interest.layer(&amp;"sight")
+		sight.add_entity(target_entity)
+		sight.add_viewer(observer_peer_id)
+
+		# Observer client: react to what this peer can see.
+		var sight := Netw.of(self).interest.layer(&amp;"sight")
+		sight.entity_visible.connect(func(entity):
+		    add_marker(entity.owner)
+		)
+		[/codeblock]
+		Transitions are never synchronous. [method add_viewer] and [method add_entity] mark the layer dirty and the session's interest flush is what emits, so a caller that needs the new row inside the same frame flushes first.
+		Scene admission is separate and happens first. A scene wrapper is an ordinary member of its scene layer, and its committed parent row clamps every descendant, so a generic layer refines an already-admitted scene rather than revealing its root.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="add_entity">
+			<return type="bool" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Enrols [param entity] in this layer and returns whether the roster changed. Idempotent.
+				[br][br][b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="add_viewer">
+			<return type="bool" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Adds [param peer_id] to [member viewers] and returns whether the set changed. Idempotent. [param peer_id] must be non-zero, and the visibility edges it earns arrive at the next interest flush rather than here.
+			</description>
+		</method>
+		<method name="apply_server_transition">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="peer_id" type="int" />
+			<param index="2" name="visible" type="bool" />
+			<description>
+				Emits one committed server edge: [signal interest_enter] or [signal interest_exit] on this layer, then the same edge on [param entity], then the entity's own enter and leave callbacks. The interest flush calls this once per transition the engine committed, so calling it by hand announces an edge nothing else believes in.
+				[br][br][b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="client_admit">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Records that the local peer now sees [param entity] through this layer, and emits [signal entity_visible] after the entity's own enter callbacks. Idempotent, and driven by the awareness projection rather than by game code.
+			</description>
+		</method>
+		<method name="client_revoke">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Records that the local peer stopped seeing [param entity] through this layer, and emits [signal entity_hidden] after the entity's own leave callbacks. Idempotent.
+			</description>
+		</method>
+		<method name="client_untrack_entity">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Drops [param entity] on a client because it left the tree, which is a membership loss as well as a visibility loss: [signal entity_removed] fires before the leave callbacks and [signal entity_hidden]. Idempotent, so a teardown may run it twice.
+			</description>
+		</method>
+		<method name="debug_dump">
+			<return type="Dictionary" />
+			<param index="0" name="peer_id" type="int" default="0" />
+			<description>
+				Returns this layer's state and the engine's own explanation of [param peer_id]'s verdict.
+				[codeblock]
+				{
+				  ┠╴ layer_id: String
+				  ┠╴ policy: int          # a Policy value
+				  ┠╴ viewers: Array       # peer ids
+				  ┠╴ entities: int        # roster size
+				  ┠╴ peer_id: int
+				  ┠╴ verdict: bool        # what verdict_for(peer_id) answers
+				  ┖╴ explanation: String  # why the engine answered that
+				}
+				[/codeblock]
+			</description>
+		</method>
+		<method name="has_entity" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Whether [param entity] is in this layer's roster. On a client the roster is what this peer was admitted to, which is why this is not [method is_visible_to].
+			</description>
+		</method>
+		<method name="has_viewer" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Whether [param peer_id] is in [member viewers]. Membership is not a verdict: under [constant HIDE_FROM_INSIDERS] a viewer is exactly who cannot see.
+			</description>
+		</method>
+		<method name="is_visible_to">
+			<return type="bool" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="peer_id" type="int" />
+			<description>
+				Whether the session's committed matrix admits [param entity] to [param peer_id], which composes every layer and the ancestry clamp rather than this layer alone. A client can answer only for its own projected row.
+			</description>
+		</method>
+		<method name="monitor_snapshot" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns aggregate occupancy counters.
+				[codeblock]
+				{
+				  ┠╴ viewers: int            # size of viewers
+				  ┠╴ entities: int           # size of entities
+				  ┠╴ visible_edges: int      # admitted (entity, peer) pairs
+				  ┖╴ transitions_total: int  # summed show plus hide since creation
+				}
+				[/codeblock]
+				[code]transitions_total[/code] is cumulative since this layer was created, so a monitor reads it as a delta over an interval to surface churn.
+			</description>
+		</method>
+		<method name="remove_entity">
+			<return type="bool" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Removes [param entity] from this layer and returns whether the roster changed. An unknown entity is a no-op, so teardown may run it twice, and the visibility exits arrive at the next interest flush.
+				[br][br][b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="remove_viewer">
+			<return type="bool" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Removes [param peer_id] from [member viewers] and returns whether the set changed. Idempotent.
+			</description>
+		</method>
+		<method name="set_policy">
+			<return type="bool" />
+			<param index="0" name="value" type="int" />
+			<description>
+				Replaces [member policy] and returns whether it changed. The spelling that answers whether anything moved.
+			</description>
+		</method>
+		<method name="verdict_for" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				This layer's own policy verdict for [param peer_id], with no other layer and no ancestry clamp folded in. [method is_visible_to] is what a game asks.
+			</description>
+		</method>
+		<method name="viewer_ids" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Returns the current viewer peer ids.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="default_leave_policy" type="int" setter="set_default_leave_policy" getter="get_default_leave_policy" default="0">
+			Wire behavior when this layer stops admitting an entity and the entity carries no per-entity override. A [constant NetwMultiplayer.LeavePolicy] value.
+		</member>
+		<member name="default_perception_policy" type="int" setter="set_default_perception_policy" getter="get_default_perception_policy" default="0">
+			Local presentation behavior when this layer stops admitting an entity and no per-entity override is configured. A [constant NetwMultiplayer.PerceptionPolicy] value.
+		</member>
+		<member name="entities" type="Dictionary" setter="" getter="get_entities" default="{}">
+			The entity set, keyed for membership tests. On the server this is every entity registered through [method add_entity]; on a client it is every entity currently admitted to this layer for the local peer.
+			Read-only, and rebuilt on every read from the session's roster, so writing through it mutates a copy. Use [method add_entity] and [method remove_entity].
+		</member>
+		<member name="layer_id" type="StringName" setter="set_layer_id" getter="get_layer_id" default="&amp;&quot;&quot;">
+			The stable id this layer is addressed by. Setting it declares the layer in the session's interest engine, so a layer taken from the session already carries its id.
+		</member>
+		<member name="policy" type="int" setter="set_policy" getter="get_policy" default="0">
+			How [member viewers] composes into the per-peer verdict. See [enum Policy].
+		</member>
+		<member name="viewers" type="Dictionary" setter="" getter="get_viewers" default="{}">
+			The peer ids participating in this layer, keyed for membership tests.
+			Read-only, and rebuilt on every read, so writing through it mutates a copy. Use [method add_viewer] and [method remove_viewer].
+		</member>
+	</members>
+	<signals>
+		<signal name="entity_added">
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Emitted when [param entity] joins this layer's roster.
+			</description>
+		</signal>
+		<signal name="entity_hidden">
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Emitted on a client when the local peer stops seeing [param entity] through this layer.
+			</description>
+		</signal>
+		<signal name="entity_removed">
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Emitted when [param entity] leaves this layer's roster.
+			</description>
+		</signal>
+		<signal name="entity_visible">
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Emitted on a client when the local peer can see [param entity] through this layer.
+			</description>
+		</signal>
+		<signal name="interest_enter">
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="peer_id" type="int" />
+			<description>
+				Emitted on the server when [param entity] becomes visible to [param peer_id] through this layer, at the interest flush that committed the edge.
+			</description>
+		</signal>
+		<signal name="interest_exit">
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="peer_id" type="int" />
+			<description>
+				Emitted on the server when [param entity] stops being visible to [param peer_id] through this layer, at the interest flush that committed the edge.
+			</description>
+		</signal>
+		<signal name="viewer_added">
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Emitted when [param peer_id] is added to [member viewers]. A viewer edge, not a visibility edge.
+			</description>
+		</signal>
+		<signal name="viewer_removed">
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Emitted when [param peer_id] is removed from [member viewers].
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="HIDE_FROM_OUTSIDERS" value="0" enum="Policy">
+			Peers in [member viewers] see [member entities]; outsiders do not.
+		</constant>
+		<constant name="HIDE_FROM_INSIDERS" value="1" enum="Policy">
+			Peers in [member viewers] do [b]not[/b] see [member entities]; outsiders do.
+		</constant>
+	</constants>
+</class>

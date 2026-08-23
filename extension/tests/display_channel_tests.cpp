@@ -1,8 +1,10 @@
+#include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
 #include "godot/spatial_node.hpp"
 #include "netw/display_channel.hpp"
 #include "netw/display_history.hpp"
+#include "netw/display_port.hpp"
 
 namespace TestNetwDisplayChannel {
 
@@ -78,14 +80,13 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Display][Hosted] C3 a channel mints its own render offset, "
+    "[Networked][Display][Hosted] C3 a channel carries its own render offset, "
     "so no caller has to remember to"
 ) {
     Ref<NetwDisplayChannel> channel = make_channel();
 
-    CHECK(channel->get_offset().is_valid());
-    CHECK(!channel->get_offset()->is_held());
-    CHECK(!channel->get_offset()->is_armed());
+    CHECK(!channel->render_offset().is_held());
+    CHECK(!channel->render_offset().armed);
 }
 
 TEST_CASE(
@@ -112,16 +113,173 @@ TEST_CASE(
     history->record(0, Vector2(0.0, 0.0), false);
     history->record(4, Vector2(8.0, 0.0), false);
     channel->set_history(history);
-    channel->get_offset()->absorb(Vector2(10.0, 0.0), INFINITY);
+    channel->render_offset().absorb(Vector2(10.0, 0.0), INFINITY);
     channel->set_last_written(Vector2(1.0, 1.0));
 
     channel->snap(Vector2(9.0, 9.0));
 
     CHECK(history->is_empty());
-    CHECK(!channel->get_offset()->is_held());
+    CHECK(!channel->render_offset().is_held());
     CHECK(Vector2(channel->get_last_written()).is_equal_approx(
         Vector2(9.0, 9.0)
     ));
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C6 an installed output takes the write, and "
+    "takes it INSTEAD of the port, because it is the whole backend"
+) {
+    netw_test::CallLog log;
+    Ref<NetwDisplayChannel> channel = make_channel();
+    Ref<netw::NetwDisplayPort> port;
+    port.instantiate();
+    channel->set_port(port);
+    channel->set_output(log.callable("shown"));
+
+    channel->write(Vector2(3.0, 4.0));
+
+    CHECK(log.count("shown") == 1);
+    CHECK(Vector2(log.args("shown")[0]).is_equal_approx(Vector2(3.0, 4.0)));
+    CHECK(port->get_lost() == 0);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C7 a channel with no output writes its port, "
+    "so the node write is the default rather than an installed backend"
+) {
+    Node2D *body = memnew(Node2D);
+    Node2D *visual = memnew(Node2D);
+    body->add_child(visual);
+
+    Ref<NetwDisplayChannel> channel = make_channel();
+    Ref<netw::NetwDisplayPort> port;
+    port.instantiate();
+    port->bind(visual, body);
+    port->declare("position", "position", false);
+    channel->set_port(port);
+
+    channel->write(Vector2(3.0, 4.0));
+
+    CHECK(visual->get_position().is_equal_approx(Vector2(3.0, 4.0)));
+    memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C8 a channel bound to neither an output nor "
+    "a port drops its writes rather than refusing them"
+) {
+    Ref<NetwDisplayChannel> channel = make_channel();
+
+    channel->write(Vector2(3.0, 4.0));
+    channel->snap(Vector2(5.0, 6.0));
+
+    CHECK(Vector2(channel->get_last_written()).is_equal_approx(
+        Vector2(5.0, 6.0)
+    ));
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C9 a snap goes out through the same write "
+    "path, so an installed output sees teleports as well as smoothed frames"
+) {
+    netw_test::CallLog log;
+    Ref<NetwDisplayChannel> channel = make_channel();
+    channel->set_output(log.callable("shown"));
+
+    channel->write(Vector2(1.0, 0.0));
+    channel->snap(Vector2(9.0, 9.0));
+
+    CHECK(log.count("shown") == 2);
+    CHECK(Vector2(log.args("shown", 1)[0]).is_equal_approx(Vector2(9.0, 9.0)));
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C10 a door that TAKES the value stops the "
+    "write, because a lane and a port both writing is the double write"
+) {
+    netw_test::CallLog log;
+    Node2D *body = memnew(Node2D);
+    Node2D *visual = memnew(Node2D);
+    body->add_child(visual);
+    visual->set_position(Vector2(1.0, 1.0));
+
+    Ref<NetwDisplayChannel> channel = make_channel();
+    Ref<netw::NetwDisplayPort> port;
+    port.instantiate();
+    port->bind(visual, body);
+    port->declare("position", "position", false);
+    channel->set_port(port);
+    channel->set_door(log.answering("lane", int64_t(OK)));
+
+    channel->write(Vector2(7.0, 7.0));
+
+    CHECK(log.count("lane") == 1);
+    CHECK(visual->get_position().is_equal_approx(Vector2(1.0, 1.0)));
+    memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C11 ERR_DOES_NOT_EXIST is the ONE door "
+    "verdict that falls through, because it means no lane answers this entity"
+) {
+    netw_test::CallLog log;
+    Node2D *body = memnew(Node2D);
+    Node2D *visual = memnew(Node2D);
+    body->add_child(visual);
+
+    Ref<NetwDisplayChannel> channel = make_channel();
+    Ref<netw::NetwDisplayPort> port;
+    port.instantiate();
+    port->bind(visual, body);
+    port->declare("position", "position", false);
+    channel->set_port(port);
+    channel->set_door(log.answering("lane", int64_t(ERR_DOES_NOT_EXIST)));
+
+    channel->write(Vector2(7.0, 7.0));
+
+    CHECK(log.count("lane") == 1);
+    CHECK(visual->get_position().is_equal_approx(Vector2(7.0, 7.0)));
+    memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C12 a door REFUSAL stops the write as firmly "
+    "as a success, so a failing lane never silently degrades to the node"
+) {
+    netw_test::CallLog log;
+    Node2D *body = memnew(Node2D);
+    Node2D *visual = memnew(Node2D);
+    body->add_child(visual);
+    visual->set_position(Vector2(1.0, 1.0));
+
+    Ref<NetwDisplayChannel> channel = make_channel();
+    Ref<netw::NetwDisplayPort> port;
+    port.instantiate();
+    port->bind(visual, body);
+    port->declare("position", "position", false);
+    channel->set_port(port);
+    channel->set_door(log.answering("lane", int64_t(ERR_INVALID_DATA)));
+
+    channel->write(Vector2(7.0, 7.0));
+
+    CHECK(log.count("lane") == 1);
+    CHECK(visual->get_position().is_equal_approx(Vector2(1.0, 1.0)));
+    memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] C13 the door is tried ahead of an installed "
+    "output as well as ahead of the port, so a lane outranks every backend"
+) {
+    netw_test::CallLog log;
+    Ref<NetwDisplayChannel> channel = make_channel();
+    channel->set_output(log.callable("shown"));
+    channel->set_door(log.answering("lane", int64_t(OK)));
+
+    channel->write(Vector2(7.0, 7.0));
+
+    CHECK(log.count("lane") == 1);
+    CHECK(log.count("shown") == 0);
 }
 
 } // namespace TestNetwDisplayChannel

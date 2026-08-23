@@ -1,8 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictJournalRow" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		A detached snapshot of one journal row: the fingerprints,
+		provenance, and flags recorded for one transition.
 	</brief_description>
 	<description>
+		A copy of everything [NetwPredictJournal] knows about one
+		transition, taken at a moment in time so it keeps answering after
+		the row it was read from ages out of the journal ring. Every
+		member reads whatever was true when the snapshot was taken; none
+		of them re-consult the journal.
+		[br][br]The evidence fields split into a pre-state half, recorded
+		when the transition opened, and a post-state half, recorded when
+		it closed. [method pre_fp] and [method pre_families] answer the
+		pre-state; [method post_fp] and [method post_families] answer the
+		post-state and read their zero defaults until the row closes.
+		[method op], [method basis], [method episode_id], and
+		[method write_id] are provenance: which operator write, if any,
+		accounts for a discontinuity ahead of this row, and which episode
+		and write recorded it.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,116 +26,179 @@
 		<method name="aligned_error" qualifiers="const">
 			<return type="float" />
 			<description>
+				The measured error at the transition an alignment reseed
+				matched against, or [code]0.0[/code] when this row never
+				recorded one.
 			</description>
 		</method>
 		<method name="attribution" qualifiers="const">
 			<return type="int" />
 			<description>
+				This row's [enum NetwPredictJournal.Attribution], the cause
+				assigned to its divergence, or
+				[constant NetwPredictJournal.UNKNOWN] when none was.
 			</description>
 		</method>
 		<method name="basis" qualifiers="const">
 			<return type="int" />
 			<description>
+				The write [method op] accounts for, or [code]-1[/code]
+				when nothing wrote the body.
 			</description>
 		</method>
 		<method name="c_hash" qualifiers="const">
 			<return type="int" />
 			<description>
+				The command hash recorded when this transition opened.
 			</description>
 		</method>
 		<method name="differing_family" qualifiers="const">
 			<return type="int" />
 			<description>
+				This row's [enum NetwPredictJournal.StateFamily], the one
+				state family a comparison narrowed this row's divergence
+				to, or [constant NetwPredictJournal.FAMILY_NONE] when no
+				comparison narrowed it to a single family.
 			</description>
 		</method>
 		<method name="domain" qualifiers="const">
 			<return type="int" />
 			<description>
+				This row's [enum NetwPredictJournal.Domain]:
+				[constant NetwPredictJournal.IN_DOMAIN] when the
+				divergence is one recovery is expected to close, or
+				[constant NetwPredictJournal.OUT_OF_DOMAIN] when it is
+				not, the domain [method NetwPredictEpisodeReport.generator_domain]
+				pins an episode's generator against.
 			</description>
 		</method>
 		<method name="e_digest" qualifiers="const">
 			<return type="int" />
 			<description>
+				The environment digest recorded for this transition, or
+				[code]0[/code] when none was recorded.
 			</description>
 		</method>
 		<method name="episode_id" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [method NetwPredictEpisodeReport.id] of the episode
+				[method op] belongs to, or [code]0[/code] when
+				[method op] names no write.
 			</description>
 		</method>
 		<method name="evidence_mask" qualifiers="const">
 			<return type="int" />
 			<description>
+				The bitmask of which evidence kinds this row carries,
+				[constant NetwPredictJournal.EVIDENCE_WITNESS] and
+				[constant NetwPredictJournal.EVIDENCE_RAW] combined.
 			</description>
 		</method>
 		<method name="flags" qualifiers="const">
 			<return type="int" />
 			<description>
+				This row's status bits, an
+				[constant NetwPredictJournal.ROW_DIVERGENT]-style
+				combination recording whether the row was acked, matched,
+				substituted, superseded, found divergent, closed, chain
+				broken, or witness matched.
 			</description>
 		</method>
 		<method name="kind" qualifiers="const">
 			<return type="int" />
 			<description>
+				The drive kind this transition ran under, the raw value
+				stamped when the row opened.
 			</description>
 		</method>
 		<method name="label" qualifiers="const">
 			<return type="int" />
 			<description>
+				The command label this transition's row was opened
+				against.
 			</description>
 		</method>
 		<method name="op" qualifiers="const">
 			<return type="int" />
 			<description>
+				The operator write that accounts for a state-chain
+				discontinuity ahead of this row, or [code]0[/code] with
+				[method basis] at [code]-1[/code] when nothing wrote the
+				body.
 			</description>
 		</method>
 		<method name="post_families" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				Pose, momentum, then controller, the order every family
+				fingerprint triple is written and read in.
 			</description>
 		</method>
 		<method name="post_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The combined post-state fingerprint recorded when this
+				transition closed, or [code]0[/code] while it has not.
 			</description>
 		</method>
 		<method name="pre_families" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				Pose, momentum, then controller, the order every family
+				fingerprint triple is written and read in.
 			</description>
 		</method>
 		<method name="pre_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The combined pre-state fingerprint recorded when this
+				transition opened.
 			</description>
 		</method>
 		<method name="raw_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The unclassified raw fingerprint recorded for this
+				transition, or [code]0[/code] when none was.
 			</description>
 		</method>
 		<method name="topo_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The topology fingerprint recorded for this transition.
 			</description>
 		</method>
 		<method name="transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition this row describes, the key it was pinned
+				from the journal under.
 			</description>
 		</method>
 		<method name="witness_class_bits" qualifiers="const">
 			<return type="int" />
 			<description>
+				What kind of contact witnessed this transition: bit
+				[code]1[/code] a supporting body, bit [code]2[/code]
+				static geometry, and bit [code]4[/code] a dynamic entity,
+				combined when more than one kind witnessed at once, or
+				[code]0[/code] when none did.
 			</description>
 		</method>
 		<method name="witness_fp" qualifiers="const">
 			<return type="int" />
 			<description>
+				The witness fingerprint recorded for this transition, or
+				[code]0[/code] when no witness evidence was recorded.
 			</description>
 		</method>
 		<method name="write_id" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [method NetwPredictEpisodeReport.write_id] of the
+				write named by [method op], or [code]0[/code] when
+				[method op] names no write.
 			</description>
 		</method>
 	</methods>

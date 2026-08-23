@@ -1,9 +1,3 @@
-// Laws for NetwJoinRoster.
-//
-// Two books that must move together, and one rule about names that has three
-// answers rather than two. The rule is a verdict rather than an act, so the
-// same decision serves a join arriving on the wire and one a test hands in.
-
 #include "support/netw_test.h"
 
 #include "netw/join_roster.hpp"
@@ -11,13 +5,11 @@
 namespace TestNetwJoinRoster {
 
 using namespace godot;
-using netw::NetwJoinRoster;
+using netw::JoinRoster;
 using netw::ResolvedJoin;
 
-Ref<NetwJoinRoster> make_roster() {
-    Ref<NetwJoinRoster> roster;
-    roster.instantiate();
-    return roster;
+JoinRoster make_roster() {
+    return JoinRoster();
 }
 
 Ref<ResolvedJoin> join(int64_t peer_id, const char *name, bool with_args) {
@@ -45,31 +37,31 @@ TEST_CASE(
     "[Networked][Session][Hosted] L1 a peer is remembered again only when the "
     "record learned something"
 ) {
-    Ref<NetwJoinRoster> roster = make_roster();
+    JoinRoster roster = make_roster();
 
-    CHECK(roster->remember(join(4, "ana", false)));
-    NETW_CHECK_EQ(roster->size(), 1);
+    CHECK(roster.remember(join(4, "ana", false)));
+    NETW_CHECK_EQ(roster.size(), 1);
 
     SUBCASE("the same argless record twice teaches nothing") {
-        CHECK_FALSE(roster->remember(join(4, "ana", false)));
-        NETW_CHECK_EQ(roster->size(), 1);
+        CHECK_FALSE(roster.remember(join(4, "ana", false)));
+        NETW_CHECK_EQ(roster.size(), 1);
     }
 
     SUBCASE("args arriving where there were none enrich it") {
-        CHECK(roster->remember(join(4, "ana", true)));
-        CHECK_FALSE(roster->accepted_join(4)->get_arg_values().is_empty());
+        CHECK(roster.remember(join(4, "ana", true)));
+        CHECK_FALSE(roster.accepted_join(4)->get_arg_values().is_empty());
     }
 
     SUBCASE("an argless echo does not replace a record that carries args") {
-        roster->remember(join(4, "ana", true));
-        CHECK_FALSE(roster->remember(join(4, "ana", false)));
-        CHECK_FALSE(roster->accepted_join(4)->get_arg_values().is_empty());
+        roster.remember(join(4, "ana", true));
+        CHECK_FALSE(roster.remember(join(4, "ana", false)));
+        CHECK_FALSE(roster.accepted_join(4)->get_arg_values().is_empty());
     }
 
     SUBCASE("another peer is another record") {
-        CHECK(roster->remember(join(5, "bo", false)));
-        NETW_CHECK_EQ(roster->size(), 2);
-        NETW_CHECK_EQ(roster->accepted_joins().size(), 2);
+        CHECK(roster.remember(join(5, "bo", false)));
+        NETW_CHECK_EQ(roster.size(), 2);
+        NETW_CHECK_EQ(roster.accepted_joins().size(), 2);
     }
 }
 
@@ -77,87 +69,81 @@ TEST_CASE(
     "[Networked][Session][Hosted] L2 a name collision has three answers, and "
     "which one depends on the peer asking"
 ) {
-    Ref<NetwJoinRoster> roster = make_roster();
+    JoinRoster roster = make_roster();
     const PackedStringArray taken = names({"ana", "ana1"});
 
     NETW_CHECK_EQ(
-        roster->name_verdict("bo", taken, false, false),
-        int(NetwJoinRoster::ADMIT)
+        roster.name_verdict("bo", taken, false, false),
+        int(JoinRoster::ADMIT)
     );
     NETW_CHECK_EQ(
-        roster->name_verdict("ana", taken, true, false),
-        int(NetwJoinRoster::RENAME)
+        roster.name_verdict("ana", taken, true, false),
+        int(JoinRoster::RENAME)
     );
     NETW_CHECK_EQ(
-        roster->name_verdict("ana", taken, false, true),
-        int(NetwJoinRoster::REFUSE)
+        roster.name_verdict("ana", taken, false, true),
+        int(JoinRoster::REFUSE)
     );
 
     SUBCASE("an unauthenticated collision is admitted, not refused") {
-        // Nothing proves the name belongs to the peer already holding it, so
-        // the session says so and lets both in rather than locking one out on
-        // a first-come claim.
         NETW_CHECK_EQ(
-            roster->name_verdict("ana", taken, false, false),
-            int(NetwJoinRoster::ADMIT)
+            roster.name_verdict("ana", taken, false, false),
+            int(JoinRoster::ADMIT)
         );
     }
 
     SUBCASE("a debug rename outranks an authenticated refusal") {
         NETW_CHECK_EQ(
-            roster->name_verdict("ana", taken, true, true),
-            int(NetwJoinRoster::RENAME)
+            roster.name_verdict("ana", taken, true, true),
+            int(JoinRoster::RENAME)
         );
     }
 
     SUBCASE("the free name skips every suffix already held") {
-        CHECK(roster->free_name("ana", taken) == StringName("ana2"));
-        CHECK(roster->free_name("bo", taken) == StringName("bo1"));
+        CHECK(roster.free_name("ana", taken) == StringName("ana2"));
+        CHECK(roster.free_name("bo", taken) == StringName("bo1"));
     }
 }
 
 TEST_CASE(
     "[Networked][Session][Hosted] L3 forgetting a peer forgets both books"
 ) {
-    // A peer remembered as accepted while a refusal reason still names it is a
-    // peer the session disagrees with itself about.
-    Ref<NetwJoinRoster> roster = make_roster();
-    roster->remember(join(4, "ana", true));
-    roster->refuse(4, "Username 'ana' is already in use");
+    JoinRoster roster = make_roster();
+    roster.remember(join(4, "ana", true));
+    roster.refuse(4, "Username 'ana' is already in use");
 
-    CHECK(roster->refusal(4) == String("Username 'ana' is already in use"));
+    CHECK(roster.refusal(4) == String("Username 'ana' is already in use"));
 
-    roster->forget(4);
+    roster.forget(4);
 
-    NETW_CHECK_EQ(roster->size(), 0);
-    CHECK(roster->accepted_join(4).is_null());
-    CHECK(roster->refusal(4).is_empty());
+    NETW_CHECK_EQ(roster.size(), 0);
+    CHECK(roster.accepted_join(4).is_null());
+    CHECK(roster.refusal(4).is_empty());
 
     SUBCASE("and a session teardown forgets every peer at once") {
-        roster->remember(join(5, "bo", false));
-        roster->refuse(6, "no");
-        roster->clear();
-        NETW_CHECK_EQ(roster->size(), 0);
-        CHECK(roster->refusal(6).is_empty());
+        roster.remember(join(5, "bo", false));
+        roster.refuse(6, "no");
+        roster.clear();
+        NETW_CHECK_EQ(roster.size(), 0);
+        CHECK(roster.refusal(6).is_empty());
     }
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] the roster serializes in peer order"
+    "[Networked][Session][Hosted] the roster serializes in peer order rather "
+    "than the order its book happens to hash to"
 ) {
-    // A backfill and the roster it backfills have to agree about order, and a
-    // hash walk does not.
-    Ref<NetwJoinRoster> roster = make_roster();
-    roster->remember(join(9, "cy", false));
-    roster->remember(join(4, "ana", false));
-    roster->remember(join(7, "bo", false));
+    JoinRoster roster = make_roster();
+    roster.remember(join(9, "cy", false));
+    roster.remember(join(4, "ana", false));
+    roster.remember(join(7, "bo", false));
 
-    const Array joins = roster->accepted_joins();
+    const Array joins = roster.accepted_joins();
     NETW_CHECK_EQ(joins.size(), 3);
     NETW_CHECK_EQ(int(Ref<ResolvedJoin>(joins[0])->get_peer_id()), 4);
     NETW_CHECK_EQ(int(Ref<ResolvedJoin>(joins[1])->get_peer_id()), 7);
     NETW_CHECK_EQ(int(Ref<ResolvedJoin>(joins[2])->get_peer_id()), 9);
-    NETW_CHECK_EQ(roster->serialize_accepted().size(), 3);
+    NETW_CHECK_EQ(roster.serialize_accepted().size(), 3);
 }
 
 } // namespace TestNetwJoinRoster

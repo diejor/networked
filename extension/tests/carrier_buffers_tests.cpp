@@ -11,6 +11,8 @@
 
 #include "netw/carrier_buffers.hpp"
 
+using namespace godot;
+
 namespace TestNetwCarrierBuffers {
 
 using godot::PackedByteArray;

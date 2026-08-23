@@ -19,12 +19,6 @@ func get_scene_manager() -> MultiplayerSceneManager:
 	return api.get_service(MultiplayerSceneManager) as MultiplayerSceneManager if api else null
 
 
-## Returns the [SceneCore] for this session.
-func get_scenes() -> SceneCore:
-	var api := Netw.of(self)
-	return api._scenes if api else null
-
-
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local
 ## client. Dedicated servers return [code]null[/code]; listen-server hosts
 ## can still return a layer because they also render a local client view.
@@ -37,12 +31,12 @@ func get_tp_layer() -> TPLayerAPI:
 	return api.get_service(TPLayerAPI) as TPLayerAPI
 
 
-## Returns the [ClockCore] for this session.
-func get_multiplayer_clock() -> ClockCore:
+## Returns the [NetwClockHandle] for this session.
+func get_multiplayer_clock() -> NetwClockHandle:
 	var api := Netw.of(self)
-	if not api or not api.clock.is_configured():
+	if not api or not api.clock.is_configured:
 		return null
-	return api._clock
+	return api._native_core.clock_handle
 
 
 ## Returns the session service registered for [param type], or

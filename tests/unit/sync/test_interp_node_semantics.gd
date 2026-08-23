@@ -1,5 +1,5 @@
-## Node-truth semantics for [DisplayCore] the display calculus
-## cannot see.
+## Node-truth semantics [method NetwMultiplayerCore.display_pump] and
+## [method NetwMultiplayerCore.display_pump_runtime] cannot see.
 ##
 ## The pure display math (smoothness, lag, dilation, determinism) is proven by
 ## the Tier 0 calculus in [code]tests/unit/interpolation/[/code] against the
@@ -33,10 +33,9 @@ class InterpTarget:
 
 var _tree: MultiplayerTree
 var _clock_node: MultiplayerClock
-var _clock: ClockCore
+var _clock: NetwClockHandle
 var _replication: ReplicationCore
 var _native_core: NetwMultiplayerCore
-var _iface: DisplayCore
 var _player: InterpTarget
 var _visual: Node2D
 var _entity: NetwEntity
@@ -59,11 +58,10 @@ func before_test() -> void:
 	assert(api != null, "test requires NetwMultiplayer")
 	api.set_meta(&"_multiplayer_tree", _tree)
 	api.set_meta(&"_multiplayer_clock", _clock_node)
-	_clock = api._clock
+	_clock = api._native_core.clock_handle
 
 	_replication = _tree.api._replication
 	_native_core = _tree.api._native_core
-	_iface = _tree.api._display
 
 
 func after_test() -> void:
@@ -142,7 +140,7 @@ func test_predicted_chase_moves_visual_toward_live_source() -> void:
 	_bind_route()
 
 	_player.position = P1
-	_iface.pump(1.0 / 60.0)
+	_native_core.display_pump(1.0 / 60.0)
 
 	assert_float(_visual.global_position.x).is_greater(0.0)
 	assert_float(_visual.global_position.x).is_less(P1.x)
@@ -161,7 +159,7 @@ func test_display_role_switches_glide_between_remote_and_predicted() -> void:
 	_entity.interpolation.display_role = (
 			NetwDisplayHandle.DisplayRole.REMOTE
 	)
-	_iface.record(_player, &"position", P1, 1)
+	_record(_player, &"position", P1, 1)
 	_display_at(1, 0, 0.0)
 	assert_float(_visual.global_position.distance_to(P0)) \
 			.override_failure_message(
@@ -224,9 +222,9 @@ func test_demote_flip_resumes_from_rows_recorded_while_predicted() -> void:
 	# Authority rows keep arriving during prediction. The chase display must
 	# ignore them, but they must land in history so a demote hands the remote
 	# pump a warm ring even when no row arrives after the flip.
-	_iface.record(_player, &"position", P1, 1)
-	_iface.record(_player, &"position", P2, 2)
-	var runtime := _iface._runtime_for_handle(_entity.interpolation)
+	_record(_player, &"position", P1, 1)
+	_record(_player, &"position", P2, 2)
+	var runtime := _native_core.display_book.runtime_of(_entity.rid)
 	assert_bool(runtime.states[0].history.is_empty()) \
 			.override_failure_message(
 				"network rows must record into history during prediction",
@@ -259,20 +257,20 @@ func test_demote_flip_seeds_role_offset_on_first_frame() -> void:
 	for frame in 30:
 		_render()
 
-	_iface.record(_player, &"position", P2, 1)
+	_record(_player, &"position", P2, 1)
 	_entity.interpolation.display_role = (
 			NetwDisplayHandle.DisplayRole.REMOTE
 	)
-	var runtime := _iface._runtime_for_handle(_entity.interpolation)
-	var state = runtime.states[0]
-	assert_bool(state.offset.is_armed()).is_true()
+	var runtime := _native_core.display_book.runtime_of(_entity.rid)
+	var track: StringName = runtime.states[0].name
+	assert_bool(runtime.track_stat(track, &"offset_armed")).is_true()
 
 	_display_at(1, 0, 0.0)
-	assert_bool(state.offset.is_armed()) \
+	assert_bool(runtime.track_stat(track, &"offset_armed")) \
 			.override_failure_message(
 				"the role offset must seed on the first frame after a demote",
 			).is_false()
-	assert_bool(state.offset.is_held()).is_true()
+	assert_bool(runtime.track_stat(track, &"offset_held")).is_true()
 
 
 func test_promote_flip_still_clears_history() -> void:
@@ -282,14 +280,14 @@ func test_promote_flip_still_clears_history() -> void:
 	)
 	_bind_route()
 
-	_iface.record(_player, &"position", P0, 0)
-	_iface.record(_player, &"position", P1, 1)
+	_record(_player, &"position", P0, 0)
+	_record(_player, &"position", P1, 1)
 	_display_at(1, 1, 0.5)
 
 	_entity.interpolation.display_role = (
 			NetwDisplayHandle.DisplayRole.PREDICTED
 	)
-	var runtime := _iface._runtime_for_handle(_entity.interpolation)
+	var runtime := _native_core.display_book.runtime_of(_entity.rid)
 	for state in runtime.states:
 		assert_bool(state.history.is_empty()) \
 				.override_failure_message(
@@ -318,7 +316,7 @@ func test_remote_rigidbody_freezes_and_restores_from_handle_role() -> void:
 	entity.interpolation.display_role = (
 			NetwDisplayHandle.DisplayRole.DISABLED
 	)
-	_iface._mark_runtime_dirty(entity.rid)
+	_native_core.display_book.mark_dirty(entity.rid, NetwDisplayDecl.DIRT_RUNTIME)
 	await get_tree().process_frame
 
 	assert_bool(body.freeze).is_false()
@@ -340,7 +338,7 @@ func test_auto_role_disables_a_display_this_peer_holds_authority_over() -> void:
 	auto_free(node)
 	_native_core.liveness_bind_route(51, entity)
 
-	_iface.record(node, &"position", P0, 0)
+	_record(node, &"position", P0, 0)
 
 	assert_int(entity.interpolation.resolved_display_role).is_equal(
 		NetwDisplayHandle.DisplayRole.DISABLED
@@ -368,7 +366,7 @@ func test_auto_role_predicts_a_locally_simulated_entity() -> void:
 	auto_free(node)
 	_native_core.liveness_bind_route(52, entity)
 
-	_iface.record(node, &"position", P0, 0)
+	_record(node, &"position", P0, 0)
 
 	assert_int(entity.interpolation.resolved_display_role).is_equal(
 		NetwDisplayHandle.DisplayRole.PREDICTED
@@ -396,8 +394,8 @@ func test_auto_role_predicts_what_this_peer_steers() -> void:
 	_native_core.liveness_bind_route(53, entity)
 	entity.set_controller(1)
 
-	_iface.record(node, &"position", P0, 0)
-	_iface._mark_role_dirty(entity.rid)
+	_record(node, &"position", P0, 0)
+	_native_core.display_mark_role_dirty(entity.rid)
 
 	assert_bool(entity.is_controlled_locally).is_true()
 	assert_int(entity.interpolation.resolved_display_role).is_equal(
@@ -419,8 +417,8 @@ func test_scriptless_node_via_overlay_interpolates() -> void:
 	auto_free(node)
 	_native_core.liveness_bind_route(33, entity)
 
-	_iface.record(node, &"position", P0, 0)
-	_iface.record(node, &"position", P1, 1)
+	_record(node, &"position", P0, 0)
+	_record(node, &"position", P1, 1)
 	_display_at(1, 1, 0.5)
 
 	assert_vector(node.position).is_equal_approx(
@@ -438,9 +436,9 @@ func test_unconfigured_record_is_a_noop() -> void:
 	auto_free(node)
 	_native_core.liveness_bind_route(31, entity)
 
-	_iface.record(node, &"position", P1, 0)
+	_record(node, &"position", P1, 0)
 
-	assert_that(_iface._runtime_for_handle(entity.interpolation)).is_null()
+	assert_that(_native_core.display_book.runtime_of(entity.rid)).is_null()
 
 
 func test_two_nodes_interpolating_position_do_not_collide() -> void:
@@ -465,10 +463,10 @@ func test_two_nodes_interpolating_position_do_not_collide() -> void:
 	auto_free(player)
 	_native_core.liveness_bind_route(21, entity)
 
-	_iface.record(a, &"position", P0, 0)
-	_iface.record(b, &"position", P2, 0)
+	_record(a, &"position", P0, 0)
+	_record(b, &"position", P2, 0)
 
-	var runtime := _iface._runtime_for_handle(entity.interpolation)
+	var runtime := _native_core.display_book.runtime_of(entity.rid)
 	assert_that(runtime).is_not_null()
 	var sources: Array = []
 	for state in runtime.states:
@@ -494,8 +492,8 @@ func test_slerp_interpolates_quaternion_rotation() -> void:
 
 	var q0 := Quaternion.IDENTITY
 	var q1 := Quaternion(Vector3.UP, PI / 2.0)
-	_iface.record(node, &"quaternion", q0, 0)
-	_iface.record(node, &"quaternion", q1, 1)
+	_record(node, &"quaternion", q0, 0)
+	_record(node, &"quaternion", q1, 1)
 	_display_at(1, 1, 0.5)
 
 	assert_bool(node.quaternion.is_equal_approx(q0.slerp(q1, 0.5))).is_true()
@@ -508,11 +506,11 @@ func test_runtime_rebuild_preserves_interpolation() -> void:
 	)
 	_bind_route()
 
-	_iface._mark_runtime_dirty(_entity.rid)
+	_native_core.display_book.mark_dirty(_entity.rid, NetwDisplayDecl.DIRT_RUNTIME)
 	await get_tree().process_frame
 
-	_iface.record(_player, &"position", P0, 0)
-	_iface.record(_player, &"position", P1, 1)
+	_record(_player, &"position", P0, 0)
+	_record(_player, &"position", P1, 1)
 	_display_at(1, 1, 0.5)
 
 	assert_vector(_visual.global_position).is_equal_approx(
@@ -563,11 +561,11 @@ func test_predicted_correction_snap_is_absorbed_continuously() -> void:
 func test_predicted_auto_smooth_time_tracks_clock_ticktime() -> void:
 	_spawn_predicted()
 	_entity.interpolation.predicted_smooth_time = 0.0
-	var runtime := _iface._runtime_for_handle(_entity.interpolation)
+	var runtime := _native_core.display_book.runtime_of(_entity.rid)
 
 	_clock.tickrate = 15
 	assert_float(
-		_iface._predicted_effective_smooth_time(
+		_native_core.display_chase_smooth_time(
 			runtime,
 			NetwDisplayTiming.capture(_clock, 0.0),
 		),
@@ -575,7 +573,7 @@ func test_predicted_auto_smooth_time_tracks_clock_ticktime() -> void:
 
 	_clock.tickrate = 60
 	assert_float(
-		_iface._predicted_effective_smooth_time(
+		_native_core.display_chase_smooth_time(
 			runtime,
 			NetwDisplayTiming.capture(_clock, 0.0),
 		),
@@ -589,8 +587,8 @@ func test_visual_smoothed_position_survives_moving_parent() -> void:
 	)
 	_bind_route()
 
-	_iface.record(_player, &"position", P0, 0)
-	_iface.record(_player, &"position", P1, 1)
+	_record(_player, &"position", P0, 0)
+	_record(_player, &"position", P1, 1)
 
 	# Moving the body must not drag the smoothed channel, since it is written
 	# in global space every frame.
@@ -610,8 +608,8 @@ func test_non_interpolated_channel_inherits_from_body() -> void:
 	)
 	_bind_route()
 
-	_iface.record(_player, &"position", P0, 0)
-	_iface.record(_player, &"position", P1, 1)
+	_record(_player, &"position", P0, 0)
+	_record(_player, &"position", P1, 1)
 
 	# The visual stays parented, so an unsmoothed channel still inherits from
 	# the body instead of being severed by top_level.
@@ -639,9 +637,9 @@ func test_bracketed_predicted_equals_remote_pipeline_fed_locally() -> void:
 
 	# The local after_tick sampler feeds the same resample the remote role uses.
 	_player.position = P0
-	_iface._on_clock_tick(0.0, 0)
+	_native_core.display_on_clock_tick(0.0, 0)
 	_player.position = P1
-	_iface._on_clock_tick(0.0, 1)
+	_native_core.display_on_clock_tick(0.0, 1)
 
 	_display_at(1, 0, 0.5)
 
@@ -684,16 +682,37 @@ func _bind_route() -> void:
 	_native_core.liveness_bind_route(7, _entity)
 
 
+# Pumps the entity's own runtime directly, one call per invocation, since
+# [method NetwMultiplayerCore.display_pump] dedups by engine process frame
+# and this helper is called several times within one frame.
 func _render(delta: float = 1.0 / 60.0) -> void:
-	_iface._last_update_frame = -1
-	_iface.pump(delta)
+	var runtime := _native_core.display_book.runtime_of(_entity.rid)
+	var timing := NetwDisplayTiming.capture(_clock, delta)
+	_native_core.display_pump_runtime(
+		runtime,
+		timing,
+		_native_core.display_book.stats,
+	)
 
 
 func _display_at(tick: int, display_offset: int, factor: float) -> void:
 	_clock.tick = tick
 	_clock.display_offset = display_offset
-	_clock.tick_factor = factor
-	_iface.pump(0.0)
+	_clock.tick_factor_override = factor
+	_native_core.display_pump(0.0)
+
+
+func _record(
+		node: Node,
+		target_property: StringName,
+		value: Variant,
+		tick: int,
+) -> void:
+	var spec := NetwScriptModel.get_node_property_interpolator(
+		node,
+		target_property,
+	)
+	_native_core.display_record(node, target_property, value, tick, spec, false)
 
 
 func _dispatch_property(property: StringName, value: Variant) -> void:

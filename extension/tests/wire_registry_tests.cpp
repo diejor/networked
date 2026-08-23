@@ -2,6 +2,8 @@
 
 #include "netw/wire/registry.hpp"
 
+using namespace godot;
+
 namespace TestNetwWireRegistry {
 
 using netw::wire::ChannelDecl;

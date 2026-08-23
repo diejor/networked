@@ -1,13 +1,5 @@
 #pragma once
 
-/* The receive-side comparison for one predicted transition.
- *
- * State is indexed by the declaration's field table. Missing values have a
- * presence column, so absence never shares a representation with `null`.
- * Comparison produces one record and mutates no body. The shell may act on the
- * verdict later, while a shell-less law reads the same record directly.
- */
-
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
@@ -18,22 +10,20 @@
 
 namespace netw {
 
-using namespace godot;
-
 namespace predict {
 
 constexpr int METER_SATURATED = 0x7FFFFFFF;
 
 struct StateRow {
-    LocalVector<Variant> values;
-    LocalVector<uint8_t> present;
+    godot::LocalVector<godot::Variant> values;
+    godot::LocalVector<uint8_t> present;
 
     StateRow() = default;
     StateRow(const StateRow &p_other);
     StateRow &operator=(const StateRow &p_other);
 
     void resize(int p_count);
-    void set(int p_field, const Variant &p_value);
+    void set(int p_field, const godot::Variant &p_value);
     bool has(int p_field) const;
     bool any() const;
 };
@@ -67,7 +57,8 @@ struct StateVerdict {
     ExactVerdict exact = ExactVerdict::UNJUDGED;
     Domain domain = Domain::OUT_OF_DOMAIN;
     Attribution attribution = Attribution::UNKNOWN;
-    LocalVector<double> field_errors;
+    godot::LocalVector<double> field_errors;
+    godot::LocalVector<double> all_field_errors;
     double divergence = 0.0;
     int meter = 0;
     bool compared = false;
@@ -83,7 +74,11 @@ struct CompareStats {
     int64_t first_divergent_transition = -1;
 };
 
-double value_error(const Variant &p_left, const Variant &p_right, bool p_angle);
+double value_error(
+    const godot::Variant &p_left,
+    const godot::Variant &p_right,
+    bool p_angle
+);
 
 Attribution attribute(
     bool p_pre_equal,
@@ -111,8 +106,8 @@ StateVerdict compare_state(
     int64_t p_transition,
     const StateRow &p_predicted,
     const StateRow &p_authority,
-    const LocalVector<double> &p_correction_tolerances,
-    const LocalVector<double> &p_meter_tolerances,
+    const godot::LocalVector<double> &p_correction_tolerances,
+    const godot::LocalVector<double> &p_meter_tolerances,
     double p_fallback_epsilon,
     bool p_stream_reconstructed
 );

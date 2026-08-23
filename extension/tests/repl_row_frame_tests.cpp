@@ -1,16 +1,11 @@
-// A masked row on the wire and back.
-//
-// The mask is load-bearing rather than advisory: a reader takes bits only where
-// the mask says to, so a mask the two sides disagree about does not mislabel a
-// column, it desynchronizes the stream and every column after it. Most of these
-// exist to pin that.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
 
 #include "netw/repl/row_frame.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
+
+using namespace godot;
 
 namespace TestNetwReplRowFrame {
 
@@ -86,7 +81,6 @@ TEST_CASE(
     const WirePlan plan = triple();
     const CodeRow fresh = filled(plan, 11, 22, 33);
 
-    // Column 1 alone moved.
     const PackedByteArray bytes = write_row_frame(header(0b010), plan, fresh);
     REQUIRE(bytes.size() > 0);
 
@@ -94,9 +88,6 @@ TEST_CASE(
     RowFrameHeader got;
     REQUIRE(read_row_frame(bytes, plan, got, held));
 
-    // The masked column takes the sender's value and the others keep the
-    // receiver's, which is what makes a masked frame applicable to the row a
-    // receiver already holds rather than a whole-row replacement.
     NETW_CHECK_EQ(held.read(plan.column(0), 0), 7);
     NETW_CHECK_EQ(held.read(plan.column(1), 0), 22);
     NETW_CHECK_EQ(held.read(plan.column(2), 0), 9);
@@ -112,8 +103,6 @@ TEST_CASE(
         = write_row_frame(header(plan.full_mask()), plan, row).size();
     const int64_t one = write_row_frame(header(0b001), plan, row).size();
 
-    // The masked lane's entire reason. If a narrower mask cost the same bytes
-    // there would be nothing to gain by computing one.
     CHECK(one < whole);
 }
 
@@ -123,8 +112,6 @@ TEST_CASE(
     const WirePlan plan = triple();
     const CodeRow row = filled(plan, 11, 22, 33);
 
-    // A caught-up peer costs the pass nothing, so there is no such thing as a
-    // frame carrying no columns.
     NETW_CHECK_EQ(write_row_frame(header(0), plan, row).size(), 0);
 
     RowFrameHeader got;
@@ -138,8 +125,6 @@ TEST_CASE(
     const WirePlan plan = triple();
     const CodeRow row = filled(plan, 11, 22, 33);
 
-    // Bit 3 is past this plan's three columns. Writing it would produce a
-    // frame whose reader walks off the end of the plan.
     NETW_CHECK_EQ(write_row_frame(header(0b1000), plan, row).size(), 0);
 }
 
@@ -152,8 +137,6 @@ TEST_CASE(
     REQUIRE(bytes.size() > 0);
     bytes.push_back(0xAB);
 
-    // A reader that stopped early would accept a frame carrying bytes it never
-    // accounted for, and a sender could hide anything after a short row.
     RowFrameHeader got;
     CodeRow into = CodeRow::for_plan(plan);
     CHECK_FALSE(read_row_frame(bytes, plan, got, into));
@@ -178,8 +161,6 @@ TEST_CASE(
     CodeRow into = CodeRow::for_plan(plan);
     CHECK_FALSE(read_row_frame(cut, plan, got, into));
 
-    // And the row it was handed is untouched, so a refused frame cannot leave
-    // a receiver holding half a sender's state.
     CHECK(into.equals(CodeRow::for_plan(plan)));
 }
 
@@ -197,8 +178,6 @@ TEST_CASE("[Networked][Repl][Hosted] a plain frame round trips every column") {
     NETW_CHECK_EQ(got.tick, 41);
     CHECK(into.equals(row));
 
-    // A plain frame carries no mask, so the reader answers the plan's full one
-    // rather than leaving a caller to guess what it holds.
     NETW_CHECK_EQ(got.mask, plan.full_mask());
 }
 
@@ -213,10 +192,6 @@ TEST_CASE(
         = write_row_frame(header(plan.full_mask()), plan, row).size();
     const int64_t plain = write_plain_frame(header(0), plan, row).size();
 
-    // The only reason a second frame shape exists. A plain lane sends every
-    // column to everyone, so the mask would be the same full word on every
-    // frame of the commonest lane, and paying for it there is the saving worth
-    // a second shape.
     CHECK(plain <= masked);
 }
 
@@ -249,15 +224,10 @@ TEST_CASE(
     const CodeRow row = filled(plan, 11, 22, 33);
     const PackedByteArray plain = write_plain_frame(header(0), plan, row);
 
-    // Which shape a reader is holding is decided by the channel, and reading a
-    // plain frame as a masked one takes the first columns' bits as a mask. It
-    // must not answer a row: a shape confusion that produced values would be a
-    // desynchronization nobody could see.
     RowFrameHeader got;
     CodeRow into = CodeRow::for_plan(plan);
     const bool read_as_masked = read_row_frame(plain, plan, got, into);
     if (read_as_masked) {
-        // If it parses at all it must not claim to be the row that was sent.
         CHECK_FALSE(into.equals(row));
     }
 }
@@ -293,8 +263,6 @@ TEST_CASE(
     NETW_CHECK_EQ(got.route, 300);
     NETW_CHECK_EQ(got.tick, 41);
     REQUIRE(read.size() == 3);
-    // Ages ride, ticks arrive. A reader that answered ages would hand the
-    // caller a number that means nothing outside this frame.
     for (uint32_t at = 0; at < read.size(); ++at) {
         NETW_CHECK_EQ(read[at].tick, samples[at].tick);
         CHECK(read[at].row.equals(samples[at].row));
@@ -351,8 +319,6 @@ TEST_CASE(
     PackedByteArray shorter = bytes;
     shorter.resize(bytes.size() - 1);
     CHECK_FALSE(read_window_frame(shorter, plan, got, read));
-    // A refusal answers nothing, so a caller cannot step the ticks it did read
-    // before the frame ran out.
     NETW_CHECK_EQ(read.size(), 0);
 }
 

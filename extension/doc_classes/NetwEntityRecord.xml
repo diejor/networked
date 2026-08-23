@@ -31,7 +31,7 @@
 			<param index="0" name="stage" type="int" />
 			<description>
 				Moves the record to [param stage], answering [code]false[/code] and changing nothing when the stage table does not admit the edge, so a caller decides for itself whether a refusal is a bug or a duplicate it can drop.
-				The one stage mutator. Legality is [NetwEntityStage]'s table and this class has no second opinion about it: a stage is never re-entered, the terminal stage is terminal, and a reparent is not an edge at all because a record keeps its stage across a move.
+				The one stage mutator. Legality is the stage table's alone and this class has no second opinion about it: a stage is never re-entered, the terminal stage is terminal, and a reparent is not an edge at all because a record keeps its stage across a move.
 			</description>
 		</method>
 		<method name="finish_teardown">
@@ -64,7 +64,7 @@
 		<method name="get_stage" qualifiers="const">
 			<return type="int" />
 			<description>
-				Returns where the record is in its life, as a [NetwEntityStage] value. A fresh record is unbound.
+				Returns where the record is in its life, as an [enum NetwEntity.Stage] value. A fresh record is [constant NetwEntity.STAGE_UNBOUND].
 			</description>
 		</method>
 		<method name="has_part_factory" qualifiers="static">

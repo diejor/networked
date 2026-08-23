@@ -23,6 +23,59 @@ const LeavePolicy := NetwMultiplayer.LeavePolicy
 const PerceptionPolicy := NetwMultiplayer.PerceptionPolicy
 
 var _entity_ref: WeakRef
+## Fluent declarative builder returned by [method Netw.configure_interest].
+class Config:
+	extends RefCounted
+
+	var _handle: NetwInterestHandle
+	var _layers: Array[StringName] = []
+
+
+	func _init(handle: NetwInterestHandle) -> void:
+		_handle = handle
+
+
+	## Adds [param layer_id], optionally overrides its leave and perception
+	## policies, and returns this builder.
+	func layer(
+			layer_id: StringName,
+			leave_policy: Variant = null,
+			perception_policy: Variant = null,
+	) -> Config:
+		_handle.join(layer_id)
+		if leave_policy != null:
+			assert(
+				leave_policy is int,
+				"NetwInterestHandle.Config.layer: leave_policy must be a LeavePolicy",
+			)
+			_handle.on_leave_policy(layer_id, int(leave_policy))
+		if perception_policy != null:
+			assert(
+				perception_policy is int,
+				"NetwInterestHandle.Config.layer: perception_policy must be a PerceptionPolicy",
+			)
+			_handle.on_perception_policy(layer_id, int(perception_policy))
+		if layer_id not in _layers:
+			_layers.append(layer_id)
+		return self
+
+
+	## Registers [param callback] for enter events on every layer already added
+	## through [method layer].
+	func on_enter(callback: Callable) -> Config:
+		for layer_id in _layers:
+			_handle.on_enter(layer_id, callback)
+		return self
+
+
+	## Registers [param callback] for leave events on every layer already added
+	## through [method layer].
+	func on_leave(callback: Callable) -> Config:
+		for layer_id in _layers:
+			_handle.on_leave(layer_id, callback)
+		return self
+
+
 var _service_ref: WeakRef
 var _decl := NetwInterestDecl.new()
 var _enter_callbacks: Dictionary[StringName, Array] = { }
@@ -176,10 +229,10 @@ func on_perception_policy(
 ) -> NetwInterestHandle:
 	if not _decl.set_perception_policy(layer_id, policy, custom_callback):
 		return self
-	var service := _service()
+	var api := _flat_api()
 	var entity := _entity()
-	if service and entity:
-		service._reapply_local_perception(entity)
+	if api and entity:
+		api._native_core.interest_reapply_perception(entity)
 	return self
 
 
@@ -241,7 +294,7 @@ func _activate() -> void:
 		api = NetwMultiplayer.of(entity.owner)
 	if not api:
 		return
-	_service_ref = weakref(api._interest)
+	_service_ref = weakref(api)
 	for layer_id: StringName in _decl.labels():
 		var layer := api.layer_create(layer_id)
 		if api.is_server():
@@ -282,16 +335,9 @@ func _entity() -> NetwEntity:
 	return _entity_ref.get_ref() as NetwEntity if _entity_ref else null
 
 
-# Returns the active session service while it is alive.
-func _service() -> InterestCore:
-	return _service_ref.get_ref() as InterestCore \
-	if _service_ref else null
-
-
-# Returns the flat session api behind the compatibility service.
+# Returns the session this handle was activated against, while it is alive.
 func _flat_api() -> NetwMultiplayer:
-	var service := _service()
-	return service._api() if service else null
+	return _service_ref.get_ref() as NetwMultiplayer if _service_ref else null
 
 
 # Validates a callback at registration time.

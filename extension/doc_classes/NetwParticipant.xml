@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwParticipant" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Live handle for one accepted session player.
+	</brief_description>
+	<description>
+		A view over one peer's row in the session, holding nothing but the peer id: every member is read back through the session when it is asked for, so a participant is correct after a rehost, a scene rebuild or a respawn without anything re-issuing it. One peer has one participant, so [code]==[/code] answers "the same player".
+		[member current_scene] tracks the peer's primary scene membership independently of any spawned player node, which is what lets a session seat a player before it has a body and keep the seat after the body is gone.
+		[codeblock]
+		var participant := api.peer_get_participant(peer_id)
+		if participant.identity:
+		    greet(participant.username)
+		participant.move_to(arena)
+		[/codeblock]
+		Minted by [method NetwMultiplayerCore.participant_ensure] and never by a caller: the session mints the row the first time a peer is asked about, so two reads of one peer answer the same object.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="move_to">
+			<return type="void" />
+			<param index="0" name="dest" type="Variant" />
+			<description>
+				Moves this participant into the [NetwSceneHandle] [param dest] without touching any player node.
+				The seat and both admission boundaries move together in [method NetwMultiplayerCore.participant_move_seat], so a participant is never seated in one scene while admitted to another. A move into the scene already held changes nothing, and a destination that resolves to no scene entity is refused.
+				[b][br][br]Server Only.[/b]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="arg_values" type="Array" setter="" getter="get_arg_values" default="[]">
+			The typed join arguments accepted for this peer. See [member ResolvedJoin.arg_values].
+		</member>
+		<member name="current_scene" type="Variant" setter="set_current_scene" getter="get_current_scene">
+			The [NetwSceneHandle] for this peer's primary scene membership, or [code]null[/code] outside every scene.
+			A participant is admitted to one scene at a time, so this is a scalar even though the mechanism underneath it is not. The seat is held as the scene entity's identity rather than as a handle, so membership survives the container being rebuilt and never pins a freed node, and the handle read here is minted from that identity on demand.
+			Assigning it records membership without admitting anyone. [method move_to] is the verb that moves the admission edge too, and it is what a caller wanting a participant to actually arrive uses.
+			Answered as a [Variant] for the reason [member NetwEntity.scene] is: the handle is the kit's and the session may not name its type.
+		</member>
+		<member name="identity" type="NetwIdentity" setter="" getter="get_identity">
+			The validated auth identity for this peer, or [code]null[/code].
+			Present only when the session has an auth provider, and never part of the replicated roster, which is what [ResolvedJoin] is. Read through the reader installed by [method NetwMultiplayerCore.set_identity_reader], because auth buckets are keyed by a GDScript type and the session cannot name one.
+		</member>
+		<member name="is_debug" type="bool" setter="" getter="get_is_debug" default="false">
+			Whether the accepted join was a debug join. See [member ResolvedJoin.is_debug].
+		</member>
+		<member name="join" type="ResolvedJoin" setter="" getter="get_join">
+			The accepted join record for this peer, or [code]null[/code] before the join is accepted.
+			Read through [method NetwMultiplayerCore.session_accepted_join] on every access rather than held, so a join enriched after the participant was minted is answered by the participant that already exists.
+		</member>
+		<member name="peer_id" type="int" setter="" getter="get_peer_id" default="0">
+			The peer this participant represents. The one piece of state it holds, because everything else is a read.
+		</member>
+		<member name="username" type="StringName" setter="" getter="get_username">
+			The accepted username for this peer, empty before the join is accepted. See [member ResolvedJoin.username].
+		</member>
+	</members>
+	<signals>
+		<signal name="scene_changed">
+			<param index="0" name="from" type="Variant" />
+			<param index="1" name="to" type="Variant" />
+			<description>
+				Emitted when [member current_scene] changes, carrying the [NetwSceneHandle] left and the one arrived in, either of which may be [code]null[/code].
+				Emitted by the seat verbs themselves rather than by whoever called them, so a seat written by a move, by a release and by a session teardown all announce the same way. A silent write is the failure this closes: a seat that changed without announcing leaves every viewer showing the previous scene.
+				The session republishes the local participant's edge as [signal NetwMultiplayer.local_scene_changed], rebinding it as the local row comes and goes, so a game that only cares about this peer listens there and never has to hold a participant to do it.
+			</description>
+		</signal>
+	</signals>
+</class>

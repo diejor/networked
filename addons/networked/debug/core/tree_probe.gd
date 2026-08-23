@@ -122,7 +122,7 @@ func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 
 	# Priority 2: Session fallback (Tree Root)
 	var snap := NetwNodeSnapshot.from_node(mt)
-	var scenes := mt.api._scenes if mt.api else null
+	var scenes := mt.api
 
 	# Manually enrich the tree root's snapshot with service-level data.
 	# This keeps the MultiplayerTree core clean while providing rich context.
@@ -149,11 +149,11 @@ func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 
 # One label per live scene, not per stem. Several instances of one level share
 # a stem, so reading the keyed map would report a session of five arenas as one.
-func _live_scene_labels(scenes: SceneCore) -> Array:
+func _live_scene_labels(scenes: NetwMultiplayer) -> Array:
 	var out: Array = []
 	if scenes == null:
 		return out
-	for scene: Node in scenes.live_scenes():
+	for scene: Node in scenes._scene_live_nodes():
 		if is_instance_valid(scene) and is_instance_valid(_scene_level(scene)):
 			out.append(StringName(_scene_level(scene).name))
 	return out
@@ -550,12 +550,12 @@ func _disconnect_all() -> void:
 		if clock and clock.pong_received.is_connected(_on_clock_pong):
 			clock.pong_received.disconnect(_on_clock_pong)
 
-		var scenes := mt.api._scenes if mt.api else null
+		var scenes := mt.api
 		if scenes:
-			if scenes.scene_spawned.is_connected(_on_scene_spawned):
-				scenes.scene_spawned.disconnect(_on_scene_spawned)
-			if scenes.scene_despawned.is_connected(_on_scene_despawned):
-				scenes.scene_despawned.disconnect(_on_scene_despawned)
+			if scenes._scene_spawned.is_connected(_on_scene_spawned):
+				scenes._scene_spawned.disconnect(_on_scene_spawned)
+			if scenes._scene_despawned.is_connected(_on_scene_despawned):
+				scenes._scene_despawned.disconnect(_on_scene_despawned)
 
 
 func _on_mt_peer_connected(id: int) -> void:
@@ -595,14 +595,14 @@ func _on_configured() -> void:
 	if clock:
 		clock.pong_received.connect(_on_clock_pong)
 
-	var scenes := mt.api._scenes if mt.api else null
+	var scenes := mt.api
 	if scenes:
-		scenes.scene_spawned.connect(_on_scene_spawned)
-		scenes.scene_despawned.connect(_on_scene_despawned)
+		scenes._scene_spawned.connect(_on_scene_spawned)
+		scenes._scene_despawned.connect(_on_scene_despawned)
 
 		# Retroactively hook scenes that spawned before this context was ready
 		# (e.g. ON_STARTUP).
-		for scene: Node in scenes.scenes.values():
+		for scene: Node in scenes._scene_nodes_by_label().values():
 			if not is_instance_valid(scene) or _hooked_scenes.has(scene):
 				continue
 			_scene_tokens[scene] = null # no causal token

@@ -1,4 +1,4 @@
-## Typed registration payload for the [SessionCore] session machine.
+## Typed registration payload for the [NetwMultiplayer] session machine.
 ##
 ## A [MultiplayerTree] snapshots its session exports into one of these and hands
 ## it to [method NetwMultiplayer.service_install]. The session dispatches on the
@@ -41,6 +41,7 @@ extends NetwObjectConfig
 ## Optional latency and loss simulation applied to this session's peer.
 ##
 ## Authored beside [member transport] because it is tuning for the same
-## connection. [SessionCore] wraps the built peer with it, so a session applies
-## what it was configured with whether or not a [MultiplayerTree] owns it.
+## connection. [NetwMultiplayer] wraps the built peer with it, so a session
+## applies what it was configured with whether or not a [MultiplayerTree]
+## owns it.
 @export var link_conditions: NetwLinkConditions

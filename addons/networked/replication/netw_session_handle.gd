@@ -28,13 +28,13 @@ extends RefCounted
 ## [MultiplayerTree] registers rather than making every reader null-check.
 var config: NetwSessionConfig:
 	get:
-		return _core.config
+		return _api().session_config
 
 ## The game-build tag admission gates on, from
 ## [member NetwSessionConfig.app_id]. Empty disables the gate.
 var app_id: StringName:
 	get:
-		return _core.app_id
+		return _api().session_app_id
 
 ## The player cap this session advertises, zero while it is not hosting.
 ##
@@ -43,15 +43,22 @@ var app_id: StringName:
 ## number is a session fact rather than a re-reading of the host configuration.
 var advertised_max_players: int:
 	get:
-		return _core.advertised_max_players
+		return _api().session_advertised_max_players
 	set(value):
-		_core.advertised_max_players = value
+		_api().session_advertised_max_players = value
 
-var _core: SessionCore
+# The api this view reads. A weakref because the api holds this handle
+# strongly and both are reference counted.
+var _api_ref: WeakRef
 
 
-func _init(core: SessionCore) -> void:
-	_core = core
+func _init(api: NetwMultiplayer) -> void:
+	_api_ref = weakref(api)
+
+
+func _api() -> NetwMultiplayer:
+	return _api_ref.get_ref() as NetwMultiplayer
+
 
 #region ── Bring-up ────────────────────────────────────────────────────────────
 
@@ -60,25 +67,27 @@ func _init(core: SessionCore) -> void:
 ##
 ## Bring-up prepares for its caller, so this is the verb a flow that opens its
 ## own peer calls before assigning it. A client submits the prepared payload on
-## reaching [constant SessionCore.State.ONLINE]; a host holds it until an
-## explicit [method submit_join]. See [method SessionCore.prepare_join].
+## reaching [constant NetwMultiplayer.SessionState.ONLINE]; a host holds it
+## until an explicit [method submit_join]. See
+## [method NetwMultiplayer.session_prepare_join].
 ##
 ## [br][br][b]Player request.[/b]
 func prepare_join(join_payload: JoinPayload) -> Error:
-	return await _core.prepare_join(join_payload)
+	return await _api().session_prepare_join(join_payload)
 
 
 ## Submits [param join_payload] to server authority over the session's join
 ## channel.
 ##
-## A client submits its prepared payload automatically on reaching
-## [constant SessionCore.State.ONLINE], so this is the verb a rejoin or a custom
-## connect flow uses when the peer is already online and only the identity is
-## being (re)sent. See [method SessionCore.submit_join].
+## A client submits its prepared payload automatically on reaching [constant
+## NetwMultiplayer.SessionState.ONLINE], so this is the verb a rejoin or a
+## custom connect flow uses when the peer is already online and only the
+## identity is being (re)sent. See
+## [method NetwMultiplayer.session_submit_join].
 ##
 ## [br][br][b]Player request.[/b]
 func submit_join(join_payload: JoinPayload) -> void:
-	_core.submit_join(join_payload)
+	_api().session_submit_join(join_payload)
 
 #endregion
 
@@ -87,7 +96,7 @@ func submit_join(join_payload: JoinPayload) -> void:
 ## Saves game state, closes the multiplayer peer, and waits for the server to
 ## acknowledge leaving.
 func leave() -> void:
-	await _core.leave()
+	await _api().session_leave()
 
 
 ## Asks the server for permission to leave.
@@ -96,18 +105,18 @@ func leave() -> void:
 ## whether to honor it.
 ## [br][br][b]Player request.[/b]
 func request_leave(reason: String = "") -> void:
-	_core.request_leave(reason)
+	_api().session_request_leave(reason)
 
 
 ## Notifies all clients that the server is shutting down.
 ##
 ## Clients receive [signal NetwMultiplayer.server_disconnecting]. The notice
 ## rides [constant NetwFrameEnvelope.Channel.SESSION_SHUTDOWN] on
-## [method SessionCore.notify_shutdown], so a root-installed session with no
-## [MultiplayerTree] warns its clients through its own verb.
+## [method NetwMultiplayer.session_notify_shutdown], so a root-installed
+## session with no [MultiplayerTree] warns its clients through its own verb.
 ## [br][br][b]Server Only.[/b]
 func notify_shutdown(reason: String = "") -> void:
-	_core.notify_shutdown(reason)
+	_api().session_notify_shutdown(reason)
 
 #endregion
 
@@ -119,7 +128,7 @@ func notify_shutdown(reason: String = "") -> void:
 ## [signal NetwMultiplayer.tree_paused].
 ## [br][br][b]Server Only.[/b]
 func pause(reason: String = "") -> void:
-	_core.pause(reason)
+	_api().session_pause(reason)
 
 
 ## Unpauses the game on every peer via [code]get_tree().paused = false[/code].
@@ -127,7 +136,7 @@ func pause(reason: String = "") -> void:
 ## Every peer receives [signal NetwMultiplayer.tree_unpaused].
 ## [br][br][b]Server Only.[/b]
 func unpause() -> void:
-	_core.unpause()
+	_api().session_unpause()
 
 #endregion
 
@@ -136,17 +145,17 @@ func unpause() -> void:
 ## Overrides the join admission handler for this session, which decides whether
 ## an arriving [JoinPayload] is admitted and quantizes what it carries.
 func set_join_handler(handler: Callable, quantizers: Array = []) -> void:
-	_core.set_join_handler(handler, quantizers)
+	_api().session_set_join_handler(handler, quantizers)
 
 
 ## Overrides the [NetwAuthFlow] this session authenticates arriving peers with.
 func set_auth_flow(flow: NetwAuthFlow) -> void:
-	_core.set_auth_flow(flow)
+	_api().session_set_auth_flow(flow)
 
 
 ## Overrides the provider that answers a probe with this session's
 ## [NetwServerInfo], so a browser reads the host's own advertised state.
 func set_server_info_provider(provider: Callable) -> void:
-	_core.set_server_info_provider(provider)
+	_api().session_set_server_info_provider(provider)
 
 #endregion

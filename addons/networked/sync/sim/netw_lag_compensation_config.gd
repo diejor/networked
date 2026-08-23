@@ -1,4 +1,4 @@
-## Typed registration payload for the [LagCompCore] engine.
+## Typed registration payload for the [NetwMultiplayer] engine.
 ##
 ## A [LagCompensation] node snapshots its exports into one of these and hands it
 ## to [method NetwMultiplayer.service_install]. The session dispatches on the

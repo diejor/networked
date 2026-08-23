@@ -6,42 +6,34 @@
 
 namespace netw {
 
-using namespace godot;
-
-class NetwSnapshotBook : public RefCounted {
-    GDCLASS(NetwSnapshotBook, RefCounted)
-
-private:
+class SnapshotBook {
     struct Column {
-        StringName property;
+        godot::StringName property;
         double interval = 0.0;
         double accum = 0.0;
     };
 
-    LocalVector<Column> columns;
-    Dictionary last_flushed;
+    godot::LocalVector<Column> columns;
+    godot::Dictionary last_flushed;
     double default_interval = 0.0;
 
-    int index_of(const StringName &property) const;
-
-protected:
-    static void _bind_methods();
+    int index_of(const godot::StringName &property) const;
 
 public:
     void set_default_interval(double value);
     double get_default_interval() const;
 
-    void declare(const StringName &property, double interval);
+    void declare(const godot::StringName &property, double interval);
     bool is_empty() const;
-    Array properties() const;
+    godot::Array properties() const;
 
-    Array advance(double delta);
+    godot::Array advance(double delta);
 
-    Dictionary changed(const Dictionary &current) const;
-    bool differs(const Dictionary &current) const;
+    godot::Dictionary changed(const godot::Dictionary &current) const;
+    bool differs(const godot::Dictionary &current) const;
 
-    void commit(const Dictionary &values);
-    void adopt(const Dictionary &values);
+    void commit(const godot::Dictionary &values);
+    void adopt(const godot::Dictionary &values);
 };
 
 } // namespace netw

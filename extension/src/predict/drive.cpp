@@ -4,6 +4,8 @@
 
 #include "netw/log.hpp"
 
+using namespace godot;
+
 namespace netw {
 
 namespace predict {

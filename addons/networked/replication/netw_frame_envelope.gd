@@ -54,7 +54,7 @@ const CARRIER_MAGIC_UNRELIABLE_ACKED := NetwCarrierFrame.MAGIC_UNRELIABLE_ACKED
 ##
 ## [constant Channel.SYNC] and [constant Channel.SYNC_DELTA] are the per-tick
 ## sync carriers, pumped together every
-## [signal ClockCore.after_tick]. [constant Channel.CALL] and
+## [signal NetwMultiplayer.after_tick]. [constant Channel.CALL] and
 ## [constant Channel.REPLY] carry entity RPCs and their transaction replies.
 ## [constant Channel.SIGNAL] and [constant Channel.PROPERTY_SYNC] carry
 ## on-demand variable and signal replication. [constant Channel.ACTION]
@@ -261,23 +261,7 @@ enum Channel {
 
 
 static func pack(route: int, comp: int, channel: Channel, payload: PackedByteArray, path: String = "") -> PackedByteArray:
-	var w := NetwBitBufferWriter.new()
-	NetwCodec.put_varint(w, route)
-	w.put_aligned_u8(comp)
-	w.put_aligned_u8(channel)
-
-	var final_payload := payload
-	if comp == 255:
-		var path_bytes := path.to_utf8_buffer()
-		var pw := NetwBitBufferWriter.new()
-		NetwCodec.put_varint(pw, path_bytes.size())
-		pw.put_aligned_bytes(path_bytes)
-		pw.put_aligned_bytes(payload)
-		final_payload = pw.to_bytes()
-
-	NetwCodec.put_varint(w, final_payload.size())
-	w.put_aligned_bytes(final_payload)
-	return w.to_bytes()
+	return NetwMultiplayerCore.frame_pack(route, comp, channel, payload, path)
 
 
 static func unpack_next(r: NetwBitBufferReader) -> Dictionary:

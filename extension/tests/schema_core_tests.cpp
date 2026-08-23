@@ -1,18 +1,8 @@
-/* Declaration laws for the column list two peers must agree on.
- *
- * The flat RID surface is proven through NetwMultiplayer's own schema verbs by
- * the carried GdUnit suites, which reach it the way a caller does. What is
- * proven here is the half no caller reaches: the record-facing statics a
- * declaration with no session is built through, the shape-hash formula that is
- * wire contract rather than implementation, and the re-declaration cursor a
- * script reload replays against a sealed record.
- */
-
 #include "support/netw_test.h"
 
 #include "netw/handle_ledger.hpp"
-#include "netw/quantize.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/quantize.hpp"
+#include "netw/api/schema_core.hpp"
 
 namespace TestSchemaCore {
 
@@ -23,8 +13,6 @@ using netw::SchemaColumn;
 using netw::SchemaCore;
 using netw::SchemaRecord;
 
-// godot-cpp cannot construct a RID with a chosen id, so a handle comes from
-// the same mint the flat surface uses.
 Ref<NetwHandleLedger> make_ledger() {
     Ref<NetwHandleLedger> ledger;
     ledger.instantiate();
@@ -58,7 +46,6 @@ TEST_CASE(
     NETW_CHECK_EQ(record->column_count(), 3);
     CHECK(bool(record->at(1)->key == StringName("hp")));
     NETW_CHECK_EQ(record->at(2)->stride, 8);
-    // A duplicate key has no second address to take.
     NETW_CHECK_EQ(
         SchemaCore::append_column(record, "hp", SchemaCore::U16, 1),
         -1
@@ -98,7 +85,6 @@ TEST_CASE("[Networked][Table][Hosted] Sealing fixes the order and the hash") {
 
     CHECK(record->sealed);
     CHECK(record->shape_hash != 0);
-    // A sealed record cannot gain a column, and its quantizers are frozen.
     NETW_CHECK_EQ(
         SchemaCore::append_column(record, "mana", SchemaCore::U16, 1),
         -1
@@ -117,15 +103,11 @@ TEST_CASE(
     SchemaCore::append_column(base, "pos", SchemaCore::VECTOR3, 1);
     SchemaCore::fix(base);
 
-    // The same declaration hashes the same, so two peers agree without
-    // negotiating.
     Ref<SchemaRecord> same = make_record("Shape");
     SchemaCore::append_column(same, "pos", SchemaCore::VECTOR3, 1);
     SchemaCore::fix(same);
     NETW_CHECK_EQ(same->shape_hash, base->shape_hash);
 
-    // Each of the five visible fields moves it: name, key, type, stride,
-    // quantizer.
     Ref<SchemaRecord> renamed = make_record("Shape2");
     SchemaCore::append_column(renamed, "pos", SchemaCore::VECTOR3, 1);
     SchemaCore::fix(renamed);
@@ -154,7 +136,6 @@ TEST_CASE(
     SchemaCore::fix(packed);
     CHECK(packed->shape_hash != base->shape_hash);
 
-    // It is a u16, because that is the width a frame header carries it in.
     CHECK(base->shape_hash >= 0);
     CHECK(base->shape_hash <= 0xFFFF);
 }
@@ -195,7 +176,6 @@ TEST_CASE(
     SchemaCore::fix(record);
     const int sealed_hash = record->shape_hash;
 
-    // The replay a script reload runs: same columns, in order, then a re-seal.
     SchemaCore::open_redeclare(record);
     NETW_CHECK_EQ(
         SchemaCore::append_column(record, "pos", SchemaCore::VECTOR3, 1),
@@ -209,7 +189,6 @@ TEST_CASE(
     NETW_CHECK_EQ(record->shape_hash, sealed_hash);
     NETW_CHECK_EQ(record->column_count(), 2);
 
-    // A changed shape fails at the seal rather than shifting every index.
     SchemaCore::open_redeclare(record);
     NETW_CHECK_EQ(
         SchemaCore::append_column(record, "pos", SchemaCore::VECTOR2, 1),
@@ -217,12 +196,10 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(SchemaCore::fix(record), ERR_UNCONFIGURED);
 
-    // A replay that stops short is a disagreement too.
     SchemaCore::open_redeclare(record);
     SchemaCore::append_column(record, "pos", SchemaCore::VECTOR3, 1);
     NETW_CHECK_EQ(SchemaCore::fix(record), ERR_UNCONFIGURED);
 
-    // A replay that runs past the end fails rather than growing the record.
     SchemaCore::open_redeclare(record);
     SchemaCore::append_column(record, "pos", SchemaCore::VECTOR3, 1);
     SchemaCore::append_column(record, "hp", SchemaCore::U16, 1);
@@ -233,7 +210,6 @@ TEST_CASE(
     NETW_CHECK_EQ(SchemaCore::fix(record), ERR_UNCONFIGURED);
     NETW_CHECK_EQ(record->column_count(), 2);
 
-    // Re-sealing without a replay is idempotent rather than an error.
     NETW_CHECK_EQ(SchemaCore::fix(record), OK);
 }
 
@@ -324,8 +300,6 @@ TEST_CASE("[Networked][Table][Hosted] Every column type has a storage shape") {
         const Variant storage = SchemaCore::make_storage(type);
         NETW_CHECK_EQ(storage.get_type(), SchemaCore::storage_type(type));
     }
-    // Both tables cover exactly the enum, so a value past its end is answered
-    // rather than read off the end of an array.
     NETW_CHECK_EQ(
         SchemaCore::storage_type(SchemaCore::VARIANT),
         Variant::ARRAY
@@ -346,7 +320,6 @@ TEST_CASE("[Networked][Table][Hosted] Re-declaring a name reaches its record") {
     core->add_column(handle, "hp", SchemaCore::U16, 1);
     core->seal(handle);
 
-    // The second declare opens the replay cursor rather than minting a record.
     core->declare(handle, "Twice");
     NETW_CHECK_EQ(core->add_column(handle, "hp", SchemaCore::U16, 1), 0);
     NETW_CHECK_EQ(core->seal(handle), OK);

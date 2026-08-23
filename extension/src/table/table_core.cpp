@@ -1,7 +1,7 @@
 #include "netw/table/table_core.hpp"
 
 #include "godot/class_db.hpp"
-#include "netw/codec.hpp"
+#include "netw/api/codec.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -12,20 +12,13 @@ namespace netw {
 
 namespace {
 
-// How many ticks a removal memo is kept before it is pruned. An implementation
-// constant, never wire, so it may be measured and changed freely.
 constexpr int64_t MEMO_AGE_TICKS = 256;
 
-// How far behind the freshest applied tick a frame may still be applied, which
-// absorbs ordinary datagram reordering without letting genuinely old state win.
 constexpr int64_t REORDER_WINDOW_TICKS = 8;
 
 const int WIRE_BITS[SchemaCore::COLUMN_TYPE_COUNT]
     = {32, 64, 8, 8, 16, 16, 32, 64, 1, 64, 96, 128, 128, 128, 40, 0};
 
-// Bytes one element of a memcpy column occupies. Zero marks a type whose
-// storage width does not equal its wire width, which is what decides between
-// one memcpy for the whole column and a loop over its elements.
 const int MEMCPY_BYTES[SchemaCore::COLUMN_TYPE_COUNT]
     = {4, 8, 0, 0, 0, 0, 4, 8, 0, 8, 12, 16, 16, 16, 0, 0};
 
@@ -56,8 +49,6 @@ int element_count(const Variant &data) {
     }
 }
 
-// A real copy rather than a shared reference. The commit is the one edge where
-// atomicity is bought, so it severs the aliasing there and nowhere else.
 template <typename T> Variant uniquify(const Variant &data) {
     T copy = data;
     if (copy.size() > 0) {
@@ -144,9 +135,6 @@ int storage_size(const Variant &data) {
     return size < 0 ? 0 : size;
 }
 
-// Moves a run of elements within one storage array, or from one to another of
-// the same type. This is the per-element Variant loop the port exists to
-// remove: each arm is a typed pointer copy.
 template <typename T, typename E>
 void copy_typed(Variant &dst, int at, const Variant &src, int from, int count) {
     T target = dst;
@@ -214,8 +202,6 @@ void copy_elements(
     }
 }
 
-// Reads one element as the Variant a quantizer expects, which is the one place
-// a quaternion column stops being the Vector4 it stores as.
 Variant element_value(const Variant &data, int at, int type) {
     if (type == SchemaCore::QUATERNION) {
         const PackedVector4Array typed = data;
@@ -248,7 +234,6 @@ Variant element_value(const Variant &data, int at, int type) {
     }
 }
 
-// The inverse of element_value.
 Variant storage_value(const Variant &value, int type) {
     if (type == SchemaCore::QUATERNION) {
         const Quaternion q = value;
@@ -324,7 +309,6 @@ void store_element(Variant &data, int at, const Variant &value) {
     }
 }
 
-// Sign-extends a narrow integer read back out of its wire width.
 int64_t narrow(int64_t value, int bits, bool is_signed) {
     if (!is_signed) {
         return value;
@@ -333,19 +317,11 @@ int64_t narrow(int64_t value, int bits, bool is_signed) {
     return (value & sign_bit) ? value - (int64_t(1) << bits) : value;
 }
 
-// The wire carries the vector shapes as raw little-endian floats, so the byte
-// width of one element is what makes the column a memcpy in both directions.
-// A double-precision build would widen these and silently double every column,
-// so it fails here instead.
 static_assert(sizeof(Vector2) == 8, "the wire packs Vector2 as two float32");
 static_assert(sizeof(Vector3) == 12, "the wire packs Vector3 as three float32");
 static_assert(sizeof(Vector4) == 16, "the wire packs Vector4 as four float32");
 static_assert(sizeof(Color) == 16, "the wire packs Color as four float32");
 
-// Rebuilds a memcpy column's storage from its bytes, the inverse of
-// slice_bytes. Straight into the typed array: the engine's PackedByteArray is a
-// bare byte vector with no converters on it, and going through an intermediate
-// float array would cost a copy the wire layout does not need.
 template <typename T, typename E>
 Variant bytes_into(const PackedByteArray &bytes, int count) {
     T out;
@@ -377,8 +353,6 @@ Variant from_bytes(const PackedByteArray &bytes, int type, int count) {
     }
 }
 
-// The bytes of one slice of a memcpy column, which is the raw little-endian
-// copy the wire carries.
 PackedByteArray slice_bytes(
     const Variant &data,
     int type,
@@ -595,9 +569,6 @@ RID TableCore::table_from_wire_id(int id) const {
     return wire_order[id - 1];
 }
 
-// Sorted as String rather than StringName, because StringName ordering is by
-// internal pointer and two peers would disagree about it. The whole point of a
-// name-sorted id is that both ends compute the same one without negotiating.
 void TableCore::rebuild_wire_order() {
     LocalVector<String> names;
     HashMap<String, RID> by_name;
@@ -840,10 +811,6 @@ int64_t TableCore::tick_of(const RID &table) const {
     return record != nullptr ? record->tick : -1;
 }
 
-/* Wire — encode */
-
-// Plans how many rows fit one frame, counting each column's worst case plus the
-// byte alignment every column starts on.
 int TableCore::rows_per_frame(const Record &record, int budget) const {
     int64_t bits = 40;
     for (uint32_t i = 0; i < record.shapes.size(); i++) {
@@ -857,8 +824,6 @@ int TableCore::rows_per_frame(const Record &record, int budget) const {
     );
 }
 
-// Writes one column's slice. Every column starts byte aligned, so a bit-packed
-// column can never leave the next one's memcpy straddling a byte.
 void TableCore::encode_column(
     const Ref<NetwBitBufferWriter> &writer,
     const ColumnShape &shape,
@@ -924,8 +889,6 @@ void TableCore::encode_column(
     }
 }
 
-// Writes one upsert frame carrying rows first through first + rows of the
-// record's applied store.
 PackedByteArray TableCore::encode_frame(
     const Record &record,
     int id,
@@ -1005,8 +968,6 @@ TypedArray<PackedByteArray> TableCore::encode_frames(
     return out;
 }
 
-// Writes routes-only frames, the shape both a table removal and a lifecycle
-// tombstone take.
 TypedArray<PackedByteArray> TableCore::encode_routes_only(
     int id,
     int hash,
@@ -1125,8 +1086,6 @@ Error TableCore::admit_header(const Dictionary &header) {
     return OK;
 }
 
-// Reads one column's slice into a fresh storage array, or nil when the frame
-// ran out of bytes.
 Variant TableCore::decode_column(
     const Ref<NetwBitBufferReader> &reader,
     const ColumnShape &shape,
@@ -1229,8 +1188,6 @@ Variant TableCore::decode_column(
     return from_bytes(bytes, shape.type, count);
 }
 
-// Reads the routes section, returning fewer routes than asked when the frame is
-// truncated or carries a route no sender could have issued.
 PackedInt64Array TableCore::read_frame_routes(
     const Ref<NetwBitBufferReader> &reader,
     int rows
@@ -1442,10 +1399,6 @@ Dictionary TableCore::counters() const {
     return out;
 }
 
-/* Internals */
-
-// Clears the rows without disturbing the declaration, the first half of a
-// snapshot's clear-then-apply.
 void TableCore::clear_rows(Record &record) {
     record.routes = PackedInt64Array();
     record.row_of.clear();
@@ -1459,8 +1412,6 @@ void TableCore::clear_rows(Record &record) {
     }
 }
 
-// Replaces a record's applied state wholesale, deriving both cohorts against
-// what it held before.
 void TableCore::apply_wave(
     Record &record,
     const PackedInt64Array &routes,
@@ -1496,8 +1447,6 @@ void TableCore::apply_wave(
     }
 }
 
-// Starts this table's wave on the first frame of an intake that reaches it, so
-// cohorts describe the wave rather than the last frame of it.
 void TableCore::open_wave(Record &record) {
     if (record.wave_touched) {
         return;
@@ -1507,8 +1456,6 @@ void TableCore::open_wave(Record &record) {
     record.deaths = PackedInt64Array();
 }
 
-// Erases rows by swap-remove and records why, so a reordered upsert that lost
-// the race to its own removal cannot put the row back.
 void TableCore::apply_removal(
     Record &record,
     const PackedInt64Array &routes,
@@ -1566,7 +1513,6 @@ void TableCore::swap_remove_row(Record &record, int64_t route, int row) {
     }
 }
 
-// Applies upsert rows, returning the routes this frame introduced.
 PackedInt64Array TableCore::apply_upsert(
     Record &record,
     const PackedInt64Array &routes,

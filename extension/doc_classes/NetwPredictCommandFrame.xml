@@ -1,8 +1,44 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictCommandFrame" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		One owner-to-authority command window: a contiguous transition run,
+		its schema-planned payload rows, and the evidence fingerprints
+		proving its closed prefix.
 	</brief_description>
 	<description>
+		A frame is built one direction and read the other, and both
+		directions share this one class rather than a pair of hand-written
+		codecs. A sender calls [method create], appends rows in order, and
+		asks for [method to_bytes]. A receiver calls [method from_bytes] and
+		reads the same columns back through the same accessors.
+		[codeblock]
+		var frame := NetwPredictCommandFrame.create(schema)
+		frame.set_epoch(epoch)
+		frame.set_ack_of_acks(ack_of_acks)
+		for index in range(oldest, newest + 1):
+		    if not frame.append_transition(index, label, fresh):
+		        break
+		    if fresh:
+		        frame.append_payload(values)
+		send(frame.to_bytes())
+		[/codeblock]
+		[member SchemaRecord] is fixed at construction, because a payload
+		row is only meaningful beside the plan it was gathered under, and a
+		frame that could be re-planned mid-fill would hold rows of two
+		shapes. [method create] and [method from_bytes] both return
+		[code]null[/code] rather than a half-built frame when the schema
+		will not compile or the bytes will not decode.
+		[br][br][method append_transition] enforces one contiguous run: a
+		gap would leave the base index and the row count disagreeing about
+		which transition a later row names. [method append_payload] is
+		called only for
+		a fresh transition, so [method payload_count] tracks the fresh
+		subset of [method transition_count] rather than matching it row for
+		row. [method append_evidence] is called only for the closed prefix
+		the owner can already speak for, so [method evidence_count] is the
+		leading run of [method indices] the owner has finished, and a still
+		open row simply stops that run rather than appearing as a zero
+		claim.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,6 +46,10 @@
 		<method name="ack_of_acks" qualifiers="const">
 			<return type="int" />
 			<description>
+				The newest ack this frame's owner has itself acknowledged,
+				set by [method set_ack_of_acks]. Lets authority retire its
+				own ack history once the owner confirms it arrived, rather
+				than resending it forever.
 			</description>
 		</method>
 		<method name="append_evidence">
@@ -24,12 +64,25 @@
 			<param index="7" name="post_family_fps" type="PackedInt32Array" />
 			<param index="8" name="raw_fp" type="int" />
 			<description>
+				Appends one evidence row for the next transition in the
+				closed prefix this frame is proving. [param pre_family_fps]
+				and [param post_family_fps] must each hold exactly the
+				pose, momentum, and controller triple, in that order, or
+				this returns [code]false[/code] and appends nothing.
+				Evidence rows are positional against the leading run of
+				[method indices]; there is no explicit transition index
+				per evidence row.
 			</description>
 		</method>
 		<method name="append_payload">
 			<return type="bool" />
 			<param index="0" name="values" type="Array" />
 			<description>
+				Appends one payload row, encoded against this frame's
+				[SchemaRecord], for the fresh transition most recently
+				passed to [method append_transition]. Returns
+				[code]false[/code] without appending when [param values]
+				does not match the schema's declared shape.
 			</description>
 		</method>
 		<method name="append_transition">
@@ -38,37 +91,61 @@
 			<param index="1" name="label" type="int" />
 			<param index="2" name="fresh" type="bool" />
 			<description>
+				Appends one transition to the window. Returns
+				[code]false[/code] and appends nothing when the window has
+				already reached its wire cap, or when [param index] does
+				not immediately follow the previous append, since the
+				window is a single contiguous run. Pass [param fresh]
+				[code]true[/code] only for a transition this frame also
+				owes a [method append_payload] call.
 			</description>
 		</method>
 		<method name="create" qualifiers="static">
 			<return type="NetwPredictCommandFrame" />
 			<param index="0" name="schema" type="SchemaRecord" />
 			<description>
+				Builds an empty frame planned against [param schema], or
+				[code]null[/code] when the schema will not compile to a
+				wire plan.
 			</description>
 		</method>
 		<method name="e_digests" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				One environment digest per evidence row, in [method append_evidence] order.
 			</description>
 		</method>
 		<method name="epoch" qualifiers="const">
 			<return type="int" />
 			<description>
+				This frame's epoch byte, set by [method set_epoch]. A
+				receiver reads it to tell a frame from a stream that
+				restarted from one that continues an existing one.
 			</description>
 		</method>
 		<method name="evidence_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many evidence rows this frame carries, the bound for
+				every [code]*_fps[/code] and [code]evidence_masks[/code]
+				accessor. At most [method transition_count], since evidence
+				never outruns the transitions it proves.
 			</description>
 		</method>
 		<method name="evidence_masks" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
+				One evidence-kind bitmask per evidence row, in
+				[method append_evidence] order.
 			</description>
 		</method>
 		<method name="fresh_flags" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
+				One byte per transition, [code]1[/code] where
+				[method append_transition] was called with [param fresh]
+				[code]true[/code] and [code]0[/code] otherwise, in
+				[method indices] order.
 			</description>
 		</method>
 		<method name="from_bytes" qualifiers="static">
@@ -76,84 +153,126 @@
 			<param index="0" name="schema" type="SchemaRecord" />
 			<param index="1" name="bytes" type="PackedByteArray" />
 			<description>
+				Decodes [param bytes] as a frame planned against
+				[param schema], or [code]null[/code] when the schema will
+				not compile or the bytes do not decode against it.
 			</description>
 		</method>
 		<method name="indices" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<description>
+				The transition indices this frame's window covers, one
+				contiguous ascending run, in [method append_transition]
+				order.
 			</description>
 		</method>
 		<method name="labels" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<description>
+				One command label per transition, in [method indices] order.
 			</description>
 		</method>
 		<method name="payload_at" qualifiers="const">
 			<return type="Array" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Decodes the payload row at [param index] against this
+				frame's [SchemaRecord], or an empty [Array] when
+				[param index] is outside [code][0, payload_count)[/code].
 			</description>
 		</method>
 		<method name="payload_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many payload rows this frame carries, the bound for
+				[param index] on [method payload_at]. Counts only the
+				fresh transitions [method append_payload] was called for,
+				so it is at most and usually less than
+				[method transition_count].
 			</description>
 		</method>
 		<method name="post_family_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				The post-state pose, momentum, and controller fingerprints,
+				flattened three per evidence row in that order, in
+				[method append_evidence] order.
 			</description>
 		</method>
 		<method name="post_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				One combined post-state fingerprint per evidence row, in
+				[method append_evidence] order.
 			</description>
 		</method>
 		<method name="pre_family_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				The pre-state pose, momentum, and controller fingerprints,
+				flattened three per evidence row in that order, in
+				[method append_evidence] order.
 			</description>
 		</method>
 		<method name="pre_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				One combined pre-state fingerprint per evidence row, in
+				[method append_evidence] order.
 			</description>
 		</method>
 		<method name="raw_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				One unclassified raw fingerprint per evidence row, in
+				[method append_evidence] order.
 			</description>
 		</method>
 		<method name="set_ack_of_acks">
 			<return type="void" />
 			<param index="0" name="transition" type="int" />
 			<description>
+				Sets [method ack_of_acks] to [param transition].
 			</description>
 		</method>
 		<method name="set_epoch">
 			<return type="void" />
 			<param index="0" name="epoch" type="int" />
 			<description>
+				Sets [method epoch] to [param epoch], truncated to the
+				low 8 bits.
 			</description>
 		</method>
 		<method name="to_bytes" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
+				Encodes this frame's transitions, payload rows, and
+				evidence against its [SchemaRecord]'s wire plan, the bytes
+				[method from_bytes] decodes back.
 			</description>
 		</method>
 		<method name="topo_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				One topology fingerprint per evidence row, in
+				[method append_evidence] order.
 			</description>
 		</method>
 		<method name="transition_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many transitions this frame's window carries, the
+				bound for [method indices], [method labels], and
+				[method fresh_flags]. Capped at the wire's maximum window
+				length; [method append_transition] refuses to extend it
+				further.
 			</description>
 		</method>
 		<method name="witness_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
+				One witness fingerprint per evidence row, in
+				[method append_evidence] order.
 			</description>
 		</method>
 	</methods>

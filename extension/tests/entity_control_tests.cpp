@@ -1,15 +1,8 @@
-// The entity control machine's laws.
-//
-// Four of the five below are about a question being asked BEFORE the answer is
-// stored. An entity is configured, read, and reasoned about long before it
-// arms, and the whole reason the controller resolves lazily is that a read
-// then must answer what arm will do later. A core that answered 0 until arm
-// would be right eventually and wrong for the entire window a game sets its
-// entities up in.
-
 #include "support/netw_test.h"
 
 #include "netw/entity_control.hpp"
+
+using namespace godot;
 
 namespace TestNetwEntityControl {
 
@@ -38,14 +31,11 @@ TEST_CASE(
     control->initial = int(InitialController::REPRESENTED_PEER);
     NETW_CHECK_EQ(control->resolve(REPRESENTED), REPRESENTED);
 
-    // A pre-arm write is a choice, and arm resolving the rule again must not
-    // overwrite it. `configured` is the whole of what tells the two apart.
     CHECK_FALSE(control->configured);
     control->set_controller(OTHER);
     CHECK(control->configured);
     NETW_CHECK_EQ(control->resolve(REPRESENTED), OTHER);
 
-    // Including the write that happens to name the server.
     control->set_controller(0);
     NETW_CHECK_EQ(control->resolve(REPRESENTED), 0);
 }
@@ -69,13 +59,9 @@ TEST_CASE(
     Ref<NetwEntityControl> control = fresh();
     control->initial = int(InitialController::REPRESENTED_PEER);
 
-    // The rule alone is enough: an entity reads as locally controlled before
-    // anything wrote a controller onto it.
     CHECK(control->controlled_by(REPRESENTED, REPRESENTED));
     CHECK_FALSE(control->controlled_by(OTHER, REPRESENTED));
 
-    // Offline, or before a peer id exists, nobody is the local peer, and a
-    // server-controlled entity is steered by nobody at all.
     CHECK_FALSE(control->controlled_by(0, REPRESENTED));
     control->set_controller(0);
     CHECK_FALSE(control->controlled_by(REPRESENTED, REPRESENTED));
@@ -99,8 +85,6 @@ TEST_CASE(
     Ref<NetwEntityControl> control = fresh();
     control->set_controller(REPRESENTED);
 
-    // The peer both represents and steers this entity. The entity IS that
-    // player, so it leaves with them whatever the disconnect rule says.
     NETW_CHECK_EQ(
         control->disconnect_verdict(REPRESENTED, REPRESENTED),
         NetwEntityControl::DESPAWN_REPRESENTED
@@ -111,7 +95,6 @@ TEST_CASE(
         NetwEntityControl::DESPAWN_REPRESENTED
     );
 
-    // A server-owned entity a peer merely steers is the rule's to decide.
     Ref<NetwEntityControl> npc = fresh();
     npc->set_controller(OTHER);
     NETW_CHECK_EQ(
@@ -138,9 +121,6 @@ TEST_CASE(
         NetwEntityControl::NOTHING
     );
 
-    // The server is not a peer that can disconnect, and an entity representing
-    // nobody and steered by nobody must not read a server-valued controller as
-    // a match for one.
     NETW_CHECK_EQ(
         fresh()->disconnect_verdict(0, 0),
         NetwEntityControl::NOTHING
@@ -151,9 +131,6 @@ TEST_CASE(
     "[Networked][Entity][Hosted] the write policy answers the same question "
     "for a receiver and for an author"
 ) {
-    // A receiver asks whether the peer that sent a write was allowed to. An
-    // author asks whether it is the peer that may write at all, which is the
-    // same question with its own id as the sender.
     const int64_t AUTHORITY_PEER = 1;
     const int64_t CONTROLLER_PEER = REPRESENTED;
 
@@ -183,7 +160,6 @@ TEST_CASE(
             AUTHORITY_PEER,
             CONTROLLER_PEER
         ));
-        // The authority is not the controller by being the authority.
         CHECK_FALSE(NetwEntityControl::policy_admits(
             int(netw::WritePolicy::CONTROLLER),
             AUTHORITY_PEER,
@@ -193,8 +169,6 @@ TEST_CASE(
     }
 
     SUBCASE("a node carrying no entity has no controller and admits nobody") {
-        // Zero is not a peer, so the controller policy refuses every sender
-        // rather than admitting one that happens to compare equal.
         CHECK_FALSE(NetwEntityControl::policy_admits(
             int(netw::WritePolicy::CONTROLLER),
             AUTHORITY_PEER,

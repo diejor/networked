@@ -13,9 +13,8 @@ const P1 := Vector2(100.0, 0.0)
 
 var _tree: MultiplayerTree
 var _clock_node: MultiplayerClock
-var _clock: ClockCore
+var _clock: NetwClockHandle
 var _native_core: NetwMultiplayerCore
-var _display: DisplayCore
 
 
 func before_test() -> void:
@@ -34,9 +33,8 @@ func before_test() -> void:
 	var api := _tree.api
 	api.set_meta(&"_multiplayer_tree", _tree)
 	api.set_meta(&"_multiplayer_clock", _clock_node)
-	_clock = api._clock
+	_clock = api._native_core.clock_handle
 	_native_core = api._native_core
-	_display = api._display
 
 
 func after_test() -> void:
@@ -217,12 +215,25 @@ func _spawn_target(node_name: String, route: int) -> NetwEntity:
 
 
 func _feed(node: Node) -> void:
-	_display.record(node, &"position", P0, 0)
-	_display.record(node, &"position", P1, 1)
+	_record(node, &"position", P0, 0)
+	_record(node, &"position", P1, 1)
+
+
+func _record(
+		node: Node,
+		target_property: StringName,
+		value: Variant,
+		tick: int,
+) -> void:
+	var spec := NetwScriptModel.get_node_property_interpolator(
+		node,
+		target_property,
+	)
+	_native_core.display_record(node, target_property, value, tick, spec, false)
 
 
 func _display_at(tick: int, display_offset: int, factor: float) -> void:
 	_clock.tick = tick
 	_clock.display_offset = display_offset
-	_clock.tick_factor = factor
-	_display.pump(0.0)
+	_clock.tick_factor_override = factor
+	_native_core.display_pump(0.0)

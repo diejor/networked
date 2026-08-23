@@ -36,11 +36,11 @@ func test_spawn_and_start_scene_initialization_flow() -> void:
 
 	tp = auto_free(TPComponent.new())
 	tp.starting_scene_path = SceneNodePath.new(TEST_LEVEL + "::")
-	# spawn() takes the session's scene interface. A bare session with no
+	# spawn() takes the session. A bare session with no
 	# registered scene resolves current_scene_path from starting_scene_path and
 	# skips the player add, which is all this path asserts.
 	var api := NetwMultiplayer.new()
-	tp.spawn(api._scenes)
+	tp.spawn(api)
 
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
 	api.embedding.dispose()

@@ -43,7 +43,7 @@
 ## [br]A route names one entity instance for its whole life.
 ## [constant NetwFrameEnvelope.Channel.SPAWN] and
 ## [constant NetwFrameEnvelope.Channel.DESPAWN] frames are per-peer visibility
-## edges at the boundary of what [InterestCore] admits, not lifecycle
+## edges at the boundary of what the session interest plane admits, not lifecycle
 ## events of the entity itself.
 ## [method schedule_visibility_sweep] reconciles the
 ## [NetwSpawnRecord] recipient set against the current admissions,
@@ -141,6 +141,12 @@ const _FLUSH_KEY := &"spawn-carrier-flush"
 # subsystem that owns them. A Recipe.FN_REGISTRY spawn resolves its function
 # here instead of from a node anchor, so a manager-less session still spawns.
 var _spawn_constructors: Dictionary[StringName, Callable] = { }
+
+# Argument schemas keyed by the same id the wire carries, as [quantizers,
+# types]. A registration that declares one owns its schema outright, which is
+# what lets a constructor with no script host encode and decode; an id absent
+# here falls back to its host script's Netw.configure_spawn row.
+var _spawn_constructor_schemas: Dictionary[StringName, Array] = { }
 
 # Route -> a suspended action-spawn owner, hidden until its display tick arrives.
 var _action_gates: Dictionary[int, _ActionGate] = { }
@@ -271,7 +277,7 @@ func _run_visibility_sweep() -> void:
 			var desired := _spawn_locally_desired_to(peer_id, node)
 			local_desired[peer_id] = desired
 			if entity and record.has_recipient(peer_id) and not desired:
-				leave[peer_id] = api._interest._resolve_leave_decision(
+				leave[peer_id] = api._native_core.interest_leave_resolve(
 					entity,
 					peer_id,
 				)
@@ -301,7 +307,7 @@ func _run_visibility_sweep() -> void:
 			reconcile_verdict,
 			0,
 	) != OK:
-		api._interest._finish_leave_sweep()
+		api._native_core.interest_leave_finish_sweep()
 		return
 	var spawn_payloads: Dictionary[int, PackedByteArray] = { }
 	var despawn_payloads: Dictionary[int, PackedByteArray] = { }
@@ -339,7 +345,7 @@ func _run_visibility_sweep() -> void:
 			&"retain", &"despawn":
 				var entity := NetwEntity.of(node)
 				if entity:
-					api._interest._commit_leave_decision(
+					api._native_core.interest_leave_commit(
 						entity,
 						peer_id,
 						operation[&"decision"],
@@ -367,7 +373,7 @@ func _run_visibility_sweep() -> void:
 					"",
 					true,
 				)
-	api._interest._finish_leave_sweep()
+	api._native_core.interest_leave_finish_sweep()
 	_schedule_carrier_flush()
 
 
@@ -391,10 +397,10 @@ func _spawn_locally_desired_to(peer_id: int, node: Node) -> bool:
 		return false
 	var entity := NetwEntity.of(node)
 	if entity:
-		if api._interest.has_committed_intent(entity):
-			return api._interest.wire_admits(peer_id, entity)
+		if api._native_core.interest_has_committed_intent(entity):
+			return api._native_core.interest_wire_admits(peer_id, entity)
 		if api.interest_is_filtered(api.entity_of(node)) \
-				and not api._interest.wire_admits(peer_id, entity):
+				and not api._native_core.interest_wire_admits(peer_id, entity):
 			return false
 	return api._replication._sync_compat.synchronizer_verdict(peer_id, node)
 
@@ -541,14 +547,40 @@ func spawn(fn: Callable, args: Array = [], owner: NetwParticipant = null) -> Nod
 ## Registers [param fn] as a host-less spawn constructor under [param id]. A
 ## [method spawn_registered] call and its receivers resolve the function from
 ## [param id] alone, so a session with no host node still reconstructs it.
-## [param fn]'s method must also be registered with
-## [method Netw.configure_spawn] so its arguments encode.
-func register_spawn_constructor(id: StringName, fn: Callable) -> void:
+##
+## [param arg_types] and [param quantizers] declare how [param fn]'s arguments
+## cross the wire, positionally. Declaring them keys the schema to [param id],
+## which is how the wire already addresses the recipe, so a constructor whose
+## host has no [Script] still encodes and decodes. Declaring neither falls back
+## to the [method Netw.configure_spawn] row on [param fn]'s host script, which
+## every peer must then register identically under [param id].
+func register_spawn_constructor(
+		id: StringName,
+		fn: Callable,
+		arg_types: Array = [],
+		quantizers: Array = [],
+) -> void:
 	_spawn_constructors[id] = fn
+	if arg_types.is_empty() and quantizers.is_empty():
+		_spawn_constructor_schemas.erase(id)
+		return
+	_spawn_constructor_schemas[id] = [quantizers, arg_types]
 
 
 func _spawn_constructor(id: StringName) -> Callable:
 	return _spawn_constructors.get(id, Callable())
+
+
+# The [quantizers, types] a registry recipe encodes and decodes its arguments
+# with. Null when neither a declaration nor a scripted host answers, which is
+# the caller's signal to refuse the frame rather than write or read bytes the
+# other side reads differently.
+func _fn_registry_schema(id: StringName, fn: Callable) -> Variant:
+	if _spawn_constructor_schemas.has(id):
+		return _spawn_constructor_schemas[id]
+	var host := fn.get_object()
+	var script: Script = host.get_script() as Script if host else null
+	return _fn_script_schema(script, fn.get_method())
 
 
 ## Constructs a node on every peer by running the constructor registered under
@@ -668,37 +700,35 @@ func _arm_authoritative_spawn(
 	return entity
 
 
-# Writes a spawn function's arguments using the quantizers and types declared
-# for its (script, method) through Netw.configure_spawn. Shared by the FN and
-# FN_REGISTRY recipes, which differ only in how they address the function.
+# The [quantizers, types] a spawn function on a scripted host encodes with,
+# read from its Netw.configure_spawn row. Null when the method has none.
+func _fn_script_schema(script: Script, method: StringName) -> Variant:
+	var cfg := NetwScriptModel.get_spawn_config(script, method)
+	if cfg == null:
+		return null
+	return [
+		cfg.quantizers,
+		NetwScriptModel.get_method_arg_types(script, method),
+	]
+
+
+# Writes a spawn function's arguments against the schema its recipe resolved.
+# Shared by the FN and FN_REGISTRY recipes, which differ only in how they
+# address the function and therefore in where the schema comes from.
 func _encode_fn_args(
 		w: NetwBitBufferWriter,
-		script: Script,
-		method: StringName,
+		schema: Array,
 		fn_args: Array,
 ) -> void:
 	var api := _api()
-	var cfg := NetwScriptModel.get_spawn_config(script, method)
 	var encoded_args: Array = api._rpc_core._encode_args(api._native_core, fn_args)
-	NetwCodec.write_values(
-		w,
-		encoded_args,
-		cfg.quantizers if cfg else [],
-		NetwScriptModel.get_method_arg_types(script, method),
-	)
+	NetwCodec.write_values(w, encoded_args, schema[0], schema[1])
 
 
-# Reads a spawn function's encoded arguments for its (script, method) config.
-# Returns null when the function is not registered through Netw.configure_spawn.
-func _read_fn_args(r: NetwBitBufferReader, script: Script, method: StringName) -> Variant:
-	var cfg := NetwScriptModel.get_spawn_config(script, method)
-	if not cfg:
-		return null
-	return NetwCodec.read_values(
-		r,
-		cfg.quantizers,
-		NetwScriptModel.get_method_arg_types(script, method),
-	)
+# Reads a spawn function's encoded arguments against the same schema the
+# sender wrote them with.
+func _read_fn_args(r: NetwBitBufferReader, schema: Array) -> Array:
+	return NetwCodec.read_values(r, schema[0], schema[1])
 
 
 # Materializes a spawn function's decoded arguments, resolving each NetwNodeRef
@@ -823,7 +853,7 @@ func _flush_armed_spawn(route: int) -> void:
 			api._native_core.liveness_route_of(parent_entity) if api and parent_entity else 0
 	)
 	if api:
-		api._interest._sync_scene_membership(NetwEntity.of(node))
+		api._native_core.interest_sync_scene_membership(NetwEntity.of(node))
 	_spawn_book.issue(record)
 	if not api:
 		return
@@ -953,7 +983,7 @@ func _refresh_record_anchors(record: NetwSpawnRecord, node: Node) -> void:
 	record.parent_route = (
 			api._native_core.liveness_route_of(parent_entity) if parent_entity else 0
 	)
-	api._interest._sync_scene_membership(NetwEntity.of(node))
+	api._native_core.interest_sync_scene_membership(NetwEntity.of(node))
 	# A consumed record's recipe must stay reconstructible from the destination,
 	# or the sweep re-encode and late-join replay hand new observers a spawner
 	# anchor inside a scene they were never admitted to.
@@ -1072,9 +1102,17 @@ func _encode_spawn_frame(record: NetwSpawnRecord, node: Node) -> PackedByteArray
 				[record.fn_registry_id, record.route],
 			)
 			return PackedByteArray()
+		var reg_schema = _fn_registry_schema(record.fn_registry_id, fn)
+		if reg_schema == null:
+			Netw.dbg.error(
+				"NetwSpawnPipeline: spawn constructor '%s' for route %d "
+				+ "declares no argument schema, so no receiver could decode "
+				+ "the bytes this would write",
+				[record.fn_registry_id, record.route],
+			)
+			return PackedByteArray()
 		_put_str(w, String(record.fn_registry_id))
-		var host := fn.get_object()
-		_encode_fn_args(w, host.get_script() as Script, fn.get_method(), record.fn_args)
+		_encode_fn_args(w, reg_schema, record.fn_args)
 	elif record.recipe == NetwSpawnBook.RECIPE_FN:
 		var host := record.fn_host()
 		if not host or not _encode_anchor(w, host):
@@ -1084,8 +1122,20 @@ func _encode_spawn_frame(record: NetwSpawnRecord, node: Node) -> PackedByteArray
 				[record.route],
 			)
 			return PackedByteArray()
+		var fn_schema = _fn_script_schema(
+			host.get_script() as Script,
+			record.fn_method,
+		)
+		if fn_schema == null:
+			Netw.dbg.error(
+				"NetwSpawnPipeline: spawn function '%s' for route %d is not "
+				+ "registered through Netw.configure_spawn, so no receiver "
+				+ "could decode the bytes this would write",
+				[record.fn_method, record.route],
+			)
+			return PackedByteArray()
 		_put_str(w, String(record.fn_method))
-		_encode_fn_args(w, host.get_script() as Script, record.fn_method, record.fn_args)
+		_encode_fn_args(w, fn_schema, record.fn_args)
 	else:
 		Netw.dbg.error(
 			"NetwSpawnPipeline: unknown spawn recipe %d for route %d",
@@ -1093,7 +1143,7 @@ func _encode_spawn_frame(record: NetwSpawnRecord, node: Node) -> PackedByteArray
 		)
 		return PackedByteArray()
 
-	var entries := _collect_spawn_state(node)
+	var entries := collect_spawn_state(node)
 	NetwCodec.put_varint(w, entries.size())
 	for entry in entries:
 		var source: Node = entry["node"]
@@ -1191,7 +1241,7 @@ func _collect_native_spawn_state(root: Node) -> Array[Dictionary]:
 
 # Collects every property marked .on_spawn() under root, in preorder, so the
 # apply order on the receiver matches the authority's declaration order.
-func _collect_spawn_state(root: Node) -> Array[Dictionary]:
+func collect_spawn_state(root: Node) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var stack: Array[Node] = [root]
 	while not stack.is_empty():
@@ -1395,11 +1445,8 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			)
 			_drops_spawn_unresolved += 1
 			return
-		var host := fn.get_object()
-		var script := host.get_script() as Script
-		var method := fn.get_method()
-		var encoded_args := _read_fn_args(r, script, method)
-		if encoded_args == null:
+		var reg_schema = _fn_registry_schema(reg_id, fn)
+		if reg_schema == null:
 			Netw.dbg.warn(
 				"NetwSpawnPipeline: SPAWN for route %d names constructor "
 				+ "'%s' whose arguments are not configured",
@@ -1407,6 +1454,7 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			)
 			_drops_spawn_unresolved += 1
 			return
+		var encoded_args := _read_fn_args(r, reg_schema)
 		var args = _resolve_spawn_args(encoded_args, payload, route, native_core)
 		if args == null:
 			return
@@ -1440,9 +1488,8 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			_drops_spawn_unresolved += 1
 			return
 		var method := StringName(_get_str(r))
-		var script := host.get_script() as Script
-		var encoded_args := _read_fn_args(r, script, method)
-		if encoded_args == null:
+		var fn_schema = _fn_script_schema(host.get_script() as Script, method)
+		if fn_schema == null:
 			Netw.dbg.warn(
 				"NetwSpawnPipeline: SPAWN for route %d names spawn "
 				+ "function '%s' that is not registered on '%s'",
@@ -1450,6 +1497,7 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			)
 			_drops_spawn_unresolved += 1
 			return
+		var encoded_args := _read_fn_args(r, fn_schema)
 		var args = _resolve_spawn_args(encoded_args, payload, route, native_core)
 		if args == null:
 			return
@@ -1735,9 +1783,9 @@ func _free_despawned(route: int) -> void:
 func _park_timeout_ticks() -> int:
 	var api := _api()
 	var tickrate := 30.0
-	if api and api.clock.is_configured():
+	if api and api.clock.is_configured:
 		tickrate = float(api.clock.tickrate)
-	return NetwClockCore.pumps_for(park_timeout_seconds, tickrate)
+	return NetwClockHandle.pumps_for(park_timeout_seconds, tickrate)
 
 
 # Parks the frame spawning [param route] until [param dep_route] goes live.
@@ -1768,7 +1816,7 @@ func _park_spawn(payload: PackedByteArray, dep_route: int, route: int) -> void:
 # still gives up instead of holding the payload forever.
 func _park_spawn_for_scene(payload: PackedByteArray, route: int) -> void:
 	var api := _api()
-	if not api or not api._scenes:
+	if not api or not api._scene_core:
 		_drops_spawn_unresolved += 1
 		return
 	_spawn_deferrals += 1
@@ -1945,10 +1993,10 @@ class _ActionGate:
 
 # The display clock, or null while none is configured, so the gate degrades to a
 # no-op against a clockless session.
-func _gate_display_clock() -> ClockCore:
+func _gate_display_clock() -> NetwClockHandle:
 	var api := _api()
-	if api and api.clock.is_configured():
-		return api._clock
+	if api and api.clock.is_configured:
+		return api._native_core.clock_handle
 	return null
 
 
@@ -1975,7 +2023,7 @@ func _apply_action_gate(route: int, entity: NetwEntity) -> void:
 	_action_gates[route] = gate
 	var api := _api()
 	if api:
-		api._connect_once(clock.on_tick, _on_action_reveal_tick)
+		api._connect_once(api._native_core.on_tick, _on_action_reveal_tick)
 
 
 func _on_action_reveal_tick(_delta: float, tick: int) -> void:
@@ -2003,9 +2051,12 @@ func _reveal_gate(route: int) -> void:
 func _disconnect_action_reveal_if_idle() -> void:
 	if not _action_gates.is_empty():
 		return
-	var clock := _gate_display_clock()
-	if clock and clock.on_tick.is_connected(_on_action_reveal_tick):
-		clock.on_tick.disconnect(_on_action_reveal_tick)
+	var api := _api()
+	if not api:
+		return
+	var ticked := api._native_core.on_tick
+	if ticked.is_connected(_on_action_reveal_tick):
+		ticked.disconnect(_on_action_reveal_tick)
 
 
 func _is_local_action_requester(entity: NetwEntity) -> bool:

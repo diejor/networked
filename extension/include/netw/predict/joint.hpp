@@ -77,14 +77,14 @@ struct IslandMember {
 };
 
 struct Island {
-    LocalVector<IslandMember> members;
+    godot::LocalVector<IslandMember> members;
     int64_t owner_order_key = 0;
     Promotion promotion = Promotion::NONE;
     int promotion_count = 0;
     double promotion_meters = 0.0;
 
     void commit(
-        const LocalVector<IslandCandidate> &p_candidates,
+        const godot::LocalVector<IslandCandidate> &p_candidates,
         int64_t p_frontier
     );
     void release_lingering(int64_t p_floor);
@@ -106,8 +106,8 @@ struct JointCommandRecord {
 };
 
 struct JointTrack {
-    LocalVector<JointStateRecord> states;
-    LocalVector<JointCommandRecord> commands;
+    godot::LocalVector<JointStateRecord> states;
+    godot::LocalVector<JointCommandRecord> commands;
     Tenure tenure;
     int64_t basis = -1;
     int64_t relay_floor = -1;
@@ -145,8 +145,8 @@ struct JointStep {
 };
 
 struct JointPassPlan {
-    LocalVector<JointRestore> restores;
-    LocalVector<JointStep> steps;
+    godot::LocalVector<JointRestore> restores;
+    godot::LocalVector<JointStep> steps;
     int64_t floor = -1;
     int64_t present = -1;
     bool heal = false;
@@ -174,8 +174,8 @@ struct JointStats {
 };
 
 JointFloorDecision joint_floor(
-    const LocalVector<int64_t> &p_bases,
-    const LocalVector<int64_t> &p_relay_floors,
+    const godot::LocalVector<int64_t> &p_bases,
+    const godot::LocalVector<int64_t> &p_relay_floors,
     int64_t p_epoch_floor,
     int64_t p_history_floor,
     int64_t p_present

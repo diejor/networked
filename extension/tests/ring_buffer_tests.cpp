@@ -1,29 +1,21 @@
-// Unit tests for NetwRingBuffer.
-//
-// Contract examples cover record/retrieve, bracketing search, and eviction
-// under a fixed capacity. Oracle tests cross-check the same invariants against
-// a brute-force model.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
 #include <utility>
 #include <vector>
 
-#include "netw/ring_buffer.hpp"
+#include "netw/api/ring_buffer.hpp"
 
 namespace TestNetwRingBuffer {
 
 using namespace godot;
 using netw::NetwRingBuffer;
 
-// The oracle the fuzzing cases cross-check against: a plain list that evicts
-// from the front, which is what the ring is supposed to be equivalent to.
-struct Oracle {
+struct FrontEvictingList {
     std::vector<std::pair<int64_t, String>> rows;
     int64_t capacity;
 
-    explicit Oracle(int64_t p_capacity) : capacity(p_capacity) {
+    explicit FrontEvictingList(int64_t p_capacity) : capacity(p_capacity) {
     }
 
     void record(int64_t tick, const String &value) {
@@ -34,9 +26,7 @@ struct Oracle {
     }
 };
 
-// A deterministic sequence stands in for the GDScript fuzzer, so a failure
-// names the same inputs every run instead of a seed nobody recorded.
-int64_t next_value(int64_t &state, int64_t low, int64_t high) {
+int64_t deterministic_next(int64_t &state, int64_t low, int64_t high) {
     state = (state * 6364136223846793005LL + 1442695040888963407LL);
     const int64_t span = high - low + 1;
     return low + ((state >> 33) % span + span) % span;
@@ -122,8 +112,9 @@ TEST_CASE(
     "[Networked][Ring][Hosted] ring buffer evicts the oldest entry past "
     "capacity"
 ) {
-    // A requested 3 rounds up to 4, so the fourth entry still fits.
-    Ref<NetwRingBuffer> buffer = NetwRingBuffer::create(3);
+    const int64_t requested_below_a_power_of_two = 3;
+    Ref<NetwRingBuffer> buffer
+        = NetwRingBuffer::create(requested_below_a_power_of_two);
     for (int64_t tick = 1; tick < 5; ++tick) {
         buffer->record(tick, String("v") + String::num_int64(tick));
     }
@@ -147,27 +138,27 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Ring][Hosted] ring buffer view matches an evicting-list oracle"
+    "[Networked][Ring][Hosted] ring buffer view matches a front-evicting list"
 ) {
     int64_t state = 1;
     for (int run = 0; run < 20; ++run) {
         const int64_t capacity = 4;
         const int64_t inserts = 12;
         Ref<NetwRingBuffer> buffer = NetwRingBuffer::create(capacity);
-        Oracle oracle(capacity);
+        FrontEvictingList expected(capacity);
 
-        const int64_t base = next_value(state, 1, 1000000);
+        const int64_t base = deterministic_next(state, 1, 1000000);
         for (int64_t i = 0; i < inserts; ++i) {
             const int64_t tick = base + i;
             const String value = String("value_") + String::num_int64(tick);
             buffer->record(tick, value);
-            oracle.record(tick, value);
+            expected.record(tick, value);
         }
 
-        CHECK(buffer->size() == static_cast<int64_t>(oracle.rows.size()));
-        CHECK(buffer->oldest_tick() == oracle.rows.front().first);
-        CHECK(buffer->newest_tick() == oracle.rows.back().first);
-        for (const auto &row : oracle.rows) {
+        CHECK(buffer->size() == static_cast<int64_t>(expected.rows.size()));
+        CHECK(buffer->oldest_tick() == expected.rows.front().first);
+        CHECK(buffer->newest_tick() == expected.rows.back().first);
+        for (const auto &row : expected.rows) {
             CHECK(buffer->get_at(row.first) == Variant(row.second));
         }
     }
@@ -184,12 +175,12 @@ TEST_CASE(
 
         int64_t tick = 0;
         for (int64_t i = 0; i < capacity; ++i) {
-            tick += 1 + next_value(state, 0, 50) % 5;
+            tick += 1 + deterministic_next(state, 0, 50) % 5;
             buffer->record(tick, tick);
             recorded.push_back(tick);
         }
 
-        const int64_t query = next_value(state, 0, 50);
+        const int64_t query = deterministic_next(state, 0, 50);
         Vector2i expected(-1, -1);
         for (int64_t stored : recorded) {
             if (stored <= query && stored > expected.x) {

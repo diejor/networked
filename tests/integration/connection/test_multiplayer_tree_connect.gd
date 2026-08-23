@@ -50,10 +50,12 @@ func test_host_starts_server_and_joins() -> void:
 	assert_that(server_node).is_instanceof(MultiplayerTree)
 	var server_tree := server_node as MultiplayerTree
 
-	# Interest is no longer a mounted service node. The interface is owned by
-	# the tree's api and always present.
-	assert_that(server_tree.api._interest).is_not_null()
-	assert_that(server_tree.api._interest).is_instanceof(InterestCore)
+	# Interest is no longer a mounted service node. The plane is owned by the
+	# tree's session and always present.
+	var occupancy: Dictionary = \
+			server_tree.api._native_core.interest_monitor_snapshot()
+	assert_bool(occupancy.has(&"layers")).is_true()
+	assert_bool(occupancy.has(&"visible_edges")).is_true()
 
 
 func test_listen_server_auto_connect_player_spawns_player() -> void:
@@ -65,7 +67,7 @@ func test_listen_server_auto_connect_player_spawns_player() -> void:
 		),
 	)
 
-	assert_that(tree.role).is_equal(SessionCore.Role.LISTEN_SERVER)
+	assert_that(tree.role).is_equal(NetwMultiplayer.Role.LISTEN_SERVER)
 
 	var player := await harness.wait_for_player(tree, level_builder.scene_name)
 	assert_that(player).is_not_null()
@@ -84,8 +86,11 @@ func test_join_fail_fast_on_offline_address() -> void:
 	payload.username = "offline_client"
 
 	tree.api.state_changed.connect(
-		func(_old: SessionCore.State, new: SessionCore.State) -> void:
-			if new != SessionCore.State.CONNECTING:
+		func(
+				_old: NetwMultiplayer.SessionState,
+				new: NetwMultiplayer.SessionState,
+		) -> void:
+			if new != NetwMultiplayer.SessionState.CONNECTING:
 				return
 			var trigger_failure: Callable
 			trigger_failure = func() -> void:

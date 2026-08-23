@@ -2,7 +2,7 @@
 
 #include "netw/predict/engine.hpp"
 #include "netw/predict/journal.hpp"
-#include "netw/quantize.hpp"
+#include "netw/api/quantize.hpp"
 
 namespace TestNetwPredictDeclarationLaws {
 

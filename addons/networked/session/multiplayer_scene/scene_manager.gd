@@ -2,13 +2,16 @@
 @tool
 class_name MultiplayerSceneManager
 extends Node
-## Authoring node that declares a session's scenes for [SceneCore].
+## Authoring node that declares a session's scenes for [NetwMultiplayer].
 ##
 ## The manager holds no runtime state. It snapshots its exported rows into a
 ## [NetwSceneConfig] and registers that with the session through
 ## [method NetwMultiplayer.object_configuration_add], so the session reads one
 ## declaration whether a manager authored the rows or a tree-less session built
-## the config directly.
+## the config directly. The declaration also names this node as its
+## [member NetwSceneConfig.anchor], which is how the session comes to parent the
+## scenes it spawns under the manager rather than under
+## [member NetwMultiplayer.root].
 ## [codeblock]
 ## # Inspector rows become a config the session reads.
 ## manager.scene_paths = ["res://level/lobby.tscn"]
@@ -45,9 +48,15 @@ var level_spawn_function: Callable:
 		if _netw_scene_config:
 			_netw_scene_config.level_spawn_function = value
 
-## Per-scene spawn data shared with [member NetwSceneConfig.spawn_data], so an
-## in-place edit after the config registers reaches the interface.
-var scene_spawn_data: Dictionary[StringName, Variant] = { }
+## The per-scene spawn data declared so far, as a copy.
+##
+## Reads answer a copy because the only way in is
+## [method declare_scene_spawn_data], which republishes the declaration. A
+## dictionary a caller could edit in place would be a second way in, and the
+## session would never hear it.
+var scene_spawn_data: Dictionary[StringName, Variant]:
+	get:
+		return _scene_spawn_data.duplicate(true)
 
 ## Declared level resource paths.
 @export var scene_paths: Array[String] = []
@@ -60,6 +69,7 @@ var scene_spawn_data: Dictionary[StringName, Variant] = { }
 @export var initial_scene_paths: Array[String] = []
 
 var _scene_paths: Dictionary[StringName, String] = { }
+var _scene_spawn_data: Dictionary[StringName, Variant] = { }
 var _netw_scene_config: NetwSceneConfig
 
 
@@ -95,31 +105,54 @@ func _exit_tree() -> void:
 # registered after the config lands still reach the interface.
 func _build_netw_scene_config() -> NetwSceneConfig:
 	var config := NetwSceneConfig.new()
+	config.anchor = self
 	config.isolation = scene_isolation
 	config.level_spawn_function = level_spawn_function
-	config.spawn_data = scene_spawn_data
 	_populate_scene_lists(config)
 	return config
 
 
-# Rebuilds the config's scene name map and startup list from the current paths.
+# Rebuilds the config's declared rows from the current paths and spawn data.
 func _populate_scene_lists(config: NetwSceneConfig) -> void:
-	config.scenes.clear()
-	for path in get_configured_paths():
-		var packed := load(path) as PackedScene
-		if packed:
-			config.scenes[NetwMultiplayerCore.scene_packed_stem(packed)] = packed
-	config.initial_scenes.clear()
+	config.declare(_declare_rows)
+
+
+# The rows this node stands for, rebuilt whole inside one declaration.
+func _declare_rows(config: NetwSceneConfig) -> void:
+	config.clear_declarations()
+	var startup: Array[PackedScene] = []
 	for stored_path: String in initial_scene_paths:
 		var packed := load(ResourceUID.ensure_path(stored_path)) as PackedScene
 		if packed:
-			config.initial_scenes.append(packed)
+			startup.append(packed)
+	config.initial_scenes = startup
+	for path in get_configured_paths():
+		var packed := load(path) as PackedScene
+		if packed:
+			config.declare_scene(
+				NetwMultiplayerCore.scene_packed_stem(packed),
+				packed,
+			)
+	for scene_name: StringName in _scene_spawn_data:
+		config.declare_spawn_data(scene_name, _scene_spawn_data[scene_name])
 
 
 # Refreshes the live config after a declaration changes.
 func _sync_config() -> void:
 	if _netw_scene_config:
 		_populate_scene_lists(_netw_scene_config)
+
+
+## Declares the data [member level_spawn_function] receives when the session
+## activates the scene named [param scene_name].
+##
+## Reaches the session immediately, including after this node registered its
+## declaration, because the declaration republishes rather than being read back
+## through a dictionary this node still holds. See
+## [method NetwSceneConfig.declare_spawn_data].
+func declare_scene_spawn_data(scene_name: StringName, data: Variant) -> void:
+	_scene_spawn_data[scene_name] = data
+	_sync_config()
 
 
 ## Adds a resource path or UID [param path] to this declaration node.

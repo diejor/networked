@@ -4,7 +4,9 @@
 
 #include "godot/variant.hpp"
 #include "netw/repl/set_model.hpp"
-#include "netw/sync_model.hpp"
+#include "netw/api/sync_model.hpp"
+
+using namespace godot;
 
 namespace TestNetwReplSetModel {
 

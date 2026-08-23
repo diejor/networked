@@ -12,7 +12,7 @@
  */
 
 #include "godot/variant.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/wire/code_row.hpp"
 
 namespace netw::wire {

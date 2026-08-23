@@ -1,8 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictConsumePlan" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		Whether one transition has an authored command to consume, and
+		what to do when it does not.
 	</brief_description>
 	<description>
+		Answers one question ahead of driving a transition: is there input
+		to consume, and if the caller's own tick has none, is a later one
+		already known to exist. [method eligible] gates every other
+		member; while it is [code]false[/code] no input has arrived yet
+		for this transition at all, and a caller waits rather than
+		treating the gap as a decision.
+		[br][br]When [method missing] is [code]true[/code], this
+		transition itself carries no fresh command but a later one is
+		already known, so the gap must be filled one way or another.
+		[method use_last] says whether the fill repeats the most recent
+		known command, the policy that lets a transition run rather than
+		stall on a single dropped input. [method run] is [code]true[/code]
+		whenever a transition should actually be driven this pass: always
+		for fresh input, and for a missing one only when
+		[method use_last] holds or the schedule itself runs every frame
+		regardless of freshness.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,26 +28,45 @@
 		<method name="eligible" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this transition has anything to decide about at
+				all: either a fresh command arrived, or a later one is
+				already known so the gap is a real decision rather than
+				an unopened future.
 			</description>
 		</method>
 		<method name="kind" qualifiers="const">
 			<return type="int" />
 			<description>
+				The drive kind this consumption plans for: [code]1[/code]
+				fresh when [method eligible] and not [method missing], or
+				[code]6[/code] missing otherwise. [code]0[/code] while
+				[method eligible] is [code]false[/code].
 			</description>
 		</method>
 		<method name="missing" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this transition's own command never arrived, even
+				though a later one already has. Implies
+				[method eligible].
 			</description>
 		</method>
 		<method name="run" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this transition should be driven this pass. Always
+				[code]true[/code] for fresh input, and for
+				[method missing] input only when [method use_last] holds
+				or the schedule runs every frame regardless of freshness.
 			</description>
 		</method>
 		<method name="use_last" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether a [method missing] transition should be filled by
+				repeating the most recently known command, rather than
+				left undriven until a fresh one arrives. Only meaningful
+				when [method missing] is [code]true[/code].
 			</description>
 		</method>
 	</methods>

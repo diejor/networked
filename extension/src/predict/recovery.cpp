@@ -7,7 +7,9 @@
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
-#include "netw/project.hpp"
+#include "netw/api/project.hpp"
+
+using namespace godot;
 
 namespace netw::predict {
 

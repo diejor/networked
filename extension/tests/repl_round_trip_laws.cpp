@@ -1,26 +1,15 @@
-// The whole pipeline, values in and values out.
-//
-// Every stage has its own laws and the compositions have the ordering ones.
-// This asks the only question none of them can: whether a value handed to the
-// send side arrives on the receive side as the same value. A pipeline whose
-// stages are each correct can still lose a row between them, and nothing short
-// of the round trip would say so.
-//
-// The comparison is at the VALUE level rather than the byte level on purpose.
-// Sender and receiver agree about a row's MEANING, and the grid is part of
-// that meaning: what the receiver must hold is the sender's value after one
-// trip through the declared grid, not the sender's raw input.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
 
 #include "godot/variant.hpp"
-#include "netw/quantize.hpp"
+#include "netw/api/quantize.hpp"
 #include "netw/repl/row_frame.hpp"
 #include "netw/repl/session_send.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/wire/value_row.hpp"
+
+using namespace godot;
 
 namespace TestNetwReplRoundTrip {
 
@@ -57,8 +46,6 @@ WireRegistry registry() {
     return out;
 }
 
-// Two gridded axes and one raw integer, so the trip crosses both a quantizer
-// and a column that has none.
 Ref<SchemaRecord> mixed() {
     Ref<SchemaRecord> record;
     record.instantiate();
@@ -97,8 +84,6 @@ RowOffer offer(const Ref<SchemaRecord> &p_schema, const Array &p_values) {
     return out;
 }
 
-// What the receiver ends up holding, given the row the send side produced and
-// the row it already had.
 Array receive(
     const Ref<SchemaRecord> &p_schema,
     const WirePlan &p_plan,
@@ -146,9 +131,6 @@ TEST_CASE(
     const Array got = receive(schema, plan, bytes, held);
     REQUIRE(got.size() == 3);
 
-    // The canonical form: what the sender's own values become after one trip
-    // through the declared grid. That is what both sides agree the row means,
-    // and it is what the receiver must hold.
     CodeRow canonical = CodeRow::for_plan(plan);
     REQUIRE(netw::wire::encode_scalar_row(
         schema,
@@ -187,7 +169,6 @@ TEST_CASE(
 
     session.acknowledge(PEER, 1);
 
-    // Only the third column moves.
     LocalVector<RowOffer> second;
     second.push_back(offer(schema, values_of(1.0, 2.0, 99)));
     const SessionResult two = session.run(reg, second, 100000, 2, 901);
@@ -199,10 +180,6 @@ TEST_CASE(
         = receive(schema, plan, write_row_frame(head, plan, two.sends[0].row), held);
     REQUIRE(got.size() == 3);
 
-    // The masked frame carried one column and the receiver still holds three,
-    // because the frame applied to the row it already had. This is the whole
-    // masked lane in one assertion: had the untouched columns come back wrong,
-    // every peer would drift one pass at a time and nothing would report it.
     NETW_CHECK_EQ(int64_t(got[2]), 99);
     CHECK(double(got[0]) != 0.0);
     CHECK(double(got[1]) != 0.0);
@@ -225,9 +202,6 @@ TEST_CASE(
     same.push_back(offer(schema, values_of(1.0, 2.0, 3)));
     const SessionResult quiet = session.run(reg, same, 100000, 2, 901);
 
-    // No frame at all, which is the end of the chain: the mask was empty, so
-    // there is nothing to write, nothing to send, and nothing for a receiver
-    // to apply.
     NETW_CHECK_EQ(quiet.sends.size(), 0);
     NETW_CHECK_EQ(quiet.caught_up, 1);
 }

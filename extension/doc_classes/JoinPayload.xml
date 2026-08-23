@@ -34,7 +34,7 @@
 		<method name="serialize" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
-				Writes the request as the frame that travels to the server, carrying [member arg_bytes] rather than [member arg_values].
+				Writes the request as the frame that travels to the server, carrying [member arg_bytes] rather than [member arg_values]. Keys are [StringName], matching the frame a GDScript-era client wrote.
 			</description>
 		</method>
 	</methods>

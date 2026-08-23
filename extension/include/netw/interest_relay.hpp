@@ -9,10 +9,7 @@
 
 namespace netw {
 
-class NetwInterestAwareness : public godot::RefCounted {
-    GDCLASS(NetwInterestAwareness, godot::RefCounted)
-
-public:
+struct InterestAwareness {
     enum Kind {
         EXIT = 0,
         ENTER = 1,
@@ -23,52 +20,37 @@ public:
         OBSERVER = 1,
     };
 
-private:
     int32_t type = LAYER;
     int64_t route = 0;
     godot::StringName layer_id;
     int64_t observer_peer = 0;
     int32_t kind = ENTER;
 
-protected:
-    static void _bind_methods();
-
-public:
-    static godot::Ref<NetwInterestAwareness> layer_edge(
+    static InterestAwareness layer_edge(
         int64_t route,
         const godot::StringName &layer_id,
         int kind
     );
-    static godot::Ref<NetwInterestAwareness> observer_edge(
+    static InterestAwareness observer_edge(
         int64_t route,
         const godot::StringName &layer_id,
         int64_t observer_peer,
         int kind
     );
 
-    static godot::Ref<NetwInterestAwareness> from_array(
-        const godot::Variant &raw
+    static bool from_array(
+        const godot::Variant &raw,
+        InterestAwareness &r_edge
     );
     godot::Array to_array() const;
-
-    int get_edge_type() const { return type; }
-    int64_t get_route() const { return route; }
-    godot::StringName get_layer_id() const { return layer_id; }
-    int64_t get_observer_peer() const { return observer_peer; }
-    int get_kind() const { return kind; }
 };
 
-class NetwInterestRelay : public godot::RefCounted {
-    GDCLASS(NetwInterestRelay, godot::RefCounted)
-
+class InterestRelay {
     godot::LocalVector<int64_t> peer_order;
     godot::HashMap<int64_t, godot::Array> pending;
 
-protected:
-    static void _bind_methods();
-
 public:
-    void append(int64_t peer_id, const godot::Ref<NetwInterestAwareness> &edge);
+    void append(int64_t peer_id, const InterestAwareness &edge);
 
     godot::PackedInt64Array targets() const;
 
@@ -80,5 +62,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::NetwInterestAwareness::Type);

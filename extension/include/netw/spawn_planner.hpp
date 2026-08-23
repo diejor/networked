@@ -1,21 +1,12 @@
 #pragma once
 
-/* The shell's handle on the materialization planner.
- *
- * A binding that exists so the GDScript spawn pump can plan a tick before
- * `NetwMultiplayer` is native. It holds no logic and no state: the verb
- * translates rows in, calls `netw::repl::reconcile`, and translates the plan
- * back out.
- *
- * TODO: unregister this class and delete this header once the spawn pump is
- * native and calls `netw::repl::reconcile` over its own rows.
- */
-
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 
 namespace netw {
 
+// TODO: unregister this class and delete this header once the spawn pump is
+// native and calls netw::repl::reconcile over its own rows.
 class NetwSpawnPlanner : public godot::RefCounted {
     GDCLASS(NetwSpawnPlanner, godot::RefCounted)
 

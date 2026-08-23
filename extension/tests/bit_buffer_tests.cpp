@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-#include "netw/bit_buffer.hpp"
+#include "netw/api/bit_buffer.hpp"
 
 namespace TestNetwBitBuffer {
 

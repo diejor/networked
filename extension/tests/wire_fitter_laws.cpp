@@ -1,15 +1,3 @@
-// What the fitter does with more frames than a datagram holds.
-//
-// The fitter is the only place that decides what is sent NOW and what waits,
-// so two of its properties are load-bearing beyond packing well. A deferred
-// candidate has to rise, or a channel that loses one pass loses every pass and
-// starves behind a busier one. And the order has to be a function of the
-// candidates alone, or two runs over identical input pack differently and
-// every byte-exact instrument downstream is measuring the sort.
-//
-// The sibling suite covers that packing stays inside the budget. This covers
-// the decisions either side of that: what happens to what did not fit, and
-// what happens when two candidates are equally entitled.
 
 #include "support/netw_test.h"
 
@@ -18,6 +6,8 @@
 #include "godot/local_vector.hpp"
 #include "netw/wire/fitter.hpp"
 #include "netw/wire/registry.hpp"
+
+using namespace godot;
 
 namespace TestNetwWireFitterLaws {
 
@@ -63,9 +53,6 @@ TEST_CASE(
     NETW_CHECK_EQ(result.packed.size(), 1);
     NETW_CHECK_EQ(result.deferred.size(), 1);
 
-    // The deferred candidate leaves owed its own priority again. Without that
-    // it arrives at the next pass exactly as entitled as it was, loses to the
-    // same rival, and starves for as long as the rival keeps sending.
     CHECK(result.deferred[0].accumulated_priority
           > result.deferred[0].priority);
 }
@@ -79,8 +66,6 @@ TEST_CASE(
     candidates.push_back(candidate(1, 800, 4.0f));
     candidates.push_back(candidate(2, 800, 1.0f));
 
-    // The loser is carried forward as the fitter left it, which is what a
-    // caller does with a deferral, and the winner arrives fresh each pass.
     FitCandidate starved;
     int won_at = -1;
     for (int pass = 0; pass < 6; ++pass) {
@@ -129,18 +114,10 @@ TEST_CASE(
 ) {
     const WireRegistry registry = fitted_registry();
     LocalVector<FitCandidate> candidates;
-    // Past the threshold where a introsort stops falling back to insertion
-    // sort, since below it an unstable sort is incidentally stable and the law
-    // would pass on the implementation rather than on the contract.
     for (int64_t id = 1; id <= 64; ++id) {
         candidates.push_back(candidate(id, 100));
     }
 
-    // Every candidate here is equally entitled, so nothing about them decides
-    // the order and only the offer order is left. An unstable sort would be
-    // free to answer differently for the same input, and every byte-exact
-    // instrument downstream would then be measuring the sort rather than the
-    // lane.
     const FitResult result = WireFitter::fit(registry, candidates, 400);
     REQUIRE(result.packed.size() == 4);
     for (uint32_t at = 0; at < result.packed.size(); ++at) {

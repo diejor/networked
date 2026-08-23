@@ -4,6 +4,8 @@
 
 #include "netw/predict/drive.hpp"
 
+using namespace godot;
+
 namespace TestNetwPredictRecoveryLaws {
 
 using namespace netw;

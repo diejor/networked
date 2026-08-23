@@ -1,8 +1,8 @@
 ## Unit tests for the session roster's name policy, the one place two players
 ## arriving under one name is settled.
 ##
-## The policy itself is lawed natively as [NetwJoinRoster]; what these cases
-## hold is that the roster hands it the right facts about the joining peer.
+## The policy itself is lawed natively on [NetwMultiplayerCore]; what these
+## cases hold is that the roster hands it the right facts about the peer.
 class_name TestSessionRosterNames
 extends NetwTestSuite
 
@@ -13,7 +13,7 @@ var _held: Array[NetwEntity] = []
 
 
 func before_test() -> void:
-	_roster = SessionRoster.new()
+	_roster = SessionRoster.new(NetwMultiplayerCore.new())
 	_held = [_player("ana")]
 
 

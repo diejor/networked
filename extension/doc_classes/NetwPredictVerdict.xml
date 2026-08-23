@@ -1,8 +1,27 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictVerdict" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		One receive-side judgement of a predicted transition, either a
+		state comparison or an acknowledgement, never both.
 	</brief_description>
 	<description>
+		Wraps whichever of two judgements produced it: a state comparison,
+		made when a fresh authoritative state row arrives, or an
+		acknowledgement, made when authority's ack of a locally predicted
+		transition arrives. The two share every accessor, but a member
+		that only means something for one kind answers a fixed default
+		under the other rather than being unavailable. [method recv_tick],
+		[method corrected], [method settled], [method divergence], and
+		[method field_errors] are state-only and answer [code]-1[/code],
+		[code]false[/code], [code]false[/code], [code]0.0[/code], and an
+		empty array on an acknowledgement verdict. [method domain] and
+		[method differing_family] are the mirror case: an acknowledgement
+		always reads [code]OUT_OF_DOMAIN[/code] and [code]NONE[/code],
+		since only a state comparison narrows either.
+		[br][br][method exact] holds for both kinds:
+		[code]0[/code] means the row was never comparable at all,
+		[code]1[/code] means it matched exactly, and [code]2[/code] means
+		it did not.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,66 +29,112 @@
 		<method name="attribution" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [enum NetwPredictJournal.Attribution] this verdict
+				assigns to its divergence, or
+				[constant NetwPredictJournal.UNKNOWN] when it judged none.
 			</description>
 		</method>
 		<method name="compared" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether this verdict actually ran a comparison, as opposed
+				to a row that arrived with nothing yet to compare it
+				against.
 			</description>
 		</method>
 		<method name="corrected" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether a state comparison's divergence was corrected in
+				the same pass that judged it. Always [code]false[/code] on
+				an acknowledgement verdict, which never applies a
+				correction of its own.
 			</description>
 		</method>
 		<method name="differing_family" qualifiers="const">
 			<return type="int" />
 			<description>
+				Which state family an acknowledgement narrowed its
+				divergence to: [code]0[/code] none, [code]1[/code] pose,
+				[code]2[/code] momentum, or [code]3[/code] the controller
+				latch. Always [code]0[/code] on a state comparison
+				verdict, which judges the whole state rather than one
+				family.
 			</description>
 		</method>
 		<method name="divergence" qualifiers="const">
 			<return type="float" />
 			<description>
+				The magnitude of a state comparison's divergence, or
+				[code]0.0[/code] on an acknowledgement verdict.
 			</description>
 		</method>
 		<method name="domain" qualifiers="const">
 			<return type="int" />
 			<description>
+				The [enum NetwPredictJournal.Domain] a state comparison
+				judged its divergence to be in. Always
+				[constant NetwPredictJournal.OUT_OF_DOMAIN] on an
+				acknowledgement verdict, which carries no domain
+				classification of its own.
 			</description>
 		</method>
 		<method name="evidence_complete" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether an acknowledgement's evidence covered every field
+				it needed to judge. Always [code]false[/code] on a state
+				comparison verdict.
 			</description>
 		</method>
 		<method name="exact" qualifiers="const">
 			<return type="int" />
 			<description>
+				Whether this row matched exactly: [code]0[/code] never
+				judged, [code]1[/code] equal, or [code]2[/code] unequal.
+				Meaningful for both a state comparison and an
+				acknowledgement verdict.
 			</description>
 		</method>
 		<method name="field_errors" qualifiers="const">
 			<return type="PackedFloat64Array" />
 			<description>
+				One error magnitude per declared field, in declaration
+				order, for a state comparison verdict. Empty on an
+				acknowledgement verdict.
 			</description>
 		</method>
 		<method name="meter" qualifiers="const">
 			<return type="int" />
 			<description>
+				The divergence meter a state comparison measured, the same
+				scale [method NetwPredictEpisodeReport.comparison_meter]
+				reads back from a recorded episode. [code]0[/code] on an
+				acknowledgement verdict.
 			</description>
 		</method>
 		<method name="recv_tick" qualifiers="const">
 			<return type="int" />
 			<description>
+				The local tick a state comparison's authoritative row
+				arrived on, or [code]-1[/code] on an acknowledgement
+				verdict.
 			</description>
 		</method>
 		<method name="settled" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether a state comparison reached a final answer this
+				pass: the transition was out of domain, or [method exact]
+				judged it rather than leaving it [code]UNJUDGED[/code].
+				Always [code]false[/code] on an acknowledgement verdict.
 			</description>
 		</method>
 		<method name="transition" qualifiers="const">
 			<return type="int" />
 			<description>
+				The transition this verdict judges, read from whichever of
+				the state comparison or the acknowledgement produced it.
 			</description>
 		</method>
 	</methods>

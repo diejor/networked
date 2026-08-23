@@ -4,17 +4,16 @@
 ## The node writer sets a property on a live [Node]; this backend appends the
 ## value to a log with the frame time that produced it, so the display calculus
 ## can assert signal properties on the output with no [SceneTree] in reach. It is
-## the concrete first payoff of the seam being swappable, and it declares the
-## [code]ANY[/code] thread class every non-node writer carries.
+## the concrete first payoff of the seam being swappable.
 ## [codeblock]
 ## var writer := NetwInterpRecordingWriter.new()
-## state.output = writer                 # replaces the node writer
+## state.output = writer.write           # replaces the node writer
 ## writer.mark_frame(wall_seconds)       # stamps the next writes
 ## # ... pump runs, calling writer.write(value) ...
 ## var last := writer.samples.back()     # the captured displayed value
 ## [/codeblock]
 class_name NetwInterpRecordingWriter
-extends DisplayCore._Output
+extends RefCounted
 
 ## Every value written, in emission order.
 var samples: Array = []
@@ -30,11 +29,6 @@ var _frame_time := 0.0
 ## the frame that produced it.
 func mark_frame(seconds: float) -> void:
 	_frame_time = seconds
-
-
-## The recording writer runs off any thread because it touches no node.
-func thread_class() -> StringName:
-	return &"ANY"
 
 
 ## Captures [param value] with the current frame time instead of writing a node.

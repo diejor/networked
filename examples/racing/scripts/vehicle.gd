@@ -619,7 +619,7 @@ func _should_simulate() -> bool:
 func _start_net_log() -> void:
 	if not RacingNetLog.armed():
 		return
-	var clock: ClockCore = multiplayer._clock if multiplayer else null
+	var clock: NetwClockHandle = multiplayer._native_core.clock_handle if multiplayer else null
 	if not clock:
 		return
 	if sphere.get_script() == null:

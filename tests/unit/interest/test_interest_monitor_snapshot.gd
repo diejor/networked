@@ -3,7 +3,7 @@ class_name TestInterestMonitorSnapshot
 extends NetwTestSuite
 
 var mt: MultiplayerTree
-var service: InterestCore
+var service: NetwMultiplayer
 
 
 func before_test() -> void:
@@ -11,11 +11,11 @@ func before_test() -> void:
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
-	service = mt.api._interest
+	service = mt.api
 
 
 func test_layer_snapshot_counts_viewers_entities_edges_transitions() -> void:
-	var layer := service.layer(&"sight")
+	var layer: NetwInterestLayer = service._native_core.interest_layer(&"sight")
 	layer.add_viewer(7)
 	var entity := NetwEntity.of(make_test_entity(mt, "Target", 0, false))
 	layer.add_entity(entity)
@@ -27,7 +27,7 @@ func test_layer_snapshot_counts_viewers_entities_edges_transitions() -> void:
 	assert_that(_before[&"visible_edges"]).is_equal(0)
 	assert_that(_before[&"transitions_total"]).is_equal(0)
 
-	service.flush_now()
+	service.interest_flush()
 
 	var _after := layer.monitor_snapshot()
 	assert_that(_after[&"visible_edges"]).is_equal(1)
@@ -35,26 +35,26 @@ func test_layer_snapshot_counts_viewers_entities_edges_transitions() -> void:
 
 
 func test_visible_edge_count_drops_on_forget() -> void:
-	var layer := service.layer(&"sight")
+	var layer: NetwInterestLayer = service._native_core.interest_layer(&"sight")
 	layer.add_viewer(7)
 	var entity := NetwEntity.of(make_test_entity(mt, "Target", 0, false))
 	layer.add_entity(entity)
-	service.flush_now()
+	service.interest_flush()
 	assert_that(layer.monitor_snapshot()[&"visible_edges"]).is_equal(1)
 
 	layer.remove_entity(entity)
-	service.flush_now()
+	service.interest_flush()
 	assert_that(layer.monitor_snapshot()[&"visible_edges"]).is_equal(0)
 
 
 func test_service_snapshot_aggregates_tree_wide() -> void:
-	var layer := service.layer_for(&"sight")
+	var layer: NetwInterestLayer = service._native_core.interest_layer(&"sight")
 	layer.add_viewer(7)
 	var entity := NetwEntity.of(make_test_entity(mt, "Target", 0, false))
 	layer.add_entity(entity)
-	service.flush_now()
+	service.interest_flush()
 
-	var snap := service.monitor_snapshot()
+	var snap: Dictionary = service._native_core.interest_monitor_snapshot()
 	assert_that(snap[&"layers"]).is_greater_equal(1)
 	assert_that(snap[&"entities_filtered"]).is_equal(1)
 	assert_that(snap[&"visible_edges"]).is_equal(1)

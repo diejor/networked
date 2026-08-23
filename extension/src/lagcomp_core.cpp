@@ -39,7 +39,92 @@ Ref<NetwTimeline> NetwLagCompCore::timeline_history(int64_t p_slot) const {
     return row != nullptr ? row->history : Ref<NetwTimeline>();
 }
 
+uint64_t NetwLagCompCore::entity_key(const Ref<RefCounted> &p_entity) {
+    return p_entity.is_valid() ? uint64_t(p_entity->get_instance_id())
+                               : uint64_t(0);
+}
+
+int64_t NetwLagCompCore::timeline_register(
+    const Ref<RefCounted> &p_entity,
+    int64_t p_history_limit
+) {
+    const uint64_t key = entity_key(p_entity);
+    if (key == 0) {
+        NETW_ERR_V(-1, MODULE, "timeline_register refused a null entity");
+    }
+    HashMap<uint64_t, int64_t>::ConstIterator seated = slot_by_entity.find(key);
+    if (seated != slot_by_entity.end()) {
+        NETW_TRACE(
+            MODULE,
+            "timeline_register is idempotent for entity %d at slot %d",
+            int64_t(key),
+            seated->value
+        );
+        return seated->value;
+    }
+    const int64_t slot = timeline_open(p_history_limit);
+    Row *row = mutable_row_of(slot);
+    row->entity = p_entity;
+    slot_by_entity.insert(key, slot);
+    p_entity->set(StringName("timeline"), row->history);
+    NETW_TRACE(
+        MODULE,
+        "timeline_register seated entity %d at slot %d, %d registered",
+        int64_t(key),
+        slot,
+        int64_t(slot_by_entity.size())
+    );
+    return slot;
+}
+
+int64_t NetwLagCompCore::timeline_slot_of(const Ref<RefCounted> &p_entity
+) const {
+    HashMap<uint64_t, int64_t>::ConstIterator seated =
+        slot_by_entity.find(entity_key(p_entity));
+    return seated != slot_by_entity.end() ? seated->value : -1;
+}
+
+void NetwLagCompCore::timeline_unregister(const Ref<RefCounted> &p_entity) {
+    const int64_t slot = timeline_slot_of(p_entity);
+    if (slot < 0) {
+        return;
+    }
+    NETW_TRACE(
+        MODULE,
+        "timeline_unregister released slot %d, %d left registered",
+        slot,
+        int64_t(slot_by_entity.size()) - 1
+    );
+    timeline_close(slot);
+}
+
+int64_t NetwLagCompCore::timeline_registered() const {
+    return int64_t(slot_by_entity.size());
+}
+
+Dictionary NetwLagCompCore::timeline_entities() const {
+    Dictionary out;
+    for (const KeyValue<uint64_t, int64_t> &seat : slot_by_entity) {
+        const Row *row = row_of(seat.value);
+        if (row != nullptr && row->entity.is_valid()) {
+            out[row->entity] = row->history;
+        }
+    }
+    return out;
+}
+
+Dictionary NetwLagCompCore::timeline_sample_entity(
+    const Ref<RefCounted> &p_entity,
+    int64_t p_tick
+) const {
+    return timeline_sample(timeline_slot_of(p_entity), p_tick);
+}
+
 void NetwLagCompCore::timeline_close(int64_t p_slot) {
+    const Row *row = row_of(p_slot);
+    if (row != nullptr && row->entity.is_valid()) {
+        slot_by_entity.erase(entity_key(row->entity));
+    }
     rows.erase(p_slot);
 }
 
@@ -197,6 +282,30 @@ int NetwLagCompCore::rewind(
 }
 
 void NetwLagCompCore::_bind_methods() {
+    ClassDB::bind_method(
+        D_METHOD("timeline_register", "entity", "history_limit"),
+        &NetwLagCompCore::timeline_register
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeline_slot_of", "entity"),
+        &NetwLagCompCore::timeline_slot_of
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeline_unregister", "entity"),
+        &NetwLagCompCore::timeline_unregister
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeline_registered"),
+        &NetwLagCompCore::timeline_registered
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeline_entities"),
+        &NetwLagCompCore::timeline_entities
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeline_sample_entity", "entity", "tick"),
+        &NetwLagCompCore::timeline_sample_entity
+    );
     ClassDB::bind_method(
         D_METHOD("timeline_open", "history_limit"),
         &NetwLagCompCore::timeline_open

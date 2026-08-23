@@ -22,8 +22,8 @@
 #include "netw_test.h"
 
 #include "godot/callable.hpp"
-#include "netw/entity_record.hpp"
-#include "netw/netw_multiplayer.hpp"
+#include "netw/api/entity_record.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 
 namespace netw_test {
 

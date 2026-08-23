@@ -11,7 +11,7 @@
 #include "netw/predict/frames.hpp"
 #include "netw/predict/sensors.hpp"
 #include "netw/profile.hpp"
-#include "netw/project.hpp"
+#include "netw/api/project.hpp"
 
 using namespace godot;
 

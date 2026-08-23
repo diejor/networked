@@ -1655,7 +1655,7 @@ class DespawnConfig:
 ## Client-side on-ramp config for one scene root script, registered through
 ## [method Netw.configure_multiplayer_scene]. It carries the presentation knobs
 ## the detach hook reads when a native [method SceneTree.change_scene_to_file]
-## converts into a [method SceneCore.request_change_path].
+## converts into a [method NetwMultiplayer.scene_request].
 ##
 ## This config is not an authorization record. Whether a client may reach a
 ## scene is decided server side by the handler installed through
@@ -1681,7 +1681,7 @@ class SceneMarkConfig:
 
 	## Seconds the client request waits before resolving
 	## [constant ERR_TIMEOUT]. [code]0.0[/code] uses
-	## [constant SceneCore.DEFAULT_REQUEST_DEADLINE].
+	## [constant NetwMultiplayer.SCENE_REQUEST_DEADLINE].
 	var deadline: float = 0.0
 
 	## When [code]true[/code], a request for this scene is deny-default, so a
@@ -1712,8 +1712,9 @@ class SceneMarkConfig:
 
 	## Names a side-effect method the detach hook calls while a captured native
 	## change is pending, such as one that shows a loading screen. The game
-	## undoes it on [signal SceneCore.native_change_settled]. Stored by
-	## name so the callable only names the method on the scene root.
+	## undoes it when the captured change settles, because a refused or
+	## timed-out request never delivers the scene that would clear it. Stored
+	## by name so the callable only names the method on the scene root.
 	func on_pending(callable: Callable) -> SceneMarkConfig:
 		pending_method = callable.get_method()
 		return self
@@ -1736,8 +1737,8 @@ class SceneMarkConfig:
 
 
 	## Declares that an admitted request for this scene replaces the whole
-	## session ([method SceneCore.change_to]) rather than moving the one
-	## requester. Session-wide requests stay deny-default, so a
+	## session rather than moving the one requester.
+	## Session-wide requests stay deny-default, so a
 	## [method NetwMultiplayer.scene_set_request_handler] must admit it.
 	## admit them.
 	func session_wide() -> SceneMarkConfig:

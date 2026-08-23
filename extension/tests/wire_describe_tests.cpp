@@ -13,6 +13,8 @@
 #include "netw/wire/describe.hpp"
 #include "netw/wire/stream.hpp"
 
+using namespace godot;
+
 namespace TestNetwWireDescribe {
 
 using godot::Array;

@@ -4,7 +4,7 @@
 		Pre-allocated ring buffer that stores values keyed by tick number.
 	</brief_description>
 	<description>
-		[NetwRingBuffer] rounds its capacity up to a power of two so [method record], [method get_at], and [method bracketing_ticks] can stay cheap in interpolation and rollback hot paths.
+		[NetwRingBuffer] rounds its capacity up to a power of two so [method record], [method get_at], and [method bracketing_ticks] can stay cheap in interpolation and rollback hot paths: a capacity that is a power of two wraps an index with a mask rather than a modulo, and that is the whole reason this type exists rather than an [Array].
 		[codeblock]
 		var history := NetwRingBuffer.create(32)
 		history.record(tick, snapshot)

@@ -16,7 +16,7 @@ class_name ScheduleFaultStepper
 extends RefCounted
 
 var tree: SceneTree
-var clocks: Array[ClockCore] = []
+var clocks: Array[NetwClockHandle] = []
 
 ## The last physics frame advanced by [method sync_frames].
 var frame_index := 0
@@ -25,7 +25,7 @@ var _ratios: Array[int] = []
 var _overrides: Dictionary[int, Dictionary] = { }
 
 
-func _init(p_tree: SceneTree, p_clocks: Array[ClockCore]) -> void:
+func _init(p_tree: SceneTree, p_clocks: Array[NetwClockHandle]) -> void:
 	tree = p_tree
 	clocks = p_clocks
 	for clock in clocks:
@@ -65,10 +65,10 @@ func sync_frames(frames: int) -> void:
 		for i in clocks.size():
 			var natural_count := 1 if frame_index % _ratios[i] == 0 else 0
 			var step_count: int = frame_overrides.get(i, natural_count)
-			clocks[i].before_tick_loop.emit()
+			clocks[i].begin_tick_loop()
 			if step_count > 0:
 				clocks[i].force_step(step_count)
-			clocks[i].after_tick_loop.emit()
+			clocks[i].end_tick_loop()
 
 	for clock in clocks:
 		clock.manual_tick = false

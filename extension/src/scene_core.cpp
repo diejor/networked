@@ -1,6 +1,7 @@
 #include "netw/scene_core.hpp"
 
 #include "godot/class_db.hpp"
+#include "godot/resource.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -12,6 +13,17 @@ namespace netw {
 namespace {
 
 const char *SIG_NATIVE_CHANGE_SETTLED = "native_change_settled";
+
+Variant detached_copy(const Variant &p_value) {
+    switch (p_value.get_type()) {
+        case Variant::ARRAY:
+            return Array(p_value).duplicate(true);
+        case Variant::DICTIONARY:
+            return Dictionary(p_value).duplicate(true);
+        default:
+            return p_value;
+    }
+}
 
 }
 
@@ -89,8 +101,16 @@ int NetwSceneCore::dispatch(
         if (!callback.is_valid()) {
             continue;
         }
+        const Variant answer = callback.callv(args);
+        if (answer.get_type() == Variant::BOOL && bool(answer)) {
+            NETW_TRACE(
+                sys::SCENE,
+                "observer of event %d retired itself",
+                event
+            );
+            continue;
+        }
         surviving.push_back(callback);
-        callback.callv(args);
     }
     const int called = int(surviving.size());
     if (surviving.size() == started_with) {
@@ -220,6 +240,23 @@ Array NetwSceneCore::retiring_scenes() const {
     return out;
 }
 
+void NetwSceneCore::set_scene_anchor(Node *anchor) {
+    scene_anchor = gd::instance_id(anchor);
+}
+
+Node *NetwSceneCore::get_scene_anchor() {
+    Node *held = Object::cast_to<Node>(gd::instance_from_id(scene_anchor));
+    if (held == nullptr) {
+        scene_anchor = ObjectID();
+    }
+    return held;
+}
+
+Node *NetwSceneCore::spawn_anchor(Node *fallback) {
+    Node *declared = get_scene_anchor();
+    return declared != nullptr ? declared : fallback;
+}
+
 void NetwSceneCore::set_current_scene(const RID &scene) {
     current_scene = scene;
 }
@@ -301,6 +338,125 @@ bool NetwSceneCore::would_share_one_world() const {
     return true;
 }
 
+const NetwSceneCore::DeclaredRow *NetwSceneCore::declared_row(
+    const StringName &p_stem
+) const {
+    if (!declared.published) {
+        return nullptr;
+    }
+    for (uint32_t at = 0; at < declared.rows.size(); ++at) {
+        if (declared.rows[at].stem == p_stem) {
+            return &declared.rows[at];
+        }
+    }
+    return nullptr;
+}
+
+void NetwSceneCore::declaration_open(
+    int p_isolation,
+    const Callable &p_level_spawn_function
+) {
+    drafted = Declaration();
+    drafted.isolation = int32_t(p_isolation);
+    drafted.level_spawn_function = p_level_spawn_function;
+    drafting = true;
+}
+
+void NetwSceneCore::declaration_row(
+    const StringName &p_stem,
+    const String &p_path,
+    const Variant &p_spawn_data,
+    bool p_initial
+) {
+    if (!drafting || String(p_stem).is_empty()) {
+        return;
+    }
+    for (uint32_t at = 0; at < drafted.rows.size(); ++at) {
+        if (drafted.rows[at].stem != p_stem) {
+            continue;
+        }
+        if (!p_path.is_empty()) {
+            drafted.rows[at].path = p_path;
+        }
+        if (p_spawn_data.get_type() != Variant::NIL) {
+            drafted.rows[at].spawn_data = detached_copy(p_spawn_data);
+        }
+        drafted.rows[at].initial = drafted.rows[at].initial || p_initial;
+        return;
+    }
+    DeclaredRow fresh;
+    fresh.stem = p_stem;
+    fresh.path = p_path;
+    fresh.spawn_data = detached_copy(p_spawn_data);
+    fresh.initial = p_initial;
+    drafted.rows.push_back(fresh);
+}
+
+void NetwSceneCore::declaration_publish() {
+    if (!drafting) {
+        return;
+    }
+    drafted.published = true;
+    declared = drafted;
+    drafted = Declaration();
+    drafting = false;
+}
+
+void NetwSceneCore::declaration_drop() {
+    declared = Declaration();
+    drafted = Declaration();
+    drafting = false;
+}
+
+bool NetwSceneCore::declaration_is_published() const {
+    return declared.published;
+}
+
+int NetwSceneCore::declared_isolation() const {
+    return int(declared.isolation);
+}
+
+Callable NetwSceneCore::declared_level_spawn_function() const {
+    return declared.level_spawn_function;
+}
+
+bool NetwSceneCore::declares_scene(const StringName &p_stem) const {
+    return declared_row(p_stem) != nullptr;
+}
+
+String NetwSceneCore::declared_scene_path(const StringName &p_stem) const {
+    const DeclaredRow *row = declared_row(p_stem);
+    return row != nullptr ? row->path : String();
+}
+
+Variant NetwSceneCore::declared_spawn_data(
+    const StringName &p_stem,
+    const Variant &p_fallback
+) const {
+    const DeclaredRow *row = declared_row(p_stem);
+    if (row == nullptr || row->spawn_data.get_type() == Variant::NIL) {
+        return p_fallback;
+    }
+    return detached_copy(row->spawn_data);
+}
+
+Array NetwSceneCore::declared_initial_stems() const {
+    Array out;
+    if (!declared.published) {
+        return out;
+    }
+    for (uint32_t at = 0; at < declared.rows.size(); ++at) {
+        if (declared.rows[at].initial) {
+            out.append(declared.rows[at].stem);
+        }
+    }
+    return out;
+}
+
+int NetwSceneCore::declared_scene_count() const {
+    return declared.published ? int(declared.rows.size()) : 0;
+}
+
 bool NetwSceneCore::transition_open() {
     if (transitioning) {
         return false;
@@ -309,8 +465,84 @@ bool NetwSceneCore::transition_open() {
     return true;
 }
 
+void NetwSceneCore::transition_arm(
+    const Variant &p_target,
+    const Array &p_sources,
+    const Ref<NetwPromise> &p_promise
+) {
+    transition = Transition();
+    transition.target = p_target;
+    transition.sources = p_sources;
+    transition.promise = p_promise;
+}
+
+Variant NetwSceneCore::transition_target() const {
+    return transition.target;
+}
+
+Array NetwSceneCore::transition_sources() const {
+    return transition.sources;
+}
+
+Variant NetwSceneCore::transition_next_mover(const Callable &p_roster_of) {
+    while (transition.roster_index >= int64_t(transition.roster.size())) {
+        if (transition.source_index >= int64_t(transition.sources.size())) {
+            return Variant();
+        }
+        const Variant source
+            = transition.sources[int(transition.source_index)];
+        transition.source_index += 1;
+        const Variant answered = p_roster_of.is_valid()
+            ? p_roster_of.call(source)
+            : Variant();
+        transition.roster = Array();
+        if (answered.get_type() == Variant::ARRAY) {
+            transition.roster = answered;
+        }
+        transition.roster_index = 0;
+    }
+    const Variant mover = transition.roster[int(transition.roster_index)];
+    transition.roster_index += 1;
+    return mover;
+}
+
+bool NetwSceneCore::transition_accept(int p_code, int64_t p_peer) {
+    if (p_code != OK) {
+        NETW_TRACE(
+            sys::SCENE,
+            "a transition mover answered %d, so the walk aborts",
+            p_code
+        );
+        transition_fail(int(ERR_UNAVAILABLE));
+        return false;
+    }
+    transition.moved.insert(p_peer);
+    return true;
+}
+
+bool NetwSceneCore::transition_moved(int64_t p_peer) const {
+    return transition.moved.has(p_peer);
+}
+
+void NetwSceneCore::transition_fail(int p_code) {
+    const Ref<NetwPromise> promise = transition.promise;
+    transition_close();
+    if (promise.is_valid()) {
+        promise->reject(p_code, String());
+    }
+}
+
+void NetwSceneCore::transition_land() {
+    const Ref<NetwPromise> promise = transition.promise;
+    transition_close();
+    if (promise.is_valid()) {
+        promise->resolve(int(OK));
+    }
+}
+
 void NetwSceneCore::transition_close() {
     transitioning = false;
+    transition = Transition();
 }
 
 int NetwSceneCore::open_request() {
@@ -413,6 +645,76 @@ String NetwSceneCore::verify_requested_path(const String &path) {
     return path;
 }
 
+String NetwSceneCore::resolve_requested_path(const String &reference) {
+    if (reference.is_empty()) {
+        return String();
+    }
+    return verify_requested_path(netw::gd::ensure_path(reference));
+}
+
+Ref<PackedScene> NetwSceneCore::packed_at(const String &reference) {
+    if (reference.is_empty()) {
+        return Ref<PackedScene>();
+    }
+    const Ref<PackedScene> packed
+        = netw::gd::load_scene(netw::gd::ensure_path(reference));
+    if (packed.is_null()) {
+        NETW_TRACE(sys::SCENE, "no packed scene at: %s", reference);
+    }
+    return packed;
+}
+
+Ref<Script> NetwSceneCore::packed_root_script(const Ref<PackedScene> &packed) {
+    if (packed.is_null()) {
+        return Ref<Script>();
+    }
+    const Ref<SceneState> state = packed->get_state();
+    if (state.is_null() || state->get_node_count() == 0) {
+        return Ref<Script>();
+    }
+    const int total = state->get_node_property_count(0);
+    for (int index = 0; index < total; index++) {
+        if (state->get_node_property_name(0, index) != StringName("script")) {
+            continue;
+        }
+        const Variant value = state->get_node_property_value(0, index);
+        Object *object = value;
+        return Ref<Script>(Object::cast_to<Script>(object));
+    }
+    return Ref<Script>();
+}
+
+Ref<Script> NetwSceneCore::scene_root_script_at(const String &reference) {
+    return packed_root_script(packed_at(reference));
+}
+
+NetwSceneCore::Destination NetwSceneCore::destination_kind(
+    const Variant &destination
+) {
+    switch (destination.get_type()) {
+        case Variant::STRING:
+        case Variant::STRING_NAME:
+            return DESTINATION_NAME;
+        case Variant::OBJECT:
+            break;
+        default:
+            return DESTINATION_NONE;
+    }
+    Object *object = destination;
+    if (object == nullptr) {
+        return DESTINATION_NONE;
+    }
+    PackedScene *packed = Object::cast_to<PackedScene>(object);
+    if (packed != nullptr) {
+        return packed->get_path().is_empty()
+            ? DESTINATION_PACKED_UNPATHED
+            : DESTINATION_PACKED;
+    }
+    return Object::cast_to<Node>(object) != nullptr
+        ? DESTINATION_NODE
+        : DESTINATION_NONE;
+}
+
 bool NetwSceneCore::set_request_reach(int value) {
     NETW_ERR_COND_V(
         value < REACH_PARTICIPANT || value >= REACH_MAX,
@@ -448,8 +750,30 @@ NetwSceneCore::Capture NetwSceneCore::capture_verdict(
     return CAPTURE_ACTIVATE;
 }
 
+bool NetwSceneCore::change_replaces_session(
+    bool p_declared_session_wide,
+    bool p_has_participant
+) const {
+    return p_declared_session_wide || !p_has_participant
+            || request_reach == REACH_SESSION;
+}
+
 bool NetwSceneCore::native_change_strands(bool p_online, bool p_marked) {
     return p_online && !p_marked;
+}
+
+NetwSceneCore::Move NetwSceneCore::move_verdict(
+    bool p_mover_live,
+    bool p_target_live,
+    bool p_same_scene
+) {
+    if (!p_mover_live || !p_target_live) {
+        return MOVE_REFUSED;
+    }
+    if (p_same_scene) {
+        return MOVE_ALREADY_THERE;
+    }
+    return MOVE_CARRY;
 }
 
 int NetwSceneCore::native_entry_verdict(
@@ -500,6 +824,26 @@ void NetwSceneCore::set_request_handler(const Callable &handler) {
 
 Callable NetwSceneCore::get_request_handler() const {
     return request_handler;
+}
+
+void NetwSceneCore::set_container_lifecycle(
+    const Callable &entered,
+    const Callable &exited
+) {
+    container_entered = entered;
+    container_exited = exited;
+}
+
+Callable NetwSceneCore::get_container_entered() const {
+    return container_entered;
+}
+
+Callable NetwSceneCore::get_container_exited() const {
+    return container_exited;
+}
+
+bool NetwSceneCore::isolation_owns_world(int isolation) {
+    return isolation == ISOLATION_OWN_WORLD;
 }
 
 bool NetwSceneCore::decide_request(
@@ -560,6 +904,8 @@ void NetwSceneCore::clear() {
     pending_request_id = 0;
     pending_request = Ref<NetwPromise>();
     pending_from_capture = false;
+    scene_anchor = ObjectID();
+    transition = Transition();
 }
 
 bool NetwSceneCore::admission_park(const RID &p_scene, int64_t p_peer) {
@@ -734,6 +1080,55 @@ void NetwSceneCore::_bind_methods() {
     );
 
     ClassDB::bind_method(
+        D_METHOD("declaration_open", "isolation", "level_spawn_function"),
+        &NetwSceneCore::declaration_open
+    );
+    ClassDB::bind_method(
+        D_METHOD("declaration_row", "stem", "path", "spawn_data", "initial"),
+        &NetwSceneCore::declaration_row
+    );
+    ClassDB::bind_method(
+        D_METHOD("declaration_publish"),
+        &NetwSceneCore::declaration_publish
+    );
+    ClassDB::bind_method(
+        D_METHOD("declaration_drop"),
+        &NetwSceneCore::declaration_drop
+    );
+    ClassDB::bind_method(
+        D_METHOD("declaration_is_published"),
+        &NetwSceneCore::declaration_is_published
+    );
+    ClassDB::bind_method(
+        D_METHOD("declared_isolation"),
+        &NetwSceneCore::declared_isolation
+    );
+    ClassDB::bind_method(
+        D_METHOD("declared_level_spawn_function"),
+        &NetwSceneCore::declared_level_spawn_function
+    );
+    ClassDB::bind_method(
+        D_METHOD("declares_scene", "stem"),
+        &NetwSceneCore::declares_scene
+    );
+    ClassDB::bind_method(
+        D_METHOD("declared_scene_path", "stem"),
+        &NetwSceneCore::declared_scene_path
+    );
+    ClassDB::bind_method(
+        D_METHOD("declared_spawn_data", "stem", "fallback"),
+        &NetwSceneCore::declared_spawn_data
+    );
+    ClassDB::bind_method(
+        D_METHOD("declared_initial_stems"),
+        &NetwSceneCore::declared_initial_stems
+    );
+    ClassDB::bind_method(
+        D_METHOD("declared_scene_count"),
+        &NetwSceneCore::declared_scene_count
+    );
+
+    ClassDB::bind_method(
         D_METHOD("open_request"),
         &NetwSceneCore::open_request
     );
@@ -748,6 +1143,38 @@ void NetwSceneCore::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("transition_open"),
         &NetwSceneCore::transition_open
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_arm", "target", "sources", "promise"),
+        &NetwSceneCore::transition_arm
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_target"),
+        &NetwSceneCore::transition_target
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_sources"),
+        &NetwSceneCore::transition_sources
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_next_mover", "roster_of"),
+        &NetwSceneCore::transition_next_mover
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_accept", "code", "peer"),
+        &NetwSceneCore::transition_accept
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_moved", "peer"),
+        &NetwSceneCore::transition_moved
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_fail", "code"),
+        &NetwSceneCore::transition_fail
+    );
+    ClassDB::bind_method(
+        D_METHOD("transition_land"),
+        &NetwSceneCore::transition_land
     );
     ClassDB::bind_method(
         D_METHOD("transition_close"),
@@ -794,6 +1221,31 @@ void NetwSceneCore::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwSceneCore",
+        D_METHOD("resolve_requested_path", "reference"),
+        &NetwSceneCore::resolve_requested_path
+    );
+    ClassDB::bind_static_method(
+        "NetwSceneCore",
+        D_METHOD("packed_at", "reference"),
+        &NetwSceneCore::packed_at
+    );
+    ClassDB::bind_static_method(
+        "NetwSceneCore",
+        D_METHOD("packed_root_script", "packed"),
+        &NetwSceneCore::packed_root_script
+    );
+    ClassDB::bind_static_method(
+        "NetwSceneCore",
+        D_METHOD("scene_root_script_at", "reference"),
+        &NetwSceneCore::scene_root_script_at
+    );
+    ClassDB::bind_static_method(
+        "NetwSceneCore",
+        D_METHOD("destination_kind", "destination"),
+        &NetwSceneCore::destination_kind
+    );
+    ClassDB::bind_static_method(
+        "NetwSceneCore",
         D_METHOD("admits_request", "named", "marked", "gated", "path"),
         &NetwSceneCore::admits_request
     );
@@ -809,6 +1261,23 @@ void NetwSceneCore::_bind_methods() {
         PropertyInfo(Variant::CALLABLE, "request_handler"),
         "set_request_handler",
         "get_request_handler"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_container_lifecycle", "entered", "exited"),
+        &NetwSceneCore::set_container_lifecycle
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_container_entered"),
+        &NetwSceneCore::get_container_entered
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_container_exited"),
+        &NetwSceneCore::get_container_exited
+    );
+    ClassDB::bind_static_method(
+        "NetwSceneCore",
+        D_METHOD("isolation_owns_world", "isolation"),
+        &NetwSceneCore::isolation_owns_world
     );
     ClassDB::bind_method(
         D_METHOD(
@@ -837,17 +1306,48 @@ void NetwSceneCore::_bind_methods() {
         ),
         &NetwSceneCore::native_entry_verdict
     );
+    ClassDB::bind_method(
+        D_METHOD(
+            "change_replaces_session",
+            "declared_session_wide",
+            "has_participant"
+        ),
+        &NetwSceneCore::change_replaces_session
+    );
     ClassDB::bind_static_method(
         "NetwSceneCore",
         D_METHOD("native_change_strands", "online", "marked"),
         &NetwSceneCore::native_change_strands
     );
+    ClassDB::bind_static_method(
+        "NetwSceneCore",
+        D_METHOD(
+            "move_verdict",
+            "mover_live",
+            "target_live",
+            "same_scene"
+        ),
+        &NetwSceneCore::move_verdict
+    );
     BIND_CONSTANT(MAX_REQUESTED_PATH_LENGTH);
+    BIND_ENUM_CONSTANT(MOVE_REFUSED);
+    BIND_ENUM_CONSTANT(MOVE_ALREADY_THERE);
+    BIND_ENUM_CONSTANT(MOVE_CARRY);
     BIND_ENUM_CONSTANT(CAPTURE_REFUSED);
     BIND_ENUM_CONSTANT(CAPTURE_REQUEST);
     BIND_ENUM_CONSTANT(CAPTURE_CHANGE_SESSION);
     BIND_ENUM_CONSTANT(CAPTURE_MOVE_ME);
     BIND_ENUM_CONSTANT(CAPTURE_ACTIVATE);
+    BIND_ENUM_CONSTANT(DESTINATION_NONE);
+    BIND_ENUM_CONSTANT(DESTINATION_NAME);
+    BIND_ENUM_CONSTANT(DESTINATION_NODE);
+    BIND_ENUM_CONSTANT(DESTINATION_PACKED);
+    BIND_ENUM_CONSTANT(DESTINATION_PACKED_UNPATHED);
+    BIND_ENUM_CONSTANT(ISOLATION_NONE);
+    BIND_ENUM_CONSTANT(ISOLATION_OWN_WORLD);
+    BIND_ENUM_CONSTANT(EVENT_PARTICIPANT);
+    BIND_ENUM_CONSTANT(EVENT_PLAYER);
+    BIND_ENUM_CONSTANT(EVENT_ENTITY);
     ClassDB::bind_method(
         D_METHOD("get_pending_request_id"),
         &NetwSceneCore::get_pending_request_id
@@ -869,6 +1369,19 @@ void NetwSceneCore::_bind_methods() {
         PropertyInfo(Variant::INT, "next_request_id"),
         "set_next_request_id",
         "get_next_request_id"
+    );
+
+    ClassDB::bind_method(
+        D_METHOD("set_scene_anchor", "anchor"),
+        &NetwSceneCore::set_scene_anchor
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_scene_anchor"),
+        &NetwSceneCore::get_scene_anchor
+    );
+    ClassDB::bind_method(
+        D_METHOD("spawn_anchor", "fallback"),
+        &NetwSceneCore::spawn_anchor
     );
 
     ClassDB::bind_method(

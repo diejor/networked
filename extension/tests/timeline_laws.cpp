@@ -1,6 +1,6 @@
 #include "support/netw_test.h"
 
-#include "netw/timeline.hpp"
+#include "netw/api/timeline.hpp"
 
 namespace TestNetwTimelineLaws {
 

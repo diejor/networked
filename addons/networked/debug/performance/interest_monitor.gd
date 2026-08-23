@@ -1,5 +1,5 @@
 @tool
-## Exposes [InterestCore] occupancy as Godot [Performance] monitors, with a
+## Exposes session interest occupancy as Godot [Performance] monitors, with a
 ## tree-wide group per [MultiplayerTree] and one group per [NetwInterestLayer].
 ##
 ## This is a presentation adapter managed by the [DebugReporter]. It pulls
@@ -59,7 +59,7 @@ func _exit_tree() -> void:
 	clear_all()
 
 
-## Tracks [param mt] so its [InterestCore] is sampled each interval.
+## Tracks [param mt] so its interest occupancy is sampled each interval.
 func register_tree(mt: MultiplayerTree) -> void:
 	if mt not in _trees:
 		_trees.append(mt)
@@ -86,7 +86,9 @@ func _sample(elapsed: float) -> void:
 	for mt in _trees:
 		if not is_instance_valid(mt):
 			continue
-		var interest := mt.api._interest if mt.api else null
+		var interest: NetwMultiplayerCore = (
+				mt.api._native_core if mt.api else null
+		)
 		if not interest:
 			continue
 		var tree_category := _tree_category(mt)
@@ -112,7 +114,7 @@ func _sample(elapsed: float) -> void:
 		)
 
 		var live: Dictionary[String, bool] = { }
-		for layer in interest.all_layers():
+		for layer: NetwInterestLayer in interest.interest_layers():
 			var layer_category := "%s · %s" % [tree_category, String(layer.layer_id)]
 			live[layer_category] = true
 			var lsnap := layer.monitor_snapshot()

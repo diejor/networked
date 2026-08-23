@@ -10,9 +10,6 @@ var api: NetwMultiplayer:
 func _enter_tree() -> void:
 	var config := NetwSceneConfig.new()
 	config.isolation = NetwMultiplayer.SceneIsolation.SCENE_ISOLATION_OWN_WORLD
-	config.initial_scenes = [LEVEL_1]
-	config.scenes = {
-		&"Level1": LEVEL_1,
-		&"Level2": LEVEL_2,
-	}
+	config.declare_scene(&"Level1", LEVEL_1, true)
+	config.declare_scene(&"Level2", LEVEL_2)
 	api.object_configuration_add(self, config)

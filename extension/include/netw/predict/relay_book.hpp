@@ -1,17 +1,5 @@
 #pragma once
 
-/* Who receives an entity's authored commands, on the server.
- *
- * Membership only. Whether a subscriber may still see the entity is the
- * interest gate's answer and is re-asked on every relay rather than remembered
- * here, so a peer that leaves an entity's interest set stops receiving its
- * commands without anything having to observe the exit.
- *
- * Rows are keyed by the session's entity slot, which is the one entity
- * numbering every core reads. A slot with no subscriber holds no row, so the
- * book costs nothing for the entities nobody relays.
- */
-
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
@@ -21,12 +9,10 @@
 
 namespace netw {
 
-using namespace godot;
+class NetwPredictRelayBook : public godot::RefCounted {
+    GDCLASS(NetwPredictRelayBook, godot::RefCounted)
 
-class NetwPredictRelayBook : public RefCounted {
-    GDCLASS(NetwPredictRelayBook, RefCounted)
-
-    HashMap<int64_t, LocalVector<int64_t>> rows;
+    godot::HashMap<int64_t, godot::LocalVector<int64_t>> rows;
 
 protected:
     static void _bind_methods();
@@ -36,7 +22,7 @@ public:
 
     bool subscribed(int64_t p_entity_slot, int64_t p_peer) const;
 
-    PackedInt64Array peers(int64_t p_entity_slot) const;
+    godot::PackedInt64Array peers(int64_t p_entity_slot) const;
 
     int peer_count(int64_t p_entity_slot) const;
 
@@ -44,9 +30,9 @@ public:
 
     int slot_count() const;
 
-    static PackedByteArray request_bytes(bool p_subscribed);
+    static godot::PackedByteArray request_bytes(bool p_subscribed);
 
-    static int request_of(const PackedByteArray &p_bytes);
+    static int request_of(const godot::PackedByteArray &p_bytes);
 };
 
 } // namespace netw

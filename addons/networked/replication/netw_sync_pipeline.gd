@@ -1182,8 +1182,8 @@ func _feed_derived_interpolation(
 		header: Dictionary,
 ) -> void:
 	var api := _api()
-	var iface := api._display if api else null
-	if not iface:
+	var core := api._native_core if api else null
+	if not core:
 		return
 	if binding.set.audience != NetwPropertySet.Audience.AUDIENCE_PUBLIC:
 		return
@@ -1196,7 +1196,7 @@ func _feed_derived_interpolation(
 	var tick := int(header.get("tick", -1))
 	var authoring := binding.set.stamp != NetwPropertySet.Stamp.STAMP_NONE and tick >= 0
 	if not authoring:
-		tick = api.clock.tick if api.clock.is_configured() else 0
+		tick = api.clock.tick if api.clock.is_configured else 0
 	var payload: Dictionary = header.get("payload", { })
 	if payload.is_empty():
 		# Only the retained lane applies without a payload row, and it never shares
@@ -1207,12 +1207,12 @@ func _feed_derived_interpolation(
 				continue
 			var spec := NetwScriptModel.get_node_property_interpolator(node, field.key)
 			if spec:
-				iface._record(node, field.key, node.get(field.key), tick, spec, false)
+				core.display_record(node, field.key, node.get(field.key), tick, spec, false)
 		return
 	for key: StringName in payload:
 		var spec := NetwScriptModel.get_node_property_interpolator(node, key)
 		if spec:
-			iface._record(node, key, payload[key], tick, spec, authoring)
+			core.display_record(node, key, payload[key], tick, spec, authoring)
 
 
 # Resolves a unified ordinal to the derived binding it names on this peer, or
@@ -1416,9 +1416,9 @@ class _PropertySignalRouter:
 				else null
 		)
 		if interpolator:
-			var iface := api._display if api else null
-			if iface:
-				iface._record(
+			var core := api._native_core if api else null
+			if core:
+				core.display_record(
 					comp_node,
 					prop,
 					val,
@@ -1530,8 +1530,8 @@ class _PropertySignalRouter:
 		if not opt or opt.interpolators.is_empty():
 			return
 		var api := _sync._api()
-		var iface := api._display if api else null
-		if not iface:
+		var core := api._native_core if api else null
+		if not core:
 			return
 		var tick := api._receive_tick()
 		for i in opt.interpolators.size():
@@ -1540,7 +1540,7 @@ class _PropertySignalRouter:
 				continue
 			if i >= args.size():
 				continue
-			iface._record(
+			core.display_record(
 				comp_node,
 				spec.target,
 				args[i],

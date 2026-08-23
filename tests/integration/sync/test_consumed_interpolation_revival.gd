@@ -2,7 +2,7 @@
 ## route's lifecycle churn.
 ##
 ## After the consumption flip a plain [MultiplayerSynchronizer] no longer feeds
-## [DisplayCore] through the native
+## [NetwMultiplayerCore]'s display runtime through the native
 ## [signal MultiplayerSynchronizer.synchronized] signal but through the
 ## pipeline's apply hook. This suite proves that feed keeps delivering samples to
 ## a spawned entity's interpolation buffer after a late join and after the entity
@@ -14,7 +14,8 @@ extends NetwTestSuite
 var harness: NetwTestHarness
 var client0: MultiplayerTree
 var probe_scene: PackedScene
-var _server_clock: ClockCore
+var _server_api: NetwMultiplayer
+var _server_clock: NetwClockHandle
 
 
 func before_test() -> void:
@@ -23,6 +24,7 @@ func before_test() -> void:
 	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	client0 = await harness.add_client()
 	_server_clock = await harness.add_clock(30)
+	_server_api = harness.server().api
 	_mount_arena(harness.server())
 	_mount_arena(client0)
 	await drain_frames(get_tree(), 2)
@@ -38,13 +40,13 @@ func test_consumed_sync_feeds_interpolation_after_flap_revival() -> void:
 
 	# The server authors a fresh position every tick so the consumed sync always
 	# has new state to deliver into the receiver's interpolation buffer.
-	_server_clock.on_tick.connect(func(_d: float, t: int) -> void: node.position = Vector2(t, -t))
+	_server_api.on_tick.connect(func(_d: float, t: int) -> void: node.position = Vector2(t, -t))
 
-	var interest := harness.server().api._interest
-	var layer := interest.layer_for(&"interp_flap")
+	var interest := harness.server().api
+	var layer := interest._native_core.interest_layer(&"interp_flap")
 	layer.add_entity(entity)
 	layer.add_viewer(peer0)
-	interest.flush()
+	interest.interest_flush()
 	assert_that(await _wait_state(route, NetwMultiplayer.EntityState.LIVE)).is_true()
 
 	var buffer_key := &"position"
@@ -53,11 +55,11 @@ func test_consumed_sync_feeds_interpolation_after_flap_revival() -> void:
 
 	# Interest loss darkens the route, then re-admission revives it.
 	layer.remove_viewer(peer0)
-	interest.flush()
+	interest.interest_flush()
 	assert_that(await _wait_state(route, NetwMultiplayer.EntityState.DEAD)).is_true()
 
 	layer.add_viewer(peer0)
-	interest.flush()
+	interest.interest_flush()
 	assert_that(await _wait_state(route, NetwMultiplayer.EntityState.LIVE)).is_true()
 
 	# The rebuilt runtime must accept fresh consumed-sync samples again.

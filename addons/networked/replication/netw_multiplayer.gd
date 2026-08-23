@@ -70,13 +70,16 @@ class_name NetwMultiplayer
 extends MultiplayerAPIExtension
 
 const PersistenceCore := preload("res://addons/networked/sync/database/persistence_core.gd")
-const PredictionCore := preload("res://addons/networked/replication/prediction_core.gd")
 
 const RpcCore := preload("res://addons/networked/replication/rpc_core.gd")
 
 const SessionRoster := preload("res://addons/networked/session/session_roster.gd")
 
 const AuthProtocol := preload("res://addons/networked/session/auth/auth_protocol.gd")
+
+const AreaReparentGuard := preload("res://addons/networked/utils/area_reparent_guard.gd")
+
+const Async := preload("res://addons/networked/utils/async.gd")
 
 ## Project setting naming the default [NetwMultiplayer] implementation script.
 const MULTIPLAYER_SCRIPT_SETTING := "networked/multiplayer_script"
@@ -114,7 +117,6 @@ var _rpc_core: RefCounted
 
 # The tick engine. Never null, inert until a MultiplayerClock configurator
 # registers through object_configuration_add.
-var _clock: ClockCore
 
 # The read view handed out by the clock property. Built with the engine, so it
 # is never null and never rebound.
@@ -164,10 +166,9 @@ signal poll_started(delta: float)
 ##
 ## Never [code]null[/code]. The clock is inert until a [MultiplayerClock]
 ## registers its [NetwClockConfig], so
-## [method NetwClockHandle.is_configured] is the absence story rather than a
-## null check. The handle reads only: [NetwClockConfig] is the one way to tune
-## a clock, which is what keeps a written setting and a read setting from ever
-## disagreeing.
+## [member NetwClockHandle.is_configured] is the absence story rather than a
+## null check. A game reads the tick here and subscribes to [signal on_tick],
+## because a tick is a session event rather than a handle's own.
 ## [codeblock]
 ## var api := NetwMultiplayer.of(self)
 ## api.on_tick.connect(func(delta: float, tick: int) -> void:
@@ -195,28 +196,54 @@ var embedding: NetwEmbeddingHandle:
 	get:
 		return _embedding_handle
 
-# The lag-compensation core. Never null, inert until a LagCompensation
-# configurator registers through object_configuration_add.
-var _lagcomp: LagCompCore
+
+# Physics space RID -> the stepper that re-steps it for a STEPPED replay.
+var _steppers: Dictionary = { }
 
 # The persistence core. Never null. Registers nothing on clients and no-ops
 # without a Netw.configure_persistence archetype.
 var _persistence: PersistenceCore
 
 # The visibility and interest core for this tree.
-var _interest: InterestCore
 
-# The session lifecycle machine, driven by peer assignment. Never null. The
-# handle follows it, so replacing the machine can never leave the session
-# property reading a retired one.
-var _session: SessionCore:
-	set(value):
-		_session = value
-		_session_handle = NetwSessionHandle.new(value) if value else null
+# The view handed out by the session property. It reads this api rather than a
+# machine, so replacing the machine can never leave the session property
+# reading a retired one.
+var _session_handle := NetwSessionHandle.new(self)
 
-# The view handed out by the session property. Bound to whatever machine
-# _session currently holds, so it is never null once the session exists.
-var _session_handle: NetwSessionHandle
+# The session configuration, a default until a MultiplayerTree registers its
+# NetwSessionConfig. Facts read through it so a bare API answers with defaults
+# instead of a special inert mode.
+var _session_config: NetwSessionConfig = NetwSessionConfig.new()
+
+# Authentication is session wire state, so it binds straight to the wrapped
+# SceneMultiplayer. The tree only supplies a typed config and optional
+# admission policy.
+var _auth: AuthCoordinator
+
+# A successfully prepared join waiting for the next client ONLINE edge. It is
+# consumed before submission so repeated connection signals cannot resend it.
+var _prepared_join: JoinPayload
+
+# A submitted client join held for one resend, in case the first submit dropped
+# at the carrier because the server peer had not yet landed in get_peers.
+var _resubmit_join: JoinPayload
+
+# The built-in join handler, bound lazily to this api. Resolved when no project
+# registration or per-session override is present.
+var _default_join: NetwDefaultJoin
+
+# Per-session join handler override and its wire-arg quantizers, taking
+# precedence over the project-wide Netw.configure_join registration. For tests,
+# the debugger, or a session that genuinely differs.
+var _join_override: Callable
+var _join_override_quantizers: Array = []
+
+# The auth flow constructed once from the project-wide Netw.configure_auth
+# factory, cached for this session's lifetime. A per-session override takes
+# precedence, for tests, the debugger, or a service binding a runtime flow.
+var _bound_auth_flow: NetwAuthFlow
+var _auth_flow_override: NetwAuthFlow
 
 ## The verbs that move this session between offline and online.
 ##
@@ -238,11 +265,6 @@ var session: NetwSessionHandle:
 
 # The engine state behind every scene: construction, the native-capture policy,
 # the request protocol, and the admission rows. Never null, because the session
-# constructs it, so scenes answer before any MultiplayerSceneManager node
-# exists. Private, because the mechanism is reached through the flat scene_*
-# family, the Netw.* doors, and NetwSceneHandle rather than named directly.
-var _scenes: SceneCore
-
 ## The timeline role of a compiled property set.
 ##
 ## The role decides one thing: whether the server keeps history for the stream,
@@ -262,13 +284,13 @@ enum RecordKind {
 ## The current connection lifecycle state.
 enum SessionState {
 	## No peer is connected and none is being sought.
-	OFFLINE = SessionCore.State.OFFLINE,
+	OFFLINE = 0,
 	## A host or join is in flight and may still fail.
-	CONNECTING = SessionCore.State.CONNECTING,
+	CONNECTING = 1,
 	## The session carries traffic.
-	ONLINE = SessionCore.State.ONLINE,
+	ONLINE = 2,
 	## Teardown is in flight; no new traffic is admitted.
-	DISCONNECTING = SessionCore.State.DISCONNECTING,
+	DISCONNECTING = 3,
 }
 
 ## The local peer's role in the current session.
@@ -278,13 +300,13 @@ enum SessionState {
 ## because a listen-server host is also a player.
 enum Role {
 	## No session, so no role yet.
-	NONE = SessionCore.Role.NONE,
+	NONE = 0,
 	## A remote peer holding no authority.
-	CLIENT = SessionCore.Role.CLIENT,
+	CLIENT = 1,
 	## Server authority with no local player.
-	DEDICATED_SERVER = SessionCore.Role.DEDICATED_SERVER,
+	DEDICATED_SERVER = 2,
 	## Server authority held by a peer that is also playing.
-	LISTEN_SERVER = SessionCore.Role.LISTEN_SERVER,
+	LISTEN_SERVER = 3,
 }
 
 ## Existence state of an entity handle or wire route.
@@ -311,10 +333,10 @@ enum EntityState {
 ## spread across frames.
 enum SyncMode {
 	## Hard-jump the local tick to the calibrated target on every sample.
-	SYNC_MODE_SNAP = ClockCore.SyncMode.SNAP,
+	SYNC_MODE_SNAP = NetwClockHandle.SyncMode.SYNC_SNAP,
 	## Nudge the tick accumulator toward the target, snapping only once the
 	## divergence exceeds the configured panic threshold.
-	SYNC_MODE_STRETCH = ClockCore.SyncMode.STRETCH,
+	SYNC_MODE_STRETCH = NetwClockHandle.SyncMode.SYNC_STRETCH,
 }
 
 ## Mutable properties of an interest layer.
@@ -370,8 +392,8 @@ enum SceneEvent {
 enum SceneReach {
 	## Only the requesting participant moves.
 	SCENE_REACH_PARTICIPANT,
-	## Every participant follows and the source scene retires, which is
-	## [method SceneCore.change_to] applied to every request.
+	## Every participant follows and the source scene retires, which is a
+	## session-wide change applied to every request.
 	SCENE_REACH_SESSION,
 }
 
@@ -412,12 +434,12 @@ enum LayerPolicy {
 enum LeavePolicy {
 	## Tell the peer to destroy its copy. Frees memory, and the entity is
 	## rebuilt from scratch if it comes back.
-	DESPAWN = InterestCore.LeavePolicy.DESPAWN,
+	DESPAWN = 0,
 	## Keep the copy and stop updating it. It resumes from a stale pose when
 	## interest returns, with no spawn cost.
-	RETAIN = InterestCore.LeavePolicy.RETAIN,
+	RETAIN = 1,
 	## Neither. The game decides, through the layer's own handler.
-	CUSTOM = InterestCore.LeavePolicy.CUSTOM,
+	CUSTOM = 2,
 }
 
 ## Local presentation behavior when an interest layer stops admitting.
@@ -427,11 +449,11 @@ enum LeavePolicy {
 ## still present, so something must say whether it is drawn.
 enum PerceptionPolicy {
 	## Hide the retained copy. It stops being drawn where it was last seen.
-	HIDE = InterestCore.PerceptionPolicy.HIDE,
+	HIDE = 0,
 	## Keep drawing the retained copy at its last known pose.
-	SHOW = InterestCore.PerceptionPolicy.SHOW,
+	SHOW = 1,
 	## Neither. The game decides, through the layer's own handler.
-	CUSTOM = InterestCore.PerceptionPolicy.CUSTOM,
+	CUSTOM = 2,
 }
 
 ## Mutable parameters of an entity's display runtime.
@@ -1140,8 +1162,8 @@ var _entity_property_sets: Dictionary[RID, Dictionary] = { }
 var auth_callback: Callable = Callable():
 	set(value):
 		auth_callback = value
-		if _session:
-			_session.set_auth_callback(value)
+		if _auth:
+			_auth.set_application_auth_callback(value)
 
 ## Seconds an authenticating peer may remain pending before Godot disconnects
 ## it. Mirrors [member SceneMultiplayer.auth_timeout].
@@ -1224,10 +1246,6 @@ var _services: NetwServiceRegistry
 # at construction so no one dispatcher knows every service.
 var _install_book := NetwServiceInstallBook.new()
 
-# RID bridge for the compatibility layer objects retained until FL10.
-var _layer_ledger := NetwHandleLedger.new()
-var _layer_by_name: Dictionary[StringName, RID] = { }
-var _layer_records: Dictionary[RID, NetwInterestLayer] = { }
 var _layer_drivers: Dictionary[RID, Callable] = { }
 var _layer_monitor_hooks: Dictionary[RID, Array] = { }
 
@@ -1257,7 +1275,7 @@ var _spawn_constructor: Callable
 # API so a bare session with no tree still answers get_participant and
 # get_peer_context. Participants are keyed by peer id and read their accepted
 # join, identity, and context back through this same API.
-var _roster: SessionRoster = SessionRoster.new()
+var _roster: SessionRoster
 
 # Weak registry of every constructed extension, backing live_sessions().
 # Weakrefs because a strong static list would keep disposed sessions alive.
@@ -1284,18 +1302,79 @@ var root: Node:
 		return _root
 
 
+# The reading behind NetwMultiplayerCore.session_root, which takes the tree walk
+# as a Callable because the session itself never touches a SceneTree.
+func _session_root() -> Node:
+	return root
+
+
+# The wait behind NetwMultiplayerCore.scene_request_open, taken as a Callable
+# because a deadline is the SceneTree's wall clock and the session itself never
+# touches a SceneTree. A tree-less run arms nothing, and the request it opened
+# then waits for authority with no deadline behind it.
+func _arm_request_deadline(request_id: int, deadline: float) -> void:
+	var scene_tree := Engine.get_main_loop() as SceneTree
+	if scene_tree == null:
+		return
+	_connect_once(
+		scene_tree.create_timer(deadline).timeout,
+		_native_core.scene_request_expire.bind(request_id),
+	)
+
+
+# The reading behind NetwMultiplayerCore.authored_desired_role. It answers the
+# config plane LIVE, which the session machine's own desired_role does not:
+# that one is a snapshot pushed at the edges that resolve a role, and a game
+# re-authors the config between two of them.
+func _authored_desired_role() -> int:
+	# The config authors this in the public enum, which mirrors Role exactly.
+	return int(_session_config.desired_role)
+
+
 func _init(inner_api: SceneMultiplayer = null) -> void:
 	inner = inner_api if inner_api else SceneMultiplayer.new()
 	_native_core = NetwMultiplayerCore.new()
 	_native_core.set_inner(inner)
+	_native_core.set_session_root(_session_root)
+	_native_core.set_request_deadline_arm(_arm_request_deadline)
+	_roster = SessionRoster.new(_native_core)
+	_native_core.set_identity_reader(_read_peer_identity)
 	_schema_core = _native_core.schema_core
 	_table_core = _native_core.table_core
 	_native_core.set_multiplayer_peer(inner.multiplayer_peer)
 	var adopted_auth_callback := inner.auth_callback
 	_replication = ReplicationCore.new(self)
+	# Installed the moment the plane exists, because everything constructed
+	# below can already dispatch a frame or register a constructor, and the
+	# native core refuses both while it has nobody to reach.
+	_native_core.set_replication_plane(_replication)
+	_native_core.set_spawn_pipeline(_replication._spawn_pipeline)
+	_native_core.set_sync_pipeline(_replication._sync_pipeline)
+	# Which marked properties ride a spawn is a declaration-registry question,
+	# so the session is told how to answer it once rather than reaching into
+	# the registry per instantiation.
+	_native_core.set_spawn_state_gather(_replication.spawn_state_of)
 	_rpc_core = RpcCore.new(self, _replication)
-	_clock = ClockCore.new(self)
-	_clock_handle = NetwClockHandle.new(_clock)
+	_clock_handle = _native_core.get_clock_handle()
+	# The calibration protocol answers on every peer, including a server that
+	# never mounts a MultiplayerClock, so the session registers it rather than
+	# the configurator node.
+	_replication.register_protocol(
+		NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE,
+		_native_core.clock_receive_handshake,
+	)
+	_replication.register_protocol(
+		NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE_REPLY,
+		_native_core.clock_receive_handshake_reply,
+	)
+	_replication.register_protocol(
+		NetwFrameEnvelope.Channel.CLOCK_PING,
+		_native_core.clock_receive_ping,
+	)
+	_replication.register_protocol(
+		NetwFrameEnvelope.Channel.CLOCK_PONG,
+		_native_core.clock_receive_pong,
+	)
 	_install_book.register_service(
 		&"NetwClockConfig",
 		_install_clock_service,
@@ -1303,33 +1382,56 @@ func _init(inner_api: SceneMultiplayer = null) -> void:
 	)
 	_embedding = EmbeddingCore.new(self)
 	_embedding_handle = NetwEmbeddingHandle.new(_embedding)
-	_lagcomp = LagCompCore.new(self)
+	_registry = _native_core.lagcomp_core
+	_prediction_pool = _native_core.prediction_engine
+	_runner._service = self
+	_replication.register_protocol(
+		NetwFrameEnvelope.Channel.LAGCOMP_DENY,
+		_handle_deny,
+	)
 	_install_book.register_service(
 		&"NetwLagCompensationConfig",
 		_install_lagcomp_service,
 		_uninstall_lagcomp_service,
 	)
 	_persistence = PersistenceCore.new(self)
-	_display = DisplayCore.new(self)
-	_interest = InterestCore.new(self)
-	_session = SessionCore.new(self)
+	_native_core.set_display_spec_reader(_display_specs)
+	_native_core.set_display_lane(_display_lane)
+	_native_core.set_display_sync_intervals(_display_sync_intervals)
+	_native_core.set_display_authors_streams(_display_authors_streams)
+	_native_core.set_display_role_facts(_display_role_facts)
+	_native_core.set_display_chase_hook(_display_chase_hook)
+	_native_core.set_display_chase_clamp(_display_chase_clamp)
+	_native_core.display_bind_session()
+	_native_core.set_interest_flush(_flush_interest_visibility)
+	_native_core.set_interest_compat_refresh(_refresh_interest_intents)
+	_native_core.set_interest_awareness_send(_send_interest_awareness)
+	_replication.register_protocol(
+		NetwFrameEnvelope.Channel.INTEREST_AWARENESS,
+		_native_core.interest_receive_awareness,
+	)
+	_connect_once(peer_connected, _native_core.interest_peer_connected)
+	_connect_once(peer_disconnected, _native_core.interest_peer_disconnected)
+	_connect_once(session_ended, _native_core.interest_session_ended)
+	_native_core.set_interest_visibility_sweep(
+		_replication._spawn_pipeline.schedule_visibility_sweep
+	)
+	_session_install()
+	_native_core.set_desired_role_reader(_authored_desired_role)
 	_install_book.register_service(
 		&"NetwSessionConfig",
 		_install_session_service,
 		_uninstall_session_service,
 	)
-	_scenes = SceneCore.new(self)
+	_scene_install()
+	_native_core.set_scene_refresh(_scene_refresh_current)
+	_native_core.set_scene_path_reader(_scene_core.declared_scene_path)
 	_install_book.register_service(
 		&"NetwSceneConfig",
 		_install_scene_service,
 		_uninstall_scene_service,
 	)
 	_services = NetwServiceRegistry.new(self)
-	# Which marked properties ride a spawn is a declaration-registry question,
-	# so the session is told how to answer it once rather than reaching into
-	# the registry per instantiation.
-	_native_core.set_spawn_state_gather(_replication.spawn_state_of)
-	_native_core.set_replication_plane(_replication)
 	_connect_once(_native_core.local_scene_changed, local_scene_changed.emit)
 	_connect_once(_native_core.scene_live, scene_live.emit)
 	_connect_once(_native_core.state_changed, state_changed.emit)
@@ -1639,17 +1741,8 @@ func _connect_once(
 		callback: Callable,
 		flags: int = 0,
 ) -> void:
-	if source.is_connected(callback):
-		return
-	var verdict := source.connect(callback, flags)
-	if verdict == OK:
-		return
-	_count_gate_verdict(ERR_UNAVAILABLE)
-	Netw.dbg.error(
-		"NetwMultiplayer: signal connection failed with error %d",
-		[verdict],
-	)
-	assert(verdict == OK, "NetwMultiplayer signal connection failed")
+	var wired := _native_core.connect_once(source, callback, flags)
+	assert(wired, "NetwMultiplayer signal connection failed")
 
 
 func _unbind_inner_signals() -> void:
@@ -1844,14 +1937,14 @@ func _release_owned_graph() -> void:
 	auth_callback = Callable()
 	if _native_core.local_scene_changed.is_connected(local_scene_changed.emit):
 		_native_core.local_scene_changed.disconnect(local_scene_changed.emit)
-	_scenes.dispose()
+	_scene_dispose()
 	if _native_core.session_entered.is_connected(session_entered.emit):
 		_native_core.session_entered.disconnect(session_entered.emit)
 	if _native_core.session_ended.is_connected(session_ended.emit):
 		_native_core.session_ended.disconnect(session_ended.emit)
 	if _native_core.session_ended.is_connected(_on_session_ended):
 		_native_core.session_ended.disconnect(_on_session_ended)
-	_session.dispose()
+	_session_dispose()
 	_unbind_inner_signals()
 	if _native_core.after_tick.is_connected(_on_clock_tick):
 		_native_core.after_tick.disconnect(_on_clock_tick)
@@ -1869,7 +1962,7 @@ func _release_owned_graph() -> void:
 		peer_connected.disconnect(_ensure_participant_row)
 	if peer_disconnected.is_connected(_clear_disconnected_peer):
 		peer_disconnected.disconnect(_clear_disconnected_peer)
-	_display.dispose()
+	_native_core.display_clear_runtimes()
 	_replication.dispose()
 	_rpc_core.dispose()
 	_property_set_records.clear()
@@ -2123,8 +2216,8 @@ func when_live(
 		timeout_ticks: int = 0,
 		on_timeout: Callable = Callable(),
 ) -> void:
-	var clock := _native_core.clock_core
-	var clocked := clock.configured
+	var clock := _native_core.clock_handle
+	var clocked := clock.is_configured
 	var timeout := timeout_ticks
 	if timeout == 0:
 		timeout = clock.tickrate if clocked else _CLOCKLESS_TICKRATE
@@ -2143,8 +2236,8 @@ func when_live(
 # Which counter a deadline was measured against is settled where the clock is
 # reachable, which is here, and carried into the record plane as an integer.
 func _liveness_poll() -> void:
-	var clock := _native_core.clock_core
-	_native_core.liveness_poll(clock.tick if clock.configured else 0)
+	var clock := _native_core.clock_handle
+	_native_core.liveness_poll(clock.tick if clock.is_configured else 0)
 
 
 ## Mints [param count] fresh routes and binds each as a live entity with no
@@ -2563,28 +2656,21 @@ func _adopt_table_declarations() -> void:
 
 ## Creates or returns the layer named [param name].
 func layer_create(name: StringName) -> RID:
-	if name.is_empty():
+	var known := _native_core.layer_named(name)
+	if known.is_valid():
+		return known
+	var opened := _native_core.layer_open(name)
+	if not opened.is_valid():
+		return opened
+	if _layer_declare(opened) != OK:
+		_native_core.layer_close(opened)
 		return RID()
-	var existing: RID = _layer_by_name.get(name, RID())
-	if existing.is_valid():
-		return existing
-	var layer := _interest.layer(name)
-	if layer == null:
-		return RID()
-	var rid := _layer_ledger.rid_create()
-	_layer_by_name[name] = rid
-	_layer_records[rid] = layer
-	if _layer_declare(rid) != OK:
-		_layer_records.erase(rid)
-		_layer_by_name.erase(name)
-		_layer_ledger.rid_free(rid)
-		return RID()
-	return rid
+	return opened
 
 
 ## Returns the layer named [param name], or an invalid RID.
 func layer_find(name: StringName) -> RID:
-	return _layer_by_name.get(name, RID())
+	return _native_core.layer_named(name)
 
 
 ## Frees [param layer] and removes its current memberships.
@@ -2595,9 +2681,7 @@ func layer_free(layer: RID) -> void:
 	_layer_undeclare(layer)
 	_disconnect_layer_monitor(layer)
 	_layer_drivers.erase(layer)
-	_layer_records.erase(layer)
-	_layer_by_name.erase(record.layer_id)
-	_layer_ledger.rid_free(layer)
+	_native_core.layer_close(layer)
 
 
 ## Adds [param peer] to [param layer].
@@ -2700,7 +2784,7 @@ func layer_set_driver_callback(layer: RID, callback: Callable) -> void:
 
 ## Returns whether [param peer] is in [param entity]'s committed row.
 func interest_admits(entity: RID, peer: int) -> bool:
-	var bit := _native_core.interest_engine.peer_bit_of(peer)
+	var bit := _native_core.interest_peer_bit(peer)
 	if bit < 0:
 		return false
 	return _interest_admits(entity, bit)
@@ -2713,11 +2797,8 @@ func interest_get_row(entity: RID) -> PackedInt64Array:
 
 ## Returns the resolved layer RIDs for [param entity].
 func interest_get_membership(entity: RID) -> Array[RID]:
-	var wrapper := _entity_wrapper(entity)
 	var out: Array[RID] = []
-	if wrapper == null:
-		return out
-	for name: StringName in _interest.resolved_layer_ids(wrapper):
+	for name: StringName in _native_core.interest_membership_ids(entity):
 		var layer := layer_find(name)
 		if not layer.is_valid():
 			layer = layer_create(name)
@@ -2727,16 +2808,37 @@ func interest_get_membership(entity: RID) -> Array[RID]:
 
 ## Returns whether [param entity] has a visibility filter.
 func interest_is_filtered(entity: RID) -> bool:
-	var wrapper := _entity_wrapper(entity)
-	return _interest.has_filter(wrapper) if wrapper else false
+	return _native_core.interest_has_filter(entity)
 
 
 ## Explains the committed interest verdict for [param peer].
 func interest_explain(entity: RID, peer: int) -> String:
-	var bit := _native_core.interest_engine.peer_bit_of(peer)
+	var bit := _native_core.interest_peer_bit(peer)
 	if bit < 0:
 		return "peer is not registered"
 	return _interest_explain(entity, bit)
+
+
+# Drives one interest flush from the settle queue, sinking its verdict the way
+# every other scheduled stage does.
+func _flush_interest_visibility() -> void:
+	_sink_verdict(interest_flush(), 0)
+
+
+# Rebuilds the compat adapter's per-peer intent after a live-peer change.
+func _refresh_interest_intents() -> void:
+	_replication._sync_compat.refresh_interest_intents()
+
+
+# Sends one awareness batch to peer_id as a reliable route-0 carrier frame.
+func _send_interest_awareness(peer_id: int, wire: Array) -> void:
+	_replication.send_to(
+		peer_id,
+		0,
+		NetwFrameEnvelope.Channel.INTEREST_AWARENESS,
+		var_to_bytes(wire),
+		true,
+	)
 
 
 ## Flushes driver mutations and the committed interest matrix.
@@ -2744,7 +2846,12 @@ func interest_flush() -> Error:
 	var driver_verdict := _run_layer_drivers()
 	if driver_verdict != OK:
 		return driver_verdict
-	return _interest.flush()
+	_settle_cancel(NetwMultiplayerCore.interest_flush_key())
+	var verdict := _interest_recompute()
+	if verdict != OK:
+		return verdict
+	_interest_commit()
+	return _native_core.interest_flush_tail()
 
 
 ## Admits one newly declared interest [param layer] into the matrix.
@@ -2781,8 +2888,7 @@ func _layer_undeclare(layer: RID) -> void:
 		record.remove_entity(entity)
 	for peer: int in record.viewer_ids():
 		record.remove_viewer(peer)
-	_interest._layers.erase(record.layer_id)
-	_interest.forget_layer_row(record.layer_id)
+	_native_core.interest_forget_layer_row(record.layer_id)
 
 
 ## Folds every layer into one pending viewer delta.
@@ -2799,7 +2905,7 @@ func _layer_undeclare(layer: RID) -> void:
 ## Called by [method interest_flush] after the layer drivers run. Part of the
 ## committed matrix described on [method _layer_declare].
 func _interest_recompute() -> Error:
-	return _interest._engine_recompute()
+	return _native_core.interest_recompute()
 
 
 ## Publishes the delta that [method _interest_recompute] staged.
@@ -2809,8 +2915,7 @@ func _interest_recompute() -> Error:
 ## makes the fold atomic to everything downstream. Shares the committed matrix
 ## described on [method _layer_declare].
 func _interest_commit() -> void:
-	_interest._engine_commit()
-	report_event(NetwMultiplayerCore.INTEREST_COMMIT)
+	_native_core.interest_commit()
 
 
 ## Returns [param entity]'s committed viewer row as packed peer-bit words.
@@ -2824,7 +2929,8 @@ func _interest_commit() -> void:
 ## committed matrix described on [method _layer_declare].
 func _interest_row_of(entity: RID) -> PackedInt64Array:
 	var wrapper := _entity_wrapper(entity)
-	return _interest.committed_row(wrapper) if wrapper else PackedInt64Array()
+	return _native_core.interest_committed_row(wrapper) if wrapper \
+	else PackedInt64Array()
 
 
 ## Returns whether [param entity] is visible to the viewer at [param peer_bit].
@@ -2837,7 +2943,8 @@ func _interest_row_of(entity: RID) -> PackedInt64Array:
 ## committed matrix described on [method _layer_declare].
 func _interest_admits(entity: RID, peer_bit: int) -> bool:
 	var wrapper := _entity_wrapper(entity)
-	return _interest.bit_admits(wrapper, peer_bit) if wrapper else false
+	return _native_core.interest_bit_admits(wrapper, peer_bit) if wrapper \
+	else false
 
 
 ## Returns human-readable reasoning for one [method _interest_admits] verdict.
@@ -2851,15 +2958,13 @@ func _interest_admits(entity: RID, peer_bit: int) -> bool:
 ## of the committed matrix described on [method _layer_declare].
 func _interest_explain(entity: RID, peer_bit: int) -> String:
 	var wrapper := _entity_wrapper(entity)
-	return _interest.explain_bit(wrapper, peer_bit) \
+	return _native_core.interest_explain_bit(wrapper, peer_bit) \
 	if wrapper else "entity is not registered"
 
 
 # Resolves one owned layer record.
 func _layer_record(layer: RID) -> NetwInterestLayer:
-	if not _layer_ledger.rid_is_valid(layer):
-		return null
-	return _layer_records.get(layer)
+	return _native_core.layer_view(layer) as NetwInterestLayer
 
 
 # Disconnects one layer's monitor signal adapters.
@@ -2930,8 +3035,7 @@ func scene_undeclare(entity: RID) -> Error:
 ## True on every peer once the SPAWN packet lands, not only on the server that
 ## declared it.
 func scene_is_declared(entity: RID) -> bool:
-	var wrapper := _entity_wrapper(entity)
-	return wrapper != null and wrapper.declares_scene
+	return _native_core.scene_declared(entity)
 
 
 ## Replaces one [enum SceneParam] on [param scene].
@@ -2981,14 +3085,14 @@ func scene_get_param(scene: RID, param: SceneParam) -> Variant:
 ## Stems are not unique, so this answers "an instance of this stem". Use
 ## [method scene_find_all] when the difference matters.
 func scene_find(stem: StringName) -> RID:
-	var found: RID = _native_core.scene_core.scene_named(stem)
+	var found: RID = _native_core.scene_named(stem)
 	return found if entity_get_node(found) != null else RID()
 
 
 ## Returns every live scene whose stem is [param stem].
 func scene_find_all(stem: StringName) -> Array[RID]:
 	var out: Array[RID] = []
-	for scene: RID in _native_core.scene_core.scenes_named(stem):
+	for scene: RID in _native_core.scenes_named(stem):
 		if entity_get_node(scene) != null:
 			out.append(scene)
 	return out
@@ -3013,34 +3117,23 @@ func scene_get_layer(scene: RID) -> RID:
 	var layer_id := _scene_layer_id(scene)
 	var found := layer_find(layer_id)
 	if found.is_valid() \
-			or not _native_core.interest_engine.has_layer(layer_id):
+			or not _native_core.interest_has_layer(layer_id):
 		return found
 	return layer_create(layer_id)
 
 
 # The framework-derived layer id naming [param scene]'s admission boundary, or
-# empty. This is the single place the scene container's type is named, so every
-# other caller (including InterestCore) asks in terms of the scene RID and core
-# stays free of any scene class.
+# empty. Every caller asks in terms of the scene RID, so
+# this shell names no scene class.
 func _scene_layer_id(scene: RID) -> StringName:
 	return _native_core.scene_layer_id(scene)
-
-
-# The content root of [param scene], which is its container's only child. This
-# and [method _scene_layer_id] are the only places a scene's node shape is read,
-# so everything else asks in terms of the scene RID.
-func _scene_level(scene: RID) -> Node:
-	var node := entity_get_node(scene)
-	if node == null or node.get_child_count() == 0:
-		return null
-	return node.get_child(0)
 
 
 ## Returns the scene this peer currently presents, or an invalid RID.
 ##
 ## A dedicated server presents nothing, so it always answers invalid.
 func scene_get_current() -> RID:
-	var scene := _native_core.scene_core.current_scene
+	var scene: RID = _native_core.current_scene
 	return scene if entity_get_node(scene) != null else RID()
 
 
@@ -3105,7 +3198,7 @@ func scene_spawn(
 ## Returns every live scene in the session.
 func scene_list() -> Array[RID]:
 	var out: Array[RID] = []
-	for scene: RID in _native_core.scene_core.live_scenes():
+	for scene: RID in _native_core.live_scenes():
 		if entity_get_node(scene) != null:
 			out.append(scene)
 	return out
@@ -3118,52 +3211,43 @@ func scene_list() -> Array[RID]:
 ## the admission itself rather than the attempt: an answer of [constant OK]
 ## means [method scene_admits] now holds, so a caller that ignores it cannot
 ## mistake a dropped admission for a completed one.
+##
+## [method NetwMultiplayerCore.scene_admit_peer] writes the boundary and reports
+## the participant edge in one act, so a peer that was already admitted changes
+## nothing and reports nothing.
 ## [br][br][b]Server Only.[/b]
 func scene_admit(scene: RID, peer: int) -> Error:
-	assert(is_server(), "NetwMultiplayer.scene_admit is server-only")
-	if peer == 0:
-		return ERR_INVALID_PARAMETER
-	if entity_get_node(scene) == null:
-		return ERR_DOES_NOT_EXIST
-	_scenes.admit_peer(scene, peer)
-	if not scene_admits(scene, peer):
-		return ERR_UNAVAILABLE
-	interest_flush()
-	return OK
+	var verdict: Error = _native_core.scene_admit(scene, peer)
+	if verdict == OK:
+		interest_flush()
+	return verdict
 
 
 ## Removes [param peer] from [param scene].
 ##
-## A released peer is told so on its own side, because a client learns
+## A released peer is told so on its own side by
+## [method NetwMultiplayerCore.scene_notify_released], because a client learns
 ## membership from awareness of the scene entity and would otherwise keep
-## presenting a scene it no longer belongs to.
+## presenting a scene it no longer belongs to. The telling goes first, while the
+## peer still holds the seat that names what it is being released from.
 ## [br][br][b]Server Only.[/b]
 func scene_release(scene: RID, peer: int) -> void:
-	assert(is_server(), "NetwMultiplayer.scene_release is server-only")
-	if entity_get_node(scene) == null:
-		return
-	var core := _scenes
-	core._notify_scene_released(scene, peer)
-	core.release_peer(scene, peer)
-	interest_flush()
+	if _native_core.scene_release(scene, peer):
+		interest_flush()
 
 
 ## Returns whether [param scene] admits [param peer].
 func scene_admits(scene: RID, peer: int) -> bool:
-	return _native_core.interest_engine.layer_has_viewer(
-		_scene_layer_id(scene),
-		peer,
-	)
+	return _native_core.scene_admits(scene, peer)
 
 
 ## Returns every peer [param scene] admits.
+##
+## [method NetwMultiplayerCore.scene_peers] reads the same admission boundary
+## [method scene_admit] writes, so what is listed here is what admission means
+## rather than a roster kept beside it.
 func scene_get_peers(scene: RID) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	for peer: int in _native_core.interest_engine.layer_viewers(
-		_scene_layer_id(scene),
-	):
-		out.append(peer)
-	return out
+	return _native_core.scene_peers(scene)
 
 
 ## Returns every entity [param scene] encloses.
@@ -3173,23 +3257,8 @@ func scene_get_peers(scene: RID) -> PackedInt32Array:
 ## its own descendants, so the walk stops there and they report against it.
 func scene_get_entities(scene: RID) -> Array[RID]:
 	var out: Array[RID] = []
-	var node := entity_get_node(scene)
-	if node != null:
-		_collect_scene_entities(node, out)
+	out.assign(_native_core.scene_entities_under(scene))
 	return out
-
-
-# Appends every entity root under [param node] to [param out], excluding
-# [param node] itself so a scene never reports as its own member.
-func _collect_scene_entities(node: Node, out: Array[RID]) -> void:
-	for child: Node in node.get_children():
-		var record := NetwEntity.of(child)
-		var owns_record := record != null and record.owner == child
-		if owns_record:
-			out.append(entity_of(child))
-			if record.declares_scene:
-				continue
-		_collect_scene_entities(child, out)
 
 
 ## Registers [param callback] for one [enum SceneEvent] on [param scene].
@@ -3206,12 +3275,12 @@ func _collect_scene_entities(node: Node, out: Array[RID]) -> void:
 ##             score_board.add(player))
 ## [/codeblock]
 func scene_observe(scene: RID, event: SceneEvent, callback: Callable) -> void:
-	_native_core.scene_core.observe(scene, event, callback)
+	_native_core.scene_observe(scene, event, callback)
 
 
 ## Reverses [method scene_observe] for one [param callback].
 func scene_unobserve(scene: RID, event: SceneEvent, callback: Callable) -> void:
-	_native_core.scene_core.unobserve(scene, event, callback)
+	_native_core.scene_unobserve(scene, event, callback)
 
 
 ## Spawns a scene and declares it, returning its entity RID.
@@ -3231,7 +3300,7 @@ func scene_create(
 		isolation: SceneIsolation = SceneIsolation.SCENE_ISOLATION_NONE,
 ) -> RID:
 	assert(is_server(), "NetwMultiplayer.scene_create is server-only")
-	var node := _scenes.spawn(recipe, isolation)
+	var node := _native_core.scene_spawn(recipe, isolation)
 	if not is_instance_valid(node):
 		return RID()
 	var entity := entity_of(node)
@@ -3249,49 +3318,36 @@ func scene_create(
 ## [br][br][b]Server Only.[/b]
 func scene_despawn(scene: RID, linger_seconds: float = 0.0) -> Error:
 	assert(is_server(), "NetwMultiplayer.scene_despawn is server-only")
-	if entity_get_node(scene) == null:
-		return ERR_DOES_NOT_EXIST
-	var content := _scene_level(scene)
-	var stem := StringName(content.name) if content != null else &""
-	if stem.is_empty():
-		return ERR_DOES_NOT_EXIST
-	if linger_seconds <= 0.0:
-		_scenes.destroy(stem)
-	else:
-		_scenes.retire(stem, _linger_pumps(linger_seconds))
-	return OK
+	return _native_core.scene_despawn(
+		scene,
+		0 if linger_seconds <= 0.0 else _linger_pumps(linger_seconds),
+	)
 
 
 # The pumps a linger in seconds is worth, at the rate this session pumps: its
 # tick rate once a clock is configured, and the engine's own frame rate while
 # the session pumps on polls alone.
 func _linger_pumps(seconds: float) -> int:
-	var rate := float(_clock.tickrate) if _clock.is_configured() \
+	var clock := _native_core.clock_handle
+	var rate := float(clock.tickrate) if clock.is_configured \
 			else _POLL_PUMP_RATE
-	return NetwClockCore.pumps_for(seconds, rate)
+	return NetwClockHandle.pumps_for(seconds, rate)
 
 
 ## Moves [param entity] into [param destination].
 ##
 ## The returned [NetwPromise] settles once reparenting, membership, and
-## persistence have all landed. It rejects with
-## [constant @GlobalScope.ERR_UNAVAILABLE] when the destination cannot be
-## reached.
+## persistence have all landed. [method NetwMultiplayerCore.scene_move_entity]
+## mints it and rejects with [constant @GlobalScope.ERR_UNAVAILABLE] when either
+## handle names no live node, so a move that cannot start still answers.
 ## [br][br][b]Server Only.[/b]
 func scene_move(
 		entity: RID,
 		destination: RID,
-		opts: SceneMoveOpts = null,
+		opts: NetwReparentOpts = null,
 ) -> NetwPromise:
 	assert(is_server(), "NetwMultiplayer.scene_move is server-only")
-	var node := entity_get_node(entity)
-	var target := entity_get_node(destination)
-	var wrapper := NetwEntity.of(node) if node else null
-	if wrapper == null or target == null:
-		var refused := NetwPromise.new()
-		refused.reject(ERR_UNAVAILABLE, "scene_move: entity or destination is unreachable")
-		return refused
-	return _scenes.move(wrapper, target, opts.to_reparent_opts() if opts else null)
+	return _native_core.scene_move_entity(entity, destination, opts)
 
 
 ## Asks server authority to move the local player to [param destination].
@@ -3306,9 +3362,14 @@ func scene_request(
 		destination: Variant,
 		args: Array = [],
 ) -> NetwPromise:
-	if destination is String:
-		return _scenes.request_change_path(destination, args)
-	return _scenes.request_change(StringName(destination), args)
+	var is_path: bool = destination is String
+	return _native_core.scene_request_open(
+		is_path,
+		destination if is_path else StringName(destination),
+		args,
+		false,
+		SCENE_REQUEST_DEADLINE,
+	)
 
 
 ## Installs the single handler deciding player scene requests.
@@ -3322,7 +3383,7 @@ func scene_request(
 ## [br][br][b]Server Only.[/b]
 func scene_set_request_handler(handler: Callable) -> void:
 	assert(is_server(), "NetwMultiplayer.scene_set_request_handler is server-only")
-	_native_core.scene_core.set_request_handler(handler)
+	_native_core.scene_set_request_handler(handler)
 
 
 ## Whether a request [param destination] names the scene declared [param label].
@@ -3341,20 +3402,7 @@ func scene_set_request_handler(handler: Callable) -> void:
 ## )
 ## [/codeblock]
 func scene_request_targets(destination: Variant, label: StringName) -> bool:
-	if not (destination is StringName or destination is String):
-		return false
-	var named := String(destination)
-	if named == String(label):
-		return true
-	var asked := ResourceUID.ensure_path(named)
-	if not asked.begins_with("res://"):
-		return false
-	# A stem is the declared root node's name, which need not match the file
-	# name, so the declared path is checked as well as the basename.
-	if asked.get_file().get_basename() == String(label):
-		return true
-	var declared := _scenes._scene_path_for(label)
-	return not declared.is_empty() and ResourceUID.ensure_path(declared) == asked
+	return _native_core.scene_request_targets(destination, label)
 
 
 ## Sets how far an admitted scene request reaches.
@@ -3369,12 +3417,12 @@ func scene_request_targets(destination: Variant, label: StringName) -> bool:
 ## [br][br][b]Server Only.[/b]
 func scene_set_request_reach(reach: SceneReach) -> void:
 	assert(is_server(), "NetwMultiplayer.scene_set_request_reach is server-only")
-	_native_core.scene_core.request_reach = reach
+	_native_core.request_reach = reach
 
 
 ## Returns how far an admitted scene request reaches.
 func scene_get_request_reach() -> SceneReach:
-	return _native_core.scene_core.request_reach as SceneReach
+	return _native_core.request_reach as SceneReach
 
 
 # Enrolls [param entity] in whatever scene now encloses it, after a move that
@@ -3394,13 +3442,6 @@ func _scene_adopt_entity(entity: RID) -> void:
 	# node itself, which parenting already did before this ran.
 	if wrapper.peer_id != 0 and is_server():
 		scene_admit(destination, wrapper.peer_id)
-
-
-# Reports [param entity]'s scene edges for as long as it lives, for an entity
-# seated into a scene without ever routing. Routed entities reach the same watch
-# through the liveness bus.
-func _scene_watch_entity(entity: NetwEntity) -> void:
-	_scenes.watch_entity(entity)
 
 
 # The one writer behind scene_declare and scene_undeclare. Both share the
@@ -3436,6 +3477,1379 @@ func _apply_pending_scene_facet(entity: RID, wrapper: NetwEntity) -> void:
 	wrapper.declares_scene = declared
 	if not declared:
 		wrapper.scene_label = &""
+
+#endregion
+
+#region Scene machine
+
+# Emitted when a constructed scene container enters the tree on this peer.
+signal _scene_spawned(scene: Node)
+
+# Emitted when an active scene begins processing.
+signal _scene_activated(scene: Node)
+
+# Emitted when an active scene leaves the session.
+signal _scene_despawned(scene: Node)
+
+# Emitted after an entity moves between replicated scenes.
+signal _scene_entity_moved(entity: NetwEntity, from: Node, to: Node)
+
+# Emitted after the server's startup scenes have all spawned.
+signal _startup_scenes_spawned()
+
+# The record plane behind the flat scene family: the observer routing table,
+# the published declaration, and the in-flight request. Untyped because the
+# record plane's class registers internally, so no GDScript may name it.
+var _scene_core
+
+# The resource the published declaration was read from, held for the session
+# lifetime rather than keyed to the registrar node, so a freed registrar
+# neither drops it nor leaks. The declaration itself lives in the record plane,
+# so an edit here republishes rather than being read back later.
+var _scene_declared_config: NetwSceneConfig
+var _scene_constructor_registered := false
+var _scene_local_participant: NetwParticipant
+# The tree-less host presentation view the session parents under its root,
+# freed on session end. Stays null when an owning MultiplayerTree already
+# created its own on its branch.
+var _scene_host_view: HostSceneView
+# The client-side awareness mirror each live scene's admission reads from, or
+# null on a server, which reads its own admission edges instead. A key is what
+# says the scene's admission is wired, so wiring it twice is refused. The peers
+# admitted before their roster row landed are the record plane's, on the live
+# row itself.
+var _scene_admission_layers: Dictionary[RID, NetwInterestLayer] = { }
+
+## Seconds a [method scene_request] waits for a server answer before it
+## resolves [constant @GlobalScope.ERR_TIMEOUT].
+##
+## The fallback a request takes when the target scene declared no deadline of
+## its own through [method NetwScriptModel.SceneMarkConfig.deadline].
+const SCENE_REQUEST_DEADLINE := 10.0
+
+# The registry id the session registers its scene constructor under, so a
+# session with no MultiplayerSceneManager still reconstructs scene wrappers.
+const _SCENE_CONSTRUCTOR_ID := &"__netw_scene__"
+
+const _SCENE_REFRESH_KEY := &"scene-refresh-current"
+
+# The reparent reason a move records when the caller named none.
+# NetwReparentOpts defaults to empty, which reads in a journal as a reparent
+# nobody attributed.
+const _SCENE_MOVE_REASON := &"scene_move"
+const _SCENE_SYNC_LOCAL_KEY := &"scene-sync-local"
+
+
+# Wires the scene machine onto the session plane, once, from the constructor.
+func _scene_install() -> void:
+	_scene_core = _native_core.scene_core
+	_scene_register_constructor()
+	_native_core.connect_once(
+		_native_core.local_participant_joined,
+		_scene_bind_local_participant,
+	)
+	_native_core.connect_once(
+		_native_core.local_scene_changed,
+		_scene_on_local_changed,
+	)
+	_native_core.connect_once(
+		_native_core.session_entered,
+		_scene_on_session_entered,
+	)
+	_native_core.connect_once(
+		_native_core.session_reclaimed,
+		_scene_on_session_reclaimed,
+	)
+	_native_core.connect_once(_native_core.entity_live, _scene_on_entity_live)
+	_native_core.set_scene_mark_reader(_scene_read_mark)
+	_native_core.set_scene_participant_edge(_scene_report_participant)
+	_native_core.set_scene_carry_move(_scene_carry_entity_move)
+	_native_core.channel_book.register_protocol(
+		NetwFrameEnvelope.Channel.SESSION_SCENE_REQUEST,
+		_scene_handle_request_frame,
+	)
+	_native_core.channel_book.register_protocol(
+		NetwFrameEnvelope.Channel.SESSION_SCENE_RESULT,
+		_native_core.scene_receive_result_frame,
+	)
+	_native_core.channel_book.register_protocol(
+		NetwFrameEnvelope.Channel.SESSION_SCENE_RELEASED,
+		_scene_handle_released_frame,
+	)
+	if not Netw.is_test_env():
+		var scene_tree := Engine.get_main_loop() as SceneTree
+		if scene_tree:
+			_native_core.connect_once(
+				scene_tree.scene_changed,
+				_scene_on_native_changed,
+			)
+
+
+# Registers the session's scene declaration. The session owns [param config]
+# for its lifetime, so a registrar node need not deregister it on the way out.
+func _scene_configure(config: NetwSceneConfig) -> void:
+	if _scene_declared_config != config:
+		_scene_release_declaration()
+		_scene_declared_config = config
+		if _scene_declared_config:
+			_native_core.connect_once(
+				_scene_declared_config.declaration_changed,
+				_scene_publish_declaration,
+			)
+	_scene_publish_declaration()
+	_scene_register_constructor()
+	_scene_settle_refresh()
+
+
+# Drops the session's scene declaration.
+func _scene_deconfigure() -> void:
+	_scene_release_declaration()
+	_scene_settle_refresh()
+
+
+# Copies the authored rows into the record plane, which is the only place a
+# session reads them from. Every row crosses on every publish, so a declaration
+# is replaced whole rather than amended.
+func _scene_publish_declaration() -> void:
+	if _scene_declared_config == null:
+		_scene_core.set_scene_anchor(null)
+		_scene_core.declaration_drop()
+		return
+	_scene_core.set_scene_anchor(_scene_declared_config.anchor)
+	_scene_core.declaration_open(
+		_scene_declared_config.isolation,
+		_scene_declared_config.level_spawn_function,
+	)
+	for packed: PackedScene in _scene_declared_config.initial_scenes:
+		if packed:
+			_scene_core.declaration_row(
+				NetwMultiplayerCore.scene_packed_stem(packed),
+				packed.resource_path,
+				null,
+				true,
+			)
+	for label: StringName in _scene_declared_config.declared_scene_names():
+		var packed := _scene_declared_config.declared_scene(label)
+		_scene_core.declaration_row(
+			label,
+			packed.resource_path if packed else "",
+			_scene_declared_config.declared_spawn_data(label),
+			false,
+		)
+	_scene_core.declaration_publish()
+
+
+# Lets go of the authoring resource, the edge that republished it, and the
+# declaration it published.
+func _scene_release_declaration() -> void:
+	if _scene_declared_config \
+			and _scene_declared_config.declaration_changed.is_connected(
+				_scene_publish_declaration,
+			):
+		_scene_declared_config.declaration_changed.disconnect(
+			_scene_publish_declaration,
+		)
+	_scene_declared_config = null
+	_scene_core.set_scene_anchor(null)
+	_scene_core.declaration_drop()
+
+
+# Binds the accepted local [param participant] to the presented scene.
+func _scene_bind_local_participant(participant: NetwParticipant) -> void:
+	if _scene_local_participant == participant:
+		_scene_settle_sync_local()
+		return
+	_scene_local_participant = participant
+	_scene_settle_sync_local()
+	_scene_settle_refresh()
+
+
+# Infers the local participant's scene from wrapper awareness.
+func _scene_sync_local_participant() -> void:
+	if _scene_local_participant == null:
+		return
+	_native_core.scene_seat_sync(_scene_local_participant.peer_id)
+
+
+# Recomputes what this peer presents from its local presentation state.
+func _scene_refresh_current() -> void:
+	_scene_core.current_scene = _scene_resolve_current()
+
+
+# Recomputes local presentation at the next settle. Keyed, so a cascade of
+# scene edges recomputes once, after all of them have landed.
+func _scene_settle_refresh() -> void:
+	_native_core.settle_schedule(_scene_refresh_current, _SCENE_REFRESH_KEY)
+
+
+# Re-reads the local participant's scene from awareness at the next settle,
+# which is the pump that also applies the awareness it reads.
+func _scene_settle_sync_local() -> void:
+	_native_core.settle_schedule(
+		_scene_sync_local_participant,
+		_SCENE_SYNC_LOCAL_KEY,
+	)
+
+
+# Releases SceneTree and participant signal connections.
+func _scene_dispose() -> void:
+	_scene_local_participant = null
+	_scene_core.request_abandon(ERR_UNAVAILABLE)
+	if _native_core.local_participant_joined.is_connected(
+		_scene_bind_local_participant,
+	):
+		_native_core.local_participant_joined.disconnect(
+			_scene_bind_local_participant,
+		)
+	if _native_core.local_scene_changed.is_connected(_scene_on_local_changed):
+		_native_core.local_scene_changed.disconnect(_scene_on_local_changed)
+	if _native_core.session_entered.is_connected(_scene_on_session_entered):
+		_native_core.session_entered.disconnect(_scene_on_session_entered)
+	if _native_core.session_reclaimed.is_connected(
+		_scene_on_session_reclaimed,
+	):
+		_native_core.session_reclaimed.disconnect(_scene_on_session_reclaimed)
+	var scene_tree := Engine.get_main_loop() as SceneTree
+	if scene_tree and scene_tree.scene_changed.is_connected(
+		_scene_on_native_changed,
+	):
+		scene_tree.scene_changed.disconnect(_scene_on_native_changed)
+	_scene_release_declaration()
+	# A session that ends has no next pump, so a window still open here would
+	# hold its wrapper forever.
+	for scene: RID in _scene_core.retiring_scenes():
+		var retired := _scene_node_of(scene)
+		if retired:
+			retired.queue_free()
+	_scene_core.clear()
+
+
+# Active scene containers keyed by their label, one entry per stem. The stem is
+# not unique: this holds the most recent, where scene_instances answers with
+# all of them.
+func _scene_nodes_by_label() -> Dictionary[StringName, Node]:
+	var out: Dictionary[StringName, Node] = { }
+	for scene: RID in _scene_core.live_scenes():
+		var stem: StringName = _scene_core.stem_of(scene)
+		if _scene_core.scene_named(stem) != scene:
+			continue
+		var node := _scene_node_of(scene)
+		if node:
+			out[stem] = node
+	return out
+
+
+# The container node standing in for [param label], for the paths that mount,
+# free, and reparent it.
+func _scene_container_named(label: StringName) -> Node:
+	return _scene_node_of(_scene_core.scene_named(label))
+
+
+# The container node one live scene identity stands for, or null.
+func _scene_node_of(scene: RID) -> Node:
+	return _native_core.wrapper_owner(scene) as Node
+
+
+# Every live scene container, in registration order.
+func _scene_live_nodes() -> Array[Node]:
+	var out: Array[Node] = []
+	for scene: RID in _scene_core.live_scenes():
+		var node := _scene_node_of(scene)
+		if node:
+			out.append(node)
+	return out
+
+
+# The container node this peer currently presents, or null.
+func _scene_current_node() -> Node:
+	return _scene_node_of(_scene_core.current_scene)
+
+
+# Activates a declared label or a file-backed PackedScene, on authority.
+func _scene_activate_ref(scene_ref: Variant) -> Node:
+	assert(_native_core.is_server(), "Scene activation is server-only.")
+	var active := _native_core.scene_activate(scene_ref)
+	if active:
+		_scene_activated.emit(active)
+	return active
+
+
+# Ensures the declared scene named [param label] is active and forces its level
+# to process, on authority.
+func _scene_activate_named(label: StringName) -> Node:
+	assert(_native_core.is_server(), "Scene activation is server-only.")
+	var active := _native_core.scene_activate_named(label)
+	if active:
+		_scene_activated.emit(active)
+	return active
+
+
+# Constructs and replicates the declared scene named [param label].
+func _scene_spawn_declared(label: StringName) -> void:
+	_native_core.scene_spawn_declared(label)
+
+
+# Disables processing for the active scene named [param label], on authority.
+func _scene_freeze_named(label: StringName) -> void:
+	assert(_native_core.is_server(), "Scene freezing is server-only.")
+	_native_core.scene_freeze(label)
+
+
+# Removes the active scene named [param label] from the session, on authority.
+func _scene_destroy_named(label: StringName) -> void:
+	assert(_native_core.is_server(), "Scene destruction is server-only.")
+	_native_core.scene_destroy(label)
+
+
+# Removes [param label] from the active registry now, then frees the wrapper
+# after [param drain_pumps] pumps, which is how long a path stays resolvable for
+# frames still in flight.
+func _scene_retire_named(label: StringName, drain_pumps: int = 8) -> void:
+	assert(_native_core.is_server(), "Scene retirement is server-only.")
+	_native_core.scene_retire_named(label, drain_pumps)
+
+
+## Answers a [NetwPromise] resolving with the [Node] a freshly instantiated
+## [param player] enters, honoring a stored teleport scene over
+## [param fallback].
+##
+## The answer waits on spawn hydration, so persisted spawn state rides the
+## SPAWN frame. It is a promise rather than the node itself because the wait is
+## a database read: the caller subscribes instead of awaiting, and an archetype
+## that wants no hydration resolves before this returns.
+## [codeblock]
+##     api.scene_resolve_hydrated_spawn(player, container).then(
+##         func(entered: Node) -> void:
+##             NetwEntity.of(entered).scene.add_player(NetwEntity.of(player)),
+##     )
+## [/codeblock]
+## [br][br][b]Server Only.[/b]
+func scene_resolve_hydrated_spawn(
+		player: Node,
+		fallback: Node,
+) -> NetwPromise:
+	var answer := NetwPromise.new()
+	var entity := NetwEntity.of(player)
+	var engine: NetwPersistenceEngine = null
+	if entity:
+		engine = entity.persistence as NetwPersistenceEngine
+	if engine == null or not engine.wants_spawn_hydration():
+		answer.resolve(_scene_spawn_scene_of(player, fallback))
+		return answer
+	engine.hydrate().when_settled(
+		func() -> void: answer.resolve(
+			_scene_spawn_scene_of(player, fallback),
+		),
+	)
+	return answer
+
+
+# The scene a hydrated player belongs in: the stem its TPComponent restored,
+# activated if it is not already live, and [param fallback] when it stored none.
+#
+# Persistence stores the stem, not an identity, so restoring means "put this
+# player into an instance of this stem". With several instances live any of them
+# satisfies the save, which is the semantic a non-unique stem carries.
+func _scene_spawn_scene_of(player: Node, fallback: Node) -> Node:
+	var tp: TPComponent = player.get_node_or_null("%TPComponent")
+	if not tp or tp.current_scene_name.is_empty():
+		return fallback
+	var label := StringName(tp.current_scene_name)
+	if _scene_container_named(label) == null:
+		_scene_activate_named(label)
+	var active := _scene_container_named(label)
+	return active if active else fallback
+
+
+# Moves [param entity] into [param destination], named as a Node rather than as
+# an entity handle. The promise resolves after both physics flushes, replicated
+# reparenting, participant membership, and persistence have settled.
+func _scene_move_entity_to(
+		entity: NetwEntity,
+		destination: Variant,
+		opts: NetwReparentOpts = null,
+) -> NetwPromise:
+	assert(_native_core.is_server(), "Scene movement is server-only.")
+	var promise := NetwPromise.new()
+	_scene_carry_entity_move(entity, destination, opts, promise)
+	return promise
+
+
+# Replaces the active SINGLE scene and moves every participant into it.
+func _scene_change_session(destination: Variant) -> NetwPromise:
+	assert(_native_core.is_server(), "Scene changes are server-only.")
+	var promise := NetwPromise.new()
+	_scene_change_single(destination, promise)
+	return promise
+
+
+## The muscle-memory front door mirroring
+## [method SceneTree.change_scene_to_file].
+##
+## [param requester] carries the session and the local mover, so server
+## authority runs the change directly while a client turns it into a
+## [method scene_request] the server decides. Both resolve to the same verbs, so
+## the front door and the captured native change never diverge.
+## [codeblock]
+## var promise := Netw.change_scene_to_file(self, "res://arena.tscn")
+## promise.when_settled(
+##     func() -> void:
+##         if promise.code != OK:
+##             status.text = "Could not change scene.",
+## )
+## [/codeblock]
+func scene_change_to_file(requester: Node, path: String) -> NetwPromise:
+	return _scene_front_door_change(requester, ResourceUID.ensure_path(path))
+
+
+## The front door for a file-backed [PackedScene], mirroring
+## [method SceneTree.change_scene_to_packed]. See
+## [method scene_change_to_file].
+func scene_change_to_packed(
+		requester: Node,
+		packed: PackedScene,
+) -> NetwPromise:
+	if NetwMultiplayerCore.scene_destination_kind(packed) \
+			!= NetwMultiplayerCore.SCENE_DESTINATION_PACKED:
+		push_error(
+			"scene_change_to_packed needs a file-backed PackedScene so a "
+			+ "client can request it by path.",
+		)
+		return NetwPromise.rejected(
+			ERR_UNAVAILABLE,
+			"scene_change_to_packed: the PackedScene has no resource path",
+		)
+	return _scene_front_door_change(requester, packed.resource_path)
+
+
+## Re-enters the scene this peer currently presents, mirroring
+## [method SceneTree.reload_current_scene]. See
+## [method scene_change_to_file].
+func scene_reload_current(requester: Node) -> NetwPromise:
+	var here := _scene_current_node()
+	if here == null or _scene_level_of(here) == null:
+		push_error("scene_reload_current: this peer presents no scene.")
+		return NetwPromise.rejected(
+			ERR_UNAVAILABLE,
+			"scene_reload_current: this peer presents no scene",
+		)
+	var path := _scene_level_of(here).scene_file_path
+	if path.is_empty():
+		push_error("scene_reload_current: the current scene has no file path.")
+		return NetwPromise.rejected(
+			ERR_UNAVAILABLE,
+			"scene_reload_current: the current scene has no file path",
+		)
+	return _scene_front_door_change(requester, ResourceUID.ensure_path(path))
+
+
+# Routes a front-door change to authority's verb or a client's request. Server
+# authority applies the change directly at the configured reach; a client
+# asks through the same request path the server policy decides.
+func _scene_front_door_change(requester: Node, path: String) -> NetwPromise:
+	if path.is_empty():
+		return NetwPromise.rejected(
+			ERR_UNAVAILABLE,
+			"a scene change needs a live session and a scene path",
+		)
+	if not _native_core.is_server():
+		return _native_core.scene_request_open(
+			true,
+			path,
+			[],
+			false,
+			SCENE_REQUEST_DEADLINE,
+		)
+	var packed := NetwMultiplayerCore.scene_packed_at(path)
+	if packed == null:
+		return NetwPromise.rejected(
+			ERR_UNAVAILABLE,
+			"no scene loads from " + path,
+		)
+	return _scene_apply_player_change(
+		_scene_requester_participant(requester),
+		packed,
+		false,
+	)
+
+
+# The participant a front-door call moves: the one owning the requester node, or
+# the local participant when the requester is not itself a player entity.
+func _scene_requester_participant(requester: Node) -> NetwParticipant:
+	if is_instance_valid(requester):
+		var entity := NetwEntity.of(requester)
+		if entity and entity.participant:
+			return entity.participant
+	return _native_core.participant_admitted_local() as NetwParticipant
+
+
+# Converts a marked scene's native tree entry into the role's replicated verb.
+# Called by the detach hook only for a live session and a non-framework entry.
+func _scene_handle_native_entry(node: Node) -> void:
+	var path := node.scene_file_path
+	match _native_core.scene_capture_verdict(path):
+		NetwMultiplayerCore.SCENE_CAPTURE_REFUSED:
+			# An in-memory instance has no path to request, mirroring activate's
+			# rejection of a pathless PackedScene.
+			push_error(
+				"A marked scene entered natively has no resource_path, so it "
+				+ "cannot become a server request. Instantiate it from a saved "
+				+ "scene file.",
+			)
+		NetwMultiplayerCore.SCENE_CAPTURE_REQUEST:
+			_scene_detach_and_request(node, path)
+		var verdict:
+			_scene_discard_and_respawn(node, path, verdict)
+
+
+# Server: the native instance already ran _ready outside the wrapper, gate, and
+# hydration, so it is discarded and re-spawned authoritatively through the
+# pipeline, the same double-instantiation bare-level adoption already pays. A
+# listen host under CONCURRENT reads the bare call as "move me", the same
+# meaning a client's bare call carries, so the host relocates rather than
+# spawning a world it does not enter.
+func _scene_discard_and_respawn(node: Node, path: String, verdict: int) -> void:
+	_scene_hide_and_free(node)
+	var packed := NetwMultiplayerCore.scene_packed_at(path)
+	if packed == null:
+		return
+	match verdict:
+		NetwMultiplayerCore.SCENE_CAPTURE_CHANGE_SESSION:
+			_scene_change_session(packed)
+		NetwMultiplayerCore.SCENE_CAPTURE_MOVE_ME:
+			_scene_apply_player_change(
+				_native_core.participant_admitted_local() as NetwParticipant,
+				packed,
+				false,
+			)
+		_:
+			_scene_activate_ref(packed)
+
+
+# Client: detach the local instance and wait for the authoritative scene to
+# arrive as spawn frames, the byte-identical state a freshly admitted client is
+# already in.
+func _scene_detach_and_request(node: Node, path: String) -> void:
+	var mark := _native_core.scene_mark_of(node.get_script())
+	_scene_invoke_pending_hook(node, mark.pending_method)
+	_scene_hide_and_free(node)
+	_native_core.scene_request_open(
+		true,
+		path,
+		[],
+		true,
+		mark.deadline_or(SCENE_REQUEST_DEADLINE),
+	)
+
+
+# Runs the marked scene's on_pending hook, a side-effect callback for the game
+# to present its own loading UI. Called on the native instance before it is
+# freed.
+# The game tears its UI down when the captured change settles, since a denied
+# or timed-out request never reaches the scene that would clear it.
+func _scene_invoke_pending_hook(node: Node, pending_method: StringName) -> void:
+	if pending_method.is_empty():
+		return
+	if node.has_method(pending_method):
+		node.call(pending_method)
+
+
+# Hides and frees a detached native instance. The free defers so the engine
+# finishes assigning current_scene before the node leaves the tree.
+func _scene_hide_and_free(node: Node) -> void:
+	node.process_mode = Node.PROCESS_MODE_DISABLED
+	if node is CanvasItem or node is Node3D:
+		node.set(&"visible", false)
+	node.queue_free()
+
+
+# Registers the session's host-less scene constructor once per session. The
+# constructor is the session's own native method, so its argument schema is
+# declared here under the same id the wire addresses the recipe by rather than
+# reflected off a script the native session does not have. The two lifecycle
+# edges are handed over in the same breath, because the constructor runs on
+# every peer and is the only place that sees a wrapper before it enters a tree.
+func _scene_register_constructor() -> void:
+	if _scene_constructor_registered:
+		return
+	_scene_core.set_container_lifecycle(
+		_scene_on_container_entered,
+		_scene_on_container_exited,
+	)
+	_native_core.spawn_register_constructor(
+		_SCENE_CONSTRUCTOR_ID,
+		_native_core.scene_spawn_node,
+		[TYPE_NIL, TYPE_INT],
+	)
+	_scene_constructor_registered = true
+
+
+# Server startup spawns the declared initial scenes, deferred one idle frame so
+# the session has settled, then announces completion.
+func _scene_on_session_entered() -> void:
+	if _native_core.is_server():
+		_scene_spawn_initial.call_deferred()
+	_scene_ensure_host_view.call_deferred()
+
+
+# Turns one direct packed level a scoped embedding offered into the default
+# SINGLE scene declaration, run once from the settle step so the adopted
+# declaration is registered before the host view and startup spawns read it.
+# Skipped when an explicit declaration already won or a manager already authored
+# the session, and a no-op under a root install, which offers no bare level.
+func _scene_adopt_bare_level(level: Node) -> void:
+	if not is_instance_valid(level):
+		return
+	if _scene_core.declaration_is_published():
+		return
+	var root := _native_core.session_root()
+	if root == null:
+		return
+	for child in root.get_children():
+		if child is MultiplayerSceneManager:
+			return
+	var path := ResourceUID.ensure_path(level.scene_file_path)
+	var parent := level.get_parent()
+	if parent:
+		parent.remove_child(level)
+	level.free()
+	var manager := MultiplayerSceneManager.new()
+	manager.name = &"MultiplayerSceneManager"
+	manager._configure_default(path)
+	root.add_child(manager)
+
+
+# Builds the one [HostSceneView] a listen-server host presenting an offscreen
+# world is missing. Whether this peer presents as such a host is
+# [method NetwMultiplayerCore.presents_as_listen_host], which is asked again on
+# each of the two edges that can turn it over, the settle step and the session
+# entering online, rather than cached at the first one. The view parents under
+# [method NetwMultiplayerCore.session_root] so it survives a native scene change
+# alongside the session content. Idempotent, and skipped when a view already
+# owns the display.
+func _scene_ensure_host_view() -> void:
+	if not _native_core.presents_as_listen_host():
+		return
+	var root := _native_core.session_root()
+	if root == null or not _native_core.scene_hosts_isolated_world():
+		return
+	for child in root.get_children():
+		if child is HostSceneView:
+			return
+	var view := HostSceneView.new()
+	view.name = &"HostSceneView"
+	_scene_host_view = view
+	root.add_child(view)
+
+
+func _scene_spawn_initial() -> void:
+	_native_core.scene_spawn_initial()
+	_startup_scenes_spawned.emit()
+
+
+func _scene_on_container_entered(scene_node: Node) -> void:
+	var content := _scene_level_of(scene_node)
+	if content == null:
+		return
+	var label := StringName(content.name)
+	# The stem is a non-unique label: N instances of one level are N scenes,
+	# each owning its own route-keyed admission boundary. The book answers "an
+	# instance of this stem" by stem and "every instance" in registration order.
+	var seat := _native_core.entity_of(scene_node)
+	_scene_core.scene_enter(
+		seat,
+		label,
+		_native_core.scene_owns_its_world(seat),
+	)
+	_scene_open_admission(scene_node)
+	_scene_ensure_host_view()
+	_scene_spawned.emit(scene_node)
+	var record := NetwEntity.of(scene_node)
+	if record:
+		# The session records and announces as one act, and resolves the facet
+		# from the container's own record. The container names itself, because
+		# a mounted scene declares its own facet.
+		_native_core.scene_publish_live(
+			record.route,
+			seat,
+			String(scene_node.name),
+		)
+	_scene_settle_sync_local()
+	_scene_settle_refresh()
+
+
+func _scene_on_container_exited(scene_node: Node) -> void:
+	_scene_close_admission(scene_node)
+	_native_core.scene_forget(scene_node)
+	_scene_despawned.emit(scene_node)
+
+
+# Opens one scene's admission row. A server reads its own admission edges. A
+# client has none to read, so it learns membership from awareness of the scene
+# entity itself, which is the same fact arriving the only way a client can see
+# it.
+func _scene_open_admission(scene_node: Node) -> void:
+	var scene := _native_core.entity_of(scene_node)
+	if not scene.is_valid() or _scene_admission_layers.has(scene):
+		return
+	_scene_admission_layers[scene] = null
+	if _native_core.is_server():
+		for peer: int in _native_core.scene_peers(scene):
+			_scene_report_participant(scene, peer, true)
+		return
+	_native_core.connect_once(
+		_native_core.participant_joined,
+		_scene_on_participant_joined,
+	)
+	var boundary := _native_core.scene_layer_view(scene) as NetwInterestLayer
+	if boundary == null:
+		return
+	_scene_admission_layers[scene] = boundary
+	_native_core.connect_once(
+		boundary.entity_visible,
+		_scene_on_visible.bind(scene),
+	)
+	_native_core.connect_once(
+		boundary.entity_hidden,
+		_scene_on_hidden.bind(scene),
+	)
+	var record := NetwEntity.of(scene_node)
+	if record and boundary.has_entity(record):
+		_scene_report_local_participant(scene, true)
+
+
+# Closes one scene's admission row, clearing the membership of everyone still
+# recorded as being in it.
+func _scene_close_admission(scene_node: Node) -> void:
+	var scene := _native_core.entity_of(scene_node)
+	if not _scene_admission_layers.has(scene):
+		return
+	var layer: NetwInterestLayer = _scene_admission_layers[scene]
+	if layer:
+		var shown := _scene_on_visible.bind(scene)
+		if layer.entity_visible.is_connected(shown):
+			layer.entity_visible.disconnect(shown)
+		var hidden := _scene_on_hidden.bind(scene)
+		if layer.entity_hidden.is_connected(hidden):
+			layer.entity_hidden.disconnect(hidden)
+	_scene_admission_layers.erase(scene)
+	if _native_core.participant_admitted_local():
+		_native_core.participant_seat_clear(_native_core.get_unique_id(), scene)
+	for peer: int in _native_core.scene_peers(scene):
+		if _native_core.participant_admitted_of(peer):
+			_native_core.participant_seat_clear(peer, scene)
+
+
+# Records one participant's arrival or departure and reports it to observers,
+# installed on the record plane so every boundary write reports its own edge. A
+# peer admitted before its roster row lands is parked and retried on join.
+func _scene_report_participant(scene: RID, peer: int, present: bool) -> void:
+	if _native_core.participant_admitted_of(peer) == null:
+		if present:
+			_scene_core.admission_park(scene, peer)
+		return
+	_scene_core.admission_unpark(scene, peer)
+	if present:
+		_native_core.participant_seat_move(peer, scene)
+	else:
+		_native_core.scene_seat_clear_deferred(peer, scene)
+	_scene_core.dispatch(
+		scene,
+		SceneEvent.SCENE_EVENT_PARTICIPANT,
+		present,
+		peer,
+	)
+
+
+func _scene_on_visible(entity: NetwEntity, scene: RID) -> void:
+	if entity == _native_core.wrapper_of(scene):
+		_scene_report_local_participant(scene, true)
+
+
+func _scene_on_hidden(entity: NetwEntity, scene: RID) -> void:
+	if entity == _native_core.wrapper_of(scene):
+		_scene_report_local_participant(scene, false)
+
+
+func _scene_report_local_participant(scene: RID, present: bool) -> void:
+	if _native_core.participant_admitted_local():
+		_scene_report_participant(scene, _native_core.get_unique_id(), present)
+
+
+# Retries the admission fact for a peer whose roster row landed after it was
+# already admitted.
+func _scene_on_participant_joined(participant: NetwParticipant) -> void:
+	var local := _native_core.participant_admitted_local()
+	for scene: RID in _scene_core.live_scenes():
+		if _scene_core.admission_is_parked(scene, participant.peer_id):
+			_scene_report_participant(scene, participant.peer_id, true)
+			continue
+		var layer := _scene_admission_layers.get(scene) as NetwInterestLayer
+		if layer == null or participant != local:
+			continue
+		var record := _native_core.wrapper_of(scene) as NetwEntity
+		if record and layer.has_entity(record):
+			_scene_report_participant(scene, participant.peer_id, true)
+
+
+# Watches one entity's tree edges for as long as it is live. The scene is
+# resolved at the moment of each edge rather than remembered, so a reparent
+# across scenes reports a leave against the old scene, which tree_exiting still
+# sees, and an enter against the new one, with nothing handing the entity over.
+func _scene_on_entity_live(_route: int, entity: NetwEntity) -> void:
+	_scene_watch_entity(entity)
+
+
+# Reports [param entity]'s scene edges for as long as it lives. The liveness bus
+# covers every routed entity, and this is also the door for one that never
+# routes, such as a player seated directly into a scene, whose admission would
+# otherwise outlive it.
+func _scene_watch_entity(entity: NetwEntity) -> void:
+	if entity == null or not is_instance_valid(entity.owner):
+		return
+	var node := entity.owner
+	# The id is resolved once, here, while the entity is alive. Re-resolving per
+	# edge would mint a fresh one for an entity on its way out, because a despawn
+	# clears the record's id before the node leaves the tree.
+	var subject := _native_core.entity_of(node)
+	if not subject.is_valid():
+		return
+	var entered := _scene_report_entity_edge.bind(entity, subject, true)
+	var exited := _scene_report_entity_edge.bind(entity, subject, false)
+	if not node.tree_entered.is_connected(entered):
+		node.tree_entered.connect(entered)
+	if not node.tree_exiting.is_connected(exited):
+		node.tree_exiting.connect(exited)
+	if node.is_inside_tree():
+		_scene_report_entity_edge(entity, subject, true)
+	# A player's admission is released against the scene it was seated into.
+	# Teardown cannot resolve that scene, because the node is already leaving the
+	# tree the walk would follow, so the seat is remembered here instead.
+	if entity.peer_id != 0:
+		var seat := _native_core.entity_scene_of(subject)
+		if seat.is_valid() and seat != subject:
+			var leaving := _scene_on_player_exiting.bind(
+				seat,
+				subject,
+				entity,
+				entity.peer_id,
+			)
+			if not node.tree_exiting.is_connected(leaving):
+				node.tree_exiting.connect(leaving)
+
+
+# Settles the release so it can tell a free from a reparent, which the exit
+# signal itself cannot.
+func _scene_on_player_exiting(
+		seat: RID,
+		subject: RID,
+		entity: NetwEntity,
+		peer: int,
+) -> void:
+	_native_core.settle_schedule(
+		_scene_release_departed_player.bind(seat, subject, entity, peer),
+		NetwMultiplayerCore.scene_seat_release_key(peer, seat),
+	)
+
+
+# Reports one entity crossing a scene boundary. The node still standing is the
+# one fact the record plane cannot answer, because subject was resolved while
+# the entity was alive and stays answerable after it is not.
+func _scene_report_entity_edge(
+		entity: NetwEntity,
+		subject: RID,
+		present: bool,
+) -> void:
+	if entity == null or not is_instance_valid(entity.owner):
+		return
+	_native_core.scene_report_entity_edge(
+		subject,
+		present,
+		entity.peer_id != 0,
+	)
+
+
+# Releases a player's admission once it is clear the player left for good. The
+# strong reference this holds is the only thing that can still answer whether
+# the mover survived the window, because the record it was known by is cleared
+# before its node leaves the tree.
+func _scene_release_departed_player(
+		scene: RID,
+		subject: RID,
+		entity: NetwEntity,
+		peer: int,
+) -> void:
+	_native_core.scene_release_departed(
+		scene,
+		subject,
+		is_instance_valid(entity) and is_instance_valid(entity.owner),
+		peer,
+	)
+
+
+# Runs one guarded replicated entity move, installed on the record plane as the
+# session's carry.
+func _scene_carry_entity_move(
+		entity: NetwEntity,
+		destination: Variant,
+		opts: NetwReparentOpts,
+		promise: NetwPromise,
+) -> void:
+	var mover_live := entity != null and is_instance_valid(entity.owner)
+	var target := _scene_resolve_destination(destination) if mover_live else null
+	var source := _native_core.scene_containing(entity.owner) if mover_live \
+			else null
+	match NetwMultiplayerCore.scene_move_verdict(
+		mover_live,
+		target != null,
+		source == target,
+	):
+		NetwMultiplayerCore.SCENE_MOVE_REFUSED:
+			promise.reject(ERR_UNAVAILABLE)
+		NetwMultiplayerCore.SCENE_MOVE_ALREADY_THERE:
+			promise.resolve(OK)
+		_:
+			_scene_carry_move(
+				entity,
+				target,
+				opts,
+				_scene_arrive.bind(entity, source, target, promise),
+			)
+
+
+# The one branch of a move that spends physics frames. It hands the move on
+# through [param arrived] rather than returning, because the frames are
+# subscribed to rather than awaited and the caller has to keep going without a
+# coroutine of its own.
+func _scene_carry_move(
+		entity: NetwEntity,
+		target: Node,
+		opts: NetwReparentOpts,
+		arrived: Callable,
+) -> void:
+	if opts == null:
+		opts = NetwReparentOpts.new()
+		opts.reason = _SCENE_MOVE_REASON
+	var guard := AreaReparentGuard.new(entity.owner)
+	guard.flush_then(
+		_scene_swap_move_parent.bind(guard, entity, target, opts, arrived),
+	)
+
+
+# Reparents the guarded body once the physics server has dropped it from the
+# source areas, then opens the second window so the destination overlaps are
+# settled before the suppression ends.
+func _scene_swap_move_parent(
+		guard: AreaReparentGuard,
+		entity: NetwEntity,
+		target: Node,
+		opts: NetwReparentOpts,
+		arrived: Callable,
+) -> void:
+	entity.reparent_to(_scene_level_of(target), opts)
+	guard.flush_then(_scene_end_move_guard.bind(guard, arrived))
+
+
+# Ends the suppression window and lets the move answer.
+func _scene_end_move_guard(guard: AreaReparentGuard, arrived: Callable) -> void:
+	guard.release()
+	arrived.call()
+
+
+# What a completed move owes everyone watching, once the body is in place.
+func _scene_arrive(
+		entity: NetwEntity,
+		source: Node,
+		target: Node,
+		promise: NetwPromise,
+) -> void:
+	var participant := entity.participant
+	if participant:
+		participant.current_scene = _scene_handle_for(target)
+	var persistence := entity.persistence
+	if persistence:
+		persistence.flush()
+	_scene_entity_moved.emit(entity, source, target)
+	promise.resolve(OK)
+
+
+# Replaces what the session presents. Every participant ends up in the target
+# wherever it started, and every other live scene retires, so the answer does
+# not depend on which scene happened to be first. A second transition entered
+# while one is still moving peers resolves UNAVAILABLE, so concurrent approvals
+# never interleave moves against a half-transitioned roster.
+func _scene_change_single(
+		destination: Variant,
+		promise: NetwPromise,
+) -> void:
+	if not _scene_core.transition_open():
+		promise.reject(ERR_UNAVAILABLE)
+		return
+	var target := _scene_existing_destination(destination)
+	if target == null:
+		_scene_core.replacing = true
+		target = _scene_activate_ref(destination)
+		_scene_core.replacing = false
+	if target == null:
+		_scene_core.transition_close()
+		promise.reject(ERR_UNAVAILABLE)
+		return
+	var sources: Array[Node] = []
+	for active: Node in _scene_live_nodes():
+		if is_instance_valid(active) and active != target:
+			sources.append(active)
+	_scene_core.transition_arm(target, sources, promise)
+	_scene_carry_transition()
+
+
+# Moves the participants the transition still owes, each in turn. A move that
+# settled on the spot continues the walk here and a pending one continues it on
+# its own edge, which is the same order a loop-carried await reached them in.
+func _scene_carry_transition() -> void:
+	var target: Node = _scene_core.transition_target()
+	var mover := _scene_next_mover()
+	while mover != null:
+		var moving := _scene_move_entity_to(mover, target)
+		if not moving.is_settled:
+			moving.settled.connect(
+				_scene_resume_transition.bind(mover, moving),
+				CONNECT_ONE_SHOT,
+			)
+			return
+		if not _scene_core.transition_accept(moving.code, mover.peer_id):
+			return
+		mover = _scene_next_mover()
+	_scene_land_transition()
+
+
+# Continues the walk on a pending move's own settle edge.
+func _scene_resume_transition(
+		mover: NetwEntity,
+		moving: NetwPromise,
+) -> void:
+	if _scene_core.transition_accept(moving.code, mover.peer_id):
+		_scene_carry_transition()
+
+
+# The next participant the transition still owes a move, or null when every
+# source is walked.
+func _scene_next_mover() -> NetwEntity:
+	return _scene_core.transition_next_mover(_scene_players_in) as NetwEntity
+
+
+# Admits everyone the moves did not carry, retires the sources, and answers.
+func _scene_land_transition() -> void:
+	var target: Node = _scene_core.transition_target()
+	var arrived := _scene_handle_for(target)
+	for participant: NetwParticipant in _native_core.participant_admitted_all():
+		if _scene_core.transition_moved(participant.peer_id):
+			continue
+		participant.current_scene = arrived
+		var admitted := arrived.admit(participant)
+		if admitted != OK:
+			_scene_core.transition_fail(admitted)
+			return
+	var sources: Array = _scene_core.transition_sources()
+	for source: Node in sources:
+		var content := _scene_level_of(source)
+		if content != null:
+			_scene_destroy_named(StringName(content.name))
+	_scene_settle_refresh()
+	_scene_core.transition_land()
+
+
+# Resolves and activates a destination reference.
+func _scene_resolve_destination(destination: Variant) -> Node:
+	var existing := _scene_existing_destination(destination)
+	return existing if existing else _scene_activate_ref(destination)
+
+
+# Resolves an already active destination reference.
+func _scene_existing_destination(destination: Variant) -> Node:
+	return _native_core.scene_existing_destination(destination)
+
+
+# Server receive for a player scene request off the carrier. The wall clock is
+# read here and handed down, so the window the frame is admitted under is a
+# function of its arguments.
+func _scene_handle_request_frame(
+		payload: PackedByteArray,
+		sender: int,
+) -> void:
+	var row := _native_core.scene_request_frame_row(
+		payload,
+		sender,
+		Time.get_ticks_msec(),
+	)
+	if row.is_empty():
+		return
+	var request_id: int = row[0]
+	var is_path: bool = row[1]
+	var scene_ref: Variant = row[2]
+	var args: Array = row[3]
+	_scene_receive_request(sender, request_id, is_path, scene_ref, args)
+
+
+# Clears the local participant's scene membership from a server release notice.
+func _scene_handle_released_frame(
+		payload: PackedByteArray,
+		sender: int,
+) -> void:
+	var seat := _native_core.scene_released_seat(payload, sender)
+	if not seat.is_valid():
+		return
+	if _native_core.participant_admitted_local():
+		_native_core.participant_seat_clear(_native_core.get_unique_id(), seat)
+
+
+# Applies server policy and answers one player request.
+func _scene_receive_request(
+		peer_id: int,
+		request_id: int,
+		is_path: bool,
+		scene_ref: Variant,
+		args: Array,
+) -> void:
+	var participant := _native_core.participant_admitted_of(peer_id) \
+			as NetwParticipant
+	if participant == null:
+		_native_core.scene_send_result(peer_id, request_id, ERR_UNAUTHORIZED)
+		return
+	if is_path:
+		_scene_receive_path_request(
+			peer_id,
+			request_id,
+			participant,
+			String(scene_ref),
+			args,
+		)
+	else:
+		_scene_receive_named_request(
+			peer_id,
+			request_id,
+			participant,
+			StringName(scene_ref),
+			args,
+		)
+
+
+# A declared-name request builds the wire context and authorizes it.
+func _scene_receive_named_request(
+		peer_id: int,
+		request_id: int,
+		participant: NetwParticipant,
+		label: StringName,
+		args: Array,
+) -> void:
+	var path: String = _scene_core.declared_scene_path(label)
+	var normalized := ResourceUID.ensure_path(path) if not path.is_empty() else ""
+	var mark := _native_core.scene_mark_of(
+		NetwMultiplayerCore.scene_root_script_at(path),
+	)
+	if not _scene_admits_request(
+		participant,
+		label,
+		normalized,
+		args,
+		mark.marked,
+		mark.is_deny_default(),
+	):
+		_native_core.scene_send_result(peer_id, request_id, ERR_UNAUTHORIZED)
+		return
+	_native_core.scene_answer_when_settled(
+		_scene_apply_player_change(participant, label, mark.session_wide),
+		peer_id,
+		request_id,
+	)
+
+
+# A path request is bounded to a real scene file, then authorized against the
+# target scene's mark. The mark is the consent line, so a marked non-gated
+# scene admits by default and an installed request handler may still refuse it.
+func _scene_receive_path_request(
+		peer_id: int,
+		request_id: int,
+		participant: NetwParticipant,
+		scene_path: String,
+		args: Array,
+) -> void:
+	var resolved := NetwMultiplayerCore.scene_resolve_requested_path(scene_path)
+	if resolved.is_empty():
+		_native_core.scene_send_result(peer_id, request_id, ERR_UNAVAILABLE)
+		return
+	var packed := NetwMultiplayerCore.scene_packed_at(resolved)
+	if packed == null:
+		_native_core.scene_send_result(peer_id, request_id, ERR_UNAVAILABLE)
+		return
+	var mark := _native_core.scene_mark_of(
+		NetwMultiplayerCore.scene_packed_root_script(packed),
+	)
+	if not _scene_admits_request(
+		participant,
+		&"",
+		resolved,
+		args,
+		mark.marked,
+		mark.is_deny_default(),
+	):
+		_native_core.scene_send_result(peer_id, request_id, ERR_UNAUTHORIZED)
+		return
+	_native_core.scene_answer_when_settled(
+		_scene_apply_player_change(participant, packed, mark.session_wide),
+		peer_id,
+		request_id,
+	)
+
+
+# The reading behind NetwMultiplayerCore.scene_mark_of, taken as a Callable
+# because a mark is authored against a Script by Netw.mark_multiplayer_scene and
+# Netw.configure_multiplayer_scene, and only the script tier can key by one. It
+# reads and never decides: which of these fields deny a request by default, and
+# what an undeclared deadline falls back to, are NetwSceneMark's.
+func _scene_read_mark(target_script: Script) -> NetwSceneMark:
+	var mark := NetwSceneMark.new()
+	mark.marked = Netw.is_multiplayer_scene(target_script)
+	var config := NetwScriptModel.get_scene_config(target_script)
+	if config == null:
+		return mark
+	mark.gated = config.is_gated
+	mark.session_wide = config.is_session_wide
+	mark.captured = config.is_captured
+	mark.pending_method = config.pending_method
+	mark.deadline = config.deadline
+	return mark
+
+
+# Decides one player request. The mark readings are the authoring tier's, so
+# they are reduced at the door and handed down, and the verdict itself is the
+# record plane's.
+func _scene_admits_request(
+		participant: NetwParticipant,
+		label: StringName,
+		scene_path: String,
+		args: Array,
+		marked: bool,
+		gated: bool,
+) -> bool:
+	var named := not label.is_empty()
+	return _scene_core.decide_request(
+		participant,
+		label if named else scene_path,
+		args,
+		named,
+		marked,
+		gated,
+		scene_path,
+	)
+
+
+# Applies an allowed request at the reach the record plane answers.
+func _scene_apply_player_change(
+		participant: NetwParticipant,
+		destination: Variant,
+		session_wide: bool,
+) -> NetwPromise:
+	if _scene_core.change_replaces_session(session_wide, participant != null):
+		return _scene_change_session(destination)
+	var target := _scene_resolve_destination(destination)
+	if target == null:
+		var unavailable := NetwPromise.new()
+		unavailable.reject(ERR_UNAVAILABLE)
+		return unavailable
+	for active: Node in _scene_nodes_by_label().values():
+		for entity: NetwEntity in _scene_players_in(active):
+			if entity.peer_id == participant.peer_id:
+				return _scene_move_entity_to(entity, target)
+	participant.move_to(_scene_handle_for(target))
+	var completed := NetwPromise.new()
+	completed.resolve(OK)
+	return completed
+
+
+# The canonical handle for one scene container, which is how a participant's
+# membership is recorded now that the scalar is a handle rather than a node.
+func _scene_handle_for(scene_node: Node) -> NetwSceneHandle:
+	var record := NetwEntity.of(scene_node)
+	return record.scene if record else null
+
+
+# The content root of [param scene_node], which is its only child. A scene with
+# no content is a pure admission boundary and answers null.
+func _scene_level_of(scene_node: Node) -> Node:
+	return NetwMultiplayerCore.scene_level_of(scene_node)
+
+
+# The player entities inside [param scene_node].
+func _scene_players_in(scene_node: Node) -> Array[NetwEntity]:
+	var record := NetwEntity.of(scene_node)
+	return record.scene.players if record else [] as Array[NetwEntity]
+
+
+# Resolves the scene this peer presents. A dedicated server presents nothing,
+# and the readings the record plane cannot take for itself are the local role
+# and whichever seat the session holds for this peer.
+func _scene_resolve_current() -> RID:
+	var presents := _native_core.role != Role.DEDICATED_SERVER
+	var seat := _native_core.participant_seat(
+		_scene_local_participant.peer_id,
+	) if _scene_local_participant else RID()
+	return _scene_core.resolve_current(presents, seat)
+
+
+# The session publishes the edge; this refreshes what it means locally.
+func _scene_on_local_changed(
+		_from: NetwSceneHandle,
+		_to: NetwSceneHandle,
+) -> void:
+	_scene_refresh_current()
+
+
+# Frees every active scene so a re-host rebuilds from empty, then clears local
+# presentation. Freeing wrappers clears their layer memberships through normal
+# entity lifecycle teardown, so the next session starts cleanly. The free is
+# synchronous, which is why it rides the reclaim phase rather than the
+# announcement: every listener that holds scene nodes has dropped them by the
+# time this runs.
+func _scene_on_session_reclaimed() -> void:
+	for scene_node: Node in _scene_live_nodes():
+		if scene_node.get_parent():
+			scene_node.get_parent().remove_child(scene_node)
+		scene_node.free()
+	_scene_core.clear()
+	if is_instance_valid(_scene_host_view):
+		if _scene_host_view.get_parent():
+			_scene_host_view.get_parent().remove_child(_scene_host_view)
+		_scene_host_view.free()
+	_scene_host_view = null
+	if _scene_local_participant:
+		_scene_local_participant.current_scene = null
+	_scene_local_participant = null
+	_scene_core.request_abandon(ERR_UNAVAILABLE)
+	_scene_core.current_scene = RID()
+
+
+# Diagnoses native scene changes to a scene with no on-ramp during a live
+# session. A scene marked [method NetwScriptModel.SceneMarkConfig.captured]
+# carries its own detach hook that converts the change into a server request, so
+# it is exempt. Declaring a scene without that knob declares it and nothing
+# more, so the change still strands this peer.
+func _scene_on_native_changed(scene_root: Node) -> void:
+	var on_ramped := is_instance_valid(scene_root) \
+			and _native_core.scene_mark_of(scene_root.get_script()).captured
+	if not NetwMultiplayerCore.scene_native_change_strands(
+		_native_core.state == SessionState.ONLINE,
+		on_ramped,
+	):
+		return
+	push_error(
+		"Native change_scene_to_* to a scene with no on-ramp during an online "
+		+ "session. The replicated session is intact, but this client left the "
+		+ "presented game locally. Add "
+		+ "Netw.configure_multiplayer_scene(self).captured() to the scene root "
+		+ "to make the change a server request, or change scenes with "
+		+ "Netw.change_scene_to_file(), which applies on authority and asks "
+		+ "from a client.",
+	)
 
 #endregion
 
@@ -3518,6 +4932,258 @@ func _write_display_param(
 		param,
 		value,
 	)
+
+
+# The display door with its event reported, installed on every channel as the
+# lane it tries before its own port. A door that answers ERR_DOES_NOT_EXIST has
+# no lane for this entity, which is the only verdict the channel falls through.
+func _display_lane(entity: RID, track: StringName, value: Variant) -> Error:
+	var verdict := _display_write(entity, track, value)
+	report_event(
+		NetwMultiplayerCore.DISPLAY_WRITE,
+		_native_core.liveness_core.route_of(entity),
+		{ track = track },
+		0,
+		&"",
+		{ },
+		verdict,
+	)
+	return verdict
+
+
+# The display facts only the prediction handle and entity control can answer.
+# The stream half is decided natively and arrives as authors_streams.
+func _display_role_facts(
+		runtime: NetwDisplayRuntime,
+		authors_streams: bool,
+) -> NetwDisplayRoleFacts:
+	var entity := runtime.entity()
+	var facts := NetwDisplayRoleFacts.new()
+	if entity == null:
+		return facts
+	facts.authors_streams = authors_streams
+	facts.controlled_locally = entity.is_controlled_locally
+	facts.predicted_input = entity.prediction.input_source \
+			== NetwPredict.InputSource.PREDICTED
+	facts.prediction_registered = entity.prediction.is_registered()
+	facts.simulates_locally = _display_simulates_locally(runtime)
+	return facts
+
+
+# True when this peer runs the entity's own simulation forward, which is the
+# body a PREDICTED display chases. Registration alone does not answer it: an
+# entity whose recovery policy closes the delay is registered and simulates
+# nothing here, so it has an authoritative stream to play back instead.
+func _display_simulates_locally(runtime: NetwDisplayRuntime) -> bool:
+	var entity := runtime.entity()
+	if entity and entity.prediction.is_registered():
+		return entity.prediction.sim_mode != NetwPredict.SimMode.DISPLAY
+	var owner := runtime.owner()
+	if owner:
+		return owner.get_node_or_null("%PredictionComponent") != null
+	return false
+
+
+# The largest render offset a chase absorption may hold, the entity's own
+# teleport tier: an offset past it would show a pose a teleport was entitled
+# to snap through.
+func _display_chase_clamp(runtime: NetwDisplayRuntime) -> float:
+	var entity := runtime.entity()
+	if entity and entity.prediction:
+		return maxf(entity.prediction.teleport_threshold, 0.0)
+	return INF
+
+
+# Subscribes a chasing runtime to its entity's reconciliation writes, and drops
+# the subscription for every other role. A source transition owns any offset
+# left behind after leaving the chase.
+func _display_chase_hook(runtime: NetwDisplayRuntime, bind: bool) -> void:
+	var entity := runtime.entity()
+	var hooks := runtime.chase_hooks
+	for hook: Callable in hooks:
+		if entity and entity.prediction \
+				and entity.prediction.recovered.is_connected(hook):
+			entity.prediction.recovered.disconnect(hook)
+	hooks.clear()
+	if not bind or not entity or not entity.prediction:
+		runtime.chase_hooks = hooks
+		return
+	var hook := _display_on_recovered.bind(runtime)
+	entity.prediction.recovered.connect(hook)
+	hooks.append(hook)
+	runtime.chase_hooks = hooks
+
+
+func _display_on_recovered(
+		_entry: int,
+		deltas: Dictionary,
+		teleported: bool,
+		_attribution: int,
+		runtime: NetwDisplayRuntime,
+) -> void:
+	_native_core.display_absorb_recovery(runtime, deltas, teleported)
+
+
+# Walks owner and every descendant, collecting one NetwDisplaySpecRow per
+# tracked property and per interpolated RPC or signal argument.
+func _display_specs(owner: Node) -> Array:
+	var rows: Array = []
+	if not owner:
+		return rows
+	var nodes: Array[Node] = [owner]
+	for child in owner.find_children("*", "", true, false):
+		nodes.append(child)
+	for node in nodes:
+		var configs := NetwScriptModel.get_node_property_configs(node)
+		for property: StringName in configs:
+			var opt: NetwScriptModel.SyncConfig = configs[property]
+			if opt.interpolators.is_empty():
+				continue
+			var spec: NetwInterpolate = opt.interpolators[0]
+			rows.append(NetwDisplaySpecRow.of_property(node, property, spec))
+		var script := node.get_script() as Script
+		if not script:
+			continue
+		for method in NetwScriptModel.get_rpc_configs(script):
+			var rpc_opt: NetwScriptModel.SyncConfig = (
+					NetwScriptModel.get_rpc_configs(script)[method]
+			)
+			for raw_spec in rpc_opt.interpolators:
+				var arg_spec := raw_spec as NetwInterpolate
+				if not arg_spec or arg_spec.mode == NetwInterpolate.MODE_NONE:
+					continue
+				if arg_spec.target.is_empty():
+					continue
+				rows.append(NetwDisplaySpecRow.of_argument(node, arg_spec))
+		for signal_name in NetwScriptModel.get_signal_configs(script):
+			var sig_opt: NetwScriptModel.SyncConfig = (
+					NetwScriptModel.get_signal_configs(script)[signal_name]
+			)
+			for raw_spec in sig_opt.interpolators:
+				var arg_spec := raw_spec as NetwInterpolate
+				if not arg_spec or arg_spec.mode == NetwInterpolate.MODE_NONE:
+					continue
+				if arg_spec.target.is_empty():
+					continue
+				rows.append(NetwDisplaySpecRow.of_argument(node, arg_spec))
+	return rows
+
+
+func _display_sync_intervals(runtime: NetwDisplayRuntime) -> void:
+	var max_interval := 0.0
+	var entity := runtime.entity()
+	if not entity:
+		return
+	runtime.authoring_binding = null
+	for sync in entity.synchronizers():
+		if not sync.public_visibility:
+			continue
+		if not _sync_replicates_tracked_property(runtime, sync):
+			continue
+		max_interval = maxf(
+			max_interval,
+			maxf(sync.replication_interval, sync.delta_interval),
+		)
+	var state_binding := entity.state_binding
+	if state_binding and _set_replicates_tracked_property(runtime, state_binding.set):
+		runtime.authoring_binding = state_binding
+	if max_interval <= 0.0:
+		return
+	if _native_core.clock_handle.is_configured:
+		runtime.playhead.expected_interval_ticks = maxi(
+			1,
+			ceili(max_interval * _native_core.clock_handle.tickrate),
+		)
+
+
+func _sync_replicates_tracked_property(
+		runtime: NetwDisplayRuntime,
+		sync: MultiplayerSynchronizer,
+) -> bool:
+	if not sync.replication_config:
+		return false
+	for path in sync.replication_config.get_properties():
+		if path.get_subname_count() == 0:
+			continue
+		var clean_name := path.get_subname(path.get_subname_count() - 1)
+		for state in runtime.states:
+			if state.source_prop == clean_name or state.name == clean_name:
+				return true
+	return false
+
+
+# True for a plain display synchronizer whose receive path is the consumed
+# apply feed. Read by role resolution to tell an authored stream from a
+# received one.
+func _sync_feeds_consumed(sync: MultiplayerSynchronizer) -> bool:
+	if not sync.replication_config:
+		return false
+	if not sync.public_visibility:
+		return false
+	return true
+
+
+func _display_authors_streams(runtime: NetwDisplayRuntime) -> bool:
+	var entity := runtime.entity()
+	if not entity:
+		return false
+	var found := false
+	for sync in entity.synchronizers():
+		if not sync.is_inside_tree():
+			continue
+		if not _sync_feeds_consumed(sync):
+			continue
+		if not _sync_replicates_tracked_property(runtime, sync):
+			continue
+		if not sync.is_multiplayer_authority():
+			return false
+		found = true
+	for binding in _replication.derived_group(runtime.route):
+		var node := binding.node()
+		if not is_instance_valid(node) or not node.is_inside_tree():
+			continue
+		if binding.set.audience != NetwPropertySet.Audience.AUDIENCE_PUBLIC:
+			continue
+		if not _set_replicates_tracked_property(runtime, binding.set):
+			continue
+		if not _authors_derived_stream(binding, entity):
+			return false
+		found = true
+	return found
+
+
+# The send-side author predicate for a derived stream, mirrored from the
+# pump's gate: the server for a state set, the node authority for an
+# authority-policed set, the local controller for a controller-policed set,
+# any peer for an open set.
+func _authors_derived_stream(
+		binding: NetwPropertySetBinding,
+		entity: NetwEntity,
+) -> bool:
+	var node := binding.node()
+	if not is_instance_valid(node):
+		return false
+	if binding.set.record == NetwPropertySet.Record.RECORD_STATE:
+		return get_unique_id() == 1
+	return NetwEntityControl.policy_admits(
+		binding.set.policy,
+		get_unique_id(),
+		node.get_multiplayer_authority(),
+		entity.controller,
+	)
+
+
+# The derived counterpart of _sync_replicates_tracked_property: a set feeds
+# the runtime when any field key names a tracked value's source or name.
+func _set_replicates_tracked_property(
+		runtime: NetwDisplayRuntime,
+		set: NetwPropertySet,
+) -> bool:
+	for field in set.columns:
+		for state in runtime.states:
+			if state.source_prop == field.key or state.name == field.key:
+				return true
+	return false
 
 
 ## Returns one [enum DisplayParam], or [code]null[/code] when invalid.
@@ -3638,7 +5304,7 @@ func _display_declare(
 	if not is_instance_valid(node) or not (spec is NetwInterpolate):
 		return ERR_INVALID_DATA
 	NetwScriptModel.configure_node_property(node, track).interpolate(spec)
-	_display._mark_runtime_dirty(entity)
+	_native_core.display_book.mark_dirty(entity, NetwDisplayDecl.DIRT_RUNTIME)
 	return OK
 
 
@@ -3649,7 +5315,9 @@ func _display_declare(
 ## makes teardown safe to repeat. Shares the sample history described on
 ## [method _display_declare].
 func _display_undeclare(entity: RID) -> void:
-	_display._remove_entity_runtime(entity)
+	var route := _native_core.display_book.route_of(entity)
+	if route > 0:
+		_native_core.display_on_entity_dead(route)
 
 
 ## Feeds one authored sample of [param track] into the display history.
@@ -3683,7 +5351,7 @@ func _display_record(
 	var node := _comp_node(wrapper, int(declaration[0]))
 	if not is_instance_valid(node):
 		return ERR_UNAVAILABLE
-	_display._record(
+	_native_core.display_record(
 		node,
 		track,
 		value,
@@ -3717,7 +5385,7 @@ func _display_pump_entity(
 		alpha: float,
 		delta: float,
 ) -> Error:
-	return _display._pump_entity(entity, _display_pump_timing)
+	return _native_core.display_pump_entity(entity, _display_pump_timing)
 
 
 ## Applies one resolved pose of [param track] to what the player sees.
@@ -3777,9 +5445,9 @@ func predict_declare(entity: RID) -> Error:
 	var wrapper := _entity_wrapper(entity)
 	if wrapper == null:
 		return ERR_DOES_NOT_EXIST
-	if not _lagcomp.is_configured():
+	if not is_configured():
 		return ERR_UNCONFIGURED
-	_lagcomp.register_prediction(wrapper)
+	register_prediction(wrapper)
 	return OK
 
 
@@ -3787,7 +5455,7 @@ func predict_declare(entity: RID) -> Error:
 func predict_undeclare(entity: RID) -> void:
 	var wrapper := _entity_wrapper(entity)
 	if wrapper:
-		_lagcomp.unregister_prediction(wrapper)
+		unregister_prediction(wrapper)
 
 
 ## Writes one [enum PredictParam] on [param entity].
@@ -3931,7 +5599,7 @@ func predict_bind_owner(entity: RID, owner: Object) -> Error:
 		return ERR_DOES_NOT_EXIST
 	if not is_instance_valid(owner):
 		return ERR_INVALID_DATA
-	if not _lagcomp.native_bind_owner(wrapper, owner):
+	if not _native_core.prediction_engine.slot_bind_owner(wrapper, owner):
 		return ERR_DOES_NOT_EXIST
 	var handle := wrapper.prediction
 	if handle and not handle.simulate.is_valid() \
@@ -3945,7 +5613,7 @@ func predict_bind_owner(entity: RID, owner: Object) -> Error:
 func predict_unbind_owner(entity: RID) -> void:
 	var wrapper := _entity_wrapper(entity)
 	if wrapper:
-		_lagcomp.native_unbind_owner(wrapper)
+		_native_core.prediction_engine.slot_unbind_owner(wrapper)
 
 
 ## Adds [param other] to [param entity]'s prediction island.
@@ -4053,7 +5721,16 @@ func predict_stepper_install(
 		space: RID,
 		stepper: NetwPhysicsStepper = null,
 ) -> void:
-	_lagcomp.install_stepper(space, stepper)
+	if stepper == null or not stepper._can_step():
+		_steppers.erase(space)
+		return
+	_steppers[space] = stepper
+
+
+# The re-stepping driver installed for a physics space, or null when the space
+# has none and a STEPPED member must fall back to FRAME.
+func _stepper_for(space: RID) -> NetwPhysicsStepper:
+	return _steppers.get(space) as NetwPhysicsStepper
 
 
 ## Asks the server to relay [param entity]'s authored commands to this peer, or
@@ -4070,12 +5747,12 @@ func predict_relay_subscribe(entity: RID, subscribed: bool = true) -> void:
 	if wrapper == null:
 		return
 	if is_server():
-		_lagcomp.relay_subscribe(wrapper, get_unique_id(), subscribed)
+		relay_subscribe(wrapper, get_unique_id(), subscribed)
 		return
 	var route := _native_core.liveness_route_of(wrapper)
 	if route <= 0:
 		return
-	_replication.send_to(
+	_native_core.send_to(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		route,
 		NetwFrameEnvelope.Channel.PREDICT_RELAY_REQUEST,
@@ -4087,7 +5764,7 @@ func predict_relay_subscribe(entity: RID, subscribed: bool = true) -> void:
 ## Marks a local collision or other undeclared prediction contact.
 func predict_notify_contact(entity: RID) -> void:
 	var wrapper := _entity_wrapper(entity)
-	var engine := _lagcomp.engine_for(wrapper) if wrapper else null
+	var engine := engine_for(wrapper) if wrapper else null
 	if engine:
 		engine.notify_contact()
 
@@ -4099,8 +5776,13 @@ func predict_sensor_sample(
 		default: Variant = null,
 ) -> Variant:
 	var wrapper := _entity_wrapper(entity)
-	var engine := _lagcomp.engine_for(wrapper) if wrapper else null
-	return engine.sensor_sample(name, default) if engine else default
+	if wrapper == null:
+		return default
+	var pool := _native_core.prediction_engine
+	var slot := pool.slot_of(wrapper)
+	if slot < 0:
+		return default
+	return pool.sensor_samples(slot).get(name, default)
 
 
 ## Declares an authoritative history timeline for [param entity].
@@ -4109,7 +5791,10 @@ func timeline_declare(entity: RID) -> Error:
 	var wrapper := _entity_wrapper(entity)
 	if wrapper == null:
 		return ERR_DOES_NOT_EXIST
-	_lagcomp.register_timeline(wrapper)
+	_native_core.lagcomp_core.timeline_register(
+		wrapper,
+		NetwTimeline.DEFAULT_LIMIT,
+	)
 	return OK
 
 
@@ -4117,7 +5802,7 @@ func timeline_declare(entity: RID) -> Error:
 func timeline_undeclare(entity: RID) -> void:
 	var wrapper := _entity_wrapper(entity)
 	if wrapper:
-		_lagcomp.unregister_timeline(wrapper)
+		_native_core.lagcomp_core.timeline_unregister(wrapper)
 
 
 ## Returns [param entity]'s state at or before [param tick].
@@ -4130,24 +5815,53 @@ func timeline_sample(entity: RID, tick: int) -> NetwSnapshot:
 ## [br][br][b]Server Only.[/b]
 func lagcomp_sample(entity: RID, tick: int) -> NetwSnapshot:
 	var wrapper := _entity_wrapper(entity)
-	return _lagcomp.sample(wrapper, tick) \
-	if wrapper else NetwSnapshot.new()
+	if wrapper == null:
+		return NetwSnapshot.new()
+	return NetwSnapshot.from_dictionary(
+		_native_core.lagcomp_core.timeline_sample_entity(wrapper, tick),
+	)
 
 
 ## Rewinds [param entities] while [param body] runs, then restores them.
 ## [br][br][b]Server Only.[/b]
 func lagcomp_rewind(entities: Array[RID], tick: int, body: Callable) -> void:
-	var wrappers: Array[NetwEntity] = []
+	var slots := PackedInt64Array()
 	for entity: RID in entities:
 		var wrapper := _entity_wrapper(entity)
-		if wrapper:
-			wrappers.append(wrapper)
-	_lagcomp.rewind(wrappers, tick, body)
+		if wrapper == null:
+			continue
+		var slot := _arm_rewind_timeline(wrapper)
+		if slot >= 0:
+			slots.append(slot)
+	_native_core.lagcomp_core.rewind(slots, tick, body)
+
+
+# Points the slot at the node its state set declares and names that set's
+# fields, so a rewind writes exactly what the set owns and puts back exactly
+# what it overwrote. Answers -1 for an entity the pool cannot rewind, which is
+# one with no slot, no state set, or no live node.
+func _arm_rewind_timeline(entity: NetwEntity) -> int:
+	var core := _native_core.lagcomp_core
+	var slot := core.timeline_slot_of(entity)
+	if slot < 0:
+		return -1
+	var state: NetwPropertySetBinding = entity.state_binding
+	if state == null or state.set == null:
+		return -1
+	var node := state.node()
+	if not is_instance_valid(node):
+		return -1
+	core.timeline_bind_owner(slot, node)
+	var keys: Array[StringName] = []
+	for column: NetwPropertySet.Column in state.set.columns:
+		keys.append(column.key)
+	core.timeline_declare(slot, keys)
+	return slot
 
 
 ## Returns a predicted action bound to [param authority].
 func lagcomp_action(authority: Callable) -> NetwAction:
-	return _lagcomp.action(authority)
+	return action(authority)
 
 
 ## Returns the ledger key for an optimistic act by [param entity] at
@@ -4239,7 +5953,7 @@ func _sweep_effects(_delta: float, tick: int) -> void:
 ## ┖╴gate_fallbacks: int    state-ready actions resolved best-effort
 ## [/codeblock]
 func lagcomp_metrics() -> Dictionary:
-	var result := _lagcomp.metrics()
+	var result := metrics()
 	result[&"effects_armed"] = _native_core.effect_count()
 	return result
 
@@ -4645,13 +6359,7 @@ func sync_send_property(
 		comp: int,
 		property: StringName,
 ) -> Error:
-	var node := _entity_component_node(entity, comp)
-	if not is_instance_valid(node):
-		return ERR_DOES_NOT_EXIST
-	if not property in node:
-		return ERR_INVALID_DATA
-	_replication._sync_pipeline.send_property(node, property)
-	return OK
+	return _native_core.sync_send_property(entity, comp, property)
 
 
 ## Sends one configured signal from an entity component.
@@ -4661,13 +6369,7 @@ func sync_send_signal(
 		signal_name: StringName,
 		args: Array,
 ) -> Error:
-	var node := _entity_component_node(entity, comp)
-	if not is_instance_valid(node):
-		return ERR_DOES_NOT_EXIST
-	if not node.has_signal(signal_name):
-		return ERR_INVALID_DATA
-	_replication._sync_pipeline.send_signal(node, signal_name, args)
-	return OK
+	return _native_core.sync_send_signal(entity, comp, signal_name, args)
 
 
 ## Registers one application channel handler.
@@ -4708,7 +6410,7 @@ func channel_send(
 	var route := entity_get_route(entity)
 	if route <= 0:
 		return ERR_DOES_NOT_EXIST
-	_replication.send_to(peer, route, channel, payload, reliable)
+	_native_core.send_to(peer, route, channel, payload, reliable)
 	return OK
 
 
@@ -4736,20 +6438,40 @@ func _install_clock_service(
 		config: NetwObjectConfig,
 		object: Object,
 ) -> Error:
-	_clock.configure(null, config as NetwClockConfig)
-	_clock._configured = true
-	_connect_once(_clock.on_tick, _sweep_effects)
+	_apply_clock_config(config as NetwClockConfig)
+	_native_core.clock_handle.is_configured = true
+	_connect_once(_native_core.on_tick, _sweep_effects)
 	_wire_lagcomp_service()
 	if object is MultiplayerClock:
-		_clock._attach_node(object as MultiplayerClock)
+		_native_core.clock_handle.node_pumped = true
 	return OK
+
+
+# Writes a declared clock configuration onto the engine that runs the schedule.
+# The config authors sync_mode in the public enum, which mirrors the engine's
+# SyncMode exactly.
+func _apply_clock_config(config: NetwClockConfig) -> void:
+	var clock := _native_core.clock_handle
+	clock.tickrate = config.tickrate
+	clock.max_ticks_per_frame = config.max_ticks_per_frame
+	clock.stall_threshold = config.stall_threshold
+	clock.use_physics_interpolation = config.use_physics_interpolation
+	clock.sync_mode = int(config.sync_mode)
+	clock.panic_snap_threshold = config.panic_snap_threshold
+	clock.stretch_nudge_factor = config.stretch_nudge_factor
+	clock.ping_interval = config.ping_interval
+	clock.display_offset = config.display_offset
+	clock.jitter_multiplier = config.jitter_multiplier
+	clock.jitter_window = config.jitter_window
+	clock.jitter_stability_threshold = config.jitter_stability_threshold
+	clock.enable_drift_logging = config.enable_drift_logging
 
 
 func _uninstall_clock_service(
 		_config: NetwObjectConfig,
 		_object: Object,
 ) -> Error:
-	_clock._configured = false
+	_native_core.clock_handle.is_configured = false
 	return OK
 
 
@@ -4757,8 +6479,8 @@ func _install_lagcomp_service(
 		config: NetwObjectConfig,
 		_object: Object,
 ) -> Error:
-	_lagcomp.configure(null, config as NetwLagCompensationConfig)
-	_lagcomp._configured = true
+	configure(null, config as NetwLagCompensationConfig)
+	_configured = true
 	_wire_lagcomp_service()
 	return OK
 
@@ -4767,8 +6489,8 @@ func _uninstall_lagcomp_service(
 		_config: NetwObjectConfig,
 		_object: Object,
 ) -> Error:
-	_lagcomp._configured = false
-	_lagcomp._close_tap()
+	_configured = false
+	_close_tap()
 	return OK
 
 
@@ -4776,7 +6498,7 @@ func _install_session_service(
 		config: NetwObjectConfig,
 		_object: Object,
 ) -> Error:
-	_session.configure(config as NetwSessionConfig)
+	_session_configure(config as NetwSessionConfig)
 	return OK
 
 
@@ -4784,7 +6506,7 @@ func _uninstall_session_service(
 		_config: NetwObjectConfig,
 		_object: Object,
 ) -> Error:
-	_session.deconfigure()
+	_session_deconfigure()
 	return OK
 
 
@@ -4802,7 +6524,7 @@ func _install_scene_service(
 				],
 			],
 		)
-	_scenes.configure(config as NetwSceneConfig)
+	_scene_configure(config as NetwSceneConfig)
 	return OK
 
 
@@ -4810,36 +6532,35 @@ func _uninstall_scene_service(
 		_config: NetwObjectConfig,
 		_object: Object,
 ) -> Error:
-	_scenes.deconfigure()
+	_scene_deconfigure()
 	return OK
 
 
 func _wire_lagcomp_service() -> void:
-	if not _clock.is_configured() or not _lagcomp.is_configured():
+	if not _native_core.clock_handle.is_configured or not is_configured():
 		return
-	_lagcomp._clock = _clock
-	_connect_once(_clock.before_tick_loop, _lagcomp.before_frame_step)
-	_connect_once(_clock.on_tick, _lagcomp.tick_step)
-	_connect_once(_clock.after_tick_loop, _lagcomp.frame_step)
+	_connect_once(_native_core.before_tick_loop, before_frame_step)
+	_connect_once(_native_core.on_tick, tick_step)
+	_connect_once(_native_core.after_tick_loop, frame_step)
 	_replication.register_channel(
 		NetwFrameEnvelope.Channel.ACTION,
-		_lagcomp._handle_action_carrier,
+		_handle_action_carrier,
 	)
 	_replication.register_channel(
 		NetwFrameEnvelope.Channel.PREDICT_COMMAND,
-		_lagcomp._handle_predict_command_carrier,
+		_handle_predict_command_carrier,
 	)
 	_replication.register_channel(
 		NetwFrameEnvelope.Channel.PREDICT_ACK,
-		_lagcomp._handle_predict_ack_carrier,
+		_handle_predict_ack_carrier,
 	)
 	_replication.register_channel(
 		NetwFrameEnvelope.Channel.PREDICT_RELAY,
-		_lagcomp._handle_predict_relay_carrier,
+		_handle_predict_relay_carrier,
 	)
 	_replication.register_channel(
 		NetwFrameEnvelope.Channel.PREDICT_RELAY_REQUEST,
-		_lagcomp._handle_predict_relay_request_carrier,
+		_handle_predict_relay_request_carrier,
 	)
 
 
@@ -4865,9 +6586,7 @@ func sync_policy_admits(
 ## Sends the local player's control request to server authority.
 ## [br][br][b]Player request.[/b]
 func entity_request_control(entity: RID) -> void:
-	var wrapper := _entity_wrapper(entity)
-	if wrapper:
-		_replication.request_control(wrapper)
+	_native_core.entity_control_request(entity)
 
 
 ## Grants [param peer] control and broadcasts the change.
@@ -5071,24 +6790,33 @@ func entity_call(
 	return OK
 
 
-## Hydrates the persisted fields of [param entity].
+## Hydrates the persisted fields of [param entity], answering the
+## [NetwPromise] the read settles with its [enum @GlobalScope.Error].
+##
+## The wait is a database read, so the answer is a promise rather than the code
+## itself and the caller subscribes instead of awaiting.
 ## [br][br][b]Server Only.[/b]
-func persist_hydrate(entity: RID) -> Error:
+func persist_hydrate(entity: RID) -> NetwPromise:
 	var wrapper := _entity_wrapper(entity)
 	if wrapper == null:
-		return ERR_DOES_NOT_EXIST
-	var engine := _persistence.engine_for(wrapper)
-	return await engine.hydrate() if engine else ERR_UNCONFIGURED
+		return NetwPromise.resolved(ERR_DOES_NOT_EXIST)
+	var engine := _native_core.persistence_engine_for(wrapper)
+	if engine == null:
+		return NetwPromise.resolved(ERR_UNCONFIGURED)
+	return engine.hydrate()
 
 
-## Flushes persisted [param keys] from [param entity].
+## Flushes persisted [param keys] from [param entity], answering the
+## [NetwPromise] the write settles with its [enum @GlobalScope.Error].
 ## [br][br][b]Server Only.[/b]
-func persist_flush(entity: RID, keys: Array = []) -> Error:
+func persist_flush(entity: RID, keys: Array = []) -> NetwPromise:
 	var wrapper := _entity_wrapper(entity)
 	if wrapper == null:
-		return ERR_DOES_NOT_EXIST
-	var engine := _persistence.engine_for(wrapper)
-	return await engine.flush(keys) if engine else ERR_UNCONFIGURED
+		return NetwPromise.resolved(ERR_DOES_NOT_EXIST)
+	var engine := _native_core.persistence_engine_for(wrapper)
+	if engine == null:
+		return NetwPromise.resolved(ERR_UNCONFIGURED)
+	return engine.flush(keys)
 
 
 ## Advances the persistence snapshot loop by [param delta] seconds.
@@ -5103,7 +6831,7 @@ func persist_flush(entity: RID, keys: Array = []) -> Error:
 ## for a caller driving persistence time itself, such as a test.
 ## [br][br][b]Server Only.[/b]
 func persist_tick(delta: float) -> void:
-	_persistence.tick(delta)
+	_native_core.persistence_tick(delta)
 
 
 ## Saves [param table]'s committed rows into [param db] as one record.
@@ -5128,6 +6856,8 @@ func persist_tick(delta: float) -> void:
 ## touches, so a quantized column saves at full precision. A
 ## [constant ColumnType.COLUMN_ENTITY] column is skipped with one warning,
 ## because a route is meaningless in the session that loads it.
+## The answer is a [NetwPromise] because the write is a database write, and it
+## resolves with the [enum @GlobalScope.Error] the write reached.
 ## [codeblock]
 ## Error
 ## ┠╴OK                  written
@@ -5141,18 +6871,18 @@ func persist_table_flush(
 		db: NetwDatabase,
 		into: StringName,
 		ids: PackedStringArray,
-) -> Error:
+) -> NetwPromise:
 	if not is_server():
 		Netw.dbg.error("NetwMultiplayer.persist_table_flush is server-only")
-		return ERR_UNCONFIGURED
+		return NetwPromise.resolved(ERR_UNCONFIGURED)
 	if db == null or into.is_empty():
-		return ERR_UNCONFIGURED
+		return NetwPromise.resolved(ERR_UNCONFIGURED)
 	var schema := table_get_schema(table)
 	if not schema.is_valid():
-		return ERR_DOES_NOT_EXIST
+		return NetwPromise.resolved(ERR_DOES_NOT_EXIST)
 	var routes := table_read_routes(table)
 	if ids.size() != routes.size():
-		return ERR_INVALID_DATA
+		return NetwPromise.resolved(ERR_INVALID_DATA)
 
 	var values: Dictionary = { &"ids": ids }
 	var skipped := PackedStringArray()
@@ -5176,7 +6906,7 @@ func persist_table_flush(
 	for key: StringName in values:
 		names.append(key)
 	db.declare_table(into, names)
-	return await db.transaction(
+	return db.transaction_promise(
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(into, _schema_core.name_of(schema), values)
 	)
@@ -5196,29 +6926,54 @@ func persist_table_flush(
 ## Both arrays are empty when no record exists, which is the first-play case
 ## rather than an error. A [constant ColumnType.COLUMN_ENTITY] column
 ## zero-fills, matching the skip at flush.
+##
+## The answer is a [NetwPromise] resolving with that [Dictionary], because the
+## read is a database read and the rows are committed on the edge it settles.
 ## [br][br][b]Server Only.[/b]
 func persist_table_hydrate(
 		table: RID,
 		db: NetwDatabase,
 		into: StringName,
-) -> Dictionary:
+) -> NetwPromise:
 	var out := {
 		&"routes": PackedInt64Array(),
 		&"ids": PackedStringArray(),
 	}
 	if not is_server():
 		Netw.dbg.error("NetwMultiplayer.persist_table_hydrate is server-only")
-		return out
+		return NetwPromise.resolved(out)
 	var schema := table_get_schema(table)
 	if db == null or into.is_empty() or not schema.is_valid():
-		return out
+		return NetwPromise.resolved(out)
 
 	var names: Array[StringName] = [&"ids"]
 	for column in schema_get_column_count(schema):
 		names.append(schema_get_column_key(schema, column))
 	db.declare_table(into, names)
-	var record := await db.table(into).fetch(_schema_core.name_of(schema))
-	var data := record.to_dict() if record else { }
+	var answer := NetwPromise.new()
+	var stored := db.find_promise(into, _schema_core.name_of(schema))
+	stored.catch_error(
+		func(_code: int, _detail: String) -> void: answer.resolve(out),
+	)
+	stored.then(
+		func(data: Dictionary) -> void:
+			answer.resolve(_persist_table_commit(table, schema, data)),
+	)
+	return answer
+
+
+# Claims fresh routes for the rows [param data] saved, writes every column back
+# under them, and answers the route-to-save-key pairing the caller rebuilds its
+# indexes from. An empty record claims nothing, which is the first play.
+func _persist_table_commit(
+		table: RID,
+		schema: RID,
+		data: Dictionary,
+) -> Dictionary:
+	var out := {
+		&"routes": PackedInt64Array(),
+		&"ids": PackedStringArray(),
+	}
 	if data.is_empty():
 		return out
 
@@ -5253,15 +7008,14 @@ func persist_table_hydrate(
 ## [/codeblock]
 ## [br][br][b]Server Only.[/b]
 func persist_shutdown() -> void:
-	_persistence.handle_shutdown()
+	_native_core.persistence_shutdown()
 
 #region Spawn
 
 ## Arms [param node] for replicated construction and returns its entity RID.
 ## [br][br][b]Server Only.[/b]
 func replicate(node: Node, owner: NetwParticipant = null) -> RID:
-	var wrapper := _replication._spawn_pipeline.replicate(node, owner)
-	return wrapper.rid if wrapper else RID()
+	return _native_core.spawn_replicate(node, owner)
 
 
 ## Runs and replicates one configured spawn function.
@@ -5271,13 +7025,12 @@ func spawn_fn(
 		args: Array = [],
 		owner: NetwParticipant = null,
 ) -> RID:
-	var node := _replication._spawn_pipeline.spawn(function, args, owner)
-	return entity_of(node) if node else RID()
+	return _native_core.spawn_function(function, args, owner)
 
 
 ## Registers one host-less spawn constructor.
 func spawn_register_constructor(id: StringName, function: Callable) -> void:
-	_replication._spawn_pipeline.register_spawn_constructor(id, function)
+	_native_core.spawn_register_constructor(id, function)
 
 
 ## Runs and replicates one registered constructor.
@@ -5287,15 +7040,13 @@ func spawn_registered(
 		args: Array = [],
 		owner: NetwParticipant = null,
 ) -> RID:
-	var node := _replication._spawn_pipeline.spawn_registered(id, args, owner)
-	return entity_of(node) if node else RID()
+	return _native_core.spawn_registered(id, args, owner)
 
 
 ## Adopts one already-present node into replication.
 ## [br][br][b]Server Only.[/b]
 func adopt_in_place(root_node: Node) -> RID:
-	var wrapper := _replication._spawn_pipeline.adopt_in_place(root_node)
-	return wrapper.rid if wrapper else RID()
+	return _native_core.spawn_adopt(root_node)
 
 
 ## Despawns one live entity.
@@ -5312,9 +7063,7 @@ func despawn(entity: RID, opts: NetwDespawnOpts = null) -> Error:
 
 ## Returns one entity subtree's authored spawn state contribution.
 func spawn_get_state(entity: RID) -> Array[Dictionary]:
-	var node := entity_get_node(entity)
-	return _replication._spawn_pipeline._collect_spawn_state(node) \
-	if node else []
+	return _native_core.spawn_state_of(entity)
 
 
 ## Declares that [param entity] may be materialized on other peers.
@@ -5461,10 +7210,8 @@ func _warn_gate_verdict(
 		message: String,
 		args: Array = [],
 ) -> void:
-	_count_gate_verdict(verdict, route)
-	if not _native_core.claim_verdict_warning(verdict, route):
-		return
-	Netw.dbg.warn(message, args)
+	if _native_core.warn_verdict(verdict, route):
+		Netw.dbg.warn(message, args)
 
 
 # Records [param seq] as the freshest inbound datagram from [param sender] when it
@@ -5553,14 +7300,15 @@ func _drive_tick(tick: int) -> Error:
 	# job through its keys, never the scheduling site's.
 	_native_core.settle_advance()
 	_settle()
-	_scenes.on_pump()
+	_native_core.scene_pump_retired()
 	return err
 
 
 # The tick a received payload is stamped with: the session tick when the clock
 # engine is configured, otherwise a local frame counter.
 func _receive_tick() -> int:
-	return _clock.tick if _clock.is_configured() else _native_core.frame_counter
+	var clock := _native_core.clock_handle
+	return clock.tick if clock.is_configured else _native_core.frame_counter
 
 
 # Counts and returns one hostile-input verdict.
@@ -5947,20 +7695,9 @@ func stats_snapshot() -> Dictionary:
 	var result := _relay_stats_snapshot()
 	result[&"pending_live"] = _native_core.liveness_pending_live_count()
 
-	var interest_stats := _interest.monitor_snapshot()
-	result[&"interest_layers"] = interest_stats[&"layers"]
-	result[&"interest_entities_filtered"] = (
-			interest_stats[&"entities_filtered"]
-	)
-	result[&"interest_visible_edges"] = interest_stats[&"visible_edges"]
-	result[&"interest_dirty_entities"] = interest_stats[&"dirty_entities"]
-	result[&"interest_relay_backlog"] = interest_stats[&"relay_backlog"]
-	result[&"interest_transitions_total"] = (
-			interest_stats[&"transitions_total"]
-	)
-	result[&"interest_vanished_dirty_skips"] = (
-			interest_stats[&"vanished_dirty_skips"]
-	)
+	var interest: Dictionary = _native_core.interest_monitor_snapshot()
+	for counter: StringName in interest:
+		result[StringName("interest_%s" % counter)] = interest[counter]
 
 	result.merge(_table_core.counters())
 
@@ -5971,7 +7708,7 @@ func stats_snapshot() -> Dictionary:
 	result[&"predict_max_replay_depth"] = predict_stats[&"max_replay_depth"]
 	result[&"predict_consumed"] = predict_stats[&"consumed"]
 	result[&"predict_missing"] = predict_stats[&"missing"]
-	result[&"predict_pending_actions"] = predict_stats[&"pending_actions"]
+	result[&"predict_pending_actions"] = predict_stats[&"predict_pending_actions"] if predict_stats.has(&"predict_pending_actions") else predict_stats[&"pending_actions"]
 	result[&"predict_effects_armed"] = predict_stats[&"effects_armed"]
 	result[&"predict_gate_fallbacks"] = predict_stats[&"gate_fallbacks"]
 
@@ -5983,15 +7720,15 @@ func stats_snapshot() -> Dictionary:
 	result[&"joint_heal_snaps"] = joint_stats[&"heal_snaps"]
 	result[&"joint_linger_held"] = joint_stats[&"linger_held"]
 
-	var display_stats := _display._stats_snapshot()
-	result[&"display_runtimes"] = display_stats[&"runtimes"]
-	result[&"display_starving"] = display_stats[&"starving"]
-	result[&"display_sleeping"] = display_stats[&"sleeping"]
-	result[&"display_projecting"] = display_stats[&"projecting"]
-	result[&"display_snaps"] = display_stats[&"snaps"]
-	result[&"display_max_display_lag"] = display_stats[&"max_display_lag"]
+	var display_stats: NetwPumpStats = _native_core.display_book.stats
+	result[&"display_runtimes"] = display_stats.runtimes
+	result[&"display_starving"] = display_stats.starving
+	result[&"display_sleeping"] = display_stats.sleeping
+	result[&"display_projecting"] = display_stats.projecting
+	result[&"display_snaps"] = display_stats.snaps
+	result[&"display_max_display_lag"] = int(display_stats.max_display_lag)
 	result[&"display_max_forecast_age"] = (
-			display_stats[&"max_forecast_age"]
+			int(display_stats.max_forecast_age)
 	)
 	result[&"verdict_does_not_exist"] = (
 			_native_core.verdict_total(ERR_DOES_NOT_EXIST)
@@ -6113,9 +7850,7 @@ func _clear_flat_family_state() -> void:
 				source.disconnect(callback)
 	_layer_monitor_hooks.clear()
 	_layer_drivers.clear()
-	_layer_records.clear()
-	_layer_by_name.clear()
-	_layer_ledger.clear()
+	_native_core.layer_forget_all()
 	_pending_scene_facets.clear()
 	# Table declarations outlive the session that adopted them, the way field
 	# sets do, so a re-entered session finds the same tables under the same
@@ -6173,22 +7908,17 @@ signal tree_paused(reason: String)
 ## [method NetwSessionHandle.unpause].
 signal tree_unpaused()
 ## Emitted when the session reaches
-## [constant SessionCore.State.ONLINE] with its role resolved. Pairs
+## [constant SessionState.ONLINE] with its role resolved. Pairs
 ## with [signal session_ended].
 signal session_entered()
 ## Emitted when the session leaves
-## [constant SessionCore.State.ONLINE]. Pairs with
+## [constant SessionState.ONLINE]. Pairs with
 ## [signal session_entered].
 signal session_ended()
 ## Emitted on every [member state] edge, including the ones
 ## [signal session_entered] and [signal session_ended] do not cover
 ## (offline to connecting, and a connect that fails before it is online).
 signal state_changed(old_state: SessionState, new_state: SessionState)
-# The session's DisplayCore, pumped every frame from the session poll. Owned
-# for the session lifetime, so it needs no scene anchor.
-var _display: DisplayCore
-
-
 ## Returns the [NetwPeerContext] for [param peer_id], creating one on first
 ## access.
 func peer_get_context(peer_id: int) -> NetwPeerContext:
@@ -6314,17 +8044,21 @@ var connected_participants: Array[NetwParticipant]:
 # Opens a roster row for a freshly connected peer. The row carries only the peer
 # id until a join frame enriches it, so an un-joined peer is still a known row.
 func _ensure_participant_row(peer_id: int) -> void:
-	if not _native_core.participant_has(peer_id):
-		_native_core.participant_adopt(
-			peer_id,
-			NetwParticipant.new(self, peer_id),
-		)
+	_native_core.participant_ensure(peer_id)
+
+
+# The auth bucket a participant's identity is read from. Buckets are keyed by a
+# GDScript type, so the session answers this rather than the core reading it.
+func _read_peer_identity(peer_id: int) -> NetwIdentity:
+	if not peer_has_context(peer_id):
+		return null
+	return peer_get_context(peer_id).get_bucket(NetwIdentityBucket).identity
 
 ## Whether this session is live.
 ##
 ## The session machine owns the fact: transport edges already drive
-## [method SessionCore.transition], so this answers what the transport answers,
-## one hop later. A caller that genuinely needs the raw transport window reads
+## [member state] through its own legal edges, so this answers what the
+## transport answers, one hop later. A caller that needs the raw window reads
 ## [member MultiplayerAPI.multiplayer_peer] and says so.
 var is_online: bool:
 	get:
@@ -6397,7 +8131,7 @@ func _on_liveness_entity_dead(route: int) -> void:
 ## the connection is closed.
 ## [br][br][b]Server Only.[/b]
 func peer_kick(peer_id: int, reason: String = "") -> void:
-	_session.kick(peer_id, reason)
+	_native_core.session_kick(peer_id, reason)
 
 
 ## Asks the server to kick [param peer_id].
@@ -6405,7 +8139,499 @@ func peer_kick(peer_id: int, reason: String = "") -> void:
 ## The server emits [signal kick_requested] and decides whether to honor it.
 ## [br][br][b]Player request.[/b]
 func peer_request_kick(peer_id: int, reason: String = "") -> void:
-	_session.request_kick(peer_id, reason)
+	_native_core.session_request_kick(peer_id, reason)
+
+
+## Pauses the game on every peer, which each receives as
+## [signal tree_paused] carrying [param reason].
+##
+## [br][br][b]Server Only.[/b]
+func session_pause(reason: String = "") -> void:
+	_native_core.session_pause(reason)
+
+
+## Unpauses the game on every peer, which each receives as
+## [signal tree_unpaused].
+##
+## [br][br][b]Server Only.[/b]
+func session_unpause() -> void:
+	_native_core.session_unpause()
+
+
+## Warns every peer that this server is shutting down, which each receives as
+## [signal server_disconnecting] carrying [param reason].
+##
+## The notice rides the session's own control channel rather than a node
+## [code]@rpc[/code], so a session with no [MultiplayerTree] still warns its
+## clients before it tears down.
+##
+## [br][br][b]Server Only.[/b]
+func session_notify_shutdown(reason: String = "") -> void:
+	_native_core.session_notify_shutdown(reason)
+
+
+## Asks server authority for permission to leave, carrying [param reason].
+##
+## The server hears it as [signal disconnect_requested] and decides. Nothing
+## here disconnects anyone, which is what separates it from
+## [method NetwSessionHandle.leave].
+##
+## [br][br][b]Player request.[/b]
+func session_request_leave(reason: String = "") -> void:
+	_native_core.session_request_leave(reason)
+
+
+## The [NetwSessionConfig] this session was registered with, or the default one
+## until a [MultiplayerTree] registers its own.
+##
+## Never [code]null[/code], which is what lets a bare API answer
+## [member session_app_id] and
+## [member NetwSessionConfig.link_conditions] with defaults instead of holding
+## a special inert mode.
+var session_config: NetwSessionConfig:
+	get:
+		return _session_config
+
+
+## The game-build tag admission gates on, from
+## [member NetwSessionConfig.app_id]. Empty disables the gate.
+var session_app_id: StringName:
+	get:
+		return _session_config.app_id
+
+
+## The player cap the live host advertises, or zero while this session is not
+## hosting.
+##
+## Whatever opened the host stamps the cap it resolved, so
+## [method NetwServerInfo.from_session] answers a probe with a plain session
+## fact rather than reading back the configuration the host was built from.
+var session_advertised_max_players: int:
+	get:
+		return _native_core.session_advertised_max_players()
+	set(value):
+		_native_core.session_set_advertised_max_players(value)
+
+
+## The [NetwAuthFlow] this session authenticates arriving peers with: a
+## per-session override, else the flow built by the project-wide
+## [method Netw.configure_auth] factory, else [code]null[/code] for open
+## admission.
+var session_auth_flow: NetwAuthFlow:
+	get:
+		return _effective_auth_flow()
+
+
+## Prepares [param payload] as the local player's join, without assigning a
+## transport peer.
+##
+## It validates the join identity, awaits the configured provider's credential
+## preparation, and stores what Godot's authentication phase will send. A
+## client submits it on reaching [constant SessionState.ONLINE]; a host holds it
+## until an explicit [method session_submit_join].
+##
+## [br][br][b]Player request.[/b]
+func session_prepare_join(payload: JoinPayload) -> Error:
+	_clear_prepared_join()
+	if payload == null:
+		Netw.dbg.error("join_payload is null.", func(m): push_error(m))
+		return ERR_INVALID_PARAMETER
+	if payload.username.is_empty():
+		Netw.dbg.error("username is empty.", func(m): push_error(m))
+		return ERR_INVALID_PARAMETER
+
+	_auth.prepare()
+	var prepare_err := await _auth.prepare_join_payload(payload)
+	if prepare_err != OK:
+		return prepare_err
+	_auth.set_client_join_payload(payload)
+	_prepared_join = payload
+	return OK
+
+
+## Submits [param payload] as the local player's join request.
+##
+## The request rides the session's own join channel rather than a node
+## [code]@rpc[/code], so a session with no [MultiplayerTree] still joins. A host
+## submits to itself locally. Clients normally submit their prepared payload
+## automatically on [constant SessionState.ONLINE], so this is for rejoin and
+## custom flows.
+##
+## [br][br][b]Player request.[/b]
+func session_submit_join(payload: JoinPayload) -> void:
+	if payload == null:
+		return
+	if payload == _prepared_join:
+		_prepared_join = null
+		_auth.set_client_join_payload(null)
+	_encode_join_args(payload)
+	if is_server():
+		_native_core.session_receive_join(payload.serialize(), 1)
+	else:
+		_native_core.send_to(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.SESSION_JOIN,
+			payload.serialize(),
+			true,
+			0,
+			"",
+			false,
+		)
+
+
+## Flushes persistence, closes the active peer, and returns to
+## [constant SessionState.OFFLINE].
+##
+## It waits up to three seconds for the server to acknowledge the departure, so
+## a caller that awaits it knows the peer is closed rather than closing.
+func session_leave() -> void:
+	if state == SessionState.OFFLINE:
+		return
+
+	Netw.dbg.trace("Session: leave called.")
+	Netw.dbg.info("Disconnecting player.")
+	_native_core.persistence_flush_all()
+	_session_transition(SessionState.DISCONNECTING)
+	if has_multiplayer_peer():
+		multiplayer_peer.close()
+
+	var scene_tree := Engine.get_main_loop() as SceneTree
+	if scene_tree:
+		var timer := scene_tree.create_timer(3.0)
+		await Async.timeout(server_disconnected, timer)
+	_session_transition(SessionState.OFFLINE)
+	session_advertised_max_players = 0
+
+
+## Overrides the join handler for this one session with [param handler] and its
+## wire-arg [param quantizers], taking precedence over any
+## [method Netw.configure_join] registration. Tests and the debugger use it. An
+## invalid [Callable] restores the resolved default.
+func session_set_join_handler(handler: Callable, quantizers: Array = []) -> void:
+	_join_override = handler
+	_join_override_quantizers = quantizers
+
+
+## Overrides the auth flow for this one session with [param flow], taking
+## precedence over any [method Netw.configure_auth] factory. Tests, the
+## debugger, and a runtime-bound service flow use it.
+func session_set_auth_flow(flow: NetwAuthFlow) -> void:
+	_auth_flow_override = flow
+	_auth.set_auth_flow(_effective_auth_flow())
+
+
+## Overrides the probe reply for this one session with [param provider], taking
+## precedence over any [method Netw.configure_server_info] registration. Tests,
+## the debugger, and a session that genuinely differs use it. An invalid
+## [Callable] clears the override.
+func session_set_server_info_provider(provider: Callable) -> void:
+	_auth.set_server_info_provider(provider)
+
+#endregion
+
+#region Session machine
+
+# Binds the session's wire hooks and the four Callables the native core
+# installs. The two edge hooks are not announcements: the core calls them after
+# it has relayed the edge, so an entered session submits a client's prepared
+# join and an offline one drops it, both strictly after every consumer of the
+# public signal has already seen the edge.
+#
+# A client peer is still mid-handshake at assignment, so the connect completes
+# on the relayed connection signals rather than at the edge. A failed handshake
+# returns to OFFLINE without ever entering ONLINE, and a server that vanishes
+# mid-session ends it through the same teardown a graceful leave takes.
+func _session_install() -> void:
+	_auth = AuthCoordinator.new(_roster)
+	_auth.bind_api(inner)
+	_auth.set_owner(self)
+	_native_core.set_session_entered_hook(_on_session_entered)
+	_native_core.set_session_edge_hook(_on_session_state_changed)
+	_connect_once(connected_to_server, _on_session_connected)
+	_connect_once(connection_failed, _on_session_connect_failed)
+	_connect_once(server_disconnected, _on_session_server_dropped)
+	_native_core.set_session_join_handler(_run_join_handler)
+	_native_core.set_session_join_resolver(_resolve_inbound_join)
+
+
+# Applies config as the session configuration, registered by a MultiplayerTree
+# through object_configuration_add.
+func _session_configure(config: NetwSessionConfig) -> void:
+	_session_config = config
+	_push_desired_role()
+	_apply_auth_config()
+
+
+# Restores the default configuration when the registering tree removes its own.
+func _session_deconfigure() -> void:
+	_session_config = NetwSessionConfig.new()
+	_push_desired_role()
+	_apply_auth_config()
+
+
+# The hint the machine splits a server peer with. Pushed rather than read,
+# because the machine holds no configuration, and pushed again at every edge
+# that can resolve a role, because a config is authored live and the value it
+# carried at registration is not the one that decides.
+func _push_desired_role() -> void:
+	_native_core.session_set_desired_role(_authored_desired_role())
+
+
+# Applies the registered session facts to the auth wire engine. The dispatcher
+# stays armed because every Networked session uses the base hello protocol and
+# same-port probes share its isolated authentication phase.
+func _apply_auth_config() -> void:
+	_auth.set_auth_flow(_effective_auth_flow())
+	_auth.set_app_tag(NetwMultiplayerCore.session_app_tag(_session_config.app_id))
+	_auth.prepare()
+
+
+# Resolves the effective flow: a per-session override, then a cached instance
+# from the project-wide factory, else null.
+func _effective_auth_flow() -> NetwAuthFlow:
+	if _auth_flow_override != null:
+		return _auth_flow_override
+	if _bound_auth_flow == null:
+		var factory := Netw.resolve_auth_factory()
+		if factory.is_valid():
+			_bound_auth_flow = factory.call(self)
+	return _bound_auth_flow
+
+
+# Rebinds session wire hooks after inner changes.
+func _session_adopt_inner(new_inner: SceneMultiplayer) -> void:
+	_auth.bind_api(new_inner)
+	_apply_auth_config()
+
+
+# Releases session wire hooks during NetwEmbeddingHandle.dispose.
+func _session_dispose() -> void:
+	_clear_prepared_join()
+	_auth.clear()
+
+
+# Advances state to next along a legal edge, running the exit hook for the old
+# state then the enter hook for the new one. The only entry point allowed to
+# move state, so setup and teardown stay paired.
+func _session_transition(next: SessionState) -> void:
+	_native_core.session_transition(next)
+
+
+# Reacts to a peer handed to the session by _set_multiplayer_peer, which is the
+# one edge every host, join, test rig and embedded-server path already crosses.
+#
+# A live transport peer drives the connect direction straight from the edge, so
+# a bare multiplayer_peer = peer with no host or join verb still reaches ONLINE.
+# A server peer is live at assignment; a client peer is still mid-handshake, so
+# it waits in CONNECTING until the transport reports the connection. A null or
+# OfflineMultiplayerPeer assignment while connecting collapses the machine back
+# to OFFLINE, so a cancelled connect becomes this edge rather than a bespoke
+# abort verb. A null assignment while already ONLINE is left alone, since a tree
+# deletion nulls the peer that way; a graceful leave and a server crash own the
+# ONLINE teardown instead.
+func _session_on_peer_assigned(peer: MultiplayerPeer) -> void:
+	var live := peer != null and not peer is OfflineMultiplayerPeer
+	_push_desired_role()
+	_native_core.session_peer_assigned(
+		live,
+		live and peer.get_connection_status() \
+			== MultiplayerPeer.CONNECTION_CONNECTED,
+		peer.get_unique_id() if live else 0,
+	)
+
+
+# Completes a client connect once the transport reports it reached the server.
+func _on_session_connected() -> void:
+	if state != SessionState.CONNECTING:
+		return
+	_push_desired_role()
+	_native_core.session_resolve_online(get_unique_id())
+
+
+# A failed handshake returns to OFFLINE without ever entering ONLINE.
+func _on_session_connect_failed() -> void:
+	if state == SessionState.CONNECTING:
+		_session_transition(SessionState.OFFLINE)
+
+
+# Ends the session when the transport reports the server vanished. A crash
+# arrives while ONLINE and reuses the leave path's DISCONNECTING -> OFFLINE
+# teardown. A leave has already moved to DISCONNECTING, and a disposing api that
+# closes its own peer sets the embedding disposing, so neither is mistaken for a
+# crash.
+func _on_session_server_dropped() -> void:
+	if embedding.is_disposing():
+		return
+	if state != SessionState.ONLINE:
+		return
+	_session_transition(SessionState.DISCONNECTING)
+	_session_transition(SessionState.OFFLINE)
+
+
+# The setup half the machine cannot own, which is the half that needs the wire.
+# A client submits the join it prepared. A server has no handshake coming to
+# bring it an identity, so it makes its own.
+func _on_session_entered() -> void:
+	if role == Role.CLIENT:
+		_submit_prepared_join()
+	else:
+		_auth.synthesize_host_identity()
+
+
+# The teardown half that owns a payload rather than a state: a session back at
+# OFFLINE is no longer holding a join to send.
+func _on_session_state_changed(_old_state: int, new_state: int) -> void:
+	if new_state == SessionState.OFFLINE:
+		_clear_prepared_join()
+
+
+# Consumes the prepared client join before sending it. Clearing first makes the
+# ONLINE edge idempotent even when the transport repeats its connected signal.
+# A relayed transport can raise connected_to_server a poll before the server
+# peer lands in get_peers, and the carrier drops a send to a peer it cannot yet
+# see, so that first submit is resent once peer_connected reports the server. A
+# transport whose server peer is already present arms nothing, since its
+# peer_connected preceded the online edge, and the join lands on the first
+# submit.
+func _submit_prepared_join() -> void:
+	var payload := _prepared_join
+	if payload == null:
+		return
+	_prepared_join = null
+	_auth.set_client_join_payload(null)
+	session_submit_join(payload)
+	if MultiplayerPeer.TARGET_PEER_SERVER not in get_peers():
+		_resubmit_join = payload
+		if not peer_connected.is_connected(_resubmit_join_on_server_peer):
+			peer_connected.connect(_resubmit_join_on_server_peer)
+
+
+# Resends the client join once the server peer connects, covering the relayed
+# transport whose connected_to_server outran its server peer registration. The
+# first submit dropped at the carrier, so this is the only delivery, not a
+# double.
+func _resubmit_join_on_server_peer(peer_id: int) -> void:
+	if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
+		return
+	if peer_connected.is_connected(_resubmit_join_on_server_peer):
+		peer_connected.disconnect(_resubmit_join_on_server_peer)
+	var payload := _resubmit_join
+	_resubmit_join = null
+	if payload:
+		session_submit_join(payload)
+
+
+# Drops the pending join frame, the credentials derived from it, and a resubmit
+# still waiting on the server peer.
+func _clear_prepared_join() -> void:
+	_prepared_join = null
+	if _auth:
+		_auth.set_client_join_payload(null)
+	_resubmit_join = null
+	if peer_connected.is_connected(_resubmit_join_on_server_peer):
+		peer_connected.disconnect(_resubmit_join_on_server_peer)
+
+
+# The admission policy a session runs when nothing registered its own gate:
+# resolve the identity, reject an invalid payload, and reject the loser of a
+# username collision. This is the permissive baseline, so an unauthenticated
+# session still cannot admit two players under one name.
+func _default_join_gate(join_payload: JoinPayload, peer_id: int) -> ResolvedJoin:
+	var rj := join_payload.resolve()
+	if rj == null:
+		Netw.dbg.warn("join: invalid payload from peer %d", [peer_id])
+		return null
+	if not _roster.resolve_username_collision(
+		rj,
+		players,
+		inner.disconnect_peer,
+	):
+		return null
+	return rj
+
+
+# Resolves an inbound join into the ResolvedJoin the session admits, or null to
+# reject it. The identity, the arg codec and the gate are all script, so the
+# native receive installs this rather than implementing it.
+func _resolve_inbound_join(
+		join_payload: JoinPayload,
+		sender: int,
+) -> ResolvedJoin:
+	if not _decode_join_args(join_payload):
+		Netw.dbg.warn(
+			"join: rejected malformed or mismatched args from peer %d",
+			[sender],
+		)
+		return null
+	_auth.resolve_identity(sender, join_payload)
+	return _default_join_gate(join_payload, sender)
+
+
+# Resolves this session's join handler: a per-session override, then the
+# project-wide registration, then the built-in NetwDefaultJoin bound to this
+# api.
+func _resolve_join_handler() -> Callable:
+	if _join_override.is_valid():
+		return _join_override
+	var registered := Netw.resolve_join_handler()
+	if registered.is_valid():
+		return registered
+	if _default_join == null:
+		_default_join = NetwDefaultJoin.new(self)
+	return _default_join.spawn
+
+
+# The wire-arg quantizers matching the resolved handler.
+func _resolve_join_quantizers() -> Array:
+	if _join_override.is_valid():
+		return _join_override_quantizers
+	if Netw.resolve_join_handler().is_valid():
+		return Netw.resolve_join_quantizers()
+	return []
+
+
+# Packs a client's typed arg_values into arg_bytes plus a schema hash. No intent
+# or no resolvable handler leaves empty bytes.
+func _encode_join_args(payload: JoinPayload) -> void:
+	NetwJoinCodec.encode(
+		payload,
+		_resolve_join_handler(),
+		_resolve_join_quantizers(),
+	)
+
+
+# Verifies and decodes arg_bytes into arg_values against this server's resolved
+# handler. Returns false to reject a schema mismatch or an undecodable request.
+func _decode_join_args(payload: JoinPayload) -> bool:
+	return NetwJoinCodec.decode(
+		payload,
+		_resolve_join_handler(),
+		_resolve_join_quantizers(),
+	)
+
+
+# Invokes the resolved join handler once for the peer admitted as peer_id,
+# passing the decoded join args after the ResolvedJoin. A returned
+# NetwSceneHandle becomes the participant's current_scene, and a participant
+# with no join intent spawns nothing. Installed on the native core, which calls
+# it on server authority between the admission and its announcement.
+func _run_join_handler(peer_id: int) -> void:
+	if not is_server():
+		return
+	var participant := peer_get_participant(peer_id)
+	if participant == null:
+		return
+	var rj := participant.join
+	if rj == null or rj.arg_values.is_empty():
+		return
+	var handler := _resolve_join_handler()
+	if not handler.is_valid():
+		return
+	var scene = await handler.callv([rj] + rj.arg_values)
+	var record := NetwEntity.of(scene) if scene is Node else null
+	if record != null:
+		participant.current_scene = record.scene
 
 #endregion
 
@@ -6467,19 +8693,19 @@ func _poll() -> Error:
 	# A clocked session counts its drain windows on the tick pump instead, which
 	# is the cadence it sends at, so counting here as well would spend one window
 	# twice over.
-	if not _clock.is_configured():
+	if not _native_core.clock_handle.is_configured:
 		_native_core.settle_advance()
 	_settle()
-	if not _clock.is_configured():
-		_scenes.on_pump()
-	_clock.mark_poll()
-	_clock.poll_step()
+	if not _native_core.clock_handle.is_configured:
+		_native_core.scene_pump_retired()
+	_native_core.clock_handle.count_poll()
+	_native_core.clock_handle.poll_step()
 	_native_core.advance_frame()
 	_replication.on_poll()
 	# Persistence accumulates in wall-clock seconds, so it counts on the poll
 	# and never on the tick: a session that polls without rendering still saves.
 	persist_tick(frame_delta)
-	_sink_verdict(_display.pump(frame_delta), 0)
+	_sink_verdict(_native_core.display_pump(frame_delta), 0)
 	return err
 
 
@@ -6544,7 +8770,7 @@ func _set_multiplayer_peer(p_peer: MultiplayerPeer) -> void:
 	inner.multiplayer_peer = p_peer
 	_native_core.set_multiplayer_peer(p_peer)
 	# The session machine reacts to the one edge every connect path crosses.
-	_session.on_peer_assigned(p_peer)
+	_session_on_peer_assigned(p_peer)
 
 
 func _get_multiplayer_peer() -> MultiplayerPeer:
@@ -6567,3 +8793,1477 @@ func _get_remote_sender_id() -> int:
 	if _relay_sender != 0:
 		return _relay_sender
 	return inner.get_remote_sender_id()
+
+
+
+const DebugFeature := preload("res://addons/networked/debug/ui/debug_feature.gd")
+
+## One drive pass's timing.
+##
+## [i]Deprecated.[/i] The record is [NetwPredict.Timing] now. It moved to the
+## vocabulary leaf so the kernel can name the type without depending on the
+## shell that steps it.
+const PredictTiming := NetwPredict.Timing
+
+# The columns of one pass's outcome, as native_open_drive and
+# native_replay_drive both report it.
+const DRIVE_RECORD_TRANSITION := 0
+const DRIVE_RECORD_LABEL := 1
+const DRIVE_RECORD_KIND := 2
+const DRIVE_RECORD_FRESH := 3
+const DRIVE_RECORD_RAN := 4
+const DRIVE_RECORD_WIDTH := 5
+
+const _OBSERVE_KEY_PREFIX := "lagcomp-observe-node?"
+
+# Tri-state result of the action readiness check, shared by admission and drain.
+enum _Readiness { NOT_READY, READY, READY_BY_DEADLINE }
+
+## Maximum number of ticks a player action may be scheduled ahead of the
+## server clock before it is denied.
+var max_future_action_ticks: int = 8
+
+## Ticks a [constant NetwAction.TimingMode.TICK_ALIGNED_STATE_READY] action waits
+## for input-backed state at its view tick before it resolves best-effort.
+##
+## A state-ready action queues from the tick the server admits it. It resolves the
+## moment the server has consumed and recorded authoritative state for the view
+## tick, the input-backed slot [method sample] reads. Lost or late input can mean
+## that slot never arrives, so this bound stops the wait from lasting forever. Once
+## the wait reaches it the action resolves against the best available history and
+## [signal action_gate_fallback] fires.
+## [codeblock]
+## queued_at                              state recorded at view_tick -> resolve (input-backed)
+## queued_at + input_gate_deadline_ticks  still no state at view_tick -> resolve best-effort
+## [/codeblock]
+## Set it above the input arrival lag in ticks, about
+## [member NetwClockHandle.recommended_display_offset] for the network and jitter
+## part plus the input send cadence. A value below that resolves state-ready actions
+## best-effort under normal latency, the artifact the gate exists to prevent.
+var input_gate_deadline_ticks: int = 12
+
+## Emitted when a state-ready action resolves through its deadline fallback.
+signal action_gate_fallback(key: StringName, view_tick: int)
+
+## Emitted on authority when an owner's claimed post-state for [param entry]
+## disagrees with the one authority reached, charged to [param attribution].
+##
+## Authority holds a timeline per peer and checks it, so a peer whose simulation
+## has drifted is discovered where the divergence can be acted on rather than
+## only where it is felt. This is a report and never a repair: nothing is pushed
+## back to [param peer] on the strength of it, so a game decides for itself
+## whether a run of these is latency, a bug, or a client worth distrusting.
+## [codeblock]
+## api.peer_divergence.connect(
+##     func(peer: int, entry: int, attribution: NetwPredictJournal.Attribution):
+##         if attribution == NetwPredictJournal.Attribution.CLOSURE:
+##             suspicion[peer] = suspicion.get(peer, 0) + 1
+## )
+## [/codeblock]
+## [br][br][b]Server Only.[/b]
+signal peer_divergence(
+		peer: int,
+		entry: int,
+		attribution: NetwPredictJournal.Attribution,
+)
+
+# Flipped by NetwMultiplayer when a LagCompensation configurator registers.
+var _configured := false
+# Physics frames this session has run. A transition's cost in simulated time is
+# the difference between the frames two consecutive drives ran on, and that cost
+# has to match on every peer for a compared transition to mean anything.
+var _physics_frame: int = 0
+# The clock configuration a quantum report has already judged, so the report
+# fires once per distinct configuration rather than once per drive.
+var _quantum_config_reported: int = -1
+# Entities whose archetype says the physics server integrates their body, each
+# with the space it last resolved into so a release can restore what it held.
+#   { NetwEntity -> { space: RID, dimension: int } }
+var _gated_entities: Dictionary = { }
+# Relay subscribers per entity slot, server-side.
+var _relay_book := NetwPredictRelayBook.new()
+
+
+## Admits [param peer] to [param entity]'s relayed command lane, or drops it
+## when [param subscribed] is false.
+##
+## The interest gate is re-answered on every relay rather than remembered here,
+## so a peer that leaves the entity's interest set stops receiving its commands
+## without anything having to observe the exit. This returns the verdict for the
+## request itself, which is what a subscriber learns.
+##
+## [br][br][b]Server Only.[/b]
+func relay_subscribe(
+		entity: NetwEntity,
+		peer: int,
+		subscribed: bool = true,
+) -> Error:
+	var api := self
+	if api == null or not api.is_server():
+		return ERR_UNAUTHORIZED
+	if entity == null or not is_instance_valid(entity):
+		return ERR_DOES_NOT_EXIST
+	if not api._native_core.liveness_core.entity_is_valid(entity.rid):
+		return ERR_DOES_NOT_EXIST
+	var slot := entity.rid.get_id()
+	if not subscribed:
+		_relay_book.set_subscribed(slot, peer, false)
+		return OK
+	if not api.interest_admits(entity.rid, peer):
+		return ERR_UNAUTHORIZED
+	_relay_book.set_subscribed(slot, peer, true)
+	return OK
+
+
+# Re-emits one admitted command frame to every subscriber interest still
+# admits, byte for byte. A subscriber that decoded a re-cut frame would be
+# reading a command its author never wrote, so the payload is passed through
+# rather than re-encoded, and the author is skipped because it already has it.
+func _relay_command_frame(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		author: int,
+) -> void:
+	var api := self
+	if api == null or not api.is_server():
+		return
+	var slot := entity.rid.get_id()
+	var subscribers := _relay_book.peers(slot)
+	if subscribers.is_empty():
+		return
+	var native_core := api._native_core if api else null
+	var route := native_core.liveness_route_of(entity) if native_core else -1
+	if route <= 0:
+		return
+	for peer in subscribers:
+		if peer == author:
+			continue
+		if not api.interest_admits(entity.rid, peer):
+			_relay_book.set_subscribed(slot, peer, false)
+			continue
+		api._replication.send_to(
+			peer,
+			route,
+			NetwFrameEnvelope.Channel.PREDICT_RELAY,
+			payload,
+			false,
+		)
+
+var _registry: NetwLagCompCore
+var _recorder := _HistoryRecorder.new()
+var _runner := _SimulationRunner.new()
+# Per-entity prediction engine records, created by register_prediction, keyed by
+# NetwEntity. The handle on NetwEntity.prediction reaches its record back through
+# a weakref, so erasing an entry here is the whole release.
+var _engines: Dictionary = { }
+var _prediction_pool: NetwPredictionEngine
+# One acknowledgement run judges a whole window of transitions, and the pool
+# copies the row it is handed, so the carrier is refilled rather than reminted.
+
+
+# The two questions an engine asks about its siblings, named so they are a
+# contract rather than a reach into this file's storage.
+#
+# An island rollback re-runs every declared member together, and a contact
+# classifier asks whether the body it touched is one this peer predicts. Both
+# are questions about the registry, which the shell owns; neither is a question
+# an engine can answer from its own state. Spelled here, an engine never depends
+# on how the registry is stored, and this file stays free to change that.
+func engine_for(entity: NetwEntity) -> NetwPredictEngine._PredictionEngine:
+	return _engines.get(entity) as NetwPredictEngine._PredictionEngine
+
+
+func native_prediction_slot(entity: NetwEntity) -> int:
+	return _prediction_pool.slot_of(entity)
+
+
+# True when [param entity] has a prediction engine on this peer, which is what
+# makes a contacted body predicted rather than merely replicated.
+func predicts(entity: NetwEntity) -> bool:
+	return _engines.has(entity)
+
+
+const _PredictionBoundaryOverlay := preload(
+	"res://addons/networked/debug/prediction_boundary_overlay.gd"
+)
+var _prediction_overlays: Dictionary[NetwEntity, Node] = { }
+
+# Env-gated JSONL drain of the public prediction surface, built lazily the
+# first frame it is armed and never re-checked once found off. The every-N
+# gate is safe while N stays under the journal ring depth, because the tap's
+# export cursor guarantees no sealed row is ever skipped.
+const _PredictTap := preload("res://addons/networked/replication/netw_predict_tap.gd")
+const _TAP_EVERY_ENV := "NETW_PREDICT_TAP_EVERY"
+var _tap = null
+var _tap_off: bool = false
+var _tap_every: int = 1
+var _tap_frame: int = 0
+var _pending_actions: Array[_PendingAction] = []
+var _action_slots: Dictionary[String, int] = { }
+var _observed_entities: Dictionary[NetwEntity, bool] = { }
+var _gate_fallbacks: int = 0
+
+
+
+## Applies [param config] to the engine. Called by [NetwMultiplayer] when a
+## [NetwMultiplayer] installs a [NetwLagCompensationConfig]. The values live
+## here, not on the node, so [method is_configured] stays true after a scene
+## change frees the configurator.
+@warning_ignore("unused_parameter")
+func configure(node: LagCompensation, config: NetwLagCompensationConfig) -> void:
+	max_future_action_ticks = config.max_future_action_ticks
+	input_gate_deadline_ticks = config.input_gate_deadline_ticks
+
+
+## True once a [LagCompensation] configurator has registered. Until then every
+## query returns its safe empty result and every action is denied.
+func is_configured() -> bool:
+	return _configured
+
+
+## Resolves the lag-compensation interface for [param node], logging an error
+## when [param node] sits under a [MultiplayerTree] that has no
+## [LagCompensation] node mounted.
+##
+## A node run standalone (no enclosing [MultiplayerTree], for example pressing
+## [code]F6[/code] on a scene in isolation) resolves to [code]null[/code] quietly,
+## so detached testing keeps working. A node mounted in a real session that depends
+## on rewind or prediction but finds no [LagCompensation] is a misconfiguration,
+## so [method NetwDbg.error] names it rather than crashing.
+static func resolve_required(node: Node) -> NetwMultiplayer:
+	# Resolve the session api directly, falling back to the enclosing tree when
+	# a node's own multiplayer is not yet bound to the api at call time.
+	var api := NetwMultiplayer.of(node)
+	if api == null:
+		var mt := MultiplayerTree.resolve(node)
+		api = mt.api if mt else null
+	if not api:
+		return null
+	if api.is_configured():
+		return api
+	Netw.dbg.error(
+		"%s needs a LagCompensation node mounted under the MultiplayerTree, "
+		+ "but none was found. Add one as a child of the tree to enable "
+		+ "prediction and rewind.",
+		[node.get_class() if node else "A node"],
+		func(m: String) -> void: push_error(m),
+	)
+	return null
+
+
+## Creates and wires the prediction engine record for [param entity]. Idempotent.
+##
+## [PredictionComponent] calls this on tree entry after pushing its exports into
+## [member NetwEntity.prediction], and a code-first caller configures that handle
+## and calls this directly. The engine resolves its role from authority, follows
+## [signal NetwEntity.control_changed] and [signal NetwEntity.reparented], and
+## steps in the deterministic simulation loop. Only the roles this peer simulates
+## enter the loop, so a remote display costs nothing per tick.
+func register_prediction(entity: NetwEntity) -> void:
+	if not entity or _engines.has(entity):
+		return
+	var engine := NetwPredictEngine._PredictionEngine.new()
+	_engines[entity] = engine
+	_prediction_pool.slot_register(entity)
+	entity.prediction._engine_ref = weakref(engine)
+	engine._attach(self, entity)
+	_attach_prediction_overlay(entity)
+
+
+# The declaration model an engine wires on, resolved for [param entity] here
+# because both set handles resolve through the replication registry and the
+# liveness route, and both axes read this peer's authority. This is the one
+# place a prediction engine's wiring depends on a live session.
+func declaration_of(entity: NetwEntity) -> NetwPredictEngine.Declaration:
+	var declaration := NetwPredictEngine.Declaration.new()
+	if not entity:
+		return declaration
+	declaration.state = entity.state_binding
+	declaration.input = entity.input_binding
+	declaration.authority = entity.is_authority
+	declaration.controlled_locally = entity.is_controlled_locally
+	return declaration
+
+
+## Releases [param entity]'s prediction engine record, restoring the set-handle
+## hooks it held. [member NetwEntity.prediction] stays bound and keeps its config
+## and counters, so a re-registration resumes where the engine left off.
+func unregister_prediction(entity: NetwEntity) -> void:
+	var engine := _engines.get(entity) as NetwPredictEngine._PredictionEngine
+	if not engine:
+		return
+	_engines.erase(entity)
+	_prediction_pool.slot_unregister(entity)
+	_release_slot(entity)
+	_detach_prediction_overlay(entity)
+	engine._release()
+	entity.prediction._engine_ref = null
+
+
+func configure_native_prediction(
+		entity: NetwEntity,
+		binding: NetwPropertySetBinding,
+		input_binding: NetwPropertySetBinding,
+		schedule: int,
+		role: int,
+		declared_correction: int,
+		restore: int,
+		max_restore_ticks: int,
+		island: int,
+		carry: bool,
+		witness: bool,
+) -> int:
+	var slot := native_prediction_slot(entity)
+	if slot < 0 or not binding or not binding.set:
+		return -1
+	var node := binding.node()
+	var declaration := NetwPredictDeclaration.new()
+	for field: NetwPropertySet.Column in binding.set.columns:
+		declaration.append_field(
+			field.key,
+			field.property_class,
+			binding.carry_channel_of(field.key),
+			binding.converge_stiffness_of(field.key),
+			binding.teleport_only_of(field.key),
+			binding.reconcile_only_of(field.key),
+			binding.epsilon_override_of(field.key),
+			binding.teleport_at_of(field.key),
+			false,
+			field.quantizer,
+			_declared_property_type(node, field.key),
+		)
+	_prediction_pool.rewire(slot, declaration, _input_declaration(input_binding))
+	_bind_declared_owner(entity, node)
+	var correction: int = _prediction_pool.resolve_correction(
+		slot,
+		declared_correction,
+	)
+	if not _prediction_pool.configure(
+		slot,
+		schedule,
+		role,
+		correction,
+		restore,
+		max_restore_ticks,
+		island,
+		carry,
+		witness,
+	):
+		return -1
+	return correction
+
+
+# The plane's owner is the object that holds the declared properties. The
+# simulate step is adopted from it, falling back to the entity root, because a
+# component may carry the property set while the root carries the body.
+func _bind_declared_owner(entity: NetwEntity, node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	var api := self
+	if api == null:
+		return
+	api.predict_bind_owner(entity.rid, node)
+	var handle := entity.prediction
+	if handle == null:
+		return
+	if not handle.simulate.is_valid():
+		var root := entity.owner
+		if is_instance_valid(root) and root.has_method(&"_network_tick"):
+			handle.simulate = Callable(root, &"_network_tick")
+	var slot := native_prediction_slot(entity)
+	if slot < 0:
+		return
+	var route := self._native_core.liveness_route_of(entity)
+	_prediction_pool.set_order_key(slot, route if route > 0 else -1)
+	_prediction_pool.set_simulate(slot, handle.simulate)
+	_prediction_pool.set_witness(slot, handle.witness_contacts)
+	_prediction_pool.set_corridor(slot, handle.transport_corridor)
+	for name: StringName in handle.sensors:
+		_prediction_pool.set_sensor(slot, name, handle.sensors[name])
+
+
+# An input row is canonicalized and shipped, never recovered, so the pool needs
+# its codec columns and none of the recovery declarations.
+func _input_declaration(
+		binding: NetwPropertySetBinding,
+) -> NetwPredictDeclaration:
+	if not binding or not binding.set:
+		return null
+	var node := binding.node()
+	var declaration := NetwPredictDeclaration.new()
+	for field: NetwPropertySet.Column in binding.set.columns:
+		declaration.append_field(
+			field.key,
+			field.property_class,
+			&"",
+			0.0,
+			false,
+			false,
+			-1.0,
+			-1.0,
+			false,
+			field.quantizer,
+			_declared_property_type(node, field.key),
+		)
+	return declaration
+
+
+func _declared_property_type(node: Node, key: StringName) -> int:
+	if not is_instance_valid(node):
+		return TYPE_NIL
+	return NetwScriptModel.get_node_property_type(node, key)
+
+
+func configure_native_prediction_axes(
+		entity: NetwEntity,
+		schedule: int,
+		role: int,
+		correction: int,
+		restore: int,
+		max_restore_ticks: int,
+		island: int,
+		carry: bool,
+		witness: bool,
+		island_declared: bool,
+		island_approximate: bool,
+) -> bool:
+	var slot := native_prediction_slot(entity)
+	return _prediction_pool.configure(
+		slot,
+		schedule,
+		role,
+		correction,
+		restore,
+		max_restore_ticks,
+		island,
+		carry,
+		witness,
+		island_declared,
+		island_approximate,
+	) if slot >= 0 else false
+
+
+# One acknowledgement stages one recovery, so the carrier is refilled rather
+# than reminted.
+
+
+func _release_slot(entity: NetwEntity) -> void:
+	# The subscribers go with the handle, because a handle is never reissued and
+	# a row left behind would answer for an entity nothing predicts.
+	if entity:
+		_relay_book.release(entity.rid.get_id())
+
+
+# Adds the read-only in-world overlay when the shared debug gate is active.
+func _attach_prediction_overlay(entity: NetwEntity) -> void:
+	if not DebugFeature.is_world_debug_enabled():
+		return
+	if not bool(
+		ProjectSettings.get_setting(
+			"debug/networked/prediction_boundary_overlay",
+			true,
+		),
+	):
+		return
+	if not is_instance_valid(entity.owner):
+		return
+	var overlay := _PredictionBoundaryOverlay.new()
+	overlay.name = "PredictionBoundaryOverlay"
+	overlay.bind(entity)
+	_prediction_overlays[entity] = overlay
+	entity.owner.add_child.call_deferred(overlay)
+
+
+# Releases the entity overlay without changing any prediction state.
+func _detach_prediction_overlay(entity: NetwEntity) -> void:
+	var overlay := _prediction_overlays.get(entity) as Node
+	_prediction_overlays.erase(entity)
+	if is_instance_valid(overlay):
+		overlay.queue_free()
+
+
+## Registers [param entity] for server-side authoritative recording, returning its
+## [NetwTimeline]. Idempotent: a repeat call returns the existing timeline.
+##
+## [method NetwSyncPipeline.register_derived] calls this when a server-authored
+## state set registers, and the server [PredictionComponent] roles read the same
+## timeline back, so the trigger is state-set presence, not prediction. The
+## created timeline is published to [member NetwEntity.timeline].
+##
+## [br][br][b]Server Only.[/b]
+func register_timeline(entity: NetwEntity) -> NetwTimeline:
+	if not entity:
+		return null
+	var slot := _registry.timeline_register(entity, NetwTimeline.DEFAULT_LIMIT)
+	return _registry.timeline_history(slot) if slot >= 0 else null
+
+
+## Returns the registered [NetwTimeline] for [param entity], or [code]null[/code].
+##
+## This is the enumeration seam the server rewind queries read.
+func timeline_of(entity: NetwEntity) -> NetwTimeline:
+	return _registry.timeline_history(_registry.timeline_slot_of(entity))
+
+
+## Returns aggregate simulation counters for the debug overlay.
+##
+## The cumulative counters ([code]corrections[/code], [code]consumed[/code],
+## [code]missing[/code], [code]max_replay_depth[/code]) sum since spawn, so a live
+## monitor like [LagCompensationMonitor] reads them as deltas over an interval. The
+## remaining keys are instantaneous occupancy.
+## [codeblock]
+## {
+##   |- entities: int          # engine records stepped this tick
+##   |- timelines: int         # rewindable entities recorded this tick
+##   |- corrections: int       # summed reconciliation snaps since spawn
+##   |- max_replay_depth: int  # worst replay window walked
+##   |- consumed: int          # summed inputs the server consumed
+##   |- missing: int           # summed input ticks stepped over as lost
+##   |- pending_actions: int   # actions queued awaiting readiness
+##   `- gate_fallbacks: int    # state-ready actions resolved best-effort
+## }
+## [/codeblock]
+func metrics() -> Dictionary:
+	var result := _runner.metrics()
+	result[&"timelines"] = _registry.timeline_registered()
+	result[&"pending_actions"] = _pending_actions.size()
+	result[&"gate_fallbacks"] = _gate_fallbacks
+	return result
+
+
+## Returns [param entity]'s recorded state at or before [param tick] as a detached
+## [NetwSnapshot], the analytic hit-validation read.
+##
+## Returns an empty [NetwSnapshot] when no [LagCompensation] node is mounted, off
+## the server, or for an entity with no retained history at [param tick].
+##
+## [codeblock]
+## var past := Netw.of(self).lag_compensation.sample(target, view_tick)
+## if past.has_value(&"position") and hits(origin, dir, past.position):
+##     apply_damage(target)
+## [/codeblock]
+##
+## [br][br][b]Server Only.[/b]
+func sample(entity: NetwEntity, tick: int) -> NetwSnapshot:
+	return NetwSnapshot.from_dictionary(
+		_registry.timeline_sample_entity(entity, tick),
+	)
+## Returns a [NetwAction] bound to [param authority].
+##
+## [param authority] must be a method [Callable] on the entity root or one of
+## its children. The returned action predicts through the session's effect
+## ledger ([method NetwMultiplayer.effect_arm]) and uses the mounted
+## [LagCompensation] node for private request transport.
+func action(authority: Callable) -> NetwAction:
+	var slot := _assign_action_slot(authority) if _configured else 0
+	return NetwAction.new(self, authority, slot)
+
+
+## Advances the simulation loop by one tick: drains admitted actions, steps every
+## registered prediction engine record, and on the server records authoritative
+## history. Driven by the [LagCompensation] configurator's
+## [signal NetwMultiplayer.on_tick] binding.
+func tick_step(delta: float, tick: int) -> void:
+	_drain_pending_actions(tick)
+	_runner.tick_step(
+		NetwPredict.Timing.new(
+			tick,
+			delta,
+			_ticktime(),
+			_physics_frame,
+			_declared_quantum(),
+		),
+	)
+	# The server holds the truth, so only it records authoritative history.
+	var api := self
+	if _configured and api and api.is_server():
+		_recorder.record_tick(_registry, _engines, tick)
+
+
+## Records the state produced by the preceding FRAME drive after its physics
+## solve has completed. Driven before the next frame's tick loop.
+func before_frame_step() -> void:
+	# One solve completed since the last call, unless the clock held it. The
+	# clock's decision still names the frame that just ended here, because this
+	# runs before the tick loop resolves the frame now opening, so a held frame
+	# costs a transition nothing and every other frame costs it one.
+	if not _native_core or _native_core.clock_handle.is_simulating:
+		_physics_frame += 1
+	_runner.before_frame_step()
+	var api := self
+	if _configured and api and api.is_server():
+		_recorder.record_frame(_registry, _engines, _current_tick())
+	_drain_tap()
+
+
+## Advances every FRAME-scheduled simulation once after the clock's tick loop.
+## Tick callbacks only author and label input for these entities. This pass
+## performs their one drive application for the physics frame.
+##
+## The pass closes by flushing the transport, because it is the only producer
+## that runs after the tick loop and so the only one whose frames would otherwise
+## wait for a flush it already missed. See
+## [method ReplicationCore.on_frame_end].
+func frame_step() -> void:
+	_runner.frame_step(frame_timing())
+	_apply_simulation_gate()
+	var api := self
+	if _configured and api:
+		api._replication.on_frame_end()
+
+
+# Holds or admits every gated body's space for the solve this frame is about to
+# run. Called after the drives and before the physics server steps, which is the
+# only window where the decision can still take effect.
+func _apply_simulation_gate() -> void:
+	if _gated_entities.is_empty():
+		return
+	var active := not _native_core or _native_core.clock_handle.is_simulating
+	var stale: Array[NetwEntity] = []
+	for entity: NetwEntity in _gated_entities:
+		if not is_instance_valid(entity) or not is_instance_valid(entity.owner):
+			stale.append(entity)
+			continue
+		var record: Dictionary = _gated_entities[entity]
+		var resolved := _entity_space(entity)
+		if resolved[&"space"] != record[&"space"]:
+			# A reparent moved the body to another world. Give the world it left
+			# its own clock back before adopting the new one.
+			_set_space_active(record, true)
+			_gated_entities[entity] = resolved
+			record = resolved
+		_set_space_active(record, active)
+	for entity: NetwEntity in stale:
+		_gated_entities.erase(entity)
+	if _gated_entities.is_empty() and _native_core:
+		while _native_core.clock_handle.is_gated:
+			_native_core.clock_handle.release_gate()
+
+
+# The physics space a predicted body actually steps in, with the server that
+# owns it. Resolved from the node rather than from any viewport it sits under,
+# because those are two different questions and only this one names the space.
+func _entity_space(entity: NetwEntity) -> Dictionary:
+	var node := entity.owner if entity else null
+	if node is Node3D:
+		var world_3d := (node as Node3D).get_world_3d()
+		if world_3d:
+			return { &"space": world_3d.space, &"dimension": 3 }
+	elif node is CanvasItem:
+		var world_2d := (node as CanvasItem).get_world_2d()
+		if world_2d:
+			return { &"space": world_2d.space, &"dimension": 2 }
+	return { &"space": RID(), &"dimension": 0 }
+
+
+func _set_space_active(record: Dictionary, active: bool) -> void:
+	var space: RID = record[&"space"]
+	if not space.is_valid():
+		return
+	match int(record[&"dimension"]):
+		3:
+			PhysicsServer3D.space_set_active(space, active)
+		2:
+			PhysicsServer2D.space_set_active(space, active)
+
+
+# Arms or releases [param entity]'s gate as its declaration resolves. A gate is
+# armed by the archetype that says the physics server integrates this body, so a
+# game whose bodies it does not integrate never holds a frame.
+func _sync_simulation_gate(entity: NetwEntity, wanted: bool) -> void:
+	if not entity:
+		return
+	var held := _gated_entities.has(entity)
+	if wanted == held:
+		return
+	if wanted:
+		_gated_entities[entity] = _entity_space(entity)
+		if _native_core:
+			_native_core.clock_handle.arm_gate()
+		return
+	# Releasing must give the space back, because nothing else will: an
+	# unarmed clock stops resolving and a held space would stay held forever.
+	_set_space_active(_gated_entities[entity], true)
+	_gated_entities.erase(entity)
+	if _native_core:
+		_native_core.clock_handle.release_gate()
+
+
+# Drains every registered entity's public evidence to JSONL when the
+# NETW_PREDICT_TAP directory is set. The tap reads only the public handle, so
+# it never moves recorded state, and it meters its own wall cost.
+func _drain_tap() -> void:
+	if _tap_off:
+		return
+	if _tap == null:
+		if not _PredictTap.armed():
+			_tap_off = true
+			return
+		_tap = _PredictTap.new()
+		_tap_every = maxi(
+			1,
+			OS.get_environment(_TAP_EVERY_ENV).to_int(),
+		)
+	_tap_frame += 1
+	if _tap_frame % _tap_every != 0:
+		return
+	for entity: NetwEntity in _engines:
+		if is_instance_valid(entity):
+			_tap.drain(entity.entity_id, entity.prediction)
+
+
+## Returns the prediction tap's self-reported cost, or an empty [Dictionary]
+## while no tap is armed.
+##
+## The tap is the one instrument whose price once masqueraded as a game
+## defect, so its cost is a first-class read a capture harness echoes beside
+## the numbers the tap produced: bytes and lines written, drain calls, and
+## the mean wall cost of one drain.
+func tap_cost() -> Dictionary:
+	return _tap.cost() if _tap else { }
+
+
+## Flushes the prediction tap's buffered lines to disk, so a capture collected
+## while the session still runs reads complete files. A no-op while no tap is
+## armed. The tap flushes once per second on its own and closes with the
+## session, so most readers never need this.
+func flush_tap() -> void:
+	if _tap:
+		_tap.flush()
+
+
+# Closes the tap with the session, which flushes its tail and prints its
+# self-reported cost. Driven by the LagCompensation configurator's removal.
+func _close_tap() -> void:
+	if _tap:
+		_tap.close()
+		_tap = null
+
+
+## Reads the clock once for one FRAME pass and returns it by value.
+##
+## A frame drive completes the solve of the tick before the one now opening, so
+## the transition it authors is labeled [code]tick - 1[/code]. Callers that step
+## an engine directly through
+## [method NetwPredictionHandle.simulate_frame] capture
+## here too, so a direct drive and a pumped drive agree about when they are.
+func frame_timing() -> PredictTiming:
+	if not _native_core:
+		return NetwPredict.Timing.new(0, 0.0, 0.0, _physics_frame, 1)
+	var clock := _native_core.clock_handle
+	var ticktime := clock.ticktime
+	return NetwPredict.Timing.new(
+		clock.tick - 1,
+		ticktime,
+		ticktime,
+		_physics_frame,
+		_declared_quantum(),
+		clock.is_simulating,
+	)
+
+
+# The fixed network tick duration, or 0.0 when no clock is resolvable. A reader
+# that gets 0.0 keeps whatever step it already had rather than adopting a
+# meaningless one.
+func _ticktime() -> float:
+	return _native_core.clock_handle.ticktime if _native_core else 0.0
+
+
+# Physics steps one transition is declared to advance. The physics server runs
+# exactly one step per frame, so this is whole by construction wherever the
+# declaration is sound, and _report_quantum_misconfiguration says so when it is
+# not.
+func _declared_quantum() -> int:
+	if not _native_core:
+		return 1
+	return maxi(1, int(round(_native_core.clock_handle.physics_factor)))
+
+
+# A body the physics server integrates needs a whole number of steps per
+# transition, because the server runs exactly one step per frame. A fractional
+# ratio makes the count alternate on a phase each peer keeps privately, so two
+# peers can never spend the same simulated time on the same transition and no
+# other declaration can repair it.
+func _report_quantum_misconfiguration(entity: NetwEntity) -> void:
+	if not _native_core:
+		return
+	var config := hash([
+			_native_core.clock_handle.tickrate, Engine.physics_ticks_per_second
+	])
+	if config == _quantum_config_reported:
+		return
+	_quantum_config_reported = config
+	var factor: float = _native_core.clock_handle.physics_factor
+	if is_equal_approx(factor, roundf(factor)):
+		return
+	push_error(
+		(
+				"Prediction: %s drives a solver body at %d physics steps per "
+				+ "second against a tickrate of %d, so one transition costs "
+				+ "%.3f steps. The physics server runs exactly one step per "
+				+ "frame, so a fractional cost alternates on a phase each peer "
+				+ "keeps privately and the two never advance the same simulated "
+				+ "time. Make physics_ticks_per_second a whole multiple of "
+				+ "tickrate."
+		) % [
+			entity.entity_id if is_instance_valid(entity) else &"entity",
+			Engine.physics_ticks_per_second,
+			_native_core.clock_handle.tickrate,
+			factor,
+		],
+	)
+
+
+## Submits a player action request to be resolved.
+## [br][br][b]Server Only.[/b]
+func submit_action(
+		route: int,
+		method: StringName,
+		view_tick: int,
+		data: Variant,
+		key: StringName,
+		timing_mode: NetwAction.TimingMode,
+		requester: int,
+) -> void:
+	var api := self if _configured else null
+	if requester == 0 and api and api.multiplayer_peer:
+		requester = api.get_unique_id()
+
+	var target_path: NodePath = NodePath()
+	var anchor := api.root if api else null
+	var native_core := api._native_core if api else null
+	if anchor and native_core:
+		var entity := native_core.wrapper_for_route(route) as NetwEntity
+		if entity and is_instance_valid(entity.owner):
+			target_path = anchor.get_path_to(entity.owner)
+
+	var request := _PendingAction.new(
+		target_path,
+		method,
+		view_tick,
+		data,
+		key,
+		requester,
+		timing_mode,
+		_current_tick(),
+	)
+	if not _can_resolve_action(request):
+		_deny_action_to(requester, key)
+		return
+	var current_tick := _current_tick()
+	var readiness := _action_readiness(request, current_tick)
+	if readiness != _Readiness.NOT_READY:
+		_execute_ready_action(request, current_tick, readiness)
+		return
+	# Not ready yet, so queue it, unless it is scheduled too far ahead to wait.
+	if view_tick > current_tick + max_future_action_ticks:
+		_deny_action_to(requester, key)
+		return
+	_pending_actions.append(request)
+
+
+func _assign_action_slot(authority: Callable) -> int:
+	var target := authority.get_object() as Node
+	if not target:
+		return 0
+	var entity := NetwEntity.of(target)
+	if not entity:
+		return 0
+	var route := "%s:%s" % [entity.entity_id, authority.get_method()]
+	if _action_slots.has(route):
+		return _action_slots[route]
+	var slot := _action_slots.size()
+	_action_slots[route] = slot
+	return slot
+
+
+func _send_action_request(
+		target_path: NodePath,
+		method: StringName,
+		view_tick: int,
+		data: Variant,
+		key: StringName,
+		timing_mode: NetwAction.TimingMode,
+) -> void:
+	if not _configured:
+		return
+	# Routes are allocated server-side and learned from the spawn packet, so a
+	# remote requester only ever reads. A client-minted route would name a
+	# different entity on the server. A route of 0 fails resolution there and
+	# the request is denied.
+	var api := self
+	var is_remote := api and api.multiplayer_peer \
+			and not api.is_server()
+	var route := 0
+	var anchor := api.root if api else null
+	var node := anchor.get_node_or_null(target_path) if anchor else null
+	var entity := NetwEntity.of(node)
+	var native_core := api._native_core if api else null
+	if entity and native_core:
+		route = native_core.liveness_route_of(entity)
+		if route <= 0 and not is_remote:
+			route = native_core.liveness_allocate_route(entity)
+	if route <= 0:
+		Netw.dbg.warn(
+			"LagCompensation: action target '%s' has no native_core route; "
+			+ "the request will be denied",
+			[String(target_path)],
+		)
+
+	if is_remote:
+		if api:
+			var payload := var_to_bytes(
+				[
+					method,
+					view_tick,
+					data,
+					key,
+					timing_mode,
+				],
+			)
+			api._replication.send_to(
+				MultiplayerPeer.TARGET_PEER_SERVER,
+				route,
+				NetwFrameEnvelope.Channel.ACTION,
+				payload,
+				true,
+			)
+		return
+	submit_action(route, method, view_tick, data, key, timing_mode, 0)
+
+
+func _deny_action_to(requester: int, key: StringName) -> void:
+	var api := self
+	var transport := api if _configured and api \
+			and api.multiplayer_peer else null
+	var local_peer := transport.get_unique_id() if transport else 0
+	var remote := transport and requester != 0 and requester != local_peer \
+			and requester in transport.get_peers()
+	if remote:
+		transport._replication.send_to(
+			requester,
+			0,
+			NetwFrameEnvelope.Channel.LAGCOMP_DENY,
+			var_to_bytes(key),
+			true,
+		)
+		return
+	if api:
+		api.effect_discard(key)
+
+
+# Client receive for a denied action. Discards the optimistic effect keyed by
+# the denial.
+func _handle_deny(payload: PackedByteArray, sender: int) -> void:
+	if sender != 1:
+		return
+	var api := self
+	if api:
+		api.effect_discard(bytes_to_var(payload))
+
+
+func _handle_predict_command_carrier(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		sender: int,
+) -> void:
+	var engine := _engines.get(entity) as NetwPredictEngine._PredictionEngine
+	if engine:
+		engine.receive_command_frame(payload)
+	# Relayed after the engine consumed it, so a subscriber never sees a
+	# command authority itself refused.
+	_relay_command_frame(entity, payload, sender)
+
+
+func _handle_predict_relay_carrier(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		_sender: int,
+) -> void:
+	var engine := _engines.get(entity) as NetwPredictEngine._PredictionEngine
+	if engine:
+		engine.receive_relayed_command_frame(payload)
+
+
+func _handle_predict_relay_request_carrier(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		sender: int,
+) -> void:
+	var request := NetwPredictRelayBook.request_of(payload)
+	if request < 0:
+		return
+	relay_subscribe(entity, sender, request == 1)
+
+
+func _handle_predict_ack_carrier(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		_sender: int,
+) -> void:
+	var engine := _engines.get(entity) as NetwPredictEngine._PredictionEngine
+	if engine:
+		engine.receive_ack_frame(payload)
+
+
+func _handle_action_carrier(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		sender: int,
+) -> void:
+	var api := self if _configured else null
+	if not api or not api.is_server():
+		return
+	var array = bytes_to_var(payload) as Array
+	if array == null or array.size() < 5:
+		return
+	var method: StringName = array[0]
+	var view_tick: int = array[1]
+	var data: Variant = array[2]
+	var key: StringName = array[3]
+	var timing_mode: int = array[4]
+
+	submit_action(
+		entity.route,
+		method,
+		view_tick,
+		data,
+		key,
+		timing_mode,
+		sender,
+	)
+
+
+func _node_from_tree_path(path: NodePath) -> Node:
+	var api := self if _configured else null
+	var anchor := api.root if api else null
+	if not anchor:
+		return null
+	return anchor.get_node_or_null(path)
+
+
+func _can_resolve_action(request: _PendingAction) -> bool:
+	var target := _node_from_tree_path(request.target_path)
+	return target != null and target.has_method(request.method)
+
+
+func _drain_pending_actions(tick: int) -> void:
+	if _pending_actions.is_empty():
+		return
+	var waiting: Array[_PendingAction] = []
+	for request in _pending_actions:
+		if not _can_resolve_action(request):
+			_deny_action_to(request.requester, request.key)
+			continue
+		var readiness := _action_readiness(request, tick)
+		if readiness == _Readiness.NOT_READY:
+			waiting.append(request)
+			continue
+		_execute_ready_action(request, tick, readiness)
+	_pending_actions = waiting
+
+
+func _input_readiness(request: _PendingAction, tick: int) -> _Readiness:
+	if tick - request.queued_at_tick >= input_gate_deadline_ticks:
+		return _Readiness.READY_BY_DEADLINE
+	var target := _node_from_tree_path(request.target_path)
+	var entity := NetwEntity.of(target) if target else null
+	if not entity:
+		return _Readiness.NOT_READY
+	var engine := _engines.get(entity) as NetwPredictEngine._PredictionEngine
+	if engine and not engine.has_consumed_state_tick(request.view_tick):
+		return _Readiness.NOT_READY
+	var timeline := timeline_of(entity)
+	if not timeline:
+		return _Readiness.NOT_READY
+	if timeline.state_at(request.view_tick).is_empty():
+		return _Readiness.NOT_READY
+	return _Readiness.READY
+
+
+func _execute_ready_action(
+		request: _PendingAction,
+		execution_tick: int,
+		readiness: _Readiness,
+) -> void:
+	if readiness == _Readiness.READY_BY_DEADLINE:
+		_gate_fallbacks += 1
+		action_gate_fallback.emit(request.key, request.view_tick)
+	_execute_action(request, execution_tick)
+
+
+# Single mode dispatch shared by admission and the drain, so both stay mode agnostic.
+func _action_readiness(request: _PendingAction, tick: int) -> _Readiness:
+	match request.timing_mode:
+		NetwAction.TimingMode.IMMEDIATE:
+			return _Readiness.READY
+		NetwAction.TimingMode.TICK_ALIGNED:
+			return _Readiness.READY if request.view_tick <= tick else _Readiness.NOT_READY
+		NetwAction.TimingMode.TICK_ALIGNED_STATE_READY:
+			if request.view_tick > tick:
+				return _Readiness.NOT_READY
+			return _input_readiness(request, tick)
+	return _Readiness.READY
+
+
+func _execute_action(request: _PendingAction, execution_tick: int) -> void:
+	var target := _node_from_tree_path(request.target_path)
+	if not target or not target.has_method(request.method):
+		_deny_action_to(request.requester, request.key)
+		return
+	var clamped_tick := mini(request.view_tick, execution_tick)
+	var ctx := NetwAction.Context.new(
+		self,
+		request.requester,
+		clamped_tick,
+		request.view_tick,
+		execution_tick,
+		request.key,
+	)
+	if request.data == null:
+		target.call(request.method, ctx)
+	else:
+		target.call(request.method, ctx, request.data)
+
+
+func _current_tick() -> int:
+	return _native_core.clock_handle.tick if _native_core else 0
+
+
+func _on_node_added(node: Node) -> void:
+	_observe_node_entity(node)
+	_settle_observe(node)
+
+
+# Re-reads the node at the next settle, because a node enters the tree before
+# whatever stamps an entity onto it has run. Keyed by instance, so a batch of
+# adds in one cascade observes every one of them.
+func _settle_observe(node: Node) -> void:
+	var api := self
+	if api == null:
+		return
+	api._settle_schedule(
+		_observe_node_entity_ref.bind(weakref(node)),
+		StringName("%s%d" % [_OBSERVE_KEY_PREFIX, node.get_instance_id()]),
+	)
+
+
+func _observe_node_entity_ref(node_ref: WeakRef) -> void:
+	var node := node_ref.get_ref() as Node if node_ref else null
+	if not is_instance_valid(node):
+		return
+	_observe_node_entity(node)
+
+
+func _observe_node_entity(node: Node) -> void:
+	var entity := NetwEntity.of(node)
+	if not entity:
+		return
+	var api := self
+	if api and not entity.entity_id.is_empty():
+		api.effect_adopt(entity.entity_id)
+	if _observed_entities.has(entity):
+		return
+	_observed_entities[entity] = true
+	if not entity.spawned.is_connected(_on_entity_spawned):
+		entity.spawned.connect(_on_entity_spawned.bind(entity))
+
+
+func _on_entity_spawned(entity: NetwEntity) -> void:
+	var api := self
+	if api and entity and not entity.entity_id.is_empty():
+		api.effect_adopt(entity.entity_id)
+
+
+class _PendingAction extends RefCounted:
+	var target_path: NodePath
+	var method: StringName
+	var view_tick: int
+	var data: Variant
+	var key: StringName
+	var requester: int
+	var timing_mode: int
+	var queued_at_tick: int
+
+
+	func _init(
+			p_target_path: NodePath,
+			p_method: StringName,
+			p_view_tick: int,
+			p_data: Variant,
+			p_key: StringName,
+			p_requester: int,
+			p_timing_mode: int,
+			p_queued_at_tick: int,
+	) -> void:
+		target_path = p_target_path
+		method = p_method
+		view_tick = p_view_tick
+		data = p_data
+		key = p_key
+		requester = p_requester
+		timing_mode = p_timing_mode
+		queued_at_tick = p_queued_at_tick
+
+
+## The one reading of the clock a single simulation pass gets, taken at the pump
+## boundary and handed down by value to everything the pass drives.
+##
+## A prediction kernel decides from its antecedents alone, so it may not resolve
+## a clock of its own. Two kernels in one pass that each asked would be free to
+## disagree about which tick they were running, and a replay could reproduce
+## neither answer. Capturing once makes the pass's timing an antecedent like the
+## command and the previous state, which is what lets
+## [method NetwMultiplayer.frame_step] drive a body with no clock in
+## reach at all.
+## [codeblock]
+## clock ──> tick_step / frame_step  ── NetwPredict.Timing ──> engine ──> kernels
+##             (the only reader)         (by value)      (no clock reference)
+## [/codeblock]
+# Steps every registered prediction engine each tick in the order the pool
+# declares, so the server consumes every entity identically each run and a
+# replayed trace is reproducible. Capability logic stays in the engine record;
+# this owns only ordering and metric aggregation.
+class _SimulationRunner extends RefCounted:
+	var _engines: Array[NetwPredictEngine._PredictionEngine] = []
+	# The pool's order, resolved back to engines and rebuilt only when the
+	# roster changes, so re-resolving an unchanged roster every tick is not
+	# paid.
+	var _sorted: Array[NetwPredictEngine._PredictionEngine] = []
+	# The pool's slot back to the engine that carries the body, rebuilt with
+	# the order. Empty when the pool could not name the whole roster.
+	var _by_slot: Dictionary[int, NetwPredictEngine._PredictionEngine] = { }
+	var _sort_dirty: bool = true
+	var _service: NetwMultiplayer
+
+
+	func register(engine: NetwPredictEngine._PredictionEngine) -> void:
+		if engine not in _engines:
+			_engines.append(engine)
+			_sort_dirty = true
+
+
+	func unregister(engine: NetwPredictEngine._PredictionEngine) -> void:
+		_engines.erase(engine)
+		_sort_dirty = true
+
+
+	func tick_step(timing: NetwPredict.Timing) -> void:
+		for engine in _phase(NetwPredictionEngine.PASS_ISLAND_TICK):
+			engine.prepare_island(NetwPredict.Schedule.TICK)
+		# Every group replays before any member drives fresh, so a pass carries
+		# the whole group to the present against one committed roster.
+		for engine in _phase(NetwPredictionEngine.PASS_JOINT):
+			engine.joint_pass(timing)
+		for engine in _phase(NetwPredictionEngine.PASS_TICK):
+			engine.network_tick(timing)
+
+
+	func frame_step(timing: NetwPredict.Timing) -> void:
+		for engine in _phase(NetwPredictionEngine.PASS_ISLAND_FRAME):
+			engine.prepare_island(NetwPredict.Schedule.FRAME)
+		for engine in _phase(NetwPredictionEngine.PASS_FRAME):
+			engine.simulate_frame(timing)
+
+
+	func before_frame_step() -> void:
+		for engine in _phase(NetwPredictionEngine.PASS_FINALIZE_FRAME):
+			engine.finalize_frame_state()
+
+
+	# The engines one phase steps, in the order the pool declares. Both the
+	# order and the membership are determinism contracts, so the pool answers
+	# them and this resolves the answer back to the engines that carry the
+	# bodies. A roster the pool cannot name whole is one mid-registration, and
+	# the fallback steps every engine so a slice never silently skips one.
+	func _phase(
+			phase: NetwPredictionEngine.PassPhase,
+	) -> Array[NetwPredictEngine._PredictionEngine]:
+		if _sort_dirty:
+			_rebuild_sorted()
+		if _service == null or _by_slot.size() != _engines.size():
+			return _sorted
+		var out: Array[NetwPredictEngine._PredictionEngine] = []
+		for slot: int in _service._prediction_pool.pass_slots(phase):
+			var engine := _by_slot.get(slot) as NetwPredictEngine._PredictionEngine
+			if engine:
+				out.append(engine)
+		return out
+
+
+	func metrics() -> Dictionary:
+		var corrections := 0
+		var max_replay := 0
+		var consumed := 0
+		var missing := 0
+		var folded := 0
+		var joint := _joint_metrics()
+		for engine in _engines:
+			var handle := engine.handle()
+			if not handle:
+				continue
+			corrections += handle.stats.corrections
+			max_replay = maxi(max_replay, handle.stats.max_replay_depth)
+			consumed += handle.stats.consumed
+			missing += handle.stats.missing
+			folded += handle.stats.folded
+		return {
+			&"entities": _engines.size(),
+			&"corrections": corrections,
+			&"max_replay_depth": max_replay,
+			&"consumed": consumed,
+			&"missing": missing,
+			&"folded": folded,
+			&"joint": joint,
+		}
+
+
+	# The replay groups' own cadence, summed over the engines that ran a pass.
+	# A group that never replayed reports zeros rather than being absent, so a
+	# reader can tell a quiet cadence from an unreported one.
+	#
+	# The depth histogram and the floor-move breakdown are per-group shapes
+	# rather than scalars, so they stay on the member's own
+	# [NetwPredictStats] where a handle reads them keyed to one group.
+	func _joint_metrics() -> Dictionary:
+		var passes := 0
+		var members := 0
+		var relayed := 0
+		var substituted := 0
+		var heals := 0
+		var lingering := 0
+		for engine in _engines:
+			var handle := engine.handle()
+			if not handle:
+				continue
+			passes += handle.stats.joint_passes
+			members = maxi(members, handle.stats.joint_members)
+			relayed += handle.stats.cells_relayed
+			substituted += handle.stats.cells_substituted
+			heals += handle.stats.heal_snaps
+			lingering += handle.stats.linger_held
+		return {
+			&"joint_passes": passes,
+			&"joint_members": members,
+			&"cells_relayed": relayed,
+			&"cells_substituted": substituted,
+			&"heal_snaps": heals,
+			&"linger_held": lingering,
+		}
+
+
+	# Stable order by entity id so the server consumes every entity identically each
+	# run. Rebuilt only when an engine registers or unregisters, since entity ids
+	# are fixed once spawned.
+	func _rebuild_sorted() -> void:
+		_by_slot.clear()
+		_sorted = _pool_order()
+		if _sorted.size() != _engines.size():
+			_by_slot.clear()
+			_sorted = _engines.duplicate()
+			_sorted.sort_custom(
+				func(
+						a: NetwPredictEngine._PredictionEngine,
+						b: NetwPredictEngine._PredictionEngine,
+				) -> bool:
+					return a.order_key() < b.order_key()
+			)
+		_sort_dirty = false
+
+
+	# The pool holds the order key, so it holds the order. An engine the pool
+	# does not name is an engine mid-registration, and the caller falls back to
+	# sorting the roster it has rather than stepping a partial one.
+	func _pool_order() -> Array[NetwPredictEngine._PredictionEngine]:
+		var resolved: Array[NetwPredictEngine._PredictionEngine] = []
+		if _service == null:
+			return resolved
+		for engine in _engines:
+			var slot := _service.native_prediction_slot(engine._entity)
+			if slot < 0:
+				_by_slot.clear()
+				return []
+			_by_slot[slot] = engine
+		for slot: int in _service._prediction_pool.ordered_slots():
+			var engine := _by_slot.get(slot) as NetwPredictEngine._PredictionEngine
+			if engine:
+				resolved.append(engine)
+		return resolved
+
+
+# Records every registered entity's authoritative state snapshot after a tick. The
+# server holds the truth, so the recorder runs only on server authority and reads
+# each entity's state-set snapshot through NetwEntity.state_binding. This gives
+# non-predicted state-synced entities rewind history too, without a prediction
+# engine.
+class _HistoryRecorder extends RefCounted:
+	# Records the current snapshot_payload of every entity in registry into its
+	# timeline at tick. A consuming engine keys its record at the input-backed tick
+	# through NetwPredictEngine._PredictionEngine.history_record_tick.
+	func record_tick(
+			registry: NetwLagCompCore,
+			engines: Dictionary,
+			tick: int,
+	) -> void:
+		_record(
+			registry,
+			engines,
+			tick,
+			NetwPredict.Schedule.TICK,
+			true,
+		)
+
+
+	func record_frame(
+			registry: NetwLagCompCore,
+			engines: Dictionary,
+			tick: int,
+	) -> void:
+		_record(
+			registry,
+			engines,
+			tick,
+			NetwPredict.Schedule.FRAME,
+			false,
+		)
+
+
+	func _record(
+			registry: NetwLagCompCore,
+			engines: Dictionary,
+			tick: int,
+			schedule: NetwPredict.Schedule,
+			include_unregistered: bool,
+	) -> void:
+		var timelines := registry.timeline_entities()
+		for entity in timelines:
+			if not is_instance_valid(entity.owner):
+				continue
+			# A deactivated entity (a lingering despawn) freezes its history at the
+			# despawn boundary instead of recording stale frozen copies, so its
+			# retained window ages from the moment it died and expires cleanly when
+			# it frees. A carrier outside the tree has no process mode to read,
+			# and is live by its registration alone.
+			if entity.owner.is_inside_tree() and not entity.owner.can_process():
+				continue
+			var state: NetwPropertySetBinding = entity.state_binding
+			if state:
+				var record_tick := tick
+				var engine := engines.get(entity) as NetwPredictEngine._PredictionEngine
+				if engine:
+					if not engine.uses_schedule(schedule):
+						continue
+					record_tick = engine.history_record_tick(tick)
+					# A consuming engine declines a slot on a tick that consumed no
+					# input, so the ack's own slot keeps the state that consume
+					# actually produced rather than a coasted body under the same key.
+					if record_tick < 0 \
+							and not engine.consumed_unslotted_transition():
+						continue
+				elif not include_unregistered:
+					continue
+				var payload := state.canonicalize_payload(state.snapshot_payload())
+				if record_tick >= 0:
+					timelines[entity].record_state(record_tick, payload)
+				if engine:
+					engine.finalize_recorded_state(payload)

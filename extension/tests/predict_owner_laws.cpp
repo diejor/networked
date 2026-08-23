@@ -1,9 +1,3 @@
-// The owner port's laws: the one place a pool slot touches a game object.
-//
-// Tier 2a only, and deliberately not [Hosted]: the subject is a registered
-// engine class with a dynamic property bag, which the module tier's own
-// registration does not carry.
-
 #include "support/netw_test.h"
 
 #include "netw/predict/engine.hpp"
@@ -58,6 +52,51 @@ Carrier *carrier() {
     out->define("speed", 0.0);
     out->define("throttle", 0.0);
     return out;
+}
+
+TEST_CASE("[Networked][Predict][Owner] a slot registered by entity is that "
+          "entity's, and binding by entity reaches it") {
+    const Ref<NetwPredictionEngine> engine = pool();
+    Ref<RefCounted> seated;
+    seated.instantiate();
+    Ref<RefCounted> other;
+    other.instantiate();
+    Carrier *body = carrier();
+
+    const int64_t slot = engine->slot_register(seated);
+    CHECK(slot >= 0);
+    NETW_CHECK_EQ(engine->slot_register(seated), slot);
+    NETW_CHECK_EQ(engine->slot_of(seated), slot);
+    NETW_CHECK_EQ(engine->slot_of(other), int64_t(-1));
+    NETW_CHECK_EQ(engine->slot_registered(), int64_t(1));
+
+    CHECK(engine->slot_bind_owner(seated, body));
+    CHECK(engine->owner_bound(slot));
+    CHECK_FALSE(engine->slot_bind_owner(other, body));
+
+    engine->slot_unbind_owner(seated);
+    CHECK_FALSE(engine->owner_bound(slot));
+
+    engine->slot_unregister(seated);
+    NETW_CHECK_EQ(engine->slot_of(seated), int64_t(-1));
+    NETW_CHECK_EQ(engine->slot_registered(), int64_t(0));
+    CHECK_FALSE(engine->is_open(slot));
+
+    memdelete(body);
+}
+
+TEST_CASE("[Networked][Predict][Owner] closing a slot by number unseats its "
+          "entity too, so the two doors cannot disagree") {
+    const Ref<NetwPredictionEngine> engine = pool();
+    Ref<RefCounted> seated;
+    seated.instantiate();
+
+    const int64_t slot = engine->slot_register(seated);
+    engine->close(slot);
+
+    NETW_CHECK_EQ(engine->slot_of(seated), int64_t(-1));
+    NETW_CHECK_EQ(engine->slot_registered(), int64_t(0));
+    CHECK(engine->slot_register(seated) >= 0);
 }
 
 TEST_CASE("[Networked][Predict][Owner] a bound owner is captured field by "
@@ -193,9 +232,6 @@ TEST_CASE("[Networked][Predict][Owner] a rewire under a live bind re-asks "
     memdelete(owner);
 }
 
-// A step that tries to close its own slot mid-pass, which is the roster
-// mutation D7 refuses. Nothing else can reach the pool from inside its own
-// pass.
 class ClosingStep final : public CallableCustom {
     Ref<NetwPredictionEngine> engine;
     int64_t slot = 0;
@@ -380,8 +416,6 @@ TEST_CASE("[Networked][Predict][Owner] AUTO asks the bound owner, and an "
     memdelete(plain);
 }
 
-// A slot with a rule, an owner, and a two-entry tape whose recorded states
-// agree with what the rule restates.
 struct CarryFixture {
     Ref<NetwPredictionEngine> engine;
     int64_t slot = 0;
@@ -414,8 +448,6 @@ struct CarryFixture {
             engine->tape_author(slot, label, true);
             lane->record_input(label, command);
         }
-        // The recorded past the rule is replayed against: each transition
-        // advanced speed by the throttle it ran.
         const Ref<netw::NetwTimeline> entries = engine->entry_history(slot);
         for (int64_t at = 0; at <= 2; at += 1) {
             Dictionary state;
@@ -452,9 +484,7 @@ TEST_CASE("[Networked][Predict][Owner] a rule that reproduces the recorded "
     CHECK(attempt->finite());
     CHECK(attempt->within_envelope());
     CHECK(attempt->pure());
-    // Two entries past the basis, each advancing by the throttle it carried.
     NETW_CHECK_CLOSE(double(attempt->value()), 14.0, 0.0001);
-    // Nothing was measured against a tolerance, because nothing disagreed.
     NETW_CHECK_CLOSE(attempt->residual(), -1.0, 0.0);
 }
 
@@ -467,12 +497,8 @@ TEST_CASE("[Networked][Predict][Owner] a rule that overstates every "
 
     CHECK(attempt->evidence());
     CHECK_FALSE(attempt->faithful());
-    // The residual is reported so a caller can name the distance rather than
-    // only the verdict, and it is measured against the field's own tolerance.
     NETW_CHECK_CLOSE(attempt->residual(), 2.0, 0.0001);
     NETW_CHECK_CLOSE(attempt->tolerance(), 0.01, 0.0);
-    // A rule the replay refused is never folded, so the value it would have
-    // reached was never computed.
     NETW_CHECK_EQ(int(attempt->value().get_type()), int(Variant::NIL));
 }
 
@@ -482,8 +508,6 @@ TEST_CASE("[Networked][Predict][Owner] a rule that writes the body it "
 
     const Ref<NetwPredictCarryAttempt> attempt = fixture.attempt();
 
-    // The write does not stop it reproducing the past, which is exactly why
-    // the bracket exists beside the replay rather than instead of it.
     CHECK(attempt->faithful());
     CHECK_FALSE(attempt->pure());
 }
@@ -492,7 +516,6 @@ TEST_CASE("[Networked][Predict][Owner] an attempt with no transition to "
           "replay carries no evidence to judge") {
     CarryFixture fixture("carry_speed");
 
-    // Every entry is acknowledged, so there is no transition past the basis.
     const Ref<NetwPredictCarryAttempt> empty = fixture.engine->attempt_carry(
         fixture.slot,
         StringName("speed"),
@@ -503,7 +526,6 @@ TEST_CASE("[Networked][Predict][Owner] an attempt with no transition to "
     );
     CHECK_FALSE(empty->evidence());
 
-    // A field the slot declares no rule for is the same absence.
     CHECK_FALSE(fixture.engine
                     ->attempt_carry(
                         fixture.slot,
@@ -516,8 +538,6 @@ TEST_CASE("[Networked][Predict][Owner] an attempt with no transition to "
                     ->evidence());
 }
 
-// A sensor that answers a fixed fact, and one that answers what the carrier
-// currently holds, so a law can move the world under a digest.
 class ReadsCarrier final : public CallableCustom {
     Carrier *source;
     StringName key;
@@ -574,7 +594,6 @@ TEST_CASE("[Networked][Predict][Owner] a slot that declared no world fact "
     NETW_CHECK_EQ(engine->sample_environment(slot, -1), int64_t(0));
     CHECK(engine->sensor_samples(slot).is_empty());
 
-    // A declared epoch IS a world fact, so it is digested even with no sensor.
     CHECK(engine->sample_environment(slot, 4) != 0);
 
     NETW_CHECK_EQ(engine->sample_environment(slot + 9000, 4), int64_t(0));
@@ -599,8 +618,6 @@ TEST_CASE("[Networked][Predict][Owner] the digest moves with what the sensors "
         0.0
     );
 
-    // The world moving without a re-sample leaves the held samples where the
-    // transition saw them: reading them is a read and never a sample.
     owner->set("speed", 2.0);
     NETW_CHECK_CLOSE(
         double(engine->sensor_samples(slot)[StringName("ground")]),
@@ -608,8 +625,6 @@ TEST_CASE("[Networked][Predict][Owner] the digest moves with what the sensors "
         0.0
     );
 
-    // A re-sample takes the world as it now stands, and a world that moved
-    // digests to a different fact.
     CHECK(engine->sample_environment(slot, -1) != first);
     NETW_CHECK_CLOSE(
         double(engine->sensor_samples(slot)[StringName("ground")]),
@@ -620,6 +635,6 @@ TEST_CASE("[Networked][Predict][Owner] the digest moves with what the sensors "
     memdelete(owner);
 }
 
-#endif // NETW_TIER_HOSTED
+#endif
 
 } // namespace TestNetwPredictOwnerPort

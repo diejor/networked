@@ -1,28 +1,7 @@
-// The record plane against the trace recorded from the GDScript arm it
-// replaces.
-//
-// Liveness has no seam and no byte grammar, so nothing here can be certified
-// the way a codec can. What it has instead is a lifecycle trace: scenarios
-// scripted through the GDScript record plane and committed BEFORE any of it was
-// native, so the native arm has something to reproduce other than itself.
-//
-// The scenarios below are the golden's `record/` half, re-driven against the
-// core directly rather than through the interface that wraps it. That is the
-// half that outlives the arm: the `shell/` half drives wrappers and nodes and
-// stays GDScript, and the arm keeps checking it until the shell itself goes.
-//
-// One antecedent is pinned rather than reproduced. The recording ran with no
-// clock configured, so every wait there aged against the frame counter, and
-// these scenarios arm on the frame counter for the same reason. A clock-armed
-// wait is a law of its own in liveness_core_tests.cpp.
-//
-// The golden lives in the project, so this file runs in the tier that can read
-// res:// and carries no [Hosted] tag.
-
 #include "support/netw_test.h"
 
 #include "godot/file_access.hpp"
-#include "netw/liveness_core.hpp"
+#include "netw/api/liveness_core.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwLivenessTrace {
@@ -33,8 +12,6 @@ using netw_test::CallLog;
 
 constexpr const char *GOLDEN = "res://tests/native/goldens/liveness_lifecycle.txt";
 
-// What the interface above this one falls back to when no clock has registered,
-// and therefore what the recording's default timeouts were measured in.
 constexpr int CLOCKLESS_TICKRATE = 30;
 
 String state_name(NetwLivenessCore::State p_state) {
@@ -67,8 +44,6 @@ String routes_text(const PackedInt64Array &p_routes) {
     return out + "]";
 }
 
-// One row's fields, sorted by key when they are written out, so the order a
-// case happens to name them in can never move a row.
 struct Fields {
     Vector<String> keys;
     Vector<String> values;
@@ -101,9 +76,6 @@ struct Fields {
     }
 };
 
-// The trace under construction. Rows and callback arrivals share one list,
-// because when a callback ran relative to what was observed around it is the
-// whole content of a waiting-room contract.
 struct Trace {
     CallLog log;
     String scenario;
@@ -118,7 +90,6 @@ struct Trace {
         );
     }
 
-    // The pair of readings every transition is judged by.
     void state(
         const Ref<NetwLivenessCore> &p_core,
         const String &p_at,
@@ -330,7 +301,6 @@ Vector<String> golden_rows() {
         if (line.is_empty() || line.begins_with("#")) {
             continue;
         }
-        // The wrapper plane's rows are the arm's to check, not this tier's.
         if (line.begins_with("record/")) {
             rows.push_back(line);
         }
@@ -344,7 +314,6 @@ TEST_CASE(
     "lifecycle trace"
 ) {
     const Vector<String> expected = golden_rows();
-    // A golden nobody read is a golden that passes.
     REQUIRE(expected.size() > 0);
 
     Vector<String> actual;
@@ -369,10 +338,6 @@ TEST_CASE(
     for (int index = 0; index < expected.size(); ++index) {
         const String produced
             = index < actual.size() ? actual[index] : String("<missing>");
-        // Captured through a char array rather than a pointer, and compared as
-        // one bool rather than two operands. Either shortcut hands this tier's
-        // printer something it dies on, and it dies only on the first FAILING
-        // row, which is the one row anybody needed to read.
         NETW_FORMAT_TEXT(want, expected[index].utf8().get_data());
         NETW_FORMAT_TEXT(got, produced.utf8().get_data());
         CAPTURE(want);

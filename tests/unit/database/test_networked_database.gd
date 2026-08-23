@@ -163,3 +163,35 @@ func test_schema_mismatch_signal_flow() -> void:
 	db._diff_record(&"rocks", &"r1", { &"health": 10, &"gold": 5 })
 	assert_that(captured_unknown.has(&"gold")).is_true()
 	assert_that(captured_missing.is_empty()).is_true()
+
+
+## Verify the repository's two faces round trip through one another: what
+## [method NetwDatabase.TableRepository.put] writes is what
+## [method NetwDatabase.TableRepository.fetch] hydrates back, over both a
+## declared record script and the untyped default.
+func test_table_repository_fetch_and_put_round_trip_records() -> void:
+	var db := _make_db()
+	var backend: NetwDatabaseBackend = db.backend
+	db._register_schema(&"players", [&"score"])
+	await get_tree().process_frame
+
+	await db.transaction(
+		func(tx: NetwDatabase.TransactionContext) -> void:
+			tx.queue_upsert(&"players", &"carol", { &"score": 42 })
+	)
+
+	var carol: NetwRecord = await db.table(&"players").fetch(&"carol")
+	assert_that(carol).is_not_null()
+	assert_that(carol.get_value(&"score")).is_equal(42)
+
+	var dave: DictionaryRecord = DictionaryRecord.new()
+	dave.set_value(&"score", 77)
+
+	var err: Error = await db.table(&"players").put(&"dave", dave)
+	assert_that(err).is_equal(OK)
+
+	var raw: Dictionary = await NetwDatabase.settled_value(
+		backend.find_by_id(&"players", &"dave"),
+		{ },
+	)
+	assert_that(raw.get(&"score")).is_equal(77)

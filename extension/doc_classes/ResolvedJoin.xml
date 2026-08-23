@@ -26,7 +26,7 @@
 		<method name="serialize" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
-				Writes this join as the frame the server sends to every peer, which [method deserialize] reads back.
+				Writes this join as the frame the server sends to every peer, which [method deserialize] reads back. Keys are [StringName], matching the frame a GDScript-era peer wrote and still reads.
 			</description>
 		</method>
 	</methods>

@@ -26,11 +26,11 @@ func test_state_flows_to_client_and_input_flows_to_server() -> void:
 	# validated, so the client registered its own binding.
 	assert_object(NetwEntity.of(rig.client_node)).is_not_null()
 
-	rig.server_clock.on_tick.connect(
+	rig.server_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.server_node.position = Vector2(t, -t)
 	)
-	rig.client_clock.on_tick.connect(
+	rig.client_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.client_node.rotation = float(t) * 0.01
 	)
@@ -65,7 +65,7 @@ func test_a_sync_pass_reports_the_stages_that_carried_it() -> void:
 	server._native_core.event_arm(true)
 	rig.client.api._native_core.event_arm(true)
 
-	rig.server_clock.on_tick.connect(
+	rig.server_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.server_node.position = Vector2(t, -t)
 	)
@@ -113,11 +113,11 @@ func test_server_only_input_never_reaches_another_client() -> void:
 	rig = DerivedLoopbackRig.new()
 	await rig.setup(self, 60, true)
 
-	rig.server_clock.on_tick.connect(
+	rig.server_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.server_node.position = Vector2(t, -t)
 	)
-	rig.client_clock.on_tick.connect(
+	rig.client_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.client_node.rotation = float(t) * 0.01
 	)
@@ -137,7 +137,7 @@ func test_reports_controller_authored_public_state_relay() -> void:
 	rig.player_type = CONTROLLER_STATE_PLAYER
 	await rig.setup(self, 60, true)
 
-	rig.client_clock.on_tick.connect(
+	rig.client_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.client_node.position = Vector2(t, -t)
 	)
@@ -164,7 +164,7 @@ func test_a_retained_field_crosses_only_when_it_changes() -> void:
 	rig.player_type = RETAINED_STATE_PLAYER
 	await rig.setup(self)
 
-	rig.server_clock.on_tick.connect(
+	rig.server_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.server_node.position = Vector2(t, -t)
 	)
@@ -192,7 +192,7 @@ func test_the_input_lane_repeats_recent_ticks_rather_than_retransmitting() -> vo
 	rig = DerivedLoopbackRig.new()
 	await rig.setup(self)
 
-	rig.client_clock.on_tick.connect(
+	rig.client_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			rig.client_node.rotation = float(t) * 0.01
 	)

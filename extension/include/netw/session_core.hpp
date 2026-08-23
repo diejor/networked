@@ -2,15 +2,14 @@
 
 #include <cstdint>
 
-#include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 #include "netw/rate_window.hpp"
 
 namespace netw {
 
-class NetwSessionCore : public godot::RefCounted {
-    GDCLASS(NetwSessionCore, godot::RefCounted)
+class NetwMultiplayerCore;
 
+class SessionCore {
 public:
     enum State {
         STATE_OFFLINE = 0,
@@ -31,17 +30,17 @@ private:
     Role role = ROLE_NONE;
     Role desired_role = ROLE_LISTEN_SERVER;
     int32_t advertised_max_players = 0;
+    NetwMultiplayerCore *host = nullptr;
 
-    godot::Ref<NetwRateWindow> join_window;
+    RateWindow join_window;
 
     void enter_state(State next);
     void exit_state(State prev);
 
-protected:
-    static void _bind_methods();
-
 public:
     static bool edge_is_legal(State from, State to);
+
+    void announce_to(NetwMultiplayerCore *p_host);
 
     void set_state(State value);
     State get_state() const;
@@ -68,6 +67,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::NetwSessionCore::State);
-VARIANT_ENUM_CAST(netw::NetwSessionCore::Role);

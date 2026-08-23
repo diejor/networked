@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites id="2026-08-18" name="report_1" tests="1" failures="0" skipped="1" flaky="0" time="0.000">
+	<testsuite id="0" name="test_display_smoothness_probe" package="tests/integration/gameplay" timestamp="2026-08-18T22:18:56" hostname="localhost" tests="1" failures="0" errors="0" skipped="1" flaky="0" time="0.048">
+		<testcase name="test_bracketed_local_visuals_move_monotonically" classname="test_display_smoothness_probe" time="0.000">
+			<skipped message="SKIPPED: res://tests/integration/gameplay/test_display_smoothness_probe.gd:113">
+<![CDATA[
+This test is skipped!
+  Reason: 'Load-marginal probe, not a law. It fails the whole res://tests arm and passes every smaller one, with the simulation bit-identical either way. Set NETW_MARGINAL=1 to run it.'
+]]>
+			</skipped>
+		</testcase>
+	</testsuite>
+</testsuites>

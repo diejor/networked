@@ -113,7 +113,7 @@ const STATS_HEADER := "kind,wall_ms,consumed,missing,starved,held," \
 const RECOVERY_HEADER := "kind,wall_ms,field,triggered,repaired,contracted," \
 		+ "carried,declined,infidelity"
 
-var _clock: ClockCore
+var _clock: NetwClockHandle
 var _handle: NetwPredictionHandle
 var _body: Node
 var _inputs: Node
@@ -147,7 +147,7 @@ static func _output_dir() -> String:
 ## [code]user://netlog_<role>_<id>.csv[/code]. A no-op when the recorder is not
 ## armed or the entity carries no prediction handle, so the caller never has to
 ## guard the call.
-func start(entity: NetwEntity, clock: ClockCore) -> void:
+func start(entity: NetwEntity, clock: NetwClockHandle) -> void:
 	if not armed() or not entity or not clock:
 		return
 	_handle = entity.prediction
@@ -186,8 +186,10 @@ func start(entity: NetwEntity, clock: ClockCore) -> void:
 	print("net_log recording to %s" % ProjectSettings.globalize_path(path))
 
 	_snapshot_counters()
-	_clock.on_tick.connect(_on_tick)
-	_clock.after_tick_loop.connect(_on_after_tick_loop)
+	var api := NetwMultiplayer.of(_body)
+	if api:
+		api.on_tick.connect(_on_tick)
+		api.after_tick_loop.connect(_on_after_tick_loop)
 	_handle.recovered.connect(_on_recovered)
 	_handle.state_evaluated.connect(_on_state_evaluated)
 

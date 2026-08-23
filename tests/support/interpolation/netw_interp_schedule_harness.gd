@@ -30,7 +30,7 @@ var send_period := 1
 ## Pump stats summed across every lane and frame, the schedule-invariant merge.
 var run_stats := NetwPumpStats.new()
 
-var _iface: DisplayCore
+var _core: NetwMultiplayerCore
 var _lanes: Array[Lane] = []
 var _stats := NetwPumpStats.new()
 
@@ -74,7 +74,7 @@ func lane(index: int) -> Lane:
 ## [param order] (a permutation of lane indices). Fills each lane's
 ## [member Lane.displayed] and the shared [member run_stats].
 func run(duration_sec: float, order: PackedInt32Array) -> void:
-	_iface = DisplayCore.new()
+	_core = NetwMultiplayerCore.new()
 	run_stats.reset()
 	var ticktime := 1.0 / tickrate
 
@@ -88,7 +88,7 @@ func run(duration_sec: float, order: PackedInt32Array) -> void:
 		lane.rt.config = NetwDisplayDecl.new()
 		lane.rt.playhead = NetwDisplayPlayhead.new()
 		lane.rt.playhead.expected_interval_ticks = maxi(1, send_period)
-		lane.rt.pump_mode = DisplayCore._PUMP_REMOTE
+		lane.rt.pump_mode = NetwDisplayDecl.PUMP_REMOTE
 
 		lane.state = NetwDisplayChannel.new()
 		lane.state.name = &"value"
@@ -98,7 +98,7 @@ func run(duration_sec: float, order: PackedInt32Array) -> void:
 		lane.state.history = NetwDisplayHistory.new()
 		lane.state.history.mode = lane.state.spec.mode
 		lane.writer = NetwInterpRecordingWriter.new()
-		lane.state.output = lane.writer
+		lane.state.output = lane.writer.write
 		lane.state.last_written = lane.oracle.value_at(0.0)
 		lane.rt.states.append(lane.state)
 
@@ -128,7 +128,7 @@ func run(duration_sec: float, order: PackedInt32Array) -> void:
 			var timing := _timing(lane, wall)
 			lane.writer.mark_frame(wall)
 			_stats.reset()
-			_iface._pump_history(lane.rt, timing, _stats)
+			_core.display_pump_runtime(lane.rt, timing, _stats)
 			run_stats.merge(_stats)
 			lane.displayed.append(lane.state.last_written)
 

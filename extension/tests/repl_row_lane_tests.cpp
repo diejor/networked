@@ -12,7 +12,9 @@
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
 #include "netw/repl/row_lane.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
+
+using namespace godot;
 
 namespace TestNetwReplRowLane {
 

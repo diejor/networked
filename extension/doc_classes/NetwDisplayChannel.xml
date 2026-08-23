@@ -38,6 +38,26 @@
 				This is what a teleport is. A snap that kept the history would glide back toward the pose it just left.
 			</description>
 		</method>
+		<method name="current_source_value">
+			<return type="Variant" />
+			<description>
+				What this channel is worth RIGHT NOW, read from the live object rather than from anything recorded: [member source_obj] when the channel samples something, and otherwise [member target_obj], which is what is on screen.
+				A channel bound to neither answers [code]null[/code]. This is what a reset restarts from, so a display resumes from truth instead of from the last thing it happened to show.
+			</description>
+		</method>
+		<method name="write">
+			<return type="void" />
+			<param index="0" name="value" type="Variant" />
+			<description>
+				Shows [param value] and does nothing else: no history, no offset, no [member last_written]. Every pass that shows a value goes through here, so the three surfaces are ordered in one place rather than at each call site.
+				[codeblock]
+				door     the session's lane      -&gt; stops unless ERR_DOES_NOT_EXIST
+				output   an installed backend    -&gt; stops
+				port     the node writer         -&gt; the default
+				[/codeblock]
+				A channel bound to none of the three drops its writes silently, which is what an unconfigured channel is: it still samples, smooths and holds [member last_written], and shows nobody.
+			</description>
+		</method>
 	</methods>
 	<members>
 		<member name="authoring_ticks" type="bool" setter="set_authoring_ticks" getter="get_authoring_ticks" default="false">
@@ -55,8 +75,20 @@
 		<member name="offset" type="NetwDisplayOffset" setter="set_offset" getter="get_offset">
 			The render offset holding the visual still through a correction or a change of display source. Minted with the channel, so no caller has to remember to.
 		</member>
-		<member name="output" type="RefCounted" setter="set_output" getter="get_output">
-			The writer one smoothed value is handed to. Swappable: a test backend records the sequence instead of touching a node.
+		<member name="door" type="Callable" setter="set_door" getter="get_door">
+			The session's display lane, called as [code](entity, target_prop, value)[/code] and answering an [enum @GlobalScope.Error]. It is tried before every backend, because a lane that owns this entity's presentation is the presentation.
+			[constant @GlobalScope.ERR_DOES_NOT_EXIST] is the ONE verdict that falls through to [member output] or [member port], and it means no lane answers for this entity. Every other verdict, success and refusal alike, ends the write: a failing lane that degraded to the node would write the same value twice through two surfaces.
+		</member>
+		<member name="entity" type="RID" setter="set_entity" getter="get_entity">
+			The entity this channel displays, carried so a write can name its subject to [member door] without the caller holding the pair together.
+		</member>
+		<member name="output" type="Callable" setter="set_output" getter="get_output">
+			A backend that replaces [member port], as a single method rather than an object, so an alternate writer is one arrow instead of a class and a test can record the sequence with a plain [Callable].
+			Called with the value alone. Set it and the port is never reached.
+		</member>
+		<member name="port" type="NetwDisplayPort" setter="set_port" getter="get_port">
+			The node writer, and the default backend. Owned by the channel rather than named by it, because a [Callable] holds its target by id and would leave a port nothing else referenced to free out from under the write.
+			A port that refuses a global-space write says so once per channel and writes locally, which composes with the body and is the drag global space promised to escape.
 		</member>
 		<member name="self_feedback" type="bool" setter="set_self_feedback" getter="get_self_feedback" default="false">
 			[code]true[/code] when the channel writes the very property it samples on the very object it samples it from. A remote display writes it harmlessly because the body is frozen; a predicted or authority pump skips it, because feeding a display filter into the simulation it is filtering is a drag with no bottom.

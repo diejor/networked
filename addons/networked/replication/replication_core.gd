@@ -192,29 +192,12 @@ func send_to(
 		path: String = "",
 		batched: bool = false,
 ) -> void:
-	if route < 0:
-		return
 	var api := _api()
 	if not api:
 		return
-	if api.inner.multiplayer_peer and peer_id == api.get_unique_id():
-		_dispatch(route, comp, channel, payload, path, peer_id, reliable)
-		return
-
-	var framed := NetwFrameEnvelope.pack(route, comp, channel, payload, path)
-	# The tick pump is what flushes an aggregate, so without a running clock a
-	# buffered frame would sit there forever.
-	var should_aggregate: bool = (
-			api._clock.is_configured()
-			and api._native_core.channel_aggregates(channel, batched)
+	api._native_core.send_to(
+		peer_id, route, channel, payload, reliable, comp, path, batched,
 	)
-
-	if should_aggregate:
-		_note_staged(api, peer_id, api._native_core.carrier_append(
-				peer_id, framed, reliable,
-		))
-	else:
-		api._native_core.send_datagram(peer_id, framed, reliable)
 
 
 ## Fans a control change for [param entity] out to [param peer], reaching every
@@ -242,16 +225,16 @@ func broadcast_control(entity: NetwEntity, peer: int) -> void:
 ## Returns [code]true[/code] when sending [param entity] traffic to
 ## [param peer_id] is meaningful: the entity is locally
 ## [constant NetwLivenessCore.STATE_LIVE] and the peer's committed
-## [InterestCore] admission allows it.
+## the session interest plane admission allows it.
 ##
 ## The gate lives here because it is a join, and neither half owns the other.
 ## [NetwMultiplayerCore] reports what a peer [i]has[/i] and
-## [InterestCore] decides what it [i]should[/i] see, so the subsystem
+## The session interest plane decides what it [i]should[/i] see, so the subsystem
 ## that fans carriers out is the one that asks both.
 ## [codeblock]
 ## is_live_for(peer, entity)
 ## ┠╴ route_state == LIVE          NetwMultiplayerCore
-## ┖╴ wire_admits(peer, entity)    InterestCore, when a filter exists
+## ┖╴ interest_wire_admits(peer, entity)  when a filter exists
 ## [/codeblock]
 ## The verdict is a send gate, not a delivery guarantee. It is optimistic by
 ## construction: a true verdict means the spawn has been issued, not that it has
@@ -267,11 +250,11 @@ func is_live_for(peer_id: int, entity: NetwEntity) -> bool:
 	if peer_id == 1 or peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
 
-	var interest := api._interest
-	if not interest.has_filter(entity):
+	var interest := api._native_core
+	if not interest.interest_entity_has_filter(entity):
 		return true
 
-	return interest.wire_admits(peer_id, entity)
+	return interest.interest_wire_admits(peer_id, entity)
 
 
 ## Returns [code]true[/code] when [param sender] may author a write for
@@ -348,9 +331,11 @@ func flush_all_buffers() -> void:
 
 # Reports an assigned unreliable seq to the sync pipeline, so a masked-delta
 # send staged this pass commits its pending row under the seq that will carry
-# its acknowledgment.
-func _note_staged(api: NetwMultiplayer, peer_id: int, seq: int) -> void:
-	if seq >= 0:
+# its acknowledgment. Called by NetwMultiplayerCore.send_to, which is what
+# assigns the seq.
+func _note_staged(peer_id: int, seq: int) -> void:
+	var api := _api()
+	if api:
 		api._note_sent(peer_id, seq)
 
 
@@ -945,7 +930,7 @@ func on_frame_end() -> void:
 ## the consumed pump rides [method on_clock_tick] instead.
 func on_poll() -> void:
 	var api := _api()
-	if not api or api._clock.is_configured():
+	if not api or api._native_core.clock_handle.is_configured:
 		return
 	_sync_compat.pump()
 	flush_all_buffers()
@@ -1104,7 +1089,7 @@ func spawn_state_of(root: Node) -> Array[Dictionary]:
 	var wrapper := NetwEntity.of(root)
 	if api and wrapper and api._native_core.liveness_core.entity_is_valid(wrapper.rid):
 		return api.spawn_get_state(wrapper.rid)
-	return _spawn_pipeline._collect_spawn_state(root)
+	return _spawn_pipeline.collect_spawn_state(root)
 
 
 ## Returns [code]true[/code] when [param route] is tracked by the spawn

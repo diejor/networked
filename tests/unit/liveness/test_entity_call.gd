@@ -77,6 +77,12 @@ class RecordingPeer:
 
 	var sent: Array[Dictionary] = []
 
+	# When non-negative, the session this peer backs pretends to be that unique
+	# id, so a test can exercise the client-side send branches without a second
+	# machine. Identity is asked of the peer, so the pretence lives here rather
+	# than on the session that reads it.
+	var fake_unique_id := -1
+
 	var _target := 0
 	var _reliable := true
 
@@ -91,7 +97,7 @@ class RecordingPeer:
 
 
 	func _get_unique_id() -> int:
-		return 1
+		return fake_unique_id if fake_unique_id >= 0 else 1
 
 
 	func _is_server() -> bool:
@@ -157,9 +163,11 @@ class TestNetwMultiplayer:
 
 	var recorder: RecordingPeer
 
-	# When non-negative, this peer pretends to be that unique id, so a test can
-	# exercise the client-side send branches without a second machine.
-	var fake_unique_id := -1
+	var fake_unique_id: int:
+		set(value):
+			recorder.fake_unique_id = value
+		get:
+			return recorder.fake_unique_id
 
 	# Every datagram the carrier produced, stripped back to the frames it
 	# carries. The transport's own raw-command byte and the carrier header ride
@@ -186,12 +194,6 @@ class TestNetwMultiplayer:
 
 	func clear_sent() -> void:
 		recorder.sent.clear()
-
-
-	func _get_unique_id() -> int:
-		if fake_unique_id >= 0:
-			return fake_unique_id
-		return super._get_unique_id()
 
 
 # Installs the capturing API through the tree's one construction point.
@@ -225,6 +227,11 @@ func before_test() -> void:
 	var handshake := api.inner.auth_callback
 	api.inner.auth_callback = Callable()
 	api.inner.multiplayer_peer = peer
+	# The session's own peer, which is what answers get_unique_id and therefore
+	# what decides whether a send loops back or reaches the wire. Assigned
+	# beside the transport's rather than through the session, so the state
+	# machine stays where the case left it.
+	api._native_core.set_multiplayer_peer(peer)
 	api.inner.set_block_signals(true)
 	peer.announce_peers()
 	api.inner.set_block_signals(false)
@@ -360,7 +367,7 @@ func test_node_argument_outside_sender_interest_is_not_disclosed() -> void:
 	var _entity = _bound_entity(1, node)
 	var hidden = _bound_entity(2)
 	Netw.configure_rpc(node.receive_node)
-	api._interest.layer(&"hidden").add_entity(hidden)
+	api._native_core.interest_layer(&"hidden").add_entity(hidden)
 
 	var ref := NetwNodeRef.create(2, 0, "")
 	var call_payload := _pack_call(0, &"receive_node", [ref, 7])

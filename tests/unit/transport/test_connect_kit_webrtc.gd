@@ -56,11 +56,11 @@ func test_loopback_host_reaches_online() -> void:
 	pump.call()
 
 	var guard := 0
-	while api.state != SessionCore.State.ONLINE and guard < 40:
+	while api.state != NetwMultiplayer.SessionState.ONLINE and guard < 40:
 		api.poll()
 		await get_tree().process_frame
 		guard += 1
 
 	assert_bool(results[0].is_ok()).is_true()
-	assert_int(api.state).is_equal(SessionCore.State.ONLINE)
+	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
 	api.embedding.dispose()

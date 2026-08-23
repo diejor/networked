@@ -77,7 +77,9 @@ func test_a_table_round_trips_through_one_record() -> void:
 
 	var ids := PackedStringArray(["mob_a", "mob_b", "mob_c"])
 	assert_int(
-		await api.persist_table_flush(table, db, &"mobs", ids),
+		await NetwDatabase.settled_error(
+			api.persist_table_flush(table, db, &"mobs", ids),
+		),
 	).is_equal(OK)
 
 	var other := MultiplayerTree.new()
@@ -87,7 +89,10 @@ func test_a_table_round_trips_through_one_record() -> void:
 	var loaded := other.api.table_find(&"SaveMob")
 	assert_bool(loaded.is_valid()).is_true()
 
-	var back := await other.api.persist_table_hydrate(loaded, db, &"mobs")
+	var back: Dictionary = await NetwDatabase.settled_value(
+		other.api.persist_table_hydrate(loaded, db, &"mobs"),
+		{ },
+	)
 
 	assert_array(back[&"ids"]).is_equal(ids)
 	assert_int((back[&"routes"] as PackedInt64Array).size()).is_equal(3)
@@ -116,7 +121,9 @@ func test_a_whole_table_is_one_record() -> void:
 
 	var ids := PackedStringArray()
 	ids.resize(40)
-	await api.persist_table_flush(table, db, &"mobs", ids)
+	await NetwDatabase.settled_error(
+		api.persist_table_flush(table, db, &"mobs", ids),
+	)
 
 	assert_int(backend.upsert_calls.size()).is_equal(1)
 	assert_that(backend.upsert_calls[0].get("id")).is_equal(&"SaveMob")
@@ -136,11 +143,13 @@ func test_a_mismatched_id_count_is_refused() -> void:
 	api.table_commit(table)
 
 	assert_int(
-		await api.persist_table_flush(
-			table,
-			db,
-			&"mobs",
-			PackedStringArray(["only_one"]),
+		await NetwDatabase.settled_error(
+			api.persist_table_flush(
+				table,
+				db,
+				&"mobs",
+				PackedStringArray(["only_one"]),
+			),
 		),
 	).is_equal(ERR_INVALID_DATA)
 	assert_array(backend.upsert_calls).is_empty()
@@ -163,11 +172,13 @@ func test_a_route_column_is_skipped_and_zero_filled() -> void:
 	api.table_commit(table)
 
 	assert_int(
-		await api.persist_table_flush(
-			table,
-			db,
-			&"edges",
-			PackedStringArray(["e0", "e1"]),
+		await NetwDatabase.settled_error(
+			api.persist_table_flush(
+				table,
+				db,
+				&"edges",
+				PackedStringArray(["e0", "e1"]),
+			),
 		),
 	).is_equal(OK)
 	assert_bool(
@@ -180,7 +191,10 @@ func test_a_route_column_is_skipped_and_zero_filled() -> void:
 	auto_free(other)
 	var loaded := other.api.table_find(&"SaveEdge")
 
-	await other.api.persist_table_hydrate(loaded, db, &"edges")
+	await NetwDatabase.settled_value(
+		other.api.persist_table_hydrate(loaded, db, &"edges"),
+		{ },
+	)
 
 	assert_array(other.api.table_read_column(loaded, 0)).is_equal(
 		PackedInt64Array([0, 0]),
@@ -195,7 +209,10 @@ func test_a_route_column_is_skipped_and_zero_filled() -> void:
 func test_a_missing_record_is_a_first_play() -> void:
 	var table := _mobs()
 
-	var back := await api.persist_table_hydrate(table, db, &"mobs")
+	var back: Dictionary = await NetwDatabase.settled_value(
+		api.persist_table_hydrate(table, db, &"mobs"),
+		{ },
+	)
 
 	assert_array(back[&"routes"]).is_empty()
 	assert_array(back[&"ids"]).is_empty()

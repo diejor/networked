@@ -1,6 +1,6 @@
 #include "support/netw_test.h"
 
-#include "netw/group_promise.hpp"
+#include "netw/api/group_promise.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwGroupPromise {

@@ -1,8 +1,8 @@
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
-#include "netw/liveness_core.hpp"
-#include "netw/spawn_book.hpp"
+#include "netw/api/liveness_core.hpp"
+#include "netw/api/spawn_book.hpp"
 
 namespace TestNetwSpawnBook {
 

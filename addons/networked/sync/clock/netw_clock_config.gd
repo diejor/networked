@@ -1,9 +1,9 @@
-## Typed registration payload for the [ClockCore] tick engine.
+## Typed registration payload for the session clock, [NetwClockHandle].
 ##
 ## A [MultiplayerClock] node snapshots its exports into one of these and hands
 ## it to [method NetwMultiplayer.service_install]. The session dispatches on the
 ## resource type rather than the node class, so nodes and code-first callers
-## configure the same tick engine.
+## configure the same clock.
 ## [codeblock]
 ## var config := NetwClockConfig.new()
 ## config.tickrate = 60

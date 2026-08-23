@@ -24,8 +24,9 @@ extends RefCounted
 ## embedding through [method settle].
 ##
 ## Authoring registration is only in-contract during [constant Phase.DECLARING].
-## Orthogonal to [enum SessionCore.State]: a [constant Phase.LIVE] session is
-## still [constant SessionCore.State.OFFLINE] until it hosts or joins.
+## Orthogonal to [enum NetwMultiplayer.SessionState]: a [constant Phase.LIVE]
+## session is still [constant NetwMultiplayer.SessionState.OFFLINE] until it
+## hosts or joins.
 enum Phase {
 	## Nodes and scripts register configs through
 	## [method MultiplayerAPI.object_configuration_add]. Nothing acts on them

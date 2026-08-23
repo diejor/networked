@@ -8,11 +8,14 @@
 ## reproduce, and no amount of later work recovers that.
 ##
 ## [br][br]
-## Every scenario drives [ClockCore] alone, with no session, no node and no real
-## time, so the whole trace is a function of the calls the arm makes. That is
-## also why it reaches no private: [method ClockCore.handle_pong] answers the
+## Every scenario drives one [NetwClockHandle] with no node and no real time, so
+## the whole trace is a function of the calls the arm makes. The bare
+## [NetwMultiplayerCore] beside it is the sink the clock announces on and
+## nothing else: a tick is a session event, so a session is what the recorder
+## watches. That is also why the arm
+## reaches no private: [method NetwClockHandle.handle_pong] answers the
 ## whole calibration result as a metrics dictionary, and the effect of the
-## [constant ClockCore.SyncMode.STRETCH] anchor is read off the ticks that follow
+## [constant NetwClockHandle.SyncMode.SYNC_STRETCH] anchor is read off the ticks that follow
 ## it rather than off the anchor itself. Behaviour is stronger evidence than
 ## internal state, and it is evidence the port cannot quietly redefine.
 ## [codeblock]
@@ -21,7 +24,7 @@
 ## [/codeblock]
 ##
 ## Two readings are deliberately uncovered because neither is a function of the
-## calls alone. [member ClockCore.tick_factor] and [method ClockCore.cadence]
+## calls alone. [member NetwClockHandle.tick_factor] and [method NetwClockHandle.cadence]
 ## both read the wall clock, so they belong to a native restatement that can pin
 ## time, not to a golden. Everything else the engine exposes is here.
 ##
@@ -84,7 +87,8 @@ const SCENARIOS: Array[StringName] = [
 ]
 
 var _rows: Array[String] = []
-var _clock: ClockCore
+var _session: NetwMultiplayerCore
+var _clock: NetwClockHandle
 var _recorder: RefCounted
 
 
@@ -304,7 +308,7 @@ func _gates_nest_and_only_the_last_release_ungates(scenario: StringName) -> void
 	_clock.arm_gate()
 
 	_clock.release_gate()
-	_row(scenario, "one_released", { &"gated": _clock.is_gated() })
+	_row(scenario, "one_released", { &"gated": _clock.is_gated })
 	_clock.force_step(0)
 	_row(scenario, "held", { &"simulating": _clock.is_simulating })
 
@@ -312,7 +316,7 @@ func _gates_nest_and_only_the_last_release_ungates(scenario: StringName) -> void
 	_row(
 		scenario,
 		"all_released",
-		{ &"gated": _clock.is_gated(), &"simulating": _clock.is_simulating },
+		{ &"gated": _clock.is_gated, &"simulating": _clock.is_simulating },
 	)
 	_close()
 
@@ -352,15 +356,15 @@ func _the_first_pong_synchronizes_and_seeds_the_phase(
 		scenario: StringName,
 ) -> void:
 	_open(30)
-	_clock.sync_mode = ClockCore.SyncMode.STRETCH
+	_clock.sync_mode = NetwClockHandle.SyncMode.SYNC_STRETCH
 	_clock.lead_ticks = 0.0
 	_row(scenario, "before", { &"synchronized": _clock.is_synchronized })
 
-	_metrics(scenario, "first", _clock.handle_pong(0.0, 40, 0.5))
+	_metrics(scenario, "first", _clock.handle_pong(0.0, 40, 0.5, true))
 	_signals(scenario)
 
 	# A second pong must not re-announce a synchronization that already happened.
-	_metrics(scenario, "second", _clock.handle_pong(0.0, 41, 0.5))
+	_metrics(scenario, "second", _clock.handle_pong(0.0, 41, 0.5, true))
 	_signals(scenario)
 	_close()
 
@@ -369,19 +373,19 @@ func _the_first_pong_synchronizes_and_seeds_the_phase(
 # frame, so the same divergence resolves as a crawl and never as a teleport.
 func _snap_jumps_where_stretch_crawls(scenario: StringName) -> void:
 	_open(PHASE_RATE)
-	_clock.sync_mode = ClockCore.SyncMode.SNAP
+	_clock.sync_mode = NetwClockHandle.SyncMode.SYNC_SNAP
 	_clock.lead_ticks = 0.0
-	_clock.handle_pong(0.0, 100, 0.0)
-	_clock.handle_pong(0.0, 150, 0.0)
+	_clock.handle_pong(0.0, 100, 0.0, true)
+	_clock.handle_pong(0.0, 150, 0.0, true)
 	_row(scenario, "snapped", { &"tick": _clock.tick })
 
 	_open(PHASE_RATE)
-	_clock.sync_mode = ClockCore.SyncMode.STRETCH
+	_clock.sync_mode = NetwClockHandle.SyncMode.SYNC_STRETCH
 	_clock.lead_ticks = 0.0
 	_clock.stretch_nudge_factor = 0.5
 	_clock.panic_snap_threshold = 100
-	_clock.handle_pong(0.0, 100, 0.0)
-	_clock.handle_pong(0.0, 104, 0.0)
+	_clock.handle_pong(0.0, 100, 0.0, true)
+	_clock.handle_pong(0.0, 104, 0.0, true)
 	for step in 4:
 		_clock.physics_step(0.0)
 		_row(scenario, "crawled", { &"step": step, &"tick": _clock.tick })
@@ -389,7 +393,7 @@ func _snap_jumps_where_stretch_crawls(scenario: StringName) -> void:
 	# A divergence past the panic threshold is a real desync, so it snaps rather
 	# than crawling for a second at a time.
 	_clock.panic_snap_threshold = 2
-	_clock.handle_pong(0.0, 400, 0.0)
+	_clock.handle_pong(0.0, 400, 0.0, true)
 	_clock.physics_step(0.0)
 	_row(scenario, "panicked", { &"tick": _clock.tick })
 	_close()
@@ -399,7 +403,7 @@ func _snap_jumps_where_stretch_crawls(scenario: StringName) -> void:
 # fraction of a tick later seeds the clock that fraction further into its tick
 # and never a whole tick further. A quantized anchor would instead flip by one
 # tick as the arrival phase crossed a server boundary, and
-# [constant ClockCore.SyncMode.STRETCH] would chase each flip for about a
+# [constant NetwClockHandle.SyncMode.SYNC_STRETCH] would chase each flip for about a
 # second, sweeping the client's tick boundary through the server's.
 #
 # The seeded phase is sub-tick by construction, so reading the tick counter
@@ -413,9 +417,9 @@ func _the_target_follows_the_server_phase(scenario: StringName) -> void:
 	for phase in [0.0, 0.25, 0.5, 0.75]:
 		_open(PHASE_RATE)
 		# SNAP, so the frames below only accumulate and never also nudge.
-		_clock.sync_mode = ClockCore.SyncMode.SNAP
+		_clock.sync_mode = NetwClockHandle.SyncMode.SYNC_SNAP
 		_clock.lead_ticks = 1.0
-		_clock.handle_pong(0.0, 100, phase)
+		_clock.handle_pong(0.0, 100, phase, true)
 		_row(scenario, "seeded", { &"phase": phase, &"tick": _clock.tick })
 
 		var schedule: Array[int] = []
@@ -438,7 +442,7 @@ func _jitter_moves_stability_and_the_recommendation(
 	_clock.display_offset = 1
 
 	for sample in [0.020000, 0.020000, 0.200000, 0.020000]:
-		_metrics(scenario, "sample", _clock.handle_pong(sample, 100, 0.0))
+		_metrics(scenario, "sample", _clock.handle_pong(sample, 100, 0.0, true))
 	_signals(scenario)
 	_close()
 
@@ -447,14 +451,16 @@ func _jitter_moves_stability_and_the_recommendation(
 #region Rig
 
 func _open(tickrate: int) -> void:
-	_clock = ClockCore.new()
+	_session = NetwMultiplayerCore.new()
+	_clock = _session.clock_handle
 	_clock.tickrate = tickrate
-	_recorder = Recorder.new(_clock, WATCHED)
+	_recorder = Recorder.new(_session, WATCHED)
 
 
 func _close() -> void:
 	_recorder = null
 	_clock = null
+	_session = null
 
 
 # The signal order since the last reading, which is what polled state cannot

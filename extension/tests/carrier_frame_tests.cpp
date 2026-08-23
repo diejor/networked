@@ -10,6 +10,8 @@
 
 #include "netw/carrier_frame.hpp"
 
+using namespace godot;
+
 namespace TestNetwCarrierFrame {
 
 using godot::PackedByteArray;

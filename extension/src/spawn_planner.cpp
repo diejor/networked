@@ -142,7 +142,6 @@ Array NetwSpawnPlanner::reconcile(
         entry[key_action()] = action_name(op.action);
         entry[key_route()] = op.route;
         entry[key_peer()] = op.peer;
-        // A gain carries no leave policy, because nothing is being left.
         if (op.action != repl::SpawnAction::SPAWN) {
             entry[key_decision()] = write_decision(op.decision);
             entry[key_forced()] = op.forced;

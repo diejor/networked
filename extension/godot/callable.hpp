@@ -10,12 +10,14 @@ namespace godot {
 using ::Callable;
 using ::CallableCustom;
 using ::ObjectID;
+using ::Signal;
 } // namespace godot
 #elif defined(NETW_GDEXTENSION)
 #include <godot_cpp/core/object_id.hpp>
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/callable_custom.hpp>
 #include <godot_cpp/variant/callable_method_pointer.hpp>
+#include <godot_cpp/variant/signal.hpp>
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif

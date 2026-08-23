@@ -353,11 +353,11 @@ func _annotation(handle, snapshot: Dictionary) -> String:
 
 func _row_annotation(transition: int, row: Dictionary) -> String:
 	var domain := _enum_name(
-		NetwPredictJournal.Domain,
+		NetwPredictJournal.domain_names(),
 		int(row.get(&"domain", NetwPredictJournal.Domain.IN_DOMAIN)),
 	)
 	var attribution := _enum_name(
-		NetwPredictJournal.Attribution,
+		NetwPredictJournal.attribution_names(),
 		int(row.get(&"attribution", NetwPredictJournal.Attribution.UNKNOWN)),
 	)
 	var witness := _witness_glyph(int(row.get(&"witness_class_bits", 0)))
@@ -394,7 +394,7 @@ func _last_operator_annotation(episode: Dictionary) -> String:
 	if attempt.is_empty():
 		return ""
 	var operation := _enum_name(
-		NetwPredictJournal.Operator,
+		NetwPredictJournal.operator_names(),
 		int(attempt.get(&"operator", NetwPredictJournal.Operator.NONE)),
 	)
 	var outcome_value := int(attempt.get(&"outcome", -1))

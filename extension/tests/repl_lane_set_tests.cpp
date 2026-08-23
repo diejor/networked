@@ -11,7 +11,9 @@
 
 #include "godot/local_vector.hpp"
 #include "netw/repl/lane_set.hpp"
-#include "netw/table/schema_core.hpp"
+#include "netw/api/schema_core.hpp"
+
+using namespace godot;
 
 namespace TestNetwReplLaneSet {
 

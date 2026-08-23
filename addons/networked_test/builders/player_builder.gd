@@ -80,7 +80,7 @@ func with_multiplayer_entity() -> PlayerBuilder:
 ## Declares persistence on the player archetype, baking the table into the packed
 ## scene as metadata the [NetwPersistenceEngine] reads. The database is set per
 ## instance after spawn through
-## [constant NetwPersistenceEngine.META_DATABASE].
+## [method NetwPersistenceEngine.meta_database].
 func with_save(database: Resource, table: StringName) -> PlayerBuilder:
 	_has_save = true
 	_save_database = database
@@ -330,7 +330,7 @@ func build() -> Node:
 		# scriptless path. Only value-typed table and columns bake in; the live
 		# database is set on the spawned instance after spawn.
 		root.set_meta(
-			NetwPersistenceEngine.META_TABLE,
+			NetwPersistenceEngine.meta_table(),
 			_save_table,
 		)
 		var columns: Array = []
@@ -342,7 +342,7 @@ func build() -> Node:
 				},
 			)
 		root.set_meta(
-			NetwPersistenceEngine.META_COLUMNS,
+			NetwPersistenceEngine.meta_columns(),
 			columns,
 		)
 

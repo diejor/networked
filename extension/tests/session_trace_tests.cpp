@@ -1,52 +1,31 @@
-// The session machine against the trace recorded from the GDScript arm it
-// replaces.
-//
-// The session has no seam and no byte grammar, so nothing here can be certified
-// the way a codec can. What it has instead is an admission and lifecycle trace:
-// scenarios scripted through the GDScript session and committed BEFORE any of
-// it was native, so the native arm has something to reproduce other than
-// itself.
-//
-// The scenarios below are the golden's `edges/`, `flood/` and `apptag/` halves,
-// re-driven against the machine directly. That is the half that outlives the
-// arm. The `machine/` half drives a real MultiplayerPeer through the session
-// interface, and reproducing it here would mean asserting what a peer answered
-// rather than observing it, so the arm keeps checking that half until the
-// interface itself crosses.
-//
-// The golden lives in the project, so this file runs in the tier that can read
-// res:// and carries no [Hosted] tag.
-
 #include "support/netw_test.h"
 
 #include "godot/file_access.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/session_core.hpp"
 #include "support/netw_recorder.h"
 
 namespace TestNetwSessionTrace {
 
 using namespace godot;
-using netw::NetwSessionCore;
+using netw::NetwMultiplayerCore;
+using netw::SessionCore;
 using netw_test::Recorder;
 
 constexpr const char *GOLDEN
     = "res://tests/native/goldens/session_admission.txt";
 
-// The wall-clock reading the recording ran against, pinned rather than read.
-// Every flood scenario there spent its whole budget inside one window, so a
-// single instant reproduces it and makes the window's own edge a law of its
-// own rather than a race.
 constexpr int64_t NOW = 1'000'000;
 
 String state_name(int p_state) {
     switch (p_state) {
-        case NetwSessionCore::STATE_OFFLINE:
+        case SessionCore::STATE_OFFLINE:
             return "OFFLINE";
-        case NetwSessionCore::STATE_CONNECTING:
+        case SessionCore::STATE_CONNECTING:
             return "CONNECTING";
-        case NetwSessionCore::STATE_ONLINE:
+        case SessionCore::STATE_ONLINE:
             return "ONLINE";
-        case NetwSessionCore::STATE_DISCONNECTING:
+        case SessionCore::STATE_DISCONNECTING:
             return "DISCONNECTING";
     }
     return "INVALID";
@@ -54,20 +33,18 @@ String state_name(int p_state) {
 
 String role_name(int p_role) {
     switch (p_role) {
-        case NetwSessionCore::ROLE_NONE:
+        case SessionCore::ROLE_NONE:
             return "NONE";
-        case NetwSessionCore::ROLE_CLIENT:
+        case SessionCore::ROLE_CLIENT:
             return "CLIENT";
-        case NetwSessionCore::ROLE_DEDICATED_SERVER:
+        case SessionCore::ROLE_DEDICATED_SERVER:
             return "DEDICATED_SERVER";
-        case NetwSessionCore::ROLE_LISTEN_SERVER:
+        case SessionCore::ROLE_LISTEN_SERVER:
             return "LISTEN_SERVER";
     }
     return "INVALID";
 }
 
-// One row's fields, sorted by key when they are written out, so the order a
-// case happens to name them in can never move a row.
 struct Fields {
     Vector<String> keys;
     Vector<String> values;
@@ -82,12 +59,6 @@ struct Fields {
         return put(p_key, itos(p_value));
     }
 
-    // The String is built before the call rather than at it. A bare literal
-    // here binds to THIS overload rather than to the String one, because a
-    // pointer decaying to bool is a standard conversion and beats the
-    // user-defined one, and the recursion that produces is silent: it spins at
-    // full speed and the runner reports a case that never ended rather than a
-    // case that failed.
     Fields &put(const String &p_key, bool p_value) {
         return put(p_key, String(p_value ? "true" : "false"));
     }
@@ -120,17 +91,14 @@ struct Trace {
         );
     }
 
-    void state(const Ref<NetwSessionCore> &p_core, const String &p_at) {
+    void state(const SessionCore &p_core, const String &p_at) {
         row("state",
             Fields()
                 .put("at", p_at)
-                .put("role", role_name(p_core->get_role()))
-                .put("state", state_name(p_core->get_state())));
+                .put("role", role_name(p_core.get_role()))
+                .put("state", state_name(p_core.get_state())));
     }
 
-    // The signal order since the last reading, with state_changed's edge riding
-    // its name. A trace of edges that does not say which edge is a trace of
-    // nothing.
     void signals(Recorder &p_recorder) {
         String order = "[";
         int changes = 0;
@@ -153,57 +121,55 @@ struct Trace {
     }
 };
 
-Ref<NetwSessionCore> fresh() {
-    Ref<NetwSessionCore> core;
-    core.instantiate();
-    return core;
+SessionCore fresh() {
+    return SessionCore();
 }
 
-// Every edge the table admits, driven in the one order that reaches all of
-// them, so the exit and entry hooks are observed paired rather than asserted.
 void every_legal_edge_runs_its_hooks(Trace &t) {
-    Ref<NetwSessionCore> core = fresh();
+    Ref<NetwMultiplayerCore> host;
+    host.instantiate();
+    SessionCore &core = host->session_plane();
     Recorder recorder(
-        core.ptr(),
+        host.ptr(),
         {"state_changed", "session_entered", "session_ended"}
     );
 
-    const NetwSessionCore::State walk[] = {
-        NetwSessionCore::STATE_CONNECTING,
-        NetwSessionCore::STATE_OFFLINE,
-        NetwSessionCore::STATE_CONNECTING,
-        NetwSessionCore::STATE_ONLINE,
-        NetwSessionCore::STATE_DISCONNECTING,
-        NetwSessionCore::STATE_OFFLINE,
+    const SessionCore::State walk[] = {
+        SessionCore::STATE_CONNECTING,
+        SessionCore::STATE_OFFLINE,
+        SessionCore::STATE_CONNECTING,
+        SessionCore::STATE_ONLINE,
+        SessionCore::STATE_DISCONNECTING,
+        SessionCore::STATE_OFFLINE,
     };
-    for (const NetwSessionCore::State next : walk) {
-        core->transition(next);
+    for (const SessionCore::State next : walk) {
+        core.transition(next);
         t.state(core, "to_" + state_name(next));
         t.signals(recorder);
     }
 
-    core->transition(NetwSessionCore::STATE_OFFLINE);
+    core.transition(SessionCore::STATE_OFFLINE);
     t.state(core, "repeated");
     t.signals(recorder);
 }
 
 void an_honest_peer_stays_under_the_window(Trace &t) {
-    Ref<NetwSessionCore> core = fresh();
+    SessionCore core = fresh();
     for (int attempt = 0; attempt < 2; ++attempt) {
         t.row(
             "submit",
             Fields()
                 .put("attempt", int64_t(attempt))
-                .put("flooded", core->join_flooded(7, NOW))
+                .put("flooded", core.join_flooded(7, NOW))
         );
     }
 }
 
 void a_flood_trips_at_the_limit(Trace &t) {
-    Ref<NetwSessionCore> core = fresh();
+    SessionCore core = fresh();
     int tripped_at = -1;
     for (int attempt = 0; attempt < 20; ++attempt) {
-        if (core->join_flooded(7, NOW)) {
+        if (core.join_flooded(7, NOW)) {
             tripped_at = attempt;
             break;
         }
@@ -212,20 +178,20 @@ void a_flood_trips_at_the_limit(Trace &t) {
 }
 
 void the_host_self_join_is_never_limited(Trace &t) {
-    Ref<NetwSessionCore> core = fresh();
+    SessionCore core = fresh();
     bool flooded = false;
     for (int attempt = 0; attempt < 40; ++attempt) {
-        flooded = flooded || core->join_flooded(1, NOW);
+        flooded = flooded || core.join_flooded(1, NOW);
     }
     t.row("host", Fields().put("flooded_once", flooded));
 }
 
 void each_peer_draws_its_own_budget(Trace &t) {
-    Ref<NetwSessionCore> core = fresh();
+    SessionCore core = fresh();
     for (int attempt = 0; attempt < 20; ++attempt) {
-        core->join_flooded(7, NOW);
+        core.join_flooded(7, NOW);
     }
-    t.row("neighbour", Fields().put("flooded", core->join_flooded(8, NOW)));
+    t.row("neighbour", Fields().put("flooded", core.join_flooded(8, NOW)));
 }
 
 void the_fold_is_the_compatibility_gate(Trace &t) {
@@ -246,7 +212,7 @@ void the_fold_is_the_compatibility_gate(Trace &t) {
             "fold",
             Fields()
                 .put("length", int64_t(text.length()))
-                .put("tag", NetwSessionCore::compute_app_tag(StringName(text)))
+                .put("tag", SessionCore::compute_app_tag(StringName(text)))
         );
     }
 }
@@ -281,7 +247,6 @@ Vector<String> golden_rows(const String &p_family) {
         if (line.is_empty() || line.begins_with("#")) {
             continue;
         }
-        // The interface plane's rows are the arm's to check, not this tier's.
         if (line.begins_with(p_family)) {
             rows.push_back(line);
         }
@@ -292,7 +257,6 @@ Vector<String> golden_rows(const String &p_family) {
 
 void replay(const String &p_family) {
     const Vector<String> expected = golden_rows(p_family);
-    // A golden nobody read is a golden that passes.
     REQUIRE(expected.size() > 0);
 
     Vector<String> actual;
@@ -316,10 +280,6 @@ void replay(const String &p_family) {
     for (int index = 0; index < expected.size(); ++index) {
         const String produced
             = index < actual.size() ? actual[index] : String("<missing>");
-        // Captured through a char array rather than a pointer, and compared as
-        // one bool rather than two operands. Either shortcut hands this tier's
-        // printer something it dies on, and it dies only on the first FAILING
-        // row, which is the one row anybody needed to read.
         NETW_FORMAT_TEXT(want, expected[index].utf8().get_data());
         NETW_FORMAT_TEXT(got, produced.utf8().get_data());
         CAPTURE(want);

@@ -4,12 +4,14 @@
 		The scene column's record plane: which scenes are live, a routing table keyed by scene identity, and the one scene request in flight.
 	</brief_description>
 	<description>
-		It holds no [Node] and instantiates nothing, which is what makes a registration outlive the scene it names. A scene is identified by the entity [RID] it is keyed under rather than by whichever node is currently standing in for it, so rebuilding a scene does not silently drop everyone watching it. Everything that reaches a [Node], a [PackedScene] or a promise lives in the interface above this class.
+		It references no [Node] and instantiates nothing, which is what makes a registration outlive the scene it names. The one node it names, the spawn anchor, it holds as an instance id resolved at each read rather than as a reference, so a freed anchor is no anchor and nothing here keeps a node alive. A scene is identified by the entity [RID] it is keyed under rather than by whichever node is currently standing in for it, so rebuilding a scene does not silently drop everyone watching it. It mints no scene identity of its own; every [RID] arrives from whatever the liveness plane keys scenes under. Everything that mounts, frees or instantiates a [Node] or a [PackedScene] lives in the interface above this class, which is why the anchor is a decision here and a parenting act there.
 		[codeblock]
 		scene_enter(scene, stem)          the book gains a live scene under a non-unique stem
 		scene_named(stem)                 an instance of that stem
 		scenes_named(stem)                every instance of it, in registration order
 		scene_retire(scene, pumps)        out of the book now, out of memory after the drain
+		set_scene_anchor(node)            what a declaration node parents its scenes under
+		spawn_anchor(fallback)            that anchor while it lives, the fallback otherwise
 		observe(scene, event, callback)   one row per (event, scene), in registration order
 		dispatch(scene, event, ...)       every live callback; the dead ones are dropped here
 		open_request()                    the next id, and it becomes the pending one
@@ -17,7 +19,11 @@
 		is_current(id)                    whether a reply names the request still in flight
 		request_settle(id, code)          settles that promise and lets go, in one act
 		request_abandon(code)             settles whatever is in flight, at teardown
+		declaration_open(...)             a draft nobody can read yet
+		declaration_row(stem, ...)        one declared scene into that draft
+		declaration_publish()             the draft becomes the declaration, at once
 		[/codeblock]
+		The session's scene declaration is held here as detached rows rather than as the authoring resource it came from, which is what makes an authoring edit after the fact impossible to make silently: the only way to change what a session declares is to publish a new draft over the old one.
 		A stem names an archetype and not an instance, so two live copies of one level share one. [method scene_named] answers with the one that entered most recently, and losing it promotes the oldest survivor sharing the stem rather than making the stem unanswerable.
 		A request id can only be drawn, never claimed. There is no setter for [member pending_request_id], because an id a caller could assign without opening would let it answer a request nobody made.
 		The request protocol's decisions live here as well. [method verify_requested_path] bounds what a peer may name and [method admits_request] is the consent line a request clears on its own, both static verbs over their arguments, and both refusals a caller can check rather than crashes it has to avoid. [method decide_request] is the one verdict composed from them: [member request_handler] answers when one is installed, that consent line when none is.
@@ -71,6 +77,7 @@
 			<description>
 				Registers [param callback] for [param event] on [param scene].
 				An invalid [param scene] or an unset [param callback] registers nothing, so a later [method dispatch] can never find a row nobody meant to create. Registering the same [param callback] twice stores it once, so an edge is heard once.
+				[param event] is a raw ordinal mirroring a GDScript enum this tier cannot see, kept in sync by value rather than by name.
 			</description>
 		</method>
 		<method name="observer_count" qualifiers="const">
@@ -222,10 +229,82 @@
 				Asking and claiming are one act. Two calls would let one caller read the slot free and take it after another caller already had it.
 			</description>
 		</method>
+		<method name="transition_arm">
+			<return type="void" />
+			<param index="0" name="target" type="Variant" />
+			<param index="1" name="sources" type="Array" />
+			<param index="2" name="promise" type="NetwPromise" />
+			<description>
+				Records what the claimed transition is: the scene everyone ends up in, the scenes they are leaving, and the one answer the whole transition owes. Call it once, after [method transition_open] answered [code]true[/code] and the target actually exists.
+				The record is a cursor rather than a loop because a pending move is subscribed to rather than awaited, so the walk has to be resumable. Every walk verb below reads and advances this one record.
+				[codeblock]
+				if not core.transition_open():
+				    promise.reject(ERR_UNAVAILABLE)
+				    return
+				core.transition_arm(target, sources, promise)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="transition_target">
+			<return type="Variant" />
+			<description>
+				The scene the armed transition moves everyone into, or [code]null[/code] once the transition has left through [method transition_land], [method transition_fail] or [method transition_close].
+			</description>
+		</method>
+		<method name="transition_sources">
+			<return type="Array" />
+			<description>
+				The scenes the armed transition is emptying, in the order [method transition_arm] took them. They are the scenes the caller retires once every participant has landed.
+			</description>
+		</method>
+		<method name="transition_next_mover">
+			<return type="Variant" />
+			<param index="0" name="roster_of" type="Callable" />
+			<description>
+				The next participant the transition still owes a move, or [code]null[/code] when every source is walked.
+				[param roster_of] answers the participants inside one source. It is called when the walk REACHES that source and never ahead of it, so a peer that left during an earlier source's moves is gone from the roster before it is asked to move. A caller that flattened every roster up front would pin a roster taken before the first move.
+				[codeblock]
+				sources:  [A, B]
+				          take A -> roster_of(A) -> [p1, p2]
+				          p1, p2 handed out
+				          take B -> roster_of(B) -> [p3]
+				          p3 handed out
+				          no sources left -> null
+				[/codeblock]
+			</description>
+		</method>
+		<method name="transition_accept">
+			<return type="bool" />
+			<param index="0" name="code" type="int" />
+			<param index="1" name="peer" type="int" />
+			<description>
+				Records one arrived mover, or ends the whole transition on its rejection, and answers whether the walk may continue. A [param code] other than [constant @GlobalScope.OK] rejects the armed promise as [constant @GlobalScope.ERR_UNAVAILABLE] through [method transition_fail], so the first failure aborts rather than the walk carrying on against a roster it can no longer complete.
+			</description>
+		</method>
+		<method name="transition_moved">
+			<return type="bool" />
+			<param index="0" name="peer" type="int" />
+			<description>
+				Whether [param peer] was carried into the target by a move [method transition_accept] recorded. Everyone else is admitted on landing instead.
+			</description>
+		</method>
+		<method name="transition_fail">
+			<return type="void" />
+			<param index="0" name="code" type="int" />
+			<description>
+				Releases the slot and rejects the armed promise with [param code]. A participant left outside the destination would present a scene it is not in, so a partial transition fails here rather than half-landing.
+			</description>
+		</method>
+		<method name="transition_land">
+			<return type="void" />
+			<description>
+				Releases the slot and resolves the armed promise. Call it last, because it drops the record [method transition_sources] and [method transition_target] answer from.
+			</description>
+		</method>
 		<method name="transition_close">
 			<return type="void" />
 			<description>
-				Releases the slot [method transition_open] claimed. Idempotent, because the transition unwinds down several paths and each of them releases a slot it may not have taken.
+				Releases the slot [method transition_open] claimed and drops the record [method transition_arm] wrote, without answering the promise. Idempotent, because the transition unwinds down several paths and each of them releases a slot it may not have taken. Every path out of a transition passes through here, which is what keeps a refused or abandoned change from holding the slot shut.
 			</description>
 		</method>
 		<method name="native_entry_verdict" qualifiers="static">
@@ -281,6 +360,53 @@
 				Returns [param path] when it names a scene file a peer may request, and an empty [String] otherwise. A requested path is under [code]res://[/code], no longer than [constant MAX_REQUESTED_PATH_LENGTH], and ends in [code]tscn[/code] or [code]scn[/code]. [param path] is already resolved, so a [code]uid://[/code] reference is normalized by the caller that has the resolver.
 			</description>
 		</method>
+		<method name="resolve_requested_path" qualifiers="static">
+			<return type="String" />
+			<param index="0" name="reference" type="String" />
+			<description>
+				[method verify_requested_path] with the [ResourceUID] resolution in front of it, so a peer may name a scene by [code]uid://[/code] and still be bounded by the one rule. An empty [param reference] resolves to nothing rather than being handed to the resolver.
+			</description>
+		</method>
+		<method name="packed_at" qualifiers="static">
+			<return type="PackedScene" />
+			<param index="0" name="reference" type="String" />
+			<description>
+				The [PackedScene] a [code]res://[/code] path or [code]uid://[/code] reference names, or [code]null[/code]. A reference that resolves to nothing, or to a resource that is not a scene, answers [code]null[/code] rather than raising, because every caller here reaches a refusal code and none of them may take the session down with a bad path off the wire.
+				This is the load, not the consent line: a path arriving from a peer clears [method resolve_requested_path] first.
+			</description>
+		</method>
+		<method name="packed_root_script" qualifiers="static">
+			<return type="Script" />
+			<param index="0" name="packed" type="PackedScene" />
+			<description>
+				The [Script] on the root node of [param packed], read out of its [SceneState] rather than by instantiating it, so a scene's mark can be read before the session agrees to spawn it. A scene with no nodes, no root script, or a root [code]script[/code] property holding something else answers [code]null[/code].
+			</description>
+		</method>
+		<method name="scene_root_script_at" qualifiers="static">
+			<return type="Script" />
+			<param index="0" name="reference" type="String" />
+			<description>
+				[method packed_root_script] of [method packed_at]. The one read a server does to learn what a requested scene declares about itself, and it costs a resource load and no instantiation.
+			</description>
+		</method>
+		<method name="destination_kind" qualifiers="static">
+			<return type="int" enum="NetwSceneCore.Destination" />
+			<param index="0" name="destination" type="Variant" />
+			<description>
+				What a scene destination [Variant] is, as one [enum Destination]. Every front door in the kit takes a destination loosely, and this is the single place that partition is decided, so the refusal a caller reports and the arm a caller takes come from one table.
+				A [PackedScene] splits in two: [constant DESTINATION_PACKED] carries a resource path a peer can be told to load, and [constant DESTINATION_PACKED_UNPATHED] does not, which is the whole reason the refusal exists.
+			</description>
+		</method>
+		<method name="change_replaces_session" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="declared_session_wide" type="bool" />
+			<param index="1" name="has_participant" type="bool" />
+			<description>
+				How far an admitted change reaches, as one answer: [code]true[/code] replaces the whole session and [code]false[/code] moves the one participant that asked. Three inputs decide it and this is the only place they meet, so the reach a capture takes and the reach a wire request takes cannot drift.
+				A change with no participant to move names no smaller reach than the session, which is what authority's own front door asks for, so [param has_participant] being [code]false[/code] replaces the session whatever [member request_reach] says.
+				[param declared_session_wide] arrives already decided, because the scene mark that answers it is the authoring tier's and stays GDScript, exactly as [param marked] does in [method native_change_strands].
+			</description>
+		</method>
 		<method name="native_change_strands" qualifiers="static">
 			<return type="bool" />
 			<param index="0" name="online" type="bool" />
@@ -288,6 +414,21 @@
 			<description>
 				Whether a native scene change has left this peer out of the game. The session is intact either way: what strands the peer is a LOCAL change to a scene the session never agreed to, so an offline peer strands nobody and a marked scene is the change going through the front door.
 				[param marked] arrives already decided, because the registry that answers it is the authoring tier's and stays GDScript.
+			</description>
+		</method>
+		<method name="move_verdict" qualifiers="static">
+			<return type="int" enum="NetwSceneCore.Move" />
+			<param index="0" name="mover_live" type="bool" />
+			<param index="1" name="target_live" type="bool" />
+			<param index="2" name="same_scene" type="bool" />
+			<description>
+				Which of the three things a move into a destination can be. The caller resolves the destination only once this answers [constant MOVE_CARRY] or later, because resolving one activates a scene, and a move refused for a dead mover must not leave a scene standing that nobody arrived in.
+				[codeblock]
+				MOVE_REFUSED       -> reject, no physics frame spent
+				MOVE_ALREADY_THERE -> resolve OK, no physics frame spent
+				MOVE_CARRY         -> the awaiting branch: flush, reparent, flush
+				[/codeblock]
+				Refusal outranks arrival, so a mover that is nominally in a destination that is not live still refuses. [param same_scene] is only consulted once both ends are live.
 			</description>
 		</method>
 		<method name="admission_park">
@@ -315,6 +456,60 @@
 				Whether [param peer] is parked against [param scene], waiting for its roster row.
 			</description>
 		</method>
+		<method name="spawn_anchor">
+			<return type="Node" />
+			<param index="0" name="fallback" type="Node" />
+			<description>
+				The node the next scene container is parented under: the declared anchor while it is alive, and [param fallback] otherwise. The caller passes the session root as [param fallback] rather than this class resolving one, so the decision is over its arguments and the ambient state stays outside it.
+				This is the whole of the choice. A session that declared no anchor and a session whose anchor was freed answer identically, so a game that never mounts a declaration node keeps parenting under the root it always did, and losing a declaration node degrades to that same answer instead of dropping the spawn.
+				[codeblock]
+				anchor alive          -&gt; the anchor
+				anchor freed or unset -&gt; fallback, which may itself be null
+				[/codeblock]
+			</description>
+		</method>
+		<method name="get_container_entered">
+			<return type="Callable" />
+			<description>
+				The tree-entered half of [method set_container_lifecycle], or an invalid [Callable] when none was declared.
+			</description>
+		</method>
+		<method name="get_container_exited">
+			<return type="Callable" />
+			<description>
+				The tree-exited half of [method set_container_lifecycle], or an invalid [Callable] when none was declared.
+			</description>
+		</method>
+		<method name="get_scene_anchor">
+			<return type="Node" />
+			<description>
+				The declared anchor while it is alive, and [code]null[/code] once it is freed. The read is what clears a freed anchor, so no caller has to unset one on behalf of a node that is already gone.
+			</description>
+		</method>
+		<method name="isolation_owns_world" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="isolation" type="int" />
+			<description>
+				Whether [param isolation], an [enum Isolation], asks a hosting peer for a scene of its own world. One reading of the value, so the container build and any policy that branches on isolation cannot disagree about which member means isolated.
+			</description>
+		</method>
+		<method name="set_container_lifecycle">
+			<return type="void" />
+			<param index="0" name="entered" type="Callable" />
+			<param index="1" name="exited" type="Callable" />
+			<description>
+				Declares the pair [method NetwMultiplayerCore.scene_spawn_node] connects a new container's [signal Node.tree_entered] and [signal Node.tree_exited] to, each bound to the container. Held for the session the way [method set_request_handler]'s handler is, and cleared by neither [method clear] nor a re-host, because a registration outlives the scenes it will see.
+				The constructor runs on every peer and is the only point that holds a container while it is still an orphan, so an edge not wired here is an edge that peer never sees. A pair left unset connects nothing rather than failing the spawn.
+			</description>
+		</method>
+		<method name="set_scene_anchor">
+			<return type="void" />
+			<param index="0" name="anchor" type="Node" />
+			<description>
+				Declares the node new scene containers are parented under. A declaration node pushes itself here as it installs its [NetwSceneConfig], so its scenes co-locate under it and tree order matches on every peer, and passes [code]null[/code] to give the anchor back.
+				The anchor is held as an instance id and never as a reference, which is what lets a declaration node be freed without this class either crashing on it or keeping it alive. The last push wins, matching the one-instance-per-key rule the session's service registry follows, so two declaration nodes never contest the answer.
+			</description>
+		</method>
 		<method name="spawn_warns_shared_world" qualifiers="const">
 			<return type="bool" />
 			<description>
@@ -335,6 +530,90 @@
 			<param index="2" name="callback" type="Callable" />
 			<description>
 				Reverses [method observe] for one [param callback]. Removing something never registered is inert rather than an error.
+			</description>
+		</method>
+		<method name="declaration_open">
+			<return type="void" />
+			<param index="0" name="isolation" type="int" />
+			<param index="1" name="level_spawn_function" type="Callable" />
+			<description>
+				Begins a draft declaration carrying [param isolation] and [param level_spawn_function], discarding any draft still open. Nothing a draft holds is readable until [method declaration_publish], so a re-publish is never half visible: a reader between the two sees the previous declaration whole or none at all.
+			</description>
+		</method>
+		<method name="declaration_row">
+			<return type="void" />
+			<param index="0" name="stem" type="StringName" />
+			<param index="1" name="path" type="String" />
+			<param index="2" name="spawn_data" type="Variant" />
+			<param index="3" name="initial" type="bool" />
+			<description>
+				Adds one declared scene to the open draft: the [param stem] it answers to, the resource [param path] it instantiates from, the [param spawn_data] a custom constructor receives, and whether it is one of the scenes [param initial] to the session.
+				[param spawn_data] is stored detached. An [Array] or [Dictionary] is deep-copied on the way in and again on the way out of [method declared_spawn_data], so the caller and this class never share one container and a later edit on either side is invisible to the other. Publishing an aliased row is the one way a declaration could change without anybody declaring it, and there is no path to it here.
+				Naming a [param stem] twice merges into the row already drafted rather than doubling it: a non-empty [param path] and a non-nil [param spawn_data] overwrite, and [param initial] only ever turns on. An empty [param stem] declares nothing, and a row offered while no draft is open is dropped.
+			</description>
+		</method>
+		<method name="declaration_publish">
+			<return type="void" />
+			<description>
+				Swaps the open draft in as the published declaration, in one act. Inert when no draft is open.
+			</description>
+		</method>
+		<method name="declaration_drop">
+			<return type="void" />
+			<description>
+				Forgets the published declaration and any draft. Separate from [method clear], because a session that ends keeps what it was declared to be: the peer that re-hosts declared nothing new. Deregistering the declaration, or tearing the owning interface down, reaches here.
+			</description>
+		</method>
+		<method name="declaration_is_published" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether a declaration has been published. This is what tells a configured session from a bare one, so an auto-declaration for a level dropped into the tree can defer to an explicit one.
+			</description>
+		</method>
+		<method name="declared_isolation" qualifiers="const">
+			<return type="int" />
+			<description>
+				The isolation a declared scene takes when its own recipe names none, as an ordinal mirroring the [code]SceneIsolation[/code] enum this tier cannot see. Zero when nothing is published.
+			</description>
+		</method>
+		<method name="declared_level_spawn_function" qualifiers="const">
+			<return type="Callable" />
+			<description>
+				The custom level constructor the declaration published, or an unset [Callable].
+			</description>
+		</method>
+		<method name="declares_scene" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="stem" type="StringName" />
+			<description>
+				Whether the published declaration holds a row for [param stem].
+			</description>
+		</method>
+		<method name="declared_scene_path" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="stem" type="StringName" />
+			<description>
+				The resource path declared for [param stem], or an empty [String] when no row names it or the row carries no path.
+			</description>
+		</method>
+		<method name="declared_spawn_data" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="stem" type="StringName" />
+			<param index="1" name="fallback" type="Variant" />
+			<description>
+				The spawn data declared for [param stem], deep-copied, or [param fallback] when no row names it or the row declared none. A caller that hands the answer to a constructor and then mutates it cannot reach the declaration through it.
+			</description>
+		</method>
+		<method name="declared_initial_stems" qualifiers="const">
+			<return type="Array" />
+			<description>
+				The stems of the scenes declared initial, in the order they were declared, which is the order a starting session brings them online.
+			</description>
+		</method>
+		<method name="declared_scene_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many rows the published declaration holds. Zero when nothing is published.
 			</description>
 		</method>
 	</methods>
@@ -362,6 +641,45 @@
 		</constant>
 		<constant name="CAPTURE_ACTIVATE" value="4" enum="Capture">
 			Server authority spawns the scene through the replicated pipeline. The default, because a change nobody narrowed is a scene the session gains.
+		</constant>
+		<constant name="MOVE_REFUSED" value="0" enum="Move">
+			The move cannot happen: either the mover is gone or there is no live destination to arrive in. The caller answers [constant @GlobalScope.ERR_UNAVAILABLE].
+		</constant>
+		<constant name="MOVE_ALREADY_THERE" value="1" enum="Move">
+			The mover is already in the destination, so the move is complete before it starts. The caller answers [constant @GlobalScope.OK] without spending a physics frame.
+		</constant>
+		<constant name="MOVE_CARRY" value="2" enum="Move">
+			A live mover is bound for a different live destination, and this is the ONE verdict whose caller awaits: the physics flushes either side of the reparent belong to this branch alone.
+		</constant>
+		<constant name="DESTINATION_NONE" value="0" enum="Destination">
+			The value names no scene destination at all. The caller reports and does nothing, because there is nothing it could have meant.
+		</constant>
+		<constant name="DESTINATION_NAME" value="1" enum="Destination">
+			A [String] or [StringName] naming a declared scene, resolved against the declaration rather than the filesystem.
+		</constant>
+		<constant name="DESTINATION_NODE" value="2" enum="Destination">
+			A live scene node handed in directly. Whether it is still a scene the session holds is the caller's own reading, since this class is not the live book.
+		</constant>
+		<constant name="DESTINATION_PACKED" value="3" enum="Destination">
+			A [PackedScene] backed by a file, so its path is a thing every peer can be asked to load.
+		</constant>
+		<constant name="DESTINATION_PACKED_UNPATHED" value="4" enum="Destination">
+			A [PackedScene] built in memory. It names nothing a second peer could load, so it is refused rather than activated: the scene would exist on one peer and the session would disagree about what is running.
+		</constant>
+		<constant name="ISOLATION_NONE" value="0" enum="Isolation">
+			The scene shares the session's world, and its container is a plain [Node].
+		</constant>
+		<constant name="ISOLATION_OWN_WORLD" value="1" enum="Isolation">
+			A hosting peer builds the scene an offscreen [SubViewport] with its own world, so two live scenes never share a physics space. A peer that only views the scene still builds a plain [Node], because only the host simulates.
+		</constant>
+		<constant name="EVENT_PARTICIPANT" value="0" enum="Event">
+			Admission changed for a participant. The subject is its peer id, not a handle: a participant is admitted before it has anything in the scene to point at.
+		</constant>
+		<constant name="EVENT_PLAYER" value="1" enum="Event">
+			A player entity entered or left. The subject is its entity [RID]. Every player also reports under [constant EVENT_ENTITY], so this is the narrower reading of one crossing rather than a second one.
+		</constant>
+		<constant name="EVENT_ENTITY" value="2" enum="Event">
+			Any tracked entity entered or left. The subject is its entity [RID]. Players report here too, so an observer wanting only them registers for [constant EVENT_PLAYER] instead of filtering.
 		</constant>
 		<constant name="MAX_REQUESTED_PATH_LENGTH" value="512">
 			The longest path [method verify_requested_path] will hand back. A bound rather than a limit anyone is expected to reach: a request arrives off the wire, and a length nobody checked is a length a peer chooses.

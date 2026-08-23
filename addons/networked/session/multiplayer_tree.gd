@@ -51,7 +51,7 @@ var state: NetwMultiplayer.SessionState:
 		if api:
 			# Widen to int across the seam: the machine still types this slot as
 			# its own enum, and the two are mirrored value for value.
-			api._session.state = int(value)
+			api._native_core.session_set_state(int(value))
 
 ## The current role of this tree in the session, mirrored from
 ## [member NetwMultiplayer.state] and [member NetwMultiplayer.role].
@@ -61,7 +61,7 @@ var role: NetwMultiplayer.Role:
 	set(value):
 		if api:
 			# Widen to int across the seam, as with state above.
-			api._session.role = int(value)
+			api._native_core.session_set_role(int(value))
 
 ## Returns [code]true[/code] while this tree is acting as a server
 ## (dedicated or listen server).
@@ -653,12 +653,6 @@ func _debug_autoconnect() -> void:
 	await host(payload)
 
 
-# Reacts to the session machine admitting a participant, running the tree's own
-# join side effects (local-player binding, spawn) after the roster is remembered.
-func _on_participant_admitted(_peer_id: int) -> void:
-	pass
-
-
 # Mounts the owned api onto the SceneTree path and binds signals.
 func _mount_api() -> void:
 	if not api:
@@ -709,7 +703,7 @@ func _adopt_api(new_inner: SceneMultiplayer, reason: String) -> void:
 # session_ended signals instead.
 func _transition(next: NetwMultiplayer.SessionState) -> void:
 	if api:
-		api._session.transition(int(next))
+		api._native_core.session_transition(int(next))
 
 
 # Finalizes the session once the peer is live and the role is set. Rides
@@ -755,28 +749,21 @@ func _bind_api_signals(target: NetwMultiplayer) -> void:
 	# The session shutdown handler owns the graceful-disconnect notice, and the
 	# session request handlers own the kick/leave requests. The tree re-emits their
 	# edges so consumers bound to the tree-facing signals keep them.
-	# The session machine on the api owns state, role, and the lifecycle edges.
-	# The tree re-emits its edge and runs its own session-scoped finalize and
-	# teardown off the machine's signals.
-	if not target._session.session_entered.is_connected(_finalize_session):
-		target._session.session_entered.connect(_finalize_session)
-	if not target._session.session_ended.is_connected(_teardown_session):
-		target._session.session_ended.connect(_teardown_session)
-	# The session owns admission; the tree only runs its join side effects off
-	# the machine's admission signal.
-	if not target._session.participant_admitted.is_connected(_on_participant_admitted):
-		target._session.participant_admitted.connect(_on_participant_admitted)
+	# The api owns state, role, and the lifecycle edges. The tree re-emits its
+	# edge and runs its own session-scoped finalize and teardown off them.
+	if not target.session_entered.is_connected(_finalize_session):
+		target.session_entered.connect(_finalize_session)
+	if not target.session_ended.is_connected(_teardown_session):
+		target.session_ended.connect(_teardown_session)
 
 
 func _unbind_api_signals(target: NetwMultiplayer) -> void:
 	if not target:
 		return
-	if target._session.participant_admitted.is_connected(_on_participant_admitted):
-		target._session.participant_admitted.disconnect(_on_participant_admitted)
-	if target._session.session_entered.is_connected(_finalize_session):
-		target._session.session_entered.disconnect(_finalize_session)
-	if target._session.session_ended.is_connected(_teardown_session):
-		target._session.session_ended.disconnect(_teardown_session)
+	if target.session_entered.is_connected(_finalize_session):
+		target.session_entered.disconnect(_finalize_session)
+	if target.session_ended.is_connected(_teardown_session):
+		target.session_ended.disconnect(_teardown_session)
 	if target.peer_connected.is_connected(_on_peer_connected):
 		target.peer_connected.disconnect(_on_peer_connected)
 	if target.peer_disconnected.is_connected(_on_peer_disconnected):

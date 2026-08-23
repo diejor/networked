@@ -1,47 +1,5 @@
 #pragma once
 
-/* Logging, written once and read two ways.
- *
- * Every line carries a level and a subsystem and prints as
- * `[level][sys] text`, so a profiler's message filter and a `grep` over stdout
- * take the same query. Learning to select one is learning to select the other,
- * which is the whole reason the prefix is machine-shaped rather than pretty.
- *
- * The subsystem is the first argument of every macro, and the vocabulary is
- * `netw/subsystems.hpp`'s table, which the profiler's mask bits come from too:
- * a name a log line carries is a name a zone filter can select. A name outside
- * the table is reported once and selects nothing.
- *
- * What each level costs, which is why there are five of them:
- *
- *   TRACE DEBUG INFO   Compiled out entirely in a release build with no
- *                      profiler. Where compiled in, the message is built only
- *                      when a profiler is connected or the level is enabled,
- *                      so an unheard string is never formatted and an argument
- *                      that costs something to compute is never computed.
- *   WARN               Always compiled, always written.
- *   ERROR              Always compiled, always written, and always reaches
- *                      `push_error`. This is the error floor: no setting and
- *                      no build configures an error into silence.
- *
- * The threshold comes from `NETW_LOG`, falling back to the engine's verbose
- * flag and then to WARN, so a default run is quiet without being deaf.
- *
- * `NETW_WARN_ONCE` and `NETW_ERROR_ONCE` write at most once per call site.
- * `NETW_WARN_COND` reports and continues. `NETW_ERR` and `NETW_ERR_COND`
- * report and return, while their `_V` forms return the supplied value. All
- * condition macros evaluate their condition once and preserve the caller's
- * source location. `NETW_ASSERT` reports and traps in every build. It is only
- * for internal states that cannot safely continue. Untrusted input belongs in
- * an error guard.
- *
- * [codeblock]
- * NETW_TRACE(sys::CODEC, "encoded snapshot bytes=%d", bytes.size());
- * NETW_WARN_ONCE(sys::TRANSPORT, "peer=%d sent an unknown channel", peer_id);
- * NETW_ERR_COND(peer_id <= 0, sys::SESSION, "peer id must be positive");
- * [/codeblock]
- */
-
 #include <atomic>
 #include <utility>
 
@@ -103,9 +61,6 @@ godot::String assertion_message(
 
 } // namespace netw::log
 
-// The three readable-only levels exist where someone can read them: a build
-// that profiles, or a debug build. Elsewhere they are not gated at runtime,
-// they are not compiled, so their arguments cost nothing to have written.
 #if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
 #define NETW_LOG_VERBOSE 1
 #else
@@ -153,8 +108,6 @@ godot::String assertion_message(
         __LINE__ \
     )
 
-// One flag per expansion, because a macro's `static` is local to where it was
-// written. Two call sites saying the same thing still each get one line.
 #define NETW_LOG_ONCE(m_level, m_system, ...) \
     do { \
         static std::atomic_bool netw_logged_once = false; \

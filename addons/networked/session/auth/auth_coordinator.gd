@@ -5,7 +5,7 @@ const SessionRoster := preload("res://addons/networked/session/session_roster.gd
 
 const AuthProtocol := preload("res://addons/networked/session/auth/auth_protocol.gd")
 
-## Internal coordinator for [SessionCore] authentication hooks.
+## Internal coordinator for [NetwMultiplayer] authentication hooks.
 ##
 ## Binds [SceneMultiplayer] auth callbacks to a [NetwAuthFlow] and stores
 ## accepted identities or rejection reasons in [SessionRoster]. Validates

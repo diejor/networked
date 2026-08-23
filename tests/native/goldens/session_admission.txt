@@ -2,11 +2,10 @@
 # session machine before any of it was native. Rows are
 # scenario|kind|key=value, keys sorted, states and roles symbolic.
 #
-# Regenerate with:
-#   godot --headless --path . -s res://tests/crossing/session_arm.gd \
-#     -- --record
-# Regenerating against a candidate implementation destroys the
-# evidence this file exists to be.
+# It cannot be regenerated: the GDScript machine it was recorded
+# from no longer exists, and regenerating against a candidate
+# implementation would destroy the evidence this file exists to be.
+# session_trace_tests.cpp is what holds the native session to it.
 machine/offline_at_construction|state|at=constructed role=NONE state=OFFLINE
 machine/offline_at_construction|signals|order=[]
 machine/a_server_peer_is_online_at_the_edge|state|at=assigned role=LISTEN_SERVER state=ONLINE

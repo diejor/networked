@@ -13,7 +13,7 @@
 #include "support/netw_test.h"
 
 #include "godot/file_access.hpp"
-#include "netw/transport/loopback.hpp"
+#include "netw/api/loopback.hpp"
 
 namespace TestNetwLoopbackPermutation {
 

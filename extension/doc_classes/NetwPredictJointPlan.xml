@@ -1,8 +1,34 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictJointPlan" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		One joint island's replay plan: the member states to restore before
+		replay and the per-transition steps to run after.
 	</brief_description>
 	<description>
+		A detached result of one joint pass, built by walking the island's
+		members once and never re-consulted afterward. [method valid] is
+		[code]false[/code] whenever the pass itself was refused, such as a
+		non-JOINT owner or a schedule that cannot re-run, and every other
+		member then answers its zero default rather than a real plan.
+		[br][br]A restore is sparse per field: [method restore_has] tells
+		whether a field was captured at all before [method restore_at]
+		reads it, since a joint rebase can restore only the fields a
+		member's own history actually carried. A step is one command run
+		for one member at one transition, and [method step_provenance]
+		says where that command came from: [code]0[/code] coasted forward
+		with no new input, [code]1[/code] substituted from the local
+		predictor, [code]2[/code] relayed from another peer, or
+		[code]3[/code] authored locally.
+		[codeblock]
+		for i in plan.restore_count():
+		    for field in range(field_count):
+		        if plan.restore_has(i, field):
+		            apply(plan.restore_slot(i), field, plan.restore_at(i, field))
+		for i in plan.step_count():
+		    run(plan.step_slot(i), plan.step_transition(i), plan.step_command(i))
+		[/codeblock]
+		A joint plan spans every member of the island in one pass; it
+		carries no per-slot episode of its own.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,16 +36,28 @@
 		<method name="floor" qualifiers="const">
 			<return type="int" />
 			<description>
+				The oldest transition this pass replays from, the minimum
+				of every member's basis, relay floor, and epoch floor.
+				Equal to [method present] when [method heal] is
+				[code]true[/code], since a healing pass discards the
+				incremental replay and jumps straight to the newest
+				transition instead.
 			</description>
 		</method>
 		<method name="heal" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether the computed [method floor] fell behind what any
+				member's retained history still covers, forcing a full
+				resnapshot at [method present] instead of an incremental
+				replay from [method floor].
 			</description>
 		</method>
 		<method name="present" qualifiers="const">
 			<return type="int" />
 			<description>
+				The newest transition this pass plans up to, the transition
+				every member's steps replay toward.
 			</description>
 		</method>
 		<method name="restore_at" qualifiers="const">
@@ -27,11 +65,17 @@
 			<param index="0" name="index" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				The captured value for [param field] of the restore at
+				[param index], meaningless unless
+				[method restore_has] is [code]true[/code] for the same
+				pair.
 			</description>
 		</method>
 		<method name="restore_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many member restores this plan carries, the bound for
+				[param index] on every [code]restore_*[/code] accessor.
 			</description>
 		</method>
 		<method name="restore_has" qualifiers="const">
@@ -39,46 +83,68 @@
 			<param index="0" name="index" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				Whether the restore at [param index] captured [param field]
+				at all. A restore is sparse, so a field this answers
+				[code]false[/code] for is left untouched rather than
+				cleared.
 			</description>
 		</method>
 		<method name="restore_slot" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The slot id the restore at [param index] applies to.
 			</description>
 		</method>
 		<method name="step_command" qualifiers="const">
 			<return type="Variant" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The command the step at [param index] runs, shaped
+				according to [method step_provenance].
 			</description>
 		</method>
 		<method name="step_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many steps this plan carries, the bound for
+				[param index] on every [code]step_*[/code] accessor.
 			</description>
 		</method>
 		<method name="step_provenance" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				Where the command at [param index] came from:
+				[code]0[/code] the member coasted forward with no new
+				input, [code]1[/code] the local predictor substituted a
+				command, [code]2[/code] a peer relayed one, or
+				[code]3[/code] this owner authored one locally.
 			</description>
 		</method>
 		<method name="step_slot" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The slot id the step at [param index] runs for.
 			</description>
 		</method>
 		<method name="step_transition" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="index" type="int" />
 			<description>
+				The transition the step at [param index] runs, between
+				[method floor] and [method present].
 			</description>
 		</method>
 		<method name="valid" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Whether the joint pass that built this plan actually ran.
+				[code]false[/code] means the owner was not an open
+				island-joint slot on a re-runnable schedule, or the caller
+				passed an invalid [method present], and every other member
+				of this plan then answers its zero default.
 			</description>
 		</method>
 	</methods>

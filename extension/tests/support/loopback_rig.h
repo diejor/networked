@@ -1,32 +1,5 @@
 #pragma once
 
-/* A server plus N clients on a private loopback session, driven from C++.
- *
- * The session is never the process-wide one: a case that shares global state is
- * not a unit test. Time advances only when the rig advances it, so a delay is
- * counted in pumps rather than in wall clock.
- *
- * [codeblock]
- * LoopbackRig rig(2);
- * rig.conditions(0, LocalLinkConditions::wifi());
- * rig.pump(4);
- * int alice = rig.peer_id(0);
- * [/codeblock]
- *
- * Two things about it are true only while NetwMultiplayer is GDScript, and both
- * end when the shell ports.
- *
- * The rig is the ONLY place the native corpus says how an API is constructed.
- * Here that is a script load, which is why a rig case can only run in the tier
- * that can see `res://`: tag such a case `[Networked][<Family>]` and NEVER
- * `[Hosted]`, because a `[Hosted]` case that cannot construct its API in the
- * module tier reads as a pass there rather than as a failure.
- *
- * An API comes back as an `Object *` and a case reaches its verbs through
- * `call()`. When the shell goes native those call sites become ordinary method
- * calls. That sweep is mechanical and greppable, and it is the price of writing
- * cases against a real session now instead of after every family has crossed.
- */
 
 #include "netw_test.h"
 
@@ -37,11 +10,12 @@
 #include "godot/ref_counted.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
-#include "netw/entity.hpp"
-#include "netw/join_payload.hpp"
-#include "netw/promise.hpp"
-#include "netw/table/schema_core.hpp"
-#include "netw/transport/loopback.hpp"
+#include "netw/api/entity.hpp"
+#include "netw/api/join_payload.hpp"
+#include "netw/api/promise.hpp"
+#include "netw/api/schema_core.hpp"
+#include "netw/api/loopback.hpp"
+#include "netw/api/clock_handle.hpp"
 #include "world_decl.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -67,8 +41,6 @@ class LoopbackRig {
     godot::Vector<godot::Ref<netw::LocalMultiplayerPeer>> client_peers;
     godot::Vector<godot::HashMap<godot::StringName, godot::RID>>
         client_declared;
-    // Every owner this rig minted, freed with it. A declaration says it wants
-    // an owner and never authors one, so the lifetime has to live here.
     godot::Vector<godot::Node *> owned_nodes;
     godot::HashMap<godot::StringName, godot::RID> declared;
     godot::HashMap<godot::StringName, godot::RID> declared_state_sets;
@@ -88,8 +60,6 @@ class LoopbackRig {
 
         godot::Ref<godot::SceneMultiplayer> inner;
         inner.instantiate();
-        // A treeless session still needs a root path: poll() refuses to process
-        // inbound packets without one.
         inner->set_root_path(godot::NodePath("/"));
 
         godot::Ref<godot::RefCounted> api = script->call("new", inner);
@@ -113,6 +83,19 @@ class LoopbackRig {
         return script->call("new");
     }
 
+    static godot::Node2D *make_marker() {
+        godot::Ref<godot::Script> script
+            = godot::ResourceLoader::get_singleton()->load(
+                "res://tests/support/marker_fixture.gd"
+            );
+        REQUIRE_MESSAGE(script.is_valid(), "the marker script did not load");
+        if (script.is_null()) {
+            return nullptr;
+        }
+        godot::Object *object = script->call("new");
+        return godot::Object::cast_to<godot::Node2D>(object);
+    }
+
     static void install_services(
         godot::Object *p_api,
         const WorldDecl &p_world
@@ -128,10 +111,14 @@ class LoopbackRig {
                 int(p_api->call("service_install", config)),
                 int(godot::OK)
             );
-            godot::Object *clock = p_api->get("_clock");
-            REQUIRE_MESSAGE(clock != nullptr, "the clock did not install");
-            if (clock != nullptr) {
-                clock->set("manual_tick", true);
+            const godot::Variant held = p_api->get("_native_core");
+            godot::Object *core = held;
+            REQUIRE_MESSAGE(core != nullptr, "the session has no native core");
+            const godot::Ref<netw::NetwClockHandle> clock
+                = core->get("clock_handle");
+            REQUIRE_MESSAGE(clock.is_valid(), "the clock did not install");
+            if (clock.is_valid()) {
+                clock->set_manual_tick(true);
             }
         }
         if (p_world.wants_lagcomp) {
@@ -147,10 +134,6 @@ class LoopbackRig {
         }
     }
 
-    // Composes the flat verbs in the one order that works. The route is bound
-    // before the owner because binding an owner is what promotes an already
-    // routed row, and control is granted last because it needs the wrapper the
-    // owner brought.
     godot::RID stand_up(
         godot::Object *p_api,
         const EntityDecl &p_decl,
@@ -159,8 +142,6 @@ class LoopbackRig {
     ) const {
         godot::Object *api = p_api;
         REQUIRE_MESSAGE(api != nullptr, "a declaration needs a session");
-        // A declared route the session already stands on is that entity, not a
-        // second name for it, so the declaration resolves before it mints.
         godot::RID entity = p_decl.route() > 0
             ? godot::RID(api->call("entity_from_route", p_decl.route()))
             : godot::RID();
@@ -383,9 +364,6 @@ public:
     }
 
     ~LoopbackRig() {
-        // A move parents one owner under another, so every node is detached
-        // before any is freed: freeing a container first would leave the
-        // pointers to its children dangling in this same list.
         for (godot::Node *node : owned_nodes) {
             if (node != nullptr && node->get_parent() != nullptr) {
                 node->get_parent()->remove_child(node);
@@ -418,10 +396,17 @@ public:
         return client_apis.size();
     }
 
-    // The client's own handle on a declared entity, or an invalid RID when it
-    // has not mirrored one. Unlike `entity_of` this ASKS rather than requires,
-    // because a law about what a peer cannot answer has to be able to run on a
-    // peer that never saw the entity.
+    godot::Ref<netw::NetwClockHandle> clock_of(godot::Object *p_api) const {
+        REQUIRE_MESSAGE(p_api != nullptr, "a clock needs a session to be on");
+        const godot::Variant held = p_api->get("_native_core");
+        godot::Object *core = held;
+        REQUIRE_MESSAGE(core != nullptr, "the session has no native core");
+        const godot::Ref<netw::NetwClockHandle> clock
+            = core->get("clock_handle");
+        REQUIRE_MESSAGE(clock.is_valid(), "the session has no clock");
+        return clock;
+    }
+
     godot::RID client_entity_of(
         int p_client,
         const godot::StringName &p_name
@@ -435,9 +420,6 @@ public:
                                                         : godot::RID();
     }
 
-    // Ids are drawn rather than counted, so this is the only way to name a
-    // peer. Nothing may hardcode one. A negative index names the server, as it
-    // does for [method peer].
     int peer_id(int p_index) const {
         if (p_index < 0) {
             return link->get_server_peer()->get_unique_id();
@@ -450,7 +432,6 @@ public:
         return client_apis.size();
     }
 
-    // Returns the new client's index.
     int add_client() {
         godot::Ref<netw::LocalMultiplayerPeer> peer
             = link->create_client_peer();
@@ -461,8 +442,6 @@ public:
         return client_apis.size() - 1;
     }
 
-    // The link first, then the server, then every client, so a packet a pump
-    // releases is read by the poll that follows it rather than the next one.
     void pump(int p_times = 1) {
         for (int round = 0; round < p_times; ++round) {
             link->poll();
@@ -473,7 +452,6 @@ public:
         }
     }
 
-    // Virtual time only. Never a wall clock.
     void advance(double p_ms) {
         link->advance_time(p_ms);
         poll_api(server_api);
@@ -490,7 +468,6 @@ public:
         link->release_inbound_packets(peer(p_client));
     }
 
-    // `p_from` of 0 conditions traffic from every sender.
     void conditions(
         int p_client,
         const godot::Ref<netw::LocalLinkConditions> &p_conditions,
@@ -499,9 +476,6 @@ public:
         link->set_link_conditions(peer(p_client), p_conditions, p_from);
     }
 
-    // Stands one declaration up on the server and returns its handle. An owner
-    // is minted only when the declaration asks for one, so a wrapperless row
-    // costs no node.
     godot::RID declare_entity(const EntityDecl &p_decl) {
         godot::Node *owner = nullptr;
         if (p_decl.wants_owner()) {
@@ -526,12 +500,10 @@ public:
         const godot::StringName &p_username = godot::StringName()
     ) {
         godot::Object *api = p_client < 0 ? server() : client(p_client);
-        godot::Object *session = api->get("_session");
-        REQUIRE_MESSAGE(session != nullptr, "the session machine is missing");
         godot::Ref<netw::JoinPayload> payload;
         payload.instantiate();
         payload->set_username(p_username);
-        session->call("submit_join", payload);
+        api->call("session_submit_join", payload);
         pump(4);
         return godot::Object::cast_to<godot::Object>(
             api->get("local_participant")
@@ -580,10 +552,6 @@ public:
         return found != sets.end() ? found->value : godot::RID();
     }
 
-    // A scene is its entity record, so a declared one is composed rather than
-    // spawned. The container carries the one content child every scene verb
-    // reads its stem and its layer key off, and the facet is declared before
-    // the route binds, which is the rule `scene_declare` states.
     godot::RID declare_scene(
         const godot::StringName &p_name,
         const godot::StringName &p_stem = godot::StringName()
@@ -599,8 +567,15 @@ public:
 
         godot::Node *container = memnew(godot::Node);
         container->set_name("Scene");
-        godot::Node *level = memnew(godot::Node);
+        godot::Node2D *level = memnew(godot::Node2D);
         level->set_name(stem);
+        godot::Node2D *marker = make_marker();
+        REQUIRE_MESSAGE(marker != nullptr, "the scene marker did not instantiate");
+        if (marker == nullptr) {
+            return godot::RID();
+        }
+        marker->set_name("Marker");
+        level->add_child(marker);
         container->add_child(level);
         owned_nodes.push_back(container);
 
@@ -616,17 +591,12 @@ public:
         return scene;
     }
 
-    // Seats [param p_entity] into [param p_scene] by parenting it under the
-    // scene's content root, which is what membership by ancestry IS. The
-    // `scene_move` verb refuses here rather than doing this: it resolves a
-    // destination through the registry `tree_entered` fills, and a declared
-    // container never enters a tree.
     godot::Object *enter_scene(const godot::StringName &p_name) {
-        godot::Object *scenes = server()->get("_scenes");
+        godot::Object *scenes = server();
         REQUIRE_MESSAGE(scenes != nullptr, "the session has no scene core");
         godot::Node *container = node_of(entity_of(p_name));
         REQUIRE_MESSAGE(container != nullptr, "the scene has no container");
-        scenes->call("_on_scene_entered", container);
+        scenes->call("_scene_on_container_entered", container);
         pump();
         return scenes;
     }
@@ -663,9 +633,9 @@ public:
             int(godot::OK)
         );
 
-        godot::Object *scenes = api->get("_scenes");
+        godot::Object *scenes = api;
         REQUIRE_MESSAGE(scenes != nullptr, "the client has no scene core");
-        scenes->call("_on_scene_entered", container);
+        scenes->call("_scene_on_container_entered", container);
         pump();
         client_declared.ptrw()[p_client][p_name] = mirror;
         return mirror;
@@ -699,8 +669,6 @@ public:
         server()->call("interest_flush");
     }
 
-    // The content root every scene verb reads a stem and a layer key off,
-    // which is the container's only child.
     godot::Node *content_of(const godot::RID &p_scene) const {
         godot::Node *container = node_of(p_scene);
         if (container == nullptr || container->get_child_count() == 0) {
@@ -709,7 +677,6 @@ public:
         return container->get_child(0);
     }
 
-    // Services precede scenes, and scenes precede entities that may name one.
     void declare_world(const WorldDecl &p_world) {
         if (p_world.wants_clock) {
             tick_period_ms = 1000.0 / double(p_world.clock_tickrate);
@@ -763,10 +730,6 @@ public:
         }
     }
 
-    // A group is reconciled by the peer that predicts its owner, so every
-    // member has to exist there. A player mirrored only onto its own client is
-    // present nowhere the island can see it, which is what a remote the owner
-    // simulates actually is.
     void mirror_island(
         const WorldDecl &p_world,
         const WorldDecl::IslandRow &p_row
@@ -791,8 +754,6 @@ public:
                                         .controlled_by(0);
             declare_mirror(seat, decl);
             pump();
-            // A member the owner steps has to predict, or it is a replicated
-            // row the island can see and the pool has no slot for.
             const godot::RID mirror = entity_of(member, seat);
             configure_prediction(
                 client(seat),
@@ -823,12 +784,10 @@ public:
         return index < 0 ? -1 : p_world.rows[index].player_client;
     }
 
-    // NetwMultiplayer.IslandParam, which crosses as an int.
     enum MemberParam {
         MEMBER_PARAM_FIDELITY = 0,
     };
 
-    // NetwPredict.Fidelity.
     enum Fidelity {
         FIDELITY_PROXY = 0,
         FIDELITY_SIMULATED = 1,
@@ -841,13 +800,6 @@ public:
         ISLAND_PARAM_PROMOTION_METERS = 5,
     };
 
-    // Islands are seated after every entity exists, because membership names
-    // entities rather than declaring them.
-    //
-    // A group is reconciled by the peer that PREDICTS it, so the declaration
-    // reaches every peer holding all of its entities rather than the server
-    // alone. A client short one member has no group to admit, and seating a
-    // partial one there would make the roster peer-dependent.
     void declare_island(const WorldDecl::IslandRow &p_row) {
         seat_island(server(), p_row, -1);
         for (int index = 0; index < count(); ++index) {
@@ -919,8 +871,6 @@ public:
         return records.find(p_name) != records.end();
     }
 
-    // What this rig declared under [param name]. Names in, handles out: an RID
-    // in a failure message is a number nobody can read.
     godot::RID entity_of(
         const godot::StringName &p_name,
         int p_client = -1
@@ -936,8 +886,6 @@ public:
         return found != records.end() ? found->value : godot::RID();
     }
 
-    // The loopback is a star, so client-to-client traffic costs at least two
-    // pumps. Budgets are generous for that reason rather than by habit.
     bool pump_until(const godot::Callable &p_condition, int p_budget = 120) {
         for (int spent = 0; spent < p_budget; ++spent) {
             if (bool(p_condition.callv(godot::Array()))) {
@@ -955,11 +903,9 @@ public:
     void step_ticks(int p_ticks) {
         REQUIRE_MESSAGE(p_ticks >= 0, "a tick count cannot be negative");
         for (int step = 0; step < p_ticks; ++step) {
-            godot::Object *server_clock = server()->get("_clock");
-            server_clock->call("force_step", 1);
+            clock_of(server())->force_step(1);
             for (int index = 0; index < count(); ++index) {
-                godot::Object *clock = client(index)->get("_clock");
-                clock->call("force_step", 1);
+                clock_of(client(index))->force_step(1);
             }
             link->advance_time(tick_period_ms);
             poll_api(server_api);
@@ -973,10 +919,6 @@ public:
         step_split_frame(p_ticks, p_ticks, true);
     }
 
-    // A frame the owner reaches and authority may not. A FRAME-scheduled
-    // authority consumes on the frame hook rather than on the tick, so
-    // withholding its ticks alone changes nothing: a queue stands ahead of it
-    // only across frames authority never ran at all.
     void step_split_frame(int p_client_ticks, int p_server_ticks) {
         step_split_frame(p_client_ticks, p_server_ticks, p_server_ticks > 0);
     }
@@ -994,29 +936,27 @@ public:
             p_server_ticks >= 0,
             "a frame tick count cannot be negative"
         );
-        godot::Object *server_clock = server()->get("_clock");
+        const godot::Ref<netw::NetwClockHandle> server_clock
+            = clock_of(server());
         if (p_server_present) {
-            server_clock->emit_signal("before_tick_loop");
+            server_clock->begin_tick_loop();
         }
         for (int index = 0; index < count(); ++index) {
-            godot::Object *clock = client(index)->get("_clock");
-            clock->emit_signal("before_tick_loop");
+            clock_of(client(index))->begin_tick_loop();
         }
         if (p_server_present && p_server_ticks > 0) {
-            server_clock->call("force_step", p_server_ticks);
+            server_clock->force_step(p_server_ticks);
         }
         if (p_client_ticks > 0) {
             for (int index = 0; index < count(); ++index) {
-                godot::Object *clock = client(index)->get("_clock");
-                clock->call("force_step", p_client_ticks);
+                clock_of(client(index))->force_step(p_client_ticks);
             }
         }
         if (p_server_present) {
-            server_clock->emit_signal("after_tick_loop");
+            server_clock->end_tick_loop();
         }
         for (int index = 0; index < count(); ++index) {
-            godot::Object *clock = client(index)->get("_clock");
-            clock->emit_signal("after_tick_loop");
+            clock_of(client(index))->end_tick_loop();
         }
         link->advance_time(tick_period_ms);
         poll_api(server_api);
@@ -1038,8 +978,6 @@ public:
         return handle;
     }
 
-    // The peer under one index, or the server's at any negative index. What
-    // the link verbs are addressed by.
     netw::LocalMultiplayerPeer *peer(int p_client) const {
         if (p_client < 0) {
             return link->get_server_peer().ptr();
@@ -1058,4 +996,4 @@ private:
 
 #endif
 
-} // namespace netw_test
+}

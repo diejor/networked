@@ -1,23 +1,5 @@
 #pragma once
 
-/* The scenes and entities a case is about, declared together as one value.
- *
- * A world declared entity-at-a-time reads as setup; declared as one record it
- * reads as the thing the law is about, and the scene an entity belongs to is
- * stated beside the entity rather than threaded through a call order. Applying
- * it is the only step that touches a session, so the same world can be declared
- * once and stood up on more than one peer.
- *
- * [codeblock]
- * WorldDecl world;
- * world.scene("Arena")
- *      .entity(EntityDecl().named("Alice").on_route(31), "Arena")
- *      .entity(EntityDecl().named("Row").wrapperless());
- * rig.declare_world(world);
- * rig.entity("Alice");
- * [/codeblock]
- */
-
 #include "entity_decl.h"
 
 #include "godot/templates.hpp"
@@ -27,9 +9,6 @@ namespace netw_test {
 
 class WorldDecl {
 public:
-    // A scene is named by the case and archetyped by its stem, and the two
-    // differ only when a world declares two instances of one level: stems are
-    // not unique, so a second instance needs its own name to be asked for.
     struct SceneRow {
         godot::StringName name;
         godot::StringName stem;
@@ -45,8 +24,6 @@ private:
         bool hosted = false;
     };
 
-    // An island is a relation between declared entities rather than a property
-    // of one, so it is named here and not on EntityDecl.
     struct IslandRow {
         godot::StringName owner;
         godot::Vector<godot::StringName> members;
@@ -86,8 +63,6 @@ public:
         return *this;
     }
 
-    // An entity naming no scene is declared outside every one of them, which is
-    // what an entity the session routes but no scene owns actually is.
     WorldDecl &entity(
         const EntityDecl &p_decl,
         const godot::StringName &p_scene = godot::StringName()
@@ -105,24 +80,16 @@ public:
         return *this;
     }
 
-    // An entity the listen-server host both controls and holds authority over.
-    // It is one peer's row rather than two, so it has no mirror to declare and
-    // resolves HOST_LOCAL where a player row resolves PREDICT and CONSUME.
     WorldDecl &hosted(const EntityDecl &p_decl) {
         rows.push_back(Row{p_decl, {}, -1, true});
         return *this;
     }
 
-    // NetwPredict.Reconcile, which has no native twin because only the shell
-    // admits a group.
     enum Reconcile {
         INDEPENDENT = 0,
         JOINT = 1,
     };
 
-    // Seats [param members] in [param owner]'s island and names how the group
-    // reconciles. A JOINT group replays its members together from one floor,
-    // which is what makes the owner's simulation of them reproducible.
     WorldDecl &island(
         const godot::StringName &p_owner,
         const godot::Vector<godot::StringName> &p_members,
@@ -136,8 +103,6 @@ public:
         return *this;
     }
 
-    // Draws nearby entities into the last declared island. Promotion is what
-    // turns a candidate into a member the group steps.
     WorldDecl &promoting(
         netw::predict::Promotion p_promotion,
         int p_count = 0,
@@ -151,9 +116,6 @@ public:
         return *this;
     }
 
-    // Names a member the island steps rather than displays. Membership alone
-    // seats a participant; fidelity is what puts it in the group the owner
-    // replays.
     WorldDecl &simulating(const godot::StringName &p_member) {
         REQUIRE_MESSAGE(!islands.is_empty(), "fidelity needs an island");
         islands.write[islands.size() - 1].simulated.push_back(p_member);

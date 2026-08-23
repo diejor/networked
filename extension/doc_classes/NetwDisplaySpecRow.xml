@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplaySpecRow" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One display channel as the authoring registry declares it, before anything is built.
+	</brief_description>
+	<description>
+		The session builds an entity's display by asking what that entity declares, and the answer is a list of these. A row names WHERE a value comes from, WHERE it is shown, and HOW it is smoothed, and it names nothing else: it holds no history, no port and no runtime, because a declaration outlives every channel built from it.
+		Two shapes, and the difference is whether anything is sampled.
+		[codeblock]
+		of_property(node, "position", spec)   # sampled from node.position each frame
+		of_argument(node, spec)               # written when an event carries it
+		[/codeblock]
+		A property row's [member target_prop] is the spec's [member NetwInterpolate.target] when one is set and the source property otherwise, so redirecting a channel with [code].to()[/code] is a property of the spec rather than of the caller. An argument row has no [member source_prop] at all, because an event argument arrives rather than being read.
+		Rows are answered by the session's spec reader and consumed immediately, so a row that names a freed node is dropped rather than repaired.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="is_displayable" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether this row can become a channel: it names a live [member node], a non-empty [member target_prop], and a spec that actually smooths something.
+				A spec in [constant NetwInterpolate.MODE_NONE] declares a value tracked for other reasons and displayed by nobody, which is why it is a row that exists and does not build.
+			</description>
+		</method>
+		<method name="of_argument" qualifiers="static">
+			<return type="NetwDisplaySpecRow" />
+			<param index="0" name="node" type="Node" />
+			<param index="1" name="spec" type="NetwInterpolate" />
+			<description>
+				A row for a value that arrives on an RPC or signal argument. It takes [member target_prop] from the spec's [member NetwInterpolate.target] and has no source, so the channel built from it writes and never samples.
+			</description>
+		</method>
+		<method name="of_property" qualifiers="static">
+			<return type="NetwDisplaySpecRow" />
+			<param index="0" name="node" type="Node" />
+			<param index="1" name="source_prop" type="StringName" />
+			<param index="2" name="spec" type="NetwInterpolate" />
+			<description>
+				A row for a property sampled on [param node]. [member target_prop] is the spec's [member NetwInterpolate.target] when it is set, and [param source_prop] otherwise.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="node" type="Object" setter="set_node" getter="get_node">
+			The node this row is declared on, held by id rather than by reference: the scene owns it, and a row must not keep a freed subtree alive.
+		</member>
+		<member name="source_prop" type="StringName" setter="set_source_prop" getter="get_source_prop">
+			The property sampled on [member node], or empty for an argument row. Emptiness is what distinguishes the two shapes.
+		</member>
+		<member name="spec" type="NetwInterpolate" setter="set_spec" getter="get_spec">
+			How the value is smoothed between the samples that reach it.
+		</member>
+		<member name="target_prop" type="StringName" setter="set_target_prop" getter="get_target_prop">
+			The property the smoothed value is written to. Equal to [member source_prop] for a channel that smooths a value in place, and different for one redirected with [code].to()[/code] or aimed at a visual root.
+		</member>
+	</members>
+</class>

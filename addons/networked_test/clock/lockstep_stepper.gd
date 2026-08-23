@@ -1,13 +1,13 @@
 ## Drives clocked loopback peers tick by tick with no real frames.
 ##
 ## Each call to [method sync_ticks] runs a synchronous loop. Per tick it forces
-## exactly one [method ClockCore.force_step] on every clock, advances the
+## exactly one [method NetwClockHandle.force_step] on every clock, advances the
 ## loopback delay clock by one tick period, then flushes one
 ## [method MultiplayerAPI.poll] per peer. Because there is exactly one send per
 ## tick, input and state are never thinned, so reconciliation fidelity matches a
 ## real run while the wall-clock cost collapses to CPU time.
 ##
-## The stepper owns ticking: it sets [member ClockCore.manual_tick] on
+## The stepper owns ticking: it sets [member NetwClockHandle.manual_tick] on
 ## every clock so the real [code]_physics_process[/code] loop stops
 ## advancing. The session is driven through
 ## [method LocalLoopbackSession.advance_time], not real physics frames, so
@@ -25,7 +25,7 @@
 class_name LockstepStepper
 extends RefCounted
 
-var clocks: Array[ClockCore] = []
+var clocks: Array[NetwClockHandle] = []
 var apis: Array[MultiplayerAPI] = []
 var session: LocalLoopbackSession
 var tick_period_ms: float
@@ -43,7 +43,7 @@ var _frame: int = 0
 
 
 func _init(
-		p_clocks: Array[ClockCore],
+		p_clocks: Array[NetwClockHandle],
 		p_apis: Array[MultiplayerAPI],
 		p_session: LocalLoopbackSession,
 		p_tickrate: int,
@@ -72,14 +72,14 @@ func sync_ticks(ticks: int) -> void:
 ##
 ## [method sync_ticks] steps the clock and nothing else, which is all a
 ## [constant NetwPredict.Schedule.TICK] entity needs. A frame-tier entity
-## authors, sends and consumes in the [signal ClockCore.after_tick_loop] pass,
+## authors, sends and consumes in the [signal NetwMultiplayer.after_tick_loop] pass,
 ## so a run that never emits the bracket leaves it at drive zero however many
 ## ticks it takes.
 ##
 ## The ratio is honored rather than collapsed to one tick per frame, because a
 ## frame-tier transition is a declared quantum of physics frames: a run that
 ## steps the clock every frame drives each transition in one frame where the
-## clock declares [member ClockCore.physics_factor], and every drive charges a
+## clock declares [member NetwClockHandle.physics_factor], and every drive charges a
 ## [member NetwPredictStats.quantum_faults].
 func sync_frames(frames: int) -> void:
 	assert(frames >= 0, "sync_frames: frames must be non-negative.")
@@ -94,10 +94,10 @@ func sync_frames(frames: int) -> void:
 	for _i in range(frames):
 		_frame += 1
 		for i in clocks.size():
-			clocks[i].before_tick_loop.emit()
+			clocks[i].begin_tick_loop()
 			if _frame % ratios[i] == 0:
 				clocks[i].force_step(1)
-			clocks[i].after_tick_loop.emit()
+			clocks[i].end_tick_loop()
 		_flush(frame_period_ms)
 
 

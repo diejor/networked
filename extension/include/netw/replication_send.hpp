@@ -1,18 +1,5 @@
 #pragma once
 
-/* The shell's handle on the native send pipeline.
- *
- * A binding that exists so the GDScript shell can drive `netw::repl` before
- * `NetwMultiplayer` itself is native, which is the same arrangement every core
- * that has already crossed uses. It holds no logic: every verb forwards, and
- * the currency is plain data because a per-row script hop is the one crossing
- * the migration rules forbid.
- *
- * TODO: unregister this class and delete this header once NetwMultiplayer is
- * native and constructs `netw::repl::SessionSend` directly. Nothing outside
- * the shell may depend on it before then.
- */
-
 #include "godot/callable.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"

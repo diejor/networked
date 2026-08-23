@@ -2,6 +2,8 @@
 
 #include "godot/class_db.hpp"
 
+using namespace godot;
+
 namespace netw {
 
 namespace {
@@ -414,7 +416,221 @@ Dictionary NetwPredictEpisodeReport::decision_eligibility(int p_index) const {
         &NetwPredictEpisodeReport::m_name \
     )
 
+Dictionary NetwPredictEpisodeReport::to_dictionary(
+    const Dictionary &p_witness_details
+) const {
+    Dictionary out;
+    if (!active()) {
+        return out;
+    }
+    Array writes;
+    for (int at = 0; at < write_count(); ++at) {
+        Dictionary row;
+        row["episode"] = write_episode(at);
+        row["write_id"] = write_id(at);
+        row["operator"] = write_operator(at);
+        row["basis"] = write_basis(at);
+        row["delta_fp"] = write_delta_fp(at);
+        row["target"] = write_target(at);
+        row["outcome"] = write_outcome(at);
+        row["meter_before"] = write_meter_before(at);
+        row["meter_after"] = write_meter_after(at);
+        row["verdicts"] = write_verdicts(at);
+        row["verify_run"] = write_verify_run(at);
+        row["judged_transition"] = write_judged_transition(at);
+        row["best_meter"] = write_best_meter(at);
+        row["trigger_shape"] = write_trigger_shape(at);
+        row["evidence_free"] = write_evidence_free(at);
+        row["null_operator"] = write_null_operator(at);
+        writes.push_back(row);
+    }
+    Array comparisons;
+    for (int at = 0; at < comparison_count(); ++at) {
+        Dictionary row;
+        row["transition"] = comparison_transition(at);
+        row["meter"] = comparison_meter(at);
+        row["agrees"] = comparison_agrees(at);
+        row["write_id"] = comparison_write_id(at);
+        comparisons.push_back(row);
+    }
+    Array decisions;
+    for (int at = 0; at < decision_count(); ++at) {
+        Dictionary row;
+        row["operator"] = decision_operator(at);
+        row["basis"] = decision_basis(at);
+        row["eligible"] = decision_eligible(at);
+        row["applied"] = decision_applied(at);
+        row["eligibility"] = decision_eligibility(at);
+        decisions.push_back(row);
+    }
+    Array taint;
+    for (int at = 0; at < taint_count(); ++at) {
+        taint.push_back(taint_at(at));
+    }
+    Array reopen_chain;
+    for (int at = 0; at < reopen_count(); ++at) {
+        reopen_chain.push_back(reopen_at(at));
+    }
+    Array secondary;
+    for (int at = 0; at < secondary_generator_count(); ++at) {
+        Dictionary row;
+        row["transition"] = secondary_generator_transition(at);
+        row["label"] = secondary_generator_label(at);
+        row["domain"] = secondary_generator_domain(at);
+        row["attribution"] = secondary_generator_attribution(at);
+        row["flags"] = secondary_generator_flags(at);
+        row["beyond_retention"] = secondary_generator_beyond_retention(at);
+        secondary.push_back(row);
+    }
+    Dictionary generator;
+    if (!generator_present()) {
+        generator["status"] = StringName("UNKNOWN_BEYOND_RETENTION");
+    } else {
+        generator["transition"] = generator_transition();
+        generator["label"] = generator_label();
+        generator["c_hash"] = generator_c_hash();
+        generator["e_digest"] = generator_e_digest();
+        generator["pre_fp"] = generator_pre_fp();
+        generator["topo_fp"] = generator_topology_fp();
+        generator["raw_fp"] = generator_raw_fp();
+        generator["witness_fp"] = generator_witness_fp();
+        generator["evidence_mask"] = generator_evidence_mask();
+        generator["pre_pose_fp"] = generator_pre_pose_fp();
+        generator["pre_momentum_fp"] = generator_pre_momentum_fp();
+        generator["pre_controller_fp"] = generator_pre_controller_fp();
+        generator["post_fp"] = generator_post_fp();
+        generator["post_pose_fp"] = generator_post_pose_fp();
+        generator["post_momentum_fp"] = generator_post_momentum_fp();
+        generator["post_controller_fp"] = generator_post_controller_fp();
+        generator["domain"] = generator_domain();
+        generator["attribution"] = generator_attribution();
+        generator["flags"] = generator_flags();
+        generator["beyond_retention"] = generator_beyond_retention();
+        generator["witness_detail"]
+            = p_witness_details.get(generator_transition(), Dictionary());
+    }
+
+    out["id"] = id();
+    out["opened_transition"] = opened_transition();
+    out["generator_row_copy"] = generator;
+    out["attribution"] = attribution();
+    out["writes"] = writes;
+    out["comparisons"] = comparisons;
+    out["decisions"] = decisions;
+    out["taint"] = taint;
+    out["secondary_generators"] = secondary;
+    out["reopen_chain"] = reopen_chain;
+    out["reopened_from"] = reopened_from();
+    out["state"] = state();
+    out["non_contraction_used"] = non_contraction_used();
+    out["withheld_non_contractions"] = withheld_non_contractions();
+    out["evidence_free_non_contractions"] = evidence_free_non_contractions();
+    out["nc_no_trigger"] = no_trigger_non_contractions();
+    out["nc_mixed_trigger"] = mixed_trigger_non_contractions();
+    out["closure_used"] = closure_used();
+    out["agreement_run"] = agreement_run();
+    out["last_comparison_transition"] = last_comparison_transition();
+    out["agreement_write_id"] = agreement_write_id();
+    out["last_write_id"] = last_write_id();
+    out["closed_transition"] = closed_transition();
+    out["fallback_transition"] = fallback_transition();
+    out["resume_ack_age"] = resume_ack_age();
+    out["quarantine_target"] = quarantine_target();
+    out["quarantine_clean_run"] = quarantine_clean_run();
+    out["reseed_transition"] = reseed_transition();
+    out["aligned_transition"] = aligned_transition();
+    out["evidence_dropped"] = evidence_dropped();
+    out["transport_decided"] = transport_decided();
+    out["dissipate_decided"] = dissipate_decided();
+    out["demoted"] = demoted();
+    out["breach_transition"] = breach_transition();
+    const Dictionary breach_witness
+        = p_witness_details.get(breach_transition(), Dictionary());
+    out["breach_witness"] = breach_witness;
+
+    Dictionary named_generator;
+    named_generator["transition"] = generator_present()
+        ? generator_transition()
+        : opened_transition();
+    named_generator["boundary"] = attribution();
+    named_generator["row"] = generator;
+    out["generator"] = named_generator;
+
+    Array attempts;
+    Dictionary used;
+    for (int at = 0; at < decisions.size(); ++at) {
+        Dictionary decision = Dictionary(decisions[at]).duplicate(true);
+        Dictionary matched;
+        for (int w = 0; w < writes.size(); ++w) {
+            if (used.has(w)) {
+                continue;
+            }
+            const Dictionary candidate = writes[w];
+            if (int64_t(candidate["operator"]) == int64_t(decision["operator"])
+                && int64_t(candidate["basis"]) == int64_t(decision["basis"])) {
+                matched = candidate.duplicate(true);
+                used[w] = true;
+                break;
+            }
+        }
+        decision["outcome"]
+            = matched.is_empty() ? Variant(-1) : matched["outcome"];
+        decision["write"] = matched;
+        attempts.push_back(decision);
+    }
+    for (int w = 0; w < writes.size(); ++w) {
+        if (used.has(w)) {
+            continue;
+        }
+        const Dictionary write = Dictionary(writes[w]).duplicate(true);
+        Dictionary row;
+        row["operator"] = write["operator"];
+        row["basis"] = write["basis"];
+        row["eligible"] = true;
+        row["applied"] = true;
+        row["eligibility"] = Dictionary();
+        row["outcome"] = write["outcome"];
+        row["write"] = write;
+        attempts.push_back(row);
+    }
+    out["operators"] = attempts;
+    out["contraction"] = comparisons.duplicate(true);
+
+    Dictionary disposition;
+    disposition["state"] = state();
+    disposition["non_contraction_used"] = non_contraction_used();
+    disposition["withheld_non_contractions"] = withheld_non_contractions();
+    disposition["evidence_free_non_contractions"]
+        = evidence_free_non_contractions();
+    disposition["nc_no_trigger"] = no_trigger_non_contractions();
+    disposition["nc_mixed_trigger"] = mixed_trigger_non_contractions();
+    disposition["closure_used"] = closure_used();
+    disposition["closed_transition"] = closed_transition();
+    disposition["fallback_transition"] = fallback_transition();
+    disposition["demoted"] = demoted();
+    disposition["breach_transition"] = breach_transition();
+    disposition["breach_witness"] = breach_witness;
+    disposition["resume_ack_age"] = resume_ack_age();
+    disposition["quarantine_target"] = quarantine_target();
+    disposition["quarantine_clean_run"] = quarantine_clean_run();
+    disposition["reseed_transition"] = reseed_transition();
+    disposition["aligned_transition"] = aligned_transition();
+    disposition["evidence_dropped"] = evidence_dropped();
+    out["disposition"] = disposition;
+
+    if (reopen_chain.is_empty() && reopened_from() > 0) {
+        reopen_chain.push_back(reopened_from());
+        reopen_chain.push_back(id());
+        out["reopen_chain"] = reopen_chain;
+    }
+    return out;
+}
+
 void NetwPredictEpisodeReport::_bind_methods() {
+    ClassDB::bind_method(
+        D_METHOD("to_dictionary", "witness_details"),
+        &NetwPredictEpisodeReport::to_dictionary
+    );
     NETW_BIND_EPISODE(active);
     NETW_BIND_EPISODE(id);
     NETW_BIND_EPISODE(state);

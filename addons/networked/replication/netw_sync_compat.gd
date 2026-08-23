@@ -45,7 +45,7 @@
 ## [signal MultiplayerSynchronizer.delta_synchronized] fire on the receiving
 ## node at apply. The pipeline then exceeds the native contract in one place:
 ## recipients come from the [NetwSpawnBook] book clamped by
-## [InterestCore] admission, so a peer is never sent state for a node
+## the session interest plane admission, so a peer is never sent state for a node
 ## it was never sent, and a stream stops the moment its route stops being
 ## [constant NetwMultiplayer.EntityState.LIVE] instead of trailing the despawn.
 ## Watch lists are capped at 64 properties, asserted loudly at consumption
@@ -209,7 +209,7 @@ func _on_sync_visibility_changed(_for_peer: int, root: Node) -> void:
 		api._replication._spawn_pipeline.schedule_visibility_sweep()
 
 
-## Refreshes every event-fed [NetwInterestEngine] synchronizer intent row.
+## Refreshes every event-fed session interest synchronizer intent row.
 func refresh_interest_intents() -> void:
 	var roots: Dictionary[Node, bool] = { }
 	for binding in _consumed:
@@ -232,10 +232,13 @@ func _refresh_interest_intent(root: Node) -> void:
 	if not is_instance_valid(entity_root):
 		return
 	var admitted: Array[int] = []
-	for peer_id in api._interest._known_peer_ids():
+	for peer_id in api._native_core.interest_known_peers():
 		if synchronizer_verdict(peer_id, entity_root):
 			admitted.append(peer_id)
-	api._interest._set_entity_intent(entity, admitted)
+	api._native_core.interest_set_entity_intent(
+		entity,
+		PackedInt64Array(admitted),
+	)
 
 
 func _refresh_binding_intents_for_root(root: Node) -> void:
@@ -251,7 +254,7 @@ func _refresh_binding_intent(binding: _Consumed) -> void:
 		return
 	var peer_ids: Array[int] = []
 	if api.is_server():
-		peer_ids = api._interest._known_peer_ids()
+		peer_ids.assign(api._native_core.interest_known_peers())
 	elif api.has_multiplayer_peer():
 		peer_ids.assign(api.get_peers())
 	binding.intent_by_peer.clear()
@@ -357,7 +360,7 @@ func pump() -> void:
 	# A clock can tick before the session assigns a role, and with no role there
 	# are no live routes to gather for, so the pump has nothing to do and must
 	# not read the role-dependent host flag yet.
-	if api.role == SessionCore.Role.NONE:
+	if api.role == NetwMultiplayer.Role.NONE:
 		return
 	var host := api.is_host
 
@@ -484,7 +487,7 @@ func _recipients_for(
 		for peer_id in base:
 			if peer_id == local_id:
 				continue
-			if filtered and not api._interest.wire_admits(peer_id, entity):
+			if filtered and not api._native_core.interest_wire_admits(peer_id, entity):
 				continue
 			if not binding.intent_by_peer.get(peer_id, false):
 				continue
@@ -506,7 +509,7 @@ func _recipients_for(
 ## visible. [NetwSpawnPipeline] consults this for spawn fate and the pump
 ## consults it for stream fate, so both edges always agree. Filter callables
 ## are not script-readable, so interest-installed filters are composed by the
-## callers through [InterestCore] directly.
+## callers through the session directly.
 func synchronizer_verdict(peer_id: int, node: Node) -> bool:
 	var api := _api()
 	var local_id := api.get_unique_id() if api and api.inner.multiplayer_peer else 1
@@ -601,7 +604,7 @@ func _run_encode_stage(peer: int, stock: PackedByteArray) -> PackedByteArray:
 	api._sync_encoder = func(_peer: int, _tick: int) -> PackedByteArray:
 		return stock
 	api._sync_encode_meta = { }
-	var tick := api.clock.tick if api.clock.is_configured() else 0
+	var tick := api.clock.tick if api.clock.is_configured else 0
 	var bytes := api._sync_encode(peer, tick)
 	api._sync_encoder = Callable()
 	api.report_event(
@@ -619,7 +622,7 @@ func _run_encode_stage(peer: int, stock: PackedByteArray) -> PackedByteArray:
 ## Applies one [constant NetwFrameEnvelope.Channel.SYNC] payload to the
 ## consumed binding it addresses, then emits
 ## [signal MultiplayerSynchronizer.synchronized] on the stock node and feeds
-## the applied values to [DisplayCore]. The sender must be the
+## the applied values to the display. The sender must be the
 ## target synchronizer's authority. Called from the receive dispatch after
 ## datagram freshness gating.
 func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> void:
@@ -774,8 +777,8 @@ func _run_decode_stage(
 # stream never writes a display buffer.
 func _feed_interpolation(binding: _Consumed) -> void:
 	var api := _api()
-	var iface := api._display if api else null
-	if not iface:
+	var core := api._native_core if api else null
+	if not core:
 		return
 	var sync := binding.sync()
 	if not is_instance_valid(sync) \
@@ -785,7 +788,7 @@ func _feed_interpolation(binding: _Consumed) -> void:
 	var paths := _display_paths_for(binding, sync)
 	if paths.is_empty():
 		return
-	var tick := api.clock.tick if api.clock.is_configured() else 0
+	var tick := api.clock.tick if api.clock.is_configured else 0
 	for entry: Array in paths:
 		var node := entry[0] as Node
 		if not is_instance_valid(node):
@@ -794,7 +797,7 @@ func _feed_interpolation(binding: _Consumed) -> void:
 		var prop := entry[1] as StringName
 		var spec := NetwScriptModel.get_node_property_interpolator(node, prop)
 		if spec:
-			iface._record(node, prop, node.get(prop), tick, spec, false)
+			core.display_record(node, prop, node.get(prop), tick, spec, false)
 
 
 # Resolves and caches the consumed sync's replicated [node, property] paths on the

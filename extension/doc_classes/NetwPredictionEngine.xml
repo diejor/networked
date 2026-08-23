@@ -45,12 +45,31 @@
 			<description>
 			</description>
 		</method>
+		<method name="archetype_axes" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="archetype" type="int" />
+			<description>
+				The axis point a [enum NetwPredict.Archetype] declares, as the preset a body type implies rather than as a value a game repeated by hand.
+				[codeblock]
+				┠╴declared                     false for NONE, which declares nothing
+				┠╴schedule                     a NetwPredict.Schedule value
+				┠╴missing_policy               a NetwPredict.MissingInput value
+				┠╴recovery_policy              a NetwPredict.RecoveryPolicy value
+				┠╴snap_restore                 a NetwPredict.RestoreMode value
+				┠╴declares_snap_restore        false leaves the declared restore alone
+				┠╴teleport_threshold           in the pose field's own units
+				┖╴declares_teleport_threshold  false leaves the declared distance alone
+				[/codeblock]
+				An axis the archetype does not declare carries its [code]declares_[/code] flag as [code]false[/code], because an archetype names the axes its body type settles and leaves every other one as the game declared it. Reading a flagged-off value overwrites a game's own choice with a default it never asked for.
+			</description>
+		</method>
 		<method name="adopt_alignment">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<param index="2" name="ignore_through" type="int" />
 			<description>
+				Records the alignment a shell staged: where it landed and that the fallback retires, without planning the payload. [method align_reseed] is the same bookkeeping for an alignment the pool planned itself.
 			</description>
 		</method>
 		<method name="align_reseed">
@@ -99,6 +118,7 @@
 			<description>
 				Binds [param owner] as the object this slot reads declared input onto and captures declared state from, and answers whether the slot exists.
 				The slot holds an id rather than a pointer and resolves it at each property-I/O moment, because the simulate step between them is arbitrary user code and may free the object. Binding is optional: a slot driven by [method set_state] alone never binds and touches no property.
+				A callable named [code]_network_tick[/code] on [param owner] is adopted as [method set_simulate]'s step by convention; an explicit [method set_simulate] call always wins and keeps winning across a re-bind. Which declared fields the owner answers for is resolved here rather than per pass, because the declaration and the owner are both fixed once bound, so the answer cannot change without one of them changing.
 			</description>
 		</method>
 		<method name="bind_timeline">
@@ -205,6 +225,14 @@
 				A declared colour zeroes to a transparent one rather than to [Color]'s own default of opaque black, so it coasts to nothing the way every other type does.
 			</description>
 		</method>
+		<method name="clear_out_of_domain_window">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				Drops [param slot]'s out-of-domain window, so [method out_of_domain_until] reads -1 again and [method out_of_domain_at] answers false for every label.
+				A rewire re-keys the transitions a window was expressed in, so an open window cannot mean anything across one and is dropped rather than carried.
+			</description>
+		</method>
 		<method name="close">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
@@ -221,6 +249,7 @@
 			<param index="4" name="post_momentum_fp" type="int" default="0" />
 			<param index="5" name="post_controller_fp" type="int" default="0" />
 			<description>
+				[param post_fp] is the fingerprint of the state this transition ended at, which the next transition's pre-state fingerprint must equal or the chain between them is broken.
 			</description>
 		</method>
 		<method name="compare_state">
@@ -313,6 +342,7 @@
 			<param index="8" name="witness" type="bool" default="false" />
 			<description>
 				Stores [param slot]'s configuration, or refuses when [method supports] answers false. Refused rather than stored, so a slot never holds an axis point its own pool declines to drive.
+				The refusal is the return value and nothing else: this method answers [code]false[/code] and stores nothing rather than raising, so a caller that ignores the answer runs an entity the pool never configured.
 			</description>
 		</method>
 		<method name="confirm_reseed_epoch">
@@ -321,11 +351,20 @@
 			<description>
 			</description>
 		</method>
+		<method name="correction_for_recovery_policy" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="policy" type="int" />
+			<description>
+				The [enum NetwPredict.CorrectionMode] mechanism a [enum NetwPredict.RecoveryPolicy] runs through. A policy names a strategy and the mechanism is how it is carried out, so several policies share one mechanism without sharing a meaning.
+				Only [constant NetwPredict.RecoveryPolicy.REBASE_REPLAY] runs through [constant NetwPredict.CorrectionMode.REPLAY]. [constant NetwPredict.RecoveryPolicy.OBSERVE] writes nothing at all, so the mechanism named for it only decides what the recovery would have run had it written.
+			</description>
+		</method>
 		<method name="converge_rate_of" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				[param slot]'s declared convergence stiffness for [param field], or [code]-1.0[/code] when the declaration named none.
 			</description>
 		</method>
 		<method name="declare_skipped">
@@ -334,6 +373,7 @@
 			<param index="1" name="transition" type="int" />
 			<param index="2" name="label" type="int" />
 			<description>
+				Journals [param transition] as one authority declared it never ran. A transition [param slot] never opened is sealed as a substitution, because a declared skip names exactly which command did not run where a silent gap is indistinguishable from a lost frame. One the slot did open is overlaid instead, so the evidence it already recorded stays readable behind the verdict that retired it.
 			</description>
 		</method>
 		<method name="decline_carry">
@@ -374,6 +414,7 @@
 			<return type="PackedInt64Array" />
 			<param index="0" name="slot" type="int" />
 			<description>
+				[param slot]'s [enum NetwPredict.DriveStat] counters, kept as the decision already computed them so a shell or a plot never recomputes a drive.
 			</description>
 		</method>
 		<method name="enter_quarantine">
@@ -438,6 +479,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				[param slot]'s declared divergence epsilon for [param field], or [code]-1.0[/code] when the declaration named none.
 			</description>
 		</method>
 		<method name="escalation_field_of" qualifiers="const">
@@ -477,6 +519,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="key" type="StringName" />
 			<description>
+				The slot [param key] was compiled to, or [code]-1[/code] when [param slot]'s declaration does not name it. A field's slot here is also its column on the wire, so this is the only place a field name is resolved to a number.
 			</description>
 		</method>
 		<method name="finish_probation">
@@ -504,6 +547,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				Whether [param slot] declared [param field]'s property class as CAUSAL rather than DERIVED or COSMETIC, the same three-way split [code]NetwPropertySet.PropertyClass[/code] declares a property with.
 			</description>
 		</method>
 		<method name="is_open" qualifiers="const">
@@ -649,6 +693,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="index" type="int" />
 			<description>
+				The write [method journal_operator_at] accounts for, or [code]-1[/code] when nothing wrote the body.
 			</description>
 		</method>
 		<method name="journal_c_hash_at" qualifiers="const">
@@ -730,7 +775,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<description>
-				Whether [param slot]'s journal still retains [param transition].
+				Whether [param slot]'s journal still retains [param transition]. A transition nobody retained is one nobody can show was entitled to exactness, so a forgotten transition reads as false rather than as an error.
 			</description>
 		</method>
 		<method name="journal_kind_at" qualifiers="const">
@@ -751,6 +796,7 @@
 			<return type="int" />
 			<param index="0" name="slot" type="int" />
 			<description>
+				The frontier an acknowledgement may claim. An open row holds a zero fingerprint, so claiming it would assert a state no drive has produced.
 			</description>
 		</method>
 		<method name="journal_operator_at" qualifiers="const">
@@ -758,6 +804,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="index" type="int" />
 			<description>
+				The operator write that accounts for a state-chain discontinuity ahead of this row, or [code]0[/code] with [method journal_basis_at] at [code]-1[/code] when nothing wrote the body.
 			</description>
 		</method>
 		<method name="journal_post_families_at" qualifiers="const">
@@ -765,6 +812,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="index" type="int" />
 			<description>
+				Pose, momentum, then controller, the order every family fingerprint triple is written and read in.
 			</description>
 		</method>
 		<method name="journal_post_fp_at" qualifiers="const">
@@ -779,6 +827,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="index" type="int" />
 			<description>
+				Pose, momentum, then controller, the order every family fingerprint triple is written and read in.
 			</description>
 		</method>
 		<method name="journal_pre_fp_at" qualifiers="const">
@@ -800,6 +849,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<description>
+				A row opens when [param transition] is authored and closes when its produced state is fingerprinted, so a closed row names one drive completely. Evidence is immutable after close while the verdict overlay, attribution and domain may settle later, which is what makes the fingerprint an acceptance test rather than a tolerance. A [param transition] the ring no longer retains reads as the label that claims nothing, since nobody retaining it can show it was entitled to exactness.
 			</description>
 		</method>
 		<method name="journal_size" qualifiers="const">
@@ -814,7 +864,7 @@
 			<param index="1" name="transition" type="int" />
 			<description>
 				The ring index [param transition] occupies in [param slot]'s journal, or [code]-1[/code] when the ring no longer retains it.
-				Every column reader addresses a ring index while a transition names a row rather than a position, so a caller holding a transition resolves it here once and indexes every column with the answer.
+				Every column reader addresses a ring index while a transition names a row rather than a position, so a caller holding a transition resolves it here once and indexes every column with the answer. The search runs newest first, since every caller addresses a recent transition.
 			</description>
 		</method>
 		<method name="journal_topology_at" qualifiers="const">
@@ -829,6 +879,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="index" type="int" />
 			<description>
+				[param index] runs oldest first, the order every journal column reader shares, so one index names the same row across all of them.
 			</description>
 		</method>
 		<method name="journal_transitions" qualifiers="const">
@@ -895,6 +946,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<description>
+				Records [param transition] as the frontier a caller proved on a lane the pool does not decode. A transition can be acknowledged without [param slot] ever holding a journal row for it, and the speculative span [method drive_stats] reports is measured from the freshest proof on either lane rather than from the newest row. The frontier never retreats: an older acknowledgement arriving after a newer one cannot reopen a horizon the newer one already closed.
 			</description>
 		</method>
 		<method name="mark_chain_broken">
@@ -995,6 +1047,9 @@
 			<param index="11" name="raw_fp" type="int" default="0" />
 			<param index="12" name="evidence_mask" type="int" default="0" />
 			<description>
+				Attempts one transition and answers the drive it produced. [method NetwPredictDrive.ran] false with [method NetwPredictDrive.held] or [method NetwPredictDrive.clamped] set is a refusal the pass earned rather than an error: the horizon was full, or a FRAME slot declined a tick that bought no simulated time.
+				A predicting slot holds the horizon: it declines rather than opens once it has run more than one quarter of the history ring ahead of what authority has acknowledged, about one second at the standard rate, leaving the rest of the ring for acknowledgement and recovery evidence. A slot that is the authority for its own commands confirms nothing back to itself, so the horizon never applies to it.
+				A FRAME slot also refuses a second frame at a tick it already transitioned, the same clamp as one that bought no simulated time. Input capture continues while the body holds, so the horizon bounds the speculation and never the command lane.
 			</description>
 		</method>
 		<method name="open_episode">
@@ -1003,6 +1058,16 @@
 			<param index="1" name="transition" type="int" />
 			<param index="2" name="attribution" type="int" />
 			<description>
+			</description>
+		</method>
+		<method name="open_out_of_domain_window">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="label" type="int" />
+			<param index="2" name="cooldown" type="int" />
+			<description>
+				Extends [param slot]'s out-of-domain window to [param cooldown] labels past [param label], never shortening one already open.
+				A window opens on a fact that makes some antecedent unequal between the two peers: a contact against a body this peer does not simulate equivalently, an island roster that moved, or a world epoch the game bumped. It stays open a cooldown past that fact because the disturbance keeps perturbing the bodies after the frame that reported it, and while it is open [method NetwPredictionCore.domain_of] answers [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN], which is what stops a divergence being charged to the solver.
 			</description>
 		</method>
 		<method name="open_recovery_window">
@@ -1017,12 +1082,30 @@
 			<return type="int" />
 			<param index="0" name="slot" type="int" />
 			<description>
+				[param slot]'s order key, the entity's ROUTE, the session-global integer identity that replicates to every peer, so two peers step the same roster in the same order without exchanging anything about it. Set with [method set_order_key].
 			</description>
 		</method>
 		<method name="ordered_slots" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<description>
-				Every open slot, ascending by order key and then by slot, which is what makes the order total even before every slot has been keyed.
+				Every open slot, ascending by order key and then by slot, which is what makes the order total even before every slot has been keyed. An unkeyed slot sorts after every keyed one, and ties break on the slot itself.
+			</description>
+		</method>
+		<method name="out_of_domain_at" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="label" type="int" />
+			<description>
+				Whether [param slot]'s open out-of-domain window still covers [param label], which is the contact-window fact a recovery plan is judged under.
+				False whenever no window is open, so a caller never has to test [method out_of_domain_until] against -1 itself.
+			</description>
+		</method>
+		<method name="out_of_domain_until" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The label [param slot]'s open out-of-domain window stops covering, and -1 when none is open. This is the window argument [method NetwPredictionCore.domain_of] reads.
+				Opened by [method open_out_of_domain_window] and dropped by [method clear_out_of_domain_window]. [method out_of_domain_at] is the same fact asked about one label.
 			</description>
 		</method>
 		<method name="owner_bound" qualifiers="const">
@@ -1054,6 +1137,14 @@
 				The slots phase [param phase] steps, in the pool's declared order.
 				Order and participation are both determinism contracts: two peers step the same roster in the same order without exchanging anything about it, and a slot the phase does not name is one the phase must not reach.
 				The BODY stays with the caller, so this answers a list rather than driving one, and no phase pays a call back across the language boundary per slot.
+			</description>
+		</method>
+		<method name="pending_provenance" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The last out-of-transition body write staged against [param slot], stamped onto the next row the slot opens so that row records what moved the body before it ran.
+				Empty once the row it belongs to has been opened, because a write is provenance for one transition and inventing a second would exonerate a solver that ran unperturbed. Set with [method set_pending_provenance] and read by [method mark_provenance].
 			</description>
 		</method>
 		<method name="plan_consume_input" qualifiers="const">
@@ -1185,6 +1276,7 @@
 			<param index="8" name="outside_boundary" type="PackedByteArray" />
 			<param index="9" name="sleeping" type="bool" default="false" />
 			<description>
+				A solve that woke into [param transition] is one the solver started rather than continued, so [param sleeping] tells the pool the previous solve's rest state has to survive it.
 			</description>
 		</method>
 		<method name="record_idle_drive">
@@ -1193,6 +1285,7 @@
 			<param index="1" name="label" type="int" />
 			<param index="2" name="kind" type="int" />
 			<description>
+				Records a pass that advanced the lane without opening a transition: a hold, a starve, or a substituted command. It counts as a drive because a reader asking when [param slot] last acted is asking about these too, and it opens no journal row because nothing was simulated.
 			</description>
 		</method>
 		<method name="record_input">
@@ -1232,6 +1325,7 @@
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
 			<description>
+				Recomputes [constant STAT_ACK_AGE_TICKS] from the freshest acknowledgement. [method open_drive] already refreshes it before authoring the entry it is about to open, so a caller reading the span after a drive reads it as of that drive's start; this is for reading it at any other moment.
 			</description>
 		</method>
 		<method name="replay_drive">
@@ -1282,7 +1376,8 @@
 			<param index="1" name="basis" type="int" />
 			<description>
 				Every transition this slot drove after [param basis], oldest first. The pool composes them out of the tape and the input lane it holds, so a replay and a carry are handed one account rather than each rebuilding one.
-				FRAME numbers a transition by its tape entry, so an entry the clock repeated carries the command the last fresh entry authored: the owner ran that sample again rather than authoring a new one. Every other tier numbers a transition by its tick and reads the command filed under it.
+				FRAME numbers a transition by its tape entry, so an entry the clock repeated carries the command the last fresh entry authored: the owner ran that sample again rather than authoring a new one. Every other tier numbers a transition by its tick and reads the command filed under it, whether or not the owner recorded one there.
+				[param basis] seeds the carry from the command the basis entry itself ran, so the first repeated entry past it is not left empty.
 			</description>
 		</method>
 		<method name="resolve_correction" qualifiers="const">
@@ -1301,7 +1396,24 @@
 			<param index="2" name="input" type="NetwPredictDeclaration" default="null" />
 			<description>
 				Recompiles [param slot]'s field tables from [param declaration] and its input codec from [param input]. Both declarations are read here and never retained, so a caller may reuse and refill one.
+				Each field's name and declared property type resolve to a table index here, once, rather than at every later read: a recovery reading many field-keyed tables afterward pays one index lookup per field per tick rather than a hash lookup.
 				[param input] compiles to a codec and nothing else, because an input row is canonicalized and shipped and never recovered, so it earns no recovery tables. Rewiring without one forgets the previous input codec.
+			</description>
+		</method>
+		<method name="role_for_axes" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="input_source" type="int" />
+			<param index="1" name="sim_mode" type="int" />
+			<description>
+				The [enum NetwPredict.Role] named by a [enum NetwPredict.InputSource] and a [enum NetwPredict.SimMode]. The axes are the decision and the role is its name, so every role is reachable from some pair and no pair reaches a role that contradicts it.
+				[codeblock]
+				            AUTHORITATIVE   SPECULATIVE   DISPLAY
+				  LOCAL     HOST_LOCAL      PREDICT       REMOTE
+				  RECEIVED  CONSUME         (unreachable) REMOTE
+				  PREDICTED (unreachable)   SIMULATE      REMOTE
+				  NONE      REMOTE          REMOTE        REMOTE
+				[/codeblock]
+				The simulation axis is asked first, because a peer running no simulation needs no command, so where it would have read one cannot change what it is. The two unreachable pairs answer [constant NetwPredict.Role.REMOTE] rather than refusing, so a caller reading a role always has one.
 			</description>
 		</method>
 		<method name="role_of" qualifiers="const">
@@ -1372,6 +1484,14 @@
 				The pass order is a determinism contract rather than a convenience: two peers step the same roster the same way or their transitions are not comparable.
 			</description>
 		</method>
+		<method name="set_pending_provenance">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="provenance" type="Dictionary" />
+			<description>
+				Stages the write [param slot]'s next opened row is stamped with, or clears the staging when [param provenance] is empty. See [method pending_provenance].
+			</description>
+		</method>
 		<method name="set_sensor">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
@@ -1411,6 +1531,15 @@
 			<description>
 			</description>
 		</method>
+		<method name="stamp_pending_provenance">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="transition" type="int" />
+			<description>
+				Writes [param slot]'s staged write onto row [param transition] through [method mark_provenance], and does nothing when nothing is staged. See [method pending_provenance] for what a caller stages there.
+				A row a write explains is not a chain break: the drive that opened it already flagged the discontinuity between its own starting state and the state the row before it closed at, and stamping the write that caused the discontinuity retires the flag. So a caller stamps before it reads the row's flags, and a transition nobody wrote through keeps the break it earned.
+			</description>
+		</method>
 		<method name="stamp_episode_write_delta">
 			<return type="void" />
 			<param index="0" name="slot" type="int" />
@@ -1430,6 +1559,70 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				The state family [param slot] compiled [param field] into, crossing as a plain int: [code]0[/code] POSE, [code]1[/code] MOMENTUM, [code]2[/code] CONTROLLER. The family decides what a recovery may write to the field.
+			</description>
+		</method>
+		<method name="slot_bind_owner">
+			<return type="bool" />
+			<param index="0" name="entity" type="RefCounted" />
+			<param index="1" name="owner" type="Object" />
+			<description>
+				Binds [param owner] to the row [param entity] is keyed to, resolving at bind time what the owner can answer for. Returns [code]false[/code] when [param entity] holds no row.
+			</description>
+		</method>
+		<method name="slot_of" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="entity" type="RefCounted" />
+			<description>
+				The row [param entity] is keyed to, or [code]-1[/code].
+				The entity is held as a plain [RefCounted] and keyed by its instance id, so the pool never needs the entity's own type. This map and the row store erase each other, so a row cannot outlive its key.
+			</description>
+		</method>
+		<method name="slot_register">
+			<return type="int" />
+			<param index="0" name="entity" type="RefCounted" />
+			<description>
+				Mints the row [param entity] is keyed to and returns it, or returns the existing row when one is already keyed.
+				One registered engine holds N slot-keyed rows rather than one object per predicting entity, so registering does not hand GDScript a per-entity class to name.
+			</description>
+		</method>
+		<method name="slot_registered" qualifiers="const">
+			<return type="int" />
+			<description>
+				How many entities currently hold a row.
+			</description>
+		</method>
+		<method name="slot_unbind_owner">
+			<return type="void" />
+			<param index="0" name="entity" type="RefCounted" />
+			<description>
+				Drops the owner bound by [method slot_bind_owner], leaving the row itself registered.
+			</description>
+		</method>
+		<method name="slot_unregister">
+			<return type="void" />
+			<param index="0" name="entity" type="RefCounted" />
+			<description>
+				Releases the row [param entity] is keyed to and erases the key. A later [method slot_of] answers [code]-1[/code].
+			</description>
+		</method>
+		<method name="state_fingerprint">
+			<return type="int" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				The fingerprint of [param payload] narrowed to the fields [param slot] declared CAUSAL, which is the only scope a comparison judges: a recovery restores fields the comparison has no business reading, so fingerprinting the whole payload would make an agreeing transition read as a fork.
+				The result is SIGNED, because that is the width the journal columns and the wire both carry, so a fingerprint never changes representation between being computed, stored and sent.
+				Returns [code]0[/code] for a slot that holds no row.
+			</description>
+		</method>
+		<method name="state_family_fingerprints">
+			<return type="PackedInt32Array" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="Dictionary" />
+			<description>
+				The same causal scope as [method state_fingerprint], split into the three state families and fingerprinted separately, always three entries in the order POSE, MOMENTUM, CONTROLLER, matching [method state_family_of].
+				A family names which PART of the state forked, so it only names a part the next transition reads. A family no causal field belongs to reports [code]0[/code] rather than the fingerprint of an empty payload, so a reader can tell an absent family from an agreeing one.
 			</description>
 		</method>
 		<method name="state_has" qualifiers="const">
@@ -1488,6 +1681,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="index" type="int" />
 			<description>
+				The input tick the entry at [param index] was authored under, or [code]-1[/code] when the entry has fallen out of the ring, which is the same absence a caller reading past the horizon already handles.
 			</description>
 		</method>
 		<method name="tape_prepare_tick">
@@ -1503,6 +1697,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="epoch" type="int" />
 			<description>
+				Opens [param epoch] and clears everything the previous one held. A transition is injective only within a tape epoch, so a journal outliving its epoch would hold two rows claiming one transition; that injectivity is the invariant a tape epoch exists to protect. The journal is re-keyed with it, so a transition the previous epoch held is one the new epoch has not seen, whatever its number. The bound input lane is untouched: it is keyed by tick rather than by tape entry and is shared with whatever else records into it, so a reset of this slot's transitions must not drop it.
 			</description>
 		</method>
 		<method name="tape_size" qualifiers="const">
@@ -1515,7 +1710,7 @@
 			<return type="PackedInt64Array" />
 			<param index="0" name="slot" type="int" />
 			<description>
-				The oldest and newest entry index the ring still holds, both [code]-1[/code] when it holds nothing. A caller walks the tape over this range rather than over a count, because the ring drops its oldest entries and the indices it keeps are the recent ones.
+				The oldest and newest entry index the ring still holds, both [code]-1[/code] when it holds nothing. A caller walks the tape over this range rather than over a count, because the ring drops its oldest entries and the indices it keeps are the recent ones. A slot the pool does not recognize answers the same absence, so a caller never walks a live entity's range by mistake.
 			</description>
 		</method>
 		<method name="teleport_of" qualifiers="const">
@@ -1523,6 +1718,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="field" type="int" />
 			<description>
+				[param slot]'s declared teleport threshold for [param field], or [code]-1.0[/code] when the declaration named none.
 			</description>
 		</method>
 		<method name="trigger_shape_of" qualifiers="const">
@@ -1588,6 +1784,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="transition" type="int" />
 			<description>
+				True once authority has answered for [param transition]'s witness. A solve the body slept through witnessed nothing, and one that woke into it witnessed a transition the solver started rather than continued, so neither is evidence a conditional operator may build on; this answers only whether a verdict has arrived, distinct from whether that verdict differs.
 			</description>
 		</method>
 		<method name="witness_row_clean" qualifiers="const">
@@ -1623,6 +1820,7 @@
 	</signals>
 	<constants>
 		<constant name="CURSOR_TAPE_EPOCH" value="0" enum="DriveCursor">
+			Incremented by [method tape_reset], which re-keys every other cursor to the new epoch too, because a retained position would name a transition the new epoch is about to reuse.
 		</constant>
 		<constant name="CURSOR_NEXT_TAPE_ENTRY" value="1" enum="DriveCursor">
 		</constant>
@@ -1633,6 +1831,7 @@
 		<constant name="CURSOR_LAST_DRIVEN_INPUT_TICK" value="4" enum="DriveCursor">
 		</constant>
 		<constant name="CURSOR_LAST_FRAME_TRANSITION_TICK" value="5" enum="DriveCursor">
+			The tick a FRAME transition ran at. A second frame at this tick is refused, and it is not the transition the entry was authored at.
 		</constant>
 		<constant name="CURSOR_COUNT" value="6" enum="DriveCursor">
 		</constant>
@@ -1659,6 +1858,7 @@
 		<constant name="STAT_QUANTUM_DECLARED" value="10" enum="DriveStat">
 		</constant>
 		<constant name="STAT_QUANTUM_FAULTS" value="11" enum="DriveStat">
+			Charged when a drive's declared quantum undercounts the physics frames it actually advanced, so the peer integrated its solver by an amount no transition names and a comparison against it carries an error nothing can attribute.
 		</constant>
 		<constant name="STAT_OWNER_LOST" value="12" enum="DriveStat">
 		</constant>

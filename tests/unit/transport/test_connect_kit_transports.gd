@@ -44,13 +44,13 @@ func test_host_via_local_transport_reaches_online() -> void:
 	pump.call()
 
 	var guard := 0
-	while api.state != SessionCore.State.ONLINE and guard < 40:
+	while api.state != NetwMultiplayer.SessionState.ONLINE and guard < 40:
 		api.poll()
 		await get_tree().process_frame
 		guard += 1
 
 	assert_bool(results[0].is_ok()).is_true()
-	assert_int(api.state).is_equal(SessionCore.State.ONLINE)
+	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
 	assert_object(NetwConnector.of(api).peer_view).is_not_null()
 	api.embedding.dispose()
 
@@ -75,7 +75,7 @@ func test_host_with_payload_admits_the_host_player() -> void:
 		await get_tree().process_frame
 		guard += 1
 
-	assert_int(api.state).is_equal(SessionCore.State.ONLINE)
+	assert_int(api.state).is_equal(NetwMultiplayer.SessionState.ONLINE)
 	# The host submitted its own join, so a roster row with an accepted join
 	# exists for peer 1 without any client connecting.
 	assert_object(api.peer_get_accepted_join(1)).is_not_null()

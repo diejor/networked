@@ -475,7 +475,85 @@ func transaction_promise(body: Callable) -> NetwPromise:
 			transaction_committed.emit(table_count, row_count))
 	return promise
 
-# ── Internal readers ──────────────────────────────────────────────────────────
+# ── Readers ───────────────────────────────────────────────────────────────────
+
+
+## Answers a [NetwPromise] resolving with the raw stored record for [param id]
+## in [param table], the read [method NetwDatabase.TableRepository.fetch]
+## hydrates into a [NetwRecord].
+##
+## The record is storage currency rather than domain currency, so a caller reads
+## columns off it without knowing the table's record script, which is what lets
+## a caller that cannot await ask for one. An absent record resolves as an empty
+## [Dictionary], because a first play has nothing saved and that is an answer.
+## Two states reject instead, since no read can run in them at all: a table with
+## no declared schema, and a record [member mismatch_policy] refused outright.
+## [codeblock]
+##     db.find_promise(&"players", username).then(
+##         func(record: Dictionary) -> void:
+##             engine.apply(record),
+##     )
+## [/codeblock]
+func find_promise(table: StringName, id: StringName) -> NetwPromise:
+	if not _schema.has(table):
+		Netw.dbg.warn(
+			"NetwDatabase: read on unregistered table '%s'. " +
+			"Declare the schema before querying.",
+			[table],
+			func(m): push_warning(m)
+		)
+		return NetwPromise.rejected(
+			ERR_UNCONFIGURED,
+			"table '%s' has no declared schema" % [table],
+		)
+
+	if not backend:
+		Netw.dbg.error(
+			"NetwDatabase: find_promise called but no backend " +
+			"is set.",
+			func(m): push_error(m)
+		)
+		return NetwPromise.rejected(ERR_UNCONFIGURED, "no backend is set")
+
+	var answer := NetwPromise.new()
+	var stored := backend.find_by_id(table, id)
+	stored.when_settled(
+		func() -> void: _settle_found(answer, stored, table, id),
+	)
+	return answer
+
+
+# Settles [param answer] with what the backend read, after the schema diff and
+# the type rejection have judged it. A record the policy refused outright
+# rejects; one the policy purged resolves empty, which is the clean slate the
+# policy meant.
+func _settle_found(
+		answer: NetwPromise,
+		stored: NetwPromise,
+		table: StringName,
+		id: StringName,
+) -> void:
+	var record: Dictionary = stored.result if stored.is_completed else { }
+	record_loaded.emit(table, id, not record.is_empty())
+	if record.is_empty():
+		answer.resolve({ })
+		return
+
+	var diff := _diff_record(table, id, record)
+	if diff.ok:
+		answer.resolve(_reject_mistyped(table, id, record))
+		return
+
+	var refusal: Array[int] = [OK]
+	record = _apply_mismatch_policy(table, id, record, diff, refusal)
+	if record.is_empty() and refusal[0] != OK \
+			and refusal[0] != ERR_FILE_NOT_FOUND:
+		answer.reject(
+			refusal[0],
+			"the schema mismatch policy refused record '%s.%s'" % [table, id],
+		)
+		return
+	answer.resolve(_reject_mistyped(table, id, record))
 
 
 # Returns the raw record for [param id] in [param table].
@@ -485,42 +563,22 @@ func transaction_promise(body: Callable) -> NetwPromise:
 # [constant OK] on success, [constant ERR_FILE_NOT_FOUND] when the record does
 # not exist, or [constant ERR_UNCONFIGURED] when the table has no registered
 # schema.
-func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> Dictionary:
-	if not _schema.has(table):
-		Netw.dbg.warn(
-			"NetwDatabase: read on unregistered table '%s'. " +
-			"Declare the schema before querying.",
-			[table],
-			func(m): push_warning(m)
-		)
-		out_error[0] = ERR_UNCONFIGURED
-		return { }
-
-	if not backend:
-		Netw.dbg.error(
-			"NetwDatabase: _find_by_id called but no backend " +
-			"is set.",
-			func(m): push_error(m)
-		)
-		out_error[0] = ERR_UNCONFIGURED
-		return { }
-
-	var record: Dictionary = await settled_value(
-		backend.find_by_id(table, id),
-		{ },
+func _find_by_id(
+		table: StringName,
+		id: StringName,
+		out_error: Array = [OK],
+) -> Dictionary:
+	var answer := find_promise(table, id)
+	answer.catch_error(
+		func(code: int, _detail: String) -> void: out_error[0] = code,
 	)
-	var hit := not record.is_empty()
-	record_loaded.emit(table, id, hit)
-
-	if not hit:
-		out_error[0] = ERR_FILE_NOT_FOUND
+	if not answer.is_settled:
+		await answer.settled
+	if answer.is_failed:
 		return { }
-
-	var diff := _diff_record(table, id, record)
-	if not diff.ok:
-		record = _apply_mismatch_policy(table, id, record, diff, out_error)
-
-	return _reject_mistyped(table, id, record)
+	var record: Dictionary = answer.result
+	out_error[0] = OK if not record.is_empty() else ERR_FILE_NOT_FOUND
+	return record
 
 
 # Drops every column whose stored value disagrees with its declared type, so

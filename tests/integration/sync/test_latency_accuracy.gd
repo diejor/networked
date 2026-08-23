@@ -26,7 +26,7 @@ func _latencies(delay_polls: int, warmup: int, measure: int) -> Array:
 
 	var server_binding: NetwPropertySetBinding = NetwEntity.of(rig.server_node) \
 			.state_binding
-	rig.server_clock.on_tick.connect(
+	rig.server_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			server_binding.authored_tick = t
 			rig.server_node.position = _pos(t),

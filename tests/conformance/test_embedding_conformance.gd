@@ -172,7 +172,7 @@ func _scenario_service_configures_on_mount(world: NetwEmbeddingWorld) -> void:
 	world.mount_clock()
 
 	var configured := await world.pump_until(
-		func() -> bool: return host.clock.is_configured()
+		func() -> bool: return host.clock.is_configured
 	)
 	assert_bool(configured).override_failure_message(
 		"[%s] a clock service mounted under the host never configured the session"

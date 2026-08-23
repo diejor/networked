@@ -2,7 +2,7 @@
 
 #include "godot/multiplayer_spawner.hpp"
 #include "godot/node.hpp"
-#include "netw/spawn_record.hpp"
+#include "netw/api/spawn_record.hpp"
 
 namespace TestNetwSpawnRecord {
 

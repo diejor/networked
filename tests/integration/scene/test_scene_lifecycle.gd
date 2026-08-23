@@ -4,7 +4,7 @@ extends NetwTestSuite
 
 var harness: NetwTestHarness
 var server_api: NetwMultiplayer
-var server_core: SceneCore
+var server_core: NetwMultiplayer
 var level_builder: LevelBuilder
 var level_2_builder: LevelBuilder
 
@@ -23,7 +23,7 @@ func before_test() -> void:
 	harness = make_harness()
 	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	server_api = harness.server().api
-	server_core = server_api._scenes
+	server_core = server_api
 	harness.register_spawnable_scene(level_builder.packed)
 	harness.register_spawnable_scene(level_2_builder.packed)
 	await harness.add_client()
@@ -34,7 +34,7 @@ func before_test() -> void:
 func test_a_dedicated_server_presents_no_scene() -> void:
 	assert_int(server_api.role) \
 			.is_equal(NetwMultiplayer.Role.DEDICATED_SERVER)
-	server_core.spawn_scene(level_builder.scene_name)
+	server_core._scene_spawn_declared(level_builder.scene_name)
 	await drain_frames(get_tree(), 2)
 
 	assert_int(server_api.scene_list().size()).is_greater(0)
@@ -45,10 +45,10 @@ func test_scene_load_policy_flow() -> void:
 	assert_that(server_api.scene(level_builder.scene_name) != null).is_true()
 	assert_that(server_api.scene(level_2_builder.scene_name) != null).is_true()
 
-	server_core.spawn_scene(level_builder.scene_name)
+	server_core._scene_spawn_declared(level_builder.scene_name)
 	assert_that(server_api.scene_instances().size()).is_equal(2)
 
-	server_core.freeze(level_builder.scene_name)
+	server_core._scene_freeze_named(level_builder.scene_name)
 	assert_that(server_api.scene(level_builder.scene_name) != null).is_true()
 
 	var h2 := make_unmanaged_harness()
@@ -64,7 +64,7 @@ func test_scene_load_policy_flow() -> void:
 
 
 func test_scene_activation_cache_and_removal_flow() -> void:
-	server_core.destroy(level_2_builder.scene_name)
+	server_core._scene_destroy_named(level_2_builder.scene_name)
 	await get_tree().process_frame
 
 	var path := level_2_builder.resource_path
@@ -73,15 +73,15 @@ func test_scene_activation_cache_and_removal_flow() -> void:
 		server_api.scene(level_2_builder.scene_name) != null,
 	).is_false()
 
-	server_core.spawn_scene(level_2_builder.scene_name)
+	server_core._scene_spawn_declared(level_2_builder.scene_name)
 
 	assert_that(server_api.scene(level_2_builder.scene_name) != null).is_true()
 
-	server_core.destroy(level_2_builder.scene_name)
+	server_core._scene_destroy_named(level_2_builder.scene_name)
 	await get_tree().process_frame
 
 	@warning_ignore("redundant_await")
-	await server_core.activate_scene(level_2_builder.scene_name)
+	server_core._scene_activate_named(level_2_builder.scene_name)
 	assert_that(server_api.scene(level_2_builder.scene_name) != null).is_true()
 
 	var scene := server_api.scene(level_builder.scene_name)
@@ -89,28 +89,28 @@ func test_scene_activation_cache_and_removal_flow() -> void:
 	scene.level.process_mode = Node.PROCESS_MODE_DISABLED
 
 	@warning_ignore("redundant_await")
-	await server_core.activate_scene(level_builder.scene_name)
+	server_core._scene_activate_named(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
-	server_core.freeze(level_builder.scene_name)
+	server_core._scene_freeze_named(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
 
 	@warning_ignore("redundant_await")
-	await server_core.activate_scene(level_builder.scene_name)
+	server_core._scene_activate_named(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
-	server_core.destroy(level_builder.scene_name)
+	server_core._scene_destroy_named(level_builder.scene_name)
 	await get_tree().process_frame
 
 	assert_that(server_api.scene(level_builder.scene_name) != null).is_false()
 	assert_that(is_instance_valid(container)).is_false()
 
-	server_core.spawn_scene(level_builder.scene_name)
+	server_core._scene_spawn_declared(level_builder.scene_name)
 	assert_that(server_api.scene(level_builder.scene_name) != null).is_true()
 
 	scene = server_api.scene(level_builder.scene_name)
 	var retired := scene.level_container()
-	server_core.retire(level_builder.scene_name, 2)
+	server_core._scene_retire_named(level_builder.scene_name, 2)
 
 	assert_that(server_api.scene(level_builder.scene_name) != null).is_false()
 	assert_that(is_instance_valid(retired)).is_true()
@@ -121,22 +121,22 @@ func test_scene_activation_cache_and_removal_flow() -> void:
 
 
 func test_api_scene_lifecycle_verbs_and_signals() -> void:
-	var core := harness.server().api._scenes
+	var core := harness.server().api
 	var activated: Array[Node] = []
 	var despawned: Array[Node] = []
-	core.scene_activated.connect(activated.append)
-	core.scene_despawned.connect(despawned.append)
+	core._scene_activated.connect(activated.append)
+	core._scene_despawned.connect(despawned.append)
 	var scene := core.scene(level_builder.scene_name)
 
-	core.freeze(level_builder.scene_name)
+	core._scene_freeze_named(level_builder.scene_name)
 	assert_int(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
 
-	assert_object(core.activate(level_builder.scene_name)) \
+	assert_object(core._scene_activate_ref(level_builder.scene_name)) \
 			.is_same(scene.level_container())
 	assert_int(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 	assert_array(activated).contains([scene.level_container()])
 
-	core.destroy(level_builder.scene_name)
+	core._scene_destroy_named(level_builder.scene_name)
 	await get_tree().process_frame
 
 	assert_object(core.scene(level_builder.scene_name)).is_null()
@@ -145,7 +145,7 @@ func test_api_scene_lifecycle_verbs_and_signals() -> void:
 
 func test_a_departing_player_releases_its_participant() -> void:
 	@warning_ignore("redundant_await")
-	await server_core.activate_scene(level_builder.scene_name)
+	server_core._scene_activate_named(level_builder.scene_name)
 	var scene := server_api.scene(level_builder.scene_name)
 	# A real participant, because the scene reports departures in participant
 	# terms and a synthetic peer id has no roster row to report.
@@ -179,21 +179,33 @@ func test_api_move_reparents_entity_and_updates_participant_scene() -> void:
 	var entity := NetwEntity.of(player)
 	var moved: Array[NetwEntity] = []
 	var reasons: Array[StringName] = []
+	var events: Array[StringName] = []
 	entity.reparented.connect(
 		func(opts: NetwReparentOpts):
+			events.append(&"reparented")
 			moved.append(entity)
 			reasons.append(opts.reason)
 	)
+	api._scene_entity_moved.connect(
+		func(_entity: NetwEntity, _source: RID, _target: RID):
+			events.append(&"scene_moved")
+	)
 
 	var promise := destination.move_in(entity)
+	promise.settled.connect(func(): events.append(&"settled"))
 	if not promise.is_settled:
 		await promise.settled
 
 	assert_int(promise.code).is_equal(OK)
 	assert_object(player.get_parent()).is_same(destination.level)
+	assert_that(api._native_core.participant_seat(participant.peer_id)) \
+			.is_equal(destination.entity)
 	assert_object(participant.current_scene).is_same(destination)
 	assert_array(moved).contains([entity])
 	assert_array(reasons).contains([&"scene_move"])
+	assert_array(events).contains_exactly(
+		[&"reparented", &"scene_moved", &"settled"]
+	)
 
 
 func test_single_change_to_moves_session_and_destroys_source() -> void:
@@ -208,14 +220,26 @@ func test_single_change_to_moves_session_and_destroys_source() -> void:
 	var participant := api.peer_get_participant(
 		client.multiplayer_peer.get_unique_id(),
 	)
+	_add_scene_player(
+		api.scene(level_builder.scene_name),
+		participant.peer_id,
+		participant.username,
+	)
 
 	# Session reach is what makes authority's own front door replace the world.
 	api.scene_set_request_reach(NetwMultiplayer.SceneReach.SCENE_REACH_SESSION)
+	var events: Array[StringName] = []
+	api._scene_despawned.connect(
+		func(_scene: Node): events.append(&"scene_despawned")
+	)
 	var promise := Netw.change_scene_to_file(
 		api.root,
 		level_2_builder.resource_path,
 	)
-	if not promise.is_settled:
+	if promise.is_settled:
+		events.append(&"settled")
+	else:
+		promise.settled.connect(func(): events.append(&"settled"))
 		await promise.settled
 	await drain_frames(get_tree(), 2)
 
@@ -224,6 +248,7 @@ func test_single_change_to_moves_session_and_destroys_source() -> void:
 	assert_object(destination).is_not_null()
 	assert_object(api.scene(level_builder.scene_name)).is_null()
 	assert_object(participant.current_scene).is_same(destination)
+	assert_array(events).contains_exactly([&"scene_despawned", &"settled"])
 	await h.teardown()
 
 

@@ -1,18 +1,10 @@
-// Laws for NetwEntityRecord, the assembled record plane.
-//
-// What the assembly is for is that one handle covers identity, control and
-// stage at once. So the laws are about the record being ONE thing: it is born
-// whole, it never shares a part with another record, it lets go of what it
-// gave up, and it moves through its life by the one table that says which
-// moves exist.
-
 #include "support/netw_test.h"
 
 #include "godot/multiplayer_synchronizer.hpp"
 #include "godot/node.hpp"
 #include "netw/entity_ids.hpp"
-#include "netw/entity_options.hpp"
-#include "netw/entity_record.hpp"
+#include "netw/api/entity_options.hpp"
+#include "netw/api/entity_record.hpp"
 #include "netw/entity_stage.hpp"
 #include <memory>
 
@@ -27,12 +19,6 @@ using netw::NetwEntityRecord;
 using netw_test::CallLog;
 using netw_test::EntityFactories;
 
-/* A sink that reads the record AT THE MOMENT it is called.
- *
- * What makes the in-flight options a field rather than an argument is that a
- * listener reads them during the announcement, so a law that reads them
- * afterwards is reading the wrong instant.
- */
 class WindowProbe final : public godot::CallableCustom {
     Ref<NetwEntityRecord> record;
     std::shared_ptr<bool> held;
@@ -86,12 +72,7 @@ public:
     }
 };
 
-// A listener that refuses every control request it is shown, which is how the
-// deny latch is observable: the record's answer must follow the refusal rather
-// than the order listeners were connected in.
 class DenyingSink final : public godot::CallableCustom {
-    // A custom callable with no object reads as INVALID, and emit_signal skips
-    // every one of those in silence.
     godot::ObjectID anchor;
 
     static bool same(const CallableCustom *a, const CallableCustom *b) {
@@ -168,8 +149,6 @@ TEST_CASE(
     CHECK(a->get_handle() != b->get_handle());
     NETW_CHECK_EQ(netw::entity_ids::holders(a->get_handle()), 1);
 
-    // The part that a shared default would break: two records that answer the
-    // same control answer for one entity while claiming to be two.
     CHECK(a->get_control().is_valid());
     CHECK(a->get_control() != b->get_control());
     a->get_control()->set_controller(7);
@@ -271,9 +250,7 @@ TEST_CASE(
         for (int from = 0; from <= int(EntityStage::FREED); ++from) {
             for (int to = 0; to <= int(EntityStage::FREED); ++to) {
                 Ref<NetwEntityRecord> probe = make_record();
-                // Only edges the table admits out of UNBOUND are reachable to
-                // set up with, so the walk starts where it can.
-                if (!netw::NetwEntityStage::edge_is_legal(
+                if (!netw::stage_edge_is_legal(
                         int(EntityStage::UNBOUND),
                         from
                     )
@@ -285,7 +262,7 @@ TEST_CASE(
                 }
                 NETW_CHECK_EQ(
                     probe->advance(to),
-                    netw::NetwEntityStage::edge_is_legal(from, to)
+                    netw::stage_edge_is_legal(from, to)
                 );
             }
         }
@@ -409,8 +386,6 @@ TEST_CASE(
     CHECK(record->mark_template(owner));
     NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
 
-    // Idempotent, because every peer marks its own copy of the same editor
-    // scene and a second mark is a duplicate rather than a bug.
     CHECK(record->mark_template(owner));
     NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
 
@@ -496,8 +471,6 @@ TEST_CASE(
     CHECK(record->begin_despawn(wrapper.ptr(), nullptr, opts));
 
     NETW_CHECK_EQ(record->get_stage(), int(EntityStage::DESPAWNING));
-    // A listener reads the mode during the announcement, which is the whole
-    // reason it is a field and not an argument.
     CHECK(*seen);
     CHECK(record->get_active_despawn_opts().is_null());
 
@@ -517,8 +490,6 @@ TEST_CASE(
     Ref<RefCounted> wrapper = make_wrapper();
     REQUIRE(record->mark_template(nullptr));
 
-    // A template is terminal: it never spawned, so it has nothing to tear
-    // down and the window would be an illegal edge rather than a no-op.
     Ref<netw::NetwDespawnOpts> none;
     CHECK_FALSE(record->begin_despawn(wrapper.ptr(), nullptr, none));
     NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
@@ -547,8 +518,6 @@ TEST_CASE(
 
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
     NETW_CHECK_EQ(log.count("moved"), 1);
-    // The record calls the server 0 and the engine calls it 1, so a node that
-    // has never moved reads as "was 0" rather than "was 1".
     REQUIRE(log.args("moved").size() == 2);
     NETW_CHECK_EQ(int(log.args("moved")[0]), 0);
     NETW_CHECK_EQ(int(log.args("moved")[1]), 7);
@@ -572,8 +541,6 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R14 an authority write recurses everywhere "
     "but mid-tree-entry"
 ) {
-    // The one row that must be false is the one that trips an engine
-    // assertion: in the tree, not ready yet, and not the authoring peer.
     CHECK_FALSE(NetwEntityRecord::control_recurses(false, true, false));
 
     CHECK(NetwEntityRecord::control_recurses(true, true, false));
@@ -615,8 +582,6 @@ TEST_CASE(
     REQUIRE(record->advance(int(EntityStage::ARMED)));
     REQUIRE(record->advance(int(EntityStage::LIVE)));
 
-    // A reparent leaves the tree and re-enters with the record still live, so
-    // a live owner leaving is never assumed to be a teardown.
     CHECK_FALSE(record->finish_teardown(wrapper.ptr()));
     NETW_CHECK_EQ(record->get_stage(), int(EntityStage::LIVE));
     NETW_CHECK_EQ(log.count("gone"), 0);
@@ -650,8 +615,6 @@ TEST_CASE(
     netw_test::CallLog log;
     wrapper->connect("control_requested", log.callable("asked"));
 
-    // A fixed entity refuses without ever asking, so gameplay code is not
-    // consulted about a transfer that could not happen.
     NETW_CHECK_EQ(record->admit_control_request(wrapper.ptr(), 9), 0);
     NETW_CHECK_EQ(log.count("asked"), 0);
 
@@ -704,9 +667,6 @@ TEST_CASE(
         Ref<NetwEntityRecord> plain = make_record();
         owner->set_name("JustANode");
         plain->hydrate_identity(owner);
-        // The codec answers nothing for a name carrying no separator, so a
-        // node the pipeline never named keeps an unbound record rather than
-        // taking its own node name for an entity id.
         CHECK(plain->get_entity_id() == StringName());
         NETW_CHECK_EQ(plain->get_peer_id(), 0);
     }

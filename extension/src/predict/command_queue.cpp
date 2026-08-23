@@ -2,6 +2,8 @@
 
 #include "netw/predict/drive.hpp"
 
+using namespace godot;
+
 namespace netw {
 
 namespace predict {

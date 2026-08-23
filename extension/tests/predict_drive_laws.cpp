@@ -1,16 +1,10 @@
-// Laws for the drive path an engine OWNS: the tape it authors, the journal row
-// each pass opens and closes, and the horizon that stops it speculating past
-// what authority has confirmed.
-//
-// These are the questions `predict_lane_laws.cpp` cannot ask. A kernel is a
-// function and has no memory, so a law about what an engine remembers between
-// two ticks has to stand on a driver that holds an engine.
-
 #include "support/netw_test.h"
 
 #include "netw/predict/engine.hpp"
 #include "support/netw_cells.h"
 #include "support/scenario_run.h"
+
+using namespace godot;
 
 namespace TestNetwPredictDriveLaws {
 
@@ -31,9 +25,7 @@ Scenario driven_lane() {
     return scenario.until(40);
 }
 
-// Long enough that the speculative span reaches its bound, which no scenario
-// shorter than the bound can show anything about.
-Scenario unacknowledged_lane() {
+Scenario lane_past_speculative_bound() {
     Scenario scenario = driven_lane();
     scenario.label = "unacknowledged-lane";
     return scenario.until(netw::predict::ACK_AGE_MAX * 2);
@@ -66,9 +58,6 @@ LawVerdict law_every_opened_row_closes(const ScenarioRun &p_run) {
 }
 
 LawVerdict law_an_uncorrected_lane_chains(const ScenarioRun &p_run) {
-    // A correction writes the body from outside the engine, and a write no
-    // operator accounts for IS a chain break. Only a lane nothing corrected
-    // says anything about whether the drive path chains on its own.
     if (p_run.scenario().declares("perturb")) {
         return law_held();
     }
@@ -112,7 +101,9 @@ const LawRow LAWS[] = {
       law_every_opened_row_closes },
     { "L-CHAIN",
       "a lane nothing corrected enters each transition holding the state the "
-      "previous one produced",
+      "previous one produced, because a correction writes the body from "
+      "outside the engine and a write no operator accounts for is what a "
+      "chain break is",
       law_an_uncorrected_lane_chains },
     { "L-HORIZON",
       "a lane authority never acknowledges stops opening transitions at the "
@@ -125,7 +116,7 @@ TEST_CASE(
 ) {
     const Scenario CORPUS[] = {
         driven_lane(),
-        unacknowledged_lane(),
+        lane_past_speculative_bound(),
         corrected_lane(),
     };
     for (const Scenario &scenario : CORPUS) {
@@ -145,18 +136,17 @@ struct RedProof {
     Plant plant;
 };
 
-// Each pair names the one scenario carrying the evidence the law reads.
-// L-HORIZON cannot be broken on a lane shorter than the bound, and L-CHAIN
-// cannot be broken on a lane a correction already broke.
 const RedProof RED_PROOFS[] = {
     { LAWS[0], driven_lane, PLANT_SKIP_CLOSE },
     { LAWS[1], driven_lane, PLANT_FORGE_PRE },
-    { LAWS[2], unacknowledged_lane, PLANT_ALWAYS_ACK },
+    { LAWS[2], lane_past_speculative_bound, PLANT_ALWAYS_ACK },
 };
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Law] every drive law breaks against its "
-    "plant"
+    "plant, paired with the one scenario carrying the evidence it reads: "
+    "L-CLOSE and L-CHAIN on a lane driven and nothing more, L-HORIZON on a "
+    "lane run long enough to reach the speculative bound"
 ) {
     for (const RedProof &proof : RED_PROOFS) {
         const Scenario scenario = proof.scenario();
@@ -305,8 +295,6 @@ TEST_CASE(
     pool.instantiate();
     const int64_t slot = framed_slot(pool);
 
-    // A frame the clock held bought no simulated time, so it opens no
-    // transition and is counted as a clamp rather than as a drive.
     const Ref<netw::NetwPredictDrive> held = pool->open_drive(
         slot, Dictionary(), 1, 1, 1.0 / 60.0, 1, false, 0, 0, 0, 0
     );
@@ -319,7 +307,6 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(stat_of(pool, slot, NetwPredictionEngine::STAT_DRIVE_SEQ), 0);
 
-    // A second frame at a tick already transitioned is the same refusal.
     pool->record_input(slot, 1, 1);
     const Ref<netw::NetwPredictDrive> first = pool->open_drive(
         slot, Dictionary(), 1, 1, 1.0 / 60.0, 1, true, 0, 0, 0, 0
@@ -365,8 +352,6 @@ TEST_CASE(
         stat_of(pool, slot, NetwPredictionEngine::STAT_SPECULATION_HELD),
         held
     );
-    // Input capture continues while the body holds, so the horizon bounds the
-    // speculation and never the command lane.
     NETW_CHECK_EQ(
         stat_of(pool, slot, NetwPredictionEngine::STAT_ACK_AGE_TICKS),
         netw::predict::ACK_AGE_MAX
@@ -387,8 +372,6 @@ TEST_CASE(
         slot, Dictionary(), 1, 1, 1.0 / 60.0, 1, true, 11, 0, 0, 0
     );
     REQUIRE(first->ran());
-    // The post state this transition ENDED at, which the next one's pre state
-    // has to equal or the two did not run back to back.
     pool->close_drive(slot, first->transition(), 77, 0, 0, 0);
     NETW_CHECK_EQ(
         stat_of(pool, slot, NetwPredictionEngine::STAT_CHAIN_BREAKS),
@@ -405,9 +388,6 @@ TEST_CASE(
         1
     );
 
-    // Three physics frames advanced across a transition declared to span one,
-    // so this peer integrated its solver by an amount no transition accounts
-    // for and its predictions carry an error the compare cannot attribute.
     NETW_CHECK_EQ(
         stat_of(pool, slot, NetwPredictionEngine::STAT_QUANTUM_STEPS),
         3
@@ -470,9 +450,6 @@ TEST_CASE(
         pool->close_drive(slot, drive->transition(), 0, 0, 0, 0);
         tick += 1;
     }
-    // The span is measured when a pass asks, not continuously: `open_drive`
-    // refreshes it BEFORE the entry it is about to author, so a caller reading
-    // it after a drive is reading the span as of that drive's start.
     NETW_CHECK_EQ(
         stat_of(pool, slot, NetwPredictionEngine::STAT_ACK_AGE_TICKS),
         5
@@ -483,18 +460,12 @@ TEST_CASE(
         6
     );
 
-    // The frontier moves for a transition this slot may hold no row for: an
-    // ack run names transitions, and a lane the pool does not decode is still
-    // a proof. Measuring from the newest ROW instead would keep speculating
-    // past what authority has confirmed.
     NETW_CHECK_EQ(pool->mark_authority_ack(slot, 3), 2);
     NETW_CHECK_EQ(
         stat_of(pool, slot, NetwPredictionEngine::STAT_ACK_AGE_TICKS),
         2
     );
 
-    // The frontier never retreats, so a late frame from an older ack cannot
-    // re-open a horizon a newer one already closed.
     NETW_CHECK_EQ(pool->mark_authority_ack(slot, 1), 2);
     NETW_CHECK_EQ(pool->mark_authority_ack(slot, 5), 0);
     NETW_CHECK_EQ(pool->mark_authority_ack(slot + 9000, 5), -1);
@@ -516,9 +487,6 @@ TEST_CASE(
         cursors[NetwPredictionEngine::CURSOR_TAPE_EPOCH],
         epoch + 1
     );
-    // A reset re-keys every cursor with the epoch, because a transition is
-    // injective only within one and a retained position would name a
-    // transition the new epoch is about to reuse.
     NETW_CHECK_EQ(cursors[NetwPredictionEngine::CURSOR_NEXT_TAPE_ENTRY], 0);
     NETW_CHECK_EQ(cursors[NetwPredictionEngine::CURSOR_LAST_DRIVEN_ENTRY], -1);
     NETW_CHECK_EQ(cursors[NetwPredictionEngine::CURSOR_LATEST_INPUT_TICK], -1);
@@ -534,8 +502,6 @@ TEST_CASE(
     REQUIRE(drive->ran());
     pool->close_drive(slot, drive->transition(), 0, 0, 0, 0);
     cursors = pool->drive_cursors(slot);
-    // The frame's TICK is what a second frame at the same tick is refused
-    // against, and it is not the transition the entry was authored at.
     NETW_CHECK_EQ(
         cursors[NetwPredictionEngine::CURSOR_LAST_FRAME_TRANSITION_TICK],
         7
@@ -562,8 +528,6 @@ TEST_CASE(
     pool.instantiate();
     const int64_t slot = framed_slot(pool);
 
-    // An empty tape spans nothing, which is the absence a caller walking the
-    // span already handles rather than a range of one.
     PackedInt64Array span = pool->tape_span(slot);
     NETW_CHECK_EQ(span[0], -1);
     NETW_CHECK_EQ(span[1], -1);
@@ -579,12 +543,8 @@ TEST_CASE(
     CHECK(pool->tape_is_fresh(slot, 0));
     CHECK_FALSE(pool->tape_is_fresh(slot, 1));
 
-    // The entry is a tape entry and nothing more: an authored command opens no
-    // transition, so the journal must not answer for one.
     CHECK_FALSE(pool->journal_has(slot, 0));
 
-    // A re-key at the contiguous tick keeps the ring, and one past it opens a
-    // new epoch and drops what the previous numbering held.
     const int64_t epoch
         = pool->drive_cursors(slot)[NetwPredictionEngine::CURSOR_TAPE_EPOCH];
     pool->tape_prepare_tick(slot, 2);
@@ -604,8 +564,6 @@ TEST_CASE(
     pool->tape_author(slot, 40, true);
     NETW_CHECK_EQ(pool->tape_span(slot)[0], 40);
 
-    // A closed slot answers rather than writing somewhere, because a caller
-    // reading a span it did not open would walk a range of a live entity's.
     NETW_CHECK_EQ(pool->tape_span(slot + 9000)[0], -1);
 }
 
@@ -617,8 +575,6 @@ TEST_CASE(
     pool.instantiate();
     const int64_t slot = framed_slot(pool);
 
-    // A slot that has driven nothing holds nothing. Answering yes here would
-    // tell a caller the pool has a row behind every number it can name.
     CHECK_FALSE(pool->journal_has(slot, 0));
     CHECK_FALSE(pool->journal_has(slot, 4));
 
@@ -632,8 +588,6 @@ TEST_CASE(
     CHECK_FALSE(pool->journal_has(slot, at + 1));
     CHECK_FALSE(pool->journal_has(slot + 9000, at));
 
-    // The epoch re-keys the journal, so a transition the previous one held is
-    // one the new one has not seen, whatever its number.
     pool->tape_reset(slot, 9);
     CHECK_FALSE(pool->journal_has(slot, at));
 }
@@ -657,9 +611,6 @@ TEST_CASE(
         lane->record_input(100 + index, marked(index));
     }
 
-    // Entry 1 is acknowledged, so entry 0 and the label entry 0 authored are
-    // both unreachable. The two numberings are unrelated: acknowledging entry
-    // 1 retires input tick 100, not input tick 0.
     pool->trim_history(framed, 1);
     NETW_CHECK_EQ(entries->floor(), 1);
     NETW_CHECK_EQ(lane->floor(), 101);
@@ -675,8 +626,6 @@ TEST_CASE(
         ticks->record_input(tick, marked(tick));
     }
 
-    // A TICK transition IS its tick, so the acknowledgement retires the lane
-    // at the number it names and there is no second book to reach.
     pool->trim_history(ticked, 6);
     NETW_CHECK_EQ(ticks->floor(), 6);
     CHECK_FALSE(ticks->has_input_at(5));
@@ -708,16 +657,12 @@ TEST_CASE(
     const Ref<netw::NetwPredictReplayEntry> repeated = entries[1];
     NETW_CHECK_EQ(repeated->index(), 1);
     NETW_CHECK_EQ(repeated->label(), 11);
-    // The owner ran the previous sample again rather than authoring a new one,
-    // so the command filed under this entry's own label is not the one it ran.
     NETW_CHECK_EQ(int64_t(repeated->input()[godot::StringName("mark")]), 10);
 
     const Ref<netw::NetwPredictReplayEntry> fresh = entries[2];
     NETW_CHECK_EQ(fresh->index(), 2);
     NETW_CHECK_EQ(int64_t(fresh->input()[godot::StringName("mark")]), 12);
 
-    // A basis inside the tape seeds the carry from the command the basis entry
-    // itself ran, so the first repeated entry past it is not left empty.
     entries = pool->replay_entries(slot, 0);
     REQUIRE(entries.size() == 2);
     const Ref<netw::NetwPredictReplayEntry> first = entries[0];
@@ -741,8 +686,6 @@ TEST_CASE(
     lane->record_input(7, marked(7));
     pool->record_input(slot, 7, 0);
 
-    // A tick the owner recorded no command at is still a transition it drove,
-    // so the walk is over the ticks rather than over the recorded commands.
     const godot::TypedArray<netw::NetwPredictReplayEntry> entries
         = pool->replay_entries(slot, 4);
     REQUIRE(entries.size() == 3);
@@ -772,16 +715,11 @@ TEST_CASE(
     Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
     pool->bind_timeline(slot, lane);
 
-    // Both books hold an entry at 3, under two unrelated numberings: the entry
-    // book is keyed by tape entry and the lane by tick.
     pool->entry_history(slot)->record_state(3, marked(3));
     lane->record_state(3, marked(99));
 
     NETW_CHECK_EQ(int64_t(pool->state_before(slot, 3)[godot::StringName("mark")]), 3);
 
-    // A reconfigure names the axes and not the history, and the pool is asked
-    // to configure a slot on every drive. Minting a book here would empty it
-    // under a caller writing into the one it already holds.
     const Ref<netw::NetwTimeline> held = pool->entry_history(slot);
     pool->configure(
         slot,
@@ -807,17 +745,11 @@ TEST_CASE(
     lane->record_input(100, marked(100));
     pool->entry_history(slot)->record_state(0, marked(0));
 
-    // The entry index is injective only within an epoch, so a state the
-    // previous numbering filed under 0 would answer for the transition the new
-    // one is about to open there.
     pool->tape_reset(slot, 9);
     const Ref<netw::NetwTimeline> entries = pool->entry_history(slot);
     REQUIRE(entries.is_valid());
     CHECK(entries->state_at(0).is_empty());
 
-    // The lane is keyed by the tick the owner authored at and is shared with
-    // whatever else records into it, so a re-key of this slot's transitions
-    // cannot be allowed to drop it.
     CHECK(lane->has_input_at(100));
 
     CHECK(pool->entry_history(slot + 9000).is_null());

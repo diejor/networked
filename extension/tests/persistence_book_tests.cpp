@@ -1,18 +1,16 @@
 #include "support/netw_test.h"
 
 #include "godot/rid.hpp"
-#include "netw/liveness_core.hpp"
+#include "netw/api/liveness_core.hpp"
 #include "netw/persistence_book.hpp"
 
 namespace TestNetwPersistenceBook {
 
 using namespace godot;
-using netw::NetwPersistenceBook;
+using netw::PersistenceBook;
 
-Ref<NetwPersistenceBook> fresh() {
-    Ref<NetwPersistenceBook> book;
-    book.instantiate();
-    return book;
+PersistenceBook fresh() {
+    return PersistenceBook();
 }
 
 Ref<RefCounted> engine() {
@@ -35,15 +33,15 @@ TEST_CASE("[Networked][Database][Hosted] an enrolment answers fresh once and "
         core->entity_create(),
         core->entity_create()
     };
-    const Ref<NetwPersistenceBook> book = fresh();
+    PersistenceBook book = fresh();
     Ref<RefCounted> first = engine();
     Ref<RefCounted> second = engine();
     const RID entity = ids[0];
 
-    CHECK(book->enroll(entity, first));
-    CHECK_FALSE(book->enroll(entity, second));
-    CHECK(book->engine_of(entity) == second);
-    NETW_CHECK_EQ(book->size(), 1);
+    CHECK(book.enroll(entity, first));
+    CHECK_FALSE(book.enroll(entity, second));
+    CHECK(book.engine_of(entity) == second);
+    NETW_CHECK_EQ(book.size(), 1);
 }
 
 TEST_CASE("[Networked][Database][Hosted] an invalid entity and a null engine "
@@ -54,11 +52,11 @@ TEST_CASE("[Networked][Database][Hosted] an invalid entity and a null engine "
         core->entity_create(),
         core->entity_create()
     };
-    const Ref<NetwPersistenceBook> book = fresh();
+    PersistenceBook book = fresh();
 
-    CHECK_FALSE(book->enroll(RID(), engine()));
-    CHECK_FALSE(book->enroll(ids[0], Ref<RefCounted>()));
-    NETW_CHECK_EQ(book->size(), 0);
+    CHECK_FALSE(book.enroll(RID(), engine()));
+    CHECK_FALSE(book.enroll(ids[0], Ref<RefCounted>()));
+    NETW_CHECK_EQ(book.size(), 0);
 }
 
 TEST_CASE("[Networked][Database][Hosted] an entity nothing enrolled answers "
@@ -69,12 +67,12 @@ TEST_CASE("[Networked][Database][Hosted] an entity nothing enrolled answers "
         core->entity_create(),
         core->entity_create()
     };
-    const Ref<NetwPersistenceBook> book = fresh();
-    book->enroll(ids[0], engine());
+    PersistenceBook book = fresh();
+    book.enroll(ids[0], engine());
 
-    CHECK(book->engine_of(ids[1]).is_null());
-    CHECK_FALSE(book->has(ids[1]));
-    CHECK_FALSE(book->drop(ids[1]));
+    CHECK(book.engine_of(ids[1]).is_null());
+    CHECK_FALSE(book.has(ids[1]));
+    CHECK_FALSE(book.drop(ids[1]));
 }
 
 TEST_CASE("[Networked][Database][Hosted] the enrolment order is what the book "
@@ -85,23 +83,23 @@ TEST_CASE("[Networked][Database][Hosted] the enrolment order is what the book "
         core->entity_create(),
         core->entity_create()
     };
-    const Ref<NetwPersistenceBook> book = fresh();
+    PersistenceBook book = fresh();
     const RID first = ids[0];
     const RID second = ids[1];
     const RID third = ids[2];
-    book->enroll(third, engine());
-    book->enroll(first, engine());
-    book->enroll(second, engine());
+    book.enroll(third, engine());
+    book.enroll(first, engine());
+    book.enroll(second, engine());
 
-    TypedArray<RID> order = book->entities();
+    TypedArray<RID> order = book.entities();
     NETW_CHECK_EQ(int(order.size()), 3);
     CHECK(RID(order[0]) == third);
     CHECK(RID(order[1]) == first);
     CHECK(RID(order[2]) == second);
 
-    CHECK(book->drop(first));
+    CHECK(book.drop(first));
 
-    order = book->entities();
+    order = book.entities();
     NETW_CHECK_EQ(int(order.size()), 2);
     CHECK(RID(order[0]) == third);
     CHECK(RID(order[1]) == second);
@@ -115,15 +113,15 @@ TEST_CASE("[Networked][Database][Hosted] a re-enrolment keeps the row's place "
         core->entity_create(),
         core->entity_create()
     };
-    const Ref<NetwPersistenceBook> book = fresh();
+    PersistenceBook book = fresh();
     const RID first = ids[0];
     const RID second = ids[1];
-    book->enroll(first, engine());
-    book->enroll(second, engine());
+    book.enroll(first, engine());
+    book.enroll(second, engine());
 
-    book->enroll(first, engine());
+    book.enroll(first, engine());
 
-    const TypedArray<RID> order = book->entities();
+    const TypedArray<RID> order = book.entities();
     NETW_CHECK_EQ(int(order.size()), 2);
     CHECK(RID(order[0]) == first);
 }
@@ -135,14 +133,14 @@ TEST_CASE("[Networked][Database][Hosted] a cleared book holds no enrolment") {
         core->entity_create(),
         core->entity_create()
     };
-    const Ref<NetwPersistenceBook> book = fresh();
-    book->enroll(ids[0], engine());
-    book->enroll(ids[1], engine());
+    PersistenceBook book = fresh();
+    book.enroll(ids[0], engine());
+    book.enroll(ids[1], engine());
 
-    book->clear();
+    book.clear();
 
-    NETW_CHECK_EQ(book->size(), 0);
-    NETW_CHECK_EQ(int(book->entities().size()), 0);
+    NETW_CHECK_EQ(book.size(), 0);
+    NETW_CHECK_EQ(int(book.entities().size()), 0);
 }
 
 Dictionary due_on(Object *p_database) {
@@ -161,7 +159,7 @@ TEST_CASE("[Networked][Database][Hosted] due rows batch by database, keeping "
     rows.push_back(due_on(left.ptr()));
 
     const TypedArray<PackedInt32Array> batches
-        = NetwPersistenceBook::group_by_database(rows);
+        = PersistenceBook::group_by_database(rows);
 
     NETW_CHECK_EQ(int(batches.size()), 2);
     const PackedInt32Array first = batches[0];
@@ -182,7 +180,7 @@ TEST_CASE("[Networked][Database][Hosted] a due row naming no database joins "
     rows.push_back(due_on(nullptr));
 
     const TypedArray<PackedInt32Array> batches
-        = NetwPersistenceBook::group_by_database(rows);
+        = PersistenceBook::group_by_database(rows);
 
     NETW_CHECK_EQ(int(batches.size()), 1);
     const PackedInt32Array first = batches[0];
@@ -193,7 +191,7 @@ TEST_CASE("[Networked][Database][Hosted] a due row naming no database joins "
 TEST_CASE("[Networked][Database][Hosted] nothing due is no batch rather than "
           "an empty one") {
     NETW_CHECK_EQ(
-        int(NetwPersistenceBook::group_by_database(Array()).size()),
+        int(PersistenceBook::group_by_database(Array()).size()),
         0
     );
 }

@@ -1,8 +1,23 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictRelayBook" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		The server-side membership of who relays an entity's authored
+		commands to whom.
 	</brief_description>
 	<description>
+		Membership only. Whether a subscriber may still see the entity is
+		the session's interest answer and is re-asked on every relay
+		rather than cached here, so a peer that leaves an entity's
+		interest set stops receiving its commands without this book
+		having to observe the exit.
+		[br][br]Rows are keyed by the session's entity slot, the one
+		numbering every prediction core reads, and a slot with no
+		subscriber holds no row at all, so this book costs nothing for
+		the entities nobody relays.
+		[br][br][method request_bytes] and [method request_of] are the
+		wire pair for the one-bit subscription request a client sends:
+		encode on the client, decode on the server, with no shared state
+		between them.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -11,26 +26,35 @@
 			<return type="int" />
 			<param index="0" name="entity_slot" type="int" />
 			<description>
+				How many peers [method peers] would return for
+				[param entity_slot], without building the array.
 			</description>
 		</method>
 		<method name="peers" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<param index="0" name="entity_slot" type="int" />
 			<description>
-				Every subscriber of a slot, in ADMISSION order, which is what makes one server's relay order a function of its own admissions rather than of a hash seed.
+				Every subscriber of a slot, in ADMISSION order, which is
+				what makes one server's relay order a function of its own
+				admissions rather than of a hash seed.
 			</description>
 		</method>
 		<method name="release">
 			<return type="void" />
 			<param index="0" name="entity_slot" type="int" />
 			<description>
+				Drops [param entity_slot]'s row entirely, releasing every
+				subscriber at once. Called when the entity itself is
+				despawned, so a stale slot number is never left holding
+				subscribers.
 			</description>
 		</method>
 		<method name="request_bytes" qualifiers="static">
 			<return type="PackedByteArray" />
 			<param index="0" name="subscribed" type="bool" />
 			<description>
-				The subscription request itself, which is one bit and the only thing a client sends on this lane.
+				The subscription request itself, which is one bit and the
+				only thing a client sends on this lane.
 			</description>
 		</method>
 		<method name="request_of" qualifiers="static">
@@ -46,12 +70,17 @@
 			<param index="1" name="peer" type="int" />
 			<param index="2" name="subscribed" type="bool" />
 			<description>
-				Admits [param peer] to [param entity_slot]'s relayed command lane, or drops it when [param subscribed] is false. Admitting twice is the same subscription.
+				Admits [param peer] to [param entity_slot]'s relayed
+				command lane, or drops it when [param subscribed] is
+				false. Admitting twice is the same subscription.
 			</description>
 		</method>
 		<method name="slot_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				How many entity slots hold a row, at least one subscriber
+				each. A slot with no subscriber is never counted, since it
+				holds no row.
 			</description>
 		</method>
 		<method name="subscribed" qualifiers="const">
@@ -59,6 +88,8 @@
 			<param index="0" name="entity_slot" type="int" />
 			<param index="1" name="peer" type="int" />
 			<description>
+				Whether [param peer] is currently admitted to
+				[param entity_slot]'s relayed command lane.
 			</description>
 		</method>
 	</methods>

@@ -11,7 +11,7 @@ const TICKRATE := 30
 var harness: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: ClockCore
+var server_clock: NetwClockHandle
 var stepper: LockstepStepper
 
 var mob_pos: int
@@ -48,7 +48,7 @@ func _pair() -> void:
 	server = harness.server()
 	server_clock = await harness.add_clock(TICKRATE)
 	stepper = LockstepStepper.new(
-		[server_clock, client.api._clock],
+		[server_clock, client.api._native_core.clock_handle],
 		[server.api, client.api],
 		harness.session(),
 		TICKRATE,
@@ -177,7 +177,7 @@ func test_a_late_joiner_is_healed_by_a_snapshot() -> void:
 
 	var latecomer := await harness.add_client()
 	stepper = LockstepStepper.new(
-		[server_clock, client.api._clock, latecomer.api._clock],
+		[server_clock, client.api._native_core.clock_handle, latecomer.api._native_core.clock_handle],
 		[server.api, client.api, latecomer.api],
 		harness.session(),
 		TICKRATE,

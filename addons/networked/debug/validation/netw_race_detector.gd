@@ -45,12 +45,12 @@ func find_connect_races(
 	if not mt or not mt.api:
 		return []
 
-	var scenes := mt.api._scenes if mt.api else null
+	var scenes := mt.api
 	if not scenes:
 		return []
 
 	var races: Array[Dictionary] = []
-	for scene: Node in scenes.live_scenes():
+	for scene: Node in scenes._scene_live_nodes():
 		if not is_instance_valid(scene) or not is_instance_valid(_scene_level(scene)):
 			continue
 

@@ -1,7 +1,7 @@
 ## Unit tests for [MultiplayerSceneManager] declaration snapshotting.
 ##
 ## The manager holds no runtime state. It only snapshots its exported rows into
-## a [NetwSceneConfig] for [SceneCore] to read.
+## a [NetwSceneConfig] for [NetwMultiplayer] to read.
 class_name TestSceneManagerConfig
 extends NetwTestSuite
 
@@ -37,7 +37,7 @@ func test_a_declared_scene_is_keyed_by_the_stem_the_live_book_uses() -> void:
 	var config := mgr._build_netw_scene_config()
 
 	assert_str(String(stem)).is_not_equal(path.get_file().get_basename())
-	assert_bool(config.scenes.has(stem)).is_true()
+	assert_object(config.declared_scene(stem)).is_not_null()
 
 
 func test_scene_config_snapshots_isolation() -> void:

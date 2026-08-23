@@ -3,18 +3,13 @@
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
-#include "godot/ref_counted.hpp"
-#include "godot/rid.hpp"
+#include "godot/templates.hpp"
 #include "godot/variant.hpp"
-#include "netw/resolved_join.hpp"
+#include "netw/api/resolved_join.hpp"
 
 namespace netw {
 
-using namespace godot;
-
-class NetwJoinRoster : public RefCounted {
-    GDCLASS(NetwJoinRoster, RefCounted)
-
+class JoinRoster {
 public:
     enum Verdict {
         ADMIT = 0,
@@ -23,33 +18,30 @@ public:
     };
 
 private:
-    HashMap<int64_t, Ref<ResolvedJoin>> accepted;
-    HashMap<int64_t, String> refusals;
+    godot::HashMap<int64_t, godot::Ref<ResolvedJoin>> accepted;
+    godot::HashMap<int64_t, godot::String> refusals;
 
-    LocalVector<int64_t> peers_in_order() const;
-
-protected:
-    static void _bind_methods();
+    godot::LocalVector<int64_t> peers_in_order() const;
 
 public:
-    bool remember(const Ref<ResolvedJoin> &rj);
-    Ref<ResolvedJoin> accepted_join(int64_t peer_id) const;
-    Array accepted_joins() const;
-    Array serialize_accepted() const;
+    bool remember(const godot::Ref<ResolvedJoin> &rj);
+    godot::Ref<ResolvedJoin> accepted_join(int64_t peer_id) const;
+    godot::Array accepted_joins() const;
+    godot::Array serialize_accepted() const;
 
     int name_verdict(
-        const StringName &name,
-        const PackedStringArray &taken,
+        const godot::StringName &name,
+        const godot::PackedStringArray &taken,
         bool is_debug,
         bool has_identity
     ) const;
-    StringName free_name(
-        const StringName &name,
-        const PackedStringArray &taken
+    godot::StringName free_name(
+        const godot::StringName &name,
+        const godot::PackedStringArray &taken
     ) const;
 
-    void refuse(int64_t peer_id, const String &reason);
-    String refusal(int64_t peer_id) const;
+    void refuse(int64_t peer_id, const godot::String &reason);
+    godot::String refusal(int64_t peer_id) const;
 
     void forget(int64_t peer_id);
     void clear();
@@ -57,5 +49,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::NetwJoinRoster::Verdict);

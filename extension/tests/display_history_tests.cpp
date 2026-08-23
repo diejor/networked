@@ -8,7 +8,7 @@
 #include "support/netw_test.h"
 
 #include "netw/display_history.hpp"
-#include "netw/interpolate.hpp"
+#include "netw/api/interpolate.hpp"
 
 namespace TestNetwDisplayHistory {
 

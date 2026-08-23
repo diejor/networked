@@ -194,7 +194,7 @@ enum Archetype {
 var simulate: Callable = Callable()
 
 var _entity: NetwEntity
-var _iface: LagCompCore
+var _iface: NetwMultiplayer
 
 
 func _init() -> void:
@@ -228,9 +228,9 @@ func _ready() -> void:
 	# through the required guard: it logs a clear error when this component sits
 	# under a MultiplayerTree with no LagCompensation node, yet stays quiet for a
 	# scene run standalone (no enclosing tree, e.g. pressing F6 to test in isolation).
-	_iface = LagCompCore.resolve_required(self)
+	_iface = NetwMultiplayer.resolve_required(self)
 	if _iface:
-		var api := _iface._api()
+		var api := _iface
 		if api:
 			api.predict_declare(api.entity_of(entity.owner))
 
@@ -239,7 +239,7 @@ func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	if is_instance_valid(_iface) and _entity:
-		var api := _iface._api()
+		var api := _iface
 		if api:
 			api.predict_undeclare(api.entity_of(_entity.owner))
 	_iface = null
@@ -351,7 +351,7 @@ func _owner_state_set() -> NetwPropertySet:
 ## predicted body registers a collision.
 func notify_contact() -> void:
 	if _entity and is_instance_valid(_iface):
-		var api := _iface._api()
+		var api := _iface
 		if api:
 			api.predict_notify_contact(api.entity_of(_entity.owner))
 

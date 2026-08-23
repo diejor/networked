@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayTiming" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One pump's timing snapshot, the plain scalars a display runtime reads instead of a clock.
+	</brief_description>
+	<description>
+		A display runtime never resolves or reads a clock. The pump captures one snapshot at the top of the frame and hands the same one to every runtime, so a runtime's sample math depends only on scalars owned by that frame and a pump over one entity touches nothing outside that entity. That is what makes a runtime pump orderable and, later, parallelisable.
+		[codeblock]
+		var timing = NetwDisplayTiming.capture(clock, frame_delta)
+		for runtime in book.runtimes():
+		    pump_runtime(runtime, timing)   # timing crosses by value, never a clock
+		[/codeblock]
+		Every field is writable, because a test rig declares a timeline directly rather than standing a clock up to produce one.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="capture" qualifiers="static">
+			<return type="NetwDisplayTiming" />
+			<param index="0" name="clock" type="NetwClockHandle" />
+			<param index="1" name="frame_delta" type="float" />
+			<description>
+				Reads one snapshot from [param clock], pairing it with the wall-clock [param frame_delta] since the previous pump.
+				A null [param clock] yields a zeroed snapshot rather than a refusal, so a pump that runs before any configurator has registered a clock stays inert instead of failing.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="0">
+			Ticks the display clock trails the simulation, which is the buffer depth that guarantees a later snapshot to interpolate toward.
+		</member>
+		<member name="display_tick" type="int" setter="set_display_tick" getter="get_display_tick" default="0">
+			The display clock tick, already trailing [member tick] by [member display_offset].
+		</member>
+		<member name="frame_delta" type="float" setter="set_frame_delta" getter="get_frame_delta" default="0.0">
+			Wall-clock seconds since the previous pump. This is the display smoothing delta, and it is the one field in the snapshot that is not tick-space.
+		</member>
+		<member name="frame_ticks" type="float" setter="set_frame_ticks" getter="get_frame_ticks" default="0.0">
+			Ticks elapsed in this frame, [member frame_delta] times the clock's tickrate.
+		</member>
+		<member name="recommended_display_offset" type="int" setter="set_recommended_display_offset" getter="get_recommended_display_offset" default="0">
+			The [member display_offset] the clock recommends given the jitter it has measured. A playhead dilates toward this rather than snapping to it.
+		</member>
+		<member name="tick" type="int" setter="set_tick" getter="get_tick" default="0">
+			The live simulation tick.
+		</member>
+		<member name="tick_factor" type="float" setter="set_tick_factor" getter="get_tick_factor" default="0.0">
+			Fractional progress from [member display_tick] toward the next tick.
+		</member>
+		<member name="ticktime" type="float" setter="set_ticktime" getter="get_ticktime" default="0.0">
+			Seconds per tick.
+		</member>
+	</members>
+</class>

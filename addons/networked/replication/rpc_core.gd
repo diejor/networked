@@ -53,10 +53,10 @@ func _api() -> NetwMultiplayer:
 
 # Resolves the tick engine, or null while no configurator has registered, so
 # callers fall back to their no-clock path against the inert interface.
-func _clock_interface() -> ClockCore:
+func _clock_interface() -> NetwClockHandle:
 	var api := _api()
-	if api and api._clock.is_configured():
-		return api._clock
+	if api and api._native_core.clock_handle.is_configured:
+		return api._native_core.clock_handle
 	return null
 
 
@@ -775,8 +775,8 @@ class _CallRouter:
 		if interpolators.is_empty():
 			return
 		var api := _rpc._api()
-		var iface := api._display if api else null
-		if not iface:
+		var core := api._native_core if api else null
+		if not core:
 			return
 		var tick := api._receive_tick()
 		for i in interpolators.size():
@@ -785,7 +785,7 @@ class _CallRouter:
 				continue
 			if i >= args.size():
 				continue
-			iface._record(
+			core.display_record(
 				comp_node,
 				spec.target,
 				args[i],

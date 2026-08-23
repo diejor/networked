@@ -1,21 +1,13 @@
 #pragma once
 
-/* The shell's handle on the receive-side freshness books.
- *
- * A binding that exists so the GDScript shell can judge an arriving frame
- * before `NetwMultiplayer` is native. It holds no logic: every verb forwards
- * to `netw::repl::FreshnessBook`, whose header carries the law.
- *
- * TODO: unregister this class and delete this header once NetwMultiplayer is
- * native and holds a `netw::repl::FreshnessBook` directly.
- */
-
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 #include "netw/repl/freshness_book.hpp"
 
 namespace netw {
 
+// TODO: unregister this class and delete this header once NetwMultiplayer is
+// native and holds a netw::repl::FreshnessBook directly.
 class NetwSyncProgress : public godot::RefCounted {
     GDCLASS(NetwSyncProgress, godot::RefCounted)
 

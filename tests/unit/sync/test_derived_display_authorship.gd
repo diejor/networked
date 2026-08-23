@@ -4,10 +4,10 @@
 ## A displayed value has to know whether this peer AUTHORS the stream feeding
 ## it: an authoring peer displays its own simulation and a receiving peer
 ## displays what arrived. When the only stream is a derived property set, that
-## question is [code]DisplayCore._authors_derived_stream[/code]'s, and it is
-## the one input to the role ladder that no other declaration shape reaches.
-## This suite is the rig that reaches it, so a port of the pump has a corpus
-## that can say it was wrong.
+## question is [method NetwMultiplayerCore.display_authors_streams]'s, and it
+## is the one input to the role ladder that no other declaration shape
+## reaches. This suite is the rig that reaches it, so a port of the pump has a
+## corpus that can say it was wrong.
 class_name TestDerivedDisplayAuthorship
 extends NetwTestSuite
 

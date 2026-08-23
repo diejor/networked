@@ -1,21 +1,13 @@
 #pragma once
 
-/* A detached typed view of one recovery episode.
- *
- * Evidence is addressed by series and index, so callers never unpack a
- * fixed-key Dictionary and one report can serve signals, tooling, and tests.
- */
-
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 #include "netw/predict/episode.hpp"
 
 namespace netw {
 
-using namespace godot;
-
-class NetwPredictEpisodeReport : public RefCounted {
-    GDCLASS(NetwPredictEpisodeReport, RefCounted)
+class NetwPredictEpisodeReport : public godot::RefCounted {
+    GDCLASS(NetwPredictEpisodeReport, godot::RefCounted)
 
     friend class NetwPredictionEngine;
 
@@ -30,6 +22,10 @@ public:
         EPISODE_CLOSED = 1,
         EPISODE_FALLBACK = 2,
     };
+
+    godot::Dictionary to_dictionary(
+        const godot::Dictionary &p_witness_details
+    ) const;
 
     bool active() const;
     int id() const;
@@ -107,7 +103,7 @@ public:
     int write_operator(int p_index) const;
     int64_t write_basis(int p_index) const;
     int64_t write_delta_fp(int p_index) const;
-    StringName write_target(int p_index) const;
+    godot::StringName write_target(int p_index) const;
     int write_outcome(int p_index) const;
     int write_meter_before(int p_index) const;
     int write_meter_after(int p_index) const;
@@ -124,7 +120,7 @@ public:
     int64_t decision_basis(int p_index) const;
     bool decision_eligible(int p_index) const;
     bool decision_applied(int p_index) const;
-    Dictionary decision_eligibility(int p_index) const;
+    godot::Dictionary decision_eligibility(int p_index) const;
 };
 
 } // namespace netw

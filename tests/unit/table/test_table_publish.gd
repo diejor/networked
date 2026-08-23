@@ -240,7 +240,7 @@ func test_a_commit_carries_the_session_tick() -> void:
 		PackedVector3Array([Vector3.ZERO]),
 		PackedInt32Array([1]),
 	)
-	assert_int(api.table_get_tick(mobs)).is_equal(api._clock.tick)
+	assert_int(api.table_get_tick(mobs)).is_equal(api._native_core.clock_handle.tick)
 
 
 ## Verify a commit marks the table for the tick boundary and clears once its

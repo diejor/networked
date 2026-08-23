@@ -17,8 +17,9 @@ const TICKRATE := 30
 var harness: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: ClockCore
-var client_clock: ClockCore
+var server_clock: NetwClockHandle
+var client_api: NetwMultiplayer
+var client_clock: NetwClockHandle
 var server_root: Node2D
 var client_root: Node2D
 var _stepper: LockstepStepper
@@ -33,6 +34,7 @@ func after_test() -> void:
 	client = null
 	server_clock = null
 	client_clock = null
+	client_api = null
 	server_root = null
 	client_root = null
 	await NetwTestSuite.drain_frames(get_tree(), 2)
@@ -47,7 +49,8 @@ func _setup_pair() -> void:
 	client = await harness.add_client()
 	server = harness.server()
 	server_clock = await harness.add_clock(TICKRATE)
-	client_clock = client.api._clock
+	client_clock = client.api._native_core.clock_handle
+	client_api = client.api
 	server_clock.manual_tick = true
 	client_clock.manual_tick = true
 
@@ -70,7 +73,7 @@ func _setup_pair() -> void:
 	await get_tree().process_frame
 
 	_stepper = LockstepStepper.new(
-		[server_clock, client_clock] as Array[ClockCore],
+		[server_clock, client_clock] as Array[NetwClockHandle],
 		[server.multiplayer, client.multiplayer] as Array[MultiplayerAPI],
 		harness.session(),
 		TICKRATE,
@@ -105,7 +108,7 @@ func test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss() -
 		client_binding.authored_tick = t
 		client_root.aim_dir = Vector2(t, -t)
 		last_tick[0] = t
-	client_clock.on_tick.connect(author)
+	client_api.on_tick.connect(author)
 
 	# The server observer merges the masked stream without ever tearing a row.
 	var torn := [0]
@@ -148,7 +151,7 @@ func test_client_broadcast_promotes_via_standalone_echo_and_heals_under_loss() -
 
 	# Heal phase: once the link recovers the baseline catches up and the observer
 	# converges on the exact final authored value.
-	client_clock.on_tick.disconnect(author)
+	client_api.on_tick.disconnect(author)
 	harness.clear_links()
 	_stepper.sync_ticks(6)
 	var t: int = last_tick[0]

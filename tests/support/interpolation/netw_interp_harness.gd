@@ -2,9 +2,10 @@
 ##
 ## The engine's display math is a pure function of recorded snapshots, a per-pump
 ## timing snapshot, and a spec. This harness supplies all three by hand: it feeds
-## a delivery schedule into a real [NetwDisplayHistory], hands the real
-## [code]_pump_history[/code] a synthesized [NetwDisplayTiming] every frame, and
-## captures the output through a [NetwInterpRecordingWriter]. It calls the same
+## a delivery schedule into a real [NetwDisplayHistory], hands
+## [method NetwMultiplayerCore.display_pump_runtime] a synthesized
+## [NetwDisplayTiming] every frame, and captures the output through a
+## [NetwInterpRecordingWriter]. It calls the same
 ## kernel methods the live pump calls, so what it certifies is the shipping
 ## engine, not a reimplementation of it. All intimacy with the engine's private
 ## shapes lives here, so the calculus tests read as property assertions.
@@ -60,7 +61,7 @@ var max_forecast_ticks := 6
 
 ## Pump mode the runtime resolves to. BRACKETED is the authored and server path,
 ## which never forecasts however the handle is set.
-var pump_mode := DisplayCore._PUMP_REMOTE
+var pump_mode := NetwDisplayDecl.PUMP_REMOTE
 
 ## Wall time after which the stream stops delivering, for the sleep and
 ## project-to-cap families. Records scheduled past it are dropped.
@@ -69,7 +70,7 @@ var record_cutoff_sec := INF
 # The flat selector the display record is written through.
 const _Param := NetwMultiplayer.DisplayParam
 
-var _iface: DisplayCore
+var _core: NetwMultiplayerCore
 var _rt: NetwDisplayRuntime
 var _state: NetwDisplayChannel
 var _writer: NetwInterpRecordingWriter
@@ -100,7 +101,7 @@ func writer() -> NetwInterpRecordingWriter:
 ## displayed value at [param initial].
 func configure(spec: NetwInterpolate, initial: Variant) -> void:
 	frame_dt_sec = 1.0 / fps
-	_iface = DisplayCore.new()
+	_core = NetwMultiplayerCore.new()
 
 	_rt = NetwDisplayRuntime.new()
 	_rt.config = NetwDisplayDecl.new()
@@ -121,7 +122,7 @@ func configure(spec: NetwInterpolate, initial: Variant) -> void:
 	_state.history.mode = spec.mode
 	_state.history.snap_distance = spec.snap_distance
 	_writer = NetwInterpRecordingWriter.new()
-	_state.output = _writer
+	_state.output = _writer.write
 	_state.last_written = initial
 
 	_rt.states.append(_state)
@@ -132,7 +133,7 @@ func configure(spec: NetwInterpolate, initial: Variant) -> void:
 ## with exponential [param smooth_time], starting the display at [param initial].
 func configure_chase(spec: NetwInterpolate, smooth_time: float, initial: Variant) -> void:
 	frame_dt_sec = 1.0 / fps
-	_iface = DisplayCore.new()
+	_core = NetwMultiplayerCore.new()
 
 	_rt = NetwDisplayRuntime.new()
 	_rt.config = NetwDisplayDecl.new()
@@ -140,7 +141,7 @@ func configure_chase(spec: NetwInterpolate, smooth_time: float, initial: Variant
 		_Param.DISPLAY_PARAM_PREDICTED_SMOOTH_TIME, smooth_time
 	)
 	_rt.playhead = NetwDisplayPlayhead.new()
-	_rt.pump_mode = DisplayCore._PUMP_CHASE
+	_rt.pump_mode = NetwDisplayDecl.PUMP_CHASE
 
 	_body = _ChaseBody.new()
 	_body.value = initial
@@ -154,7 +155,7 @@ func configure_chase(spec: NetwInterpolate, smooth_time: float, initial: Variant
 	_state.history = NetwDisplayHistory.new()
 	_state.history.mode = spec.mode
 	_writer = NetwInterpRecordingWriter.new()
-	_state.output = _writer
+	_state.output = _writer.write
 	_state.last_written = initial
 
 	_rt.states.append(_state)
@@ -180,7 +181,7 @@ func run_chase(oracle: NetwInterpOracle, duration_sec: float) -> void:
 		var timing := _timing(wall)
 		_writer.mark_frame(wall)
 		_stats.reset()
-		_iface._pump_chase(_rt, timing, _stats)
+		_core.display_pump_runtime(_rt, timing, _stats)
 
 		frames.append(wall)
 		displayed.append(_state.last_written)
@@ -196,7 +197,7 @@ func set_body(value: Variant) -> void:
 ## Feeds one recovery into the chase exactly the way the live absorber does,
 ## so a calculus law can assert what a correction looks like on the display.
 func absorb_recovery(deltas: Dictionary, teleported: bool = false) -> void:
-	_iface._on_chase_recovered(0, deltas, teleported, 0, _rt)
+	_core.display_absorb_recovery(_rt, deltas, teleported)
 
 
 ## Pumps one chase frame at [param wall] seconds, recording it the way
@@ -206,7 +207,7 @@ func step_chase(wall: float) -> void:
 	var timing := _timing(wall)
 	_writer.mark_frame(wall)
 	_stats.reset()
-	_iface._pump_chase(_rt, timing, _stats)
+	_core.display_pump_runtime(_rt, timing, _stats)
 	frames.append(wall)
 	displayed.append(_state.last_written)
 	playhead_time.append(wall)
@@ -261,7 +262,7 @@ func run(
 		var timing := _timing(wall)
 		_writer.mark_frame(wall)
 		_stats.reset()
-		_iface._pump_history(_rt, timing, _stats)
+		_core.display_pump_runtime(_rt, timing, _stats)
 		run_stats.merge(_stats)
 
 		frames.append(wall)

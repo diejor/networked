@@ -14,7 +14,7 @@ const TICKRATE := 30
 
 var harness: NetwTestHarness
 var client0: MultiplayerTree
-var server_clock: ClockCore
+var server_clock: NetwClockHandle
 var probe_scene: PackedScene
 
 var _stepper: LockstepStepper
@@ -61,22 +61,22 @@ func test_a_visibility_loss_between_pumps_reaches_the_peer_with_no_frame() \
 	var entity := _replication().replicate(node)
 	_server_arena().add_child(node)
 
-	var interest := harness.server().api._interest
-	var layer := interest.layer_for(&"settle")
+	var interest := harness.server().api
+	var layer := interest._native_core.interest_layer(&"settle")
 	layer.add_entity(entity)
-	interest.flush()
+	interest.interest_flush()
 	_sync_ticks(4)
 	assert_that(_client_node(entity.route)).is_null()
 
 	layer.add_viewer(peer0)
-	interest.flush()
+	interest.interest_flush()
 	_sync_ticks(4)
 	assert_that(_client_node(entity.route)).is_not_null()
 
 	# Only the sweep issues this edge: the entity itself never moves, so
 	# nothing but a re-read of the admission matrix can revoke it.
 	layer.remove_viewer(peer0)
-	interest.flush()
+	interest.interest_flush()
 	_sync_ticks(4)
 
 	assert_that(_client_node(entity.route)).is_null()
@@ -132,13 +132,13 @@ func test_a_spawn_reports_the_stages_that_carried_it() -> void:
 	# The sweep is what reconciles, so the spawn rides an interest edge rather
 	# than the open default: a materialization nobody had to decide about never
 	# reaches the stage that decides.
-	var interest := harness.server().api._interest
-	var layer := interest.layer_for(&"stages")
+	var interest := harness.server().api
+	var layer := interest._native_core.interest_layer(&"stages")
 	layer.add_entity(entity)
-	interest.flush()
+	interest.interest_flush()
 	_sync_ticks(4)
 	layer.add_viewer(peer0)
-	interest.flush()
+	interest.interest_flush()
 	_sync_ticks(4)
 	assert_that(_client_node(entity.route)).is_not_null()
 
@@ -200,7 +200,7 @@ func _stage_counts(api: NetwMultiplayer, route: int) -> Dictionary:
 
 func _sync_ticks(n: int) -> void:
 	if _stepper == null:
-		var clocks: Array[ClockCore] = [server_clock, client0.api._clock]
+		var clocks: Array[NetwClockHandle] = [server_clock, client0.api._native_core.clock_handle]
 		var apis: Array[MultiplayerAPI] = [
 			harness.server().multiplayer,
 			client0.multiplayer,

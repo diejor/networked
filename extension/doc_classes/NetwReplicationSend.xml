@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwReplicationSend" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
+		The send side of one replication session: gathers rows into frames, tracks what each peer holds, and settles that tracking against what the wire confirms.
 	</brief_description>
 	<description>
+		Every row this pipeline sends rides one of three lane shapes at its [code](route, comp)[/code] address, and the three coexist there without colliding: a volatile masked lane diffed by [method run] or [method run_deferred], a retained reliable lane that never defers, and a windowed lane repeating the ticks still in flight. [method NetwReplicationSend.run]'s [param offers] documents the shapes in full.
+		A datagram, not a lane, is what a peer's [method acknowledge] names. One datagram can carry frames from several lanes at once, so acknowledging it settles every lane whose frame rode inside, and an acknowledgement that reached only one of them would leave the others diffing against a row the peer has already superseded.
+		A volatile lane's mask is diffed against a peer's CONFIRMED baseline, the last row that peer's own datagram ack proves it reconstructed, never a merely staged one, because the datagram carrying a stage may never land. A column named in a mask stays sticky, sent every pass, until an acknowledged baseline actually carries it: without that, a value that moves away from the stale baseline and back inside the in-flight window would diff clean, stranding the interim value the peer already holds with no later frame to correct it. A peer that acknowledges nothing since its last confirmed baseline keeps that baseline rather than being diffed against a corrupted one. A peer with no confirmed baseline yet is sent every column, which is how a peer that just became a recipient heals with a whole row instead of an empty diff.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -12,6 +16,7 @@
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="acked_seq" type="int" />
 			<description>
+				Settles every volatile lane's baseline for [param peer] up to [param acked_seq]. Only the volatile masked lanes wait on a seq at all: a retained lane advances on send and a windowed lane repeats its own ring, so neither has anything here for this to bind.
 			</description>
 		</method>
 		<method name="apply">
@@ -23,7 +28,8 @@
 			<description>
 				Applies one frame this pipeline produced onto the row a peer holds.
 				The receive half of the same crossing, here rather than in its own class because a frame's shape is decided by the send that made it, and a receiver reading it against a different plan is the failure both halves exist to prevent.
-				[param held] is the row the receiver already has, as bytes, and may be empty for a peer holding nothing yet. Answers the values the receiver now holds, or an empty array when the frame does not read against [param schema]. A refusal never half-applies.
+				[param held] is the row the receiver already has, as bytes, and may be empty for a peer holding nothing yet. Answers the values the receiver now holds, or an empty array when the frame does not read against [param schema]. A refusal never half-applies, and reading always continues to exhaustion: a short frame, leftover residue, or a mask naming a column [param schema] does not have all refuse rather than silently accepting an unaccounted byte.
+				When [param masked] is true, only the columns the frame's mask names are written into [param held] and every other column is left as it already was, which is what makes the frame applicable to a row the receiver partially holds. When [param masked] is false, the frame is read as carrying every column and [param held] is fully replaced, because a plain frame never carried a mask to select with.
 			</description>
 		</method>
 		<method name="apply_window">
@@ -33,12 +39,14 @@
 			<description>
 				Reads one windowed frame, answering every tick it repeats.
 				A windowed frame carries a SEQUENCE rather than a state, so this answers a [code]samples[/code] array of [code]{tick, values}[/code] rather than one row. A caller that took only the newest would discard exactly the ticks the lane repeats the range to deliver.
+				Each sample rides on the wire as its age below the frame's tick, which keeps a frame's cost independent of how large the tick counter has grown. A sample newer than the frame's own tick is refused, because a negative age would reconstruct a tick the sender never had.
 			</description>
 		</method>
 		<method name="close_route">
 			<return type="void" />
 			<param index="0" name="route" type="int" />
 			<description>
+				Drops every lane at [param route], across all three shapes, so the next entity minted at that address starts with no peer believed to hold anything: no confirmed baseline to diff a volatile send against and a fresh windowed ring rather than one repeating the departed entity's ticks. Opening a lane at an address that is already open answers the one already there rather than replacing it, which is what lets a peer's confirmed baseline and a windowed ring's depth survive between passes; only [method close_route] and [method retain] ever discard one.
 			</description>
 		</method>
 		<method name="commit">
@@ -46,6 +54,7 @@
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="seq" type="int" />
 			<description>
+				Binds the sends [method confirm] most recently marked as carried to [param seq], the datagram the carrier stamped them with. A run that split mid-pass can confirm sends into more than one datagram, so [param seq] must name only the ones that rode in it; binding a later row to an earlier seq would advance its baseline to a value the peer never received, with no later frame left to correct it.
 			</description>
 		</method>
 		<method name="confirm">
@@ -83,24 +92,29 @@
 		<method name="outstanding" qualifiers="const">
 			<return type="int" />
 			<description>
+				Datagrams sent and not yet resolved delivered or lost. This answers a different question from [method pending_count]: a datagram's ack proves only that the peer SAW that datagram, which settles this count and [method acknowledge]'s baseline promotion together, while a still-open datagram here says nothing about whether an earlier one silently arrived. The two counts are allowed to disagree; making them agree would mean one of them stopped answering its own question.
 			</description>
 		</method>
 		<method name="peek" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="frame" type="PackedByteArray" />
 			<description>
+				Reads [param frame]'s header without decoding its columns.
+				The tick and the reconcile ack ride per frame rather than per datagram, because a datagram aggregates rows authored at different ticks and a peer's acknowledgement of one route is not an acknowledgement of another riding alongside it.
 			</description>
 		</method>
 		<method name="pending_count" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="peer" type="int" />
 			<description>
+				Rows waiting on a seq for [param peer], owed to [method commit]. Only a volatile masked lane ever waits here: a retained lane advances on send with no commit to bind, and a windowed lane keeps no per-peer baseline for one to advance.
 			</description>
 		</method>
 		<method name="retain">
 			<return type="void" />
 			<param index="0" name="recipients" type="PackedInt32Array" />
 			<description>
+				Forgets every peer outside [param recipients], in every lane, so a baseline never outlives the visibility that earned it. A peer that returns to a route it was dropped from has no confirmed baseline left and heals with a whole row rather than a diff against one it can no longer be assumed to hold.
 			</description>
 		</method>
 		<method name="retain_row">
@@ -124,13 +138,17 @@
 			<param index="3" name="send_id" type="int" />
 			<description>
 				Runs one send pass over [param offers].
-				An offer is a [Dictionary] of [code]route[/code], [code]comp[/code], [code]channel[/code], [code]schema[/code], [code]values[/code], [code]recipients[/code] and [code]priority[/code]. The answer carries [code]sends[/code], one dictionary per recipient owed a row, plus the counts that say why a pass sent nothing: [code]caught_up[/code], [code]ungathered[/code] and [code]untrackable[/code].
+				This is the pass's only entry: a caller offers the rows and takes back what rode and what waits, rather than gathering a row, asking for its mask, and staging it as three separate calls a caller could get out of order. Staging a row for a peer whose mask came back empty would tell the book that peer holds a row it was never sent, asking for a mask twice in one pass would arm a sticky lane's set twice, and gathering per recipient instead of once per row would cost a poll per peer, so the pass holds all three itself.
+				An offer is a [Dictionary] of [code]route[/code], [code]comp[/code], [code]channel[/code], [code]schema[/code], [code]values[/code], [code]recipients[/code] and [code]priority[/code]. An offer may also carry [code]reliable[/code], true for a row that rides an ordered, guaranteed channel and is never offered to the fitter, because a fitter may defer a candidate to the next pass and a deferred reliable row whose lane already advanced would have no later frame to carry the columns it dropped. An offer may carry [code]windowed[/code] instead, true for a row that repeats the recent ticks still in flight rather than sending one row; its [code]window[/code] is the lane's ring depth and its [code]tick[/code] is the tick the row was authored at, the key the ring is ordered by and the only shape where a tick is core state rather than framing. Unlike a reliable row, a windowed row the fitter defers costs nothing: the ring still holds its tick, so the next pass carries it beside whatever tick follows, which is why this shape may be fitted and the reliable one may not.
+				The answer carries [code]sends[/code], one dictionary per recipient owed a row. A windowed send's dictionary carries its repeated ticks oldest first under [code]samples[/code], which is empty for every other lane shape, where the row itself is the whole of what rides. The answer also carries the counts that say why a pass sent nothing: [code]caught_up[/code] counts peers already holding what the pass would have sent, since a recipient whose mask came back empty costs the pass nothing rather than producing a frame with no columns in it, [code]ungathered[/code] counts rows whose gather refused, so a caller that could not see both would read a silent pass as a session with nothing left to say rather than one that could not gather or had nothing new, and [code]untrackable[/code] marks the pass as unable to track its own progress at all. A row's [param schema] must compile to a fixed-width wire plan to gather at all: a [constant SchemaCore.VARIANT] column has no one width to plan, and a schema past 64 columns has no plan either, because a change mask is one bit per column in a single word.
 			</description>
 		</method>
 		<method name="run_deferred">
 			<return type="Dictionary" />
 			<param index="0" name="offers" type="Array" />
 			<description>
+				Runs one pass whose sends are stamped by someone else, through [method confirm], rather than staged here.
+				What a pass wanted to send and what a datagram carried are two different sets: a frame can be dropped between them, and a peer's run can split across two datagrams mid-pass. Nothing here is staged, not even for a recipient the pass answered, because [method confirm] is how a caller says which of the answered sends actually reached the carrier.
 			</description>
 		</method>
 		<method name="set_encode_stage">

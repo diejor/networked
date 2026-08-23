@@ -69,7 +69,7 @@ struct EpisodeWrite {
     Operator op = Operator::NONE;
     int64_t basis = -1;
     int32_t delta_fp = 0;
-    StringName target;
+    godot::StringName target;
     OperatorOutcome outcome = OperatorOutcome::PENDING;
     int meter_before = 0x7FFFFFFF;
     int meter_after = METER_UNMEASURED;
@@ -85,19 +85,19 @@ struct EpisodeWrite {
 struct EpisodeDecision {
     Operator op = Operator::NONE;
     int64_t basis = -1;
-    Dictionary eligibility;
+    godot::Dictionary eligibility;
     bool eligible = false;
     bool applied = false;
 };
 
 struct Episode {
     PinnedRow generator;
-    LocalVector<EpisodeWrite> writes;
-    LocalVector<int64_t> taint;
-    LocalVector<PinnedRow> secondary_generators;
-    LocalVector<EpisodeComparison> comparisons;
-    LocalVector<EpisodeDecision> decisions;
-    LocalVector<int> reopen_chain;
+    godot::LocalVector<EpisodeWrite> writes;
+    godot::LocalVector<int64_t> taint;
+    godot::LocalVector<PinnedRow> secondary_generators;
+    godot::LocalVector<EpisodeComparison> comparisons;
+    godot::LocalVector<EpisodeDecision> decisions;
+    godot::LocalVector<int> reopen_chain;
 
     int id = 0;
     int64_t opened_transition = -1;
@@ -135,7 +135,7 @@ struct Episode {
     int last_closed_id = 0;
     int64_t last_closed_transition = -1;
     Attribution last_closure_attribution = Attribution::UNKNOWN;
-    LocalVector<int> last_reopen_chain;
+    godot::LocalVector<int> last_reopen_chain;
     int fallback_flap_level = 0;
     bool last_closure_was_fallback = false;
     bool flap_suppress_once = false;
@@ -162,7 +162,7 @@ struct Episode {
         Operator p_operator,
         int64_t p_basis,
         int32_t p_delta_fp,
-        const StringName &p_target,
+        const godot::StringName &p_target,
         int p_ack_age,
         TriggerShape p_trigger_shape,
         bool p_evidence_free = false,

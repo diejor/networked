@@ -11,12 +11,7 @@
 
 namespace netw {
 
-class NetwInterestBitSet : public godot::RefCounted {
-    GDCLASS(NetwInterestBitSet, godot::RefCounted)
-
-protected:
-    static void _bind_methods();
-
+class InterestBitSet {
 public:
     static constexpr int BITS_PER_WORD = 63;
     static constexpr int64_t WORD_MASK = 0x7FFFFFFFFFFFFFFF;
@@ -58,13 +53,7 @@ public:
     static int popcount(const godot::PackedInt64Array &row);
 };
 
-class NetwInterestStats : public godot::RefCounted {
-    GDCLASS(NetwInterestStats, godot::RefCounted)
-
-protected:
-    static void _bind_methods();
-
-public:
+struct InterestStats {
     int32_t layers_recomputed = 0;
     int32_t entities_recomputed = 0;
     int32_t edges = 0;
@@ -73,37 +62,10 @@ public:
     int32_t words_per_row = 0;
     int32_t vanished_dirty_skips = 0;
 
-    int get_layers_recomputed() const {
-        return layers_recomputed;
-    }
-    int get_entities_recomputed() const {
-        return entities_recomputed;
-    }
-    int get_edges() const {
-        return edges;
-    }
-    int get_shows() const {
-        return shows;
-    }
-    int get_hides() const {
-        return hides;
-    }
-    int get_words_per_row() const {
-        return words_per_row;
-    }
-    int get_vanished_dirty_skips() const {
-        return vanished_dirty_skips;
-    }
-
     godot::PackedInt32Array to_array() const;
 };
 
-class NetwInterestDelta : public godot::RefCounted {
-    GDCLASS(NetwInterestDelta, godot::RefCounted)
-
-protected:
-    static void _bind_methods();
-
+class InterestDelta {
 public:
     godot::PackedInt64Array keys;
     godot::Array old_rows;
@@ -114,14 +76,14 @@ public:
     godot::Array layer_shows;
     godot::Array layer_hides;
     godot::PackedInt64Array removed_keys;
-    godot::Ref<NetwInterestStats> stats;
+    InterestStats stats;
 
     godot::HashMap<godot::StringName, godot::PackedInt64Array> layer_rows;
     godot::HashMap<int64_t, godot::LocalVector<godot::StringName>> memberships;
     godot::HashSet<int64_t> intents;
     int64_t commit_revision = 0;
 
-    NetwInterestDelta();
+    InterestDelta();
 
     bool is_empty() const {
         return keys.is_empty();
@@ -154,16 +116,10 @@ public:
     godot::PackedInt64Array get_removed_keys() const {
         return removed_keys;
     }
-    godot::Ref<NetwInterestStats> get_stats() const {
-        return stats;
-    }
-
     godot::Array to_array() const;
 };
 
-class NetwInterestEngine : public godot::RefCounted {
-    GDCLASS(NetwInterestEngine, godot::RefCounted)
-
+class InterestEngine {
 public:
     enum Policy {
         HIDE_FROM_OUTSIDERS = 0,
@@ -229,7 +185,7 @@ private:
     godot::HashMap<int64_t, int32_t> fallback_routes;
     int32_t next_fallback_route = 1;
     godot::PackedInt64Array live_peers;
-    godot::Ref<NetwInterestStats> last_stats;
+    InterestStats last_stats;
     int64_t revision = 0;
 
     Record &record_for(int64_t key);
@@ -249,7 +205,7 @@ private:
     void recompute_layers(
         godot::HashMap<godot::StringName, godot::PackedInt64Array>
             &rows_by_layer,
-        const godot::Ref<NetwInterestStats> &out_stats
+        InterestStats &out_stats
     ) const;
 
     void append_transition_bits(
@@ -279,11 +235,8 @@ private:
         const godot::PackedInt64Array &removed_keys
     ) const;
 
-protected:
-    static void _bind_methods();
-
 public:
-    NetwInterestEngine();
+    InterestEngine();
 
     void set_layer(
         const godot::StringName &id,
@@ -296,6 +249,7 @@ public:
     void declare_layer(const godot::StringName &id);
 
     bool has_layer(const godot::StringName &id) const;
+    int layer_count() const { return layers.size(); }
 
     bool layer_add_viewer(const godot::StringName &id, int64_t peer_id);
     bool layer_remove_viewer(const godot::StringName &id, int64_t peer_id);
@@ -367,6 +321,11 @@ public:
 
     void set_intent(int64_t key, const godot::PackedInt64Array &mask);
 
+    void set_intent_for_peers(
+        int64_t key,
+        const godot::PackedInt64Array &peer_ids
+    );
+
     void set_intent_all(int64_t key);
 
     void set_order_key(int64_t key, int depth, int route);
@@ -374,6 +333,8 @@ public:
     int order_route_for(int64_t key);
 
     void set_live_peers(const godot::PackedInt64Array &bits);
+
+    bool set_live_peer_ids(const godot::PackedInt64Array &peer_ids);
 
     int peer_bit_for(int64_t peer_id);
 
@@ -385,15 +346,17 @@ public:
 
     void remove_entity(int64_t key);
 
-    godot::Ref<NetwInterestDelta> recompute();
+    InterestDelta recompute();
 
-    void commit(const godot::Ref<NetwInterestDelta> &delta);
+    void commit(const InterestDelta &delta);
 
     godot::PackedInt64Array row_of(int64_t key) const;
 
+    godot::PackedInt64Array admitted_peers(int64_t key) const;
+
     godot::PackedInt64Array row_after(
         int64_t key,
-        const godot::Ref<NetwInterestDelta> &delta
+        const InterestDelta &delta
     ) const;
 
     bool test(int64_t key, int bit) const;
@@ -406,7 +369,15 @@ public:
 
     godot::String explain(int64_t key, int bit) const;
 
-    godot::Ref<NetwInterestStats> stats() const {
+    int stats_edges() const {
+        return last_stats.edges;
+    }
+
+    int stats_vanished_dirty_skips() const {
+        return last_stats.vanished_dirty_skips;
+    }
+
+    InterestStats stats() const {
         return last_stats;
     }
 
@@ -415,4 +386,3 @@ public:
 
 } // namespace netw
 
-VARIANT_ENUM_CAST(netw::NetwInterestEngine::Policy);

@@ -120,6 +120,7 @@
 			<param index="1" name="quantizers" type="Array" />
 			<param index="2" name="types" type="Array" />
 			<description>
+				Reads the positional row [method write_values] wrote: as many values as [param reader] carries kind bytes for, each decoded by its own kind and, where [param quantizers] and [param types] named one, its packed encoding.
 			</description>
 		</method>
 		<method name="write_values" qualifiers="static">

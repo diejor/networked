@@ -1,4 +1,4 @@
-## Integration test for [DisplayCore] authoring tick keying.
+## Integration test for [NetwMultiplayerCore] display authoring tick keying.
 ##
 ## When a single stamped derived state set drives an entity, the service keys
 ## received history by the frame's authoring tick instead of the receive tick.
@@ -29,7 +29,7 @@ func _drive_delayed_stream() -> NetwEntity:
 
 	var server_binding: NetwPropertySetBinding = NetwEntity.of(rig.server_node) \
 			.state_binding
-	rig.server_clock.on_tick.connect(
+	rig.server_api.on_tick.connect(
 		func(_d: float, t: int) -> void:
 			server_binding.authored_tick = t
 			rig.server_node.position = _pos(t),

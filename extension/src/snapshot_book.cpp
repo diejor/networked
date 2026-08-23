@@ -1,12 +1,10 @@
 #include "netw/snapshot_book.hpp"
 
-#include "godot/class_db.hpp"
-
 using namespace godot;
 
 namespace netw {
 
-int NetwSnapshotBook::index_of(const StringName &property) const {
+int SnapshotBook::index_of(const StringName &property) const {
     for (uint32_t index = 0; index < columns.size(); ++index) {
         if (columns[index].property == property) {
             return int(index);
@@ -15,15 +13,15 @@ int NetwSnapshotBook::index_of(const StringName &property) const {
     return -1;
 }
 
-void NetwSnapshotBook::set_default_interval(double value) {
+void SnapshotBook::set_default_interval(double value) {
     default_interval = value;
 }
 
-double NetwSnapshotBook::get_default_interval() const {
+double SnapshotBook::get_default_interval() const {
     return default_interval;
 }
 
-void NetwSnapshotBook::declare(
+void SnapshotBook::declare(
     const StringName &property,
     double interval
 ) {
@@ -38,11 +36,11 @@ void NetwSnapshotBook::declare(
     columns.push_back(column);
 }
 
-bool NetwSnapshotBook::is_empty() const {
+bool SnapshotBook::is_empty() const {
     return columns.is_empty();
 }
 
-Array NetwSnapshotBook::properties() const {
+Array SnapshotBook::properties() const {
     Array out;
     for (const Column &column : columns) {
         out.push_back(column.property);
@@ -50,7 +48,7 @@ Array NetwSnapshotBook::properties() const {
     return out;
 }
 
-Array NetwSnapshotBook::advance(double delta) {
+Array SnapshotBook::advance(double delta) {
     Array due;
     for (Column &column : columns) {
         column.accum += delta;
@@ -64,7 +62,7 @@ Array NetwSnapshotBook::advance(double delta) {
     return due;
 }
 
-Dictionary NetwSnapshotBook::changed(const Dictionary &current) const {
+Dictionary SnapshotBook::changed(const Dictionary &current) const {
     Dictionary out;
     const Array keys = current.keys();
     for (int index = 0; index < keys.size(); ++index) {
@@ -80,11 +78,11 @@ Dictionary NetwSnapshotBook::changed(const Dictionary &current) const {
     return out;
 }
 
-bool NetwSnapshotBook::differs(const Dictionary &current) const {
+bool SnapshotBook::differs(const Dictionary &current) const {
     return current != last_flushed;
 }
 
-void NetwSnapshotBook::commit(const Dictionary &values) {
+void SnapshotBook::commit(const Dictionary &values) {
     const Array keys = values.keys();
     for (int index = 0; index < keys.size(); ++index) {
         const Variant key = keys[index];
@@ -92,51 +90,8 @@ void NetwSnapshotBook::commit(const Dictionary &values) {
     }
 }
 
-void NetwSnapshotBook::adopt(const Dictionary &values) {
+void SnapshotBook::adopt(const Dictionary &values) {
     last_flushed = values.duplicate();
-}
-
-void NetwSnapshotBook::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("set_default_interval", "value"),
-        &NetwSnapshotBook::set_default_interval
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_default_interval"),
-        &NetwSnapshotBook::get_default_interval
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::FLOAT, "default_interval"),
-        "set_default_interval",
-        "get_default_interval"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("declare", "property", "interval"),
-        &NetwSnapshotBook::declare
-    );
-    ClassDB::bind_method(D_METHOD("is_empty"), &NetwSnapshotBook::is_empty);
-    ClassDB::bind_method(
-        D_METHOD("properties"),
-        &NetwSnapshotBook::properties
-    );
-    ClassDB::bind_method(
-        D_METHOD("advance", "delta"),
-        &NetwSnapshotBook::advance
-    );
-    ClassDB::bind_method(
-        D_METHOD("changed", "current"),
-        &NetwSnapshotBook::changed
-    );
-    ClassDB::bind_method(
-        D_METHOD("differs", "current"),
-        &NetwSnapshotBook::differs
-    );
-    ClassDB::bind_method(
-        D_METHOD("commit", "values"),
-        &NetwSnapshotBook::commit
-    );
-    ClassDB::bind_method(D_METHOD("adopt", "values"), &NetwSnapshotBook::adopt);
 }
 
 } // namespace netw

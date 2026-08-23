@@ -39,8 +39,8 @@ struct QuarantineWitness {
 };
 
 struct Quarantine {
-    LocalVector<QuarantineState> pending_states;
-    LocalVector<QuarantineWitness> witnesses;
+    godot::LocalVector<QuarantineState> pending_states;
+    godot::LocalVector<QuarantineWitness> witnesses;
     int clean_run = 0;
     int target = QUARANTINE_RESUME_MIN;
     int64_t last_tick = -1;
