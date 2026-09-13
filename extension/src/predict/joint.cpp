@@ -26,7 +26,10 @@ template <typename T> struct ByTransition {
 };
 
 template <typename T> void trim(LocalVector<T> &r_rows) {
-    r_rows.template sort_custom<ByTransition<T>>();
+    const uint32_t size = r_rows.size();
+    if (size > 1 && ByTransition<T>()(r_rows[size - 1], r_rows[size - 2])) {
+        r_rows.template sort_custom<ByTransition<T>>();
+    }
     while (int(r_rows.size()) > 256) {
         r_rows.remove_at(0);
     }
@@ -112,8 +115,6 @@ const IslandCandidate *candidate_of(
     return nullptr;
 }
 
-// A member the owner is touching keeps the promotion it already holds, so a
-// handoff waits for the contact to end rather than landing inside it.
 void defer_contacting(
     const Island &p_island,
     const LocalVector<IslandCandidate> &p_candidates,
@@ -137,9 +138,6 @@ void defer_contacting(
     }
 }
 
-// A deferred handoff can carry more automatic members than the nearest policy
-// declared room for, so the budget is re-imposed over what survives it,
-// retaining what is already promoted and then what is closest.
 void enforce_promotion_count(
     const Island &p_island,
     const LocalVector<IslandCandidate> &p_candidates,
@@ -378,8 +376,6 @@ void JointTrack::record(
     const godot::Variant &p_command,
     CellProvenance p_provenance
 ) {
-    // An empty row is the absence of an observation, so a record that carries
-    // only a better command leaves the state this transition produced alone.
     if (p_state.any()) {
         bool found_state = false;
         for (uint32_t at = 0; at < states.size(); ++at) {

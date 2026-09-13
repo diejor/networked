@@ -13,19 +13,13 @@ using godot::Ref;
 using godot::StringName;
 using netw::NetwPredictionEngine;
 
-int64_t driving_slot(const Ref<NetwPredictionEngine> &p_pool) {
-    Ref<netw::NetwPredictDeclaration> fields;
-    fields.instantiate();
-    fields->append_field(
-        StringName("position"),
-        int(netw::predict::PropertyClass::CAUSAL),
-        StringName(),
-        0.0,
-        false,
-        false,
-        -1.0,
-        -1.0,
-        false
+int64_t driving_slot(NetwPredictionEngine *p_pool) {
+    godot::LocalVector<netw::predict::FieldDecl> fields;
+    fields.push_back(
+        netw::field_decl(
+            StringName("position"),
+            int(netw::predict::PropertyClass::CAUSAL)
+        )
     );
     const int64_t slot = p_pool->open(fields);
     REQUIRE(p_pool->configure(
@@ -57,13 +51,13 @@ Dictionary staged_write(
 }
 
 int64_t driven(
-    const Ref<NetwPredictionEngine> &p_pool,
+    NetwPredictionEngine *p_pool,
     int64_t p_slot,
     int64_t p_tick,
     int64_t p_pre_fp
 ) {
     p_pool->record_input(p_slot, p_tick, int32_t(p_tick));
-    const Ref<netw::NetwPredictDrive> drive = p_pool->open_drive(
+    const netw::predict::DriveRecord drive = p_pool->open_drive(
         p_slot,
         Dictionary(),
         p_tick,
@@ -76,23 +70,18 @@ int64_t driven(
         0,
         0
     );
-    REQUIRE(drive.is_valid());
-    REQUIRE(drive->ran());
-    return drive->transition();
+    REQUIRE(drive.ran);
+    return drive.transition;
 }
 
-int row_of(
-    const Ref<NetwPredictionEngine> &p_pool,
-    int64_t p_slot,
-    int64_t p_transition
-) {
+int row_of(NetwPredictionEngine *p_pool, int64_t p_slot, int64_t p_transition) {
     const int index = p_pool->journal_slot_of(p_slot, p_transition);
     REQUIRE(index >= 0);
     return index;
 }
 
 bool chain_broken(
-    const Ref<NetwPredictionEngine> &p_pool,
+    NetwPredictionEngine *p_pool,
     int64_t p_slot,
     int64_t p_transition
 ) {
@@ -101,15 +90,12 @@ bool chain_broken(
     return (flags & netw::predict::ROW_CHAIN_BROKEN) != 0;
 }
 
-int64_t chain_breaks(
-    const Ref<NetwPredictionEngine> &p_pool,
-    int64_t p_slot
-) {
+int64_t chain_breaks(NetwPredictionEngine *p_pool, int64_t p_slot) {
     return p_pool->drive_stats(p_slot)[NetwPredictionEngine::STAT_CHAIN_BREAKS];
 }
 
 void close_a_row_the_next_drive_cannot_continue(
-    const Ref<NetwPredictionEngine> &p_pool,
+    NetwPredictionEngine *p_pool,
     int64_t p_slot
 ) {
     const int64_t first = driven(p_pool, p_slot, 1, 100);
@@ -122,8 +108,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Provenance] a staged write stands on its "
     "slot until it is replaced"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t written = driving_slot(pool);
     const int64_t untouched = driving_slot(pool);
 
@@ -146,8 +132,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Provenance] a slot that was never opened "
     "stages nothing"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t opened = driving_slot(pool);
 
     CHECK(pool->pending_provenance(-1).is_empty());
@@ -162,8 +148,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Provenance] a discontinuity no write "
     "explains breaks the chain"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
     close_a_row_the_next_drive_cannot_continue(pool, slot);
 
@@ -182,8 +168,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Provenance] a staged write is stamped onto "
     "the row it opened and retires the break it explains"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
     close_a_row_the_next_drive_cannot_continue(pool, slot);
 
@@ -209,8 +195,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Provenance] a stamp with nothing staged "
     "leaves the row as the drive wrote it"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
     close_a_row_the_next_drive_cannot_continue(pool, slot);
 

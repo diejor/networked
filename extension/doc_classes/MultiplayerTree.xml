@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MultiplayerTree" inherits="Node" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The node one session's branch is rooted at.
+	</brief_description>
+	<description>
+		A tree owns one [NetwMultiplayer] and installs it on its own branch of the [SceneTree], so every descendant answers [method Netw.of] with that session and two trees in one [SceneTree] are two independent sessions. It carries the exports that configure the session and nothing else: the state, the role, the roster and the service registry all belong to [member api].
+		A session comes online the ordinary Godot way, by assigning a [MultiplayerPeer]. The tree publishes no verb for that, because the assignment IS the bring-up. An assignment made while a declaration is still being authored is refused rather than silently deferred, so bring up through [method Netw.connection] or wait for the deferred settle.
+		[member app_id], [member desired_role] and [member link_conditions] are the session's whole FALLBACK, used when no node declared one through [method Netw.configure_session]. An explicit declaration replaces them whole: no field is merged, and any non-default export it discards is named once in a warning. Once the session has consumed its configuration these exports are immutable, and a setter reports the late write and keeps its old value.
+		[codeblock]
+		tree.peer_class = &amp;"ENetMultiplayerPeer"
+		tree.transport_settings = { port = 21253 }
+
+		# A peer the game already holds.
+		var peer := ENetMultiplayerPeer.new()
+		peer.create_client("127.0.0.1", 21253)
+		tree.api.session_prepare_join(&amp;"PlayerOne", [])
+		tree.api.multiplayer_peer = peer
+
+		# Or one the provider knows how to build, prepared and assigned inside
+		# the window the offer arrives in.
+		Netw.connection(tree).create_peer(
+		    tree.peer_class,
+		    NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+		    "127.0.0.1:21253",
+		    tree.transport_settings,
+		    func(peer: MultiplayerPeer, error: Error, _detail: String) -&gt; void:
+		        if error == OK:
+		            tree.api.session_prepare_join(&amp;"PlayerOne", [])
+		            tree.api.multiplayer_peer = peer,
+		)
+		[/codeblock]
+		The tree brings itself up in exactly two cases, both of which have no caller to answer to: a headless build with [member auto_host_headless] set, and a debug build carrying a [member debug_join]. Everything else is the game's own composition.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="dispose">
+			<return type="void" />
+			<description>
+				Clears the service registry and the roster, breaking the reference cycles a session accumulates so a torn-down branch can be freed.
+				Called for you when the tree leaves the [SceneTree] for good. Call it directly only when a rig tears a session down without freeing its node.
+			</description>
+		</method>
+		<method name="raise_embedded_server">
+			<return type="MultiplayerTree" />
+			<description>
+				Duplicates this tree as a [constant NetwMultiplayer.ROLE_DEDICATED_SERVER] sibling named [code]Server[/code] and adds it beside this one.
+				Node work only. The sibling is raised with [member auto_host_headless] cleared and returned, and bringing it online is an ordinary peer assignment on its own [member api], which is what keeps one bring-up from being written twice. Returns [code]null[/code] when this tree has no parent to add a sibling to. The sibling is freed when this tree's session ends.
+				[codeblock]
+				var server := tree.raise_embedded_server()
+				var peer := ENetMultiplayerPeer.new()
+				peer.create_server(21253)
+				server.api.multiplayer_peer = peer
+				[/codeblock]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="api" type="NetwMultiplayer" setter="" getter="get_api">
+			The [NetwMultiplayer] this tree owns and installs on its branch.
+			Built once when the tree is constructed and never replaced, so a reference taken from it stays valid for the tree's whole life. A backend bringing its own transport swaps [member NetwMultiplayer.inner] rather than this. A tree whose installed API is not a [NetwMultiplayer] is unrepresentable.
+		</member>
+		<member name="api_script" type="Script" setter="set_api_script" getter="get_api_script">
+			An optional [NetwMultiplayer] implementation script, passed to [method NetwMultiplayer.make].
+			The one door a game replaces this session's stages through. Immutable once the tree is inside the [SceneTree], so assign it before adding a programmatically created tree.
+		</member>
+		<member name="app_id" type="StringName" setter="set_app_id" getter="get_app_id" default="&amp;&quot;&quot;">
+			A game-build tag that gates admission, baked into every build.
+			A joining peer whose tag differs is rejected during the auth handshake before it reaches [method MultiplayerAPI.get_peers], so an incompatible build never corrupts a session. The tag folds this name together with the wire identity the build speaks, so no value turns the gate off: leaving this empty still refuses a peer whose format version or channel table differs, and naming it adds the game's own compatibility on top. Bump it when the game's own payloads break in a way the wire identity cannot see.
+			This export is part of the tree's session FALLBACK, not a live setting. It is immutable once the session has consumed its configuration.
+			The tag also names the space a signalled transport mints its room codes in, so two builds carrying different tags never meet on the rendezvous at all, rather than meeting and being refused a handshake later. A tag is what makes a room code short: scoped by one, five characters are unique enough, and without one a room must be unique across every game sharing the trackers, which costs twenty hex characters instead. Bumping the tag therefore retires every room code minted under the old one, which is what those rooms deserved, since they would refuse the new build anyway.
+		</member>
+		<member name="auto_host_headless" type="bool" setter="set_auto_host_headless" getter="get_auto_host_headless" default="true">
+			On a headless build, hosts from [member peer_class] and [member transport_settings] without waiting to be asked.
+			Only a [constant NetwMultiplayer.ROLE_LISTEN_SERVER] or [constant NetwMultiplayer.ROLE_DEDICATED_SERVER] tree does this, and only one naming a [member peer_class], so a tree nobody configured never opens a socket on its own.
+		</member>
+		<member name="debug_join" type="DebugJoinConfig" setter="set_debug_join" getter="get_debug_join">
+			An auto-connect applied on play, in debug builds only.
+			When set, the tree hosts on ready under the username and join arguments it carries, skipping the server browser. A release build strips this path because [method OS.has_feature] answers [code]false[/code] for [code]"debug"[/code], which is also what keeps [member link_conditions] free of a release cost.
+		</member>
+		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
+			The [enum NetwMultiplayer.Role] this tree intends to play, carried in the tree's session fallback as [member NetwSessionConfig.desired_role].
+			Configured intent rather than live state: the role a session is actually running is [member NetwMultiplayer.role], and it is assigned when the session comes online.
+		</member>
+		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">
+			Latency and loss to simulate on this tree's peer.
+			Carried in the tree's session fallback as [member NetwSessionConfig.link_conditions], which is the one home the session reads when it wraps an assigned peer. A release export never wraps at all, because [method NetwLinkConditions.wrap_peer] gates the impairment itself, so authoring one here carries no shipped cost.
+		</member>
+		<member name="peer_class" type="StringName" setter="set_peer_class" getter="get_peer_class" default="&amp;&quot;&quot;">
+			The class of peer this tree brings itself up with, such as [code]&amp;"ENetMultiplayerPeer"[/code].
+			Passed to [method NetwConnectHandle.create_peer], so a tree naming no peer class has nothing to bring itself up with and reports a configuration warning. Read [method NetwConnectHandle.transports] for the names a running build has registered. It does not constrain a peer the game assigns itself.
+		</member>
+		<member name="transport_settings" type="Dictionary" setter="set_transport_settings" getter="get_transport_settings" default="{}">
+			The settings [member peer_class]'s transport is created with, such as [code]{ port = 21253 }[/code] for an ENet server.
+			Passed to [method NetwConnectHandle.create_peer] beside [member peer_class], and carried as the advert, so the [code]name[/code], [code]max_players[/code] and [code]visibility[/code] keys ride here alongside the transport's own. Read the [code]host_settings[/code] entry of [method NetwConnectHandle.transport] for the keys a given peer class accepts.
+		</member>
+	</members>
+</class>

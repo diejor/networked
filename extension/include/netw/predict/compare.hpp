@@ -8,9 +8,7 @@
 #include "netw/predict/wiring.hpp"
 #include "netw/prediction_core.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 constexpr int METER_SATURATED = 0x7FFFFFFF;
 
@@ -21,6 +19,8 @@ struct StateRow {
     StateRow() = default;
     StateRow(const StateRow &p_other);
     StateRow &operator=(const StateRow &p_other);
+    StateRow(StateRow &&p_other) = default;
+    StateRow &operator=(StateRow &&p_other) = default;
 
     void resize(int p_count);
     void set(int p_field, const godot::Variant &p_value);
@@ -112,6 +112,4 @@ StateVerdict compare_state(
     bool p_stream_reconstructed
 );
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

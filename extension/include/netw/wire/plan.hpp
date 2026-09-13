@@ -8,10 +8,12 @@
 
 namespace netw::wire {
 
-enum class DeltaMode {
-    FULL,
-    LADDER,
-};
+using netw::table::DeltaMode;
+using netw::table::SchemaRecord;
+
+constexpr int LADDER_MIN_WIDTH = 5;
+constexpr int LADDER_SELECTOR_BITS = 2;
+constexpr int LADDER_BUCKET_BITS[3] = {4, 8, 16};
 
 struct ColumnPlan {
     int width = 0;
@@ -22,6 +24,10 @@ struct ColumnPlan {
     int64_t bits() const {
         return int64_t(width) * int64_t(stride);
     }
+
+    bool laddered() const {
+        return delta == DeltaMode::LADDER && width >= LADDER_MIN_WIDTH;
+    }
 };
 
 class WirePlan {
@@ -30,11 +36,10 @@ class WirePlan {
     bool plannable = false;
 
 public:
-    static constexpr uint32_t MAX_COLUMNS = 64;
-
-    static WirePlan compile(const godot::Ref<SchemaRecord> &record);
+    static WirePlan compile(const SchemaRecord &record);
 
     static int element_width(int column_type);
+    static int element_count(int column_type);
 
     bool valid() const {
         return plannable;

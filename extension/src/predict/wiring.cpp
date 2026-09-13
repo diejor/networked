@@ -1,36 +1,29 @@
 #include "netw/predict/wiring.hpp"
 
-#include "netw/api/bit_buffer.hpp"
-#include "netw/api/codec.hpp"
+#include "netw/call_args.hpp"
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
 
 using namespace godot;
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 namespace {
-
-// The flag byte NetwScriptModel.write_values leads every value with. A native
-// canonicalization that spelled the layout differently would produce bytes no
-// peer decoding the frame could match.
-constexpr int64_t FLAG_RAW = 0;
-constexpr int64_t FLAG_QUANTIZED = 1;
 
 bool quantizes(
     const Ref<NetwQuantize> &p_quantizer,
     int p_type,
     const Variant &p_value
 ) {
-    return p_quantizer.is_valid() && p_quantizer->supports_type(p_type)
-        && p_quantizer->supports_type(int(p_value.get_type()));
+    return p_quantizer.is_valid()
+        && p_quantizer->supports_type(static_cast<Variant::Type>(p_type))
+        && p_quantizer->supports_type(p_value.get_type());
 }
 
 struct Selection {
     LocalVector<int> fields;
-    Ref<NetwBitBufferWriter> writer;
+    PackedByteArray bytes;
+    bool written = false;
 };
 
 Selection write_selected(
@@ -46,20 +39,29 @@ Selection write_selected(
     if (out.fields.is_empty()) {
         return out;
     }
-    out.writer.instantiate();
-    out.writer->put_aligned_u8(int64_t(out.fields.size()));
+    wire::WriteStream stream;
+    uint64_t count = uint64_t(out.fields.size());
+    if (!stream.varuint(count, 2)) {
+        return out;
+    }
     for (const int at : out.fields) {
         const Variant value = p_payload[p_codec.keys[at]];
         const Ref<NetwQuantize> &quantizer = p_codec.quantizers[at];
-        const bool quantized
-            = quantizes(quantizer, p_codec.types[at], value);
-        out.writer->put_aligned_u8(quantized ? FLAG_QUANTIZED : FLAG_RAW);
-        NetwCodec::encode_value(
-            out.writer,
-            value,
-            quantized ? quantizer : Ref<NetwQuantize>()
-        );
+        bool quantized = quantizes(quantizer, p_codec.types[at], value);
+        if (!stream.bool1(quantized)
+            || !call_args::value_write(
+                stream,
+                value,
+                quantized ? quantizer : Ref<NetwQuantize>()
+            )) {
+            return out;
+        }
     }
+    if (!stream.align_verify()) {
+        return out;
+    }
+    out.bytes = stream.to_bytes();
+    out.written = true;
     return out;
 }
 
@@ -86,36 +88,59 @@ PackedByteArray canonical_bytes(
     const Dictionary &p_payload
 ) {
     NETW_ZONE_NC("predict canonical bytes", colors::PREDICTION);
-    const Selection written = write_selected(p_codec, p_payload);
-    if (written.writer.is_null()) {
-        return PackedByteArray();
-    }
-    return written.writer->to_bytes();
+    return write_selected(p_codec, p_payload).bytes;
 }
 
 namespace {
 
-// A transparent alpha rather than Color's own default of opaque black, so a
-// declared colour coasts to nothing the way every other type does.
 const Color ZERO_COLOR = Color(0.0, 0.0, 0.0, 0.0);
 
 bool zero_of(int p_type, Variant &r_zero) {
     switch (Variant::Type(p_type)) {
-        case Variant::BOOL: r_zero = false; return true;
-        case Variant::INT: r_zero = int64_t(0); return true;
-        case Variant::FLOAT: r_zero = 0.0; return true;
-        case Variant::STRING: r_zero = String(); return true;
-        case Variant::STRING_NAME: r_zero = StringName(); return true;
-        case Variant::VECTOR2: r_zero = Vector2(); return true;
-        case Variant::VECTOR2I: r_zero = Vector2i(); return true;
-        case Variant::VECTOR3: r_zero = Vector3(); return true;
-        case Variant::VECTOR3I: r_zero = Vector3i(); return true;
-        case Variant::VECTOR4: r_zero = Vector4(); return true;
-        case Variant::VECTOR4I: r_zero = Vector4i(); return true;
-        case Variant::COLOR: r_zero = ZERO_COLOR; return true;
-        case Variant::ARRAY: r_zero = Array(); return true;
-        case Variant::DICTIONARY: r_zero = Dictionary(); return true;
-        default: return false;
+        case Variant::BOOL:
+            r_zero = false;
+            return true;
+        case Variant::INT:
+            r_zero = int64_t(0);
+            return true;
+        case Variant::FLOAT:
+            r_zero = 0.0;
+            return true;
+        case Variant::STRING:
+            r_zero = String();
+            return true;
+        case Variant::STRING_NAME:
+            r_zero = StringName();
+            return true;
+        case Variant::VECTOR2:
+            r_zero = Vector2();
+            return true;
+        case Variant::VECTOR2I:
+            r_zero = Vector2i();
+            return true;
+        case Variant::VECTOR3:
+            r_zero = Vector3();
+            return true;
+        case Variant::VECTOR3I:
+            r_zero = Vector3i();
+            return true;
+        case Variant::VECTOR4:
+            r_zero = Vector4();
+            return true;
+        case Variant::VECTOR4I:
+            r_zero = Vector4i();
+            return true;
+        case Variant::COLOR:
+            r_zero = ZERO_COLOR;
+            return true;
+        case Variant::ARRAY:
+            r_zero = Array();
+            return true;
+        case Variant::DICTIONARY:
+            r_zero = Dictionary();
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -139,21 +164,30 @@ Dictionary canonicalize(
     NETW_ZONE_NC("predict canonicalize", colors::PREDICTION);
     const Selection written = write_selected(p_codec, p_payload);
     Dictionary out = p_payload.duplicate();
-    if (written.writer.is_null()) {
+    if (!written.written) {
         return out;
     }
-    const Ref<NetwBitBufferReader> reader
-        = NetwBitBufferReader::create(written.writer->to_bytes());
-    const int64_t count = reader->get_aligned_u8();
-    for (int64_t at = 0; at < count; ++at) {
-        const int64_t flag = reader->get_aligned_u8();
+    wire::ReadStream reader(written.bytes);
+    uint64_t count = 0;
+    if (!reader.varuint(count, 2)) {
+        return out;
+    }
+    for (uint64_t at = 0; at < count; ++at) {
+        bool quantized = false;
         const int field = written.fields[uint32_t(at)];
-        const bool quantized = flag == FLAG_QUANTIZED;
-        out[p_codec.keys[field]] = NetwCodec::decode_value(
-            reader,
-            quantized ? p_codec.types[field] : int(Variant::NIL),
-            quantized ? p_codec.quantizers[field] : Ref<NetwQuantize>()
-        );
+        Variant value;
+        if (!reader.bool1(quantized)
+            || !call_args::value_read(
+                reader,
+                static_cast<Variant::Type>(
+                    quantized ? p_codec.types[field] : int(Variant::NIL)
+                ),
+                quantized ? p_codec.quantizers[field] : Ref<NetwQuantize>(),
+                value
+            )) {
+            return p_payload.duplicate();
+        }
+        out[p_codec.keys[field]] = value;
     }
     return out;
 }
@@ -197,6 +231,8 @@ void Wiring::resize(int p_count) {
     vote_exclude.resize(count);
     angle.resize(count);
     causal.resize(count);
+    property_class.resize(count);
+    carry_channel.resize(count);
     for (uint32_t at = 0; at < count; ++at) {
         projection[at] = -1;
         state_family[at] = int(StateFamily::CONTROLLER);
@@ -209,6 +245,8 @@ void Wiring::resize(int p_count) {
         vote_exclude[at] = 0;
         angle[at] = 0;
         causal[at] = 0;
+        property_class[at] = int(PropertyClass::CAUSAL);
+        carry_channel[at] = godot::StringName();
     }
 }
 
@@ -235,21 +273,16 @@ Wiring compile(const LocalVector<FieldDecl> &p_declaration) {
         }
         const bool causal = decl.property_class == int(PropertyClass::CAUSAL);
         out.causal[slot] = causal ? 1 : 0;
-        // The class is the declaration that a value is not an antecedent, so
-        // it is also the declaration that its disagreement is not evidence of
-        // a fork. Both halves of the vote's exclusion are written from their
-        // own source, so the set the vote reads is never one another reader
-        // depends on.
         out.vote_exclude[slot] = causal ? 0 : 1;
         out.angle[slot] = decl.angle ? 1 : 0;
+        out.property_class[slot] = decl.property_class;
+        out.carry_channel[slot] = decl.carry_channel;
     }
 
     for (uint32_t at = 0; at < p_declaration.size(); ++at) {
         const FieldDecl &decl = p_declaration[at];
         const int slot = out.fields.index_of(decl.key);
         const int channel = out.fields.index_of(decl.carry_channel);
-        // A channel this set does not carry cannot be read at the same tick as
-        // the field it advances, so the pair is not one the engine can honour.
         if (slot < 0 || decl.carry_channel == StringName() || channel < 0) {
             continue;
         }
@@ -278,9 +311,6 @@ Wiring compile(const LocalVector<FieldDecl> &p_declaration) {
         if (decl.epsilon_override >= 0.0) {
             out.epsilon[slot] = decl.epsilon_override;
         }
-        // A declared tier distance is also an enrolment: the field is saying
-        // what its own error means, which is only answerable if the tier
-        // measurement reads it.
         if (decl.teleport_at >= 0.0) {
             out.teleport[slot] = decl.teleport_at;
             out.pose[slot] = 1;
@@ -289,7 +319,4 @@ Wiring compile(const LocalVector<FieldDecl> &p_declaration) {
     return out;
 }
 
-} // namespace predict
-
-
-} // namespace netw
+} // namespace netw::predict

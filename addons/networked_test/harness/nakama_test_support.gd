@@ -2,15 +2,21 @@
 ##
 ## [NakamaTestSupport] mirrors [WebRTCTestSupport] for real relay sessions. It
 ## wires [MultiplayerTree], [NakamaLobbyDirectory], and [NakamaBackend] directly
-## so tests own raw trees and frame polling.
+## so tests own raw trees and frame polling. Every tree here comes online
+## through [NetwOrdinarySetup], so the relay peer is built by the provider and
+## then assigned like any other, which is what makes delivery and adoption
+## ordering observable.
 ## [codeblock]
 ## var host := await NakamaTestSupport.start_host(self)
 ## var client := NakamaTestSupport.make_client_tree(self, "client")
-## var target := NakamaTestSupport.make_join_target(client, host.room)
-## await NetwConnector.of(client.api).join(target, NakamaTestSupport.payload("client"))
+## var joined := await NakamaTestSupport.join_client(
+##         client, host.room, "client")
 ## [/codeblock]
 class_name NakamaTestSupport
 extends RefCounted
+
+## The [MultiplayerPeer] class Nakama relay matches join through.
+const PEER_CLASS := &"NakamaRelayPeer"
 
 const _RUN_PREFIX_ENV := "NETW_NAKAMA_TEST_RUN"
 
@@ -75,18 +81,47 @@ static func start_host(
 		username: String = "host",
 ) -> Dictionary:
 	var tree := _make_tree(parent, "NakamaHost", username)
-	var err: Error = await tree.host(payload(username))
-	if err != OK:
-		push_error("NakamaTestSupport: host failed: %s" % error_string(err))
+	var settled := await NetwOrdinarySetup.connect_through(
+			tree,
+			NetwMultiplayer.TRANSPORT_MODE_HOST,
+			"",
+			{ },
+			StringName(username),
+	)
+	if settled.error != OK:
+		push_error(
+			"NakamaTestSupport: host failed: %s %s" % [
+				error_string(settled.error),
+				settled.detail,
+			],
+		)
 		tree.queue_free()
 		return { }
-	var room := ""
-	if tree.api and NetwConnector.of(tree.api).peer_view:
-		room = NetwConnector.of(tree.api).peer_view.join_address()
 	return {
 		tree = tree,
-		room = room,
+		room = Netw.connection(tree).join_address,
 	}
+
+
+## Joins [param client] to [param room] as [param username].
+##
+## Returns [constant @GlobalScope.OK] once the relay peer is built and
+## assigned, and the provider's own error otherwise.
+static func join_client(
+		client: MultiplayerTree,
+		room: String,
+		username: String,
+		join_args: Array = [],
+) -> Error:
+	var settled := await NetwOrdinarySetup.connect_through(
+			client,
+			NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+			room,
+			{ },
+			StringName(username),
+			join_args,
+	)
+	return settled.error
 
 
 ## Builds an offline client [MultiplayerTree] wired for Nakama.
@@ -95,17 +130,6 @@ static func make_client_tree(
 		username: String,
 ) -> MultiplayerTree:
 	return _make_tree(parent, "NakamaClient_%s" % username, username)
-
-
-## Builds a [NetwConnectTarget] pointing [param client] at [param room].
-static func make_join_target(
-		client: MultiplayerTree,
-		room: String,
-) -> NetwConnectTarget:
-	var target := NetwConnectTarget.new()
-	target.scheme = client.scheme
-	target.address = room
-	return target
 
 
 ## Tears down [param tree] and leaves the Nakama relay match.
@@ -135,17 +159,26 @@ static func host_scene(
 	_configure_tree(tree, username)
 	parent.add_child(scene)
 
-	var err: Error = await tree.host(payload(username, _level_1_spawn()))
-	if err != OK:
-		push_error("NakamaTestSupport: host scene failed: %s" % error_string(err))
+	var settled := await NetwOrdinarySetup.connect_through(
+			tree,
+			NetwMultiplayer.TRANSPORT_MODE_HOST,
+			"",
+			{ },
+			StringName(username),
+			_level_1_spawn(),
+	)
+	if settled.error != OK:
+		push_error(
+			"NakamaTestSupport: host scene failed: %s %s" % [
+				error_string(settled.error),
+				settled.detail,
+			],
+		)
 		scene.queue_free()
 		return { }
-	var room := ""
-	if tree.api and NetwConnector.of(tree.api).peer_view:
-		room = NetwConnector.of(tree.api).peer_view.join_address()
 	return {
 		tree = tree,
-		room = room,
+		room = Netw.connection(tree).join_address,
 		scene = scene,
 	}
 
@@ -162,27 +195,10 @@ static func join_scene(
 	_configure_tree(tree, username)
 	parent.add_child(scene)
 
-	var err := NetwConnector.error_of(
-		await NetwConnector.of(tree.api).join(
-			make_join_target(tree, room),
-			payload(username, _level_1_spawn()),
-			10.0,
-		),
-	)
+	var err := await join_client(tree, room, username, _level_1_spawn())
 	if err != OK:
 		push_error("NakamaTestSupport: join scene failed: %s" % error_string(err))
 	return tree
-
-
-## Builds a [JoinPayload] for [param username] with typed join [param args].
-static func payload(
-		username: String,
-		args: Array = [],
-) -> JoinPayload:
-	var p := JoinPayload.new()
-	p.username = StringName(username)
-	p.arg_values = args.duplicate(true)
-	return p
 
 
 static func _make_tree(
@@ -199,9 +215,9 @@ static func _make_tree(
 
 static func _configure_tree(tree: MultiplayerTree, username: String) -> void:
 	tree.auto_host_headless = false
-	tree.desired_role = NetwMultiplayer.Role.LISTEN_SERVER
+	tree.desired_role = NetwMultiplayer.ROLE_LISTEN_SERVER
 	_attach_directory(tree, username)
-	tree.transport = NetwNakamaParams.new()
+	tree.peer_class = PEER_CLASS
 
 
 static func _attach_directory(tree: MultiplayerTree, username: String) -> void:
@@ -219,12 +235,11 @@ static func _attach_directory(tree: MultiplayerTree, username: String) -> void:
 
 ## Returns the [NakamaLobbyDirectory] attached to [param tree].
 ##
-## [method MultiplayerTree.find_service_node] only matches scene-owned nodes, so
-## a directory added with [code].new()[/code] falls back to a lookup by node name.
+## The descendant scan only matches scene-owned nodes, so a directory added
+## with [code].new()[/code] falls back to a lookup by node name.
 static func directory(tree: MultiplayerTree) -> NakamaLobbyDirectory:
-	var dir := tree.find_service_node(NakamaLobbyDirectory) as NakamaLobbyDirectory
-	if dir != null:
-		return dir
+	for child in tree.find_children("*", "NakamaLobbyDirectory", true):
+		return child as NakamaLobbyDirectory
 	return tree.get_node_or_null("NakamaLobbyDirectory") as NakamaLobbyDirectory
 
 
@@ -249,10 +264,7 @@ static func _collect_nodes(root: Node) -> Array[Node]:
 
 
 static func _level_1_spawn() -> Array:
-	var path := SceneNodePath.new(
-		"uid://bqi7mvxdnvgch::Player"
-	)
-	return NetwDefaultJoin.args_from_scene_node_path(path)
+	return [&"Level1", NodePath("Player")]
 
 
 static func _run_prefix() -> String:

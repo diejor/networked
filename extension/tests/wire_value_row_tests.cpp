@@ -13,27 +13,26 @@
 namespace TestNetwWireValueRow {
 
 using namespace godot;
-using netw::NetwQuantizeBits;
+using netw::NetwQuantizeScalar;
 using netw::SchemaCore;
-using netw::SchemaRecord;
+using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 using netw::wire::WirePlan;
 
-Ref<SchemaRecord> record_of(const StringName &p_name) {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = p_name;
+SchemaRecord record_of(const StringName &p_name) {
+    SchemaRecord record;
+    record.name = p_name;
     return record;
 }
 
 TEST_CASE(
     "[Networked][WireValue][Hosted] raw scalars and wide vectors share one row"
 ) {
-    const Ref<SchemaRecord> schema = record_of("RawInput");
-    SchemaCore::append_column(schema, "gear", SchemaCore::I8, 1);
-    SchemaCore::append_column(schema, "throttle", SchemaCore::F32, 1);
-    SchemaCore::append_column(schema, "axes", SchemaCore::VECTOR4, 1);
-    REQUIRE(SchemaCore::fix(schema) == Error::OK);
+    SchemaRecord schema = record_of("RawInput");
+    SchemaCore::append_column(&schema, "gear", SchemaCore::I8, 1);
+    SchemaCore::append_column(&schema, "throttle", SchemaCore::F32, 1);
+    SchemaCore::append_column(&schema, "axes", SchemaCore::VECTOR4, 1);
+    REQUIRE(SchemaCore::fix(&schema) == Error::OK);
     const WirePlan plan = WirePlan::compile(schema);
     REQUIRE(plan.valid());
     NETW_CHECK_EQ(plan.row_bits(), 168);
@@ -57,14 +56,14 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][WireValue][Hosted] quantizers define the row codes once"
 ) {
-    const Ref<SchemaRecord> schema = record_of("QuantizedInput");
-    SchemaCore::append_column(schema, "move", SchemaCore::VECTOR2, 1);
-    Ref<NetwQuantizeBits> quantizer;
+    SchemaRecord schema = record_of("QuantizedInput");
+    SchemaCore::append_column(&schema, "move", SchemaCore::VECTOR2, 1);
+    Ref<NetwQuantizeScalar> quantizer;
     quantizer.instantiate();
     quantizer->set_bit_count(8);
-    SchemaCore::assign_quantizer(schema, 0, quantizer);
-    SchemaCore::append_column(schema, "jump", SchemaCore::BOOL, 1);
-    REQUIRE(SchemaCore::fix(schema) == Error::OK);
+    SchemaCore::assign_quantizer(&schema, 0, quantizer);
+    SchemaCore::append_column(&schema, "jump", SchemaCore::BOOL, 1);
+    REQUIRE(SchemaCore::fix(&schema) == Error::OK);
     const WirePlan plan = WirePlan::compile(schema);
     REQUIRE(plan.valid());
     NETW_CHECK_EQ(plan.row_bits(), 17);
@@ -90,22 +89,48 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][WireValue][Hosted] a row is meaningful only beside its plan"
 ) {
-    const Ref<SchemaRecord> narrow = record_of("Narrow");
-    SchemaCore::append_column(narrow, "value", SchemaCore::I8, 1);
-    REQUIRE(SchemaCore::fix(narrow) == Error::OK);
+    SchemaRecord narrow = record_of("Narrow");
+    SchemaCore::append_column(&narrow, "value", SchemaCore::I8, 1);
+    REQUIRE(SchemaCore::fix(&narrow) == Error::OK);
     Array values;
     values.push_back(7);
     CodeRow row;
     REQUIRE(netw::wire::encode_scalar_row(narrow, values, row));
 
-    const Ref<SchemaRecord> wide = record_of("Wide");
-    SchemaCore::append_column(wide, "value", SchemaCore::I16, 1);
-    REQUIRE(SchemaCore::fix(wide) == Error::OK);
+    SchemaRecord wide = record_of("Wide");
+    SchemaCore::append_column(&wide, "value", SchemaCore::I16, 1);
+    REQUIRE(SchemaCore::fix(&wide) == Error::OK);
     Array unchanged;
     unchanged.push_back("sentinel");
     CHECK_FALSE(netw::wire::decode_scalar_row(wide, row, unchanged));
     NETW_CHECK_EQ(unchanged.size(), 1);
     CHECK(String(unchanged[0]) == "sentinel");
+}
+
+TEST_CASE(
+    "[Networked][WireValue][Hosted] an ENTITY column rides the scalar row as "
+    "its route plus one, so zero is the null it needs"
+) {
+    SchemaRecord schema = record_of("Referrer");
+    SchemaCore::append_column(&schema, "target", SchemaCore::ENTITY, 1);
+    SchemaCore::append_column(&schema, "owner", SchemaCore::ENTITY, 1);
+    REQUIRE(SchemaCore::fix(&schema) == Error::OK);
+    const WirePlan plan = WirePlan::compile(schema);
+    REQUIRE(plan.valid());
+
+    Array values;
+    values.push_back(int64_t(9000));
+    values.push_back(int64_t(0));
+
+    CodeRow row;
+    REQUIRE(netw::wire::encode_scalar_row(schema, values, row));
+    NETW_CHECK_EQ(row.read(plan.column(0), 0), uint64_t(9001));
+    NETW_CHECK_EQ(row.read(plan.column(1), 0), uint64_t(0));
+
+    Array back;
+    REQUIRE(netw::wire::decode_scalar_row(schema, row, back));
+    NETW_CHECK_EQ(int64_t(back[0]), int64_t(9000));
+    NETW_CHECK_EQ(int64_t(back[1]), int64_t(0));
 }
 
 } // namespace TestNetwWireValueRow

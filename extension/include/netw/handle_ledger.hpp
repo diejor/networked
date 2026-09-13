@@ -2,16 +2,12 @@
 
 #include <cstdint>
 
-#include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 
 namespace netw {
 
-class NetwHandleLedger : public godot::RefCounted {
-    GDCLASS(NetwHandleLedger, godot::RefCounted)
-
-private:
+class NetwHandleLedger {
     struct Record {
         int64_t id = 0;
     };
@@ -19,9 +15,6 @@ private:
     mutable godot::RID_Owner<Record> records;
     godot::HashMap<int64_t, godot::RID> by_id;
     int64_t id_counter = 0;
-
-protected:
-    static void _bind_methods();
 
 public:
     NetwHandleLedger();

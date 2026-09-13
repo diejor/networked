@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="AuthResult" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The verdict [method NetwAuthFlow.verify] answers a joining peer's credentials with.
+	</brief_description>
+	<description>
+		An accepted verdict carries the [NetwIdentity] the session seats the peer under. A rejected one carries the sentence handed back instead. Nothing carries both, and that is what [method accept] and [method reject] are for: each sets [member accepted] and leaves the other field empty, so a result assembled through them cannot claim an identity it also refused. [member rejection_reason] on an accepted result reads as the empty string, which is the absence of a reason rather than a blank one.
+		[codeblock]
+		func _verify(peer_id: int, data: PackedByteArray) -&gt; AuthResult:
+		    var identity := _lookup(data)
+		    if identity == null:
+		        return AuthResult.reject("unknown token")
+		    return AuthResult.accept(identity)
+		[/codeblock]
+		Accepting with no identity is a whole answer rather than a half one: it says the credentials are good and leaves the display name to the one the client claimed, which is what a flow that only gates entry wants. It is not reported as a fault. A flow answering no [AuthResult] at all is, because a policy that decides nothing has not accepted anyone.
+		A flow that overrides nothing still answers one of these, because [method NetwAuthFlow.verify_default] rejects.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="accept" qualifiers="static">
+			<return type="AuthResult" />
+			<param index="0" name="identity" type="NetwIdentity" />
+			<description>
+				Returns an accepting verdict seating the peer under [param identity], with no rejection reason.
+			</description>
+		</method>
+		<method name="reject" qualifiers="static">
+			<return type="AuthResult" />
+			<param index="0" name="reason" type="String" />
+			<description>
+				Returns a refusing verdict carrying [param reason] back to the peer, with no identity.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="accepted" type="bool" setter="set_accepted" getter="get_accepted" default="false">
+			Whether the peer is admitted. This is the only field the session reads to decide, so [member identity] and [member rejection_reason] describe a verdict rather than reaching one.
+		</member>
+		<member name="identity" type="NetwIdentity" setter="set_identity" getter="get_identity">
+			The identity an accepted peer is seated under, and [code]null[/code] on a refusal.
+		</member>
+		<member name="rejection_reason" type="String" setter="set_rejection_reason" getter="get_rejection_reason" default="&quot;&quot;">
+			What the refused peer is told, and the empty string on an acceptance.
+		</member>
+	</members>
+</class>

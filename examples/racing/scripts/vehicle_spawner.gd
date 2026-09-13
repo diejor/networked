@@ -1,11 +1,5 @@
 class_name RacingVehicleSpawner
 extends MultiplayerSpawner
-## Spawns one racing [Vehicle] entity per accepted participant.
-##
-## Each car takes the next start slot in join order. Authored [Marker3D] children
-## of a sibling [code]SpawnPoints[/code] node place the cars when present, so a
-## track lays its own grid out; a computed grid is the fallback when none is
-## authored.
 
 const VEHICLE_SCENE := preload("res://examples/racing/scenes/vehicle.tscn")
 const SPAWN_POINTS_PATH := ^"../SpawnPoints"
@@ -17,17 +11,14 @@ const START_ANCHOR := Vector3(5., 0.5, 5.0)
 func _ready() -> void:
 	spawn_function = _spawn_vehicle
 	if multiplayer.is_server():
-		# Deferred so the enclosing scene finishes binding its admission bus
-		# before the first car goes live: an initial-scene spawn otherwise routes
-		# the entity during the scene's own setup and misses player enrollment.
 		_arm_spawns.call_deferred()
 
 
 func _arm_spawns() -> void:
-	var scene: NetwSceneHandle = NetwEntity.of(self).scene
-	if not scene.is_declared:
+	var scene := Netw.scene(self)
+	if scene == null or not scene.is_declared:
 		return
-	scene.on_participant_entered(_on_participant_entered)
+	scene.participant_entered.connect(_on_participant_entered)
 	for participant: NetwParticipant in scene.participants:
 		_on_participant_entered(participant)
 
@@ -41,26 +32,26 @@ func spawn_participant(participant: NetwParticipant) -> void:
 	assert(multiplayer.is_server())
 	if participant == null or participant.join == null:
 		return
-	if _has_vehicle(participant.join):
+	if _has_vehicle(participant):
 		return
 
-	var scene: NetwSceneHandle = NetwEntity.of(self).scene
-	var ordered := scene.participants
+	var ordered := Netw.scene(self).participants
 	ordered.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id
 	)
 	var spawn_index := maxi(ordered.find(participant), 0)
-	spawn({
-		peer_id = participant.peer_id,
-		spawn_index = spawn_index,
-		username = _unique_username(str(participant.username)),
-	})
+	spawn(
+		{
+			peer_id = participant.peer_id,
+			spawn_index = spawn_index,
+			username = _unique_username(str(participant.username)),
+		},
+	)
 
 
-# Duplicate display names would collide as entity ids, and the witness, the
-# island roster, and every id-keyed diagnostic would conflate the cars. A
-# later duplicate gains a join-order suffix instead.
+# Duplicate display names would collide as entity ids, so two cars would be
+# one entity. A later duplicate gains a join-order suffix instead.
 func _unique_username(username: String) -> String:
 	var parent := get_node_or_null(spawn_path)
 	var taken := { }
@@ -92,9 +83,9 @@ func _spawn_vehicle(data: Dictionary) -> Node:
 	return vehicle
 
 
-func _has_vehicle(rj: ResolvedJoin) -> bool:
+func _has_vehicle(participant: NetwParticipant) -> bool:
 	var root := get_node_or_null(spawn_path)
-	return NetwEntity.find(root, rj) != null if root else false
+	return NetwEntity.find(root, participant) != null if root else false
 
 
 # The world position of start slot [param spawn_index], from the authored spawn

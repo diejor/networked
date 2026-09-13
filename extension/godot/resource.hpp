@@ -7,6 +7,7 @@
 #include "core/io/resource_uid.h"
 
 namespace godot {
+using ::Ref;
 using ::Resource;
 using ::ResourceUID;
 } // namespace godot

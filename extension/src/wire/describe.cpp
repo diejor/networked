@@ -18,6 +18,8 @@ const char *spec_kind_name(SpecKind kind) {
             return "bool1";
         case SpecKind::BYTES_CAPPED:
             return "bytes_capped";
+        case SpecKind::STRING:
+            return "string";
     }
     return "unknown";
 }
@@ -44,6 +46,7 @@ Dictionary dump_field(const char *name, const Spec &spec) {
             out["width"] = int64_t(1);
             break;
         case SpecKind::BYTES_CAPPED:
+        case SpecKind::STRING:
             out["cap"] = spec.low;
             break;
     }

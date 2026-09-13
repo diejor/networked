@@ -5,49 +5,53 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
 #include "netw/api/promise.hpp"
+#include "netw/session/frames.hpp"
 #include "netw/wire/registry.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwSceneShellVerbLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw::NetwPromise;
 using netw_test::CallLog;
 
 struct DeclaredScene {
-    Node *container = nullptr;
+    Node *root = nullptr;
     Ref<netw::NetwEntity> entity;
     RID handle;
 };
 
 DeclaredScene declare_scene(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     const char *p_stem
 ) {
     DeclaredScene made;
-    made.container = memnew(Node);
-    Node *level = memnew(Node);
-    level->set_name(p_stem);
-    made.container->add_child(level);
+    made.root = memnew(Node);
+    made.root->set_name(p_stem);
     made.entity.instantiate();
-    made.entity->attach_to(made.container);
+    made.entity->attach_to(made.root);
     made.handle = p_core->get_liveness_core()->entity_create();
     made.entity->get_record()->adopt_handle(made.handle);
-    REQUIRE(p_core->entity_of(made.container) == made.handle);
+    made.entity->get_record()->set_route(
+        p_core->get_liveness_core()->reserve_route()
+    );
+    REQUIRE(p_core->entity_of(made.root) == made.handle);
+    REQUIRE(p_core->scene_route_of(made.handle) > 0);
     return made;
 }
 
 struct Placed {
-    Ref<RefCounted> wrapper;
-    Ref<netw::NetwEntityRecord> record;
+    Ref<netw::NetwEntity> wrapper;
+    netw::NetwEntityRecord *record = nullptr;
     RID handle;
     Node *owner = nullptr;
 };
 
 Placed place(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     bool p_declares_scene
 ) {
@@ -56,7 +60,7 @@ Placed place(
     p_parent->add_child(made.owner);
     made.wrapper.instantiate();
     made.handle = p_core->get_liveness_core()->entity_create();
-    made.record.instantiate();
+    made.record = made.wrapper->get_record();
     made.record->adopt_handle(made.handle);
     made.record->set_declares_scene(p_declares_scene);
     const int64_t route = p_core->get_liveness_core()->reserve_route();
@@ -67,7 +71,7 @@ Placed place(
         made.record,
         made.owner
     ));
-    made.owner->set_meta(NetwMultiplayerCore::wrapper_meta(), made.wrapper);
+    made.owner->set_meta(NetwMultiplayer::wrapper_meta(), made.wrapper);
     return made;
 }
 
@@ -85,7 +89,7 @@ TEST_CASE(
     "participant edge, once per change and never for a repeat, so every path "
     "that admits somebody announces it without each caller remembering to"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
@@ -115,7 +119,7 @@ TEST_CASE(
     CHECK_FALSE(core->scene_release_peer(arena.handle, 7));
     NETW_CHECK_EQ(seen.count("edge"), 2);
 
-    memdelete(arena.container);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
@@ -123,27 +127,28 @@ TEST_CASE(
     "installed still writes the boundary and still requests the flush, so the "
     "announcement is the only thing an uninstalled reporter costs"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
     const DeclaredScene arena = declare_scene(core, "Arena");
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
+    const StringName layer = core->scene_layer_id(arena.handle);
 
     CHECK(core->scene_admit_peer(arena.handle, 7));
-    CHECK(engine.layer_has_viewer(StringName("scene:Arena"), 7));
+    CHECK(engine.layer_has_viewer(layer, 7));
     CHECK(core->interest_flush_pending());
     core->settle_drain();
     NETW_CHECK_EQ(seen.count("flush"), 1);
     NETW_CHECK_EQ(seen.count("edge"), 0);
 
     CHECK(core->scene_release_peer(arena.handle, 7));
-    CHECK_FALSE(engine.layer_has_viewer(StringName("scene:Arena"), 7));
+    CHECK_FALSE(engine.layer_has_viewer(layer, 7));
     CHECK(core->interest_flush_pending());
     core->settle_drain();
     NETW_CHECK_EQ(seen.count("flush"), 2);
 
-    memdelete(arena.container);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
@@ -151,7 +156,7 @@ TEST_CASE(
     "names the scene and to nobody else, and this peer is told through the "
     "channel's own protocol handler rather than over the wire"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog seen;
     const DeclaredScene arena = declare_scene(core, "Arena");
@@ -160,7 +165,7 @@ TEST_CASE(
         declared_channel_id("SESSION_SCENE_RELEASED"),
         seen.callable("released")
     );
-    Ref<RefCounted> local;
+    Ref<netw::NetwParticipant> local;
     local.instantiate();
     core->participant_adopt(int64_t(core->get_unique_id()), local);
 
@@ -190,14 +195,16 @@ TEST_CASE(
     const Array told = seen.args("released", 0);
     NETW_CHECK_EQ(int(told.size()), 2);
     const PackedByteArray payload = told[0];
-    CHECK(
-        netw::gd::bytes_to_var(payload)
-        == Variant(core->scene_layer_id(arena.handle))
-    );
+    netw::session::SceneReleased released;
+    const bool decoded = netw::session::frame_read(payload, released);
+    CHECK(decoded);
+    const bool names_scene
+        = released.route == core->scene_route_of(arena.handle);
+    CHECK(names_scene);
     NETW_CHECK_EQ(int(told[1]), 1);
 
-    memdelete(annex.container);
-    memdelete(arena.container);
+    memdelete(annex.root);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
@@ -205,21 +212,22 @@ TEST_CASE(
     "it can start, and a reachable one is handed to the installed carry with "
     "that same promise, so nothing about the outcome is left unanswered"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog seen;
     Node *root = memnew(Node);
     const Placed arena = place(core, root, true);
     const Placed pawn = place(core, root, false);
 
+    const RID bodiless = core->get_liveness_core()->entity_create();
     const Ref<NetwPromise> unheld
-        = core->scene_move_entity(pawn.handle, arena.handle, Variant());
+        = core->scene_move_entity(bodiless, arena.handle, Variant());
     REQUIRE(unheld.is_valid());
     CHECK(unheld->get_is_failed());
     NETW_CHECK_EQ(unheld->get_code(), int(ERR_UNAVAILABLE));
     NETW_CHECK_EQ(seen.count("carry"), 0);
 
-    core->set_scene_carry_move(seen.callable("carry"));
+    core->scene_set_carry_move(seen.callable("carry"));
 
     const Ref<NetwPromise> nowhere
         = core->scene_move_entity(pawn.handle, RID(), Variant());

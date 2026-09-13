@@ -4,6 +4,10 @@ entry_symbol = "networked_library_init"
 compatibility_minimum = "4.7"
 reloadable = true
 
+[icons]
+
+NetwService = "res://addons/networked/assets/NetwService.svg"
+
 [libraries]
 
 macos.debug = "res://addons/networked/bin/libnetworked.macos.template_debug.framework"

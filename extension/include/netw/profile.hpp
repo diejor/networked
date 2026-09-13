@@ -42,6 +42,8 @@ extern const char *const PREDICT_ACK_AGE;
 extern const char *const PREDICT_FALLBACKS;
 extern const char *const PREDICT_PROBATION;
 extern const char *const PREDICT_DIVERGENCE;
+extern const char *const PREDICT_TAP_DRAINED;
+extern const char *const RPC_CALLS_DEFERRED;
 
 } // namespace names
 

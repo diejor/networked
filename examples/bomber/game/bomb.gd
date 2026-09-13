@@ -7,7 +7,7 @@ var from_player: int = 0
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_PARENTED:
 		return
-	var entity := NetwEntity.resolve(self)
+	var entity := Netw.configure_entity(self)
 	if not entity:
 		return
 	Netw.configure_property(self, &"position").on_spawn()

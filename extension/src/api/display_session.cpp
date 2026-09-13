@@ -1,38 +1,41 @@
 #include "godot/class_db.hpp"
 #include "godot/engine.hpp"
 #include "godot/object.hpp"
-#include "netw/display_build.hpp"
-#include "netw/display_channel.hpp"
-#include "netw/display_history.hpp"
-#include "netw/display_pump.hpp"
-#include "netw/display_roles.hpp"
-#include "netw/display_timing.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/log.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/colors.hpp"
+#include "netw/display/build.hpp"
+#include "netw/display/channel.hpp"
+#include "netw/display/history.hpp"
+#include "netw/display/pump.hpp"
+#include "netw/display/roles.hpp"
+#include "netw/display/timing.hpp"
+#include "netw/log.hpp"
+#include "netw/profile.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
 
 namespace netw {
 
-Ref<NetwDisplayDecl> NetwMultiplayerCore::display_config_for(
+display::Decl NetwMultiplayer::display_config_for(
     const Ref<NetwEntity> &p_entity
 ) {
     if (p_entity.is_null()) {
-        return Ref<NetwDisplayDecl>();
+        return display::Decl();
     }
     const RID rid = p_entity->get_rid_handle();
-    Ref<NetwDisplayDecl> config = display_book->decl_of(rid);
-    if (config.is_valid()) {
-        return config;
+    const display::Decl *standing = display_book->decl_ptr(rid);
+    if (standing != nullptr) {
+        return *standing;
     }
-    Object *handle = p_entity->get_interpolation();
-    if (handle != nullptr) {
-        config = handle->get("_decl");
-    }
-    if (config.is_null()) {
-        config.instantiate();
+    display::Decl config;
+    const Ref<NetwDisplayHandle> handle = p_entity->get_interpolation();
+    if (handle.is_valid()) {
+        const display::Decl *authored = handle->declaration();
+        if (authored != nullptr) {
+            config = *authored;
+        }
     }
     if (rid.is_valid()) {
         display_book->set_decl(rid, config);
@@ -40,7 +43,7 @@ Ref<NetwDisplayDecl> NetwMultiplayerCore::display_config_for(
     return config;
 }
 
-int64_t NetwMultiplayerCore::display_route_of(const Ref<NetwEntity> &p_entity) {
+int64_t NetwMultiplayer::display_route_of(const Ref<NetwEntity> &p_entity) {
     if (p_entity.is_null()) {
         return 0;
     }
@@ -48,27 +51,27 @@ int64_t NetwMultiplayerCore::display_route_of(const Ref<NetwEntity> &p_entity) {
     return route > 0 ? route : p_entity->get_route();
 }
 
-Ref<NetwDisplayRuntime> NetwMultiplayerCore::display_runtime_for(
+display::Runtime *NetwMultiplayer::display_runtime_for(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity
 ) {
     if (p_route <= 0 || p_entity.is_null()) {
-        return Ref<NetwDisplayRuntime>();
+        return nullptr;
     }
-    Ref<NetwDisplayRuntime> runtime = display_book->runtime_at(p_route);
-    if (runtime.is_valid()) {
-        return runtime;
+    display::Runtime *standing = display_book->runtime_at(p_route);
+    if (standing != nullptr) {
+        return standing;
     }
-    runtime.instantiate();
+    display_book->enroll(p_entity->get_rid_handle(), p_route);
+    display::Runtime *runtime
+        = display_book->open_runtime(p_entity->get_rid_handle());
     runtime->set_route(p_route);
     runtime->bind(p_entity.ptr(), p_entity->get_owner());
     runtime->set_config(display_config_for(p_entity));
-    display_book->enroll(p_entity->get_rid_handle(), p_route);
-    display_book->set_runtime(p_entity->get_rid_handle(), runtime);
     return runtime;
 }
 
-void NetwMultiplayerCore::display_on_entity_live(
+void NetwMultiplayer::display_on_entity_live(
     int64_t p_route,
     Object *p_entity
 ) {
@@ -77,27 +80,22 @@ void NetwMultiplayerCore::display_on_entity_live(
     if (entity.is_null()) {
         return;
     }
-    const Ref<NetwDisplayDecl> config = display_config_for(entity);
-    const bool declared_role = config.is_valid()
-        && config->get_display_role() != NetwDisplayDecl::ROLE_AUTO;
+    const display::Decl config = display_config_for(entity);
+    const bool declared_role = config.display_role != netw::display::ROLE_AUTO;
     if (!declared_role && !display_wants_runtime(entity->get_owner())) {
         return;
     }
-    const Ref<NetwDisplayRuntime> runtime
-        = display_runtime_for(p_route, entity);
-    if (runtime.is_null()) {
+    display::Runtime *runtime = display_runtime_for(p_route, entity);
+    if (runtime == nullptr) {
         return;
     }
     if (Array(runtime->get_entity_hooks()).is_empty()) {
         Array hooks;
         const Callable on_control
-            = Callable(this, "display_on_control_changed").bind(p_route);
-        const Callable on_reparent
-            = Callable(this, "display_on_reparented").bind(p_route);
+            = callable_mp(this, &NetwMultiplayer::display_on_control_changed)
+                  .bind(p_route);
         entity->connect("control_changed", on_control);
-        entity->connect("reparented", on_reparent);
         hooks.append(on_control);
-        hooks.append(on_reparent);
         runtime->set_entity_hooks(hooks);
     }
     display_rebuild_runtime(runtime);
@@ -108,9 +106,7 @@ void NetwMultiplayerCore::display_on_entity_live(
     );
 }
 
-void NetwMultiplayerCore::display_release_hooks(
-    const Ref<NetwDisplayRuntime> &p_runtime
-) {
+void NetwMultiplayer::display_release_hooks(display::Runtime *p_runtime) {
     const Ref<NetwEntity> entity = p_runtime->entity();
     const Array hooks = p_runtime->get_entity_hooks();
     if (entity.is_valid()) {
@@ -119,51 +115,45 @@ void NetwMultiplayerCore::display_release_hooks(
             if (entity->is_connected("control_changed", hook)) {
                 entity->disconnect("control_changed", hook);
             }
-            if (entity->is_connected("reparented", hook)) {
-                entity->disconnect("reparented", hook);
-            }
         }
     }
     p_runtime->set_entity_hooks(Array());
-    display_hooks.chase_hook(p_runtime, false);
+    display_hooks.chase_hook(p_runtime->entity_rid(), false);
 }
 
-void NetwMultiplayerCore::display_on_entity_dead(int64_t p_route) {
-    const Ref<NetwDisplayRuntime> runtime = display_book->runtime_at(p_route);
-    if (runtime.is_valid()) {
+void NetwMultiplayer::display_release_route(int64_t p_route) {
+    display::Runtime *runtime = display_book->runtime_at(p_route);
+    if (runtime != nullptr) {
         display_release_hooks(runtime);
-        display::apply_body_freeze(runtime, NetwDisplayDecl::ROLE_DISABLED);
+        display::apply_body_freeze(runtime, netw::display::ROLE_DISABLED);
     }
     display_book->drop_route(p_route);
 }
 
-void NetwMultiplayerCore::display_clear_runtimes() {
-    const TypedArray<NetwDisplayRuntime> runtimes = display_book->runtimes();
+void NetwMultiplayer::display_clear_runtimes() {
+    const LocalVector<display::Runtime *> runtimes = display_book->runtimes();
     for (int at = 0; at < runtimes.size(); ++at) {
-        const Ref<NetwDisplayRuntime> runtime = runtimes[at];
+        display::Runtime *runtime = runtimes[at];
         display_release_hooks(runtime);
-        display::apply_body_freeze(runtime, NetwDisplayDecl::ROLE_DISABLED);
+        display::apply_body_freeze(runtime, netw::display::ROLE_DISABLED);
     }
     display_book->clear();
 }
 
-void NetwMultiplayerCore::display_on_control_changed(
+void NetwMultiplayer::display_on_control_changed(
     int64_t p_previous,
     int64_t p_peer,
     int64_t p_route
 ) {
-    const Ref<NetwDisplayRuntime> runtime = display_book->runtime_at(p_route);
-    if (runtime.is_valid()) {
+    display::Runtime *runtime = display_book->runtime_at(p_route);
+    if (runtime != nullptr) {
         display_resolve_role(runtime);
     }
 }
 
-void NetwMultiplayerCore::display_on_reparented(
-    const Variant &p_opts,
-    int64_t p_route
-) {
-    const Ref<NetwDisplayRuntime> runtime = display_book->runtime_at(p_route);
-    if (runtime.is_null()) {
+void NetwMultiplayer::display_refresh_moved(int64_t p_route) {
+    display::Runtime *runtime = display_book->runtime_at(p_route);
+    if (runtime == nullptr) {
         return;
     }
     const Ref<NetwEntity> entity = runtime->entity();
@@ -179,21 +169,20 @@ void NetwMultiplayerCore::display_on_reparented(
     );
 }
 
-void NetwMultiplayerCore::display_mark_role_dirty(const RID &p_entity) {
-    const Ref<NetwDisplayRuntime> runtime = display_book->runtime_of(p_entity);
-    if (runtime.is_null()) {
-        display_book->mark_dirty(p_entity, NetwDisplayDecl::DIRT_RUNTIME);
+void NetwMultiplayer::display_mark_role_dirty(const RID &p_entity) {
+    display::Runtime *runtime = display_book->runtime_of(p_entity);
+    if (runtime == nullptr) {
+        display_book->mark_dirty(p_entity, netw::display::DIRT_RUNTIME);
         return;
     }
     display_resolve_role(runtime);
 }
 
-void NetwMultiplayerCore::display_drain_dirty() {
+void NetwMultiplayer::display_drain_dirty() {
     const TypedArray<RID> stale = display_book->take_dirty();
     for (int at = 0; at < stale.size(); ++at) {
-        const Ref<NetwDisplayRuntime> runtime
-            = display_book->runtime_of(stale[at]);
-        if (runtime.is_valid()) {
+        display::Runtime *runtime = display_book->runtime_of(stale[at]);
+        if (runtime != nullptr) {
             display_rebuild_runtime(runtime);
             display_resolve_role(runtime);
             runtime->reset(
@@ -204,33 +193,32 @@ void NetwMultiplayerCore::display_drain_dirty() {
     }
 }
 
-void NetwMultiplayerCore::display_on_book_dirty(
+void NetwMultiplayer::display_on_book_dirty(
     const RID &p_entity,
-    int p_dirt
+    netw::display::Dirt p_dirt
 ) {
-    const Ref<NetwDisplayRuntime> runtime = display_book->runtime_of(p_entity);
-    if (runtime.is_null()) {
+    display::Runtime *runtime = display_book->runtime_of(p_entity);
+    if (runtime == nullptr) {
         display_book->clear_dirty(p_entity);
-        const Ref<NetwEntity> wrapper
-            = Ref<NetwEntity>(Object::cast_to<NetwEntity>(
-                wrapper_for_id(p_entity.get_id()).ptr()
-            ));
+        const Ref<NetwEntity> wrapper = Ref<NetwEntity>(
+            Object::cast_to<NetwEntity>(wrapper_for_id(p_entity.get_id()).ptr())
+        );
         if (wrapper.is_valid()) {
             display_on_entity_live(display_route_of(wrapper), wrapper.ptr());
         }
         return;
     }
-    if (p_dirt == NetwDisplayDecl::DIRT_ROLE) {
+    if (p_dirt == netw::display::DIRT_ROLE) {
         display_resolve_role(runtime);
         return;
     }
-    settle_schedule(
-        Callable(this, "display_drain_dirty"),
+    session_defer(
+        callable_mp(this, &NetwMultiplayer::display_drain_dirty),
         StringName("display-rebuild")
     );
 }
 
-void NetwMultiplayerCore::display_record(
+void NetwMultiplayer::display_record(
     Node *p_node,
     const StringName &p_target_property,
     const Variant &p_value,
@@ -238,8 +226,7 @@ void NetwMultiplayerCore::display_record(
     const Ref<NetwInterpolate> &p_spec,
     bool p_authoring_tick
 ) {
-    if (p_node == nullptr || p_spec.is_null()
-        || p_target_property.is_empty()) {
+    if (p_node == nullptr || p_spec.is_null() || p_target_property.is_empty()) {
         return;
     }
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
@@ -250,24 +237,20 @@ void NetwMultiplayerCore::display_record(
     if (route <= 0) {
         return;
     }
-    const Ref<NetwDisplayRuntime> runtime = display_runtime_for(route, entity);
-    if (runtime.is_null()) {
+    display::Runtime *runtime = display_runtime_for(route, entity);
+    if (runtime == nullptr) {
         return;
     }
     display_resolve_role(runtime);
-    if (runtime->get_pump_mode() == NetwDisplayDecl::PUMP_BRACKETED) {
+    if (runtime->get_pump_mode() == netw::display::PUMP_BRACKETED) {
         return;
     }
 
-    const Ref<NetwDisplayTracks> tracks = runtime->get_tracks();
-    const int64_t at = tracks->by_key(
+    const int64_t at = runtime->display_tracks().by_key(
         display::state_key_for(p_node, p_target_property)
     );
-    const TypedArray<NetwDisplayChannel> states = runtime->get_states();
-    Ref<NetwDisplayChannel> state = at >= 0
-        ? Ref<NetwDisplayChannel>(states[at])
-        : Ref<NetwDisplayChannel>();
-    if (state.is_null()) {
+    display::Channel *state = at >= 0 ? runtime->channels()[at] : nullptr;
+    if (state == nullptr) {
         const bool is_property = gd::has_property(p_node, p_target_property);
         StringName target = p_target_property;
         if (is_property && !p_spec->get_target().is_empty()) {
@@ -282,13 +265,13 @@ void NetwMultiplayerCore::display_record(
             p_authoring_tick
         );
     }
-    if (state.is_null()) {
+    if (state == nullptr) {
         return;
     }
     if (p_authoring_tick) {
         state->set_authoring_ticks(true);
     }
-    state->get_history()->record(p_tick, p_value, p_authoring_tick);
+    state->display_history().record(p_tick, p_value, p_authoring_tick);
 
     if (plane.wants(EventPlane::DISPLAY_RECORD, route)) {
         EventPlane::Emission fact(
@@ -305,33 +288,31 @@ void NetwMultiplayerCore::display_record(
     }
 }
 
-void NetwMultiplayerCore::display_on_clock_tick(double p_delta, int64_t p_tick) {
-    const TypedArray<NetwDisplayRuntime> runtimes = display_book->runtimes();
+void NetwMultiplayer::display_on_clock_tick(double p_delta, int64_t p_tick) {
+    NETW_ZONE_NC("Display record tick", colors::INTERP);
+    const LocalVector<display::Runtime *> runtimes = display_book->runtimes();
     for (int at = 0; at < runtimes.size(); ++at) {
-        const Ref<NetwDisplayRuntime> runtime = runtimes[at];
+        display::Runtime *runtime = runtimes[at];
         if (runtime->get_disabled()
-            || runtime->get_pump_mode() != NetwDisplayDecl::PUMP_BRACKETED) {
+            || runtime->get_pump_mode() != netw::display::PUMP_BRACKETED) {
             continue;
         }
-        const TypedArray<NetwDisplayChannel> states = runtime->get_states();
-        for (int on = 0; on < states.size(); ++on) {
-            const Ref<NetwDisplayChannel> state = states[on];
+        for (display::Channel *state : runtime->channels()) {
             const Variant source = state->get_source_obj();
             Object *from = source;
             if (from == nullptr) {
                 continue;
             }
-            state->get_history()->record(
-                p_tick,
-                from->get(state->get_source_prop()),
-                false
-            );
+            state->display_history()
+                .record(p_tick, from->get(state->get_source_prop()), false);
         }
     }
 }
 
-Error NetwMultiplayerCore::display_pump(double p_delta) {
-    const int64_t frame = int64_t(Engine::get_singleton()->get_process_frames());
+Error NetwMultiplayer::display_pump(double p_delta) {
+    NETW_ZONE_NC("Display pump frame", colors::INTERP);
+    const int64_t frame
+        = int64_t(Engine::get_singleton()->get_process_frames());
     if (p_delta > 0.0 && frame == display_last_frame) {
         return OK;
     }
@@ -340,18 +321,17 @@ Error NetwMultiplayerCore::display_pump(double p_delta) {
         return OK;
     }
 
-    const Ref<NetwDisplayTiming> timing
-        = NetwDisplayTiming::capture(clock_handle, p_delta);
-    const Ref<NetwPumpStats> stats = display_book->get_stats();
-    stats->reset();
+    const display::Timing timing
+        = display::capture_timing(&clock_engine(), p_delta);
+    display::PumpStats &stats = display_book->get_stats();
+    stats.reset();
 
-    const TypedArray<NetwDisplayRuntime> runtimes = display_book->runtimes();
+    const LocalVector<display::Runtime *> runtimes = display_book->runtimes();
     for (int at = 0; at < runtimes.size(); ++at) {
-        const Ref<NetwDisplayRuntime> runtime = runtimes[at];
+        display::Runtime *runtime = runtimes[at];
         if (runtime->get_disabled()) {
             if (runtime->get_disable_until_tick() >= 0
-                && timing->get_display_tick()
-                    >= runtime->get_disable_until_tick()) {
+                && timing.display_tick >= runtime->get_disable_until_tick()) {
                 runtime->set_disabled(false);
                 runtime->set_disable_until_tick(-1);
             } else {
@@ -372,7 +352,7 @@ Error NetwMultiplayerCore::display_pump(double p_delta) {
             );
             fact.route = route;
             Dictionary detail;
-            detail["tick"] = timing->get_display_tick();
+            detail["tick"] = timing.display_tick;
             fact.detail = detail;
             plane.emit(fact);
         }
@@ -380,18 +360,29 @@ Error NetwMultiplayerCore::display_pump(double p_delta) {
     return OK;
 }
 
-void NetwMultiplayerCore::display_bind_session() {
+void NetwMultiplayer::display_bind_session() {
     if (display_session_bound) {
         return;
     }
     display_session_bound = true;
-    connect("entity_live", Callable(this, "display_on_entity_live"));
-    connect("entity_dead", Callable(this, "display_on_entity_dead"));
-    display_book->connect(
-        "went_dirty",
-        Callable(this, "display_on_book_dirty")
+    connect(
+        "entity_live",
+        callable_mp(this, &NetwMultiplayer::display_on_entity_live)
     );
-    connect("after_tick", Callable(this, "display_on_clock_tick"));
+    display_book->set_went_dirty(
+        callable_mp(this, &NetwMultiplayer::display_on_book_dirty)
+    );
+    connect(
+        "clock_after_tick",
+        callable_mp(this, &NetwMultiplayer::display_on_clock_tick)
+    );
+}
+
+void NetwMultiplayer::display_mark_dirty(
+    const RID &p_entity,
+    netw::display::Dirt p_dirt
+) {
+    display_book->mark_dirty(p_entity, p_dirt);
 }
 
 } // namespace netw

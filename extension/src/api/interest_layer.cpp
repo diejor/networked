@@ -1,4 +1,5 @@
 #include "netw/api/interest_layer.hpp"
+#include "netw/api/interest_handle.hpp"
 
 #include "godot/class_db.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -19,10 +20,6 @@ constexpr const char *SIG_VIEWER_REMOVED = "viewer_removed";
 constexpr const char *SIG_ENTITY_ADDED = "entity_added";
 constexpr const char *SIG_ENTITY_REMOVED = "entity_removed";
 
-constexpr const char *HANDLE_ENTER = "_dispatch_enter";
-constexpr const char *HANDLE_LEAVE = "_dispatch_leave";
-constexpr const char *HANDLE_JOIN_LABEL = "_client_join_label";
-
 PropertyInfo entity_param() {
     return PropertyInfo(
         Variant::OBJECT,
@@ -32,9 +29,9 @@ PropertyInfo entity_param() {
     );
 }
 
-Ref<RefCounted> facet_of(const Ref<NetwEntity> &p_entity) {
+Ref<NetwInterestHandle> facet_of(const Ref<NetwEntity> &p_entity) {
     if (p_entity.is_null()) {
-        return Ref<RefCounted>();
+        return Ref<NetwInterestHandle>();
     }
     return p_entity->get_interest();
 }
@@ -45,11 +42,11 @@ int64_t NetwInterestLayer::slot_of(const Ref<NetwEntity> &p_entity) {
     return p_entity.is_valid() ? p_entity->get_rid_handle().get_id() : 0;
 }
 
-NetwMultiplayerCore *NetwInterestLayer::host() {
-    return Object::cast_to<NetwMultiplayerCore>(session.resolve(sys::INTEREST));
+NetwMultiplayer *NetwInterestLayer::host() {
+    return Object::cast_to<NetwMultiplayer>(session.resolve(sys::INTEREST));
 }
 
-void NetwInterestLayer::bind_session(NetwMultiplayerCore *p_host) {
+void NetwInterestLayer::bind_session(NetwMultiplayer *p_host) {
     if (p_host == nullptr) {
         return;
     }
@@ -68,7 +65,7 @@ void NetwInterestLayer::set_layer_id(const StringName &p_id) {
 }
 
 Ref<NetwEntity> NetwInterestLayer::entity_for(int64_t p_slot) {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner == nullptr) {
         return Ref<NetwEntity>();
     }
@@ -78,12 +75,12 @@ Ref<NetwEntity> NetwInterestLayer::entity_for(int64_t p_slot) {
 }
 
 bool NetwInterestLayer::server_authority() {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     return owner == nullptr || owner->is_server();
 }
 
 int64_t NetwInterestLayer::local_peer_id() {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner == nullptr || !owner->has_multiplayer_peer()) {
         return 1;
     }
@@ -94,9 +91,9 @@ void NetwInterestLayer::dispatch_enter(
     const Ref<NetwEntity> &p_entity,
     int64_t p_peer_id
 ) {
-    const Ref<RefCounted> facet = facet_of(p_entity);
+    const Ref<NetwInterestHandle> facet = facet_of(p_entity);
     if (facet.is_valid()) {
-        facet->call(HANDLE_ENTER, layer_id, p_peer_id);
+        facet->dispatch_enter(layer_id, p_peer_id);
     }
 }
 
@@ -104,21 +101,21 @@ void NetwInterestLayer::dispatch_leave(
     const Ref<NetwEntity> &p_entity,
     int64_t p_peer_id
 ) {
-    const Ref<RefCounted> facet = facet_of(p_entity);
+    const Ref<NetwInterestHandle> facet = facet_of(p_entity);
     if (facet.is_valid()) {
-        facet->call(HANDLE_LEAVE, layer_id, p_peer_id);
+        facet->dispatch_leave(layer_id, p_peer_id);
     }
 }
 
 void NetwInterestLayer::join_label(const Ref<NetwEntity> &p_entity) {
-    const Ref<RefCounted> facet = facet_of(p_entity);
+    const Ref<NetwInterestHandle> facet = facet_of(p_entity);
     if (facet.is_valid()) {
-        facet->call(HANDLE_JOIN_LABEL, layer_id);
+        facet->client_join_label(layer_id);
     }
 }
 
 int64_t NetwInterestLayer::adopt_slot(const Ref<NetwEntity> &p_entity) {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner != nullptr && p_entity.is_valid()) {
         owner->liveness_adopt(p_entity.ptr());
     }
@@ -129,7 +126,7 @@ void NetwInterestLayer::track_membership(
     const Ref<NetwEntity> &p_entity,
     bool p_joined
 ) {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner == nullptr) {
         return;
     }
@@ -151,14 +148,14 @@ void NetwInterestLayer::track_membership(
 }
 
 void NetwInterestLayer::request_flush() {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner != nullptr) {
         owner->interest_request_flush();
     }
 }
 
 void NetwInterestLayer::refresh_perception(const Ref<NetwEntity> &p_entity) {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner == nullptr) {
         return;
     }
@@ -195,7 +192,7 @@ void NetwInterestLayer::set_default_perception_policy(int p_policy) {
     if (!engine->layer_set_perception_policy(layer_id, p_policy)) {
         return;
     }
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner == nullptr) {
         return;
     }
@@ -233,6 +230,20 @@ Dictionary NetwInterestLayer::get_entities() {
 }
 
 bool NetwInterestLayer::add_viewer(int64_t p_peer_id) {
+    NetwMultiplayer *owner = host();
+    if (owner != nullptr && owner->has_multiplayer_peer()
+        && p_peer_id != godot::MultiplayerPeer::TARGET_PEER_SERVER
+        && owner->interest_peer_bit(p_peer_id) < 0) {
+        NETW_WARN(
+            sys::INTEREST,
+            "layer '%s' admits peer %d, which this session has never seen. "
+            "A peer id is minted by the transport at connect, so admit from "
+            "the peer_connected handler or from a peer this session lists, "
+            "never from a loop index or a game-side player id.",
+            String(layer_id).utf8().get_data(),
+            int(p_peer_id)
+        );
+    }
     if (!engine->layer_add_viewer(layer_id, p_peer_id)) {
         return false;
     }
@@ -306,6 +317,7 @@ void NetwInterestLayer::client_admit(const Ref<NetwEntity> &p_entity) {
     if (!engine->roster_add(layer_id, slot_of(p_entity))) {
         return;
     }
+    track_membership(p_entity, true);
     join_label(p_entity);
     dispatch_enter(p_entity, local_peer_id());
     emit_signal(SIG_ENTITY_VISIBLE, p_entity);
@@ -369,7 +381,7 @@ bool NetwInterestLayer::is_visible_to(
     const Ref<NetwEntity> &p_entity,
     int64_t p_peer_id
 ) {
-    NetwMultiplayerCore *owner = host();
+    NetwMultiplayer *owner = host();
     if (owner != nullptr) {
         return owner->interest_participant_sees(p_peer_id, p_entity);
     }
@@ -429,7 +441,10 @@ void NetwInterestLayer::_bind_methods() {
         D_METHOD("set_policy", "value"),
         &NetwInterestLayer::set_policy
     );
-    ClassDB::bind_method(D_METHOD("get_policy"), &NetwInterestLayer::get_policy);
+    ClassDB::bind_method(
+        D_METHOD("get_policy"),
+        &NetwInterestLayer::get_policy
+    );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::INT,
@@ -550,9 +565,6 @@ void NetwInterestLayer::_bind_methods() {
         &NetwInterestLayer::debug_dump,
         DEFVAL(0)
     );
-
-    BIND_ENUM_CONSTANT(HIDE_FROM_OUTSIDERS);
-    BIND_ENUM_CONSTANT(HIDE_FROM_INSIDERS);
 
     ADD_SIGNAL(MethodInfo(
         SIG_INTEREST_ENTER,

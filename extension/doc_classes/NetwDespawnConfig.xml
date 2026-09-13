@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDespawnConfig" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Everything one entity [Script] declares about how a peer removes its nodes.
+	</brief_description>
+	<description>
+		The policy is authored on a [Script] and read back for every node that script drives, because [method Netw.configure_despawn] runs from [method Object._init] and the removal happens later, on whichever peer received the DESPAWN frame.
+		[method before_removal] records the method NAME and nothing else, so a config authored from one node's [Callable] never retains that [Node] and stays reusable for every later instance of the same script. The removing peer resolves the name against the node it is about to remove, and skips a name that node does not answer.
+		An author who declared nothing gets an empty [member hook_method] and a [member linger_seconds] of [code]0.0[/code], which frees immediately, so the defaults are the policy rather than an absence a reader branches on.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_despawn(self) \
+		            .before_removal(_play_death_vfx) \
+		            .linger(0.5)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="before_removal">
+			<return type="NetwDespawnConfig" />
+			<param index="0" name="callable" type="Callable" />
+			<description>
+				Declares that [param callable]'s method runs on the entity root before the node leaves the tree, for death VFX or for handing children off. Only [method Callable.get_method] is kept, into [member hook_method]. Answers the same config so the declaration chains.
+			</description>
+		</method>
+		<method name="linger">
+			<return type="NetwDespawnConfig" />
+			<param index="0" name="seconds" type="float" />
+			<description>
+				Declares [member linger_seconds]. Answers the same config so the declaration chains.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="hook_method" type="StringName" setter="set_hook_method" getter="get_hook_method" default="&amp;&quot;&quot;">
+			Method called on the entity root before removal, or empty for none. Declared through [method before_removal], which is the only spelling that keeps the object out of the record.
+		</member>
+		<member name="linger_seconds" type="float" setter="set_linger_seconds" getter="get_linger_seconds" default="0.0">
+			Seconds the node stays in the tree reporting [constant NetwMultiplayer.ENTITY_STATE_LINGERING] before it is freed. [code]0.0[/code] frees it in the same pass. Declared through [method linger].
+		</member>
+	</members>
+</class>

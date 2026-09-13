@@ -8,7 +8,7 @@ func test_active_ai_disconnects_mid_match() -> void:
 	# Let AIs play for a bit to generate real traffic.
 	await run_until(ais, 80)
 
-	var gamestate := game.host.tree.get_service(BomberGamestate) \
+	var gamestate := Netw.service(game.host.tree, BomberGamestate) \
 			as BomberGamestate
 	var errored: Array[bool] = [false]
 	gamestate.game_error.connect(
@@ -50,7 +50,7 @@ func test_half_lobby_disconnects_during_active_play() -> void:
 
 	await run_until(ais, 60)
 
-	var gamestate := game.host.tree.get_service(BomberGamestate) \
+	var gamestate := Netw.service(game.host.tree, BomberGamestate) \
 			as BomberGamestate
 	var errored: Array[bool] = [false]
 	gamestate.game_error.connect(

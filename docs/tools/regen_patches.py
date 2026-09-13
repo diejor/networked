@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild ``tools/patches/*.patch`` from ``vendor/make_rst.py`` vs ``make_rst.py``.
-
-Use this when you've edited ``tools/make_rst.py`` directly and want to push
-those changes back into the themed patch files. Hunks are bucketed by their
-original-file (vendor) start line — keep the bucket boundaries in sync with
-the patch index in ``patches/README.md`` if you reorganise.
-"""
+"""Rebuild ``tools/patches/*.patch`` from ``vendor/make_rst.py`` vs ``make_rst.py``."""
 
 from __future__ import annotations
 
@@ -65,7 +59,6 @@ def main() -> None:
         ["diff", "-u", str(VENDOR), str(WORKING)],
         capture_output=True,
     )
-    # diff exits 1 when files differ — that's what we expect.
     if result.returncode not in (0, 1):
         sys.stderr.write(result.stderr.decode("utf-8", errors="replace"))
         sys.exit("diff failed")
@@ -74,7 +67,7 @@ def main() -> None:
 
     stdout = result.stdout.decode("utf-8")
     lines = stdout.splitlines(keepends=True)
-    body = lines[2:]  # drop --- / +++ from real diff
+    body = lines[2:]
     hunks: list[list[str]] = []
     cur: list[str] = []
     for line in body:
@@ -89,7 +82,6 @@ def main() -> None:
         hunks.append(cur)
 
     PATCHES_DIR.mkdir(parents=True, exist_ok=True)
-    # Remove any existing themed patches so renames/removals propagate.
     for old in PATCHES_DIR.glob("*.patch"):
         old.unlink()
 

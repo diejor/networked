@@ -1,10 +1,3 @@
-// The cases that pin what a Recorder answers.
-//
-// The subject is a bare RefCounted carrying user signals, not any addon type:
-// a recorder has to be true about emissions before it is worth pointing at a
-// session, and a case that needed a session to test the recorder would be
-// testing two things at once.
-
 #include "support/netw_test.h"
 
 #include "godot/ref_counted.hpp"
@@ -15,8 +8,6 @@ namespace TestNetwRecorder {
 using namespace godot;
 using netw_test::Recorder;
 
-// A signal has to declare its arguments before it can carry any, so the
-// declaration is spelled once here rather than per case.
 Dictionary argument(const String &name, Variant::Type type) {
     Dictionary declared;
     declared["name"] = name;
@@ -29,9 +20,9 @@ Ref<RefCounted> source_with_signals() {
     made.instantiate();
     Array carries_a_peer;
     carries_a_peer.push_back(argument("peer", Variant::INT));
-    made->call("add_user_signal", "peer_joined", carries_a_peer);
-    made->call("add_user_signal", "peer_left", carries_a_peer);
-    made->call("add_user_signal", "session_closed", Array());
+    netw::gd::add_user_signal(made.ptr(), "peer_joined", carries_a_peer);
+    netw::gd::add_user_signal(made.ptr(), "peer_left", carries_a_peer);
+    netw::gd::add_user_signal(made.ptr(), "session_closed", Array());
     return made;
 }
 
@@ -47,7 +38,6 @@ TEST_CASE("[Networked][Recorder][Hosted] a recorder counts what it saw") {
 
     NETW_CHECK_EQ(recorder.count("peer_joined"), 2);
     NETW_CHECK_EQ(recorder.count("peer_left"), 1);
-    // A signal nobody watched is zero, not an error.
     NETW_CHECK_EQ(recorder.count("session_closed"), 0);
 }
 
@@ -64,13 +54,9 @@ TEST_CASE(
     REQUIRE(recorder.args("peer_joined").size() == 1);
     CHECK(recorder.args("peer_joined")[0] == Variant(7));
     CHECK(recorder.args("peer_joined", 1)[0] == Variant(9));
-    // Past the end is empty rather than a crash, so a wrong expectation fails
-    // on the count instead of taking the run down with it.
     CHECK(recorder.args("peer_joined", 2).is_empty());
 }
 
-// The property polled state cannot express, and the reason the recorder holds
-// one log rather than a counter per signal.
 TEST_CASE(
     "[Networked][Recorder][Hosted] a recorder keeps order across signals"
 ) {
@@ -102,9 +88,6 @@ TEST_CASE("[Networked][Recorder][Hosted] clear forgets without disconnecting") {
     CHECK(recorder.args("peer_joined")[0] == Variant(9));
 }
 
-// A recorder that outlived its scope but not its connection would record into
-// freed storage, and would also make the next recorder on the same signal see
-// double.
 TEST_CASE("[Networked][Recorder][Hosted] a destroyed recorder disconnects") {
     Ref<RefCounted> source = source_with_signals();
     {

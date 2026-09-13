@@ -1,5 +1,8 @@
 #include "support/netw_test.h"
 
+#include "netw/api/property_set.hpp"
+#include "netw/api/property_set_binding.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/predict/engine.hpp"
 #include "support/carrier.h"
 
@@ -16,26 +19,11 @@ using namespace netw;
 using namespace netw::predict;
 using netw_test::Carrier;
 
-Ref<NetwPredictionEngine> pool() {
-    Ref<NetwPredictionEngine> out;
-    out.instantiate();
-    return out;
-}
-
-Ref<NetwPredictDeclaration> fields(const PackedStringArray &p_keys) {
-    Ref<NetwPredictDeclaration> out;
-    out.instantiate();
+LocalVector<FieldDecl> fields(const PackedStringArray &p_keys) {
+    LocalVector<FieldDecl> out;
     for (int at = 0; at < p_keys.size(); ++at) {
-        out->append_field(
-            StringName(p_keys[at]),
-            int(PropertyClass::CAUSAL),
-            StringName(),
-            0.0,
-            false,
-            false,
-            -1.0,
-            -1.0,
-            false
+        out.push_back(
+            field_decl(StringName(p_keys[at]), int(PropertyClass::CAUSAL))
         );
     }
     return out;
@@ -54,9 +42,12 @@ Carrier *carrier() {
     return out;
 }
 
-TEST_CASE("[Networked][Predict][Owner] a slot registered by entity is that "
-          "entity's, and binding by entity reaches it") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] a slot registered by entity is that "
+    "entity's, and binding by entity reaches it"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     Ref<RefCounted> seated;
     seated.instantiate();
     Ref<RefCounted> other;
@@ -85,9 +76,12 @@ TEST_CASE("[Networked][Predict][Owner] a slot registered by entity is that "
     memdelete(body);
 }
 
-TEST_CASE("[Networked][Predict][Owner] closing a slot by number unseats its "
-          "entity too, so the two doors cannot disagree") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] closing a slot by number unseats its "
+    "entity too, so the two doors cannot disagree"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     Ref<RefCounted> seated;
     seated.instantiate();
 
@@ -99,9 +93,12 @@ TEST_CASE("[Networked][Predict][Owner] closing a slot by number unseats its "
     CHECK(engine->slot_register(seated) >= 0);
 }
 
-TEST_CASE("[Networked][Predict][Owner] a bound owner is captured field by "
-          "declared field") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] a bound owner is captured field by "
+    "declared field"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     owner->set("speed", 4.5);
@@ -116,9 +113,12 @@ TEST_CASE("[Networked][Predict][Owner] a bound owner is captured field by "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] an apply writes the declared fields "
-          "and no others") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] an apply writes the declared fields "
+    "and no others"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     engine->bind_owner(slot, owner);
@@ -133,9 +133,12 @@ TEST_CASE("[Networked][Predict][Owner] an apply writes the declared fields "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] a field the owner does not answer for "
-          "is absent rather than null") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] a field the owner does not answer for "
+    "is absent rather than null"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     PackedStringArray keys;
     keys.push_back("speed");
     keys.push_back("nowhere");
@@ -150,9 +153,12 @@ TEST_CASE("[Networked][Predict][Owner] a field the owner does not answer for "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] the input port reads the input "
-          "declaration") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] the input port reads the input "
+    "declaration"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     engine->rewire(slot, fields(one("speed")), fields(one("throttle")));
     Carrier *owner = carrier();
@@ -170,9 +176,12 @@ TEST_CASE("[Networked][Predict][Owner] the input port reads the input "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] an unbound slot performs no property "
-          "I/O at all") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] an unbound slot performs no property "
+    "I/O at all"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     engine->bind_owner(slot, owner);
@@ -187,9 +196,12 @@ TEST_CASE("[Networked][Predict][Owner] an unbound slot performs no property "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] a freed owner unbinds its own slot and "
-          "counts it once") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] a freed owner unbinds its own slot and "
+    "counts it once"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     engine->bind_owner(slot, owner);
@@ -211,9 +223,12 @@ TEST_CASE("[Networked][Predict][Owner] a freed owner unbinds its own slot and "
     );
 }
 
-TEST_CASE("[Networked][Predict][Owner] a rewire under a live bind re-asks "
-          "what the owner answers for") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] a rewire under a live bind re-asks "
+    "what the owner answers for"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     owner->set("throttle", 3.0);
@@ -233,7 +248,7 @@ TEST_CASE("[Networked][Predict][Owner] a rewire under a live bind re-asks "
 }
 
 class ClosingStep final : public CallableCustom {
-    Ref<NetwPredictionEngine> engine;
+    NetwPredictionEngine *engine = nullptr;
     int64_t slot = 0;
     ObjectID anchor;
 
@@ -246,9 +261,13 @@ class ClosingStep final : public CallableCustom {
     }
 
 public:
-    ClosingStep(const Ref<NetwPredictionEngine> &p_engine, int64_t p_slot)
+    ClosingStep(
+        NetwPredictionEngine *p_engine,
+        int64_t p_slot,
+        Object *p_anchor
+    )
         : engine(p_engine), slot(p_slot),
-          anchor(netw::gd::instance_id(p_engine.ptr())) {
+          anchor(netw::gd::instance_id(p_anchor)) {
     }
 
     uint32_t hash() const override {
@@ -284,9 +303,12 @@ public:
     }
 };
 
-TEST_CASE("[Networked][Predict][Owner] a step reads the input it was handed "
-          "and yields what it produced") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] a step reads the input it was handed "
+    "and yields what it produced"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     engine->rewire(slot, fields(one("speed")), fields(one("throttle")));
     Carrier *owner = carrier();
@@ -302,9 +324,12 @@ TEST_CASE("[Networked][Predict][Owner] a step reads the input it was handed "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] an explicit step wins over the one the "
-          "bind adopted") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] an explicit step wins over the one the "
+    "bind adopted"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
 
@@ -317,13 +342,19 @@ TEST_CASE("[Networked][Predict][Owner] an explicit step wins over the one the "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] the roster is frozen for the length of "
-          "a pass") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] the roster is frozen for the length of "
+    "a pass"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     engine->bind_owner(slot, owner);
-    engine->set_simulate(slot, Callable(memnew(ClosingStep(engine, slot))));
+    engine->set_simulate(
+        slot,
+        Callable(memnew(ClosingStep(engine, slot, owner)))
+    );
 
     NETW_CHECK_EQ(engine->pass_depth(), 0);
 
@@ -336,9 +367,12 @@ TEST_CASE("[Networked][Predict][Owner] the roster is frozen for the length of "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] the roster reopens once the pass "
-          "returns") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] the roster reopens once the pass "
+    "returns"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     engine->bind_owner(slot, owner);
@@ -351,9 +385,12 @@ TEST_CASE("[Networked][Predict][Owner] the roster reopens once the pass "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] the step is told which run is the "
-          "fresh one") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] the step is told which run is the "
+    "fresh one"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     owner->define("motion", Vector2(1.0, 0.0));
@@ -369,9 +406,12 @@ TEST_CASE("[Networked][Predict][Owner] the step is told which run is the "
     memdelete(owner);
 }
 
-TEST_CASE("[Networked][Predict][Owner] whether the owner solves is answered "
-          "at the bind") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] whether the owner solves is answered "
+    "at the bind"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t kinematic = engine->open(fields(one("speed")));
     const int64_t solver = engine->open(fields(one("speed")));
     Carrier *plain = carrier();
@@ -390,9 +430,12 @@ TEST_CASE("[Networked][Predict][Owner] whether the owner solves is answered "
     memdelete(plain);
 }
 
-TEST_CASE("[Networked][Predict][Owner] AUTO asks the bound owner, and an "
-          "explicit correction asks nobody") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] AUTO asks the bound owner, and an "
+    "explicit correction asks nobody"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t kinematic = engine->open(fields(one("speed")));
     const int64_t solver = engine->open(fields(one("speed")));
     const int64_t unbound = engine->open(fields(one("speed")));
@@ -417,13 +460,13 @@ TEST_CASE("[Networked][Predict][Owner] AUTO asks the bound owner, and an "
 }
 
 struct CarryFixture {
-    Ref<NetwPredictionEngine> engine;
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     int64_t slot = 0;
     Carrier *owner = nullptr;
     Ref<netw::NetwTimeline> lane;
 
     CarryFixture(const char *p_rule) {
-        engine = pool();
         slot = engine->open(fields(one("speed")));
         REQUIRE(engine->configure(
             slot,
@@ -433,7 +476,6 @@ struct CarryFixture {
             int(RestoreMode::EXACT),
             6,
             NetwPredictionEngine::ISLAND_NONE,
-            true,
             false
         ));
         owner = carrier();
@@ -460,63 +502,65 @@ struct CarryFixture {
         memdelete(owner);
     }
 
-    Ref<NetwPredictCarryAttempt> attempt() {
-        return engine->attempt_carry(
-            slot,
-            StringName("speed"),
-            10.0,
-            -1,
-            100.0,
-            0.01
-        );
+    CarryAttempt attempt() {
+        return engine
+            ->attempt_carry(slot, StringName("speed"), 10.0, -1, 100.0, 0.01);
     }
 };
 
-TEST_CASE("[Networked][Predict][Owner] a rule that reproduces the recorded "
-          "past folds the acknowledged value across every entry past it") {
+TEST_CASE(
+    "[Networked][Predict][Owner] a rule that reproduces the recorded "
+    "past folds the acknowledged value across every entry past it"
+) {
     CarryFixture fixture("carry_speed");
 
-    const Ref<NetwPredictCarryAttempt> attempt = fixture.attempt();
+    const CarryAttempt attempt = fixture.attempt();
 
-    CHECK(attempt->evidence());
-    CHECK(attempt->faithful());
-    CHECK(attempt->same_type());
-    CHECK(attempt->finite());
-    CHECK(attempt->within_envelope());
-    CHECK(attempt->pure());
-    NETW_CHECK_CLOSE(double(attempt->value()), 14.0, 0.0001);
-    NETW_CHECK_CLOSE(attempt->residual(), -1.0, 0.0);
+    CHECK(attempt.evidence);
+    CHECK(attempt.probe.faithful);
+    CHECK(attempt.probe.same_type);
+    CHECK(attempt.probe.finite);
+    CHECK(attempt.probe.within_envelope);
+    CHECK(attempt.probe.pure);
+    NETW_CHECK_CLOSE(double(attempt.value), 14.0, 0.0001);
+    NETW_CHECK_CLOSE(attempt.residual, -1.0, 0.0);
 }
 
-TEST_CASE("[Networked][Predict][Owner] a rule that overstates every "
-          "transition is caught by the replay and never folded") {
+TEST_CASE(
+    "[Networked][Predict][Owner] a rule that overstates every "
+    "transition is caught by the replay and never folded"
+) {
     CarryFixture fixture("carry_speed");
     fixture.owner->set_carry_gain(2.0);
 
-    const Ref<NetwPredictCarryAttempt> attempt = fixture.attempt();
+    const CarryAttempt attempt = fixture.attempt();
 
-    CHECK(attempt->evidence());
-    CHECK_FALSE(attempt->faithful());
-    NETW_CHECK_CLOSE(attempt->residual(), 2.0, 0.0001);
-    NETW_CHECK_CLOSE(attempt->tolerance(), 0.01, 0.0);
-    NETW_CHECK_EQ(int(attempt->value().get_type()), int(Variant::NIL));
+    CHECK(attempt.evidence);
+    CHECK_FALSE(attempt.probe.faithful);
+    NETW_CHECK_CLOSE(attempt.residual, 2.0, 0.0001);
+    NETW_CHECK_CLOSE(attempt.tolerance, 0.01, 0.0);
+    NETW_CHECK_EQ(int(attempt.value.get_type()), int(Variant::NIL));
 }
 
-TEST_CASE("[Networked][Predict][Owner] a rule that writes the body it "
-          "describes is caught by the purity bracket") {
+TEST_CASE(
+    "[Networked][Predict][Owner] a rule that writes the body it "
+    "describes is caught by the purity bracket"
+) {
     CarryFixture fixture("carry_speed_and_write");
 
-    const Ref<NetwPredictCarryAttempt> attempt = fixture.attempt();
+    const CarryAttempt attempt = fixture.attempt();
 
-    CHECK(attempt->faithful());
-    CHECK_FALSE(attempt->pure());
+    CHECK(attempt.probe.faithful);
+    CHECK_FALSE(attempt.probe.pure);
 }
 
-TEST_CASE("[Networked][Predict][Owner] an attempt with no transition to "
-          "replay carries no evidence to judge") {
+TEST_CASE(
+    "[Networked][Predict][Owner] an attempt with no transition to "
+    "replay carries no evidence to judge"
+) {
     CarryFixture fixture("carry_speed");
 
-    const Ref<NetwPredictCarryAttempt> empty = fixture.engine->attempt_carry(
+    const CarryAttempt empty = fixture.engine->attempt_carry(
         fixture.slot,
         StringName("speed"),
         10.0,
@@ -524,18 +568,17 @@ TEST_CASE("[Networked][Predict][Owner] an attempt with no transition to "
         100.0,
         0.01
     );
-    CHECK_FALSE(empty->evidence());
+    CHECK_FALSE(empty.evidence);
 
-    CHECK_FALSE(fixture.engine
-                    ->attempt_carry(
-                        fixture.slot,
-                        StringName("throttle"),
-                        10.0,
-                        -1,
-                        100.0,
-                        0.01
-                    )
-                    ->evidence());
+    const CarryAttempt unruled = fixture.engine->attempt_carry(
+        fixture.slot,
+        StringName("throttle"),
+        10.0,
+        -1,
+        100.0,
+        0.01
+    );
+    CHECK_FALSE(unruled.evidence);
 }
 
 class ReadsCarrier final : public CallableCustom {
@@ -586,9 +629,12 @@ public:
     }
 };
 
-TEST_CASE("[Networked][Predict][Owner] a slot that declared no world fact "
-          "digests to the zero an unwritten row already holds") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] a slot that declared no world fact "
+    "digests to the zero an unwritten row already holds"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
 
     NETW_CHECK_EQ(engine->sample_environment(slot, -1), int64_t(0));
@@ -599,9 +645,12 @@ TEST_CASE("[Networked][Predict][Owner] a slot that declared no world fact "
     NETW_CHECK_EQ(engine->sample_environment(slot + 9000, 4), int64_t(0));
 }
 
-TEST_CASE("[Networked][Predict][Owner] the digest moves with what the sensors "
-          "answered, and the samples are what it was taken over") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Owner] the digest moves with what the sensors "
+    "answered, and the samples are what it was taken over"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     engine->set_sensor(
@@ -632,6 +681,55 @@ TEST_CASE("[Networked][Predict][Owner] the digest moves with what the sensors "
         0.0
     );
 
+    memdelete(owner);
+}
+
+Ref<NetwPropertySetBinding> input_binding_on(Node *p_node) {
+    Ref<NetwPropertySet> set;
+    set.instantiate();
+    set->record = NetwPropertySet::RECORD_INPUT;
+    set->bind_column(
+        NetwPropertySetColumn::create(
+            StringName("throttle"),
+            Ref<NetwQuantize>(),
+            false,
+            int64_t(SchemaCore::VARIANT)
+        )
+    );
+    return NetwPropertySetBinding::create(set, p_node);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Owner] input declared off the bound owner is "
+    "captured from and applied to the node that declares it"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const int64_t slot = engine->open(fields(one("speed")));
+    engine->rewire(slot, fields(one("speed")), fields(one("throttle")));
+
+    Carrier *owner = memnew(Carrier);
+    owner->define("speed", 1.0);
+    Carrier *controls = memnew(Carrier);
+    controls->define("throttle", 2.0);
+
+    engine->bind_owner(slot, owner);
+    engine->bind_property_sets(
+        slot,
+        Ref<NetwPropertySetBinding>(),
+        input_binding_on(controls)
+    );
+
+    const Dictionary captured = engine->capture_input(slot);
+    CHECK(captured.has(StringName("throttle")));
+    NETW_CHECK_CLOSE(double(captured[StringName("throttle")]), 2.0, 0.0);
+
+    Dictionary payload;
+    payload[StringName("throttle")] = 5.0;
+    CHECK(engine->apply_input(slot, payload));
+    NETW_CHECK_CLOSE(double(controls->get("throttle")), 5.0, 0.0);
+
+    memdelete(controls);
     memdelete(owner);
 }
 

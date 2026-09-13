@@ -14,10 +14,12 @@ const char *SIG_COMPLETED = "completed";
 const char *SIG_COMPLETED_SINGLE = "completed_single";
 const char *SIG_FAILED = "failed";
 const char *SIG_SETTLED = "settled";
+const char *SIG_READY = "ready";
 
 } // namespace
 
-Ref<NetwGroupPromise> NetwGroupPromise::create(const PackedInt32Array &p_peers
+Ref<NetwGroupPromise> NetwGroupPromise::create(
+    const PackedInt32Array &p_peers
 ) {
     Ref<NetwGroupPromise> out;
     out.instantiate();
@@ -56,7 +58,8 @@ Ref<NetwGroupPromise> NetwGroupPromise::then(const Callable &p_callback) {
     return Ref<NetwGroupPromise>(this);
 }
 
-Ref<NetwGroupPromise> NetwGroupPromise::catch_error(const Callable &p_callback
+Ref<NetwGroupPromise> NetwGroupPromise::catch_error(
+    const Callable &p_callback
 ) {
     if (failed) {
         Array args;
@@ -92,6 +95,19 @@ void NetwGroupPromise::remove_peer(int64_t p_peer) {
     }
 }
 
+Variant NetwGroupPromise::answer() const {
+    return completed ? Variant(results) : Variant(code);
+}
+
+Signal NetwGroupPromise::wait() {
+    if (completed || failed) {
+        Callable(this, StringName("emit_signal"))
+            .bind(StringName(SIG_READY), answer())
+            .call_deferred();
+    }
+    return Signal(this, StringName(SIG_READY));
+}
+
 void NetwGroupPromise::resolve_all() {
     if (completed || failed) {
         return;
@@ -99,6 +115,7 @@ void NetwGroupPromise::resolve_all() {
     completed = true;
     emit_signal(StringName(SIG_COMPLETED), results);
     emit_signal(StringName(SIG_SETTLED));
+    emit_signal(StringName(SIG_READY), results);
     const LocalVector<Callable> chained(then_callbacks);
     Array args;
     args.push_back(results);
@@ -107,7 +124,7 @@ void NetwGroupPromise::resolve_all() {
     }
 }
 
-void NetwGroupPromise::reject(int p_code, const String &p_detail) {
+void NetwGroupPromise::reject(Error p_code, const String &p_detail) {
     if (completed || failed) {
         return;
     }
@@ -126,6 +143,7 @@ void NetwGroupPromise::reject(int p_code, const String &p_detail) {
     }
     emit_signal(StringName(SIG_FAILED), p_code, p_detail);
     emit_signal(StringName(SIG_SETTLED));
+    emit_signal(StringName(SIG_READY), p_code);
     const LocalVector<Callable> chained(catch_callbacks);
     Array args;
     args.push_back(p_code);
@@ -141,6 +159,8 @@ void NetwGroupPromise::_bind_methods() {
         D_METHOD("create", "peers"),
         &NetwGroupPromise::create
     );
+    ClassDB::bind_method(D_METHOD("wait"), &NetwGroupPromise::wait);
+    ClassDB::bind_method(D_METHOD("answer"), &NetwGroupPromise::answer);
     ClassDB::bind_method(D_METHOD("then", "cb"), &NetwGroupPromise::then);
     ClassDB::bind_method(
         D_METHOD("catch_error", "cb"),
@@ -177,11 +197,7 @@ void NetwGroupPromise::_bind_methods() {
         D_METHOD("get_is_failed"),
         &NetwGroupPromise::get_is_failed
     );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_failed"),
-        "",
-        "get_is_failed"
-    );
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_failed"), "", "get_is_failed");
     ClassDB::bind_method(
         D_METHOD("get_is_settled"),
         &NetwGroupPromise::get_is_settled
@@ -211,16 +227,12 @@ void NetwGroupPromise::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("get_code"), &NetwGroupPromise::get_code);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "code"), "", "get_code");
-    ClassDB::bind_method(
-        D_METHOD("get_detail"),
-        &NetwGroupPromise::get_detail
-    );
+    ClassDB::bind_method(D_METHOD("get_detail"), &NetwGroupPromise::get_detail);
     ADD_PROPERTY(PropertyInfo(Variant::STRING, "detail"), "", "get_detail");
 
-    ADD_SIGNAL(MethodInfo(
-        SIG_COMPLETED,
-        PropertyInfo(Variant::DICTIONARY, "results")
-    ));
+    ADD_SIGNAL(
+        MethodInfo(SIG_COMPLETED, PropertyInfo(Variant::DICTIONARY, "results"))
+    );
     ADD_SIGNAL(MethodInfo(
         SIG_COMPLETED_SINGLE,
         PropertyInfo(Variant::INT, "peer_id"),
@@ -232,6 +244,7 @@ void NetwGroupPromise::_bind_methods() {
         PropertyInfo(Variant::STRING, "detail")
     ));
     ADD_SIGNAL(MethodInfo(SIG_SETTLED));
+    ADD_SIGNAL(MethodInfo(SIG_READY, PropertyInfo(Variant::NIL, "answer")));
 }
 
 } // namespace netw

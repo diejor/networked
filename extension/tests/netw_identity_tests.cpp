@@ -19,14 +19,14 @@ namespace TestNetwIdentity {
 
 using namespace godot;
 using netw::NetwIdentity;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 
 TEST_CASE(
     "[Networked][Session][Hosted] D1 a display name prefers the bound entity "
     "id and falls back to the name that carries it"
 ) {
     Node *bound = memnew(Node);
-    NetwMultiplayerCore::wrapper_bind(bound, "valeria", 42);
+    NetwMultiplayer::wrapper_bind(bound, "valeria", 42);
     CHECK(NetwIdentity::username_of(bound) == String("valeria"));
 
     // Never bound, so the name is the whole of the identity there is, and the
@@ -51,7 +51,7 @@ TEST_CASE(
     "path stops matching the moment the node moves"
 ) {
     Node *bound = memnew(Node);
-    NetwMultiplayerCore::wrapper_bind(bound, "valeria", 42);
+    NetwMultiplayer::wrapper_bind(bound, "valeria", 42);
     NETW_CHECK_EQ(int64_t(NetwIdentity::stable_id_of(bound)), 42);
 
     // No record, so the name is asked instead, and it spells the same peer.

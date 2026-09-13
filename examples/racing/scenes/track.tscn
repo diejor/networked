@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://c44tfiddyjjm1" path="res://examples/racing/models/vehicle-truck-green.glb" id="9_cmq2j"]
 [ext_resource type="PackedScene" uid="uid://c5e64mpylh1ge" path="res://examples/racing/models/vehicle-truck-purple.glb" id="10_p3c1o"]
 [ext_resource type="PackedScene" uid="uid://b34e2pvbemfac" path="res://examples/racing/models/vehicle-truck-red.glb" id="11_wocnk"]
+[ext_resource type="Script" uid="uid://0agetl5d8tof" path="res://examples/racing/scripts/track_root.gd" id="12_root"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ya4ey"]
 size = Vector3(60, 0, 60)
@@ -16,6 +17,7 @@ friction = 0.0
 bounce = 0.1
 
 [node name="Track" type="Node3D" unique_id=1145999287]
+script = ExtResource("12_root")
 
 [node name="Environment" type="WorldEnvironment" parent="." unique_id=1097254880]
 environment = ExtResource("1_q4t1r")

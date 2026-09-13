@@ -18,7 +18,7 @@ public:
     static int64_t pumps_for(double seconds, double rate);
 
 private:
-    static constexpr uint64_t NEVER_STAMPED = 0;
+    static constexpr int64_t NEVER_STAMPED = INT64_MIN;
 
     struct Stats {
         double rtt = 0.0;
@@ -47,7 +47,6 @@ private:
     int32_t jitter_window = 16;
     double jitter_stability_threshold = 0.05;
     bool manual_tick = false;
-    bool node_pumped = false;
     bool enable_drift_logging = false;
 
     int32_t tick = 0;
@@ -58,8 +57,7 @@ private:
     double accumulator = 0.0;
     double target_tick_estimate = 0.0;
     double ping_timer = 0.0;
-    bool display_offset_insufficient_latched = false;
-    uint64_t step_stamp_usec = 0;
+    int64_t step_stamp_usec = NEVER_STAMPED;
 
     int32_t simulation_gates = 0;
     int32_t simulation_credit = 0;
@@ -81,7 +79,6 @@ private:
     void emit_tick();
     void calibrate(double target);
     void nudge_toward_estimate();
-    void notify_display_offset();
     void resolve_simulation_gate(int ticks_this_frame);
 
 public:
@@ -119,8 +116,6 @@ public:
     double get_tick_factor_override() const;
     void set_manual_tick(bool value);
     bool get_manual_tick() const;
-    void set_node_pumped(bool value);
-    bool get_node_pumped() const;
     void set_enable_drift_logging(bool value);
     bool get_enable_drift_logging() const;
 
@@ -150,7 +145,6 @@ public:
     void end_tick_loop();
 
     void count_poll();
-    void poll_step();
     godot::Dictionary cadence() const;
 
     double seconds_since_step() const;

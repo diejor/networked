@@ -21,6 +21,14 @@ enum class Level {
 
 void configure();
 bool enabled(Level level);
+bool is_fault(Level level);
+void set_level(Level level);
+Level level();
+Level level_named(const godot::String &name);
+godot::String format_args(
+    const godot::String &message,
+    const godot::Array &args
+);
 
 inline godot::String format(const godot::String &message) {
     return message;
@@ -40,10 +48,10 @@ godot::String format(const char *pattern, Args &&...args) {
     return godot::vformat(godot::String(pattern), std::forward<Args>(args)...);
 }
 
-void write(Level level, const char *system, const godot::String &message);
+void write(Level level, SubsystemName system, const godot::String &message);
 void write_at(
     Level level,
-    const char *system,
+    SubsystemName system,
     const godot::String &message,
     const char *function,
     const char *file,

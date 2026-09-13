@@ -9,19 +9,19 @@
 namespace TestNetwSceneMembershipLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw::NetwSceneCore;
 using netw_test::CallLog;
 
 struct Placed {
-    Ref<RefCounted> wrapper;
-    Ref<netw::NetwEntityRecord> record;
+    Ref<netw::NetwEntity> wrapper;
+    netw::NetwEntityRecord *record = nullptr;
     RID handle;
     Node *owner = nullptr;
 };
 
 Placed place(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     bool p_declares_scene
 ) {
@@ -30,7 +30,7 @@ Placed place(
     p_parent->add_child(made.owner);
     made.wrapper.instantiate();
     made.handle = p_core->get_liveness_core()->entity_create();
-    made.record.instantiate();
+    made.record = made.wrapper->get_record();
     made.record->adopt_handle(made.handle);
     made.record->set_declares_scene(p_declares_scene);
     const int64_t route = p_core->get_liveness_core()->reserve_route();
@@ -41,7 +41,7 @@ Placed place(
         made.record,
         made.owner
     ));
-    made.owner->set_meta(NetwMultiplayerCore::wrapper_meta(), made.wrapper);
+    made.owner->set_meta(NetwMultiplayer::wrapper_meta(), made.wrapper);
     return made;
 }
 
@@ -51,7 +51,7 @@ TEST_CASE(
     "peer dispatches a second time as a player, so an observer watching only "
     "players hears the crossing without filtering the entity feed"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Placed arena = place(core, root, true);
@@ -70,11 +70,10 @@ TEST_CASE(
         heard.callable("player")
     );
 
-    REQUIRE(core->entity_scene_of(prop.handle) == arena.handle);
+    REQUIRE(core->scene_of(prop.handle) == arena.handle);
 
     CHECK(
-        core->scene_report_entity_edge(prop.handle, true, false)
-        == arena.handle
+        core->scene_report_entity_edge(prop.handle, true, false) == arena.handle
     );
 
     NETW_CHECK_EQ(heard.count("entity"), 1);
@@ -83,8 +82,7 @@ TEST_CASE(
     CHECK(RID(heard.args("entity")[1]) == prop.handle);
 
     CHECK(
-        core->scene_report_entity_edge(pawn.handle, false, true)
-        == arena.handle
+        core->scene_report_entity_edge(pawn.handle, false, true) == arena.handle
     );
 
     NETW_CHECK_EQ(heard.count("entity"), 2);
@@ -102,7 +100,7 @@ TEST_CASE(
     "an invalid RID, so a scene standing in the tree is not an arrival in "
     "itself"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Placed arena = place(core, root, true);
@@ -120,8 +118,8 @@ TEST_CASE(
         heard.callable("player")
     );
 
-    REQUIRE(core->entity_scene_of(arena.handle) == arena.handle);
-    REQUIRE_FALSE(core->entity_scene_of(loose.handle).is_valid());
+    REQUIRE(core->scene_of(arena.handle) == arena.handle);
+    REQUIRE_FALSE(core->scene_of(loose.handle).is_valid());
 
     CHECK_FALSE(
         core->scene_report_entity_edge(arena.handle, true, false).is_valid()
@@ -146,7 +144,7 @@ TEST_CASE(
     "scenes reports its leave against the scene it is still under and its "
     "arrival against the one it reached"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Placed arena = place(core, root, true);
@@ -166,8 +164,7 @@ TEST_CASE(
     );
 
     CHECK(
-        core->scene_report_entity_edge(pawn.handle, false, true)
-        == arena.handle
+        core->scene_report_entity_edge(pawn.handle, false, true) == arena.handle
     );
 
     NETW_CHECK_EQ(heard.count("arena"), 1);
@@ -178,8 +175,7 @@ TEST_CASE(
     annex.owner->add_child(pawn.owner);
 
     CHECK(
-        core->scene_report_entity_edge(pawn.handle, true, true)
-        == annex.handle
+        core->scene_report_entity_edge(pawn.handle, true, true) == annex.handle
     );
 
     NETW_CHECK_EQ(heard.count("arena"), 1);

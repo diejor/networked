@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cakl64wxtsgth"]
 
-[ext_resource type="Script" uid="uid://dpokufhqiu4rj" path="res://addons/networked/nodes/tp/area_tp.gd" id="1_lteo1"]
+[ext_resource type="Script" uid="uid://dpokufhqiu4rj" path="res://examples/quick_start/area_tp.gd" id="1_lteo1"]
 [ext_resource type="Texture2D" uid="uid://c5btj6x06q0lr" path="res://examples/bomber/game/icon.webp" id="2_wetdl"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_mc20k"]

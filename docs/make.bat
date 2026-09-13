@@ -1,12 +1,4 @@
 @ECHO OFF
-REM Minimal Sphinx build helper for Windows.
-REM
-REM Usage:
-REM     make.bat html      Build the HTML docs into _build\html
-REM     make.bat api       Regenerate classes\ from addon GDScript via godot --doctool
-REM     make.bat live      Live-reload server on http://127.0.0.1:8000
-REM     make.bat linkcheck Verify external links
-REM     make.bat clean     Remove the _build directory
 
 pushd %~dp0
 

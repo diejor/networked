@@ -7,7 +7,7 @@
 ## or none, and this runs under exactly one.
 ##
 ## [method NetwTestSessionHook.startup] installs it, the way
-## [method NetwTestSuite.make_harness] installs the timeout reporter. A caller
+## [method NetwTestSuite.make_game_harness] installs the timeout reporter. A caller
 ## outside GdUnit4 leaves it unassigned and erases nothing, which is correct: a
 ## framework that records no errors has none to erase.
 extends RefCounted

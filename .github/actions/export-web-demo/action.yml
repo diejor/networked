@@ -1,0 +1,143 @@
+name: Export web demo
+description: >
+  Take one example from a checkout to a validated web export: relocate the
+  container's export templates, deploy the native cells the page will load,
+  swap the main scene, export, and boot the result in a browser. Every web
+  deployment runs this and differs only in what it does with the directory.
+
+inputs:
+  scene:
+    description: uid:// of the main scene to export.
+    required: true
+  out:
+    description: Directory the export lands in.
+    required: true
+  preset:
+    description: Export preset in export_presets.cfg.
+    required: false
+    default: Web
+  cells:
+    description: >
+      Cell ids to deploy into addons/networked/bin. Empty skips the fetch,
+      for a caller that already put the libraries there.
+    required: false
+    default: linux:x86_64:template_debug,web:wasm32:template_release
+  run-id:
+    description: Workflow run that uploaded those cells.
+    required: false
+    default: ""
+  expect-sha:
+    description: Revision the cells must have been built at.
+    required: false
+    default: ""
+  github-token:
+    description: Token for the cross-run artifact fetch.
+    required: false
+    default: ${{ github.token }}
+  turn-auth-token:
+    description: >
+      Credential for networked/webrtc/turn_credentials_headers. Empty leaves
+      project.godot alone. The setting has no reader today, because 5e8b58bc
+      dropped the fetch when the WebRTC stack crossed to the extension.
+    required: false
+    default: ""
+  smoke:
+    description: Boot the export in a browser after exporting.
+    required: false
+    default: "true"
+  record:
+    description: Write the export record to this path. Empty writes none.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Trust The Workspace
+      shell: bash
+      run: |
+        set -eu
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        git -C "$GITHUB_WORKSPACE" rev-parse HEAD
+
+    - name: Install What The Container Does Not Carry
+      shell: bash
+      run: |
+        set -eu
+        want=""
+        command -v python3 >/dev/null 2>&1 || want="$want python3"
+        ldconfig -p | grep -q libfontconfig.so.1 || want="$want libfontconfig1"
+        if [ -z "$want" ]; then
+          echo "container carries python3 and libfontconfig already"
+          exit 0
+        fi
+        sudo=""
+        [ "$(id -u)" -eq 0 ] || sudo="sudo"
+        # shellcheck disable=SC2086
+        $sudo apt-get update
+        # shellcheck disable=SC2086
+        $sudo apt-get install -y --no-install-recommends $want
+        python3 --version
+
+    - name: Setup (relocate export templates + editor config)
+      shell: bash
+      run: |
+        set -eu
+        mkdir -v -p ~/.local/share/godot/export_templates/
+        mkdir -v -p ~/.config/
+        if [ -d /root/.config/godot ] && [ ! -d "$HOME/.config/godot" ]; then
+          mv /root/.config/godot ~/.config/godot
+        fi
+        version="$(python3 ci/engine.py source templates_dir)"
+        staged="/root/.local/share/godot/export_templates/$version"
+        wanted="$HOME/.local/share/godot/export_templates/$version"
+        if [ -d "$staged" ] && [ "$staged" != "$wanted" ]; then
+          mv "$staged" "$wanted"
+        fi
+        ls "$wanted" | head -5
+
+    - uses: ./.github/actions/fetch-native-artifact
+      if: inputs.cells != ''
+      with:
+        cells: ${{ inputs.cells }}
+        expect-sha: ${{ inputs.expect-sha }}
+        run-id: ${{ inputs.run-id }}
+        github-token: ${{ inputs.github-token }}
+
+    - name: Prove A Library Is Deployed
+      shell: bash
+      run: |
+        set -eu
+        if ! ls addons/networked/bin/*.wasm >/dev/null 2>&1; then
+          echo "::error::no web library under addons/networked/bin, so the page would load nothing"
+          exit 1
+        fi
+        ls -l addons/networked/bin
+
+    - name: Inject TURN credentials into project.godot
+      if: inputs.turn-auth-token != ''
+      shell: bash
+      env:
+        T_TOKEN: ${{ inputs.turn-auth-token }}
+      run: python3 ci/export.py turn --token "$T_TOKEN"
+
+    - name: Export web
+      shell: bash
+      env:
+        EXPORT_PRESET: ${{ inputs.preset }}
+        EXPORT_SCENE: ${{ inputs.scene }}
+        EXPORT_OUT: ${{ inputs.out }}
+        EXPORT_RECORD: ${{ inputs.record }}
+      run: |
+        set -eu
+        args="--preset $EXPORT_PRESET --scene $EXPORT_SCENE --out $EXPORT_OUT"
+        if [ -n "$EXPORT_RECORD" ]; then
+          args="$args --record $EXPORT_RECORD"
+        fi
+        python3 ci/export.py --godot godot web $args
+
+    - name: Boot the export in a browser
+      if: inputs.smoke == 'true'
+      continue-on-error: true
+      shell: bash
+      run: python3 ci/export.py smoke --dir ${{ inputs.out }}

@@ -1,0 +1,102 @@
+[gd_scene format=3 uid="uid://b2sxgkfktbrow"]
+
+[ext_resource type="Script" uid="uid://c0q53yk8f0euy" path="res://addons/networked/gdscript/connect/ui/row.gd" id="1_row"]
+[ext_resource type="PackedScene" path="res://addons/networked/gdscript/connect/ui/status_dot.tscn" id="2_dot"]
+[ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/gdscript/connect/ui/connect_theme.tres" id="3_theme"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_row_panel"]
+
+[node name="ServerRow" type="PanelContainer" unique_id=681066525]
+offset_right = 366.0
+offset_bottom = 72.0
+theme = ExtResource("3_theme")
+theme_override_styles/panel = SubResource("StyleBoxEmpty_row_panel")
+script = ExtResource("1_row")
+
+[node name="ConnectButton" type="Button" parent="." unique_id=1769603675]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=586897439]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="HBox" type="HBoxContainer" parent="MarginContainer" unique_id=709587497]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 16
+
+[node name="StatusDot" parent="MarginContainer/HBox" unique_id=1777021276 instance=ExtResource("2_dot")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="ServerContainer" type="VBoxContainer" parent="MarginContainer/HBox" unique_id=560726943]
+layout_mode = 2
+mouse_filter = 2
+alignment = 1
+
+[node name="ServerContainer" type="HBoxContainer" parent="MarginContainer/HBox/ServerContainer" unique_id=1542932577]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="NameLabel" type="Label" parent="MarginContainer/HBox/ServerContainer/ServerContainer" unique_id=34935682]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 2
+size_flags_vertical = 1
+text = "name"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BadgePanel" type="PanelContainer" parent="MarginContainer/HBox/ServerContainer/ServerContainer" unique_id=1390300438]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme_type_variation = &"BadgePanelContainer"
+
+[node name="BadgeLabel" type="Label" parent="MarginContainer/HBox/ServerContainer/ServerContainer/BadgePanel" unique_id=1400222125]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "ENet"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AddressLabel" type="Label" parent="MarginContainer/HBox/ServerContainer" unique_id=1240319999]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SmallLabel"
+text = "localhost"
+vertical_alignment = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/HBox" unique_id=769585261]
+layout_mode = 2
+size_flags_horizontal = 10
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 32
+
+[node name="PlayersLabel" type="Label" parent="MarginContainer/HBox/HBoxContainer" unique_id=701090156]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "-"
+horizontal_alignment = 2
+
+[node name="PingLabel" type="Label" parent="MarginContainer/HBox/HBoxContainer" unique_id=67459324]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "-"
+horizontal_alignment = 2

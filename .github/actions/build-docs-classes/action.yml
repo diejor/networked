@@ -1,15 +1,14 @@
 name: Build docs classes
 description: >
-  Set up Python, verify make_rst.py is in sync with vendor + patches, fetch the
-  pinned Godot headless binary, run doctool against the addon, filter private
-  members, and emit RST under docs/classes/. The single shared prelude used by
-  docs.yml and linkcheck.yml.
+  Build the native library, install the engine named in the catalog, and run
+  docs/tools/build_reference.py. A thin adapter over the same script the
+  Makefile and Read the Docs call.
 
 inputs:
-  godot-version:
-    description: Godot release tag (matches a GitHub release asset).
+  engine:
+    description: Entry in ci/engines.json to install.
     required: false
-    default: 4.6.2-stable
+    default: normal
   python-version:
     description: Python version for Sphinx.
     required: false
@@ -29,54 +28,24 @@ runs:
       working-directory: docs
       run: pip install -r requirements.txt
 
-    - name: Verify make_rst.py is in sync with vendor + patches
-      shell: bash
-      working-directory: docs
-      run: python tools/build_make_rst.py --check
-
-    # The addon's own classes live in the native library, and the GDScript that
-    # types against them will not parse without it, so doctool would emit an
-    # empty class reference. addons/networked/bin is git-ignored, so the library
-    # has to be built here rather than checked out. It builds on the same
-    # interpreter Sphinx runs on, so this cannot switch python out from under
-    # the requirements installed above.
     - uses: ./.github/actions/build-native
       with:
+        cell: linux:x86_64:template_debug
+        platform: linux
+        suffix: .linux.template_debug.x86_64
         python-version: ${{ inputs.python-version }}
 
     - name: Cache Godot binary
-      id: cache-godot
       uses: actions/cache@v4
       with:
-        path: godot_linux.x86_64
-        key: godot-${{ inputs.godot-version }}-linux
+        path: .engines
+        key: engine-${{ inputs.engine }}-${{ hashFiles('ci/engines.json') }}
 
-    - name: Download Godot
-      if: steps.cache-godot.outputs.cache-hit != 'true'
+    - name: Install The Engine
+      id: engine
       shell: bash
-      run: |
-        wget -q "https://github.com/godotengine/godot/releases/download/${{ inputs.godot-version }}/Godot_v${{ inputs.godot-version }}_linux.x86_64.zip"
-        unzip "Godot_v${{ inputs.godot-version }}_linux.x86_64.zip"
-        mv "Godot_v${{ inputs.godot-version }}_linux.x86_64" godot_linux.x86_64
-        chmod +x godot_linux.x86_64
+      run: python3 ci/engine.py --engine ${{ inputs.engine }} install
 
-    - name: Generate XML via godot --doctool
+    - name: Generate The Class Reference
       shell: bash
-      working-directory: docs
-      run: |
-        mkdir -p api
-        # 1. Import pass: resolves UIDs in project.godot so doctool doesn't
-        #    abort on "Main scene path could not be resolved".
-        ../godot_linux.x86_64 --headless --path .. --editor --quit || true
-        # 2. Doctool pass: '.' for --gdscript-docs avoids path-resolution crashes.
-        ../godot_linux.x86_64 --doctool "$(pwd)/api" --gdscript-docs . --headless --path .. --quit
-
-    - name: Filter private members
-      shell: bash
-      working-directory: docs
-      run: python tools/filter_private.py api api_filtered
-
-    - name: Generate RST
-      shell: bash
-      working-directory: docs
-      run: python tools/make_rst.py api_filtered --output classes
+      run: python3 docs/tools/build_reference.py --godot "${{ steps.engine.outputs.binary }}"

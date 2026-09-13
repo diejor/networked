@@ -1,12 +1,3 @@
-// The entity option records' laws.
-//
-// A record with no logic still has a contract, and it is entirely in the
-// defaults and in what a field's absence means. Both are things no caller ever
-// writes down, so both are what a port silently changes: a despawn record that
-// came up with `flush_save` false would skip every save in the project with
-// nothing to read, and a reparent target initialized to a zero vector would
-// teleport every reparent to the world origin.
-
 #include "support/netw_test.h"
 
 #include "netw/api/entity_options.hpp"
@@ -17,7 +8,6 @@ namespace TestNetwEntityOptions {
 
 using godot::Ref;
 using godot::StringName;
-using godot::Variant;
 using netw::NetwControlRequest;
 using netw::NetwDespawnOpts;
 using netw::NetwReparentOpts;
@@ -52,20 +42,14 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] O3 an unset reparent target is nothing, not "
-    "the origin"
+    "[Networked][Entity][Hosted] O3 a reparent option carries its reason"
 ) {
     Ref<NetwReparentOpts> opts;
     opts.instantiate();
 
-    NETW_CHECK_EQ(opts->target_global_position.get_type(), Variant::NIL);
-    CHECK_FALSE(opts->preserve_history);
     CHECK(opts->reason == StringName());
-
-    // Asking for the origin is a request the record can carry, and it has to
-    // read differently from having asked for nothing.
-    opts->set_target_global_position(godot::Vector3());
-    NETW_CHECK_EQ(opts->target_global_position.get_type(), Variant::VECTOR3);
+    opts->set_reason(StringName("boarded"));
+    CHECK(opts->reason == StringName("boarded"));
 }
 
 TEST_CASE(
@@ -80,9 +64,6 @@ TEST_CASE(
     request->deny();
     CHECK(request->denied);
 
-    // The listeners share one record, so a later one writing the field must
-    // not undo an earlier one's refusal. Order would otherwise decide who is
-    // allowed to steer.
     request->set_denied(false);
     CHECK(request->denied);
     NETW_CHECK_EQ(request->requester, 42);

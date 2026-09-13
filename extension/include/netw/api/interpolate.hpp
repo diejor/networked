@@ -34,25 +34,47 @@ protected:
     static void _bind_methods();
 
 public:
-    void set_mode(Mode value) { mode = value; }
-    Mode get_mode() const { return mode; }
+    void set_mode(Mode value) {
+        mode = value;
+    }
+    Mode get_mode() const {
+        return mode;
+    }
 
-    void set_smoothing(double seconds) { smoothing = seconds; }
-    double get_smoothing() const { return smoothing; }
+    void set_smoothing(double seconds) {
+        smoothing = seconds;
+    }
+    double get_smoothing() const {
+        return smoothing;
+    }
 
-    void set_snap_distance(double distance) { snap_distance = distance; }
-    double get_snap_distance() const { return snap_distance; }
+    void set_snap_distance(double distance) {
+        snap_distance = distance;
+    }
+    double get_snap_distance() const {
+        return snap_distance;
+    }
 
-    void set_target(const godot::StringName &property) { target = property; }
-    godot::StringName get_target() const { return target; }
+    void set_target(const godot::StringName &property) {
+        target = property;
+    }
+    godot::StringName get_target() const {
+        return target;
+    }
 
-    void set_forecast_tail(Tail value) { forecast_tail = value; }
-    Tail get_forecast_tail() const { return forecast_tail; }
+    void set_forecast_tail(Tail value) {
+        forecast_tail = value;
+    }
+    Tail get_forecast_tail() const {
+        return forecast_tail;
+    }
 
     void set_project_channel(const godot::StringName &channel) {
         project_channel = channel;
     }
-    godot::StringName get_project_channel() const { return project_channel; }
+    godot::StringName get_project_channel() const {
+        return project_channel;
+    }
 
     double smoothing_weight(double p_frame_delta) const;
 

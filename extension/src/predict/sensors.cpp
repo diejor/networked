@@ -7,9 +7,7 @@
 
 using namespace godot;
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 namespace {
 
@@ -28,8 +26,7 @@ struct ContactOrder {
 };
 
 bool valid_class(int p_class) {
-    return p_class == SENSOR_WITNESS_SUPPORT
-        || p_class == SENSOR_WITNESS_STATIC
+    return p_class == SENSOR_WITNESS_SUPPORT || p_class == SENSOR_WITNESS_STATIC
         || p_class == SENSOR_WITNESS_DYNAMIC_ENTITY;
 }
 
@@ -80,8 +77,7 @@ WitnessSummary summarize_witness(
     Dictionary facts;
     facts[StringName("contacts")] = compared;
 
-    out.fingerprint
-        = int32_t(NetwPredictionCore::fact_fingerprint(facts));
+    out.fingerprint = int32_t(prediction_core::fact_fingerprint(facts));
     out.contact_count = int(p_contacts.size());
     out.valid = true;
     NETW_TRACE(
@@ -99,17 +95,14 @@ int32_t environment_digest(int64_t p_epoch, const Dictionary &p_samples) {
     if (p_epoch == -1 && p_samples.is_empty()) {
         return 0;
     }
-    return int32_t(NetwPredictionCore::environment_digest(p_epoch, p_samples));
+    return int32_t(prediction_core::environment_digest(p_epoch, p_samples));
 }
 
-int32_t topology_fingerprint(
-    const Dictionary &p_facts,
-    int p_quantum
-) {
+int32_t topology_fingerprint(const Dictionary &p_facts, int p_quantum) {
     NETW_ZONE_NC("NetwPredict topology", colors::PREDICTION);
     Dictionary facts = p_facts.duplicate();
     facts[StringName("quantum")] = p_quantum;
-    return int32_t(NetwPredictionCore::fact_fingerprint(facts));
+    return int32_t(prediction_core::fact_fingerprint(facts));
 }
 
 bool static_geometry(Object *p_collider) {
@@ -122,8 +115,7 @@ bool static_geometry(Object *p_collider) {
     }
     return p_collider->is_class("StaticBody2D")
         || p_collider->is_class("StaticBody3D")
-        || p_collider->is_class("GridMap")
-        || p_collider->is_class("CSGShape3D")
+        || p_collider->is_class("GridMap") || p_collider->is_class("CSGShape3D")
         || p_collider->is_class("TileMap")
         || p_collider->is_class("TileMapLayer");
 }
@@ -136,6 +128,4 @@ int witness_class(Object *p_collider, bool p_declared_support) {
                                        : SENSOR_WITNESS_DYNAMIC_ENTITY;
 }
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

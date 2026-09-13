@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Filter Godot doctool XML to only include classes from addons/networked.
-
-Two-pass approach:
-1. Scan addons/networked/ source files to build an allowlist of:
-   - class_name declarations (e.g. "TubeBackend", "Netw")
-   - autoload names from project.godot (e.g. "NetworkedDebugger")
-   - auto-named scripts without class_name (e.g. "addons/networked/plugin.gd")
-   - inner classes (e.g. "TubeBackend.TubeWrapper")
-2. Copy only matching XML files from api/ to api_filtered/, filtering
-   private _-prefixed members along the way.
-"""
+"""Filter Godot doctool XML to only include classes from addons/networked."""
 from __future__ import annotations
 
 import argparse
@@ -45,18 +34,13 @@ def _find_project_root(addon_dir: str) -> Path:
 
 
 def scan_addon_for_class_names(addon_dir: str) -> tuple[set[str], set[str]]:
-    """
-    Walk addon_dir and return:
-      - allowed_names: set of class_name values + autoload names
-      - allowed_auto: set of auto-named file paths (e.g. {"addons/networked/plugin.gd", ...})
-    """
+    """Walk addon_dir and return the allowed class names and auto-named paths."""
     allowed_names: set[str] = set()
     allowed_auto: set[str] = set()
 
     project_root = _find_project_root(addon_dir)
     addon_root = Path(addon_dir).resolve()
 
-    # Scan project.godot for autoload names
     project_file = project_root / "project.godot"
     if project_file.is_file():
         try:
@@ -76,7 +60,6 @@ def scan_addon_for_class_names(addon_dir: str) -> tuple[set[str], set[str]]:
         except Exception:
             pass
 
-    # Scan all .gd files under addon_dir for class_name declarations
     for root, _dirs, files in os.walk(addon_root):
         for filename in files:
             if not filename.endswith(".gd"):
@@ -106,18 +89,13 @@ def _is_allowed(root: ET.Element, allowed_names: set[str], allowed_auto: set[str
     """Return True if this XML element matches the allowlist."""
     name = root.get("name", "")
 
-    # Auto-named scripts (no class_name) use a quoted file path
     if name.startswith('"'):
         quoted_path = name.strip('"')
         return quoted_path in allowed_auto
 
-    # Private inner classes (any nested segment starting with '_', e.g.
-    # "MultiplayerInterpolator._PredictedStrategy") are implementation detail
-    # and must not appear in the reference at all.
     if any(segment.startswith("_") for segment in name.split(".")[1:]):
         return False
 
-    # Explicit class_name or inner class (e.g. "TubeBackend.TubeWrapper")
     if name in allowed_names:
         return True
 
@@ -137,13 +115,7 @@ def _method_has_doc(elem: ET.Element) -> bool:
 
 
 def filter_private_elements(root: ET.Element) -> None:
-    """Remove private _-prefixed members.
-
-    Methods are the exception: a _-prefixed method that carries a ## doc
-    comment (a non-empty <description>) is a documented virtual override point
-    and is kept. Every other member kind, and any undocumented _-method, is
-    removed.
-    """
+    """Remove private _-prefixed members, except documented _-methods."""
     parent_tags = [
         "members", "constructors", "methods", "operators",
         "signals", "constants", "annotations",
@@ -187,7 +159,6 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.addon_dir:
-        # input_dir is typically docs/api; project root is two levels up
         project_root = Path(args.input_dir).resolve().parent.parent
         args.addon_dir = [str(project_root / "addons" / name) for name in DEFAULT_ADDONS]
 
@@ -199,8 +170,6 @@ def main() -> None:
         allowed_names |= names
         allowed_auto |= auto
 
-    # Native classes have no .gd to declare a class_name; every class with
-    # authored XML in extension/doc_classes is published by definition.
     project_root = Path(args.addon_dir[0]).resolve().parent.parent
     for xml_path in (project_root / "extension" / "doc_classes").glob("*.xml"):
         allowed_names.add(xml_path.stem)

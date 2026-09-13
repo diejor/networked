@@ -1,27 +1,12 @@
 #pragma once
 
-#include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 #include "netw/predict/episode.hpp"
 
 namespace netw {
 
-class NetwPredictEpisodeReport : public godot::RefCounted {
-    GDCLASS(NetwPredictEpisodeReport, godot::RefCounted)
-
-    friend class NetwPredictionEngine;
-
+struct EpisodeReport {
     predict::Episode episode;
-
-protected:
-    static void _bind_methods();
-
-public:
-    enum State {
-        EPISODE_OPEN = 0,
-        EPISODE_CLOSED = 1,
-        EPISODE_FALLBACK = 2,
-    };
 
     godot::Dictionary to_dictionary(
         const godot::Dictionary &p_witness_details
@@ -124,5 +109,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::NetwPredictEpisodeReport::State);

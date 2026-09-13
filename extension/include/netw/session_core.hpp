@@ -7,7 +7,7 @@
 
 namespace netw {
 
-class NetwMultiplayerCore;
+class NetwMultiplayer;
 
 class SessionCore {
 public:
@@ -29,8 +29,7 @@ private:
     State state = STATE_OFFLINE;
     Role role = ROLE_NONE;
     Role desired_role = ROLE_LISTEN_SERVER;
-    int32_t advertised_max_players = 0;
-    NetwMultiplayerCore *host = nullptr;
+    NetwMultiplayer *host = nullptr;
 
     RateWindow join_window;
 
@@ -40,7 +39,7 @@ private:
 public:
     static bool edge_is_legal(State from, State to);
 
-    void announce_to(NetwMultiplayerCore *p_host);
+    void announce_to(NetwMultiplayer *p_host);
 
     void set_state(State value);
     State get_state() const;
@@ -48,8 +47,6 @@ public:
     Role get_role() const;
     void set_desired_role(Role value);
     Role get_desired_role() const;
-    void set_advertised_max_players(int value);
-    int get_advertised_max_players() const;
 
     void transition(State next);
 
@@ -59,7 +56,13 @@ public:
 
     bool is_server_role() const;
 
+    bool is_sessionless() const;
+
+    bool holds_server_authority() const;
+
     bool join_flooded(int sender, int64_t now_msec);
+
+    static int64_t compute_wire_identity();
 
     static int64_t compute_app_tag(const godot::StringName &value);
 

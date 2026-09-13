@@ -5,9 +5,7 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 struct CommandCell {
     int64_t label = -1;
@@ -53,6 +51,4 @@ public:
     void clear();
 };
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

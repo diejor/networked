@@ -8,9 +8,9 @@
 		[method corrected] is not a threshold over [method divergence]. A transition whose antecedents were all declared equal claimed reproducibility, so an exact predicate decides it and the magnitude is only ever reported. One whose antecedents were not is decided by tolerance, since the peers never claimed the exactness a fingerprint would test for.
 		[codeblock]
 		var judged := NetwPredictJudgement.of(INF, true)
-		judged.divergence()   magnitude of the disagreement, INF when unjudged
-		judged.corrected()    true when a recovery must be staged
 		[/codeblock]
+		- [method divergence] magnitude of the disagreement, [code]INF[/code] when unjudged
+		- [method corrected] true when a recovery must be staged
 	</description>
 	<tutorials>
 	</tutorials>

@@ -50,10 +50,11 @@ func bind(_tree: MultiplayerTree) -> void:
 func connect_session(
 		instance_id: String,
 		tree: MultiplayerTree,
-		payload: JoinPayload,
+		username: StringName,
+		join_args: Array,
 ) -> Error:
 	if instance_id.is_empty():
-		Netw.dbg.warn("NakamaDiscordRendezvous: empty instance_id.")
+		push_warning("NakamaDiscordRendezvous: empty instance_id.")
 		return ERR_INVALID_PARAMETER
 	var wrapper := await _ready_wrapper(tree)
 	if wrapper == null:
@@ -61,25 +62,13 @@ func connect_session(
 
 	var mid := await _freshest_match(wrapper, instance_id)
 	if not mid.is_empty():
-		Netw.dbg.info(
-			"NakamaDiscordRendezvous: joining match %s for instance %s.",
-			[mid, instance_id],
-		)
-		var join_err := NetwConnector.error_of(
-			await NetwConnector.of(tree.api).join(_target_for(mid), payload),
-		)
+		var join_err := await _join_match(tree, mid, username, join_args)
 		if join_err == OK:
 			return OK
-		Netw.dbg.info(
-			"NakamaDiscordRendezvous: recorded join failed (%s). Hosting.",
-			[error_string(join_err)],
-		)
 
-	Netw.dbg.info(
-		"NakamaDiscordRendezvous: no live record for instance %s. Hosting.",
-		[instance_id],
+	return await _host_and_commit(
+		instance_id, tree, username, join_args, wrapper
 	)
-	return await _host_and_commit(instance_id, tree, payload, wrapper)
 
 
 # Resolves the Nakama proxy base for Discord's iframe proxy.
@@ -89,40 +78,60 @@ func _resolve_proxy_base(host_node: Node, config_host: String) -> String:
 		return "%s.discordsays.com/.proxy/%s" % [id, proxy_prefix]
 	if host_node == null:
 		return ""
-	var mt := MultiplayerTree.resolve(host_node)
-	if mt == null:
+	# The ancestor walk rather than Netw.of, because a tree that was never
+	# mounted installs no api on any SceneTree path and still owns one.
+	var api := _owning_session(host_node)
+	if api == null:
 		return ""
-	var svc := mt.get_service(DiscordActivityService) as DiscordActivityService
+	var svc := api.service_get(DiscordActivityService) as DiscordActivityService
 	if svc == null or svc.client_id.is_empty():
 		return ""
 	return "%s.discordsays.com/.proxy/%s" % [svc.client_id, proxy_prefix]
+
+
+# The session owning [param node], found through the branch it is installed on
+# when there is one, and up the ancestor chain when the tree holding it has not
+# been mounted.
+static func _owning_session(node: Node) -> NetwMultiplayer:
+	var api := Netw.of(node)
+	if api != null:
+		return api
+	var walk := node
+	while walk != null:
+		var tree := walk as MultiplayerTree
+		if tree != null:
+			return tree.api
+		walk = walk.get_parent()
+	return null
 
 
 # Hosts a private match, publishes the record, and joins the winner on a race.
 func _host_and_commit(
 		instance_id: String,
 		tree: MultiplayerTree,
-		payload: JoinPayload,
+		username: StringName,
+		join_args: Array,
 		wrapper: NakamaWrapper,
 ) -> Error:
-	tree.transport = NetwNakamaParams.new()
-	var config := NetwHostConfig.new()
-	config.server_name = "Discord Activity"
-	config.visibility = LobbyDirectory.Visibility.PRIVATE
-	var host_err := await tree.host(payload, config)
+	tree.peer_class = &"NakamaRelayPeer"
+	var info := NetwServerInfo.new()
+	info.motd = "Discord Activity"
+	info.visibility = NetwServerInfo.VISIBILITY_PRIVATE
+	Netw.session(tree).set_server_info(info)
+	var host_err := await bring_up(
+		tree,
+		NetwMultiplayer.TRANSPORT_MODE_HOST,
+		"",
+		username,
+		join_args,
+	)
 	if host_err != OK:
 		return host_err
 	var winner := await _commit_host(instance_id, tree, wrapper)
 	if winner.is_empty():
 		return OK
-	Netw.dbg.info(
-		"NakamaDiscordRendezvous: lost host race for instance %s. Joining %s.",
-		[instance_id, winner],
-	)
-	await tree.api.session.leave()
-	return NetwConnector.error_of(
-		await NetwConnector.of(tree.api).join(_target_for(winner), payload),
-	)
+	await Netw.session(tree).leave().wait()
+	return await _join_match(tree, winner, username, join_args)
 
 
 # Publishes this host's match id and returns a fresher winner if one exists.
@@ -131,10 +140,10 @@ func _commit_host(
 		tree: MultiplayerTree,
 		wrapper: NakamaWrapper,
 ) -> String:
-	var dir := tree.get_service(NakamaLobbyDirectory) as NakamaLobbyDirectory
+	var dir := Netw.service(tree, NakamaLobbyDirectory) as NakamaLobbyDirectory
 	if dir == null:
 		return ""
-	var my_match := dir.get_join_address()
+	var my_match := dir._join_address()
 	if my_match.is_empty():
 		return ""
 
@@ -143,10 +152,11 @@ func _commit_host(
 		instance_id,
 		{ "match_id": my_match, "ts": Time.get_unix_time_from_system() },
 	)
-	Netw.dbg.debug(
-		"NakamaDiscordRendezvous: commit wrote instance=%s match=%s ok=%s",
-		[instance_id, my_match, wrote],
-	)
+	if not wrote:
+		push_warning(
+			"NakamaDiscordRendezvous: instance %s did not record match %s."
+			% [instance_id, my_match]
+		)
 	var winner := await _freshest_match(wrapper, instance_id)
 	if winner.is_empty() or winner == my_match:
 		return ""
@@ -156,9 +166,9 @@ func _commit_host(
 # Authenticates the shared Nakama session and returns a wrapper bound to it.
 func _ready_wrapper(tree: MultiplayerTree) -> NakamaWrapper:
 	if not NakamaWrapper.is_addon_present():
-		Netw.dbg.warn("NakamaDiscordRendezvous: Nakama addon not present.")
+		push_warning("NakamaDiscordRendezvous: Nakama addon not present.")
 		return null
-	var session := tree.get_nakama_session()
+	var session := NakamaSessionService.of(tree)
 	if session == null:
 		return null
 	session.configure(
@@ -173,11 +183,8 @@ func _ready_wrapper(tree: MultiplayerTree) -> NakamaWrapper:
 	)
 	var auth := await session.connect_async()
 	if not auth.ok:
-		Netw.dbg.error(
-			"NakamaDiscordRendezvous: session auth failed: %s",
-			[
-				auth.error,
-			],
+		push_error(
+			"NakamaDiscordRendezvous: session auth failed: %s" % [auth.error]
 		)
 		return null
 	var wrapper := NakamaWrapper.new()
@@ -214,10 +221,17 @@ func _normalized_device_id() -> String:
 	return device_id.left(128)
 
 
-func _target_for(match_id: String) -> NetwConnectTarget:
-	var target := NetwConnectTarget.new()
-	target.scheme = &"nakama"
-	target.display_name = "Discord Activity"
-	target.address = match_id
-	target.metadata = { "instance_match_id": match_id }
-	return target
+func _join_match(
+		tree: MultiplayerTree,
+		match_id: String,
+		username: StringName,
+		join_args: Array,
+) -> Error:
+	tree.peer_class = &"NakamaRelayPeer"
+	return await bring_up(
+		tree,
+		NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+		match_id,
+		username,
+		join_args,
+	)

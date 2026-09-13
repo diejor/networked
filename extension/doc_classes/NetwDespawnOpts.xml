@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDespawnOpts" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Options bag for [method NetwEntity.despawn].
+		What one [method NetwEntity.despawn] call asks for, beyond the fact that the entity is going.
 	</brief_description>
 	<description>
 		Carries the knobs that control teardown behavior. It is a record rather than an argument list so a new option can be added without breaking call sites, and its defaults are what make a despawn safe when a caller passes nothing.

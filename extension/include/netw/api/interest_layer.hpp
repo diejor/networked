@@ -7,29 +7,23 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/interest_engine.hpp"
+#include "netw/interest/engine.hpp"
 #include "netw/object_port.hpp"
 
 namespace netw {
 
-class NetwMultiplayerCore;
+class NetwMultiplayer;
 
 class NetwInterestLayer : public godot::RefCounted {
     GDCLASS(NetwInterestLayer, godot::RefCounted)
 
-public:
-    enum Policy {
-        HIDE_FROM_OUTSIDERS = InterestEngine::HIDE_FROM_OUTSIDERS,
-        HIDE_FROM_INSIDERS = InterestEngine::HIDE_FROM_INSIDERS,
-    };
-
 private:
     godot::StringName layer_id;
-    InterestEngine standalone;
-    InterestEngine *engine = &standalone;
+    interest::Engine standalone;
+    interest::Engine *engine = &standalone;
     ObjectPort session;
 
-    NetwMultiplayerCore *host();
+    NetwMultiplayer *host();
     godot::Ref<NetwEntity> entity_for(int64_t p_slot);
     bool server_authority();
     int64_t local_peer_id();
@@ -56,10 +50,12 @@ protected:
 public:
     static int64_t slot_of(const godot::Ref<NetwEntity> &p_entity);
 
-    void bind_session(NetwMultiplayerCore *p_host);
+    void bind_session(NetwMultiplayer *p_host);
 
     void set_layer_id(const godot::StringName &p_id);
-    godot::StringName get_layer_id() const { return layer_id; }
+    godot::StringName get_layer_id() const {
+        return layer_id;
+    }
 
     bool set_policy(int p_policy);
     int get_policy() const;
@@ -91,7 +87,10 @@ public:
         bool p_visible
     );
 
-    bool is_visible_to(const godot::Ref<NetwEntity> &p_entity, int64_t p_peer_id);
+    bool is_visible_to(
+        const godot::Ref<NetwEntity> &p_entity,
+        int64_t p_peer_id
+    );
     bool verdict_for(int64_t p_peer_id) const;
 
     godot::Array viewer_ids() const;
@@ -100,5 +99,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::NetwInterestLayer::Policy);

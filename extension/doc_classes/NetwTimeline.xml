@@ -23,7 +23,7 @@
 			<return type="NetwTimeline" />
 			<param index="0" name="limit" type="int" default="64" />
 			<description>
-				Returns a timeline retaining [param limit] ticks per ring. [method NetwTimeline.new] uses [constant DEFAULT_LIMIT].
+				Returns a timeline retaining [param limit] ticks per ring. A timeline built with [code skip-lint]NetwTimeline.new()[/code] instead uses [constant DEFAULT_LIMIT].
 			</description>
 		</method>
 		<method name="floor" qualifiers="const">
@@ -53,7 +53,13 @@
 			<param index="1" name="to" type="int" />
 			<description>
 				Returns recorded input snapshots for the inclusive tick range, tick-ascending.
-				This is the reconciliation replay window: each element is [code]{tick: int, input: Dictionary}[/code] for the ticks that actually carry input, skipping gaps. The low bound is clamped to [method floor].
+				This is the reconciliation replay window, skipping the ticks that carry no input. The low bound is clamped to [method floor].
+				[codeblock lang=text]
+				Array[Dictionary]
+				┖╴entry
+				  ┠╴tick   int         the tick this input was recorded at
+				  ┖╴input  Dictionary  the exact snapshot recorded at that tick
+				[/codeblock]
 			</description>
 		</method>
 		<method name="latest_state_at_or_before" qualifiers="const">

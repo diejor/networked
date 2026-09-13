@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Serde" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Abstract base for resources that round-trip through a [PackedByteArray].
+	</brief_description>
+	<description>
+		[Serde] keeps payload types responsible for their own byte representation. Callers can pass the result of [method serialize] across the wire or store it for a later [method deserialize].
+		[codeblock]
+		var bytes := payload.serialize()
+		copy.deserialize(bytes)
+		[/codeblock]
+		A subclass supplies the representation by overriding [method _serialize] and [method _deserialize], and callers always use the plain [method serialize] and [method deserialize] pair. The two spellings are one contract: the plain verb answers the override when a script supplies one and falls back to the native implementation otherwise, so the caller never asks which kind of subclass it holds.
+		[DictionaryRecord] is the implementation this addon ships.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_deserialize" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Repopulates this resource from [param bytes], undoing [method _serialize]. Override it in a script subclass; [method deserialize] is what callers use.
+			</description>
+		</method>
+		<method name="_serialize" qualifiers="virtual">
+			<return type="PackedByteArray" />
+			<description>
+				Converts this resource to a [PackedByteArray]. Override it in a script subclass; [method serialize] is what callers use.
+			</description>
+		</method>
+		<method name="deserialize">
+			<return type="void" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Repopulates this resource from [param bytes]. A subclass that overrides [method _deserialize] answers through it, and a [Serde] with neither an override nor a native implementation ignores the call.
+			</description>
+		</method>
+		<method name="serialize">
+			<return type="PackedByteArray" />
+			<description>
+				Converts this resource to a [PackedByteArray]. A subclass that overrides [method _serialize] answers through it, and a [Serde] with neither an override nor a native implementation answers an empty array.
+			</description>
+		</method>
+	</methods>
+</class>

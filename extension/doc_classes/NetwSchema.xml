@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSchema" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One named typed column list, declared beside the code that writes it and compiled by every consumer that reads it.
+	</brief_description>
+	<description>
+		A schema is both the chain a [code]static var[/code] initializer runs and the data that chain leaves behind, because a game that had to terminate the chain to get the data was making a distinction it never wanted. [member columns] is the address order, and it is the address order every adopting session seals in, so two peers built from the same scripts agree on layout without negotiating it.
+		Every column verb returns a plain [int] column index rather than a handle, because a static initializer has no session to mint a handle from and a column index is the address every binding takes anyway. The declaration holds no session state, so two embedded sessions adopt it and mint their own RIDs from it, and user code fetches the RID once through [method NetwMultiplayer.table_find].
+		[codeblock]
+		class Mobs:
+		    static var schema := Netw.configure_schema(&amp;"Mob")
+		    static var pos := schema.vector3(
+		        &amp;"pos",
+		        NetwQuantizeScalar.new().limits(-512.0, 512.0).step(0.03),
+		    )
+		    static var vel := schema.vector3(&amp;"vel")   # unquantized, the memcpy path
+		    static var hp  := schema.u16(&amp;"hp")
+
+		func _ready() -&gt; void:
+		    mobs = Netw.of(self).table_find(Mobs.schema.schema_name)
+		[/codeblock]
+		A column with no quantizer crosses the wire as a raw little-endian copy of its buffer, which is the cheapest path in both directions. A quantizer buys bandwidth by paying per element, so reach for one on the columns a link actually cares about.
+		One schema serves three consumers, so a declaration that only wants the database says so with [method replicated] and mints no table at all. [method NetwDatabase.declare_table] takes this object directly. [method variant] is the tier a table refuses and the other two accept.
+		These method names are convenience and never freeze. They compile into [method NetwMultiplayer.schema_add_column] and [method NetwMultiplayer.schema_set_column_quantizer], which do.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="boolean">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_BOOL] column, one bit per element on the wire.
+			</description>
+		</method>
+		<method name="color">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_COLOR] column.
+			</description>
+		</method>
+		<method name="column">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="type" type="int" enum="NetwMultiplayer.ColumnType" />
+			<param index="2" name="stride" type="int" default="1" />
+			<param index="3" name="quantizer" type="NetwQuantize" default="null" />
+			<description>
+				Appends one column of an [enum NetwMultiplayer.ColumnType] named at runtime and answers its index, which is the wire address readers and writers both name it by. The typed verbs beside it are this call with the type filled in.
+				A [param key] already declared with the SAME [param type] and [param stride] answers the index it already holds, which is what makes a script reload idempotent: every static initializer runs again and every column lands on the address it had. A [param key] already declared with a DIFFERENT shape answers [code]-1[/code] and appends nothing, because a column index is a stable wire address and silently shifting it would leave two peers reading each other's bytes at the wrong offsets.
+			</description>
+		</method>
+		<method name="create" qualifiers="static">
+			<return type="NetwSchema" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				Builds a schema under [param name] without listing it in the process-wide schema registry, for a consumer that types its own columns rather than publishing them. A caller that wants the registry's copy asks [method Netw.configure_schema] instead, and one holding a detached schema lists it later with [method register].
+			</description>
+		</method>
+		<method name="declare" qualifiers="static">
+			<return type="NetwSchema" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				Declares the schema named [param name] in the process-wide schema registry and answers it, or [code]null[/code] when the name is empty. Calling it twice for one name extends one declaration rather than making two, which is what lets a schema be declared beside each of the classes that write it. [method Netw.configure_schema] is the front door and this is what it answers with.
+			</description>
+		</method>
+		<method name="entity">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_ENTITY] column of routes, the forward-only link one table draws to another.
+			</description>
+		</method>
+		<method name="f32">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_F32] column.
+			</description>
+		</method>
+		<method name="f64">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_F64] column.
+			</description>
+		</method>
+		<method name="i8">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_I8] column.
+			</description>
+		</method>
+		<method name="i16">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_I16] column.
+			</description>
+		</method>
+		<method name="i32">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_I32] column.
+			</description>
+		</method>
+		<method name="i64">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_I64] column.
+			</description>
+		</method>
+		<method name="is_reliable" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether this schema's table commits ride the reliable lane, as [method reliable] left it. Meaningless while [method is_replicated] answers [code]false[/code].
+			</description>
+		</method>
+		<method name="is_replicated" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether an adopting session mints a replicated table from this schema, as [method replicated] left it.
+			</description>
+		</method>
+		<method name="quaternion">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_QUATERNION] column, stored as a [PackedVector4Array] and read as [Quaternion] so [NetwQuantizeQuaternion] can pack it smallest-three.
+			</description>
+		</method>
+		<method name="register">
+			<return type="NetwSchema" />
+			<description>
+				Puts this declaration back in the process-wide schema registry if it is not listed there, and returns itself.
+				A [code]static var[/code] initializer runs once and never again, so a holder that outlives a registry reset would otherwise keep a schema no session can find. Call this from the [method Node._ready] of whatever publishes the schema, which costs nothing when the declaration is already registered.
+			</description>
+		</method>
+		<method name="reliable">
+			<return type="NetwSchema" />
+			<param index="0" name="value" type="bool" default="true" />
+			<description>
+				Sends this schema's table commits on the reliable lane and returns this schema. Read back through [method is_reliable].
+				Reach for it when a table changes rarely, because a rare-change table has no next commit to heal a lost datagram with. A table published every tick wants the default, where loss costs one row one tick of freshness.
+			</description>
+		</method>
+		<method name="replicated">
+			<return type="NetwSchema" />
+			<param index="0" name="value" type="bool" default="true" />
+			<description>
+				Sets whether an adopting session mints a replicated table from this schema, and returns this schema. Read back through [method is_replicated].
+				Declaring a schema costs no wire on its own. Passing [code]false[/code] is how a schema that only types database columns says so, and the session skips the table, the wire id, and the frame budget entirely.
+			</description>
+		</method>
+		<method name="u8">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_U8] column.
+			</description>
+		</method>
+		<method name="u16">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_U16] column.
+			</description>
+		</method>
+		<method name="variant">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_VARIANT] column, the self-describing tier a [String] or a [Dictionary] takes.
+				A schema holding one cannot become a table, because variable width has no memcpy and no rows-per-frame budget. Reach for it on a schema the database and the property binding consume, and leave the wire's fixed-width tier to the columns that can carry it.
+			</description>
+		</method>
+		<method name="vector2">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_VECTOR2] column.
+			</description>
+		</method>
+		<method name="vector3">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_VECTOR3] column.
+			</description>
+		</method>
+		<method name="vector4">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_VECTOR4] column.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="columns" type="NetwSchemaColumn[]" setter="" getter="get_columns">
+			The declared columns in address order. A consumer that types its own storage from a schema, as [method NetwDatabase.declare_table] does, reads this list.
+		</member>
+		<member name="schema_name" type="StringName" setter="" getter="get_schema_name">
+			The name this schema is declared under and the key [method NetwMultiplayer.schema_find] answers to.
+		</member>
+	</members>
+</class>

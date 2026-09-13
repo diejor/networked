@@ -10,7 +10,7 @@ using namespace godot;
 RowLane *LaneSet::open(
     int64_t p_route,
     uint8_t p_comp,
-    const Ref<SchemaRecord> &p_schema
+    const SchemaRecord &p_schema
 ) {
     const uint64_t key = address(p_route, p_comp);
     if (RowLane *held = lanes.getptr(key)) {
@@ -27,7 +27,7 @@ RowLane *LaneSet::find(int64_t p_route, uint8_t p_comp) {
 RetainedLane *LaneSet::open_retained(
     int64_t p_route,
     uint8_t p_comp,
-    const Ref<SchemaRecord> &p_schema
+    const SchemaRecord &p_schema
 ) {
     const uint64_t key = address(p_route, p_comp);
     if (RetainedLane *held = retained.getptr(key)) {
@@ -44,7 +44,7 @@ RetainedLane *LaneSet::find_retained(int64_t p_route, uint8_t p_comp) {
 WindowRing *LaneSet::open_window(
     int64_t p_route,
     uint8_t p_comp,
-    const Ref<SchemaRecord> &p_schema,
+    const SchemaRecord &p_schema,
     uint32_t p_depth
 ) {
     const uint64_t key = address(p_route, p_comp);
@@ -122,10 +122,14 @@ void LaneSet::forget_peer(int p_peer) {
     }
 }
 
-void LaneSet::acknowledge_peer(int p_peer, uint16_t p_acked_seq) {
+void LaneSet::acknowledge_peer(
+    int p_peer,
+    uint16_t p_acked_seq,
+    uint32_t p_history
+) {
     NETW_ZONE_NC("Lane set acknowledge", colors::WIRE);
     for (KeyValue<uint64_t, RowLane> &entry : lanes) {
-        entry.value.acknowledge(p_peer, p_acked_seq);
+        entry.value.acknowledge(p_peer, p_acked_seq, p_history);
     }
 }
 

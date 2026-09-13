@@ -6,9 +6,7 @@
 
 using namespace godot;
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 ConsumeInputPlan plan_consume_input(
     Schedule p_schedule,
@@ -220,9 +218,8 @@ LocalVector<ReplayEntry> Slot::replay_entries(int64_t p_basis) const {
         return out;
     }
     const int64_t newest = tape.newest_index();
-    Dictionary carried = has_lane
-        ? timeline->input_at(tape.label_of(p_basis))
-        : Dictionary();
+    Dictionary carried
+        = has_lane ? timeline->input_at(tape.label_of(p_basis)) : Dictionary();
     for (int64_t index = std::max(tape.oldest_index(), p_basis + 1);
          index <= newest;
          ++index) {
@@ -296,8 +293,182 @@ void Slot::reset_tape(int64_t p_epoch) {
     stats.ack_age_ticks = 0;
 }
 
+void RecoveryLedger::resize(int p_count) {
+    const uint32_t width = uint32_t(std::max(0, p_count));
+    godot::LocalVector<int> kept_triggered(triggered);
+    godot::LocalVector<int> kept_repaired(repaired);
+    godot::LocalVector<int> kept_contracted(contracted);
+    godot::LocalVector<uint8_t> kept_seeded(seeded);
+    triggered.resize(width);
+    repaired.resize(width);
+    contracted.resize(width);
+    seeded.resize(width);
+    for (uint32_t at = 0; at < width; ++at) {
+        const bool carried = at < kept_seeded.size();
+        triggered[at] = carried ? kept_triggered[at] : 0;
+        repaired[at] = carried ? kept_repaired[at] : 0;
+        contracted[at] = carried ? kept_contracted[at] : 0;
+        seeded[at] = carried ? kept_seeded[at] : 0;
+    }
+}
+
+void RecoveryLedger::seed(int p_field) {
+    if (p_field >= 0 && uint32_t(p_field) < seeded.size()) {
+        seeded[uint32_t(p_field)] = 1;
+    }
+}
+
+bool RecoveryLedger::has(int p_field) const {
+    return p_field >= 0 && uint32_t(p_field) < seeded.size()
+        && seeded[uint32_t(p_field)] != 0;
+}
+
+void RecoveryLedger::bump_triggered(int p_field) {
+    if (p_field >= 0 && uint32_t(p_field) < triggered.size()) {
+        triggered[uint32_t(p_field)] += 1;
+        seeded[uint32_t(p_field)] = 1;
+    }
+}
+
+void RecoveryLedger::bump_repaired(int p_field) {
+    if (p_field >= 0 && uint32_t(p_field) < repaired.size()) {
+        repaired[uint32_t(p_field)] += 1;
+        seeded[uint32_t(p_field)] = 1;
+    }
+}
+
+void RecoveryLedger::bump_contracted(int p_field) {
+    if (p_field >= 0 && uint32_t(p_field) < contracted.size()) {
+        contracted[uint32_t(p_field)] += 1;
+        seeded[uint32_t(p_field)] = 1;
+    }
+}
+
+int EntityRoster::index_of(const godot::ObjectID &p_id) const {
+    for (uint32_t at = 0; at < members.size(); ++at) {
+        if (members[at] == p_id) {
+            return int(at);
+        }
+    }
+    return -1;
+}
+
+bool EntityRoster::add(const godot::ObjectID &p_id) {
+    if (index_of(p_id) >= 0) {
+        return false;
+    }
+    members.push_back(p_id);
+    return true;
+}
+
+bool EntityRoster::erase(const godot::ObjectID &p_id) {
+    const int at = index_of(p_id);
+    if (at < 0) {
+        return false;
+    }
+    members.remove_at(uint32_t(at));
+    return true;
+}
+
+void EntityRoster::clear() {
+    members.clear();
+}
+
+int SubjectBook::index_of(int64_t p_id) const {
+    for (uint32_t at = 0; at < ids.size(); ++at) {
+        if (ids[at] == p_id) {
+            return int(at);
+        }
+    }
+    return -1;
+}
+
+bool SubjectBook::note(int64_t p_id, const godot::Callable &p_predictor) {
+    const int at = index_of(p_id);
+    if (at >= 0) {
+        if (predictors[uint32_t(at)] == p_predictor) {
+            return false;
+        }
+        predictors[uint32_t(at)] = p_predictor;
+        return true;
+    }
+    uint32_t slot = 0;
+    while (slot < ids.size() && ids[slot] < p_id) {
+        slot += 1;
+    }
+    ids.insert(slot, p_id);
+    predictors.insert(slot, p_predictor);
+    return true;
+}
+
+bool SubjectBook::erase(int64_t p_id) {
+    const int at = index_of(p_id);
+    if (at < 0) {
+        return false;
+    }
+    ids.remove_at(uint32_t(at));
+    predictors.remove_at(uint32_t(at));
+    return true;
+}
+
+void SubjectBook::clear() {
+    ids.clear();
+    predictors.clear();
+}
+
+godot::Callable SubjectBook::first_valid() const {
+    for (uint32_t at = 0; at < predictors.size(); ++at) {
+        if (predictors[at].is_valid()) {
+            return predictors[at];
+        }
+    }
+    return godot::Callable();
+}
+
+void FieldReadings::resize(int p_count) {
+    value.resize(uint32_t(std::max(0, p_count)));
+    present.resize(uint32_t(std::max(0, p_count)));
+    clear();
+}
+
+void FieldReadings::clear() {
+    for (uint32_t at = 0; at < present.size(); ++at) {
+        present[at] = 0;
+        value[at] = 0.0;
+    }
+}
+
+void FieldReadings::note(int p_field, double p_value) {
+    if (p_field < 0 || uint32_t(p_field) >= value.size()) {
+        return;
+    }
+    value[uint32_t(p_field)] = p_value;
+    present[uint32_t(p_field)] = 1;
+}
+
+bool FieldReadings::has(int p_field) const {
+    return p_field >= 0 && uint32_t(p_field) < present.size()
+        && present[uint32_t(p_field)] != 0;
+}
+
+double FieldReadings::at(int p_field, double p_absent) const {
+    return has(p_field) ? value[uint32_t(p_field)] : p_absent;
+}
+
+bool FieldReadings::empty() const {
+    for (uint32_t at = 0; at < present.size(); ++at) {
+        if (present[at] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void Slot::rewire(const Wiring &p_wiring) {
     wiring = p_wiring;
+    report.divergence.resize(p_wiring.count());
+    report.tier_error.resize(p_wiring.count());
+    recovery_ledger.resize(p_wiring.count());
     state = StateRow();
     state.resize(wiring.count());
     recovery = RecoveryState();
@@ -453,7 +624,7 @@ DriveRecord Slot::open_drive(
         return out;
     }
 
-    const Fold decided = NetwPredictionCore::fold(
+    const Fold decided = prediction_core::fold(
         latest_input_tick,
         last_driven_input_tick,
         p_timing.tick
@@ -657,11 +828,6 @@ StateVerdict Slot::compare(
         p_fallback_epsilon,
         p_stream_reconstructed
     );
-    if (last_state_verdict.compared) {
-        compare_stats.comparisons_ran += 1;
-    } else {
-        compare_stats.comparisons_skipped += 1;
-    }
     if (p_ack_domain_confirmed && p_transition > latest_authority_ack) {
         latest_authority_ack = p_transition;
         refresh_ack_age();
@@ -897,6 +1063,4 @@ void Slot::suppress_recovery_until(int64_t p_label, int p_cooldown) {
     recovery.suppress_until(p_label, p_cooldown);
 }
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

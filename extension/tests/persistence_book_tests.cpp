@@ -1,16 +1,16 @@
 #include "support/netw_test.h"
 
 #include "godot/rid.hpp"
-#include "netw/api/liveness_core.hpp"
-#include "netw/persistence_book.hpp"
+#include "netw/liveness_core.hpp"
+#include "netw/persist/book.hpp"
 
-namespace TestNetwPersistenceBook {
+namespace TestNetwBook {
 
 using namespace godot;
-using netw::PersistenceBook;
+using netw::persist::Book;
 
-PersistenceBook fresh() {
-    return PersistenceBook();
+Book fresh() {
+    return Book();
 }
 
 Ref<RefCounted> engine() {
@@ -25,15 +25,14 @@ Ref<netw::NetwLivenessCore> minter() {
     return core;
 }
 
-TEST_CASE("[Networked][Database][Hosted] an enrolment answers fresh once and "
-          "replaces without answering fresh again") {
+TEST_CASE(
+    "[Networked][Database][Hosted] an enrolment answers fresh once and "
+    "replaces without answering fresh again"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[3] = {
-        core->entity_create(),
-        core->entity_create(),
-        core->entity_create()
-    };
-    PersistenceBook book = fresh();
+    const RID ids[3]
+        = {core->entity_create(), core->entity_create(), core->entity_create()};
+    Book book = fresh();
     Ref<RefCounted> first = engine();
     Ref<RefCounted> second = engine();
     const RID entity = ids[0];
@@ -44,30 +43,28 @@ TEST_CASE("[Networked][Database][Hosted] an enrolment answers fresh once and "
     NETW_CHECK_EQ(book.size(), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] an invalid entity and a null engine "
-          "both enroll nothing") {
+TEST_CASE(
+    "[Networked][Database][Hosted] an invalid entity and a null engine "
+    "both enroll nothing"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[3] = {
-        core->entity_create(),
-        core->entity_create(),
-        core->entity_create()
-    };
-    PersistenceBook book = fresh();
+    const RID ids[3]
+        = {core->entity_create(), core->entity_create(), core->entity_create()};
+    Book book = fresh();
 
     CHECK_FALSE(book.enroll(RID(), engine()));
     CHECK_FALSE(book.enroll(ids[0], Ref<RefCounted>()));
     NETW_CHECK_EQ(book.size(), 0);
 }
 
-TEST_CASE("[Networked][Database][Hosted] an entity nothing enrolled answers "
-          "no engine rather than a neighbour's") {
+TEST_CASE(
+    "[Networked][Database][Hosted] an entity nothing enrolled answers "
+    "no engine rather than a neighbour's"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[3] = {
-        core->entity_create(),
-        core->entity_create(),
-        core->entity_create()
-    };
-    PersistenceBook book = fresh();
+    const RID ids[3]
+        = {core->entity_create(), core->entity_create(), core->entity_create()};
+    Book book = fresh();
     book.enroll(ids[0], engine());
 
     CHECK(book.engine_of(ids[1]).is_null());
@@ -75,15 +72,14 @@ TEST_CASE("[Networked][Database][Hosted] an entity nothing enrolled answers "
     CHECK_FALSE(book.drop(ids[1]));
 }
 
-TEST_CASE("[Networked][Database][Hosted] the enrolment order is what the book "
-          "answers in, and a drop closes its own gap") {
+TEST_CASE(
+    "[Networked][Database][Hosted] the enrolment order is what the book "
+    "answers in, and a drop closes its own gap"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[3] = {
-        core->entity_create(),
-        core->entity_create(),
-        core->entity_create()
-    };
-    PersistenceBook book = fresh();
+    const RID ids[3]
+        = {core->entity_create(), core->entity_create(), core->entity_create()};
+    Book book = fresh();
     const RID first = ids[0];
     const RID second = ids[1];
     const RID third = ids[2];
@@ -105,15 +101,14 @@ TEST_CASE("[Networked][Database][Hosted] the enrolment order is what the book "
     CHECK(RID(order[1]) == second);
 }
 
-TEST_CASE("[Networked][Database][Hosted] a re-enrolment keeps the row's place "
-          "rather than moving it to the end") {
+TEST_CASE(
+    "[Networked][Database][Hosted] a re-enrolment keeps the row's place "
+    "rather than moving it to the end"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[3] = {
-        core->entity_create(),
-        core->entity_create(),
-        core->entity_create()
-    };
-    PersistenceBook book = fresh();
+    const RID ids[3]
+        = {core->entity_create(), core->entity_create(), core->entity_create()};
+    Book book = fresh();
     const RID first = ids[0];
     const RID second = ids[1];
     book.enroll(first, engine());
@@ -128,12 +123,9 @@ TEST_CASE("[Networked][Database][Hosted] a re-enrolment keeps the row's place "
 
 TEST_CASE("[Networked][Database][Hosted] a cleared book holds no enrolment") {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[3] = {
-        core->entity_create(),
-        core->entity_create(),
-        core->entity_create()
-    };
-    PersistenceBook book = fresh();
+    const RID ids[3]
+        = {core->entity_create(), core->entity_create(), core->entity_create()};
+    Book book = fresh();
     book.enroll(ids[0], engine());
     book.enroll(ids[1], engine());
 
@@ -149,8 +141,10 @@ Dictionary due_on(Object *p_database) {
     return out;
 }
 
-TEST_CASE("[Networked][Database][Hosted] due rows batch by database, keeping "
-          "both the database order and the row order they arrived in") {
+TEST_CASE(
+    "[Networked][Database][Hosted] due rows batch by database, keeping "
+    "both the database order and the row order they arrived in"
+) {
     Ref<RefCounted> left = engine();
     Ref<RefCounted> right = engine();
     Array rows;
@@ -158,8 +152,7 @@ TEST_CASE("[Networked][Database][Hosted] due rows batch by database, keeping "
     rows.push_back(due_on(right.ptr()));
     rows.push_back(due_on(left.ptr()));
 
-    const TypedArray<PackedInt32Array> batches
-        = PersistenceBook::group_by_database(rows);
+    const TypedArray<PackedInt32Array> batches = Book::group_by_database(rows);
 
     NETW_CHECK_EQ(int(batches.size()), 2);
     const PackedInt32Array first = batches[0];
@@ -171,16 +164,17 @@ TEST_CASE("[Networked][Database][Hosted] due rows batch by database, keeping "
     NETW_CHECK_EQ(int(second[0]), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] a due row naming no database joins "
-          "no batch") {
+TEST_CASE(
+    "[Networked][Database][Hosted] a due row naming no database joins "
+    "no batch"
+) {
     Ref<RefCounted> only = engine();
     Array rows;
     rows.push_back(Dictionary());
     rows.push_back(due_on(only.ptr()));
     rows.push_back(due_on(nullptr));
 
-    const TypedArray<PackedInt32Array> batches
-        = PersistenceBook::group_by_database(rows);
+    const TypedArray<PackedInt32Array> batches = Book::group_by_database(rows);
 
     NETW_CHECK_EQ(int(batches.size()), 1);
     const PackedInt32Array first = batches[0];
@@ -188,12 +182,11 @@ TEST_CASE("[Networked][Database][Hosted] a due row naming no database joins "
     NETW_CHECK_EQ(int(first[0]), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] nothing due is no batch rather than "
-          "an empty one") {
-    NETW_CHECK_EQ(
-        int(PersistenceBook::group_by_database(Array()).size()),
-        0
-    );
+TEST_CASE(
+    "[Networked][Database][Hosted] nothing due is no batch rather than "
+    "an empty one"
+) {
+    NETW_CHECK_EQ(int(Book::group_by_database(Array()).size()), 0);
 }
 
-} // namespace TestNetwPersistenceBook
+} // namespace TestNetwBook

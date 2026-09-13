@@ -6,26 +6,31 @@
 class_name NetwHarnessSession
 extends RefCounted
 
-## Session entry method used by [method connect_tree].
+## How long [method connect_tree] waits for the session to come online, in
+## milliseconds. It is the harness's own patience, not a session deadline.
+const ONLINE_TIMEOUT_MS := 5000
+
+## Which side of the backend [method connect_tree] asks for.
 enum Entry {
 	JOIN,
-	JOIN_OR_HOST,
 	HOST,
-	OPEN_HOST,
 }
 
 
-## Transport seam for harness session entry.
+## Peer seam for harness session entry.
 ##
-## Implementations build a [NetwConnectTarget], and tear down
-## transport state associated with a [MultiplayerTree].
+## Implementations build the [MultiplayerPeer] a tree assigns for one
+## [enum NetwHarnessSession.Entry], and tear down transport state associated
+## with a [MultiplayerTree]. Nothing here connects: [method connect_tree] owns
+## preparation and assignment, so every harness enters a session the way a game
+## does.
 class BackendAdapter:
-	## Builds a [NetwConnectTarget] for [param tree] and [param address].
-	func make_connect_target(
+	## Builds the peer [param tree] assigns to enter as [param entry].
+	func make_peer(
 			tree: MultiplayerTree,
-			address: String = "",
-	) -> NetwConnectTarget:
-		assert(false, "BackendAdapter.make_connect_target must be implemented.")
+			entry: Entry,
+	) -> MultiplayerPeer:
+		assert(false, "BackendAdapter.make_peer must be implemented.")
 		return null
 
 
@@ -51,15 +56,17 @@ class LoopbackAdapter:
 		_session = session
 
 
-	## Builds a [NetwConnectTarget] for [param tree]'s local loopback backend.
-	func make_connect_target(
-			tree: MultiplayerTree,
-			address: String = "",
-	) -> NetwConnectTarget:
-		var target := NetwConnectTarget.new()
-		target.scheme = tree.scheme
-		target.address = address if not address.is_empty() else "localhost"
-		return target
+	## Answers the shared loopback server peer for
+	## [constant NetwHarnessSession.Entry.HOST] and a fresh client peer,
+	## already handshaken against it, for
+	## [constant NetwHarnessSession.Entry.JOIN].
+	func make_peer(
+			_tree: MultiplayerTree,
+			entry: Entry,
+	) -> MultiplayerPeer:
+		if entry == Entry.HOST:
+			return _session.get_server_peer()
+		return _session.create_client_peer()
 
 
 var _session: LocalLoopbackSession = LocalLoopbackSession.new()
@@ -83,7 +90,7 @@ func reset() -> void:
 		LocalLoopbackSession.set_shared_session(null)
 
 
-## Applies local loopback defaults and configures local scheme.
+## Applies local loopback defaults and names the loopback peer class.
 func adopt_tree(
 		tree: MultiplayerTree,
 		role: NetwMultiplayer.Role,
@@ -91,52 +98,53 @@ func adopt_tree(
 	tree.desired_role = role
 	tree.auto_host_headless = false
 	tree.debug_join = null
-	tree.transport = NetwLocalParams.new()
+	tree.peer_class = &"LocalMultiplayerPeer"
+	tree.transport_settings = { }
 	LocalLoopbackSession.set_shared_session(_session)
 
 
-## Builds a [NetwConnectTarget] for [param tree]'s local loopback backend.
-func make_connect_target(
-		tree: MultiplayerTree,
-		address: String = "",
-) -> NetwConnectTarget:
-	return _adapter.make_connect_target(tree, address)
-
-
-## Connects [param tree] through [param entry].
+## Brings [param tree] online as [param entry], the ordinary way.
 ##
-## [param adapter] builds the join target for entries that require one. When
-## omitted, the loopback adapter owned by this session is used.
+## [param adapter] supplies the peer. When omitted, the loopback adapter owned
+## by this session is used. A non-empty [param username] is prepared through
+## [method NetwMultiplayer.session_prepare_join] BEFORE the assignment, so a
+## client holds its hello and a host submits once its startup scenes exist.
+## Returns when the session is online, which is the condition a caller waiting
+## on entry actually means.
+##
+## A direct peer assignment is refused while a declaration is still being
+## authored, so this waits one frame for the deferred configuration to settle
+## before assigning.
 func connect_tree(
 		tree: MultiplayerTree,
 		entry: Entry,
-		payload: JoinPayload = null,
+		username: StringName = &"",
+		join_args: Array = [],
 		adapter: BackendAdapter = null,
 ) -> Error:
 	var active_adapter := adapter if adapter else _adapter
-	match entry:
-		Entry.JOIN:
-			return NetwConnector.error_of(
-				await NetwConnector.of(tree.api).join(
-					active_adapter.make_connect_target(tree),
-					payload,
-				),
-			)
-		Entry.JOIN_OR_HOST:
-			return NetwConnector.error_of(
-				await NetwConnector.of(tree.api).join_or_host(
-					active_adapter.make_connect_target(tree),
-					payload,
-				),
-			)
-		Entry.HOST:
-			return await tree.host(payload)
-		Entry.OPEN_HOST:
-			return NetwConnector.error_of(
-				await NetwConnector.of(tree.api).host(null),
-			)
-		_:
-			return ERR_INVALID_PARAMETER
+	var peer := active_adapter.make_peer(tree, entry)
+	if peer == null:
+		return ERR_CANT_CREATE
+	var scene_tree := tree.get_tree()
+	if scene_tree != null:
+		await scene_tree.process_frame
+	if not String(username).is_empty():
+		tree.api.session_prepare_join(username, join_args)
+	tree.api.multiplayer_peer = peer
+	if tree.api.multiplayer_peer != peer:
+		return ERR_CANT_CONNECT
+	return await _await_online(tree)
+
+
+func _await_online(tree: MultiplayerTree) -> Error:
+	var deadline := Time.get_ticks_msec() + ONLINE_TIMEOUT_MS
+	var scene_tree := tree.get_tree()
+	while not tree.api.is_online:
+		if Time.get_ticks_msec() > deadline or scene_tree == null:
+			return ERR_TIMEOUT
+		await scene_tree.process_frame
+	return OK
 
 
 ## Takes [param tree] offline. Marks it
@@ -144,34 +152,24 @@ func connect_tree(
 ## packets, and closes the peer. Returns the closed peer id so callers can
 ## await server unregistration. Inverse of [method connect_tree].
 func disconnect_tree(tree: MultiplayerTree) -> int:
-	if not tree.multiplayer_peer:
+	if not tree.api.multiplayer_peer:
 		return 0
 
-	var peer := tree.multiplayer_peer as LocalMultiplayerPeer
-	var peer_id := tree.multiplayer_peer.get_unique_id()
-	tree.state = NetwMultiplayer.SessionState.DISCONNECTING
+	var peer := tree.api.multiplayer_peer as LocalMultiplayerPeer
+	var peer_id := tree.api.multiplayer_peer.get_unique_id()
+	tree.api.session_set_state(NetwMultiplayer.SESSION_STATE_DISCONNECTING)
 	if peer:
 		_session.release_inbound_packets(peer)
-	tree.multiplayer_peer.close()
+	tree.api.multiplayer_peer.close()
 	return peer_id
 
 
-## Builds a [JoinPayload] for [param username] and [param spawn] intent, where
-## [param spawn] is a [SceneNodePath] template, a ready [JoinPayload] whose args
-## are copied, or an [Array] of typed join args.
-func build_join_payload(
-		username: String,
-		spawn: Variant = null,
-) -> JoinPayload:
-	var payload := JoinPayload.new()
-	payload.username = username
-	if spawn is JoinPayload:
-		payload.arg_values = (spawn as JoinPayload).arg_values.duplicate(true)
-	elif spawn is SceneNodePath:
-		payload.arg_values = NetwDefaultJoin.args_from_scene_node_path(spawn)
-	elif spawn is Array:
-		payload.arg_values = (spawn as Array).duplicate(true)
-	return payload
+## Builds the join args for a [param spawn] intent, where [param spawn] is an
+## [Array] of typed join args or [code]null[/code].
+func build_join_args(spawn: Variant = null) -> Array:
+	if spawn is Array:
+		return (spawn as Array).duplicate(true)
+	return []
 
 
 ## Sets inbound link conditions on [param peer].

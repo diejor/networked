@@ -141,6 +141,51 @@ int survives(
     return arrived;
 }
 
+Ref<LocalLinkConditions> jittered(int64_t p_seed) {
+    Ref<LocalLinkConditions> conditions = LocalLinkConditions::create(p_seed);
+    conditions->set_jitter_ms(4.0 * PERIOD_MS);
+    conditions->set_reorder(1.0);
+    return conditions;
+}
+
+Vector<int> arrival_order(
+    const Ref<LocalLinkConditions> &p_conditions,
+    int p_count
+) {
+    Pair pair = connected_pair();
+    pair.session->set_link_conditions(pair.server.ptr(), p_conditions);
+    send_counted(
+        pair,
+        p_count,
+        MultiplayerPeer::TRANSFER_MODE_UNRELIABLE,
+        true
+    );
+    for (int poll = 0; poll < p_count + 10; ++poll) {
+        pair.session->poll();
+    }
+
+    Vector<int> arrived;
+    while (pair.server->get_available_packet_count() > 0) {
+        const int value = int(receive(pair.server)[0]);
+        if (!arrived.has(value)) {
+            arrived.push_back(value);
+        }
+    }
+    pair.session->reset();
+    return arrived;
+}
+
+String as_text(const Vector<int> &p_values) {
+    String text;
+    for (const int value : p_values) {
+        if (!text.is_empty()) {
+            text += String(",");
+        }
+        text += String::num_int64(value);
+    }
+    return text;
+}
+
 Ref<LocalLinkConditions> with_latency(int64_t p_seed, double p_periods) {
     Ref<LocalLinkConditions> conditions = LocalLinkConditions::create(p_seed);
     conditions->set_latency_ms(p_periods * PERIOD_MS);
@@ -615,6 +660,28 @@ TEST_CASE(
 
     NETW_CHECK_EQ(survives(session, server, reset_sender), first_draw);
     NETW_CHECK_EQ(survives(session, server, untouched), second_draw);
+}
+
+TEST_CASE(
+    "[Networked][Transport][Hosted] Duplication is rolled on a stream of its "
+    "own, so switching it on repeats arrivals without moving them"
+) {
+    constexpr int COUNT = 12;
+    constexpr int64_t SEED = 2026;
+
+    const Vector<int> jitter_alone = arrival_order(jittered(SEED), COUNT);
+    REQUIRE(jitter_alone.size() == COUNT);
+
+    Ref<LocalLinkConditions> duplicating = jittered(SEED);
+    duplicating->set_duplicate(0.5);
+
+    const String produced = as_text(arrival_order(duplicating, COUNT));
+    const String expected = as_text(jitter_alone);
+    NETW_FORMAT_TEXT(duplicated, produced.utf8().get_data());
+    NETW_FORMAT_TEXT(undisturbed, expected.utf8().get_data());
+    CAPTURE(duplicated);
+    CAPTURE(undisturbed);
+    CHECK(bool(produced == expected));
 }
 
 } // namespace TestNetwLoopbackTransport

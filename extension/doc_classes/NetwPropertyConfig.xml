@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPropertyConfig" inherits="NetwMemberConfig" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The property face of [NetwMemberConfig]: one fluent declaration that decides how a script variable travels for the rest of its life.
+	</brief_description>
+	<description>
+		Marking a field with [method state], [method input], or [method broadcast] enrolls it in one of the script's per-tick sets, and from then on the session's sync pump ships every change automatically. Writing the variable is the whole job, there is no send call in the gameplay code.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_property(self, &amp;"position").state().quantize(pos_q)
+		    Netw.configure_property(self, &amp;"move_dir").input()
+		    Netw.configure_property(self, &amp;"aim_dir").broadcast()
+
+		func _physics_process(_dt: float) -&gt; void:
+		    move_dir = Input.get_vector("left", "right", "up", "down")
+		    aim_dir = (get_global_mouse_position() - position).normalized()
+		    # no send call: the next pump tick ships every marked change
+		[/codeblock]
+		Pick the kind by answering who owns the value, who sees it, and whether the server polices it. [enum NetwPropertySet.Record] holds the comparison table. A field with no kind mark rides no per-tick set and syncs only when [method Netw.sync_property] pushes it explicitly.
+		[method volatile], [method retained], [method epsilon], and [method persisted] refine one property. [method every_tick], [method on_change], [method heartbeat], [method windowed], [method audience], and [method masked] write through to the script's whole [NetwPropertySet] from any member, so the last member to name a knob owns it.
+		[b]The chain downgrades to the base type.[/b]
+		[method NetwMemberConfig.call_local] and [method NetwMemberConfig.call_remote] are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb answers a [NetwMemberConfig] from that point on even though the object is still this [NetwPropertyConfig]. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="audience">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="server_only" type="bool" default="true" />
+			<description>
+				Narrows the set to the server only, or back to every recipient. Writes [member set_audience] for the whole set, which becomes the set's [member NetwPropertySet.audience]. The [method input] preset already narrows its set to the server.
+			</description>
+		</method>
+		<method name="broadcast">
+			<return type="NetwPropertyConfig" />
+			<description>
+				The controller owns this value, every observer sees it, and nobody checks it. The display kind, for cosmetic streams like an aim arrow or a look direction where being wrong costs nothing, so the server keeps no history and never rewinds it. See [enum NetwPropertySet.Record] to compare kinds.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_property(self, &amp;"aim_dir").broadcast()
+
+				func _process(_dt: float) -&gt; void:
+				    aim_dir = (get_global_mouse_position() - position).normalized()
+				    # nothing else to do: each pump tick broadcasts the change and
+				    # every other player's copy of this node updates its arrow
+				[/codeblock]
+				Writes [member in_broadcast_set], the [constant NetwPropertySet.VOLATILE] [member lane], and a [member set_trigger] of [constant NetwPropertySet.TRIGGER_ON_CHANGE], and nothing else. Add [method masked] when many viewers watch the same entity, so each one receives only the fields that changed for them.
+			</description>
+		</method>
+		<method name="carry_along">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="channel" type="StringName" />
+			<description>
+				Advances this value along [param channel], a sibling replicated field holding its rate, when a recovery restores it. Writes [member carry_channel].
+				A restore carries authority's value for the transition it acknowledged, which is already [member NetwPredictionHandle.ack_age_ticks] old by the time it lands, so a field still moving is written behind where it is. The channel is what closes that gap, at one constant rate, which is exact only while that rate holds still across the window. A field that declares nothing is written at the acknowledged value.
+				[codeblock]
+				# the body integrates position from velocity, so a restore advances along it
+				Netw.configure_property(self, &amp;"position").state().carry_along(&amp;"velocity")
+				[/codeblock]
+				[param channel] must name another [method state] property of the same entity, and declaring the pair is also what sorts the two: this field joins the pose [member NetwPredictionHandle.teleport_threshold] is measured over, and [param channel] joins the momentum family. A value whose rate turns, decays, or jumps inside the window wants [method carry_step] instead, and declaring both on one column is an error that keeps neither.
+				A [param channel] this entity's state set does not carry compiles to no projection at all, exactly as declaring none does, because a channel the set does not ship cannot be read at the same tick as the field it advances and the pair is not one the engine can honour.
+				This is a reconciliation declaration, independent of [method NetwInterpolate.project_by], which decides how a remote display extrapolates past its newest sample.
+			</description>
+		</method>
+		<method name="carry_step">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="step" type="Callable" />
+			<description>
+				Advances this value by running [param step] once over each transition the owner recorded since the acknowledgement.
+				Where [method carry_along] extrapolates one rate, this re-runs the part of the simulation that moves this one field, so a rate that turns, decays or jumps inside the window is followed rather than averaged. Nothing else is re-simulated and the physics server is never stepped.
+				[b]The rule must reproduce the whole change the transition made to this field[/b], and that is what the engine checks it against. So the verb is for a field whose change the game authors ENTIRELY. A field the solver also moves cannot be advanced this way, however correct the rule is about the game's own share: the recovery needs the value the body actually reached, and the solver's contribution is neither authored here nor re-runnable, and a physics server that could be re-stepped would not need this verb at all. Such a rule is refused and retired, and the retirement says so.
+				A rule's answer is admitted only when it did not write the body itself, reproduces the transitions the owner already recorded, and comes back the same type, finite, and nearer than a teleport would be. Failing any one of those refuses the carry for that recovery, which then writes the acknowledged value exactly as an undeclared field does.
+				Declaring both this and [method carry_along] on one column is an error and keeps NEITHER. One field, one forward model: the step is for a rate that varies across the acknowledgement window and the channel for one that holds still, and no field is both.
+				[codeblock]
+				# yes -- a scripted value the solver never touches
+				Netw.configure_property(self, &amp;"charge").state().carry_step(_carry_charge)
+
+				# no -- the solver moves this too, so its whole change is not yours to
+				# restate. Measured on a rolling sphere: the game's own term was 1.667 rad/s
+				# per transition against a realized 0.329, and the rule was RIGHT about the
+				# 1.667.
+				Netw.configure_property(self, &amp;"angular_velocity").state() \
+				        .carry_step(_carry_spin)
+				[/codeblock]
+				[method NetwPredictionHandle.reachability] reports whether a declared rule is live, and why when it is not.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_property(self, &amp;"spin").state().carry_step(_carry_spin)
+
+				func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
+				    return value + _drive_axis(ctx.state) * ctx.state[&amp;"speed"] * ctx.delta
+				[/codeblock]
+				[param step] may read only its [NetwPredictCarryContext] and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a refused carry writes the acknowledged value exactly as an undeclared field does. [member NetwPredictionHandle.field_recovery] counts both.
+				The rule is stored per node rather than per script, because a [Callable] is bound to one body while a property declaration is shared by every instance of the script that declares it. [param step] therefore has to be a method or lambda of a [Node], which is the body it will advance. A [param step] that is invalid, or valid but bound to something that is not a [Node], is reported through the error channel and binds NOTHING, leaving this config exactly as it was. The rule lands in a per-node overlay, which is keyed by node instance rather than by [member NetwMemberConfig.context_script].
+			</description>
+		</method>
+		<method name="causal">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Marks the value an antecedent of the simulation, one the next step reads from, so a reconciliation compares it and restores it. The default [member property_class].
+				[codeblock]
+				# the body integrates from velocity, so a restore that skipped it would
+				# rebase the position and then immediately drift away from it again
+				Netw.configure_property(self, &amp;"velocity").state().causal()
+				[/codeblock]
+				See [enum NetwPropertySet.PropertyClass] to compare classes.
+			</description>
+		</method>
+		<method name="converge">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="stiffness" type="float" />
+			<description>
+				Pulls the field toward the authoritative value at [param stiffness] during a recovery instead of writing it outright, bounded to that one recovery. Writes [member converge_stiffness].
+				[codeblock]
+				Netw.configure_property(self, &amp;"heading").state().causal().converge(0.4)
+				[/codeblock]
+				A stiffness of [code]0.0[/code] restores the value outright, the default.
+				So does a value whose type has no meaningful midpoint, whatever stiffness is declared. Converging asks for the error between two values and a fraction of the way along it, which a boolean, a name or an id does not have, so such a field is restored outright rather than left uncorrected or moved to a value neither peer holds.
+			</description>
+		</method>
+		<method name="cosmetic">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Marks the value display-only, so no reconciliation compares it, exactly as [method derived] does and for the same reason. A cosmetic field that disagreed would otherwise correct a simulation over a value no simulation reads. A recovery still writes it, so observers see the authoritative value. The two classes differ in what they tell a reader rather than in what the kernel does. [method derived] says the body recomputes the value, [method cosmetic] says nothing simulated reads it at all.
+				[codeblock]
+				Netw.configure_property(self, &amp;"skid_intensity").state().cosmetic()
+				[/codeblock]
+				See [enum NetwPropertySet.PropertyClass] to compare classes.
+			</description>
+		</method>
+		<method name="derived">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Marks the value one the body recomputes from causal fields each step, so no reconciliation compares it and none is raised on its account.
+				A recovery still writes it. Restoration is not gated on the class, and a value the next step recomputes is harmless to write and worth having for observers in the meantime. What the class buys is the vote. A field the body recomputes cannot demand a recovery for a disagreement that only restates one the causal fields already carry.
+				[codeblock]
+				# recomputed from velocity every tick, so it decides no correction
+				Netw.configure_property(self, &amp;"speed").state().derived()
+				[/codeblock]
+				See [enum NetwPropertySet.PropertyClass] to compare classes.
+			</description>
+		</method>
+		<method name="epsilon">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="threshold" type="float" />
+			<description>
+				Sets this field's own divergence [param threshold], the distance its predicted value may drift from the authoritative one before a correction triggers, in [member epsilon_override]. A field without one inherits the entity's [member NetwPredictionHandle.divergence_epsilon]. A single scalar mixes units badly for a body whose state spans meters, radians, and meters per second, so the field that needs its own tolerance declares it in its own units.
+				[codeblock]
+				Netw.configure_property(self, &amp;"velocity").state().epsilon(0.05)
+				[/codeblock]
+				The threshold is the largest error the field is allowed to HOLD, so [code]0.0[/code] means any error at all triggers a correction. That is how an exact field is declared, and it costs a recovery on every quantization step, so declare it only for a value whose grid the two peers truly share. A field that should never trigger is [method reconcile_only], not [code]epsilon(INF)[/code].
+			</description>
+		</method>
+		<method name="every_tick">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="interval" type="float" default="0.0" />
+			<description>
+				Sends the whole set every eligible tick whether or not a field changed, throttled to at most one send per [param interval] seconds. Writes [member set_trigger] and [member set_every_tick_interval], and so decides [member NetwPropertySet.trigger] for every field in the set.
+				[codeblock]
+				# position changes every tick anyway, change detection is pure overhead
+				Netw.configure_property(self, &amp;"position").state().every_tick()
+				[/codeblock]
+				A second member of the same script that writes the trigger warns, because that is two call sites disagreeing about one set-level knob.
+			</description>
+		</method>
+		<method name="heartbeat">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="ticks" type="int" />
+			<description>
+				Re-sends the whole set every [param ticks] ticks even when nothing changed, so a peer that missed an [method on_change] send converges in bounded time. Writes [member set_heartbeat_ticks], and warns when a second member of the same script writes it too.
+				[codeblock]
+				# a lost "stunned" flip heals within a second at 60 ticks
+				Netw.configure_property(self, &amp;"stunned").state().heartbeat(60)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="input">
+			<return type="NetwPropertyConfig" />
+			<description>
+				The controller owns this value, only the server sees it, and the server re-runs it to verify. The controls kind, the command stream a client is trusted to author but never to resolve. See [enum NetwPropertySet.Record] to compare kinds.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_property(self, &amp;"move_dir").input()
+
+				func _physics_process(dt: float) -&gt; void:
+				    if entity.is_controlled_locally:
+				        move_dir = Input.get_vector("left", "right", "up", "down")
+				    # both peers run this: the client predicts, the server decides
+				    velocity = move_dir * SPEED
+				[/codeblock]
+				Writes [member in_input_set], the [constant NetwPropertySet.VOLATILE] [member lane], a [member set_trigger] of [constant NetwPropertySet.TRIGGER_ON_CHANGE], and the [constant NetwPropertySet.AUDIENCE_SERVER_ONLY] [member set_audience]. That last axis is what makes it a command stream rather than a public one, and it is the only kind mark that writes it. An input set is windowed by default so a lost tick heals from a redundant sample instead of a retransmit. [method windowed] resizes that window.
+				An input column is canonicalized and SHIPPED, never recovered, so only its key, its quantizer and its type reach the engine. A recovery mark written onto an input column, a carry rule or a teleport distance among them, is read and discarded rather than refused, because the input lane has no ladder that could read it.
+			</description>
+		</method>
+		<method name="masked">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Sends each viewer only the fields that changed since they last confirmed, instead of one shared row to everyone. Writes [member set_masked], and so [member NetwPropertySet.masked] for the whole set. The same values arrive, in fewer bytes.
+				[codeblock]
+				# 50 spectators, each gets only what changed for them
+				Netw.configure_property(self, &amp;"position").broadcast().masked()
+				[/codeblock]
+				Riding a masked set is not a mistake for a causal field, and the wiring report does not flag one. The reconstruction invariant means the owner rebuilds the whole row from the masked stream before anything compares it, so a masked causal field is still reconcilable.
+			</description>
+		</method>
+		<method name="on_change">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Sends the set only when a field changed since the last send, by writing [member set_trigger] [constant NetwPropertySet.TRIGGER_ON_CHANGE]. The default [member NetwPropertySet.trigger] of every kind mark, and warns on a second writer exactly as [method every_tick] does.
+			</description>
+		</method>
+		<method name="on_spawn">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Marks this property as spawn state, in [member is_spawn_state]. The value is captured from the authority's instance when the SPAWN frame is snapshotted and applied on every receiving peer while the node is still orphaned, so [method Node._enter_tree] and [method Node._ready] read it on every peer.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_property(self, &amp;"pet_name").on_spawn()
+				[/codeblock]
+			</description>
+		</method>
+		<method name="persisted">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="interval" type="float" default="0.0" />
+			<description>
+				Marks this field a column [NetwPersistenceEngine] snapshots and hydrates, independent of whether it also syncs, by writing [member is_persisted] and [member persist_interval].
+				The database only ever sees the value the server sees.
+				[codeblock]
+				Netw.configure_persistence(self).database(db).table(&amp;"players")
+
+				# never syncs, a server secret the database still keeps
+				Netw.configure_property(self, &amp;"gold").persisted()
+
+				# synced per tick, snapshotted every 30 seconds
+				Netw.configure_property(self, &amp;"position").state().persisted(30.0)
+
+				# client-authored, persistable because input() delivers it to the server
+				Netw.configure_property(self, &amp;"loadout").input().persisted()
+				[/codeblock]
+				[param interval] of [code]0.0[/code] inherits [member NetwPersistenceConfig.default_interval].
+			</description>
+		</method>
+		<method name="reconcile_only">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Excludes the field from triggering a correction, while a correction another field triggers still restores it, by writing [member explicit_reconcile_only]. Right for a value whose own drift is tolerable but that must land with the rest of the closure when one lands.
+				This is the mark a [method causal] field needs to say that. No class but causal votes in the first place, so adding it to a [method derived] or [method cosmetic] field states an intent the class already carries.
+				[codeblock]
+				Netw.configure_property(self, &amp;"heading").state().reconcile_only()
+				[/codeblock]
+			</description>
+		</method>
+		<method name="retained">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Routes the field onto the [constant NetwPropertySet.RETAINED] reliable-on-change [member lane], right for a discrete value that changes rarely and must never miss a change.
+				[codeblock]
+				# a dropped "stunned = true" would desync forever, so it rides reliably
+				Netw.configure_property(self, &amp;"stunned").state().retained()
+				[/codeblock]
+				Refused on a PREDICTED entity's state, whatever the value is worth: predicted state has to be volatile for a timeline snapshot to arrive atomically, and a retained field would land on its own schedule and be compared against a row no single tick answers for.
+			</description>
+		</method>
+		<method name="state">
+			<return type="NetwPropertyConfig" />
+			<description>
+				The server owns this value, every observer sees it, and hit detection can rewind it. The authoritative kind, the body pose the whole game agrees on. See [enum NetwPropertySet.Record] to compare kinds.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_property(self, &amp;"position").state().quantize(pos_q)
+
+				func _physics_process(dt: float) -&gt; void:
+				    position += velocity * dt
+				    # on the server that write is enough: the pump tick replicates it,
+				    # and every client's copy of this node follows
+				[/codeblock]
+				Writes [member in_state_set], the [constant NetwPropertySet.VOLATILE] [member lane], and a [member set_trigger] of [constant NetwPropertySet.TRIGGER_ON_CHANGE], and nothing else, so it leaves the audience public. A state field is also the reconciliation anchor: a client predicting this entity is corrected against the server's stream, within the tolerance [method epsilon] grants.
+			</description>
+		</method>
+		<method name="teleport_at">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="distance" type="float" />
+			<description>
+				Sets this field's own teleport-tier [param distance] in [member teleport_at_override]: the error at which a recovery stops repairing partially and restores the whole closure verbatim. A field without one inherits the entity's [member NetwPredictionHandle.teleport_threshold].
+				Same argument as [method epsilon], and the same units problem: the tier is measured over the fields that can be advanced to the present, which on a 3D body span metres, radians and radians per second. One scalar across them compares a rotation rate against a distance, so a field enrolled in that measurement declares the tier in its own units or inherits a number that means nothing for it.
+				[codeblock]
+				Netw.configure_property(self, &amp;"position").state() \
+				        .carry_along(&amp;"velocity").teleport_at(3.0)      # metres
+				Netw.configure_property(self, &amp;"heading").state() \
+				        .carry_along(&amp;"angular_speed").teleport_at(1.0)  # radians
+				[/codeblock]
+				Declaring it also enrols the field in the tier measurement, so a field with no [method carry_along] channel can still name the distance past which its own error means the body holds nothing worth keeping. [code]0.0[/code] therefore means every recovery this field triggers is a teleport.
+			</description>
+		</method>
+		<method name="teleport_only">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Restricts the field to teleport-tier recoveries, so an ordinary one leaves it alone, by writing [member explicit_teleport_only]. Right for a value whose mid-flight rewrite is more disruptive than the drift it would correct.
+				A field marked this way and left free to trigger demands recoveries that are forbidden to write it, so the only one that repairs it is the promoted full closure. Pair it with [method carry_along] or [method carry_step] so that promoted restore lands at the present, or with [method reconcile_only] so its drift stops demanding recoveries that answer by writing other fields.
+				[codeblock]
+				Netw.configure_property(self, &amp;"angular_velocity").state().teleport_only()
+				[/codeblock]
+			</description>
+		</method>
+		<method name="volatile">
+			<return type="NetwPropertyConfig" />
+			<description>
+				Routes the field onto the [constant NetwPropertySet.VOLATILE] freshest-wins [member lane], right for a value that changes continuously, where a lost sample is superseded by the next tick anyway. The default lane.
+			</description>
+		</method>
+		<method name="windowed">
+			<return type="NetwPropertyConfig" />
+			<param index="0" name="samples" type="int" />
+			<description>
+				Carries the last [param samples] ticks of values in every volatile send, so a lost datagram heals from the next one's redundancy instead of a retransmit round trip. Writes [member set_window], and so [member NetwPropertySet.window] for the whole set, warning when a second member of the same script writes it too.
+				[codeblock]
+				# input() already windows at 2; 3 survives two consecutive lost datagrams
+				Netw.configure_property(self, &amp;"motion").input().windowed(3)
+				[/codeblock]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="carry_channel" type="StringName" setter="set_carry_channel" getter="get_carry_channel" default="&amp;&quot;&quot;">
+			The replicated channel a recovery advances this value along, or empty when it is restored at the acknowledged value. Declared through [method carry_along].
+		</member>
+		<member name="converge_stiffness" type="float" setter="set_converge_stiffness" getter="get_converge_stiffness" default="0.0">
+			How firmly a recovery pulls this value toward the authoritative one rather than writing it outright, or [code]0.0[/code] to write it. Declared through [method converge].
+		</member>
+		<member name="epsilon_override" type="float" setter="set_epsilon_override" getter="get_epsilon_override" default="-1.0">
+			The field's own divergence threshold, or a negative value to inherit the entity's [member NetwPredictionHandle.divergence_epsilon]. Declared through [method epsilon].
+		</member>
+		<member name="explicit_reconcile_only" type="bool" setter="set_explicit_reconcile_only" getter="get_explicit_reconcile_only" default="false">
+			Whether [method reconcile_only] excluded the field from triggering a correction on its own.
+		</member>
+		<member name="explicit_teleport_only" type="bool" setter="set_explicit_teleport_only" getter="get_explicit_teleport_only" default="false">
+			Whether [method teleport_only] restricted the field to teleport-tier recoveries.
+		</member>
+		<member name="in_broadcast_set" type="bool" setter="set_in_broadcast_set" getter="get_in_broadcast_set" default="false">
+			Whether [method broadcast] marked this property into its script's broadcast set, the trusted display stream outside the rewind boundary.
+		</member>
+		<member name="in_input_set" type="bool" setter="set_in_input_set" getter="get_in_input_set" default="false">
+			Whether [method input] marked this property into its script's input set.
+		</member>
+		<member name="in_state_set" type="bool" setter="set_in_state_set" getter="get_in_state_set" default="false">
+			Whether [method state] marked this property into its script's state set.
+		</member>
+		<member name="is_persisted" type="bool" setter="set_is_persisted" getter="get_is_persisted" default="false">
+			Whether [method persisted] marked this field a persistence column. The field becomes a schema column [NetwPersistenceEngine] snapshots and hydrates, independent of whether it also syncs.
+		</member>
+		<member name="is_property" type="bool" setter="set_is_property" getter="get_is_property" default="true">
+			Always [code]true[/code] on a property config, which is how a registry holding both kinds tells this apart from the plain [NetwMemberConfig] an RPC or a signal returns when only the base type is known.
+		</member>
+		<member name="is_spawn_state" type="bool" setter="set_is_spawn_state" getter="get_is_spawn_state" default="false">
+			Whether the property's value rides the SPAWN frame and is applied on every receiving peer before the node enters the tree. Declared through [method on_spawn].
+		</member>
+		<member name="lane" type="int" setter="set_lane" getter="get_lane" enum="NetwPropertySet.Lane" default="0">
+			The field's delivery lane: [constant NetwPropertySet.VOLATILE] freshest wins, [constant NetwPropertySet.RETAINED] reliable on change. Declared through [method volatile] and [method retained], and written by every kind mark.
+		</member>
+		<member name="persist_interval" type="float" setter="set_persist_interval" getter="get_persist_interval" default="0.0">
+			Per-field snapshot cadence in seconds, or [code]0.0[/code] to inherit the archetype's [member NetwPersistenceConfig.default_interval]. Declared through [method persisted].
+		</member>
+		<member name="property_class" type="int" setter="set_property_class" getter="get_property_class" enum="NetwPropertySet.PropertyClass" default="0">
+			What the value does in the simulation, which decides whether a reconciliation compares and restores it. Declared through [method causal], [method derived] and [method cosmetic].
+		</member>
+		<member name="set_audience" type="int" setter="set_set_audience" getter="get_set_audience" enum="NetwPropertySet.Audience" default="0">
+			The script set's [member NetwPropertySet.audience]. Written by [method audience] and by the [method input] preset.
+		</member>
+		<member name="set_every_tick_interval" type="float" setter="set_set_every_tick_interval" getter="get_set_every_tick_interval" default="-1.0">
+			The script set's every-tick throttle in seconds, or a negative value when unset. Written by [method every_tick].
+		</member>
+		<member name="set_heartbeat_ticks" type="int" setter="set_set_heartbeat_ticks" getter="get_set_heartbeat_ticks" default="-1">
+			The script set's heartbeat interval in ticks, or [constant UNSET]. Written by [method heartbeat].
+		</member>
+		<member name="set_masked" type="bool" setter="set_set_masked" getter="get_set_masked" default="false">
+			The script set's [member NetwPropertySet.masked]. Written by [method masked].
+		</member>
+		<member name="set_trigger" type="int" setter="set_set_trigger" getter="get_set_trigger" default="-1">
+			The script set's [member NetwPropertySet.trigger], or [constant UNSET]. Written by [method every_tick] and [method on_change], and by all three kind marks.
+		</member>
+		<member name="set_window" type="int" setter="set_set_window" getter="get_set_window" default="-1">
+			The script set's [member NetwPropertySet.window], or [constant UNSET]. Written by [method windowed].
+		</member>
+		<member name="teleport_at_override" type="float" setter="set_teleport_at_override" getter="get_teleport_at_override" default="-1.0">
+			The field's own teleport-tier distance, or a negative value to inherit the entity's [member NetwPredictionHandle.teleport_threshold]. Declared through [method teleport_at].
+		</member>
+	</members>
+	<constants>
+		<constant name="UNSET" value="-1">
+			The spelling of an integer set-level knob no member has written yet, which is what [member set_trigger], [member set_heartbeat_ticks] and [member set_window] hold until one does. It is the absence of a declaration rather than a value, so a reader tests against it instead of using it.
+		</constant>
+	</constants>
+</class>

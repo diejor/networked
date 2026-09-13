@@ -32,6 +32,7 @@ public:
     bool svarint(int64_t &value, int max_bytes = 10);
     bool bool1(bool &value);
     bool bytes_capped(godot::PackedByteArray &value, int cap);
+    bool raw_bytes(godot::PackedByteArray &value, int64_t count);
     bool align_verify();
 
     bool ok() const {
@@ -55,7 +56,10 @@ public:
     static constexpr bool is_reading = true;
     static constexpr bool is_measuring = false;
 
+    ReadStream() = default;
     explicit ReadStream(const godot::PackedByteArray &bytes);
+
+    void seat(const godot::PackedByteArray &bytes);
 
     bool bits(uint64_t &value, int count);
     bool int_range(int64_t &value, int64_t low, int64_t high);
@@ -63,6 +67,7 @@ public:
     bool svarint(int64_t &value, int max_bytes = 10);
     bool bool1(bool &value);
     bool bytes_capped(godot::PackedByteArray &value, int cap);
+    bool raw_bytes(godot::PackedByteArray &value, int64_t count);
     bool align_verify();
 
     bool ok() const {
@@ -91,6 +96,7 @@ public:
     bool svarint(int64_t &value, int max_bytes = 10);
     bool bool1(bool &value);
     bool bytes_capped(godot::PackedByteArray &value, int cap);
+    bool raw_bytes(godot::PackedByteArray &value, int64_t count);
     bool align_verify();
 
     bool ok() const {
@@ -104,5 +110,22 @@ public:
         return (bits_described + 7) / 8;
     }
 };
+
+constexpr int STRING_CAP = 1023;
+
+template <class Stream>
+inline bool string_field(Stream &p_stream, godot::String &r_value) {
+    godot::PackedByteArray staged;
+    if constexpr (!Stream::is_reading) {
+        staged = r_value.to_utf8_buffer();
+    }
+    if (!p_stream.bytes_capped(staged, STRING_CAP)) {
+        return false;
+    }
+    if constexpr (Stream::is_reading) {
+        r_value = gd::utf8_string(staged);
+    }
+    return true;
+}
 
 } // namespace netw::wire

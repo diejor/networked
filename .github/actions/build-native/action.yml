@@ -1,28 +1,42 @@
 name: Build native library
 description: >
-  Build one GDExtension cell with SCons at the extension/deps.env pins and
-  deploy it into addons/networked/bin. Every workflow that needs a library
-  either runs this or downloads what a job that ran it produced.
+  Build one declared library cell with ci/build.py and stage its exact
+  outputs. Every workflow that needs a library either runs this or downloads
+  what a job that ran it produced.
 
 inputs:
+  cell:
+    description: Cell id, platform:slice:target, as ci/matrix.py resolves it.
+    required: false
+    default: ""
+  profile:
+    description: Profile to build instead of a single cell.
+    required: false
+    default: ""
   platform:
-    description: >
-      godot-cpp platform name. Empty builds for the host, which is what a
-      contributor gets from a bare `scons`.
+    description: Platform of the cell, used for toolchain setup only.
     required: false
     default: ""
-  target:
-    description: godot-cpp target (template_debug, template_release, editor).
-    required: false
-    default: template_debug
-  arch:
-    description: godot-cpp arch. Empty lets godot-cpp detect the host arch.
+  suffix:
+    description: The cell's library suffix, which identifies the caches.
     required: false
     default: ""
-  scons-flags:
-    description: Extra `key=value` arguments appended to the SCons line.
+  scons-args:
+    description: Extra key=value arguments passed through to SCons.
     required: false
     default: ""
+  strip:
+    description: Strip the outputs with this platform's own toolchain.
+    required: false
+    default: "false"
+  require-fresh:
+    description: Refuse an output this run did not write, which a release candidate must.
+    required: false
+    default: "false"
+  staging:
+    description: Directory the cell stages into.
+    required: false
+    default: dist/cells
   python-version:
     description: Python that runs SCons.
     required: false
@@ -31,12 +45,20 @@ inputs:
 runs:
   using: composite
   steps:
-    # deps.env is the only place a version is declared, so every pin this
-    # action needs is read out of it rather than repeated here.
     - name: Read Dependency Pins
       id: pins
       shell: bash
-      run: cat extension/deps.env >> "$GITHUB_OUTPUT"
+      run: |
+        set -eu
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import sys
+
+        sys.path.insert(0, "ci")
+        from common import read_pins
+
+        for key, value in read_pins().items():
+            print("%s=%s" % (key, value))
+        PY
 
     - name: Set Up Python
       uses: actions/setup-python@v5
@@ -47,73 +69,82 @@ runs:
       shell: bash
       run: pip install "scons==${{ steps.pins.outputs.SCONS_VERSION }}"
 
-    # A side module built by a different emscripten than the one that built
-    # the engine's export template does not load in the browser, so EM_VERSION
-    # in deps.env is the version Godot's own web_builds.yml pins for the
-    # engine releases this addon targets. Changing one without the other is
-    # the bug this comment exists to prevent.
     - name: Set Up Emscripten
       if: inputs.platform == 'web'
       uses: emscripten-core/setup-emsdk@v16
       with:
         version: ${{ steps.pins.outputs.EM_VERSION }}
 
-    # godot-cpp and Tracy are fetched into extension/thirdparty at the pinned
-    # refs on first build, and godot-cpp's generated bindings and static
-    # library land beside them. Those are per-cell, so the key carries the
-    # cell as well as the pins.
+    - name: Install The Pinned Android NDK
+      if: inputs.platform == 'android'
+      shell: bash
+      env:
+        NDK_VERSION: ${{ steps.pins.outputs.ANDROID_NDK_VERSION }}
+      run: |
+        set -eu
+        root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+        test -n "$root"
+        echo "sdk root $root, already holding:"
+        ls "$root/ndk" || echo "  (no ndk directory)"
+        ndk="$root/ndk/$NDK_VERSION"
+        if [ ! -d "$ndk/toolchains/llvm/prebuilt" ]; then
+          tool="$(command -v sdkmanager || true)"
+          if [ -z "$tool" ]; then
+            tool="$(find "$root/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          fi
+          test -n "$tool"
+          echo "installing ndk;$NDK_VERSION with $tool"
+          yes | "$tool" --install "ndk;$NDK_VERSION"
+        fi
+        test -d "$ndk/toolchains/llvm/prebuilt"
+        echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"
+
     - name: Cache Native Dependencies
       uses: actions/cache@v4
       with:
         path: extension/thirdparty
         key: >-
-          extension-thirdparty-${{ runner.os }}-${{ inputs.platform }}-${{
-            inputs.arch }}-${{ inputs.target }}-${{
-            hashFiles('extension/deps.env') }}
+          extension-thirdparty-${{ runner.os }}-${{ inputs.suffix }}-${{
+            hashFiles('extension/deps.env') }}-${{
+            hashFiles('ci/platforms.json') }}
 
-    # Object files for the extension's own sources. SCONS_CACHE is read by
-    # godot-cpp's SConstruct, which this build calls into.
     - name: Cache SCons Objects
       uses: actions/cache@v4
       with:
         path: .scons_cache
         key: >-
-          scons-cache-${{ runner.os }}-${{ inputs.platform }}-${{ inputs.arch
-            }}-${{ inputs.target }}-${{ hashFiles('extension/deps.env') }}-${{
+          scons-cache-${{ runner.os }}-${{ inputs.suffix }}-${{
+            inputs.scons-args }}-${{ hashFiles('extension/deps.env') }}-${{
             github.sha }}
         restore-keys: >-
-          scons-cache-${{ runner.os }}-${{ inputs.platform }}-${{ inputs.arch
-            }}-${{ inputs.target }}-${{ hashFiles('extension/deps.env') }}-
+          scons-cache-${{ runner.os }}-${{ inputs.suffix }}-${{
+            inputs.scons-args }}-${{ hashFiles('extension/deps.env') }}-
 
-    - name: Build Native Library
+    - name: Build The Cell
       shell: bash
       env:
         SCONS_CACHE: ${{ github.workspace }}/.scons_cache
+        NETW_CELL: ${{ inputs.cell }}
+        NETW_PROFILE: ${{ inputs.profile }}
+        NETW_STAGING: ${{ inputs.staging }}
+        NETW_STRIP: ${{ inputs.strip }}
+        NETW_FRESH: ${{ inputs.require-fresh }}
+        NETW_SCONS_ARGS: ${{ inputs.scons-args }}
       run: |
         set -eu
-        jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
-        args="target=${{ inputs.target }}"
-        if [ -n "${{ inputs.platform }}" ]; then
-          args="$args platform=${{ inputs.platform }}"
+        args=(python3 ci/build.py --staging "$NETW_STAGING")
+        if [ -n "$NETW_CELL" ]; then
+          args+=(--cell "$NETW_CELL")
+        else
+          args+=(--profile "$NETW_PROFILE")
         fi
-        if [ -n "${{ inputs.arch }}" ]; then
-          args="$args arch=${{ inputs.arch }}"
+        if [ "$NETW_STRIP" = "true" ]; then
+          args+=(--strip)
         fi
-        echo "scons -C extension -j$jobs $args ${{ inputs.scons-flags }}"
-        # shellcheck disable=SC2086
-        scons -C extension -j"$jobs" $args ${{ inputs.scons-flags }}
-
-    # A build that produces no library still exits zero if SCons decided
-    # everything was up to date against a poisoned cache, so the deploy
-    # directory is checked rather than assumed.
-    - name: Verify Deployed Library
-      shell: bash
-      run: |
-        set -eu
-        ls -l addons/networked/bin
-        count="$(find addons/networked/bin \
-          -name 'libnetworked*' -print | wc -l)"
-        if [ "$count" -eq 0 ]; then
-          echo "::error::no library was deployed into addons/networked/bin"
-          exit 1
+        if [ "$NETW_FRESH" = "true" ]; then
+          args+=(--require-fresh)
         fi
+        for extra in $NETW_SCONS_ARGS; do
+          args+=(--scons-arg "$extra")
+        done
+        "${args[@]}"

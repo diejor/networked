@@ -1,12 +1,26 @@
+# CORRECTED 2026-09-02 [OWNER]: `internal` IS RETIRED AS A DESTINATION.
+# GDREGISTER_INTERNAL_CLASS leaves a class in ClassDB.get_class_list() with
+# every bound member intact, so it hides the class from the editor without
+# removing it from the surface, and the engine uses it ONCE in its whole
+# source tree. A class now either STAYS published, or it de-Objectifies into
+# a plain C++ class and leaves ClassDB entirely. Existing `internal` rows are
+# a way-station to be converted, not a resting state.
+#
 # The ClassDB disposition ledger (ring-0 plan §2.9 as data, per ZD-15).
 # One row per registered class: `<Class> stay`, `<Class> retire:ZT-n`, or
 # `<Class> internal <reason>` (ZD-26). retire's unit is the track whose
 # crossing deletes the registration. internal is
 # GDREGISTER_INTERNAL_CLASS: a class a C++ core constructs and GDScript
 # never names, kept off the script-visible surface without waiting on the
-# unit that would otherwise unregister it. check_classdb_census.py refuses
-# a registration with no row and reports a row with no registration as
-# STALE.
+# unit that would otherwise unregister it.
+#
+# NOTHING MECHANICAL CHECKS THIS FILE, and that is accepted. It was a
+# completeness ledger while the registered set was shrinking toward a
+# number; it is now the written disposition per class, which is a thing a
+# person reads and a script cannot judge. A row is worth exactly the
+# argument written in it, and a registration whose row is missing is a
+# class nobody argued for. Add the row in the slice that adds the
+# GDREGISTER, and delete it in the slice that removes one.
 #
 # stay requires an argument: a §2.9 prose clause, a published contract
 # type (a seam twin's return, an option record, a kit-facing record), or a
@@ -16,136 +30,121 @@
 # is retire.
 
 # --- §2.9 named surface ---
-NetwProject stay
-NetwEntity stay
-NetwInterestLayer stay
-NetwParticipant stay
-NetwPredictStats stay
-NetwPredictJournal stay
-NetwBitBufferWriter stay
-NetwBitBufferReader stay
-NetwCodec stay
-NetwInterpolate stay
-NetwPromise stay
-NetwGroupPromise stay
-NetwQuantize stay
-NetwQuantizeBits stay
-NetwQuantizeFixed stay
-NetwQuantizeAngle stay
-NetwQuantizeQuaternion stay
-NetwQuantizeTransform2D stay
-NetwQuantizeTransform3D stay
-LocalLinkConditions stay
-LocalMultiplayerPeer stay
-LocalLoopbackSession stay
+Netw stay the name every published verb is called on, so the framework has no surface without it
+NetwEntity stay entity.gd names it on every replicated node; Netw.replicate answers one and NetwEntity.of(node) reads it back
+NetwInterestLayer stay its enum constants are the bound default params of the interest family, so entity.interest.on_enter(NetwInterestLayer.DEFAULT, cb) names it
+NetwParticipant stay Netw.participant and five NetwMultiplayer properties answer one, and a game reads a joined peer through it
+NetwAction stay the action module a game declares with Netw.configure_action and holds for the session's life
+NetwActionContext stay the payload a game's action callback receives as its one argument
+NetwDefaultJoin stay the stock join handler a game subclasses or replaces through the join seam
+NetwPhysicsStepper stay the base a game subclasses to re-step a physics space
+NetwAuthFlow stay the base a game subclasses to authenticate a joining peer
+AuthResult stay the verdict NetwAuthFlow.verify answers
+NetwServerInfo stay the advertised record a game reads off a browser result before it joins
+NetwConnectHandle stay A GAME HOLDS THE OBJECT: Netw.connection(node) answers it and every verb that brings a session online is called on it, so it is the connect plane's whole published surface and the one form 1 the plane earns
+NetwSessionHandle stay A GAME HOLDS THE OBJECT: Netw.session(node) answers it, and it carries the eight session signals a static facade structurally cannot publish, which is what earns it form 1 rather than the statics the service plane gets
+NetwClockHandle stay A GAME HOLDS THE OBJECT: Netw.clock(node) answers it, and it carries clock_before_tick and clock_on_tick, which a tick-driven component connects to and a static facade cannot publish. OWNER 2026-09-12 took option A of the facade plan's S4 over folding these onto NetwSessionHandle
+NetwTransport stay the base a game subclasses to bring its own peer, and the seam the plane calls back through; form 1 by the installation seam and by GDVIRTUAL, and every seam carries its _default so an override can reach stock behaviour
+NetwWebRTCSignaler stay the base a game subclasses so a WebRTC session exchanges SDP and ICE over signaling it chooses, and the object it hands the transport as its signaler key; form 1 by the installation seam and by GDVIRTUAL
+NetwLinkConditions stay the impairment a game or a harness authors on NetwSessionConfig, wrapping the peer before assignment; it compiles to LocalLinkConditions, which is argued separately
+NetwProbeResult retire:connect-plane-b1 the connect plane's probe resolves a NetwServerInfo and rejects with an Error, so the seven statuses are the outcome vocabulary spelled a second time and latency_ms moves onto the info it measured
+NetwService stay the Node base a game subclasses so a service registers and unregisters with tree membership
+LobbyDirectory stay the NetwService base an SDK subclasses to become the peer source for its own peer class
+MultiplayerTree stay A GAME HOLDS THE OBJECT: the node a game roots one session's branch at, carrying the exports that configure it
+ParticipantView stay A GAME HOLDS THE OBJECT: the Control a game drops into its scene to draw one participant's SubViewport and route input back into it
+HostSceneView stay A GAME HOLDS THE OBJECT: the listen host's own display, minted by the session and subclassed or placed by a game that wants to configure it
+ParticipantWindow stay A GAME HOLDS THE OBJECT: one local participant's own window, world and input, which is what a couch co-op seat is made of
+ParticipantViewport stay A GAME HOLDS THE OBJECT: the node a game adds to tile its local participants' windows and bind a joypad to each seat
+NetwPredictStats stay entity.prediction.stats answers one and a game reads its divergence counters
+NetwPredictJournal stay entity.prediction.journal answers one and a game reads its closed episodes
+NetwBitStream stay A GAME HOLDS THE OBJECT: the stream a game builds its own Serde._serialize payload in and reads back in _deserialize, and the one published spelling of the bit vocabulary the framework's own frames are written in. One row replaces three. NetwBitBufferWriter and NetwBitBufferReader split a writer from a reader, so every format a game wrote had to be spelled twice and could drift between the two spellings; NetwBitStream's mode makes one description answer for writing, reading and measuring, which is why the thing a game holds is now the format rather than a direction through it. NetwCodec was the static value layer over that pair and its own row admitted it FAILED the storage test: every member static, no game-facing line able to hold one. Its value grammar is the wire's own and lives in netw::call_args as form 4, its varint and string primitives are NetwBitStream verbs, and its encode_value pair had exactly two production callers, both crossed in W1.7.
+NetwAuthProtocol retire:connect-plane-b6 every member is static, and the thing a game supplies to the session and the session holds for its life is NetwAuthFlow, which line 43 already argues. What holds this registration is that addons/networked/gdscript/session/netw_probe_client.gd calls encode_probe_request and decode_probe_reply and branches on ProbeStatus, reached from netw_transport.gd's probe verb, and a shipping script names a static family through ClassDB or not at all. That caller crosses with the connect plane, whose probe client is native, so nothing shipping names the family and the netw::auth namespace under it carries every decision as form 4.
+NetwInterpolate stay the per-property interpolation a game authors and chains onto Netw.configure_property
+NetwPromise stay the one async spelling in the framework; every awaitable verb answers one a game awaits
+NetwGroupPromise stay the many-peer async answer Netw and NetwMultiplayer hand a game to await
+NetwQuantize stay the base a game extends to write its own bit packer, and the type every quantizer property is declared as
+NetwQuantizeScalar stay the uniform grid a game quantizes a float, int, Vector2 or Vector3 onto, by bits or by step
+NetwQuantizeAngle stay a quantizer a game authors and chains onto Netw.configure_property
+NetwQuantizeQuaternion stay a quantizer a game authors and chains onto Netw.configure_property
+NetwQuantizeTransform2D stay a quantizer a game authors and chains onto Netw.configure_property
+NetwQuantizeTransform3D stay a quantizer a game authors and chains onto Netw.configure_property
+LocalLinkConditions stay the published test kit holds one: a harness authors the impairment and hands it to the session, and the connect plane's link conditions compile to it
+LocalMultiplayerPeer stay a MultiplayerPeer a game or harness hands the engine, and the peer class the local transport is keyed by
+LocalLoopbackSession stay the published test kit holds one for the life of a rig, and the local transport pumps it through poll_frame_scoped
 
 # --- published contract types and kit-facing records ---
-NetwTimeline stay
-NetwRingBuffer stay
-NetwEvent stay
-NetwDatabaseBackend stay
-NetwIdentity stay
-ResolvedJoin stay
-JoinPayload stay
-NetwDespawnOpts stay
-NetwReparentOpts stay
-NetwControlRequest stay
-NetwPredictCarryContext stay
-NetwPredictFold stay
-NetwPredictJudgement stay
-NetwPredictRecovery stay
-NetwSynchronizers stay
+NetwTimeline stay entity.timeline and NetwMultiplayer answer one, and a game samples a past tick off it
+NetwRingBuffer stay NetwRingBuffer.create(n) is the sample window a game builds and keeps; the bound-class exemplar
+NetwDatabase stay the save file a game authors as a .tres, names from an archetype, and reads its tables off
+NetwRecordTable stay what NetwDatabase.table answers, and a game fetches and puts its records through
+NetwTransaction stay what a game's transaction body receives and queues its writes onto
+NetwDatabaseBackend stay the Resource base a game subclasses to back persistence and assigns in the inspector
+FileSystemDatabase stay the stock backend a game assigns to NetwDatabase.backend to save on disk
+WarmPolicy stay the Resource base a game subclasses to scope cache warming and assigns to NetwDatabase.warm_policy
+WarmRequest stay the per-table warming scope a game's WarmPolicy._plan_table returns
+Serde stay the byte round trip a payload type publishes
+NetwRecord stay the record a NetwDatabase table hands the game
+DictionaryRecord stay the record NetwDatabase mints when a table declares none
+NetwIdentity stay the participant identity a game reads off a NetwParticipant to name a peer
+ResolvedJoin stay the join verdict a game's join handler returns and five surviving classes name
+DebugJoinConfig stay the inspector-authored auto-join a game assigns to MultiplayerTree.debug_join
+NetwDespawnOpts stay the opts a game constructs and passes to entity despawn
+NetwReparentOpts stay the opts a game constructs and passes to scene move
+NetwControlRequest stay the control request a game reads off NetwEntity to decide whether to grant control
+NetwPredictCarryContext stay the payload a game's carry callback receives as its one argument
+NetwPredictFold stay a type of the prediction GDVIRTUAL seam a game's override receives
+NetwPredictJudgement stay a type of the prediction GDVIRTUAL seam a game's override receives
+NetwPredictRecovery stay a type of the prediction GDVIRTUAL seam a game's override returns
 
 # --- held by the permanently-GDScript compat adapters (ZD-5), which
 #     falsifies their old "once the compat is native" triggers ---
-NetwWatchBook stay
-NetwSyncKernel stay
-NetwSpawnerRoster stay
-NetwStagedWrites stay
 
 # --- the permanent keep floor (ZD-34). Reached in CODE by GDScript that
 #     ring-0 §9 keeps forever, so no crossing retires them and the holder
 #     is named in the row. MEASURED 2026-08-19 by the one-class-at-a-time
 #     parser probe over all 70 retire rows against the 116 keep-set
 #     scripts: these eleven and no others. ---
-NetwMultiplayerCore stay context/networked.gd, netw_sync_compat.gd, scene_manager.gd, multiplayer_interpolator.gd
-NetwLivenessCore stay netw_sync_compat.gd, by property reach
-NetwSyncModel stay netw_sync_compat.gd
-NetwSyncSetRow stay netw_sync_compat.gd
-NetwSpawnBook stay netw_spawner_compat.gd, netw_sync_compat.gd
-NetwSpawnRecord stay netw_spawner_compat.gd, netw_sync_compat.gd
-NetwEntityRecord stay context/networked.gd
-NetwCompTable stay context/session/netw_component_map.gd
-NetwDisplayDecl stay sync/multiplayer_interpolator.gd
-NetwDisplayBook stay sync/multiplayer_interpolator.gd, by property reach
-SchemaCore stay sync/database/netw_database.gd
-NetwSceneMark stay replication/netw_multiplayer.gd, minted by the mark reader
+NetwMultiplayer stay the session Netw.of answers, which every example and every service node resolves through
+NetwDisplayHandle stay entity.interpolation, the kit-facing display view
+NetwInterestHandle stay entity.interest, the kit-facing interest view
+NetwChannel stay the raw byte channel Netw.channel answers, the entity-less traffic door
+NetwSceneConfig stay what Netw.configure_multiplayer_scene answers, the one scene declaration
+NetwSceneHandle stay entity.scene, the kit-facing scene view
+SpawnSlot stay what SpawnSlot.for_scene answers, and a game calls place_player on it
+NetwFrameEnvelope gone its 39 channel ids mirrored the registry by hand with nothing cross-checking the two, pack and unpack had no caller outside the suite, and the three carrier magics a game sharing send_bytes must avoid now publish on NetwMultiplayer, which is where a game reaches the session anyway. COMP_BY_PATH unpublished with it: a wire constant a game never writes
+NetwPropertySetColumn stay one member column of a set, in wire order
+NetwPropertySet stay the replicated column binding a script declares
+NetwPropertySetBinding stay entity.state_binding, one live instance of a set. RE-ARGUED at C8: what holds the row is that a game reads which set is bound where, through set, route, comp and the per-field readers; the lane machinery it also published unbound in that band and wire V3 owns those internals
+NetwDespawnConfig stay returned by Netw.configure_despawn
+NetwPersistenceConfig stay returned by Netw.configure_persistence
+NetwJoinConfig stay returned by Netw.configure_join
+NetwMemberConfig stay returned by Netw.configure_rpc, configure_signal and configure_spawn
+NetwPropertyConfig stay returned by Netw.configure_property
+NetwClockConfig stay a game holds it: Netw.configure_clock answers one for fluent or preset authoring, and the session pumps from its consumed values
+NetwLagCompensationConfig stay a game holds it: Netw.configure_lagcomp answers one for fluent or preset authoring, and declaring prediction is what arms the engine without one
+NetwSessionConfig stay a game holds it: Netw.configure_session answers one for fluent or preset authoring, and MultiplayerTree's exports build the fallback
+NetwSchemaColumn stay one declared column of a schema, listed by NetwSchema.columns
+NetwSchema stay the declared typed column list Netw.configure_schema answers, chained from a static var initializer
 
 # --- test-build-only registrations (NETW_TESTS guard) ---
-Carrier stay
-NetwTestPersistenceEngine stay
-NetwTestPersistenceDatabase stay
-NetwNativeTests stay
+Carrier stay NETW_TESTS-gated, absent from every production build; a native carrier double a GDScript harness instantiates
+SpawnIdentityProbe stay NETW_TESTS-gated, absent from every production build; a spawn identity probe a GDScript harness instantiates
+NetwTestPersistenceEngine stay NETW_TESTS-gated, absent from every production build; a persistence engine double a GDScript harness instantiates
+NetwTestAuthFlow stay NETW_TESTS-gated, absent from every production build; the NetwAuthFlow seam's own test double
+NetwNativeTests stay NETW_TESTS-gated, absent from every production build; the hosted-tier entry point tests/native/run_native_tests.gd instantiates
 
 # --- zero GDScript reach anywhere, GDREGISTER_INTERNAL_CLASS (ZD-26,
 #     ZU-17). C++ constructs these; GDScript never names them. ZU-17
-#     named seven classes; the seventh, NetwInterestStats, is read by
-#     name (.edges, .vanished_dirty_skips) from
-#     addons/networked/replication/netw_multiplayer.gd, so it stays
-#     retire below with its caller instead of converting. ---
-NetwEffectLedger internal held by NetwMultiplayerCore, GDScript never names it
-NetwCarrierBuffers internal held by NetwMultiplayerCore, GDScript never names it
-NetwCarrierDatagram internal constructed by NetwMultiplayerCore::frame_datagram, GDScript never names it
-NetwSceneCore internal held by NetwMultiplayerCore, GDScript never names it
+#     named seven classes; the seventh, NetwInterestStats, stays retire
+#     below rather than converting. ---
 
 # --- scaffolding: each row's registration dies in the ZT-6 slice that
 #     deletes the last production GDScript naming it. The layout plan's
 #     EL-3 waiting room says which band pays which class. ---
-NetwClockHandle stay
-NetwPredictionEngine retire:ZT-6
-NetwPredictionCore retire:ZT-6
-NetwLagCompCore retire:ZT-6
-NetwHandleLedger retire:ZT-6
-NetwEntityControl retire:ZT-6
-NetwCallPark retire:ZT-6
-NetwChannelBook retire:ZT-6
-NetwServiceInstallBook retire:ZT-6
-NetwTxnBook retire:ZT-6
-NetwPersistenceEngine stay entity.persistence, the archetype's save face
-NetwSpawnPark retire:ZT-6
-NetwSpawnPlanner retire:ZT-6
-NetwSyncProgress retire:ZT-6
-NetwReplicationSend retire:ZT-6
-NetwNodeRef retire:ZT-6
-NetwCarrierFrame retire:ZT-6
-NetwInterestDecl retire:ZT-6
-NetwDisplayHistory retire:ZT-6
-NetwDisplayRoleFacts retire:ZT-6
-NetwDisplayPlayhead retire:ZT-6
-NetwDisplayTracks retire:ZT-6
-NetwDisplayChannel retire:ZT-6
-NetwDisplayPort retire:ZT-6
-NetwDisplayRuntime retire:ZT-6
-NetwDisplaySpecRow stay
-NetwDisplayTiming retire:ZT-6
-NetwPumpStats retire:ZT-6
-NetwPredictDeclaration retire:ZT-6
-NetwPredictConsumePlan retire:ZT-6
-NetwPredictDrive retire:ZT-6
-NetwPredictEvidence retire:ZT-6
-NetwPredictJournalRow retire:ZT-6
-NetwPredictRecoveryRequest retire:ZT-6
-NetwPredictWritePlan retire:ZT-6
-NetwPredictEpisodeReport retire:ZT-6
-NetwPredictJointPlan retire:ZT-6
-NetwPredictVerdict retire:ZT-6
-NetwPredictCommandFrame retire:ZT-6
-NetwPredictAckFrame retire:ZT-6
-NetwPredictRelayBook retire:ZT-6
-NetwPredictReplayEntry retire:ZT-6
-NetwPredictCarryAttempt retire:ZT-6
-SchemaColumn retire:ZT-6
-SchemaRecord retire:ZT-6
-TableCore retire:ZT-6
+NetwPersistenceEngine stay entity.persistence, the archetype's save face. RE-ARGUED at C8: what holds the row is `await entity.persistence.flush().wait()`, one line a game writes and one object it holds, and the sixteen wiring members that were the rest of the class unpublished in that band. The identity is the awaitable save face and nothing else
+NetwPredict stay the enum vocabulary a game, a component or a sibling subsystem names without depending on an engine
+NetwPredictIsland stay the local prediction boundary a game declares, named by NetwPredictionHandle.island
+NetwPredictFieldRecovery stay the per-field recovery ledger a game reads through NetwPredictionHandle.field_recovery
+NetwPredictionHandle stay the per-entity prediction declaration and its report, reached through NetwEntity.prediction
 
 # --- terminal tail: test doubles ---

@@ -94,7 +94,7 @@ TEST_CASE("[Networked][Settle][Hosted] unkeyed effects run in enqueue order") {
     NETW_CHECK_EQ(queue.size(), 3);
     NETW_CHECK_EQ(queue.drain().size(), 0);
 
-    CHECK(log.order() == Vector<StringName>({ "first", "second", "third" }));
+    CHECK(log.order() == Vector<StringName>({"first", "second", "third"}));
     NETW_CHECK_EQ(queue.is_empty(), true);
 }
 
@@ -109,11 +109,13 @@ TEST_CASE("[Networked][Settle][Hosted] a named key coalesces to the back") {
     NETW_CHECK_EQ(queue.size(), 2);
     queue.drain();
 
-    CHECK(log.order() == Vector<StringName>({ "other", "keyed-again" }));
+    CHECK(log.order() == Vector<StringName>({"other", "keyed-again"}));
     NETW_CHECK_EQ(log.count("keyed"), 0);
 }
 
-TEST_CASE("[Networked][Settle][Hosted] cancelling an unqueued key is no error") {
+TEST_CASE(
+    "[Networked][Settle][Hosted] cancelling an unqueued key is no error"
+) {
     SettleQueue queue;
     CallLog log;
 
@@ -156,25 +158,21 @@ TEST_CASE("[Networked][Settle][Hosted] an effect scheduled mid-pass waits") {
 
     // What the first row scheduled runs AFTER the row already queued beside it,
     // which is what "the next pass of the same drain" means.
-    CHECK(
-        log.order() == Vector<StringName>({ "same-pass", "scheduled-during" })
-    );
+    CHECK(log.order() == Vector<StringName>({"same-pass", "scheduled-during"}));
 }
 
-TEST_CASE("[Networked][Settle][Hosted] a keyed cycle reports rather than hangs") {
+TEST_CASE(
+    "[Networked][Settle][Hosted] a keyed cycle reports rather than hangs"
+) {
     SettleQueue queue;
     CallLog log;
     Ref<RefCounted> anchor;
     anchor.instantiate();
 
     std::shared_ptr<Callable> again = std::make_shared<Callable>();
-    const Callable cycle = Callable(memnew(Rescheduler(
-        &queue,
-        log.callable("pass"),
-        again,
-        "cycle",
-        anchor.ptr()
-    )));
+    const Callable cycle = Callable(memnew(
+        Rescheduler(&queue, log.callable("pass"), again, "cycle", anchor.ptr())
+    ));
     *again = cycle;
     queue.schedule(cycle, "cycle");
 
@@ -196,13 +194,9 @@ TEST_CASE("[Networked][Settle][Hosted] an unkeyed cycle names itself") {
     anchor.instantiate();
 
     std::shared_ptr<Callable> again = std::make_shared<Callable>();
-    const Callable cycle = Callable(memnew(Rescheduler(
-        &queue,
-        Callable(),
-        again,
-        StringName(),
-        anchor.ptr()
-    )));
+    const Callable cycle = Callable(memnew(
+        Rescheduler(&queue, Callable(), again, StringName(), anchor.ptr())
+    ));
     *again = cycle;
     queue.schedule(cycle, StringName());
 
@@ -212,8 +206,9 @@ TEST_CASE("[Networked][Settle][Hosted] an unkeyed cycle names itself") {
     CHECK(pending[0] == String("<unkeyed>"));
 }
 
-
-TEST_CASE("[Networked][Settle][Hosted] a window is spent by pumps, not drains") {
+TEST_CASE(
+    "[Networked][Settle][Hosted] a window is spent by pumps, not drains"
+) {
     SettleQueue queue;
     CallLog log;
     queue.schedule_after(log.callable("freed"), StringName(), 2);
@@ -257,13 +252,9 @@ TEST_CASE("[Networked][Settle][Hosted] a window survives a reported cycle") {
     Ref<RefCounted> anchor;
     anchor.instantiate();
     std::shared_ptr<Callable> again = std::make_shared<Callable>();
-    const Callable spin = Callable(memnew(Rescheduler(
-        &queue,
-        log.callable("spun"),
-        again,
-        "spin",
-        anchor.ptr()
-    )));
+    const Callable spin = Callable(memnew(
+        Rescheduler(&queue, log.callable("spun"), again, "spin", anchor.ptr())
+    ));
     *again = spin;
     queue.schedule(spin, "spin");
 

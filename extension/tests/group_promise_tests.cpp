@@ -63,7 +63,7 @@ TEST_CASE(
     "second answer changes nothing"
 ) {
     const Ref<NetwGroupPromise> group = NetwGroupPromise::create(peers(2, 3));
-    group->reject(int(ERR_TIMEOUT), String("no quorum"));
+    group->reject(ERR_TIMEOUT, String("no quorum"));
 
     NETW_CHECK_EQ(int(group->get_is_failed()), 1);
     NETW_CHECK_EQ(group->get_code(), int(ERR_TIMEOUT));
@@ -71,7 +71,7 @@ TEST_CASE(
     group->resolve_peer(2, Variant(11));
     group->remove_peer(3);
     group->resolve_all();
-    group->reject(int(ERR_BUSY), String("later"));
+    group->reject(ERR_BUSY, String("later"));
 
     NETW_CHECK_EQ(int(group->get_is_completed()), 0);
     NETW_CHECK_EQ(group->get_code(), int(ERR_TIMEOUT));
@@ -96,6 +96,57 @@ TEST_CASE(
 
     group->catch_error(log.callable("never"));
     NETW_CHECK_EQ(log.count("never"), 0);
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] GW1 a settled batch answers its results "
+    "when every peer arrived and its code when it failed, so one channel "
+    "carries both outcomes"
+) {
+    const Ref<NetwGroupPromise> done = NetwGroupPromise::create(peers(1, 0));
+    done->resolve_peer(1, Variant(7));
+    CHECK(done->answer().get_type() == Variant::DICTIONARY);
+
+    const Ref<NetwGroupPromise> bad = NetwGroupPromise::create(peers(1, 0));
+    bad->reject(ERR_TIMEOUT, String());
+    CHECK(bad->answer() == Variant(int(ERR_TIMEOUT)));
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] GW2 a pending batch emits ready once on "
+    "its settle edge and every waiter is listening to that one emission"
+) {
+    const CallLog answer;
+
+    const Ref<NetwGroupPromise> batch = NetwGroupPromise::create(peers(1, 2));
+    batch->wait();
+    batch->connect(StringName("ready"), answer.callable("first"));
+    batch->connect(StringName("ready"), answer.callable("second"));
+
+    batch->resolve_peer(1, Variant(7));
+    NETW_CHECK_EQ(answer.count("first"), 0);
+
+    batch->resolve_peer(2, Variant(7));
+    NETW_CHECK_EQ(answer.count("first"), 1);
+    NETW_CHECK_EQ(answer.count("second"), 1);
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] GW3 wait() on a settled batch notifies "
+    "nobody during the call itself, so a caller that waits after the answer "
+    "arrived still subscribes before it is delivered"
+) {
+    const CallLog answer;
+
+    const Ref<NetwGroupPromise> batch = NetwGroupPromise::create(peers(1, 0));
+    batch->connect(StringName("settled"), answer.callable("settled"));
+    batch->resolve_peer(1, Variant(7));
+    NETW_CHECK_EQ(answer.count("settled"), 1);
+
+    batch->wait();
+    batch->wait();
+
+    NETW_CHECK_EQ(answer.count("settled"), 1);
 }
 
 } // namespace TestNetwGroupPromise

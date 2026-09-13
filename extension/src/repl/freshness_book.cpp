@@ -19,7 +19,6 @@ bool FreshnessBook::accept(
     HashMap<uint64_t, uint16_t>::Iterator last = held.find(key);
     if (last != held.end()) {
         const uint16_t seen = last->value;
-        // Forward by less than half the ring. Equal is not forward.
         const uint16_t ahead = uint16_t(p_seq - seen);
         if (ahead == 0 || ahead >= 32768) {
             return false;
@@ -27,6 +26,32 @@ bool FreshnessBook::accept(
     }
     held[key] = p_seq;
     return true;
+}
+
+void FreshnessBook::open_datagram() {
+    datagram.clear();
+}
+
+bool FreshnessBook::accept_in_datagram(
+    int p_sender,
+    int64_t p_route,
+    uint8_t p_channel,
+    uint16_t p_seq
+) {
+    NETW_ZONE_NC("Freshness accept in datagram", colors::WIRE);
+    const uint64_t key = stream(p_sender, p_channel);
+    for (uint32_t at = 0; at < datagram.size(); ++at) {
+        const DatagramVerdict &held = datagram[at];
+        if (held.route == p_route && held.stream == key) {
+            return held.accepted;
+        }
+    }
+    const bool accepted = accept(p_sender, p_route, p_channel, p_seq);
+    if (!accepted) {
+        ++stale;
+    }
+    datagram.push_back(DatagramVerdict{p_route, key, accepted});
+    return accepted;
 }
 
 void FreshnessBook::clear_route(int64_t p_route) {
@@ -50,6 +75,12 @@ void FreshnessBook::clear_peer(int p_peer) {
 
 void FreshnessBook::clear() {
     routes.clear();
+    datagram.clear();
+    stale = 0;
+}
+
+uint32_t FreshnessBook::stale_count() const {
+    return stale;
 }
 
 uint32_t FreshnessBook::stream_count() const {

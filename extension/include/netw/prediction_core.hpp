@@ -2,6 +2,7 @@
 
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/predict.hpp"
 
 namespace netw {
 
@@ -25,6 +26,12 @@ enum class Schedule : int {
 inline bool rerunnable(int p_schedule) {
     return p_schedule == int(Schedule::TICK)
         || p_schedule == int(Schedule::STEPPED);
+}
+
+inline bool island_pass_admits(int p_pass_schedule, int p_schedule) {
+    return p_pass_schedule == int(Schedule::TICK)
+        ? rerunnable(p_schedule)
+        : p_schedule == p_pass_schedule;
 }
 
 enum class Role : int {
@@ -106,6 +113,13 @@ struct Fold {
     DriveKind kind = DriveKind::NONE;
 };
 
+struct RecoveryPlan {
+    godot::Dictionary restore;
+    godot::Dictionary write;
+    bool teleport = false;
+    bool skip = true;
+};
+
 class NetwPredictRecovery : public godot::RefCounted {
     GDCLASS(NetwPredictRecovery, godot::RefCounted)
 
@@ -182,7 +196,7 @@ public:
     static godot::Ref<NetwPredictFold> of(
         int64_t p_label,
         bool p_fresh,
-        int p_kind
+        NetwPredict::DriveKind p_kind
     );
 
     int64_t label() const {
@@ -193,196 +207,205 @@ public:
         return decided.fresh;
     }
 
-    int kind() const {
-        return int(decided.kind);
+    NetwPredict::DriveKind kind() const {
+        return static_cast<NetwPredict::DriveKind>(int(decided.kind));
     }
 };
 
-class NetwPredictionCore : public godot::RefCounted {
-    GDCLASS(NetwPredictionCore, godot::RefCounted)
+namespace prediction_core {
 
-protected:
-    static void _bind_methods();
+#if defined(NETW_TESTS)
+int64_t records_minted();
+void note_record_mint();
+#define NETW_NOTE_RECORD_MINT() ::netw::prediction_core::note_record_mint()
+#else
+#define NETW_NOTE_RECORD_MINT() ((void)0)
+#endif
 
-public:
-    static godot::Ref<NetwPredictJudgement> evaluate(
-        int domain,
-        int verdict,
-        const godot::Dictionary &predicted,
-        const godot::Dictionary &payload,
-        const godot::Dictionary &wiring,
-        godot::Dictionary field_sink
-    );
+Judgement judge(
+    int domain,
+    int verdict,
+    const godot::Dictionary &predicted,
+    const godot::Dictionary &payload,
+    const godot::Dictionary &wiring,
+    godot::Dictionary field_sink
+);
 
-    static int domain_of(
-        bool declared,
-        bool approximate,
-        int64_t label,
-        int64_t window_until
-    );
+godot::Ref<NetwPredictJudgement> evaluate(
+    int domain,
+    int verdict,
+    const godot::Dictionary &predicted,
+    const godot::Dictionary &payload,
+    const godot::Dictionary &wiring,
+    godot::Dictionary field_sink
+);
 
-    static Fold fold(
-        int64_t latest_input_tick,
-        int64_t last_driven_input_tick,
-        int64_t frame_tick
-    );
+int domain_of(
+    bool declared,
+    bool approximate,
+    int64_t label,
+    int64_t window_until
+);
 
-    static godot::Ref<NetwPredictFold> predict_fold(
-        int64_t latest_input_tick,
-        int64_t last_driven_input_tick,
-        int64_t frame_tick
-    );
+Fold fold(
+    int64_t latest_input_tick,
+    int64_t last_driven_input_tick,
+    int64_t frame_tick
+);
 
-    static int consume_action(int depth, int buffer);
+godot::Ref<NetwPredictFold> predict_fold(
+    int64_t latest_input_tick,
+    int64_t last_driven_input_tick,
+    int64_t frame_tick
+);
 
-    static godot::Dictionary compared_state(
-        const godot::Dictionary &payload,
-        const godot::Dictionary &causal
-    );
+int consume_action(int depth, int buffer);
 
-    static godot::Dictionary project_payload(
-        const godot::Dictionary &payload,
-        const godot::Dictionary &projection,
-        double age
-    );
+godot::Dictionary compared_state(
+    const godot::Dictionary &payload,
+    const godot::Dictionary &causal
+);
 
-    static godot::Dictionary converge_toward(
-        const godot::Dictionary &restore,
-        const godot::Dictionary &current,
-        const godot::Dictionary &rules,
-        const godot::Dictionary &angles
-    );
+godot::Dictionary project_payload(
+    const godot::Dictionary &payload,
+    const godot::Dictionary &projection,
+    double age
+);
 
-    static godot::Ref<NetwPredictRecovery> recover(
-        const godot::Dictionary &payload,
-        int policy,
-        int correction,
-        int snap_restore,
-        const godot::Dictionary &projection,
-        const godot::Dictionary &current,
-        const godot::Dictionary &pose_errors,
-        const godot::Dictionary &wiring,
-        const godot::Dictionary &verdict,
-        double tick_delta
-    );
+godot::Dictionary converge_toward(
+    const godot::Dictionary &restore,
+    const godot::Dictionary &current,
+    const godot::Dictionary &rules,
+    const godot::Dictionary &angles
+);
 
-    static godot::Dictionary escalation_after(
-        int streak,
-        int last_sign,
-        double last_divergence,
-        double divergence,
-        int sign
-    );
+RecoveryPlan recover_plan(
+    const godot::Dictionary &payload,
+    int policy,
+    int correction,
+    int snap_restore,
+    const godot::Dictionary &projection,
+    const godot::Dictionary &current,
+    const godot::Dictionary &pose_errors,
+    const godot::Dictionary &wiring,
+    const godot::Dictionary &verdict,
+    double tick_delta
+);
 
-    static int measure(
-        const godot::Dictionary &field_sink,
-        const godot::Dictionary &tolerances
-    );
+godot::Ref<NetwPredictRecovery> recover(
+    const godot::Dictionary &payload,
+    int policy,
+    int correction,
+    int snap_restore,
+    const godot::Dictionary &projection,
+    const godot::Dictionary &current,
+    const godot::Dictionary &pose_errors,
+    const godot::Dictionary &wiring,
+    const godot::Dictionary &verdict,
+    double tick_delta
+);
 
-    static int attribute(
-        bool pre_equal,
-        bool command_equal,
-        bool environment_equal,
-        bool topology_equal,
-        bool raw_equal,
-        bool witness_equal,
-        int local_evidence,
-        int peer_evidence,
-        bool evidence_complete
-    );
+godot::Dictionary escalation_after(
+    int streak,
+    int last_sign,
+    double last_divergence,
+    double divergence,
+    int sign
+);
 
-    static int64_t raw_state_fingerprint(const godot::Dictionary &payload);
+int measure(
+    const godot::Dictionary &field_sink,
+    const godot::Dictionary &tolerances
+);
 
-    static int64_t fact_fingerprint(const godot::Dictionary &facts);
+int attribute(
+    bool pre_equal,
+    bool command_equal,
+    bool environment_equal,
+    bool topology_equal,
+    bool raw_equal,
+    bool witness_equal,
+    int local_evidence,
+    int peer_evidence,
+    bool evidence_complete
+);
 
-    static int64_t topology_fingerprint(
-        const godot::Dictionary &facts,
-        int quantum
-    );
+int64_t raw_state_fingerprint(const godot::Dictionary &payload);
 
-    static int contact_count_bucket(int count);
+int64_t fact_fingerprint(const godot::Dictionary &facts);
 
-    static int differing_family(
-        const godot::PackedInt32Array &local,
-        const godot::PackedInt32Array &peer
-    );
+int64_t topology_fingerprint(const godot::Dictionary &facts, int quantum);
 
-    static int64_t window_after(
-        int64_t label,
-        int64_t cooldown,
-        int64_t window_until
-    );
+int contact_count_bucket(int count);
 
-    static int64_t environment_digest(
-        int64_t epoch,
-        const godot::Dictionary &samples
-    );
+int differing_family(
+    const godot::PackedInt32Array &local,
+    const godot::PackedInt32Array &peer
+);
 
-    static godot::Dictionary delta_direction(
-        const godot::StringName &field,
-        const godot::Variant &delta
-    );
+int64_t window_after(int64_t label, int64_t cooldown, int64_t window_until);
 
-    static godot::Dictionary guard_projection(
-        const godot::Dictionary &projection,
-        const godot::Dictionary &field_divergence,
-        double epsilon,
-        const godot::Dictionary &epsilon_overrides,
-        int max_restore_ticks,
-        int ack_age_ticks,
-        double tick_delta
-    );
+int64_t environment_digest(int64_t epoch, const godot::Dictionary &samples);
 
-    static godot::Dictionary transport(
-        const godot::Dictionary &predicted,
-        const godot::Dictionary &authority,
-        const godot::Dictionary &current,
-        const godot::Dictionary &pose_fields,
-        const godot::Dictionary &angles
-    );
+godot::Dictionary delta_direction(
+    const godot::StringName &field,
+    const godot::Variant &delta
+);
 
-    static godot::Variant pose_delta(
-        const godot::Variant &target,
-        const godot::Variant &current,
-        bool is_angle
-    );
+godot::Dictionary guard_projection(
+    const godot::Dictionary &projection,
+    const godot::Dictionary &field_divergence,
+    double epsilon,
+    const godot::Dictionary &epsilon_overrides,
+    int max_restore_ticks,
+    int ack_age_ticks,
+    double tick_delta
+);
 
-    static bool teleport_reached(
-        const godot::Dictionary &pose_errors,
-        const godot::Dictionary &thresholds,
-        double default_threshold
-    );
+godot::Variant pose_delta(
+    const godot::Variant &target,
+    const godot::Variant &current,
+    bool is_angle
+);
 
-    static PredictionVerdict evaluate_struct_verdict(
-        int domain,
-        int verdict,
-        const godot::Dictionary &predicted,
-        const godot::Dictionary &payload,
-        const godot::Dictionary &wiring
-    );
+godot::Variant pose_advance(
+    const godot::Variant &current,
+    const godot::Variant &delta
+);
 
-    static godot::Dictionary calculate_joint_floor(
-        const godot::Dictionary &bases,
-        const godot::Dictionary &relay_floors,
-        int64_t epoch_floor,
-        int64_t history_floor,
-        int64_t present
-    );
+bool teleport_reached(
+    const godot::Dictionary &pose_errors,
+    const godot::Dictionary &thresholds,
+    double default_threshold
+);
 
-    static int calculate_joint_cell(
-        bool authored,
-        bool relayed,
-        bool predictor_valid
-    );
+PredictionVerdict evaluate_struct_verdict(
+    int domain,
+    int verdict,
+    const godot::Dictionary &predicted,
+    const godot::Dictionary &payload,
+    const godot::Dictionary &wiring
+);
 
-    static int admit_frame(
-        int channel,
-        int sender,
-        int controller,
-        bool receiver_is_server,
-        bool payload_empty,
-        int route_verdict
-    );
-};
+godot::Dictionary calculate_joint_floor(
+    const godot::Dictionary &bases,
+    const godot::Dictionary &relay_floors,
+    int64_t epoch_floor,
+    int64_t history_floor,
+    int64_t present
+);
+
+int calculate_joint_cell(bool authored, bool relayed, bool predictor_valid);
+
+int admit_frame(
+    int channel,
+    int sender,
+    int controller,
+    bool receiver_is_server,
+    bool payload_empty,
+    int route_verdict
+);
+
+} // namespace prediction_core
 
 } // namespace netw

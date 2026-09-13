@@ -1,0 +1,32 @@
+[gd_scene load_steps=6 format=3 uid="uid://c7rlballrktlg"]
+
+[ext_resource type="Script" path="res://examples/rocket_league/scripts/ball.gd" id="1_ball"]
+[ext_resource type="Material" uid="uid://bp1lxtywe5u3c" path="res://examples/rocket_league/materials/ball.tres" id="2_skin"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_ball"]
+friction = 0.7
+bounce = 0.7
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_ball"]
+margin = 0.1
+radius = 1.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_ball"]
+radius = 1.0
+height = 2.0
+
+[node name="ball|0" type="RigidBody3D"]
+collision_layer = 4
+collision_mask = 13
+mass = 0.4
+physics_material_override = SubResource("PhysicsMaterial_ball")
+can_sleep = false
+input_ray_pickable = false
+script = ExtResource("1_ball")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_ball")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = ExtResource("2_skin")

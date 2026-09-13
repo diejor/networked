@@ -1,17 +1,17 @@
 #include "support/netw_test.h"
 
-#include "netw/interest_relay.hpp"
+#include "netw/interest/relay.hpp"
 
-namespace TestNetwInterestRelay {
+namespace TestNetwRelay {
 
 using namespace godot;
-using netw::InterestAwareness;
-using netw::InterestRelay;
+using netw::interest::Awareness;
+using netw::interest::Relay;
 
-constexpr int64_t LAYER = InterestAwareness::LAYER;
-constexpr int64_t OBSERVER = InterestAwareness::OBSERVER;
-constexpr int64_t ENTER = InterestAwareness::ENTER;
-constexpr int64_t EXIT = InterestAwareness::EXIT;
+constexpr int64_t LAYER = Awareness::LAYER;
+constexpr int64_t OBSERVER = Awareness::OBSERVER;
+constexpr int64_t ENTER = Awareness::ENTER;
+constexpr int64_t EXIT = Awareness::EXIT;
 
 Array row(
     int64_t type,
@@ -33,21 +33,21 @@ Array good_layer_row() {
     return row(LAYER, 7, StringName("arena"), 0, ENTER);
 }
 
-InterestRelay fresh() {
-    return InterestRelay();
+Relay fresh() {
+    return Relay();
 }
 
 bool decodes(const Variant &p_row) {
-    InterestAwareness edge;
-    return InterestAwareness::from_array(p_row, edge);
+    Awareness edge;
+    return Awareness::from_array(p_row, edge);
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] an awareness row survives the round trip "
     "it was built for"
 ) {
-    const InterestAwareness layer
-        = InterestAwareness::layer_edge(7, StringName("arena"), ENTER);
+    const Awareness layer
+        = Awareness::layer_edge(7, StringName("arena"), ENTER);
     NETW_CHECK_EQ(layer.type, int(LAYER));
     NETW_CHECK_EQ(layer.route, 7);
     CHECK(layer.layer_id == StringName("arena"));
@@ -55,13 +55,13 @@ TEST_CASE(
     NETW_CHECK_EQ(layer.kind, int(ENTER));
     CHECK(layer.to_array() == good_layer_row());
 
-    const InterestAwareness observer
-        = InterestAwareness::observer_edge(7, StringName("arena"), 4, EXIT);
+    const Awareness observer
+        = Awareness::observer_edge(7, StringName("arena"), 4, EXIT);
     NETW_CHECK_EQ(observer.type, int(OBSERVER));
     NETW_CHECK_EQ(observer.observer_peer, 4);
 
-    InterestAwareness reread;
-    CHECK(InterestAwareness::from_array(observer.to_array(), reread));
+    Awareness reread;
+    CHECK(Awareness::from_array(observer.to_array(), reread));
     CHECK(reread.to_array() == observer.to_array());
 }
 
@@ -133,8 +133,7 @@ TEST_CASE(
     CHECK_FALSE(decodes(negative_observer));
 
     NETW_CHECK_EQ(
-        InterestAwareness::observer_edge(7, StringName("arena"), 0, ENTER)
-            .route,
+        Awareness::observer_edge(7, StringName("arena"), 0, ENTER).route,
         0
     );
 }
@@ -143,21 +142,12 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a peer's backlog keeps the order it "
     "happened in"
 ) {
-    InterestRelay relay = fresh();
+    Relay relay = fresh();
     CHECK(relay.is_empty());
 
-    relay.append(
-        4,
-        InterestAwareness::layer_edge(7, StringName("a"), ENTER)
-    );
-    relay.append(
-        9,
-        InterestAwareness::layer_edge(7, StringName("a"), ENTER)
-    );
-    relay.append(
-        4,
-        InterestAwareness::layer_edge(7, StringName("a"), EXIT)
-    );
+    relay.append(4, Awareness::layer_edge(7, StringName("a"), ENTER));
+    relay.append(9, Awareness::layer_edge(7, StringName("a"), ENTER));
+    relay.append(4, Awareness::layer_edge(7, StringName("a"), EXIT));
 
     CHECK(!relay.is_empty());
     PackedInt64Array expected;
@@ -172,15 +162,10 @@ TEST_CASE(
     NETW_CHECK_EQ(relay.wire_for(11).size(), 0);
 }
 
-TEST_CASE(
-    "[Networked][Interest][Hosted] a refused edge is queued for nobody"
-) {
-    InterestRelay relay = fresh();
+TEST_CASE("[Networked][Interest][Hosted] a refused edge is queued for nobody") {
+    Relay relay = fresh();
 
-    relay.append(
-        4,
-        InterestAwareness::layer_edge(0, StringName("a"), ENTER)
-    );
+    relay.append(4, Awareness::layer_edge(0, StringName("a"), ENTER));
 
     CHECK(relay.is_empty());
     NETW_CHECK_EQ(relay.targets().size(), 0);
@@ -190,15 +175,9 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a forgotten peer is owed nothing and is "
     "named by nothing"
 ) {
-    InterestRelay relay = fresh();
-    relay.append(
-        4,
-        InterestAwareness::layer_edge(7, StringName("a"), ENTER)
-    );
-    relay.append(
-        9,
-        InterestAwareness::layer_edge(7, StringName("a"), ENTER)
-    );
+    Relay relay = fresh();
+    relay.append(4, Awareness::layer_edge(7, StringName("a"), ENTER));
+    relay.append(9, Awareness::layer_edge(7, StringName("a"), ENTER));
 
     relay.forget(4);
     relay.forget(11);
@@ -213,4 +192,4 @@ TEST_CASE(
     NETW_CHECK_EQ(relay.targets().size(), 0);
 }
 
-} // namespace TestNetwInterestRelay
+} // namespace TestNetwRelay

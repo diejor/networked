@@ -89,9 +89,9 @@ func tick_until(predicate: Callable, max_ticks: int = 120) -> bool:
 
 func rocks_left(runner: NetwSceneRunner) -> int:
 	var world := _get_world(runner)
-	if not world or not world.level:
+	if world == null:
 		return 0
-	var rocks := world.level.get_node_or_null("Rocks")
+	var rocks := world.root.get_node_or_null("Rocks")
 	if not rocks:
 		return 0
 	return rocks.get_child_count()
@@ -99,17 +99,17 @@ func rocks_left(runner: NetwSceneRunner) -> int:
 
 func winner_visible(runner: NetwSceneRunner) -> bool:
 	var world := _get_world(runner)
-	if not world or not world.level:
+	if world == null:
 		return false
-	var winner := world.level.get_node_or_null("Winner")
+	var winner := world.root.get_node_or_null("Winner")
 	return winner != null and winner.visible
 
 
 func get_score(runner: NetwSceneRunner, peer_id: int) -> int:
 	var world := _get_world(runner)
-	if not world or not world.level:
+	if world == null:
 		return 0
-	var score := world.level.get_node_or_null("Score")
+	var score := world.root.get_node_or_null("Score")
 	if not score:
 		return 0
 	return score.get_score(peer_id)
@@ -122,9 +122,9 @@ func is_stunned(runner: NetwSceneRunner, pname: StringName) -> bool:
 
 func count_bombs(runner: NetwSceneRunner) -> int:
 	var world := _get_world(runner)
-	if not world or not world.level:
+	if world == null:
 		return 0
-	var bombs := world.level.get_node_or_null("Bombs")
+	var bombs := world.root.get_node_or_null("Bombs")
 	return bombs.get_child_count() if bombs else 0
 
 
@@ -145,14 +145,13 @@ func settle_network(
 
 
 func _begin_game(host: NetwSceneRunner) -> void:
-	var gamestate := host.tree.get_service(BomberGamestate) \
+	var gamestate := Netw.service(host.tree, BomberGamestate) \
 			as BomberGamestate
 	assert_that(gamestate).is_not_null()
 	gamestate.begin_game()
 
 
 func _get_world(runner: NetwSceneRunner) -> NetwSceneHandle:
-	if not runner or not runner.tree or not runner.tree.api:
+	if not runner or not runner.tree:
 		return null
-	var api := runner.tree.api
-	return api.scene_handle(api.scene_find(&"World"))
+	return Netw.scene(runner.tree, &"World")

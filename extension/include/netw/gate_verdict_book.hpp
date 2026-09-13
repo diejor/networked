@@ -34,7 +34,7 @@ public:
     };
 
 private:
-    int64_t totals[ROWS] = { 0 };
+    int64_t totals[ROWS] = {0};
     godot::HashSet<int64_t> warned_routes;
 
 public:

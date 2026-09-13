@@ -3,7 +3,9 @@
 #include "support/netw_cells.h"
 #include "support/scenario_run.h"
 
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/predict/drive.hpp"
+#include "netw/predict/engine.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -43,10 +45,9 @@ Scenario declared_lane(
     Scenario scenario;
     scenario.label = p_label;
     scenario.epsilon = 0.01;
-    scenario.world.clocked(p_tickrate, 3).lag_compensated().player(
-        predicted_player(p_schedule),
-        0
-    );
+    scenario.world.clocked(p_tickrate, 3)
+        .lag_compensated()
+        .player(predicted_player(p_schedule), 0);
     if (p_delayed) {
         scenario.conditions(netw::LocalLinkConditions::polls(4));
     }
@@ -107,7 +108,7 @@ Scenario fresh_side_effect_lane() {
     godot::Dictionary command;
     command[godot::StringName("motion")] = godot::Vector2(1.0, 0.0);
     command[godot::StringName("bombing")] = true;
-    scenario.input_at(30, "P", command);
+    scenario.input_at(27, "P", command);
     scenario.perturb(28, "P", godot::Vector2(50.0, 50.0));
     return scenario.until(78);
 }
@@ -347,9 +348,7 @@ LawVerdict law_frame_authors_once(const ScenarioRun &p_run) {
     return law_held();
 }
 
-LawVerdict law_held_frame_charges_next_transition(
-    const ScenarioRun &p_run
-) {
+LawVerdict law_held_frame_charges_next_transition(const ScenarioRun &p_run) {
     const Lane lane = p_run.lane("P");
     if (lane.quantum_declared() != 1) {
         return law_broken(
@@ -624,6 +623,45 @@ TEST_CASE(
     REQUIRE(run.regime_reached());
     NETW_CELL(L_JOINT, scenario);
     NETW_LAW_HOLDS(L_JOINT, run);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Declared][Law] JW1 a joint owner that corrects "
+    "moves its group's STATE FLOOR, which is the only witness that the pass "
+    "was handed something to replay"
+) {
+    const Scenario scenario = joint_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    netw::NetwMultiplayer *owner = rig.client(0);
+    REQUIRE(owner != nullptr);
+    netw::NetwPredictionEngine *const pool = owner->get_prediction_engine();
+    REQUIRE(pool != nullptr);
+
+    const godot::RID seated = rig.entity_of(godot::StringName("P"), 0);
+    const godot::Ref<godot::RefCounted> wrapper
+        = owner->entity_get_view(seated);
+    REQUIRE(wrapper.is_valid());
+    const int64_t slot = pool->slot_of(wrapper);
+    REQUIRE(slot >= 0);
+
+    const godot::PackedInt64Array stats = pool->joint_stats(slot);
+    NETW_CHECK_GE(
+        stats[netw::NetwPredictionEngine::STAT_JOINT_FLOOR_STATE_MOVES],
+        int64_t(1)
+    );
+
+    SUBCASE(
+        "and the corrections counter stays zero, because a joint owner "
+        "takes the basis branch instead of the recovery ladder"
+    ) {
+        NETW_CHECK_GE(
+            stats[netw::NetwPredictionEngine::STAT_JOINT_PASSES],
+            int64_t(1)
+        );
+    }
 }
 
 TEST_CASE(

@@ -1,6 +1,5 @@
 #include "netw/carrier_buffers.hpp"
 
-#include "godot/class_db.hpp"
 #include "netw/log.hpp"
 
 namespace netw {
@@ -31,8 +30,7 @@ PackedByteArray NetwCarrierBuffers::append(
         run = runs.getptr(p_peer);
     }
 
-    const bool overflows = !p_reliable
-        && !run->is_empty()
+    const bool overflows = !p_reliable && !run->is_empty()
         && int64_t(run->size()) + int64_t(p_frame.size()) > p_budget;
     if (overflows) {
         NETW_TRACE(
@@ -81,23 +79,6 @@ int64_t NetwCarrierBuffers::pending(int64_t p_peer, bool p_reliable) const {
 void NetwCarrierBuffers::clear() {
     unreliable.clear();
     reliable.clear();
-}
-
-void NetwCarrierBuffers::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("append", "peer", "frame", "reliable", "budget"),
-        &NetwCarrierBuffers::append
-    );
-    ClassDB::bind_method(
-        D_METHOD("take", "peer", "reliable"),
-        &NetwCarrierBuffers::take
-    );
-    ClassDB::bind_method(D_METHOD("peers", "reliable"), &NetwCarrierBuffers::peers);
-    ClassDB::bind_method(
-        D_METHOD("pending", "peer", "reliable"),
-        &NetwCarrierBuffers::pending
-    );
-    ClassDB::bind_method(D_METHOD("clear"), &NetwCarrierBuffers::clear);
 }
 
 } // namespace netw

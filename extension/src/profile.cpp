@@ -14,6 +14,8 @@ const char *const PREDICT_ACK_AGE = "Networked predict ack_age";
 const char *const PREDICT_FALLBACKS = "Networked predict fallbacks";
 const char *const PREDICT_PROBATION = "Networked predict probation";
 const char *const PREDICT_DIVERGENCE = "Networked predict divergence";
+const char *const PREDICT_TAP_DRAINED = "Networked predict tap_drained";
+const char *const RPC_CALLS_DEFERRED = "Networked rpc calls_deferred";
 
 } // namespace names
 
@@ -116,6 +118,20 @@ void configure_plots() {
         false,
         false,
         colors::PREDICTION
+    );
+    NETW_PLOT_CONFIG(
+        names::PREDICT_TAP_DRAINED,
+        PlotFormat::NUMBER,
+        true,
+        false,
+        colors::PREDICTION
+    );
+    NETW_PLOT_CONFIG(
+        names::RPC_CALLS_DEFERRED,
+        PlotFormat::NUMBER,
+        true,
+        false,
+        colors::SESSION
     );
 }
 

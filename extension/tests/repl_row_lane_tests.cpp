@@ -11,8 +11,8 @@
 
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
-#include "netw/repl/row_lane.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/repl/row_lane.hpp"
 
 using namespace godot;
 
@@ -22,20 +22,29 @@ using godot::Array;
 using godot::LocalVector;
 using godot::Ref;
 using netw::SchemaCore;
-using netw::SchemaRecord;
 using netw::repl::RowLane;
+using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 
 const int PEER = 7;
 const int OTHER = 9;
 
-Ref<SchemaRecord> body() {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = godot::StringName("Body");
-    SchemaCore::append_column(record, godot::StringName("x"), SchemaCore::I16, 1);
-    SchemaCore::append_column(record, godot::StringName("y"), SchemaCore::I16, 1);
-    SchemaCore::fix(record);
+SchemaRecord body() {
+    SchemaRecord record;
+    record.name = godot::StringName("Body");
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("x"),
+        SchemaCore::I16,
+        1
+    );
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("y"),
+        SchemaCore::I16,
+        1
+    );
+    SchemaCore::fix(&record);
     return record;
 }
 
@@ -46,20 +55,21 @@ Array pair(int64_t x, int64_t y) {
     return out;
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a lane opens on its schema or not at all") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a lane opens on its schema or not at all"
+) {
     RowLane good = RowLane::open(body());
     CHECK(good.valid());
 
-    Ref<SchemaRecord> variant;
-    variant.instantiate();
-    variant->name = godot::StringName("Loose");
+    SchemaRecord variant;
+    variant.name = godot::StringName("Loose");
     SchemaCore::append_column(
-        variant,
+        &variant,
         godot::StringName("anything"),
         SchemaCore::VARIANT,
         1
     );
-    SchemaCore::fix(variant);
+    SchemaCore::fix(&variant);
 
     // A self-describing column has no fixed width, so the lane has no plan and
     // says so at open rather than at the first send.
@@ -115,7 +125,7 @@ TEST_CASE(
     // of a lane: peers join at different moments.
     REQUIRE(lane.mask_for(PEER, first) == lane.plan().full_mask());
     lane.stage(PEER, 1, first);
-    lane.acknowledge(PEER, 1);
+    lane.acknowledge(PEER, 1, 0);
     REQUIRE(lane.knows(PEER));
 
     CodeRow second;
@@ -139,7 +149,7 @@ TEST_CASE(
     REQUIRE(lane.gather(pair(10, 20), row));
     REQUIRE(lane.mask_for(PEER, row) == lane.plan().full_mask());
     lane.stage(PEER, 1, row);
-    lane.acknowledge(PEER, 1);
+    lane.acknowledge(PEER, 1, 0);
     REQUIRE(lane.knows(PEER));
 
     LocalVector<int> nobody;
@@ -152,15 +162,13 @@ TEST_CASE(
     NETW_CHECK_EQ(lane.mask_for(PEER, row), lane.plan().full_mask());
 }
 
-TEST_CASE(
-    "[Networked][Repl][Hosted] a caught-up peer costs the pass nothing"
-) {
+TEST_CASE("[Networked][Repl][Hosted] a caught-up peer costs the pass nothing") {
     RowLane lane = RowLane::open(body());
     CodeRow row;
     REQUIRE(lane.gather(pair(10, 20), row));
     REQUIRE(lane.mask_for(PEER, row) == lane.plan().full_mask());
     lane.stage(PEER, 1, row);
-    lane.acknowledge(PEER, 1);
+    lane.acknowledge(PEER, 1, 0);
 
     CodeRow same;
     REQUIRE(lane.gather(pair(10, 20), same));

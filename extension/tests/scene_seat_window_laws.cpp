@@ -5,40 +5,31 @@
 #include "netw/api/entity_record.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
 #include "netw/scene_core.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwSceneSeatWindowLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::CallLog;
 
 struct Bound {
-    Ref<RefCounted> wrapper;
-    Ref<netw::NetwEntityRecord> record;
+    Ref<netw::NetwEntity> wrapper;
+    netw::NetwEntityRecord *record = nullptr;
     RID handle;
     Node *owner = nullptr;
 };
 
-Ref<RefCounted> a_seat_announcing_row() {
-    Ref<RefCounted> row;
+Ref<netw::NetwParticipant> a_seat_announcing_row() {
+    Ref<netw::NetwParticipant> row;
     row.instantiate();
-    Array args;
-    Dictionary from;
-    from["name"] = "from";
-    from["type"] = int(Variant::OBJECT);
-    Dictionary to;
-    to["name"] = "to";
-    to["type"] = int(Variant::OBJECT);
-    args.push_back(from);
-    args.push_back(to);
-    netw::gd::add_user_signal(row.ptr(), "scene_changed", args);
     return row;
 }
 
 Bound bind_entity(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     bool p_declares_scene
 ) {
@@ -47,7 +38,7 @@ Bound bind_entity(
     p_parent->add_child(made.owner);
     made.wrapper.instantiate();
     made.handle = p_core->get_liveness_core()->entity_create();
-    made.record.instantiate();
+    made.record = made.wrapper->get_record();
     made.record->adopt_handle(made.handle);
     made.record->set_declares_scene(p_declares_scene);
     const int64_t route = p_core->get_liveness_core()->reserve_route();
@@ -58,12 +49,12 @@ Bound bind_entity(
         made.record,
         made.owner
     ));
-    made.owner->set_meta(NetwMultiplayerCore::wrapper_meta(), made.wrapper);
+    made.owner->set_meta(NetwMultiplayer::wrapper_meta(), made.wrapper);
     return made;
 }
 
 Bound mount_scene(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     const char *p_stem
 ) {
@@ -76,10 +67,7 @@ Bound mount_scene(
     return made;
 }
 
-void open_participant(
-    const Ref<NetwMultiplayerCore> &p_core,
-    int64_t p_peer
-) {
+void open_participant(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
     p_core->participant_adopt(p_peer, a_seat_announcing_row());
     REQUIRE(p_core->participant_has(p_peer));
 }
@@ -90,7 +78,7 @@ TEST_CASE(
     "the same pump by a re-seat leaves the peer where the re-seat put it "
     "rather than nowhere"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound arena = mount_scene(core, root, "Arena");
@@ -102,7 +90,7 @@ TEST_CASE(
     core->scene_seat_clear_deferred(peer, arena.handle);
 
     CHECK(core->settle_has_key(
-        NetwMultiplayerCore::scene_seat_clear_key(peer, arena.handle)
+        NetwMultiplayer::scene_seat_clear_key(peer, arena.handle)
     ));
     CHECK(core->participant_seat(peer) == arena.handle);
 
@@ -111,7 +99,7 @@ TEST_CASE(
 
     CHECK(core->participant_seat(peer) == annex.handle);
     CHECK_FALSE(core->settle_has_key(
-        NetwMultiplayerCore::scene_seat_clear_key(peer, arena.handle)
+        NetwMultiplayer::scene_seat_clear_key(peer, arena.handle)
     ));
 
     memdelete(root);
@@ -122,7 +110,7 @@ TEST_CASE(
     "it needs no idle frame: a peer released and left alone through one "
     "drain holds no seat afterwards and its row is told once"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound arena = mount_scene(core, root, "Arena");
@@ -153,7 +141,7 @@ TEST_CASE(
     "per scene, so one peer's repeated release edges against one scene "
     "settle once and two peers leaving one scene in a pump are two clears"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound arena = mount_scene(core, root, "Arena");
@@ -165,8 +153,8 @@ TEST_CASE(
     REQUIRE(core->participant_seat_move(second, arena.handle));
 
     CHECK(
-        NetwMultiplayerCore::scene_seat_clear_key(first, arena.handle)
-        != NetwMultiplayerCore::scene_seat_clear_key(second, arena.handle)
+        NetwMultiplayer::scene_seat_clear_key(first, arena.handle)
+        != NetwMultiplayer::scene_seat_clear_key(second, arena.handle)
     );
 
     core->scene_seat_clear_deferred(first, arena.handle);
@@ -192,19 +180,19 @@ TEST_CASE(
     "peer and one scene are two settles rather than either swallowing the "
     "other"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound arena = mount_scene(core, root, "Arena");
     const int64_t peer = 7;
 
     CHECK(
-        NetwMultiplayerCore::scene_seat_clear_key(peer, arena.handle)
-        != NetwMultiplayerCore::scene_seat_release_key(peer, arena.handle)
+        NetwMultiplayer::scene_seat_clear_key(peer, arena.handle)
+        != NetwMultiplayer::scene_seat_release_key(peer, arena.handle)
     );
     CHECK(
-        NetwMultiplayerCore::scene_seat_release_key(peer, arena.handle)
-        != NetwMultiplayerCore::scene_seat_release_key(peer + 1, arena.handle)
+        NetwMultiplayer::scene_seat_release_key(peer, arena.handle)
+        != NetwMultiplayer::scene_seat_release_key(peer + 1, arena.handle)
     );
 
     memdelete(root);
@@ -216,7 +204,7 @@ TEST_CASE(
     "loses it even though it is still alive, which is the difference a "
     "reparent and a free cannot be told apart by at the exit edge alone"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
@@ -227,19 +215,19 @@ TEST_CASE(
 
     REQUIRE(core->is_server());
     REQUIRE(core->scene_admit_peer(arena.handle, peer));
-    REQUIRE(core->entity_scene_of(pawn.handle) == arena.handle);
-    NETW_CHECK_EQ(core->scene_peers(arena.handle).size(), 1);
+    REQUIRE(core->scene_of(pawn.handle) == arena.handle);
+    NETW_CHECK_EQ(core->scene_get_peers(arena.handle).size(), 1);
 
     CHECK_FALSE(
         core->scene_release_departed(arena.handle, pawn.handle, true, peer)
     );
-    NETW_CHECK_EQ(core->scene_peers(arena.handle).size(), 1);
+    NETW_CHECK_EQ(core->scene_get_peers(arena.handle).size(), 1);
 
     arena.owner->remove_child(pawn.owner);
 
-    REQUIRE_FALSE(core->entity_scene_of(pawn.handle).is_valid());
+    REQUIRE_FALSE(core->scene_of(pawn.handle).is_valid());
     CHECK(core->scene_release_departed(arena.handle, pawn.handle, true, peer));
-    NETW_CHECK_EQ(core->scene_peers(arena.handle).size(), 0);
+    NETW_CHECK_EQ(core->scene_get_peers(arena.handle).size(), 0);
 
     arena.owner->add_child(pawn.owner);
     memdelete(root);
@@ -251,7 +239,7 @@ TEST_CASE(
     "which is what lets a freed player release the admission its own record "
     "can no longer resolve"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
@@ -261,10 +249,10 @@ TEST_CASE(
     const int64_t peer = 7;
 
     REQUIRE(core->scene_admit_peer(arena.handle, peer));
-    REQUIRE(core->entity_scene_of(pawn.handle) == arena.handle);
+    REQUIRE(core->scene_of(pawn.handle) == arena.handle);
 
     CHECK(core->scene_release_departed(arena.handle, pawn.handle, false, peer));
-    NETW_CHECK_EQ(core->scene_peers(arena.handle).size(), 0);
+    NETW_CHECK_EQ(core->scene_get_peers(arena.handle).size(), 0);
 
     CHECK_FALSE(
         core->scene_release_departed(arena.handle, pawn.handle, false, peer)
@@ -278,7 +266,7 @@ TEST_CASE(
     "client reaching this window releases nobody and the boundary it holds "
     "is left as the server wrote it"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
@@ -297,7 +285,7 @@ TEST_CASE(
     CHECK_FALSE(
         core->scene_release_departed(arena.handle, pawn.handle, false, peer)
     );
-    NETW_CHECK_EQ(core->scene_peers(arena.handle).size(), 1);
+    NETW_CHECK_EQ(core->scene_get_peers(arena.handle).size(), 1);
 
     memdelete(root);
 }

@@ -1,6 +1,7 @@
 #include "netw/object_port.hpp"
 
 #include "godot/callable.hpp"
+#include "godot/node.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -24,7 +25,7 @@ void ObjectPort::unbind() {
     id = ObjectID();
 }
 
-Object *ObjectPort::resolve(const char *p_module) {
+Object *ObjectPort::resolve(SubsystemName p_module) {
     if (!id.is_valid()) {
         return nullptr;
     }
@@ -44,7 +45,7 @@ Object *ObjectPort::resolve(const char *p_module) {
 
 Dictionary port_capture(
     ObjectPort &r_port,
-    const char *p_module,
+    SubsystemName p_module,
     const Array &p_keys
 ) {
     Dictionary out;
@@ -61,7 +62,7 @@ Dictionary port_capture(
 
 bool port_apply(
     ObjectPort &r_port,
-    const char *p_module,
+    SubsystemName p_module,
     const Dictionary &p_payload
 ) {
     Object *owner = r_port.resolve(p_module);
@@ -77,11 +78,11 @@ bool port_apply(
 }
 
 void port_sync_transform(Object *p_owner) {
-    // A StringName cannot be a file-scope static: it would be constructed
-    // before the engine's string database exists.
     const StringName sync_transform("force_update_transform");
-    if (p_owner != nullptr && p_owner->has_method(sync_transform)) {
-        p_owner->call(sync_transform);
+    Node *node = Object::cast_to<Node>(p_owner);
+    if (node != nullptr && node->is_inside_tree()
+        && node->has_method(sync_transform)) {
+        node->call(sync_transform);
     }
 }
 

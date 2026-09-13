@@ -7,7 +7,7 @@ namespace TestZu25OneRecordLaws {
 
 using namespace godot;
 using netw::NetwEntity;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 
 Ref<NetwEntity> wrapper() {
     Ref<NetwEntity> out;
@@ -18,7 +18,7 @@ Ref<NetwEntity> wrapper() {
 }
 
 TEST_CASE("[Networked][Liveness][Hosted] both doors keep one record") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     const int64_t adopted_route = core->liveness_reserve_route();
@@ -54,4 +54,4 @@ TEST_CASE("[Networked][Liveness][Hosted] both doors keep one record") {
     CHECK(core->wrapper_for_route(data_first_route) == arriving);
 }
 
-}
+} // namespace TestZu25OneRecordLaws

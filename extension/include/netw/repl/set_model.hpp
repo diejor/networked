@@ -5,7 +5,7 @@
 #include "godot/local_vector.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
-#include "netw/entity_control.hpp"
+#include "netw/entity/control.hpp"
 
 namespace netw::repl {
 
@@ -29,7 +29,7 @@ struct SetRow {
     godot::RID set;
     int64_t record = SET_RECORD_NONE;
     int64_t schema_hash = 0;
-    int64_t policy = int64_t(WritePolicy::AUTHORITY);
+    int64_t policy = int64_t(entity::Control::WritePolicy::AUTHORITY);
     int64_t audience = SET_AUDIENCE_PUBLIC;
 };
 
@@ -75,7 +75,7 @@ public:
         const godot::RID &p_set,
         int64_t p_record,
         int64_t p_schema_hash,
-        int64_t p_policy = int64_t(WritePolicy::AUTHORITY),
+        int64_t p_policy = int64_t(entity::Control::WritePolicy::AUTHORITY),
         int64_t p_audience = SET_AUDIENCE_PUBLIC
     );
 

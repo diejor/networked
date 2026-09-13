@@ -73,8 +73,9 @@ Useful references
 
 Use these roles for links:
 
-- ``:ref:`quick start <doc_quick_start>``` for another page in these docs.
-- ``:ref:`MultiplayerTree <class_MultiplayerTree>``` for Networked classes.
+- ``:ref:`documentation <doc_contributing_documentation>``` for another page in
+  these docs.
+- ``:ref:`NetwMultiplayer <class_NetwMultiplayer>``` for Networked classes.
 - ``:godot:`SceneMultiplayer <SceneMultiplayer>``` for Godot API pages.
 
 Keep docs changes close to the code they describe. If a behavior is still

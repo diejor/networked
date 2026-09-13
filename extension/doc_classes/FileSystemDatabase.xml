@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="FileSystemDatabase" inherits="NetwDatabaseBackend" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A [NetwDatabaseBackend] that stores each record as one [DictionaryRecord] file.
+	</brief_description>
+	<description>
+		A record lives at [code]&lt;root&gt;/&lt;table&gt;/&lt;id&gt;.&lt;ext&gt;[/code]. The root folds [member app_id] and the open slot into [member base_dir], so two saves of one game never meet.
+		[codeblock lang=text]
+		base_dir
+		└── app_id
+		    └── slot
+		        └── table
+		            └── id.res
+		[/codeblock]
+		Every read and write goes straight to disk through [ResourceLoader] and [ResourceSaver]. There is no cache, so [member NetwDatabase.warm_policy] is ignored and a write is durable the moment it returns.
+		[codeblock]
+		var db := NetwDatabase.new()
+		var fs := FileSystemDatabase.new()
+		fs.base_dir = "user://saves"
+		fs.use_text_format = true   # readable .tres instead of binary .res
+		db.backend = fs
+		[/codeblock]
+		A subdirectory under the slot root that no registered table claims is a ghost table. Initialization reports each one as a warning and never deletes data on its own, because a directory the schema stopped naming is more often a migration than garbage.
+		Two live backends pointing at one slot root is refused with an error rather than tolerated: both would write the same files and each would report the other's tables as ghosts. Share one [NetwDatabase] instead, or give them different [member base_dir].
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="app_id" type="String" setter="set_app_id" getter="get_app_id" default="&quot;&quot;">
+			Application scope folded into the storage path ahead of the save slot. Leave it empty to store slots directly under [member base_dir]. Set it to keep several games sharing one [member base_dir] from colliding.
+		</member>
+		<member name="base_dir" type="String" setter="set_base_dir" getter="get_base_dir" default="&quot;res://saves&quot;">
+			Root directory for every table subdirectory. Point it at [code]user://saves[/code] for a shipped game: a [code]res://[/code] root is rewritten to [code]user://[/code] outside the editor, because an exported project's resources are read-only.
+		</member>
+		<member name="use_text_format" type="bool" setter="set_use_text_format" getter="get_use_text_format" default="false">
+			Picks the record file extension. [code]true[/code] writes the readable [code].tres[/code] text form, and [code]false[/code] the compact binary [code].res[/code]. [ResourceSaver] dispatches on the extension and refuses one it does not recognize, so these are the engine's own two and not a format this class invents.
+		</member>
+	</members>
+</class>

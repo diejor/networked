@@ -1,5 +1,7 @@
 #include "netw/join_roster.hpp"
 
+#include "netw/session/frames.hpp"
+
 using namespace godot;
 
 namespace netw {
@@ -45,27 +47,27 @@ Array JoinRoster::accepted_joins() const {
     return out;
 }
 
-Array JoinRoster::serialize_accepted() const {
-    Array out;
+PackedByteArray JoinRoster::roster_frame() const {
+    LocalVector<AcceptFrame> rows;
     for (const int64_t peer_id : peers_in_order()) {
-        out.push_back(accepted[peer_id]->serialize());
+        rows.push_back(accepted[peer_id]->accept_frame());
     }
-    return out;
+    return session::roster_write(rows);
 }
 
 int JoinRoster::name_verdict(
     const StringName &name,
     const PackedStringArray &taken,
-    bool is_debug,
+    bool renames_on_collision,
     bool has_identity
 ) const {
     if (!taken.has(String(name))) {
         return ADMIT;
     }
-    if (is_debug) {
-        return RENAME;
+    if (has_identity) {
+        return REFUSE;
     }
-    return has_identity ? REFUSE : ADMIT;
+    return renames_on_collision ? RENAME : ADMIT;
 }
 
 StringName JoinRoster::free_name(

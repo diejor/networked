@@ -16,6 +16,7 @@ enum class SpecKind {
     SVARINT,
     BOOL1,
     BYTES_CAPPED,
+    STRING,
 };
 
 struct Spec {
@@ -48,6 +49,10 @@ constexpr Spec bytes_capped(int cap) {
     return Spec{SpecKind::BYTES_CAPPED, cap, 0};
 }
 
+constexpr Spec string() {
+    return Spec{SpecKind::STRING, STRING_CAP, 0};
+}
+
 template <auto MemberPtr> struct Field {
     static constexpr auto member = MemberPtr;
     const char *name;
@@ -72,6 +77,20 @@ bool apply_field(const Spec &spec, Stream &stream, Owner &value) {
         return stream.bytes_capped(slot, int(spec.low));
     } else if constexpr (std::is_same_v<Member, bool>) {
         return stream.bool1(slot);
+    } else if constexpr (std::is_same_v<Member, godot::String>) {
+        return string_field(stream, slot);
+    } else if constexpr (std::is_same_v<Member, godot::StringName>) {
+        godot::String staged;
+        if constexpr (!Stream::is_reading) {
+            staged = godot::String(slot);
+        }
+        if (!string_field(stream, staged)) {
+            return false;
+        }
+        if constexpr (Stream::is_reading) {
+            slot = godot::StringName(staged);
+        }
+        return true;
     } else if (spec.kind == SpecKind::BITS) {
         using Unsigned = std::make_unsigned_t<Member>;
         uint64_t staged = uint64_t(Unsigned(slot));

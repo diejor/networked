@@ -1,38 +1,10 @@
-# Read the Docs configuration file
-# https://docs.readthedocs.com/platform/stable/config-file/v2.html
-#
-# This build compiles the native library, downloads a headless Godot,
-# regenerates the class XML via `godot --doctool`, runs make_rst.py, and then
-# sphinx-build. The committed docs/classes/ directory is therefore *not* a build
-# input — it is gitignored and produced on every RTD build.
-
 version: 2
 
 build:
   os: ubuntu-24.04
   tools:
     python: "3.13"
-  # Sync with the version used in .github/workflows/docs.yml
-  apt_packages:
-    - wget
-    - unzip
   commands:
     - pip install -r docs/requirements.txt
-    - cd docs && python tools/build_make_rst.py
-    # The addon's own classes live in the native library, and the GDScript that
-    # types against them will not parse without it, so doctool would emit an
-    # empty class reference. addons/networked/bin is git-ignored, so the library
-    # is built here rather than checked out.
-    - pip install "scons==$(grep '^SCONS_VERSION=' extension/deps.env | cut -d= -f2)"
-    - scons -C extension -j$(nproc)
-    - wget -q https://github.com/godotengine/godot/releases/download/4.7-stable/Godot_v4.7-stable_linux.x86_64.zip -O /tmp/godot.zip
-    - unzip /tmp/godot.zip -d /tmp
-    - mv /tmp/Godot_v4.7-stable_linux.x86_64 ./godot_linux.x86_64
-    - chmod +x ./godot_linux.x86_64
-    - cd docs && mkdir -p api
-    - cd docs && ../godot_linux.x86_64 --headless --path .. --editor --quit || true
-    - cd docs && ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs . --headless --path .. --quit
-    - cd docs && ls -R api
-    - cd docs && python tools/filter_private.py api api_filtered
-    - cd docs && python tools/make_rst.py api_filtered --output classes
     - cd docs && python -m sphinx -T --keep-going -b html -d _build/doctrees . $READTHEDOCS_OUTPUT/html
+

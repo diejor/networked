@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwActionContext" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The server-side request context of one [NetwAction].
+	</brief_description>
+	<description>
+		Carries the requester, the clamped view tick, and the correlation key the optimistic effect was armed under. An authority method calls [method bind] before adding a spawned entity to the tree, or [method deny] when validation rejects the request.
+		[codeblock]
+		func _place_bomb(ctx: NetwActionContext) -&gt; void:
+		    var past := lag.sample(entity, ctx.view_tick)
+		    if past.is_empty():
+		        ctx.deny()
+		        return
+		    var bomb := BOMB.instantiate()
+		    ctx.bind(bomb)
+		    bombs.add_child(bomb)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bind">
+			<return type="void" />
+			<param index="0" name="node" type="Node" />
+			<description>
+				Binds [param node] so its [member NetwEntity.entity_id] confirms this action when the authoritative spawn arrives. Call it before adding the node to the tree.
+			</description>
+		</method>
+		<method name="deny">
+			<return type="void" />
+			<description>
+				Denies this action and asks the requesting peer to revert it. Idempotent.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="execution_tick" type="int" setter="" getter="get_execution_tick">
+			The server tick that ran the authority method.
+		</member>
+		<member name="requested_tick" type="int" setter="" getter="get_requested_tick">
+			The tick the requester originally asked the server to evaluate, before clamping.
+		</member>
+		<member name="requester" type="int" setter="" getter="get_requester">
+			The peer id that sent the request.
+		</member>
+		<member name="view_tick" type="int" setter="" getter="get_view_tick">
+			The tick used for server validation, clamped to the executing tick.
+		</member>
+	</members>
+</class>

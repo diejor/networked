@@ -53,7 +53,7 @@ LeaveDecision decision_for(const SpawnRow &p_row, int64_t p_peer) {
         return LeaveDecision();
     }
     LeaveDecision copy;
-    copy.despawn = found->value.despawn;
+    copy.hide = found->value.hide;
     copy.custom = found->value.custom.duplicate(true);
     return copy;
 }
@@ -144,16 +144,14 @@ LocalVector<SpawnOp> reconcile(
             const LeaveEffect *parent_effect = row.parent_route > 0
                 ? effect_for(leave_effects, row.parent_route, peer)
                 : nullptr;
-            const bool parent_despawns = parent_effect != nullptr
-                && (parent_effect->forced || parent_effect->decision.despawn);
+            const bool parent_hides = parent_effect != nullptr
+                && (parent_effect->forced || parent_effect->decision.hide);
 
             LeaveEffect effect;
             effect.decision = decision_for(row, peer);
-            effect.forced = parent_despawns;
-            // A row that still wants this peer lost it to its parent, so the
-            // parent's verdict is the one that applies.
+            effect.forced = parent_hides;
             if (parent_effect != nullptr && local) {
-                effect.decision.despawn = parent_despawns;
+                effect.decision.hide = parent_hides;
             }
             effects.insert(peer, effect);
         }
@@ -183,9 +181,8 @@ LocalVector<SpawnOp> reconcile(
             op.decision
                 = effect != nullptr ? effect->decision : LeaveDecision();
             op.forced = effect != nullptr && effect->forced;
-            op.action = op.decision.despawn || op.forced
-                ? SpawnAction::DESPAWN
-                : SpawnAction::RETAIN;
+            op.action = op.decision.hide || op.forced ? SpawnAction::HIDE
+                                                      : SpawnAction::RETAIN;
             plan.push_back(op);
         }
     }

@@ -18,6 +18,38 @@ public:
         REPLAY_DEPTH_BUCKETS = 33,
     };
 
+    enum FactAt {
+        FACT_QUANTUM_STEPS = 2,
+        FACT_CONSUMED = 7,
+        FACT_MISSING = 8,
+        FACT_STARVED = 9,
+        FACT_HELD = 10,
+        FACT_DRIVE_SEQ = 12,
+        FACT_LAST_DRIVE_LABEL = 13,
+        FACT_TAPE_EPOCH = 15,
+        FACT_TAPE_INDEX = 16,
+        FACT_TAPE_QUEUE_DEPTH = 17,
+        FACT_RESYNC = 18,
+        FACT_SKIPPED = 19,
+        FACT_FRAMES_DROPPED_INVALID = 20,
+        FACT_COMMAND_FRAMES_SENT = 21,
+        FACT_COMMAND_FRAMES_RECEIVED = 22,
+        FACT_COMMAND_QUEUE_DEPTH = 23,
+        FACT_RELAYED_RECORDED = 24,
+        FACT_RELAYED_DROPPED_LATE = 25,
+        FACT_ACK_CONFIRMED = 26,
+        FACT_ACK_FRONTIER = 27,
+        FACT_JOURNAL_CLOSED = 28,
+        FACT_SUBSTITUTED = 31,
+        FACT_ARRIVALS = 32,
+        FACT_REPLAY_DEPTH = 33,
+        FACT_CONSUME_SHAPE = 34,
+        FACT_CLIENT_FP_VERIFIED = 39,
+        FACT_CLIENT_MISMATCHES = 40,
+        FACT_JOINT_DEPTH = 44,
+        FACT_LINGER_HELD = 52,
+    };
+
     enum Source : uint8_t {
         SOURCE_HELD = 0,
         SOURCE_DRIVE = 1,
@@ -40,8 +72,8 @@ public:
     };
 
 private:
-    godot::Ref<NetwPredictionEngine> pool;
-    godot::Ref<godot::RefCounted> entity;
+    NetwPredictionEngine *pool = nullptr;
+    godot::Ref<NetwEntity> entity;
 
     godot::LocalVector<int64_t> held;
     godot::PackedInt32Array arrivals;
@@ -71,8 +103,8 @@ public:
     NetwPredictStats();
 
     void bind_slot(
-        const godot::Ref<NetwPredictionEngine> &p_pool,
-        const godot::Ref<godot::RefCounted> &p_entity
+        NetwPredictionEngine *p_pool,
+        const godot::Ref<NetwEntity> &p_entity
     );
 
     godot::Dictionary to_dictionary() const;

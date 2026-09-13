@@ -9,66 +9,81 @@ namespace netw::wire {
 
 namespace {
 
-// Bits one element of each SchemaCore::ColumnType occupies unquantized,
-// indexed by the enum. The storage table beside the declaration answers what an
-// element is HELD in, which is a different question: five integer widths share
-// one storage array and each carries its own width here.
-//
-// VARIANT is zero because a self-describing element has no fixed width, and
-// that zero is what makes a schema carrying one unplannable.
 const int ELEMENT_WIDTHS[SchemaCore::COLUMN_TYPE_COUNT] = {
-    32,  // F32
-    64,  // F64
-    8,   // I8
-    8,   // U8
-    16,  // I16
-    16,  // U16
-    32,  // I32
-    64,  // I64
-    1,   // BOOL
-    64,  // VECTOR2
-    96,  // VECTOR3
-    128, // VECTOR4
-    128, // COLOR
-    128, // QUATERNION
-    64,  // ENTITY
-    0,   // VARIANT
+    32,
+    64,
+    8,
+    8,
+    16,
+    16,
+    32,
+    64,
+    1,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    0,
 };
+
+const int ELEMENT_COUNTS[SchemaCore::COLUMN_TYPE_COUNT] = {
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    2,
+    3,
+    4,
+    4,
+    4,
+    1,
+    1,
+};
+
+bool type_in_range(int column_type) {
+    return column_type >= 0 && column_type < SchemaCore::COLUMN_TYPE_COUNT;
+}
 
 } // namespace
 
 int WirePlan::element_width(int column_type) {
-    if (column_type < 0 || column_type >= SchemaCore::COLUMN_TYPE_COUNT) {
-        return 0;
-    }
-    return ELEMENT_WIDTHS[column_type];
+    return type_in_range(column_type) ? ELEMENT_WIDTHS[column_type] : 0;
 }
 
-WirePlan WirePlan::compile(const Ref<SchemaRecord> &record) {
+int WirePlan::element_count(int column_type) {
+    return type_in_range(column_type) ? ELEMENT_COUNTS[column_type] : 0;
+}
+
+WirePlan WirePlan::compile(const SchemaRecord &record) {
     NETW_ZONE_NC("WirePlan compile", colors::WIRE);
     WirePlan plan;
-    if (record.is_null() || !record->sealed) {
+    if (!record.sealed) {
         return plan;
     }
-    const int count = record->column_count();
-    if (count > int(MAX_COLUMNS)) {
-        return plan;
-    }
+    const int count = record.column_count();
     for (int index = 0; index < count; ++index) {
-        const Ref<SchemaColumn> column = record->at(index);
-        if (column.is_null()) {
-            return WirePlan();
-        }
+        const SchemaColumn *column = record.at(index);
+        const int declared = column->stride > 0 ? column->stride : 1;
         ColumnPlan slot;
-        slot.stride = column->stride > 0 ? column->stride : 1;
+        slot.delta = column->delta;
         if (column->quantizer.is_valid()) {
-            slot.width = column->quantizer->bit_width(
+            const Variant::Type element = static_cast<Variant::Type>(
                 SchemaCore::element_type(column->type)
             );
+            slot.width = column->quantizer->bit_width(element);
+            slot.stride = declared * column->quantizer->stride(element);
         } else {
             slot.width = element_width(column->type);
+            slot.stride = declared * element_count(column->type);
         }
-        if (slot.width <= 0) {
+        if (slot.width <= 0 || slot.stride <= 0) {
             return WirePlan();
         }
         slot.offset = plan.total_bits;

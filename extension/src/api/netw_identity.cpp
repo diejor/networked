@@ -68,10 +68,7 @@ Variant NetwIdentity::stable_id_of(Object *p_node) {
 }
 
 void NetwIdentity::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("get_username"),
-        &NetwIdentity::get_username
-    );
+    ClassDB::bind_method(D_METHOD("get_username"), &NetwIdentity::get_username);
     ClassDB::bind_method(
         D_METHOD("set_username", "value"),
         &NetwIdentity::set_username

@@ -8,7 +8,7 @@ namespace netw::repl {
 
 using namespace godot;
 
-RowLane RowLane::open(const Ref<SchemaRecord> &p_schema) {
+RowLane RowLane::open(const SchemaRecord &p_schema) {
     RowLane lane;
     lane.declaration = p_schema;
     lane.compiled = wire::WirePlan::compile(p_schema);
@@ -28,8 +28,12 @@ void RowLane::stage(int p_peer, uint16_t p_seq, const wire::CodeRow &p_row) {
     baselines.stage(p_peer, p_seq, p_row);
 }
 
-void RowLane::acknowledge(int p_peer, uint16_t p_acked_seq) {
-    baselines.acknowledge(p_peer, p_acked_seq);
+void RowLane::acknowledge(
+    int p_peer,
+    uint16_t p_acked_seq,
+    uint32_t p_history
+) {
+    baselines.acknowledge(p_peer, p_acked_seq, p_history);
 }
 
 void RowLane::retain(const LocalVector<int> &p_recipients) {

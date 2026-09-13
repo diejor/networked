@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://yyctffv44op"]
+
+[ext_resource type="PackedScene" uid="uid://cnetwsharedlob" path="res://examples/shared/in_lobby.tscn" id="1_in"]
+[ext_resource type="Script" path="res://examples/rocket_league/scripts/lobby_root.gd" id="2_root"]
+
+[node name="Lobby" type="Node3D"]
+script = ExtResource("2_root")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="InLobby" parent="UI" instance=ExtResource("1_in")]
+unique_name_in_owner = true
+match_scene = "res://examples/rocket_league/scenes/arena.tscn"

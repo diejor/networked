@@ -1,18 +1,12 @@
 #include "support/netw_test.h"
 
-#include "netw/api/liveness_core.hpp"
-#include "netw/spawn_park.hpp"
+#include "netw/liveness_core.hpp"
+#include "netw/spawn/park.hpp"
 
-namespace TestNetwSpawnPark {
+namespace TestNetwPark {
 
 using namespace godot;
-using netw::NetwSpawnPark;
-
-Ref<NetwSpawnPark> fresh() {
-    Ref<NetwSpawnPark> park;
-    park.instantiate();
-    return park;
-}
+using netw::spawn::Park;
 
 PackedByteArray frame(uint8_t marker) {
     PackedByteArray out;
@@ -24,96 +18,114 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a parked frame is taken once, and a route that "
     "parked nothing answers nothing"
 ) {
-    const Ref<NetwSpawnPark> park = fresh();
+    Park park;
 
-    CHECK(park->park(31, frame(7), NetwSpawnPark::WAIT_ROUTE, 0));
-    CHECK(park->has(31));
-    NETW_CHECK_EQ(park->size(), 1);
+    CHECK(park.park(31, frame(7), Park::WAIT_ROUTE, 0));
+    CHECK(park.has(31));
+    NETW_CHECK_EQ(park.size(), 1);
 
-    CHECK(park->take(31) == frame(7));
-    CHECK_FALSE(park->has(31));
-    NETW_CHECK_EQ(park->take(31).size(), 0);
-    NETW_CHECK_EQ(park->take(99).size(), 0);
+    CHECK(park.take(31) == frame(7));
+    CHECK_FALSE(park.has(31));
+    NETW_CHECK_EQ(park.take(31).size(), 0);
+    NETW_CHECK_EQ(park.take(99).size(), 0);
 }
 
 TEST_CASE(
     "[Networked][Spawn][Hosted] the same spawn arriving twice keeps the frame "
     "it parked with"
 ) {
-    const Ref<NetwSpawnPark> park = fresh();
-    park->park(31, frame(7), NetwSpawnPark::WAIT_ROUTE, 0);
+    Park park;
+    park.park(31, frame(7), Park::WAIT_ROUTE, 0);
 
-    CHECK_FALSE(park->park(31, frame(9), NetwSpawnPark::WAIT_SCENE, 500));
+    CHECK_FALSE(park.park(31, frame(9), Park::WAIT_SCENE, 500));
 
-    NETW_CHECK_EQ(park->size(), 1);
-    CHECK(park->take(31) == frame(7));
+    NETW_CHECK_EQ(park.size(), 1);
+    CHECK(park.take(31) == frame(7));
 }
 
 TEST_CASE(
     "[Networked][Spawn][Hosted] a cancelled park applies nothing, which is a "
     "despawn arriving mid-park"
 ) {
-    const Ref<NetwSpawnPark> park = fresh();
-    park->park(31, frame(7), NetwSpawnPark::WAIT_ROUTE, 0);
+    Park park;
+    park.park(31, frame(7), Park::WAIT_ROUTE, 0);
 
-    CHECK(park->cancel(31));
-    CHECK_FALSE(park->cancel(31));
-    NETW_CHECK_EQ(park->take(31).size(), 0);
-    NETW_CHECK_EQ(park->size(), 0);
+    CHECK(park.cancel(31));
+    CHECK_FALSE(park.cancel(31));
+    NETW_CHECK_EQ(park.take(31).size(), 0);
+    NETW_CHECK_EQ(park.size(), 0);
 }
 
 TEST_CASE(
     "[Networked][Spawn][Hosted] what a row waits on decides who retries it"
 ) {
-    const Ref<NetwSpawnPark> park = fresh();
-    park->park(31, frame(1), NetwSpawnPark::WAIT_ROUTE, 0);
-    park->park(32, frame(2), NetwSpawnPark::WAIT_SCENE, 500);
-    park->park(33, frame(3), NetwSpawnPark::WAIT_SCENE, 900);
+    Park park;
+    park.park(31, frame(1), Park::WAIT_ROUTE, 0);
+    park.park(32, frame(2), Park::WAIT_SCENE, 500);
+    park.park(33, frame(3), Park::WAIT_SCENE, 900);
 
     PackedInt64Array on_route;
     on_route.push_back(31);
-    CHECK(park->waiting_on(NetwSpawnPark::WAIT_ROUTE) == on_route);
-    NETW_CHECK_EQ(park->waiting_on(NetwSpawnPark::WAIT_SCENE).size(), 2);
+    CHECK(park.waiting_on(Park::WAIT_ROUTE) == on_route);
+    NETW_CHECK_EQ(park.waiting_on(Park::WAIT_SCENE).size(), 2);
 }
 
 TEST_CASE(
-    "[Networked][Spawn][Hosted] only a scene wait expires on the wall clock, "
-    "because a route wait is bounded by its waiter"
+    "[Networked][Spawn][Hosted] a wait carrying a deadline expires on the "
+    "wall clock, and a route wait carries none because its waiter bounds it"
 ) {
-    const Ref<NetwSpawnPark> park = fresh();
-    park->park(31, frame(1), NetwSpawnPark::WAIT_ROUTE, 0);
-    park->park(32, frame(2), NetwSpawnPark::WAIT_SCENE, 500);
+    Park park;
+    park.park(31, frame(1), Park::WAIT_ROUTE, 0);
+    park.park(32, frame(2), Park::WAIT_SCENE, 500);
+    park.park(33, frame(3), Park::WAIT_ADOPT, 700);
 
-    CHECK_FALSE(park->is_expired(32, 499));
-    CHECK(park->is_expired(32, 500));
-    CHECK(park->is_expired(32, 5000));
+    CHECK_FALSE(park.is_expired(32, 499));
+    CHECK(park.is_expired(32, 500));
+    CHECK(park.is_expired(32, 5000));
 
-    CHECK_FALSE(park->is_expired(31, 5000));
-    CHECK_FALSE(park->is_expired(99, 5000));
+    CHECK_FALSE(park.is_expired(33, 699));
+    CHECK(park.is_expired(33, 700));
+
+    CHECK_FALSE(park.is_expired(31, 5000));
+    CHECK_FALSE(park.is_expired(99, 5000));
 }
 
 TEST_CASE(
-    "[Networked][Spawn][Hosted] a cleared park is waiting for nothing"
+    "[Networked][Spawn][Hosted] a peeked payload stays parked, so a retry "
+    "that does not land keeps the deadline it was parked under"
 ) {
-    const Ref<NetwSpawnPark> park = fresh();
-    park->park(31, frame(1), NetwSpawnPark::WAIT_ROUTE, 0);
-    park->park(32, frame(2), NetwSpawnPark::WAIT_SCENE, 500);
+    Park park;
+    park.park(31, frame(7), Park::WAIT_ADOPT, 500);
 
-    park->clear();
+    CHECK(park.peek(31) == frame(7));
+    CHECK(park.has(31));
+    CHECK_FALSE(park.park(31, frame(9), Park::WAIT_ADOPT, 9000));
+    CHECK(park.is_expired(31, 500));
 
-    NETW_CHECK_EQ(park->size(), 0);
-    CHECK_FALSE(park->has(31));
-    NETW_CHECK_EQ(park->waiting_on(NetwSpawnPark::WAIT_SCENE).size(), 0);
+    CHECK(park.peek(404).is_empty());
 }
 
-TEST_CASE("[Networked][Spawn][Hosted] an anchor parks only where its route is "
-          "unresolvable, never where it is merely lingering") {
-    CHECK(NetwSpawnPark::anchor_parks(netw::NetwLivenessCore::STATE_UNKNOWN));
-    CHECK(NetwSpawnPark::anchor_parks(netw::NetwLivenessCore::STATE_DEAD));
-    CHECK_FALSE(NetwSpawnPark::anchor_parks(netw::NetwLivenessCore::STATE_LIVE));
-    CHECK_FALSE(
-        NetwSpawnPark::anchor_parks(netw::NetwLivenessCore::STATE_LINGERING)
-    );
+TEST_CASE("[Networked][Spawn][Hosted] a cleared park is waiting for nothing") {
+    Park park;
+    park.park(31, frame(1), Park::WAIT_ROUTE, 0);
+    park.park(32, frame(2), Park::WAIT_SCENE, 500);
+
+    park.clear();
+
+    NETW_CHECK_EQ(park.size(), 0);
+    CHECK_FALSE(park.has(31));
+    NETW_CHECK_EQ(park.waiting_on(Park::WAIT_SCENE).size(), 0);
 }
 
-} // namespace TestNetwSpawnPark
+TEST_CASE(
+    "[Networked][Spawn][Hosted] an anchor parks only where its route "
+    "could still arrive, so a tombstone is not a waiting room"
+) {
+    CHECK(Park::anchor_parks(netw::NetwLivenessCore::STATE_UNKNOWN));
+    CHECK(Park::anchor_parks(netw::NetwLivenessCore::STATE_ABSENT));
+    CHECK_FALSE(Park::anchor_parks(netw::NetwLivenessCore::STATE_DEAD));
+    CHECK_FALSE(Park::anchor_parks(netw::NetwLivenessCore::STATE_LIVE));
+    CHECK_FALSE(Park::anchor_parks(netw::NetwLivenessCore::STATE_LINGERING));
+}
+
+} // namespace TestNetwPark

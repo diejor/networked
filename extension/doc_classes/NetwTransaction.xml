@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwTransaction" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The batch of writes collected inside a [method NetwDatabase.transaction] body.
+	</brief_description>
+	<description>
+		A transaction body receives one of these and queues its writes onto it. Nothing is written while the body runs: [method NetwDatabase.transaction] commits the whole batch once the body returns, which is what makes the commit happen exactly once even when the body takes an early exit.
+		[codeblock]
+		await db.transaction(
+		    func(tx: NetwTransaction) -&gt; void:
+		        tx.queue_upsert(&amp;"rocks", &amp;"rock_1", {&amp;"health": 50})
+		        tx.queue_upsert(&amp;"rocks", &amp;"rock_2", {&amp;"health": 75})
+		).wait()
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="queue_upsert">
+			<return type="void" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<param index="2" name="data" type="Dictionary" />
+			<description>
+				Enqueues a write of [param data] to [param id] in [param table]. It lands through [method NetwDatabaseBackend.upsert], so a partial [param data] merges into the stored record rather than replacing it.
+				Queueing the same [param id] twice queues two writes, applied in order.
+			</description>
+		</method>
+	</methods>
+</class>

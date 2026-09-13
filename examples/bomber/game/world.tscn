@@ -5,8 +5,10 @@
 [ext_resource type="Script" uid="uid://dk6qtetpr4m5x" path="res://examples/bomber/game/score.gd" id="3"]
 [ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="4"]
 [ext_resource type="Script" uid="uid://eaxify1esc2x" path="res://examples/bomber/game/player_spawner.gd" id="7_t87ow"]
+[ext_resource type="Script" path="res://examples/bomber/game/world_root.gd" id="8_root"]
 
 [node name="World" type="Node2D" unique_id=567359237]
+script = ExtResource("8_root")
 
 [node name="Layer0" type="TileMapLayer" parent="." unique_id=1793808601]
 use_parent_material = true

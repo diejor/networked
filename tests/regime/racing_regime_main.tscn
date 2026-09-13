@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dlscfpwxq3vyr"]
+
+[ext_resource type="Script" path="res://tests/regime/racing_regime_main.gd" id="1_regime"]
+
+[node name="RegimeMain" type="Node"]
+script = ExtResource("1_regime")

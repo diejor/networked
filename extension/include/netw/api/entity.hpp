@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "godot/multiplayer.hpp"
 #include "godot/multiplayer_synchronizer.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
@@ -9,12 +10,22 @@
 #include "godot/rid.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/display_handle.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/entity_record.hpp"
+#include "netw/api/participant.hpp"
+#include "netw/api/persistence_engine.hpp"
+#include "netw/api/property_set_binding.hpp"
+#include "netw/api/scene_handle.hpp"
+#include "netw/api/timeline.hpp"
+#include "netw/comp_table.hpp"
 
 namespace netw {
 
-class NetwMultiplayerCore;
+class NetwInterestHandle;
+class NetwMultiplayer;
+class NetwPredictionHandle;
+class ReplicationCore;
 
 class NetwEntity : public godot::RefCounted {
     GDCLASS(NetwEntity, godot::RefCounted)
@@ -31,7 +42,7 @@ public:
     };
 
 private:
-    godot::Ref<NetwEntityRecord> record;
+    NetwEntityRecord *record = nullptr;
     godot::ObjectID owner_id;
     godot::ObjectID session_id;
     godot::ObjectID timeline_id;
@@ -42,18 +53,18 @@ private:
     int64_t action_spawn_tick = -1;
     int64_t action_requester = 0;
 
-    godot::Ref<NetwEntityControl> control() const;
-    NetwMultiplayerCore *session_core() const;
-    godot::Object *session() const;
+    entity::Control *control() const;
+    NetwMultiplayer *session_core() const;
     int64_t local_peer() const;
     bool ensure_server_action(const godot::StringName &p_action);
-    godot::Object *replication_plane() const;
+    ReplicationCore *get_replication_plane() const;
     void set_controller_internal(int64_t p_value);
+    int64_t resolve_initial_controller() const;
     void apply_control();
     void apply_control_change(int64_t p_peer);
     void transition(int64_t p_stage);
     void linger_then_free(const godot::Ref<NetwDespawnOpts> &p_opts);
-    godot::Variant derived_binding(int64_t p_record) const;
+    godot::Ref<NetwPropertySetBinding> derived_binding(int64_t p_record) const;
 
 protected:
     static void _bind_methods();
@@ -65,43 +76,47 @@ public:
     static godot::StringName meta_key();
     static godot::StringName template_meta();
 
-    static void set_session_lookup(const godot::Callable &p_lookup);
-    static NetwMultiplayerCore *session_core_for(godot::Object *p_node);
-    static godot::Ref<NetwMultiplayerCore> session_plane_for(
-        godot::Object *p_node
-    );
+    static NetwMultiplayer *session_core_for(godot::Node *p_node);
+    static godot::Ref<NetwMultiplayer> session_plane_for(godot::Node *p_node);
 
-    static godot::Ref<NetwEntity> of(godot::Object *p_node);
-    static godot::Ref<NetwEntity> ensure(godot::Object *p_root);
-    static godot::Ref<NetwEntity> resolve(godot::Object *p_node);
+    static godot::Ref<NetwEntity> of(godot::Node *p_node);
+    static godot::Ref<NetwEntity> ensure(godot::Node *p_root);
+    static godot::Ref<NetwEntity> resolve(godot::Node *p_node);
     static godot::Ref<NetwEntity> from_rid(
         const godot::RID &p_entity,
-        godot::Object *p_api
+        const godot::Ref<NetwMultiplayer> &p_api
     );
     static godot::Ref<NetwEntity> by_route(
         int64_t p_route,
-        godot::Object *p_api
+        const godot::Ref<NetwMultiplayer> &p_api
     );
     static godot::StringName parse_entity(const godot::String &p_node_name);
     static int64_t parse_peer(const godot::String &p_node_name);
-    static godot::String name_for(godot::Object *p_join);
-    static godot::Node *find(godot::Object *p_root, godot::Object *p_join);
+    static godot::String name_for(
+        const godot::Ref<NetwParticipant> &p_participant
+    );
+    static godot::Node *find(
+        godot::Node *p_root,
+        const godot::Ref<NetwParticipant> &p_participant
+    );
     static godot::Node *bind(
-        godot::Object *p_node,
+        godot::Node *p_node,
         const godot::StringName &p_entity_id,
         int64_t p_peer_id
     );
     static godot::Node *instantiate_from(
-        godot::Object *p_template,
+        godot::Node *p_template,
         const godot::Callable &p_configure
     );
 
-    void attach_to(godot::Object *p_root);
+    void attach_to(godot::Node *p_root);
 
-    godot::Ref<NetwEntityRecord> get_record() const { return record; }
+    NetwEntityRecord *get_record() const {
+        return record;
+    }
 
     godot::Node *get_owner() const;
-    void set_owner(godot::Object *p_owner);
+    void set_owner(godot::Node *p_owner);
 
     godot::StringName get_entity_id() const;
     void set_entity_id(const godot::StringName &p_entity_id);
@@ -112,9 +127,9 @@ public:
     godot::RID get_rid_handle() const;
     void set_rid_handle(const godot::RID &p_handle);
 
-    godot::Variant get_multiplayer() const;
+    godot::Ref<godot::MultiplayerAPI> get_multiplayer() const;
 
-    void stamp_multiplayer(godot::Object *p_api);
+    void stamp_multiplayer(const godot::Ref<NetwMultiplayer> &p_api);
 
     int64_t get_initial_controller() const;
     void set_initial_controller(int64_t p_value);
@@ -133,23 +148,29 @@ public:
     void set_controller(int64_t p_value);
     int64_t get_control_kind() const;
     bool get_is_controlled_locally() const;
-    godot::Variant get_controller_participant() const;
-    int64_t get_action_spawn_tick() const { return action_spawn_tick; }
-    void set_action_spawn_tick(int64_t p_tick) { action_spawn_tick = p_tick; }
-    int64_t get_action_requester() const { return action_requester; }
-    void set_action_requester(int64_t p_peer) { action_requester = p_peer; }
+    godot::Ref<NetwParticipant> get_controller_participant() const;
+    int64_t get_action_spawn_tick() const {
+        return action_spawn_tick;
+    }
+    void set_action_spawn_tick(int64_t p_tick) {
+        action_spawn_tick = p_tick;
+    }
+    int64_t get_action_requester() const {
+        return action_requester;
+    }
+    void set_action_requester(int64_t p_peer) {
+        action_requester = p_peer;
+    }
 
     void request_control();
     void grant_control(int64_t p_peer_id);
     void revoke_control();
 
     bool get_is_authority() const;
-    godot::Variant get_participant() const;
+    godot::Ref<NetwParticipant> get_participant() const;
     int64_t get_ownership() const;
     bool get_is_player() const;
 
-    godot::Ref<NetwReparentOpts> get_reparenting() const;
-    void set_reparenting(const godot::Ref<NetwReparentOpts> &p_opts);
     bool get_is_template() const;
     int64_t get_stage() const;
     godot::Ref<NetwDespawnOpts> get_active_despawn_opts() const;
@@ -158,53 +179,66 @@ public:
 
     void note_stage(int64_t p_from);
 
-    void arm(godot::Object *p_api);
+    void arm(const godot::Ref<NetwMultiplayer> &p_api);
 
-    godot::Node *spawn_under(godot::Object *p_parent, const godot::StringName &p_id);
-    godot::Node *instantiate_player(godot::Object *p_participant);
+    godot::Node *spawn_under(
+        godot::Node *p_parent,
+        const godot::StringName &p_id
+    );
+    godot::Node *instantiate_player(
+        const godot::Ref<NetwParticipant> &p_participant
+    );
     godot::Node *spawn_player(
-        godot::Object *p_participant,
-        godot::Object *p_scene
+        const godot::Ref<NetwParticipant> &p_participant,
+        const godot::Ref<NetwSceneHandle> &p_scene
     );
     void reparent_to(
-        godot::Object *p_new_parent,
+        godot::Node *p_new_parent,
         const godot::Ref<NetwReparentOpts> &p_opts
     );
     void despawn(const godot::Ref<NetwDespawnOpts> &p_opts);
 
-    godot::Variant get_components() const;
-    void register_component(godot::Object *p_component);
+    void register_component(godot::Node *p_component);
     godot::NodePath relative_path(
-        godot::Object *p_source,
-        godot::Object *p_target
+        godot::Node *p_source,
+        godot::Node *p_target
     ) const;
+    int64_t comp_of(godot::Node *p_node) const;
+    godot::String comp_path_of(godot::Node *p_node) const;
+    godot::Node *comp_node_of(int64_t p_comp) const;
+    bool has_comp_path(const godot::NodePath &p_path) const;
+    bool get_comps_poisoned() const;
+
+    NetwCompTable &comp_table();
+    const NetwCompTable &comp_table() const;
     godot::NodePath property_path(
-        godot::Object *p_source,
+        godot::Node *p_source,
         const godot::StringName &p_property,
-        godot::Object *p_base
+        godot::Node *p_base
     ) const;
-    godot::Variant get_persistence() const;
-    godot::Variant get_state_binding() const;
-    godot::Variant get_input_binding() const;
-    godot::Variant get_broadcast_binding() const;
-    godot::Variant get_interest() const;
-    godot::Variant get_scene() const;
-    godot::Variant get_prediction() const;
-    godot::Variant get_interpolation() const;
-    godot::Variant get_timeline() const;
-    void set_timeline(godot::Object *p_timeline);
+    godot::Ref<NetwPersistenceEngine> get_persistence() const;
+    godot::Ref<NetwPropertySetBinding> get_state_binding() const;
+    godot::Ref<NetwPropertySetBinding> get_input_binding() const;
+    godot::Ref<NetwPropertySetBinding> get_broadcast_binding() const;
+    godot::Ref<NetwInterestHandle> get_interest() const;
+    godot::Ref<NetwSceneHandle> get_scene() const;
+    godot::Ref<NetwPredictionHandle> get_prediction() const;
+    godot::Ref<NetwDisplayHandle> get_interpolation() const;
+    godot::Ref<NetwTimeline> get_timeline() const;
+    void set_timeline(const godot::Ref<NetwTimeline> &p_timeline);
 
     godot::TypedArray<godot::MultiplayerSynchronizer> synchronizers();
     bool governs_property(
         const godot::NodePath &p_real_path,
-        godot::Object *p_exclude
+        godot::Node *p_exclude
     ) const;
     void invalidate_synchronizers_cache();
     godot::Ref<NetwEntity> parent_entity() const;
 
-    godot::Variant own_scene();
+    godot::Ref<NetwSceneHandle> own_scene();
 
-    void _on_identity_hydrated();
+    void hydrate_components();
+    int64_t comp_structure_hash(const godot::PackedStringArray &p_paths) const;
     void _handle_control_request(int64_t p_sender);
     void _handle_control_apply(int64_t p_peer);
     void _go_live_if_armed();
@@ -212,12 +246,11 @@ public:
         const godot::StringName &p_reason,
         double p_linger_seconds
     );
+    void _remote_hide();
     void _handle_tree_entered();
     void _handle_tree_exiting();
     void _on_owner_ready();
     void _on_peer_disconnected(int64_t p_peer_id);
-    void _settle_emit_reparented(const godot::Ref<NetwReparentOpts> &p_opts);
-    void _do_emit_reparented(const godot::Ref<NetwReparentOpts> &p_opts);
 };
 
 } // namespace netw

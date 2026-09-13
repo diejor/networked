@@ -7,7 +7,7 @@ extends CanvasLayer
 
 @onready var _status: Label = %StatusLabel
 @onready var _browser: ConnectBrowser = %ConnectBrowser
-@onready var _ctx: NetwMultiplayer = Netw.of(self)
+@onready var session: NetwSessionHandle = Netw.session(self)
 
 var _activity: DiscordActivityService
 
@@ -15,20 +15,20 @@ var _activity: DiscordActivityService
 func _ready() -> void:
 	# The browser self-resolves the mounted session by ancestry and builds its
 	# own browse model over it, so no bind() is needed here.
-	_ctx.local_scene_changed.connect(_on_local_scene_changed)
-	_ctx.session_ended.connect(_show_browser)
-	_ctx.server_disconnecting.connect(_on_server_disconnecting)
-	_ctx.server_disconnected.connect(_on_server_disconnected)
+	session.local_scene_changed.connect(_on_local_scene_changed)
+	session.disconnecting.connect(_on_server_disconnecting)
+	session.disconnected.connect(_on_server_disconnected)
 
-	var gamestate := _ctx.get_service(BomberGamestate) as BomberGamestate
+	var gamestate := Netw.service(self, BomberGamestate) as BomberGamestate
 	gamestate.game_error.connect(_on_game_error)
 
 	_status.visible = false
 
-	var activity := _ctx.get_service(DiscordActivityService) \
+	var activity := Netw.service(self, DiscordActivityService) \
 			as DiscordActivityService
 	if activity != null and activity.in_discord():
 		_activity = activity
+		@warning_ignore("missing_await")
 		_enter_discord_activity(activity)
 		return
 
@@ -58,10 +58,9 @@ func _enter_discord_activity(activity: DiscordActivityService) -> void:
 		return
 	await activity.authenticate()
 
-	var payload := JoinPayload.new()
-	payload.username = _discord_username(activity)
-
-	var err := await activity.connect_activity(payload)
+	var err := await activity.connect_activity(
+		StringName(_discord_username(activity)),
+	)
 	if err != OK:
 		_set_status("Activity connect failed: %s" % error_string(err))
 
@@ -94,7 +93,7 @@ func _on_activity_session_lost(reason: String) -> void:
 
 func _on_game_error(text: String) -> void:
 	_set_status(text)
-	if not _ctx.is_online:
+	if not session.is_online:
 		_show_browser()
 
 

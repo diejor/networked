@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictIsland" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The local prediction boundary one entity declares: who it simulates alongside itself, and how that group is compared.
+	</brief_description>
+	<description>
+		An entity predicts its own body under its own commands. An island widens that to the bodies whose motion its own motion depends on, so a divergence caused by a neighbour is a divergence the owner can see coming rather than one authority reports afterwards.
+		Naming a roster IS the declaration, and nothing else is: a tolerance, a pacing or a reconcile mode written onto an island says how to compare a group, not that there is one, so it leaves [member declared] false. That is what keeps an entity out of the fingerprint compare until a game asks for it.
+		[codeblock]
+		var island := NetwEntity.of(self).prediction.island
+		island.from_interest()
+		island.simulate_nearest(1)
+		[/codeblock]
+		The roster is read-only from outside. [member participants] answers a fresh copy and the verbs below are the only way in, because the engine resolves a slot's configuration from the roster and a member appended behind its back would leave that configuration describing a group the entity no longer has.
+		[b]Explicit membership is exact, production is approximate.[/b] A roster the game wrote is a fact both peers hold, so it admits the fingerprint compare. A roster produced from interest is this peer's own resolution of its own scope, which the other peer never agreed to, so [method from_interest] declares [member approximate] itself and [member exact_claim] is refused on it.
+		Reached through [member NetwPredictionHandle.island], which is never [code]null[/code].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="add">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Adds [param entity] as an explicit member, once. Every verb that names a member calls this first, so membership and what is declared about it can never disagree.
+				Refused across a scene boundary: an island is a group one solve steps together, and two scenes are two worlds. An island bound to no owner has no scene to cross and admits anything.
+			</description>
+		</method>
+		<method name="bind_owner">
+			<return type="void" />
+			<param index="0" name="owner" type="NetwEntity" />
+			<description>
+				Binds the entity this rule belongs to, which is what [method add]'s scene-boundary check reads. Weakly held, because the entity owns the handle that owns this.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="duplicate_rule" qualifiers="const">
+			<return type="NetwPredictIsland" />
+			<description>
+				A detached copy carrying every declaration this rule holds. The two comparison claims are copied through their setters last, so the copy resolves the same invariant the original did rather than landing on a half-set pair.
+			</description>
+		</method>
+		<method name="fidelity_of" qualifiers="const">
+			<return type="int" enum="NetwPredict.Fidelity" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				The [enum NetwPredict.Fidelity] declared for [param entity], or [code]-1[/code] when the island declared none and the member is decided by [member promotion]. A member the island does not have answers [code]-1[/code] too, because it has declared nothing either way.
+			</description>
+		</method>
+		<method name="from_interest">
+			<return type="void" />
+			<param index="0" name="layer" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Produces members from the entity's resolved interest scope, or from [param layer] when one is named. Naming the same layer twice declares it once.
+				Production is what makes an island approximate, so this sets [member approximate] itself, and it is refused on an island that already claimed exact comparison.
+			</description>
+		</method>
+		<method name="has_member" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Whether [param entity] is on this island's explicit roster. Ask this rather than searching [member participants], which answers a copy.
+			</description>
+		</method>
+		<method name="inheritable" qualifiers="const">
+			<return type="NetwPredictIsland" />
+			<description>
+				A copy marked [member inherited], for handing this scene's rule to one descendant entity, or [code]null[/code] when the rule names nobody.
+				Null rather than an empty rule, because a rule that only set a tolerance says nothing about who is being compared and must not opt a descendant into a compare it never asked for.
+			</description>
+		</method>
+		<method name="observe">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Adds [param entity] and keeps it a displayed proxy, exempt from whatever [member promotion] would otherwise decide for it.
+			</description>
+		</method>
+		<method name="predict_commands">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="predictor" type="Callable" />
+			<description>
+				Adds [param entity] and installs [param predictor] as its substituted command producer, called as [code](participant, tick)[/code] and returning an input [Dictionary]. A simulated member without one runs the zero-input COAST policy.
+			</description>
+		</method>
+		<method name="predictor_of" qualifiers="const">
+			<return type="Callable" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				The substituted command producer declared for [param entity], or an invalid [Callable] when it declared none.
+			</description>
+		</method>
+		<method name="remove">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Removes [param entity] and everything declared about it. A fidelity or a predictor cannot outlive the member it was declared for, because the next member added would inherit it.
+			</description>
+		</method>
+		<method name="set_fidelity">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="value" type="int" enum="NetwPredict.Fidelity" />
+			<description>
+				Declares [param entity]'s [enum NetwPredict.Fidelity] without adding it. For a member the island does not have this stores nothing, which is what separates it from [method simulate] and [method observe]: those two name a member, this one only describes one.
+			</description>
+		</method>
+		<method name="simulate">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="predict_commands" type="Callable" default="Callable()" />
+			<description>
+				Adds [param entity] and promotes it for local simulation. A valid [param predict_commands] is installed as that member's command producer in the same act.
+			</description>
+		</method>
+		<method name="simulate_all">
+			<return type="void" />
+			<description>
+				Promotes every produced member for local simulation.
+			</description>
+		</method>
+		<method name="simulate_nearest">
+			<return type="void" />
+			<param index="0" name="count" type="int" />
+			<description>
+				Promotes the nearest [param count] produced members for local simulation. A negative budget promotes none rather than being refused, so a computed count can be handed in without a guard.
+			</description>
+		</method>
+		<method name="simulate_within">
+			<return type="void" />
+			<param index="0" name="meters" type="float" />
+			<description>
+				Promotes produced members within [param meters] for local simulation. A negative radius promotes none, for the same reason [method simulate_nearest] clamps.
+			</description>
+		</method>
+		<method name="watch_declaration">
+			<return type="void" />
+			<param index="0" name="callable" type="Callable" />
+			<description>
+				Installs the callback every act that MOVES this declaration invokes, so the pool's own columns can be restated rather than re-read on every drive. Reading a member never invokes it, and neither does a promotion policy, which decides who is stepped rather than what a drive is judged against.
+				[method duplicate_rule] and [method inheritable] hand back a copy with NO callback, because a copy belongs to the entity that takes it and announcing the original's declaration through it would restate the wrong slot.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="approximate" type="bool" setter="set_approximate" getter="get_approximate" default="false">
+			Whether this island is compared by tolerance rather than by exact fingerprint. Setting it clears [member exact_claim]: the two are the same question asked twice and may not disagree.
+		</member>
+		<member name="declared" type="bool" setter="" getter="get_declared" default="false">
+			Whether this island claims a roster at all, and therefore whether the entity is admitted to the fingerprint compare.
+			Derived rather than flagged: naming members or naming a producer IS the declaration, and reading or writing any other field must not opt an entity in, which a stored flag set by a fluent verb's first call could not promise.
+		</member>
+		<member name="exact_claim" type="bool" setter="set_exact_claim" getter="get_exact_claim" default="false">
+			Whether this island claims its roster is a fact both peers hold, which is what admits exact comparison. Setting it clears [member approximate].
+			A produced island cannot claim it, and the write is refused rather than stored: the claim would not be a fact about this island, it would be a statement the roster itself contradicts.
+		</member>
+		<member name="inherited" type="bool" setter="set_inherited" getter="get_inherited" default="false">
+			Whether this rule came from the containing scene rather than from the entity's own declaration. An inherited rule is re-inherited on reparent.
+			The entity's first own declaration replaces an inherited rule WHOLE rather than refining it, and naming a member or a producer is the only act that counts as one. A tolerance or a reconcile mode written onto an inherited rule refines the scene's rule, which is what a game that wrote only those asked for.
+		</member>
+		<member name="input_delay_ticks" type="int" setter="set_input_delay_ticks" getter="get_input_delay_ticks" default="0">
+			Ticks a [constant NetwPredict.PACING_DELAY_CLOSED] group holds each command before the transition it labels opens. Clamped at zero, since a negative hold is a command scheduled before it was authored.
+		</member>
+		<member name="pacing" type="int" setter="set_pacing" getter="get_pacing" default="0">
+			When this island's members open transitions, as a [enum NetwPredict.Pacing]. The group owns the mechanism a pacing names, so this selects one rather than performing it.
+		</member>
+		<member name="participants" type="NetwEntity[]" setter="" getter="get_participants" default="[]">
+			The entities explicitly named as members, through [method add] and the verbs that call it.
+			A fresh copy per read. Editing it changes nothing, because the engine resolves a slot's configuration from the roster and a member appended behind the verbs would leave that configuration describing a group the entity no longer has.
+		</member>
+		<member name="producers" type="PackedStringArray" setter="" getter="get_producers" default="PackedStringArray()">
+			The interest layers this island's membership is produced from, [code]&amp;""[/code] meaning the entity's own resolved scope. Declared through [method from_interest].
+		</member>
+		<member name="promotion" type="int" setter="set_promotion" getter="get_promotion" default="0">
+			Which produced members are promoted to local simulation, as a [enum NetwPredict.Promotion]. Explicit promotion through [method simulate] is not a policy and is unaffected: it names one member.
+		</member>
+		<member name="promotion_count" type="int" setter="set_promotion_count" getter="get_promotion_count" default="0">
+			The structural budget of [constant NetwPredict.PROMOTION_NEAREST], in members.
+		</member>
+		<member name="promotion_meters" type="float" setter="set_promotion_meters" getter="get_promotion_meters" default="0.0">
+			The radius of [constant NetwPredict.PROMOTION_WITHIN], in metres.
+		</member>
+		<member name="reconcile" type="int" setter="set_reconcile" getter="get_reconcile" default="0">
+			How divergence is reconciled across the island, as a [enum NetwPredict.Reconcile].
+			Under [constant NetwPredict.RECONCILE_JOINT] the group restores and replays its members together once a basis arrives. Admission is the engine's call at membership commit, where every member's schedule is known, so a JOINT declaration here is a request the engine may refuse by naming the member and the tier that cannot re-run.
+			A joint pass spans EVERY member in one act and opens no per-member correction episode of its own, so a member's episode books record what its own independent corrections did and never what the group did on its behalf. The group's own evidence is the joint counters on [NetwPredictStats] instead, and reading a member's episode as if it covered the group would report a group that never corrected.
+		</member>
+	</members>
+</class>

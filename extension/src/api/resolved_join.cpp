@@ -3,34 +3,11 @@
 #include "godot/class_db.hpp"
 #include "godot/utility.hpp"
 #include "netw/log.hpp"
+#include "netw/session/frames.hpp"
 
 using namespace godot;
 
 namespace netw {
-
-namespace {
-
-const StringName &key_peer_id() {
-    static const StringName name("peer_id");
-    return name;
-}
-
-const StringName &key_username() {
-    static const StringName name("username");
-    return name;
-}
-
-const StringName &key_arg_values() {
-    static const StringName name("arg_values");
-    return name;
-}
-
-const StringName &key_is_debug() {
-    static const StringName name("is_debug");
-    return name;
-}
-
-} // namespace
 
 int64_t ResolvedJoin::get_peer_id() const {
     return peer_id;
@@ -56,54 +33,43 @@ void ResolvedJoin::set_arg_values(const Array &p_value) {
     arg_values = p_value;
 }
 
-bool ResolvedJoin::get_is_debug() const {
-    return is_debug;
+AcceptFrame ResolvedJoin::accept_frame() const {
+    AcceptFrame frame;
+    frame.peer_id = peer_id;
+    frame.username = username;
+    frame.values = gd::var_to_bytes(arg_values);
+    return frame;
 }
 
-void ResolvedJoin::set_is_debug(bool p_value) {
-    is_debug = p_value;
-}
-
-PackedByteArray ResolvedJoin::serialize() const {
-    Dictionary out;
-    out[key_peer_id()] = peer_id;
-    out[key_username()] = username;
-    out[key_arg_values()] = arg_values;
-    out[key_is_debug()] = is_debug;
-    return gd::var_to_bytes(out);
-}
-
-Ref<ResolvedJoin> ResolvedJoin::deserialize(const PackedByteArray &p_bytes) {
-    const Variant decoded = gd::bytes_to_var(p_bytes);
-    if (decoded.get_type() != Variant::DICTIONARY) {
-        NETW_TRACE(sys::SESSION, "a join payload that is not a record is refused");
-        return Ref<ResolvedJoin>();
-    }
-    const Dictionary data = decoded;
-    if (!data.has(key_peer_id()) || !data.has(key_username())) {
-        NETW_TRACE(sys::SESSION, "a join payload naming no peer is refused");
-        return Ref<ResolvedJoin>();
-    }
-    if (Variant(data[key_peer_id()]).get_type() != Variant::INT) {
-        NETW_TRACE(sys::SESSION, "a join payload whose peer is not a number is refused");
-        return Ref<ResolvedJoin>();
-    }
+Ref<ResolvedJoin> ResolvedJoin::of_frame(const AcceptFrame &p_frame) {
     Ref<ResolvedJoin> out;
     out.instantiate();
-    out->peer_id = data[key_peer_id()];
-    out->username = StringName(String(data[key_username()]));
-    const Variant args = data.get(key_arg_values(), Array());
-    out->arg_values = args.get_type() == Variant::ARRAY ? Array(args) : Array();
-    const Variant debug = data.get(key_is_debug(), false);
-    out->is_debug = debug.get_type() == Variant::BOOL ? bool(debug) : false;
+    out->peer_id = p_frame.peer_id;
+    out->username = p_frame.username;
+    const Variant values = gd::bytes_to_var(p_frame.values);
+    out->arg_values
+        = values.get_type() == Variant::ARRAY ? Array(values) : Array();
     return out;
 }
 
+PackedByteArray ResolvedJoin::serialize() const {
+    return session::frame_write(accept_frame());
+}
+
+Ref<ResolvedJoin> ResolvedJoin::deserialize(const PackedByteArray &p_bytes) {
+    AcceptFrame frame;
+    if (!session::frame_read(p_bytes, frame)) {
+        NETW_TRACE(
+            sys::SESSION,
+            "a join payload that did not decode whole is refused"
+        );
+        return Ref<ResolvedJoin>();
+    }
+    return of_frame(frame);
+}
+
 void ResolvedJoin::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("get_peer_id"),
-        &ResolvedJoin::get_peer_id
-    );
+    ClassDB::bind_method(D_METHOD("get_peer_id"), &ResolvedJoin::get_peer_id);
     ClassDB::bind_method(
         D_METHOD("set_peer_id", "value"),
         &ResolvedJoin::set_peer_id
@@ -114,10 +80,7 @@ void ResolvedJoin::_bind_methods() {
         "get_peer_id"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("get_username"),
-        &ResolvedJoin::get_username
-    );
+    ClassDB::bind_method(D_METHOD("get_username"), &ResolvedJoin::get_username);
     ClassDB::bind_method(
         D_METHOD("set_username", "value"),
         &ResolvedJoin::set_username
@@ -140,20 +103,6 @@ void ResolvedJoin::_bind_methods() {
         PropertyInfo(Variant::ARRAY, "arg_values"),
         "set_arg_values",
         "get_arg_values"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_is_debug"),
-        &ResolvedJoin::get_is_debug
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_is_debug", "value"),
-        &ResolvedJoin::set_is_debug
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_debug"),
-        "set_is_debug",
-        "get_is_debug"
     );
 
     ClassDB::bind_method(D_METHOD("serialize"), &ResolvedJoin::serialize);

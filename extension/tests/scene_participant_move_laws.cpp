@@ -6,6 +6,7 @@
 #include "netw/api/group_promise.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
 #include "netw/wire/registry.hpp"
 #include "support/netw_call_log.h"
 
@@ -13,11 +14,11 @@ namespace TestNetwSceneParticipantMoveLaws {
 
 using namespace godot;
 using netw::NetwGroupPromise;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::CallLog;
 
-Ref<NetwMultiplayerCore> peered_core() {
-    Ref<NetwMultiplayerCore> core;
+Ref<NetwMultiplayer> peered_core() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Ref<netw::LocalMultiplayerPeer> peer;
     peer.instantiate();
@@ -26,27 +27,17 @@ Ref<NetwMultiplayerCore> peered_core() {
     return core;
 }
 
-Ref<RefCounted> a_seat_announcing_row() {
-    Ref<RefCounted> row;
+Ref<netw::NetwParticipant> a_seat_announcing_row() {
+    Ref<netw::NetwParticipant> row;
     row.instantiate();
-    Array args;
-    Dictionary from;
-    from["name"] = "from";
-    from["type"] = int(Variant::OBJECT);
-    Dictionary to;
-    to["name"] = "to";
-    to["type"] = int(Variant::OBJECT);
-    args.push_back(from);
-    args.push_back(to);
-    netw::gd::add_user_signal(row.ptr(), "scene_changed", args);
     return row;
 }
 
-Ref<RefCounted> adopt_participant(
-    const Ref<NetwMultiplayerCore> &p_core,
+Ref<netw::NetwParticipant> adopt_participant(
+    const Ref<NetwMultiplayer> &p_core,
     int64_t p_peer
 ) {
-    const Ref<RefCounted> row = a_seat_announcing_row();
+    const Ref<netw::NetwParticipant> row = a_seat_announcing_row();
     p_core->participant_adopt(p_peer, row);
     p_core->participant_publish_joined(p_peer);
     REQUIRE(p_core->participant_has(p_peer));
@@ -54,14 +45,14 @@ Ref<RefCounted> adopt_participant(
 }
 
 struct Declared {
-    Ref<RefCounted> wrapper;
-    Ref<netw::NetwEntityRecord> record;
+    Ref<netw::NetwEntity> wrapper;
+    netw::NetwEntityRecord *record = nullptr;
     RID handle;
     Node *owner = nullptr;
 };
 
 Declared declare_scene(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     const char *p_stem
 ) {
@@ -73,7 +64,7 @@ Declared declare_scene(
     made.owner->add_child(level);
     made.wrapper.instantiate();
     made.handle = p_core->get_liveness_core()->entity_create();
-    made.record.instantiate();
+    made.record = made.wrapper->get_record();
     made.record->adopt_handle(made.handle);
     made.record->set_declares_scene(true);
     const int64_t route = p_core->get_liveness_core()->reserve_route();
@@ -84,7 +75,7 @@ Declared declare_scene(
         made.record,
         made.owner
     ));
-    made.owner->set_meta(NetwMultiplayerCore::wrapper_meta(), made.wrapper);
+    made.owner->set_meta(NetwMultiplayer::wrapper_meta(), made.wrapper);
     REQUIRE(!p_core->scene_layer_id(made.handle).is_empty());
     return made;
 }
@@ -116,7 +107,7 @@ TEST_CASE(
     "nothing can observe a participant seated in one scene while still "
     "admitted to another"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
     Node *root = memnew(Node);
@@ -124,7 +115,7 @@ TEST_CASE(
     const Declared annex = declare_scene(core, root, "Annex");
     const int64_t peer = 7;
     adopt_participant(core, peer);
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
     const StringName arena_layer = core->scene_layer_id(arena.handle);
     const StringName annex_layer = core->scene_layer_id(annex.handle);
 
@@ -149,7 +140,7 @@ TEST_CASE(
     "container and the scene already held all answer false and leave both "
     "the seat and every boundary exactly as they were"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
     Node *root = memnew(Node);
@@ -157,7 +148,7 @@ TEST_CASE(
     const int64_t peer = 7;
     const int64_t stranger = 9;
     adopt_participant(core, peer);
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
     const StringName arena_layer = core->scene_layer_id(arena.handle);
 
     CHECK_FALSE(core->participant_move_seat(stranger, arena.handle));
@@ -184,7 +175,7 @@ TEST_CASE(
     "scene lets go, and a peer told it was released would drop the scene it "
     "has just been given"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
     core->get_channel_book()->register_protocol(
@@ -214,19 +205,66 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Scene][Hosted] SP4 releasing a peer takes the boundary and "
+    "the seat together, so the two published readers can never disagree about "
+    "whether it is in the scene, which is what the seat-only write underneath "
+    "leaves behind and why this session keeps that one to itself"
+) {
+    Ref<NetwMultiplayer> core = peered_core();
+    const CallLog seen;
+    core->set_interest_flush(seen.callable("flush"));
+    Node *root = memnew(Node);
+    const Declared arena = declare_scene(core, root, "Arena");
+    const int64_t peer = 7;
+    adopt_participant(core, peer);
+    const StringName layer = core->scene_layer_id(arena.handle);
+
+    REQUIRE(core->participant_move_seat(peer, arena.handle));
+    REQUIRE(core->scene_admits(arena.handle, peer));
+    NETW_CHECK_EQ(int(core->scene_get_participants(arena.handle).size()), 1);
+
+    SUBCASE("the published release empties both, and both readers agree") {
+        CHECK(core->scene_release(arena.handle, peer));
+
+        NETW_CHECK_EQ(int(core->scene_admits(arena.handle, peer)), 0);
+        NETW_CHECK_EQ(
+            int(core->interest_plane().layer_has_viewer(layer, peer)),
+            0
+        );
+        NETW_CHECK_EQ(
+            int(core->scene_get_participants(arena.handle).size()),
+            0
+        );
+    }
+
+    SUBCASE("the seat-only write underneath leaves the boundary standing") {
+        CHECK(core->participant_seat_clear(peer, arena.handle));
+
+        NETW_CHECK_EQ(int(core->participant_seat(peer).is_valid()), 0);
+        NETW_CHECK_EQ(int(core->scene_admits(arena.handle, peer)), 1);
+        NETW_CHECK_EQ(
+            int(core->scene_get_participants(arena.handle).size()),
+            1
+        );
+    }
+
+    memdelete(root);
+}
+
+TEST_CASE(
     "[Networked][Scene][Hosted] SP4 a group move answers a group nobody has "
     "settled yet and reports every peer that was asked for at the drain, "
     "the refused mover included, so a caller subscribes to what it was "
     "handed and hears about each peer it named"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
     Node *root = memnew(Node);
     const Declared arena = declare_scene(core, root, "Arena");
     const int64_t peer = 7;
     const int64_t stranger = 9;
-    const Ref<RefCounted> row = adopt_participant(core, peer);
+    const Ref<netw::NetwParticipant> row = adopt_participant(core, peer);
 
     const Ref<NetwGroupPromise> batch
         = core->scene_move_participants(arena.handle, peers_of(peer, stranger));
@@ -260,7 +298,7 @@ TEST_CASE(
     "drain every other move settles at, because the last arrival is what "
     "settles a group and a group with no arrivals has none to be last"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
     Node *root = memnew(Node);
@@ -291,7 +329,7 @@ TEST_CASE(
     "key would coalesce them and strand the first caller on a promise that "
     "never settles"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
     Node *root = memnew(Node);

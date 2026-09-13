@@ -13,17 +13,13 @@ Ref<NetwDespawnOpts> NetwDespawnOpts::create(const StringName &p_reason) {
     return out;
 }
 
-#define NETW_OPTION(m_class, m_type, m_name)                                   \
-    ClassDB::bind_method(D_METHOD("get_" #m_name), &m_class::get_##m_name);    \
-    ClassDB::bind_method(                                                      \
-        D_METHOD("set_" #m_name, #m_name),                                     \
-        &m_class::set_##m_name                                                 \
-    );                                                                         \
-    ADD_PROPERTY(                                                              \
-        PropertyInfo(m_type, #m_name),                                         \
-        "set_" #m_name,                                                        \
-        "get_" #m_name                                                         \
-    )
+#define NETW_OPTION(m_class, m_type, m_name) \
+    ClassDB::bind_method(D_METHOD("get_" #m_name), &m_class::get_##m_name); \
+    ClassDB::bind_method( \
+        D_METHOD("set_" #m_name, #m_name), \
+        &m_class::set_##m_name \
+    ); \
+    ADD_PROPERTY(PropertyInfo(m_type, #m_name), "set_" #m_name, "get_" #m_name)
 
 void NetwDespawnOpts::_bind_methods() {
     ClassDB::bind_static_method(
@@ -40,27 +36,7 @@ void NetwDespawnOpts::_bind_methods() {
 }
 
 void NetwReparentOpts::_bind_methods() {
-    NETW_OPTION(NetwReparentOpts, Variant::BOOL, preserve_history);
     NETW_OPTION(NetwReparentOpts, Variant::STRING_NAME, reason);
-    ClassDB::bind_method(
-        D_METHOD("get_target_global_position"),
-        &NetwReparentOpts::get_target_global_position
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_target_global_position", "target_global_position"),
-        &NetwReparentOpts::set_target_global_position
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::NIL,
-            "target_global_position",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_NIL_IS_VARIANT
-        ),
-        "set_target_global_position",
-        "get_target_global_position"
-    );
 }
 
 void NetwControlRequest::_bind_methods() {

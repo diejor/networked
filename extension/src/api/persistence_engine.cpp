@@ -3,10 +3,14 @@
 #include "godot/class_db.hpp"
 #include "godot/utility.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/property_set.hpp"
+#include "netw/api/schema_model.hpp"
+#include "netw/api/transaction.hpp"
 #include "netw/colors.hpp"
-#include "netw/entity_control.hpp"
+#include "netw/entity/control.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/script/model.hpp"
 
 using namespace godot;
 
@@ -26,16 +30,15 @@ const char *KEY_SPAWN_HYDRATION = "hydrate_on_spawn";
 const char *KEY_DEFAULT_INTERVAL = "default_interval";
 
 void queue_row(
-    const Variant &p_transaction,
+    const Ref<NetwTransaction> &p_transaction,
     const StringName &p_table,
     const StringName &p_id,
     const Dictionary &p_values
 ) {
-    Object *transaction = p_transaction;
-    if (transaction == nullptr) {
+    if (p_transaction.is_null()) {
         return;
     }
-    transaction->call("queue_upsert", p_table, p_id, p_values);
+    p_transaction->queue_upsert(p_table, p_id, p_values);
 }
 
 Callable &config_reader() {
@@ -56,6 +59,71 @@ Callable &schema_declarer() {
 HashMap<String, uint64_t> &claims() {
     static HashMap<String, uint64_t> held;
     return held;
+}
+
+Dictionary read_property_configs(Node *p_node) {
+    if (property_configs_reader().is_valid()) {
+        return Dictionary(property_configs_reader().call(p_node));
+    }
+    return netw::script::model::get_node_property_configs(p_node);
+}
+
+Dictionary read_archetype_config(Object *p_owner) {
+    if (config_reader().is_valid()) {
+        return Dictionary(config_reader().call(p_owner));
+    }
+    Node *owner = Object::cast_to<Node>(p_owner);
+    if (owner == nullptr) {
+        return Dictionary();
+    }
+    Ref<NetwPersistenceConfig> config
+        = netw::script::model::get_persistence_config(owner);
+    if (config.is_null()
+        && (owner->has_meta(NetwPersistenceEngine::meta_database())
+            || owner->has_meta(NetwPersistenceEngine::meta_columns()))) {
+        config.instantiate();
+    }
+    if (config.is_null()) {
+        return Dictionary();
+    }
+    Dictionary declared;
+    declared[KEY_DEFAULT_INTERVAL] = config->get_default_interval();
+    declared[KEY_DATABASE] = config->get_db();
+    declared[KEY_TABLE] = config->get_table_name();
+    declared[KEY_PROVIDER] = config->get_record_id_provider();
+    declared[KEY_SPAWN_HYDRATION] = config->get_hydrate_on_spawn_enabled();
+    return declared;
+}
+
+void declare_columns(
+    const Ref<NetwDatabase> &p_database,
+    const StringName &p_table,
+    const Array &p_columns
+) {
+    if (schema_declarer().is_valid()) {
+        schema_declarer().call(p_database, p_table, p_columns);
+        return;
+    }
+    const Ref<NetwSchema> declaration = NetwSchema::create(p_table);
+    declaration->replicated(false);
+    for (int at = 0; at < p_columns.size(); ++at) {
+        const Dictionary column = p_columns[at];
+        const StringName property = column.get(KEY_PROPERTY, StringName());
+        Node *node = Object::cast_to<Node>(
+            gd::live_object(column.get(KEY_NODE, Variant()))
+        );
+        const Ref<Script> script
+            = node != nullptr ? Ref<Script>(node->get_script()) : Ref<Script>();
+        declaration->column(
+            property,
+            static_cast<NetwMultiplayer::ColumnType>(
+                int(NetwPropertySet::column_type_for(script, node, property))
+            ),
+            1,
+            Ref<NetwQuantize>()
+        );
+    }
+    p_database->declare_table(p_table, declaration);
 }
 
 bool holds(const Array &p_keys, const StringName &p_property) {
@@ -103,15 +171,7 @@ Dictionary NetwPersistenceEngine::config_of(Object *p_owner) {
     if (p_owner == nullptr) {
         return Dictionary();
     }
-    if (!config_reader().is_valid()) {
-        NETW_ERROR(
-            sys::TABLE,
-            "no persistence config reader is installed, so no archetype "
-            "declaration can be read"
-        );
-        return Dictionary();
-    }
-    return config_reader().call(p_owner);
+    return read_archetype_config(p_owner);
 }
 
 Ref<NetwPersistenceEngine> NetwPersistenceEngine::create(
@@ -130,12 +190,10 @@ Ref<NetwPersistenceEngine> NetwPersistenceEngine::create(
     Ref<NetwPersistenceEngine> engine;
     engine.instantiate();
     engine->entity_id = gd::instance_id(p_entity);
-    engine->declared_database = p_declaration.get(KEY_DATABASE, Variant());
+    engine->declared_database
+        = Ref<NetwDatabase>(p_declaration.get(KEY_DATABASE, Variant()));
     engine->declared_table = p_declaration.get(KEY_TABLE, StringName());
-    engine->record_id_provider = p_declaration.get(
-        KEY_PROVIDER,
-        StringName()
-    );
+    engine->record_id_provider = p_declaration.get(KEY_PROVIDER, StringName());
     engine->hydrate_on_spawn = p_declaration.get(KEY_SPAWN_HYDRATION, false);
     engine->book.set_default_interval(
         double(p_declaration.get(KEY_DEFAULT_INTERVAL, 0.0))
@@ -169,9 +227,7 @@ Node *NetwPersistenceEngine::column_node(const StringName &p_property) const {
     return Object::cast_to<Node>(gd::object_of(row->value));
 }
 
-void NetwPersistenceEngine::warn_duplicate(
-    const StringName &p_property
-) const {
+void NetwPersistenceEngine::warn_duplicate(const StringName &p_property) const {
     Node *root = owner();
     NETW_WARN(
         sys::TABLE,
@@ -212,9 +268,7 @@ void NetwPersistenceEngine::build_columns() {
 
     for (uint32_t at = 0; at < walked.size(); ++at) {
         Node *node = walked[at];
-        const Dictionary configs = property_configs_reader().is_valid()
-            ? Dictionary(property_configs_reader().call(node))
-            : Dictionary();
+        const Dictionary configs = read_property_configs(node);
         const Array declared = configs.keys();
         for (int index = 0; index < declared.size(); ++index) {
             const StringName property = declared[index];
@@ -246,10 +300,10 @@ bool NetwPersistenceEngine::columns_empty() const {
     return book.is_empty();
 }
 
-Variant NetwPersistenceEngine::database() const {
+Ref<NetwDatabase> NetwPersistenceEngine::database() const {
     Node *root = owner();
     if (root != nullptr && root->has_meta(meta_database())) {
-        return root->get_meta(meta_database());
+        return Ref<NetwDatabase>(root->get_meta(meta_database()));
     }
     return declared_database;
 }
@@ -320,18 +374,9 @@ void NetwPersistenceEngine::ensure_schema() {
     if (schema_registered) {
         return;
     }
-    const Variant held_database = database();
-    Object *db = gd::live_object(held_database);
+    const Ref<NetwDatabase> db = database();
     const StringName table = table_name();
-    if (db == nullptr || table == StringName()) {
-        return;
-    }
-    if (!schema_declarer().is_valid()) {
-        NETW_ERROR(
-            sys::TABLE,
-            "no schema declarer is installed, so table '%s' was never declared",
-            String(table)
-        );
+    if (db.is_null() || table == StringName()) {
         return;
     }
     Array columns;
@@ -343,12 +388,14 @@ void NetwPersistenceEngine::ensure_schema() {
         column[KEY_NODE] = gd::held(column_node(property));
         columns.push_back(column);
     }
-    schema_declarer().call(db, table, columns);
+    declare_columns(db, table, columns);
     schema_registered = true;
     claim_record_id(db);
 }
 
-void NetwPersistenceEngine::claim_record_id(Object *p_database) {
+void NetwPersistenceEngine::claim_record_id(
+    const Ref<NetwDatabase> &p_database
+) {
     const StringName id = record_id();
     Node *root = owner();
     if (id == StringName() || root == nullptr) {
@@ -357,8 +404,7 @@ void NetwPersistenceEngine::claim_record_id(Object *p_database) {
     const StringName table = table_name();
     const bool nameless = record_id_provider == StringName();
     Ref<NetwEntity> held = Object::cast_to<NetwEntity>(entity());
-    if (nameless
-        && (held.is_null() || held->get_entity_id() == StringName())) {
+    if (nameless && (held.is_null() || held->get_entity_id() == StringName())) {
         NETW_WARN(
             sys::TABLE,
             "persisted entity '%s' has no record id provider and no entity id, "
@@ -367,10 +413,9 @@ void NetwPersistenceEngine::claim_record_id(Object *p_database) {
             String(root->get_name())
         );
     }
-    const String key = String::num_uint64(
-                           uint64_t(gd::instance_id(p_database))
-                       )
-        + "/" + String(table) + "/" + String(id);
+    const String key
+        = String::num_uint64(uint64_t(gd::instance_id(p_database.ptr()))) + "/"
+        + String(table) + "/" + String(id);
     const HashMap<String, uint64_t>::ConstIterator claimed = claims().find(key);
     const uint64_t mine = uint64_t(gd::instance_id(root));
     if (claimed != claims().end() && claimed->value != mine
@@ -390,10 +435,9 @@ void NetwPersistenceEngine::claim_record_id(Object *p_database) {
 
 Ref<NetwPromise> NetwPersistenceEngine::hydrate() {
     NETW_ZONE_NC("persistence hydrate", colors::TABLE);
-    const Variant held_database = database();
-    Object *db = gd::live_object(held_database);
+    const Ref<NetwDatabase> db = database();
     const StringName table = table_name();
-    if (db == nullptr || table == StringName()) {
+    if (db.is_null() || table == StringName()) {
         NETW_TRACE(
             sys::TABLE,
             "hydrate refused: the archetype names no database or no table"
@@ -401,32 +445,14 @@ Ref<NetwPromise> NetwPersistenceEngine::hydrate() {
         return NetwPromise::resolved(int64_t(ERR_UNCONFIGURED));
     }
     ensure_schema();
-    const Ref<NetwPromise> stored = db->call(
-        "find_promise",
-        table,
-        record_id()
-    );
-    if (stored.is_null()) {
-        NETW_ERROR(
-            sys::TABLE,
-            "the database answered no promise for table '%s', so the hydrate "
-            "would have waited forever",
-            String(table)
-        );
-        return NetwPromise::rejected(
-            ERR_INVALID_DATA,
-            "find_promise answered no promise"
-        );
-    }
+    const Ref<NetwPromise> stored = db->find(table, record_id());
     Ref<NetwPromise> answer;
     answer.instantiate();
     stored->catch_error(
-        callable_mp(this, &NetwPersistenceEngine::settle_refused)
-            .bind(answer)
+        callable_mp(this, &NetwPersistenceEngine::settle_refused).bind(answer)
     );
     stored->then(
-        callable_mp(this, &NetwPersistenceEngine::settle_hydrated)
-            .bind(answer)
+        callable_mp(this, &NetwPersistenceEngine::settle_hydrated).bind(answer)
     );
     return answer;
 }
@@ -464,12 +490,29 @@ void NetwPersistenceEngine::settle_refused(
     p_answer->resolve(int64_t(p_code));
 }
 
+PersistedWrite NetwPersistenceEngine::capture_write() const {
+    PersistedWrite write;
+    write.database = database();
+    write.table = table_name();
+    write.record = record_id();
+    write.values = gather(Array());
+    return write;
+}
+
 Ref<NetwPromise> NetwPersistenceEngine::flush(const Array &p_keys) {
+    PersistedWrite write;
+    write.database = database();
+    write.table = table_name();
+    write.record = record_id();
+    write.values = gather(p_keys);
+    return submit(write);
+}
+
+Ref<NetwPromise> NetwPersistenceEngine::submit(const PersistedWrite &p_write) {
     NETW_ZONE_NC("persistence flush", colors::TABLE);
-    const Variant held_database = database();
-    Object *db = gd::live_object(held_database);
-    const StringName table = table_name();
-    if (db == nullptr || table == StringName()) {
+    const Ref<NetwDatabase> db = p_write.database;
+    const StringName table = p_write.table;
+    if (db.is_null() || table == StringName()) {
         NETW_TRACE(
             sys::TABLE,
             "flush refused: the archetype names no database or no table"
@@ -477,36 +520,20 @@ Ref<NetwPromise> NetwPersistenceEngine::flush(const Array &p_keys) {
         return NetwPromise::resolved(int64_t(ERR_UNCONFIGURED));
     }
     ensure_schema();
-    const Dictionary subset = gather(p_keys);
+    const Dictionary subset = p_write.values;
     if (subset.is_empty()) {
         return NetwPromise::resolved(int64_t(OK));
     }
-    const Ref<NetwPromise> written = db->call(
-        "transaction_promise",
-        callable_mp_static(&queue_row).bind(table, record_id(), subset)
+    const Ref<NetwPromise> written = db->transaction(
+        callable_mp_static(&queue_row).bind(table, p_write.record, subset)
     );
-    if (written.is_null()) {
-        NETW_ERROR(
-            sys::TABLE,
-            "the database answered no promise for table '%s', so the flush "
-            "would have waited forever",
-            String(table)
-        );
-        return NetwPromise::rejected(
-            ERR_INVALID_DATA,
-            "transaction_promise answered no promise"
-        );
-    }
     Ref<NetwPromise> answer;
     answer.instantiate();
     written->catch_error(
-        callable_mp(this, &NetwPersistenceEngine::settle_refused)
-            .bind(answer)
+        callable_mp(this, &NetwPersistenceEngine::settle_refused).bind(answer)
     );
-    written->then(
-        callable_mp(this, &NetwPersistenceEngine::settle_flushed)
-            .bind(subset, answer)
-    );
+    written->then(callable_mp(this, &NetwPersistenceEngine::settle_flushed)
+                      .bind(subset, answer));
     return answer;
 }
 
@@ -561,8 +588,7 @@ void NetwPersistenceEngine::commit_snapshot(const Dictionary &p_values) {
 
 void NetwPersistenceEngine::lint() {
     Ref<NetwEntity> held = Object::cast_to<NetwEntity>(entity());
-    if (held.is_null() || held->get_owner() == nullptr
-        || !property_configs_reader().is_valid()) {
+    if (held.is_null() || held->get_owner() == nullptr) {
         return;
     }
     const Array declared = book.properties();
@@ -572,11 +598,12 @@ void NetwPersistenceEngine::lint() {
         if (node == nullptr) {
             continue;
         }
-        const Dictionary configs = property_configs_reader().call(node);
+        const Dictionary configs = read_property_configs(node);
         const Variant held_config = configs.get(property, Variant());
         Object *cfg = gd::live_object(held_config);
         if (cfg == nullptr
-            || int(cfg->get("write_policy")) == int(WritePolicy::AUTHORITY)) {
+            || int(cfg->get("write_policy"))
+                == int(netw::entity::Control::WritePolicy::AUTHORITY)) {
             continue;
         }
         const bool rides_a_lane = bool(cfg->get("in_state_set"))
@@ -607,59 +634,9 @@ void NetwPersistenceEngine::lint() {
 }
 
 void NetwPersistenceEngine::_bind_methods() {
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("meta_database"),
-        &NetwPersistenceEngine::meta_database
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("meta_table"),
-        &NetwPersistenceEngine::meta_table
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("meta_columns"),
-        &NetwPersistenceEngine::meta_columns
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("set_config_reader", "reader"),
-        &NetwPersistenceEngine::set_config_reader
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("set_property_configs_reader", "reader"),
-        &NetwPersistenceEngine::set_property_configs_reader
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("set_schema_declarer", "declarer"),
-        &NetwPersistenceEngine::set_schema_declarer
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("forget_claims"),
-        &NetwPersistenceEngine::forget_claims
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("config_of", "owner"),
-        &NetwPersistenceEngine::config_of
-    );
-    ClassDB::bind_static_method(
-        "NetwPersistenceEngine",
-        D_METHOD("create", "entity", "declaration"),
-        &NetwPersistenceEngine::create
-    );
-
     ClassDB::bind_method(
         D_METHOD("owner_node"),
         &NetwPersistenceEngine::owner_node
-    );
-    ClassDB::bind_method(
-        D_METHOD("columns_empty"),
-        &NetwPersistenceEngine::columns_empty
     );
     ClassDB::bind_method(
         D_METHOD("database"),
@@ -670,26 +647,10 @@ void NetwPersistenceEngine::_bind_methods() {
         &NetwPersistenceEngine::record_id
     );
     ClassDB::bind_method(
-        D_METHOD("wants_spawn_hydration"),
-        &NetwPersistenceEngine::wants_spawn_hydration
-    );
-    ClassDB::bind_method(
-        D_METHOD("gather", "keys"),
-        &NetwPersistenceEngine::gather,
-        DEFVAL(Array())
-    );
-    ClassDB::bind_method(
-        D_METHOD("apply", "data"),
-        &NetwPersistenceEngine::apply
-    );
-    ClassDB::bind_method(
         D_METHOD("is_dirty"),
         &NetwPersistenceEngine::is_dirty
     );
-    ClassDB::bind_method(
-        D_METHOD("hydrate"),
-        &NetwPersistenceEngine::hydrate
-    );
+    ClassDB::bind_method(D_METHOD("hydrate"), &NetwPersistenceEngine::hydrate);
     ClassDB::bind_method(
         D_METHOD("flush", "keys"),
         &NetwPersistenceEngine::flush,
@@ -703,7 +664,6 @@ void NetwPersistenceEngine::_bind_methods() {
         D_METHOD("commit_snapshot", "values"),
         &NetwPersistenceEngine::commit_snapshot
     );
-    ClassDB::bind_method(D_METHOD("lint"), &NetwPersistenceEngine::lint);
 
     ADD_SIGNAL(MethodInfo("hydrated"));
     ADD_SIGNAL(MethodInfo("flushed"));

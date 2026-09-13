@@ -13,8 +13,6 @@ EntityDecl crate() {
     return EntityDecl().named("Crate").on_route(91).placed_at(godot::Vector2());
 }
 
-// One entity seated in one of two scenes, which is the smallest world that can
-// tell membership from the absence of it.
 Scenario seated_entity() {
     Scenario scenario;
     scenario.label = "seated-entity";
@@ -36,8 +34,6 @@ Scenario relocated_entity() {
     return scenario;
 }
 
-// An inner scene seated inside an outer one. Both enclose the crate by
-// ancestry, and only the inner one owns it.
 Scenario nested_scene() {
     Scenario scenario;
     scenario.label = "nested-scene";
@@ -61,8 +57,6 @@ Scenario released_scene() {
     return scenario.until(3);
 }
 
-// Two instances of one level. Stems are not unique, so this is the world that
-// says whether a boundary belongs to the instance or to the archetype.
 Scenario sibling_scenes() {
     Scenario scenario;
     scenario.label = "sibling-scenes";
@@ -127,9 +121,6 @@ LawVerdict law_a_nested_scene_owns_its_own(const ScenarioRun &p_run) {
     return law_held();
 }
 
-// Whether the scenario left [param p_client] admitted to [param p_scene],
-// read as the last admission edge it declared. A scene that was never named is
-// denying, which is what a boundary defaults to.
 bool declared_admission(
     const Scenario &p_scenario,
     const godot::StringName &p_scene,
@@ -186,11 +177,10 @@ LawVerdict law_admission_is_per_scene(const ScenarioRun &p_run) {
             const bool owed = declared_admission(scenario, name, client);
             if (scene.admits(client) != owed) {
                 return law_broken(
-                    owed
-                        ? "a scene that admitted client %d holds %d viewer(s) "
-                          "without it"
-                        : "a scene that admitted client %d nothing holds %d "
-                          "viewer(s) with it",
+                    owed ? "a scene that admitted client %d holds %d viewer(s) "
+                           "without it"
+                         : "a scene that admitted client %d nothing holds %d "
+                           "viewer(s) with it",
                     client,
                     scene.viewers()
                 );
@@ -237,14 +227,14 @@ TEST_CASE(
     const godot::RID scene = rig.declare_scene("Arena");
 
     NETW_CHECK_EQ(
-        int(rig.server()->call("scene_declare", scene)),
+        int(rig.server()->scene_declare(scene)),
         int(godot::ERR_UNCONFIGURED)
     );
     NETW_CHECK_EQ(
-        int(rig.server()->call("scene_undeclare", scene)),
+        int(rig.server()->scene_undeclare(scene)),
         int(godot::ERR_UNCONFIGURED)
     );
-    CHECK(bool(rig.server()->call("scene_is_declared", scene)));
+    CHECK(rig.server()->scene_is_declared(scene));
 }
 
 TEST_CASE(
@@ -254,28 +244,23 @@ TEST_CASE(
     LoopbackRig rig(0);
     const godot::RID scene = rig.declare_scene("DeclaredArena");
 
-    // The two halves a self-declaring root buys: the record carries the facet,
-    // and the label it declared is what every scene verb reads it under.
-    CHECK(bool(rig.server()->call("scene_is_declared", scene)));
+    CHECK(rig.server()->scene_is_declared(scene));
     CHECK(
-        godot::StringName(rig.server()->call("scene_get_param", scene, 0))
+        godot::StringName(rig.server()->scene_get_param(
+            scene,
+            netw::NetwMultiplayer::SCENE_PARAM_LABEL
+        ))
         == godot::StringName("DeclaredArena")
     );
 
-    // An entity built the same way MINUS the declaration carries neither, which
-    // is what makes the facet the thing that distinguishes a scene rather than
-    // the wrapper or the container being there.
-    godot::Object *api = rig.server();
-    const godot::RID plain = api->call("entity_create");
+    netw::NetwMultiplayer *api = rig.server();
+    const godot::RID plain = api->entity_create();
     godot::Node *body = memnew(godot::Node);
     body->set_name("Crate");
-    NETW_CHECK_GT(int(api->call("entity_admit", plain)), 0);
-    NETW_CHECK_EQ(
-        int(api->call("entity_bind_node", plain, body)),
-        int(godot::OK)
-    );
+    NETW_CHECK_GT(int(api->entity_admit(plain)), 0);
+    NETW_CHECK_EQ(int(api->entity_bind_node(plain, body)), int(godot::OK));
 
-    CHECK_FALSE(bool(api->call("scene_is_declared", plain)));
+    CHECK_FALSE(api->scene_is_declared(plain));
 
     memdelete(body);
 }

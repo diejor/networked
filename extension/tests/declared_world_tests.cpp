@@ -11,10 +11,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] an entity names its shared wire schema"
 ) {
     const EntityDecl entity = EntityDecl()
-        .named("Tracked")
-        .on_schema("TrackedPose")
-        .synced("position")
-        .placed_at(Vector2(3.0, 4.0));
+                                  .named("Tracked")
+                                  .on_schema("TrackedPose")
+                                  .synced("position")
+                                  .placed_at(Vector2(3.0, 4.0));
 
     CHECK(entity.schema() == StringName("TrackedPose"));
     NETW_CHECK_EQ(entity.synced_columns().size(), 1);

@@ -23,7 +23,10 @@ Ref<NetwInterpolate> make_spec() {
 TEST_CASE("[Networked][Display][Hosted] a fresh spec lerps and smooths") {
     Ref<NetwInterpolate> spec = make_spec();
     NETW_CHECK_EQ(int(spec->get_mode()), int(NetwInterpolate::MODE_LERP));
-    NETW_CHECK_EQ(int(spec->get_forecast_tail()), int(NetwInterpolate::TAIL_AUTO));
+    NETW_CHECK_EQ(
+        int(spec->get_forecast_tail()),
+        int(NetwInterpolate::TAIL_AUTO)
+    );
     NETW_CHECK_CLOSE(spec->get_smoothing(), 0.05, 0.0001);
     NETW_CHECK_CLOSE(spec->get_snap_distance(), 0.0, 0.0001);
 }
@@ -53,11 +56,17 @@ TEST_CASE(
 ) {
     Ref<NetwInterpolate> spec = make_spec();
     spec->hold();
-    NETW_CHECK_EQ(int(spec->get_forecast_tail()), int(NetwInterpolate::TAIL_HOLD));
+    NETW_CHECK_EQ(
+        int(spec->get_forecast_tail()),
+        int(NetwInterpolate::TAIL_HOLD)
+    );
 
     spec->project_by(StringName("velocity"));
     CHECK(bool(spec->get_project_channel() == StringName("velocity")));
-    NETW_CHECK_EQ(int(spec->get_forecast_tail()), int(NetwInterpolate::TAIL_AUTO));
+    NETW_CHECK_EQ(
+        int(spec->get_forecast_tail()),
+        int(NetwInterpolate::TAIL_AUTO)
+    );
 }
 
 TEST_CASE("[Networked][Display][Hosted] two specs are the same by value") {

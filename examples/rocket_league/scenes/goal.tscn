@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3 uid="uid://c7rlgoalarea1"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_goal"]
+size = Vector3(15, 7, 4.4282227)
+
+[sub_resource type="BoxMesh" id="BoxMesh_goal"]
+size = Vector3(15.365, 7.25, 4)
+
+[node name="Goal" type="Area3D"]
+collision_layer = 8
+collision_mask = 4
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.7141113)
+shape = SubResource("BoxShape3D_goal")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.6367207)
+visible = false
+mesh = SubResource("BoxMesh_goal")

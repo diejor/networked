@@ -8,30 +8,23 @@ namespace TestWarnVerdictLaws {
 
 using namespace godot;
 using namespace netw_test;
-using netw::NetwMultiplayerCore;
-
-NetwMultiplayerCore *session_core(Object *p_api) {
-    NetwMultiplayerCore *core = Object::cast_to<NetwMultiplayerCore>(
-        p_api->get("_native_core")
-    );
-    REQUIRE(core != nullptr);
-    return core;
-}
+using netw::NetwMultiplayer;
 
 TEST_CASE(
     "[Networked][Session] WV1 warning a verdict counts every "
     "occurrence and admits only the first, so a peer retrying cannot flood"
 ) {
     LoopbackRig rig(0);
-    NetwMultiplayerCore *core = session_core(rig.server());
+    NetwMultiplayer *core = rig.server();
+    REQUIRE(core != nullptr);
 
-    const int64_t before = core->verdict_total(ERR_UNAUTHORIZED);
+    const int64_t before = core->stats_get_verdict_count(ERR_UNAUTHORIZED);
 
     NETW_CHECK_EQ(int(core->warn_verdict(ERR_UNAUTHORIZED, 0)), 1);
     NETW_CHECK_EQ(int(core->warn_verdict(ERR_UNAUTHORIZED, 0)), 0);
     NETW_CHECK_EQ(int(core->warn_verdict(ERR_UNAUTHORIZED, 0)), 0);
 
-    NETW_CHECK_EQ(core->verdict_total(ERR_UNAUTHORIZED), before + 3);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_UNAUTHORIZED), before + 3);
 }
 
 TEST_CASE(
@@ -39,7 +32,8 @@ TEST_CASE(
     "route together, so one route falling silent does not silence another"
 ) {
     LoopbackRig rig(0);
-    NetwMultiplayerCore *core = session_core(rig.server());
+    NetwMultiplayer *core = rig.server();
+    REQUIRE(core != nullptr);
 
     NETW_CHECK_EQ(int(core->warn_verdict(ERR_UNAUTHORIZED, 7)), 1);
     NETW_CHECK_EQ(int(core->warn_verdict(ERR_UNAUTHORIZED, 7)), 0);

@@ -1,0 +1,65 @@
+[gd_scene format=3 uid="uid://c7rlmainscene"]
+
+[ext_resource type="Script" uid="uid://c06rvowmt0je3" path="res://examples/rocket_league/scripts/rocket_league_session.gd" id="1_sess"]
+[ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="2_brws"]
+[ext_resource type="Script" uid="uid://b1ob7aihgdm7v" path="res://examples/rocket_league/scripts/scoreboard.gd" id="3_score"]
+[ext_resource type="Script" uid="uid://cnus2hdqimfmj" path="res://examples/rocket_league/scripts/ui_info.gd" id="4_info"]
+[ext_resource type="Script" uid="uid://ckmcc5fdus6tj" path="res://examples/rocket_league/scripts/camera_3d.gd" id="5_cam"]
+
+[node name="Main" type="Node" unique_id=218129197]
+script = ExtResource("1_sess")
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=254418985]
+
+[node name="ConnectBrowser" parent="UI" unique_id=2055595574 instance=ExtResource("2_brws")]
+unique_name_in_owner = true
+offset_top = -230.0
+offset_bottom = 230.0
+size_flags_horizontal = 0
+size_flags_vertical = 0
+server_list_path = "user://rocket_league/servers.cfg"
+
+[node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(2055595574, 522198391) index="1" unique_id=1146132509]
+text = "Rocket League Demo"
+
+[node name="TopCentre" type="Control" parent="UI" unique_id=1419622810]
+layout_mode = 3
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 96.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="ScoreBoard" type="RichTextLabel" parent="UI/TopCentre" unique_id=1043739259]
+layout_mode = 0
+offset_right = 1155.0
+offset_bottom = 113.0
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 61
+bbcode_enabled = true
+fit_content = true
+horizontal_alignment = 1
+script = ExtResource("3_score")
+
+[node name="CountDown" type="RichTextLabel" parent="UI/TopCentre" unique_id=326650024]
+layout_mode = 0
+offset_top = 120.0
+offset_right = 1155.0
+offset_bottom = 338.0
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 61
+bbcode_enabled = true
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Info" type="Label" parent="UI" unique_id=2047069628]
+offset_right = 363.0
+offset_bottom = 363.0
+script = ExtResource("4_info")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=285600570]
+current = true
+script = ExtResource("5_cam")
+
+[editable path="UI/ConnectBrowser"]

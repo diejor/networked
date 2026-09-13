@@ -1,6 +1,5 @@
 #include "netw/effect_ledger.hpp"
 
-#include "godot/class_db.hpp"
 #include "godot/local_vector.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
@@ -118,29 +117,6 @@ void NetwEffectLedger::sweep(int64_t p_tick) {
 void NetwEffectLedger::clear() {
     entries.clear();
     watchers.clear();
-}
-
-void NetwEffectLedger::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("arm", "key", "revert", "deadline_tick"),
-        &NetwEffectLedger::arm
-    );
-    ClassDB::bind_method(
-        D_METHOD("watch", "key", "confirmed", "denied"),
-        &NetwEffectLedger::watch
-    );
-    ClassDB::bind_method(D_METHOD("adopt", "key"), &NetwEffectLedger::adopt);
-    ClassDB::bind_method(
-        D_METHOD("discard", "key"),
-        &NetwEffectLedger::discard
-    );
-    ClassDB::bind_method(
-        D_METHOD("pending", "key"),
-        &NetwEffectLedger::pending
-    );
-    ClassDB::bind_method(D_METHOD("count"), &NetwEffectLedger::count);
-    ClassDB::bind_method(D_METHOD("sweep", "tick"), &NetwEffectLedger::sweep);
-    ClassDB::bind_method(D_METHOD("clear"), &NetwEffectLedger::clear);
 }
 
 } // namespace netw

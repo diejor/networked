@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPredictFieldRecovery" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One state field's recovery history, accumulated since the entity spawned.
+	</brief_description>
+	<description>
+		A field may be admitted to the trigger set without being reachable by any operator in the ladder. [method NetwPropertyConfig.teleport_only] withholds a field from every sub-teleport restore while leaving it free to trigger, so it can raise corrections that are forbidden to write it and are answered by repairing some other field instead.
+		Each comparison looks ordinary on its own and no single-tick reading can show it, because the evidence is the whole run rather than any one tick. These six counts are that run.
+		[codeblock]
+		var row := entity.prediction.field_recovery[&amp;"sphere_angular_velocity"]
+		print(row.triggered, row.repaired, row.contracted)   # 1393  50  0
+		[/codeblock]
+		Every read asks the prediction slot, so a row held across frames reports what the field has done since, not what it had done when the row was taken.
+		The counts are kept apart because a field can score any combination of them independently, and which combination it scores is the whole diagnosis. A field that triggers and is never repaired is asking for recoveries that go to other fields. One repaired without contracting is being written with a value that does not help.
+		[codeblock lang=text]
+		triggered  ──&gt; repaired ──&gt; contracted    the field is served
+		triggered  ──&gt; repaired ──&gt; .             written, and the write is no help
+		triggered  ──&gt; .        ──&gt; .             asking, and answered elsewhere
+		.          ──&gt; repaired ──&gt; .             written on someone else's behalf
+		[/codeblock]
+		Reached through [member NetwPredictionHandle.field_recovery], which holds a row for every field something has charged and none for a field nothing has.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="carried" type="int" setter="" getter="get_carried" default="0">
+			Recoveries whose write this field's declared [method NetwPropertyConfig.carry_step] rule advanced to the present.
+		</member>
+		<member name="contracted" type="int" setter="" getter="get_contracted" default="0">
+			Writes to this field that a later comparison found smaller.
+			A recovery lands on the body now while the comparisons just behind it were driven at the acknowledgement, so a write is only judged once a comparison reaches a transition driven past it. Scoring the very next comparison would read back the error the write was answering, which is the same lag that makes a correction train look like a divergence refusing to close.
+		</member>
+		<member name="declined" type="int" setter="" getter="get_declined" default="0">
+			Carries the engine refused, each of which wrote the acknowledged value instead, which is what an undeclared field always writes.
+			A rule is refused when the recorded transitions it would fold over are missing or incomplete, when it returns the wrong type or a non-finite value, when it moves the value further than a teleport would, or once it has been retired.
+		</member>
+		<member name="field" type="StringName" setter="" getter="get_field" default="&amp;&quot;&quot;">
+			The state field this row counts.
+		</member>
+		<member name="infidelity" type="int" setter="" getter="get_infidelity" default="0">
+			Times the rule failed to reproduce a transition the owner had already recorded, which is the one check that can tell a rule reading the live world, or one that is simply wrong, from a rule that agrees.
+			Enough of these retires the rule, after which it is never called again and every recovery writes the acknowledged value.
+		</member>
+		<member name="repaired" type="int" setter="" getter="get_repaired" default="0">
+			Recoveries that wrote this field, whether or not it asked for one.
+		</member>
+		<member name="triggered" type="int" setter="" getter="get_triggered" default="0">
+			Comparisons that corrected while this field was past its own [method NetwPropertyConfig.epsilon], so a recovery was materially answering it.
+		</member>
+	</members>
+</class>

@@ -3,7 +3,7 @@
 #include "godot/gdvirtual.hpp"
 #include "godot/resource.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/bit_buffer.hpp"
+#include "netw/wire/stream.hpp"
 
 namespace netw {
 
@@ -13,40 +13,53 @@ class NetwQuantize : public godot::Resource {
 protected:
     static void _bind_methods();
 
-    GDVIRTUAL2(_write, godot::Ref<NetwBitBufferWriter>, godot::Variant)
-    GDVIRTUAL2R(godot::Variant, _read, godot::Ref<NetwBitBufferReader>, int)
-    GDVIRTUAL1RC(bool, _supports_type, int)
-    GDVIRTUAL1RC(int, _bit_width, int)
-    GDVIRTUAL1RC(double, _max_error, int)
+    GDVIRTUAL1RC(bool, _supports_type, godot::Variant::Type)
+    GDVIRTUAL1RC(int, _bit_width, godot::Variant::Type)
+    GDVIRTUAL1RC(int, _stride, godot::Variant::Type)
+    GDVIRTUAL2RC(int64_t, _encode, godot::Variant, int)
+    GDVIRTUAL2RC(
+        godot::Variant,
+        _decode,
+        godot::PackedInt64Array,
+        godot::Variant::Type
+    )
+    GDVIRTUAL1RC(double, _max_error, godot::Variant::Type)
 
 public:
-    virtual void write(
-        const godot::Ref<NetwBitBufferWriter> &writer,
+    virtual bool supports_type(godot::Variant::Type type) const;
+    virtual int bit_width(godot::Variant::Type type) const;
+    virtual int stride(godot::Variant::Type type) const;
+    virtual int64_t encode(const godot::Variant &value, int element) const;
+    virtual godot::Variant decode(
+        const godot::PackedInt64Array &codes,
+        godot::Variant::Type type
+    ) const;
+    virtual double max_error(godot::Variant::Type type) const;
+
+    virtual bool write(
+        netw::wire::WriteStream &stream,
         const godot::Variant &value
     );
-    virtual godot::Variant read(
-        const godot::Ref<NetwBitBufferReader> &reader,
-        int type
+    virtual bool read(
+        netw::wire::ReadStream &stream,
+        godot::Variant::Type type,
+        godot::Variant &r_value
     );
-    virtual bool supports_type(int type) const;
-    virtual int bit_width(int type) const;
-    virtual double max_error(int type) const;
+
+    int64_t total_bits(godot::Variant::Type type) const;
     bool is_same_layout(const godot::Ref<NetwQuantize> &other) const;
 };
 
-class NetwQuantizeBits : public NetwQuantize {
-    GDCLASS(NetwQuantizeBits, NetwQuantize)
+class NetwQuantizeScalar : public NetwQuantize {
+    GDCLASS(NetwQuantizeScalar, NetwQuantize)
 
     int bit_count = 8;
     double min_limit = -1.0;
     double max_limit = 1.0;
 
-    int levels() const;
-    void encode_axis(
-        const godot::Ref<NetwBitBufferWriter> &writer,
-        double value
-    ) const;
-    double decode_axis(const godot::Ref<NetwBitBufferReader> &reader) const;
+    int64_t top_code() const;
+    int64_t encode_axis(double value) const;
+    double decode_axis(int64_t code) const;
 
 protected:
     static void _bind_methods();
@@ -58,58 +71,20 @@ public:
     double get_min_limit() const;
     void set_max_limit(double value);
     double get_max_limit() const;
-    godot::Ref<NetwQuantizeBits> bits(int value);
-    godot::Ref<NetwQuantizeBits> limits(double minimum, double maximum);
-    void write(
-        const godot::Ref<NetwBitBufferWriter> &writer,
-        const godot::Variant &value
-    ) override;
-    godot::Variant read(
-        const godot::Ref<NetwBitBufferReader> &reader,
-        int type
-    ) override;
-    bool supports_type(int type) const override;
-    int bit_width(int type) const override;
-    double max_error(int type) const override;
-};
-
-class NetwQuantizeFixed : public NetwQuantize {
-    GDCLASS(NetwQuantizeFixed, NetwQuantize)
-
-    double resolution_step = 0.5;
-    double min_limit = -2048.0;
-    double max_limit = 2048.0;
-
-    int grid_bits() const;
-    void encode_axis(
-        const godot::Ref<NetwBitBufferWriter> &writer,
-        double value
-    ) const;
-    double decode_axis(const godot::Ref<NetwBitBufferReader> &reader) const;
-
-protected:
-    static void _bind_methods();
-
-public:
     void set_resolution_step(double value);
     double get_resolution_step() const;
-    void set_min_limit(double value);
-    double get_min_limit() const;
-    void set_max_limit(double value);
-    double get_max_limit() const;
-    godot::Ref<NetwQuantizeFixed> step(double value);
-    godot::Ref<NetwQuantizeFixed> limits(double minimum, double maximum);
-    void write(
-        const godot::Ref<NetwBitBufferWriter> &writer,
-        const godot::Variant &value
-    ) override;
-    godot::Variant read(
-        const godot::Ref<NetwBitBufferReader> &reader,
-        int type
-    ) override;
-    bool supports_type(int type) const override;
-    int bit_width(int type) const override;
-    double max_error(int type) const override;
+    godot::Ref<NetwQuantizeScalar> bits(int value);
+    godot::Ref<NetwQuantizeScalar> step(double value);
+    godot::Ref<NetwQuantizeScalar> limits(double minimum, double maximum);
+    bool supports_type(godot::Variant::Type type) const override;
+    int bit_width(godot::Variant::Type type) const override;
+    int stride(godot::Variant::Type type) const override;
+    int64_t encode(const godot::Variant &value, int element) const override;
+    godot::Variant decode(
+        const godot::PackedInt64Array &codes,
+        godot::Variant::Type type
+    ) const override;
+    double max_error(godot::Variant::Type type) const override;
 };
 
 class NetwQuantizeAngle : public NetwQuantize {
@@ -128,17 +103,15 @@ public:
     bool get_centered_on_zero() const;
     godot::Ref<NetwQuantizeAngle> bits(int value);
     godot::Ref<NetwQuantizeAngle> centered();
-    void write(
-        const godot::Ref<NetwBitBufferWriter> &writer,
-        const godot::Variant &value
-    ) override;
-    godot::Variant read(
-        const godot::Ref<NetwBitBufferReader> &reader,
-        int type
-    ) override;
-    bool supports_type(int type) const override;
-    int bit_width(int type) const override;
-    double max_error(int type) const override;
+    bool supports_type(godot::Variant::Type type) const override;
+    int bit_width(godot::Variant::Type type) const override;
+    int stride(godot::Variant::Type type) const override;
+    int64_t encode(const godot::Variant &value, int element) const override;
+    godot::Variant decode(
+        const godot::PackedInt64Array &codes,
+        godot::Variant::Type type
+    ) const override;
+    double max_error(godot::Variant::Type type) const override;
 };
 
 class NetwQuantizeQuaternion : public NetwQuantize {
@@ -146,13 +119,8 @@ class NetwQuantizeQuaternion : public NetwQuantize {
 
     int bit_count = 10;
 
-    void encode_component(
-        const godot::Ref<NetwBitBufferWriter> &writer,
-        double value
-    ) const;
-    double decode_component(
-        const godot::Ref<NetwBitBufferReader> &reader
-    ) const;
+    int64_t encode_component(double value) const;
+    double decode_component(int64_t code) const;
 
 protected:
     static void _bind_methods();
@@ -161,17 +129,15 @@ public:
     void set_bit_count(int value);
     int get_bit_count() const;
     godot::Ref<NetwQuantizeQuaternion> bits(int value);
-    void write(
-        const godot::Ref<NetwBitBufferWriter> &writer,
-        const godot::Variant &value
-    ) override;
-    godot::Variant read(
-        const godot::Ref<NetwBitBufferReader> &reader,
-        int type
-    ) override;
-    bool supports_type(int type) const override;
-    int bit_width(int type) const override;
-    double max_error(int type) const override;
+    bool supports_type(godot::Variant::Type type) const override;
+    int bit_width(godot::Variant::Type type) const override;
+    int stride(godot::Variant::Type type) const override;
+    int64_t encode(const godot::Variant &value, int element) const override;
+    godot::Variant decode(
+        const godot::PackedInt64Array &codes,
+        godot::Variant::Type type
+    ) const override;
+    double max_error(godot::Variant::Type type) const override;
 };
 
 class NetwQuantizeTransform2D : public NetwQuantize {
@@ -180,29 +146,35 @@ class NetwQuantizeTransform2D : public NetwQuantize {
     godot::Ref<NetwQuantize> origin_quantizer;
     godot::Ref<NetwQuantize> rotation_quantizer;
     godot::Ref<NetwQuantize> scale_quantizer;
+    mutable godot::Ref<NetwQuantize> stock_origin;
+    mutable godot::Ref<NetwQuantize> stock_rotation;
+
+    const godot::Ref<NetwQuantize> &origin_or_stock() const;
+    const godot::Ref<NetwQuantize> &rotation_or_stock() const;
 
 protected:
     static void _bind_methods();
 
 public:
-    NetwQuantizeTransform2D();
     void set_origin_quantizer(const godot::Ref<NetwQuantize> &value);
     godot::Ref<NetwQuantize> get_origin_quantizer() const;
     void set_rotation_quantizer(const godot::Ref<NetwQuantize> &value);
     godot::Ref<NetwQuantize> get_rotation_quantizer() const;
     void set_scale_quantizer(const godot::Ref<NetwQuantize> &value);
     godot::Ref<NetwQuantize> get_scale_quantizer() const;
-    void write(
-        const godot::Ref<NetwBitBufferWriter> &writer,
+    bool write(
+        netw::wire::WriteStream &stream,
         const godot::Variant &value
     ) override;
-    godot::Variant read(
-        const godot::Ref<NetwBitBufferReader> &reader,
-        int type
+    bool read(
+        netw::wire::ReadStream &stream,
+        godot::Variant::Type type,
+        godot::Variant &r_value
     ) override;
-    bool supports_type(int type) const override;
-    int bit_width(int type) const override;
-    double max_error(int type) const override;
+    bool supports_type(godot::Variant::Type type) const override;
+    int bit_width(godot::Variant::Type type) const override;
+    int stride(godot::Variant::Type type) const override;
+    double max_error(godot::Variant::Type type) const override;
 };
 
 class NetwQuantizeTransform3D : public NetwQuantize {
@@ -211,29 +183,35 @@ class NetwQuantizeTransform3D : public NetwQuantize {
     godot::Ref<NetwQuantize> origin_quantizer;
     godot::Ref<NetwQuantize> rotation_quantizer;
     godot::Ref<NetwQuantize> scale_quantizer;
+    mutable godot::Ref<NetwQuantize> stock_origin;
+    mutable godot::Ref<NetwQuantize> stock_rotation;
+
+    const godot::Ref<NetwQuantize> &origin_or_stock() const;
+    const godot::Ref<NetwQuantize> &rotation_or_stock() const;
 
 protected:
     static void _bind_methods();
 
 public:
-    NetwQuantizeTransform3D();
     void set_origin_quantizer(const godot::Ref<NetwQuantize> &value);
     godot::Ref<NetwQuantize> get_origin_quantizer() const;
     void set_rotation_quantizer(const godot::Ref<NetwQuantize> &value);
     godot::Ref<NetwQuantize> get_rotation_quantizer() const;
     void set_scale_quantizer(const godot::Ref<NetwQuantize> &value);
     godot::Ref<NetwQuantize> get_scale_quantizer() const;
-    void write(
-        const godot::Ref<NetwBitBufferWriter> &writer,
+    bool write(
+        netw::wire::WriteStream &stream,
         const godot::Variant &value
     ) override;
-    godot::Variant read(
-        const godot::Ref<NetwBitBufferReader> &reader,
-        int type
+    bool read(
+        netw::wire::ReadStream &stream,
+        godot::Variant::Type type,
+        godot::Variant &r_value
     ) override;
-    bool supports_type(int type) const override;
-    int bit_width(int type) const override;
-    double max_error(int type) const override;
+    bool supports_type(godot::Variant::Type type) const override;
+    int bit_width(godot::Variant::Type type) const override;
+    int stride(godot::Variant::Type type) const override;
+    double max_error(godot::Variant::Type type) const override;
 };
 
 } // namespace netw

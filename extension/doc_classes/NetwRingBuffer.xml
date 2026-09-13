@@ -74,6 +74,8 @@
 			<param index="1" name="value" type="Variant" />
 			<description>
 				Records [param value] at [param tick]. Recording past capacity evicts the oldest entry.
+				A tick the buffer ALREADY holds is REPLACED in place rather than appended, so one tick is one entry and the newest write for it is the one [method get_at] answers. A replay that re-runs a tick and records the state it reached is the caller this exists for: appending would leave the pre-replay value in front of the corrected one, where every reader would keep finding the value the replay was run to supersede.
+				The replace path is guarded by a single comparison against [method newest_tick], so an append at a rising tick, which is what every hot caller does, never scans.
 			</description>
 		</method>
 		<method name="size" qualifiers="const">

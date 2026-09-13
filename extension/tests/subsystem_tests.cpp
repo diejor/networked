@@ -11,7 +11,7 @@ using namespace netw;
 TEST_CASE(
     "[Networked][Log][Hosted] a subsystem's name and its mask bit are one row"
 ) {
-    NETW_CHECK_EQ(subsystem_count(), 17);
+    NETW_CHECK_EQ(subsystem_count(), 18);
 
     for (int index = 0; index < subsystem_count(); ++index) {
         const char *name = subsystem_at(index);
@@ -38,10 +38,7 @@ TEST_CASE(
     }
     NETW_CHECK_EQ(int(seen & uint32_t(profile::SUBSYSTEM_SESSION)) != 0, 1);
     NETW_CHECK_EQ(int(seen & uint32_t(profile::SUBSYSTEM_LAGCOMP)) != 0, 1);
-    NETW_CHECK_EQ(
-        int(uint32_t(profile::SUBSYSTEM_ALL) & seen) == int(seen),
-        1
-    );
+    NETW_CHECK_EQ(int(uint32_t(profile::SUBSYSTEM_ALL) & seen) == int(seen), 1);
 }
 
 TEST_CASE(

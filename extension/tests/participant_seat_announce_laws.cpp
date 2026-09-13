@@ -3,8 +3,11 @@
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "netw/api/entity_record.hpp"
+#include "netw/api/join_request.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
+#include "netw/api/scene_handle.hpp"
 #include "support/entity_facets.h"
 #include "support/netw_call_log.h"
 #include "support/netw_recorder.h"
@@ -12,28 +15,18 @@
 namespace TestParticipantSeatAnnounceLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::CallLog;
 using netw_test::Recorder;
 
-Ref<RefCounted> a_seat_announcing_row() {
-    Ref<RefCounted> row;
+Ref<netw::NetwParticipant> a_seat_announcing_row() {
+    Ref<netw::NetwParticipant> row;
     row.instantiate();
-    Array args;
-    Dictionary from;
-    from["name"] = "from";
-    from["type"] = int(Variant::OBJECT);
-    Dictionary to;
-    to["name"] = "to";
-    to["type"] = int(Variant::OBJECT);
-    args.push_back(from);
-    args.push_back(to);
-    netw::gd::add_user_signal(row.ptr(), "scene_changed", args);
     return row;
 }
 
-Ref<NetwMultiplayerCore> peered_core() {
-    Ref<NetwMultiplayerCore> core;
+Ref<NetwMultiplayer> peered_core() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Ref<netw::LocalMultiplayerPeer> peer;
     peer.instantiate();
@@ -43,12 +36,12 @@ Ref<NetwMultiplayerCore> peered_core() {
 }
 
 struct Seated {
-    Ref<NetwMultiplayerCore> core;
-    Ref<RefCounted> row;
+    Ref<NetwMultiplayer> core;
+    Ref<netw::NetwParticipant> row;
     int64_t peer = 0;
 };
 
-Seated a_local_participant(const Ref<NetwMultiplayerCore> &p_core) {
+Seated a_local_participant(const Ref<NetwMultiplayer> &p_core) {
     Seated made;
     made.core = p_core;
     made.peer = int64_t(p_core->get_unique_id());
@@ -59,19 +52,19 @@ Seated a_local_participant(const Ref<NetwMultiplayerCore> &p_core) {
 }
 
 struct Bound {
-    Ref<RefCounted> wrapper;
-    Ref<netw::NetwEntityRecord> record;
+    Ref<netw::NetwEntity> wrapper;
+    netw::NetwEntityRecord *record = nullptr;
     RID handle;
     Node *owner = nullptr;
 };
 
-Bound bind_scene(const Ref<NetwMultiplayerCore> &p_core, Node *p_parent) {
+Bound bind_scene(const Ref<NetwMultiplayer> &p_core, Node *p_parent) {
     Bound out;
     out.owner = memnew(Node);
     p_parent->add_child(out.owner);
     out.wrapper.instantiate();
     out.handle = p_core->get_liveness_core()->entity_create();
-    out.record.instantiate();
+    out.record = out.wrapper->get_record();
     out.record->adopt_handle(out.handle);
     out.record->set_declares_scene(true);
     const int64_t route = p_core->get_liveness_core()->reserve_route();
@@ -86,33 +79,68 @@ Bound bind_scene(const Ref<NetwMultiplayerCore> &p_core, Node *p_parent) {
 }
 
 TEST_CASE(
+    "[Networked][Session][Hosted] PJ1 a joined participant is one an accepted "
+    "join names, so a peer with a row but no join is not in the roster the "
+    "session publishes"
+) {
+    Ref<NetwMultiplayer> core = peered_core();
+    const int64_t local = int64_t(core->get_unique_id());
+    const int64_t guest = local + 7;
+
+    core->participant_ensure(guest);
+    CHECK(core->participant_has(guest));
+    CHECK(core->participant_joined_of(guest).is_null());
+    CHECK(core->participant_joined_all().is_empty());
+    CHECK(core->participant_local().is_null());
+
+    Ref<netw::ResolvedJoin> join;
+    join.instantiate();
+    join->set_peer_id(guest);
+    REQUIRE(core->session_remember_join(join));
+    CHECK(core->participant_joined_of(guest).is_valid());
+    NETW_CHECK_EQ(int(core->participant_joined_all().size()), 1);
+    CHECK(core->participant_local().is_null());
+
+    Ref<netw::ResolvedJoin> mine;
+    mine.instantiate();
+    mine->set_peer_id(local);
+    REQUIRE(core->session_remember_join(mine));
+    CHECK(core->participant_local().is_valid());
+    NETW_CHECK_EQ(int(core->participant_joined_all().size()), 2);
+
+    core->session_forget_peer(guest);
+    CHECK(core->participant_joined_of(guest).is_null());
+    NETW_CHECK_EQ(int(core->participant_joined_all().size()), 1);
+}
+
+TEST_CASE(
     "[Networked][Session][Hosted] PS1 seating a participant and telling the "
     "session are one act, so a caller cannot take the seat and leave every "
     "listener behind: the silent write moves the same seat and reaches "
     "nobody, which is a failure no reading of the seat can see"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const Seated local = a_local_participant(core);
     const RID arena = core->get_liveness_core()->entity_create();
     const RID annex = core->get_liveness_core()->entity_create();
-    Recorder session(core.ptr(), Vector<StringName>({"local_scene_changed"}));
+    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
 
     CHECK(core->participant_take_seat(local.peer, arena));
     CHECK(core->participant_seat(local.peer) == arena);
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 0);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 0);
 
     CHECK(core->participant_seat_move(local.peer, annex));
     CHECK(core->participant_seat(local.peer) == annex);
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 1);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 1);
 
     CHECK(core->participant_leave_seat(local.peer, annex));
     CHECK_FALSE(core->participant_seat(local.peer).is_valid());
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 1);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 1);
 
     CHECK(core->participant_seat_move(local.peer, arena));
     CHECK(core->participant_seat_clear(local.peer, arena));
     CHECK_FALSE(core->participant_seat(local.peer).is_valid());
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 3);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 3);
 }
 
 TEST_CASE(
@@ -121,27 +149,27 @@ TEST_CASE(
     "release naming a scene no longer held both answer false and say "
     "nothing, which is what lets an admission edge fire as often as it likes"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const Seated local = a_local_participant(core);
     const RID arena = core->get_liveness_core()->entity_create();
     const RID annex = core->get_liveness_core()->entity_create();
-    Recorder session(core.ptr(), Vector<StringName>({"local_scene_changed"}));
+    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
 
     CHECK(core->participant_seat_move(local.peer, arena));
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 1);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 1);
 
     CHECK_FALSE(core->participant_seat_move(local.peer, arena));
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 1);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 1);
 
     CHECK_FALSE(core->participant_seat_clear(local.peer, annex));
     CHECK(core->participant_seat(local.peer) == arena);
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 1);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 1);
 
     CHECK(core->participant_seat_clear(local.peer, arena));
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 2);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 2);
 
     CHECK_FALSE(core->participant_seat_clear(local.peer, arena));
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 2);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 2);
 }
 
 TEST_CASE(
@@ -150,54 +178,50 @@ TEST_CASE(
     "destination, so a listener reads where this peer went without asking "
     "the roster again"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     Node *root = memnew(Node);
     const Bound arena = bind_scene(core, root);
     const Bound annex = bind_scene(core, root);
     const Seated local = a_local_participant(core);
-    netw_test::EntityFactories factories;
-    const CallLog facets;
-    netw::NetwEntityRecord::set_part_factory(
-        netw::NetwEntityRecord::PART_SCENE,
-        facets.minting("scene")
-    );
-    const Ref<RefCounted> arena_handle = core->scene_handle_of(arena.handle);
-    const Ref<RefCounted> annex_handle = core->scene_handle_of(annex.handle);
+    const Ref<netw::NetwSceneHandle> arena_handle
+        = core->scene_handle_of(arena.handle);
+    const Ref<netw::NetwSceneHandle> annex_handle
+        = core->scene_handle_of(annex.handle);
     REQUIRE(arena_handle.is_valid());
     REQUIRE(annex_handle.is_valid());
     REQUIRE(arena_handle != annex_handle);
-    Recorder session(core.ptr(), Vector<StringName>({"local_scene_changed"}));
+    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
 
     CHECK(core->participant_seat_move(local.peer, arena.handle));
-    REQUIRE(session.args("local_scene_changed", 0).size() == 2);
+    REQUIRE(session.args("scene_local_changed", 0).size() == 2);
     CHECK(
-        Object::cast_to<Object>(session.args("local_scene_changed", 0)[0])
+        Object::cast_to<Object>(session.args("scene_local_changed", 0)[0])
         == nullptr
     );
     NETW_CHECK_EQ(
-        Object::cast_to<Object>(session.args("local_scene_changed", 0)[1]),
+        Object::cast_to<Object>(session.args("scene_local_changed", 0)[1]),
         arena_handle.ptr()
     );
 
     CHECK(core->participant_seat_move(local.peer, annex.handle));
-    REQUIRE(session.args("local_scene_changed", 1).size() == 2);
+    REQUIRE(session.args("scene_local_changed", 1).size() == 2);
     NETW_CHECK_EQ(
-        Object::cast_to<Object>(session.args("local_scene_changed", 1)[0]),
+        Object::cast_to<Object>(session.args("scene_local_changed", 1)[0]),
         arena_handle.ptr()
     );
     NETW_CHECK_EQ(
-        Object::cast_to<Object>(session.args("local_scene_changed", 1)[1]),
+        Object::cast_to<Object>(session.args("scene_local_changed", 1)[1]),
         annex_handle.ptr()
     );
 
     CHECK(core->participant_seat_clear(local.peer, annex.handle));
-    REQUIRE(session.args("local_scene_changed", 2).size() == 2);
+    REQUIRE(session.args("scene_local_changed", 2).size() == 2);
     NETW_CHECK_EQ(
-        Object::cast_to<Object>(session.args("local_scene_changed", 2)[0]),
+        Object::cast_to<Object>(session.args("scene_local_changed", 2)[0]),
         annex_handle.ptr()
     );
     CHECK(
-        Object::cast_to<Object>(session.args("local_scene_changed", 2)[1])
+        Object::cast_to<Object>(session.args("scene_local_changed", 2)[1])
         == nullptr
     );
 
@@ -209,24 +233,24 @@ TEST_CASE(
     "peer's move and not this session's, so the row is told and the session "
     "republishes nothing"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const CallLog heard;
     const Seated local = a_local_participant(core);
     const int64_t other = local.peer + 1;
-    const Ref<RefCounted> theirs = a_seat_announcing_row();
+    const Ref<netw::NetwParticipant> theirs = a_seat_announcing_row();
     core->participant_adopt(other, theirs);
     core->participant_publish_joined(other);
     const RID arena = core->get_liveness_core()->entity_create();
-    Recorder session(core.ptr(), Vector<StringName>({"local_scene_changed"}));
+    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
     theirs->connect("scene_changed", heard.callable("theirs"));
 
     CHECK(core->participant_seat_move(other, arena));
     NETW_CHECK_EQ(heard.count("theirs"), 1);
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 0);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 0);
 
     CHECK(core->participant_seat_clear(other, arena));
     NETW_CHECK_EQ(heard.count("theirs"), 2);
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 0);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 0);
 }
 
 TEST_CASE(
@@ -235,16 +259,16 @@ TEST_CASE(
     "seat afterwards, which is what lets an admission edge run ahead of the "
     "join frame and park instead of inventing a participant"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const Seated local = a_local_participant(core);
     const int64_t stranger = local.peer + 7;
     const RID arena = core->get_liveness_core()->entity_create();
-    Recorder session(core.ptr(), Vector<StringName>({"local_scene_changed"}));
+    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
 
     CHECK_FALSE(core->participant_seat_move(stranger, arena));
     CHECK_FALSE(core->participant_seat(stranger).is_valid());
     CHECK_FALSE(core->participant_seat_clear(stranger, arena));
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 0);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 0);
 }
 
 } // namespace TestParticipantSeatAnnounceLaws

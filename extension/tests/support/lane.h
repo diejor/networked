@@ -57,18 +57,29 @@ struct Lane {
     int64_t digest() const {
         int64_t hash = 1469598103934665603LL;
         const int counters[] = {
-            lane_corrections,      lane_consumed,
-            lane_missing,          lane_escalations,
-            lane_max_replay_depth, lane_journal_rows,
-            lane_closed_rows,      lane_chain_breaks,
-            lane_held,             lane_starved,
-            lane_speculation_held, lane_resyncs,
-            lane_skipped,          lane_queue_depth,
+            lane_corrections,
+            lane_consumed,
+            lane_missing,
+            lane_escalations,
+            lane_max_replay_depth,
+            lane_journal_rows,
+            lane_closed_rows,
+            lane_chain_breaks,
+            lane_held,
+            lane_starved,
+            lane_speculation_held,
+            lane_resyncs,
+            lane_skipped,
+            lane_queue_depth,
             lane_authority_journal_rows,
-            lane_drives,           lane_authoring_clamped,
-            lane_quantum_steps,    lane_quantum_faults,
-            lane_fresh_effects,    lane_authority_fresh_effects,
-            lane_fp_verified,      lane_fp_mismatches,
+            lane_drives,
+            lane_authoring_clamped,
+            lane_quantum_steps,
+            lane_quantum_faults,
+            lane_fresh_effects,
+            lane_authority_fresh_effects,
+            lane_fp_verified,
+            lane_fp_mismatches,
             lane_first_divergence,
         };
         for (const int value : counters) {
@@ -94,7 +105,6 @@ private:
     }
 
 public:
-
     int corrections() const {
         return lane_corrections;
     }

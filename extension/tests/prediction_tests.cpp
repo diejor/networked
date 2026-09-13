@@ -4,15 +4,16 @@
 
 #include "netw/prediction_core.hpp"
 
-namespace TestNetwPredictionCore {
+namespace TestPredictionCore {
 
 using namespace godot;
 using netw::Attribution;
 using netw::NetwPredictFold;
 using netw::NetwPredictJudgement;
-using netw::NetwPredictionCore;
 using netw::PredictionVerdict;
 using netw::StateFamily;
+
+namespace prediction_core = netw::prediction_core;
 
 constexpr double TAU = 6.2831853071795864769252867666;
 
@@ -37,8 +38,10 @@ Dictionary one_field(const StringName &p_key, const Variant &p_value) {
 }
 
 int joint_cell(bool p_authored, bool p_relayed, bool p_predictor_valid) {
-    return NetwPredictionCore::calculate_joint_cell(
-        p_authored, p_relayed, p_predictor_valid
+    return prediction_core::calculate_joint_cell(
+        p_authored,
+        p_relayed,
+        p_predictor_valid
     );
 }
 
@@ -48,22 +51,20 @@ Dictionary wiring_with(const StringName &p_key, const Variant &p_value) {
     return wiring;
 }
 
-TEST_CASE("[Networked][Predict] A declared undisturbed transition is in domain"
+TEST_CASE(
+    "[Networked][Predict] A declared undisturbed transition is in domain"
 ) {
-    NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(true, false, 10, -1), DOMAIN_IN
-    );
+    NETW_CHECK_EQ(prediction_core::domain_of(true, false, 10, -1), DOMAIN_IN);
 }
 
 TEST_CASE(
     "[Networked][Predict] An undeclared entity is out of domain whatever its "
     "label"
 ) {
+    NETW_CHECK_EQ(prediction_core::domain_of(false, false, 0, -1), DOMAIN_OUT);
     NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(false, false, 0, -1), DOMAIN_OUT
-    );
-    NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(false, false, 999, -1), DOMAIN_OUT
+        prediction_core::domain_of(false, false, 999, -1),
+        DOMAIN_OUT
     );
 }
 
@@ -71,12 +72,8 @@ TEST_CASE(
     "[Networked][Predict] An approximate island is out of domain whatever its "
     "label"
 ) {
-    NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(true, true, 999, -1), DOMAIN_OUT
-    );
-    NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(true, true, 999, 0), DOMAIN_OUT
-    );
+    NETW_CHECK_EQ(prediction_core::domain_of(true, true, 999, -1), DOMAIN_OUT);
+    NETW_CHECK_EQ(prediction_core::domain_of(true, true, 999, 0), DOMAIN_OUT);
 }
 
 TEST_CASE(
@@ -86,16 +83,20 @@ TEST_CASE(
     const int64_t until = 6;
 
     NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(true, false, until - 1, until), DOMAIN_OUT
+        prediction_core::domain_of(true, false, until - 1, until),
+        DOMAIN_OUT
     );
     NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(true, false, until, until), DOMAIN_IN
+        prediction_core::domain_of(true, false, until, until),
+        DOMAIN_IN
     );
     NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(true, false, 0, until), DOMAIN_OUT
+        prediction_core::domain_of(true, false, 0, until),
+        DOMAIN_OUT
     );
     NETW_CHECK_EQ(
-        NetwPredictionCore::domain_of(true, false, until + 1, until), DOMAIN_IN
+        prediction_core::domain_of(true, false, until + 1, until),
+        DOMAIN_IN
     );
 }
 
@@ -103,21 +104,19 @@ TEST_CASE(
     "[Networked][Predict] A negative window admits every label of a declared "
     "entity"
 ) {
-    NETW_CHECK_EQ(NetwPredictionCore::domain_of(true, false, 0, -1), DOMAIN_IN);
+    NETW_CHECK_EQ(prediction_core::domain_of(true, false, 0, -1), DOMAIN_IN);
 }
 
 TEST_CASE(
     "[Networked][Predict] A newer input label drives fresh, and a stale one "
     "repeats"
 ) {
-    const Ref<NetwPredictFold> fresh
-        = NetwPredictionCore::predict_fold(7, 4, 99);
+    const Ref<NetwPredictFold> fresh = prediction_core::predict_fold(7, 4, 99);
     NETW_CHECK_EQ(fresh->label(), 7);
     CHECK(fresh->fresh());
     NETW_CHECK_EQ(fresh->kind(), DRIVE_FRESH);
 
-    const Ref<NetwPredictFold> repeat
-        = NetwPredictionCore::predict_fold(4, 4, 99);
+    const Ref<NetwPredictFold> repeat = prediction_core::predict_fold(4, 4, 99);
     NETW_CHECK_EQ(repeat->label(), 4);
     CHECK_FALSE(repeat->fresh());
     NETW_CHECK_EQ(repeat->kind(), DRIVE_REPEAT);
@@ -126,25 +125,45 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Predict] A pass with no input yet labels from its frame"
 ) {
-    const Ref<NetwPredictFold> fold
-        = NetwPredictionCore::predict_fold(-1, -1, 99);
+    const Ref<NetwPredictFold> fold = prediction_core::predict_fold(-1, -1, 99);
 
     NETW_CHECK_EQ(fold->label(), 99);
     CHECK_FALSE(fold->fresh());
 }
 
 TEST_CASE("[Networked][Predict] A fold naming no drive kind mints nothing") {
-    CHECK(NetwPredictFold::of(7, true, DRIVE_FRESH).is_valid());
-    CHECK(NetwPredictFold::of(7, true, 99).is_null());
-    CHECK(NetwPredictFold::of(7, true, -1).is_null());
+    CHECK(
+        NetwPredictFold::of(
+            7,
+            true,
+            static_cast<netw::NetwPredict::DriveKind>(DRIVE_FRESH)
+        )
+            .is_valid()
+    );
+    CHECK(
+        NetwPredictFold::of(
+            7,
+            true,
+            static_cast<netw::NetwPredict::DriveKind>(99)
+        )
+            .is_null()
+    );
+    CHECK(
+        NetwPredictFold::of(
+            7,
+            true,
+            static_cast<netw::NetwPredict::DriveKind>(-1)
+        )
+            .is_null()
+    );
 }
 
 TEST_CASE(
     "[Networked][Predict] Authority replays only past the standing buffer"
 ) {
-    NETW_CHECK_EQ(NetwPredictionCore::consume_action(3, 2), CONSUME_REPLAY);
-    NETW_CHECK_EQ(NetwPredictionCore::consume_action(2, 2), CONSUME_HOLD);
-    NETW_CHECK_EQ(NetwPredictionCore::consume_action(0, 0), CONSUME_STARVED);
+    NETW_CHECK_EQ(prediction_core::consume_action(3, 2), CONSUME_REPLAY);
+    NETW_CHECK_EQ(prediction_core::consume_action(2, 2), CONSUME_HOLD);
+    NETW_CHECK_EQ(prediction_core::consume_action(0, 0), CONSUME_STARVED);
 }
 
 TEST_CASE(
@@ -165,8 +184,12 @@ TEST_CASE("[Networked][Predict] The joint floor is the lowest base offered") {
     bases[StringName("A")] = (int64_t)10;
     bases[StringName("B")] = (int64_t)5;
 
-    const Dictionary res = NetwPredictionCore::calculate_joint_floor(
-        bases, Dictionary(), -1, 0, 20
+    const Dictionary res = prediction_core::calculate_joint_floor(
+        bases,
+        Dictionary(),
+        -1,
+        0,
+        20
     );
 
     NETW_CHECK_EQ((int64_t)res[StringName("floor")], 5);
@@ -180,22 +203,29 @@ TEST_CASE(
     Dictionary bases;
     bases[StringName("A")] = (int64_t)10;
 
-    const Dictionary relayed = NetwPredictionCore::calculate_joint_floor(
-        bases, one_field(StringName("A"), (int64_t)5), -1, 0, 20
+    const Dictionary relayed = prediction_core::calculate_joint_floor(
+        bases,
+        one_field(StringName("A"), (int64_t)5),
+        -1,
+        0,
+        20
     );
     NETW_CHECK_EQ((int64_t)relayed[StringName("floor")], 5);
 
-    const Dictionary epoched = NetwPredictionCore::calculate_joint_floor(
-        bases, Dictionary(), 3, 0, 20
-    );
+    const Dictionary epoched
+        = prediction_core::calculate_joint_floor(bases, Dictionary(), 3, 0, 20);
     NETW_CHECK_EQ((int64_t)epoched[StringName("floor")], 3);
 }
 
 TEST_CASE(
     "[Networked][Predict] With nothing offered the joint floor is the present"
 ) {
-    const Dictionary res = NetwPredictionCore::calculate_joint_floor(
-        Dictionary(), Dictionary(), -1, 0, 20
+    const Dictionary res = prediction_core::calculate_joint_floor(
+        Dictionary(),
+        Dictionary(),
+        -1,
+        0,
+        20
     );
 
     NETW_CHECK_EQ((int64_t)res[StringName("floor")], 20);
@@ -206,8 +236,12 @@ TEST_CASE(
     "[Networked][Predict] A negative base is an absent one and cannot pull the "
     "floor down"
 ) {
-    const Dictionary res = NetwPredictionCore::calculate_joint_floor(
-        one_field(StringName("A"), (int64_t)-4), Dictionary(), -1, 0, 20
+    const Dictionary res = prediction_core::calculate_joint_floor(
+        one_field(StringName("A"), (int64_t)-4),
+        Dictionary(),
+        -1,
+        0,
+        20
     );
 
     NETW_CHECK_EQ((int64_t)res[StringName("floor")], 20);
@@ -216,8 +250,12 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Predict] A floor under the history floor heals to the present"
 ) {
-    const Dictionary res = NetwPredictionCore::calculate_joint_floor(
-        one_field(StringName("A"), (int64_t)2), Dictionary(), -1, 8, 20
+    const Dictionary res = prediction_core::calculate_joint_floor(
+        one_field(StringName("A"), (int64_t)2),
+        Dictionary(),
+        -1,
+        8,
+        20
     );
 
     CHECK(bool(res[StringName("heal")]));
@@ -229,8 +267,7 @@ TEST_CASE(
     "corrects"
 ) {
     Dictionary sink;
-    const Ref<NetwPredictJudgement> res
-        = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res = prediction_core::evaluate(
         DOMAIN_IN,
         VERDICT_UNJUDGED,
         Dictionary(),
@@ -240,15 +277,13 @@ TEST_CASE(
     );
 
     CHECK(res->corrected());
-    const bool unbounded
-        = std::isinf(res->divergence());
+    const bool unbounded = std::isinf(res->divergence());
     CHECK(unbounded);
 }
 
 TEST_CASE("[Networked][Predict] A prediction matching its payload is clean") {
     Dictionary sink;
-    const Ref<NetwPredictJudgement> res
-        = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res = prediction_core::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), Vector2(1.0, 1.0)),
@@ -268,8 +303,7 @@ TEST_CASE(
     const Dictionary payload = one_field(StringName("pos"), Vector2(0.0, 0.0));
     Dictionary sink;
 
-    const Ref<NetwPredictJudgement> within
-        = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> within = prediction_core::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), Vector2(0.25, 0.0)),
@@ -279,8 +313,7 @@ TEST_CASE(
     );
     CHECK_FALSE(within->corrected());
 
-    const Ref<NetwPredictJudgement> past
-        = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> past = prediction_core::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), Vector2(0.75, 0.0)),
@@ -310,23 +343,29 @@ TEST_CASE(
     payload[StringName("tight")] = 0.0;
     Dictionary sink;
 
-    const Ref<NetwPredictJudgement> widened
-        = NetwPredictionCore::evaluate(
-        DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, wiring, sink
+    const Ref<NetwPredictJudgement> widened = prediction_core::evaluate(
+        DOMAIN_OUT,
+        VERDICT_UNJUDGED,
+        predicted,
+        payload,
+        wiring,
+        sink
     );
     CHECK_FALSE(widened->corrected());
 
     payload[StringName("tight")] = 4.0;
-    const Ref<NetwPredictJudgement> neighbour
-        = NetwPredictionCore::evaluate(
-        DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, wiring, sink
+    const Ref<NetwPredictJudgement> neighbour = prediction_core::evaluate(
+        DOMAIN_OUT,
+        VERDICT_UNJUDGED,
+        predicted,
+        payload,
+        wiring,
+        sink
     );
     CHECK(neighbour->corrected());
 }
 
-TEST_CASE(
-    "[Networked][Predict] An excluded field cannot force a correction"
-) {
+TEST_CASE("[Networked][Predict] An excluded field cannot force a correction") {
     Dictionary wiring;
     wiring[StringName("epsilon")] = 0.1;
     wiring[StringName("vote_excludes")]
@@ -338,9 +377,13 @@ TEST_CASE(
     payload[StringName("cosmetic")] = 90.0;
     Dictionary sink;
 
-    const Ref<NetwPredictJudgement> res
-        = NetwPredictionCore::evaluate(
-        DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, wiring, sink
+    const Ref<NetwPredictJudgement> res = prediction_core::evaluate(
+        DOMAIN_OUT,
+        VERDICT_UNJUDGED,
+        predicted,
+        payload,
+        wiring,
+        sink
     );
 
     CHECK_FALSE(res->corrected());
@@ -355,8 +398,7 @@ TEST_CASE(
     payload[StringName("pos")] = 0.0;
     payload[StringName("unpredicted")] = 1.0;
 
-    const Ref<NetwPredictJudgement> res
-        = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res = prediction_core::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), 0.0),
@@ -377,15 +419,23 @@ TEST_CASE(
     const Dictionary payload = one_field(StringName("pos"), 1.0);
     Dictionary sink;
 
-    const Ref<NetwPredictJudgement> unequal
-        = NetwPredictionCore::evaluate(
-        DOMAIN_IN, VERDICT_UNEQUAL, predicted, predicted, wiring, sink
+    const Ref<NetwPredictJudgement> unequal = prediction_core::evaluate(
+        DOMAIN_IN,
+        VERDICT_UNEQUAL,
+        predicted,
+        predicted,
+        wiring,
+        sink
     );
     CHECK(unequal->corrected());
 
-    const Ref<NetwPredictJudgement> equal
-        = NetwPredictionCore::evaluate(
-        DOMAIN_IN, VERDICT_EQUAL, predicted, payload, wiring, sink
+    const Ref<NetwPredictJudgement> equal = prediction_core::evaluate(
+        DOMAIN_IN,
+        VERDICT_EQUAL,
+        predicted,
+        payload,
+        wiring,
+        sink
     );
     CHECK_FALSE(equal->corrected());
 }
@@ -395,8 +445,7 @@ TEST_CASE(
     "decides"
 ) {
     Dictionary sink;
-    const Ref<NetwPredictJudgement> res
-        = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res = prediction_core::evaluate(
         DOMAIN_OUT,
         VERDICT_UNEQUAL,
         one_field(StringName("pos"), 0.0),
@@ -412,14 +461,13 @@ TEST_CASE(
     "[Networked][Predict] An angle field compares the short way around the "
     "circle"
 ) {
-    const Dictionary wiring
-        = wiring_with(StringName("angle_fields"), one_field(
-              StringName("heading"), true
-          ));
+    const Dictionary wiring = wiring_with(
+        StringName("angle_fields"),
+        one_field(StringName("heading"), true)
+    );
     Dictionary sink;
 
-    const Ref<NetwPredictJudgement> res
-        = NetwPredictionCore::evaluate(
+    const Ref<NetwPredictJudgement> res = prediction_core::evaluate(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("heading"), 0.1),
@@ -443,9 +491,13 @@ TEST_CASE(
     payload[StringName("b")] = 1.0;
 
     Dictionary sink;
-    const Ref<NetwPredictJudgement> res
-        = NetwPredictionCore::evaluate(
-        DOMAIN_OUT, VERDICT_UNJUDGED, predicted, payload, Dictionary(), sink
+    const Ref<NetwPredictJudgement> res = prediction_core::evaluate(
+        DOMAIN_OUT,
+        VERDICT_UNJUDGED,
+        predicted,
+        payload,
+        Dictionary(),
+        sink
     );
 
     NETW_CHECK_EQ(sink.size(), 2);
@@ -459,7 +511,7 @@ TEST_CASE(
     "[Networked][Predict] The struct verdict carries the divergence the "
     "dictionary reported"
 ) {
-    const PredictionVerdict pv = NetwPredictionCore::evaluate_struct_verdict(
+    const PredictionVerdict pv = prediction_core::evaluate_struct_verdict(
         DOMAIN_OUT,
         VERDICT_UNJUDGED,
         one_field(StringName("pos"), Vector2(0.0, 0.0)),
@@ -476,22 +528,22 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Predict] A run that will not shrink escalates on the third"
 ) {
-    Dictionary state = NetwPredictionCore::escalation_after(0, 0, -1.0, 1.0, 1);
+    Dictionary state = prediction_core::escalation_after(0, 0, -1.0, 1.0, 1);
     NETW_CHECK_EQ((int)state[StringName("streak")], 1);
     CHECK_FALSE(bool(state[StringName("escalate")]));
 
-    state = NetwPredictionCore::escalation_after(1, 1, 1.0, 1.0, 1);
+    state = prediction_core::escalation_after(1, 1, 1.0, 1.0, 1);
     NETW_CHECK_EQ((int)state[StringName("streak")], 2);
     CHECK_FALSE(bool(state[StringName("escalate")]));
 
-    state = NetwPredictionCore::escalation_after(2, 1, 1.0, 2.0, 1);
+    state = prediction_core::escalation_after(2, 1, 1.0, 2.0, 1);
     CHECK(bool(state[StringName("escalate")]));
     NETW_CHECK_EQ((int)state[StringName("sign")], 1);
 }
 
 TEST_CASE("[Networked][Predict] Escalating closes the run it escalated on") {
     const Dictionary escalated
-        = NetwPredictionCore::escalation_after(2, 1, 1.0, 2.0, 1);
+        = prediction_core::escalation_after(2, 1, 1.0, 2.0, 1);
 
     CHECK(bool(escalated[StringName("escalate")]));
     NETW_CHECK_EQ((int)escalated[StringName("streak")], 0);
@@ -501,7 +553,7 @@ TEST_CASE(
     "[Networked][Predict] A sign flip escalates at once, whatever the streak"
 ) {
     const Dictionary state
-        = NetwPredictionCore::escalation_after(0, 1, 1.0, 1.0, -1);
+        = prediction_core::escalation_after(0, 1, 1.0, 1.0, -1);
 
     CHECK(bool(state[StringName("escalate")]));
     NETW_CHECK_EQ((int)state[StringName("sign")], -1);
@@ -512,7 +564,7 @@ TEST_CASE(
     "toward the run"
 ) {
     const Dictionary state
-        = NetwPredictionCore::escalation_after(1, 1, 1.0, 9.0, 0);
+        = prediction_core::escalation_after(1, 1, 1.0, 9.0, 0);
 
     NETW_CHECK_EQ((int)state[StringName("streak")], 2);
     NETW_CHECK_EQ((int)state[StringName("sign")], 0);
@@ -524,13 +576,13 @@ TEST_CASE(
     "a flip"
 ) {
     const Dictionary steady
-        = NetwPredictionCore::escalation_after(2, 1, 5.0, 1.0, 1);
+        = prediction_core::escalation_after(2, 1, 5.0, 1.0, 1);
     NETW_CHECK_EQ((int)steady[StringName("streak")], 0);
     NETW_CHECK_EQ((int)steady[StringName("sign")], 0);
     CHECK_FALSE(bool(steady[StringName("escalate")]));
 
     const Dictionary flipped
-        = NetwPredictionCore::escalation_after(2, 1, 5.0, 1.0, -1);
+        = prediction_core::escalation_after(2, 1, 5.0, 1.0, -1);
     CHECK_FALSE(bool(flipped[StringName("escalate")]));
     NETW_CHECK_EQ((int)flipped[StringName("sign")], 0);
 }
@@ -543,16 +595,16 @@ TEST_CASE(
     Dictionary tolerances;
     sink[StringName("position")] = 0.5;
     tolerances[StringName("position")] = 0.5;
-    NETW_CHECK_EQ(NetwPredictionCore::measure(sink, tolerances), 0);
+    NETW_CHECK_EQ(prediction_core::measure(sink, tolerances), 0);
 
     sink[StringName("position")] = 1.0;
-    NETW_CHECK_EQ(NetwPredictionCore::measure(sink, tolerances), 1);
+    NETW_CHECK_EQ(prediction_core::measure(sink, tolerances), 1);
 
     Dictionary exact_sink;
     Dictionary exact_tolerances;
     exact_sink[StringName("raw")] = 0.000001;
     exact_tolerances[StringName("raw")] = 0.0;
-    NETW_CHECK_EQ(NetwPredictionCore::measure(exact_sink, exact_tolerances), 1);
+    NETW_CHECK_EQ(prediction_core::measure(exact_sink, exact_tolerances), 1);
 }
 
 TEST_CASE(
@@ -561,7 +613,8 @@ TEST_CASE(
     Dictionary tolerances;
     tolerances[StringName("position")] = 0.5;
     NETW_CHECK_EQ(
-        NetwPredictionCore::measure(Dictionary(), tolerances), 0x7FFFFFFF
+        prediction_core::measure(Dictionary(), tolerances),
+        0x7FFFFFFF
     );
 }
 
@@ -571,26 +624,58 @@ TEST_CASE(
 ) {
     const int witness = 1;
     NETW_CHECK_EQ(
-        NetwPredictionCore::attribute(
-            false, false, false, true, true, true, witness, witness, true
+        prediction_core::attribute(
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            witness,
+            witness,
+            true
         ),
         int(Attribution::PRE_STATE)
     );
     NETW_CHECK_EQ(
-        NetwPredictionCore::attribute(
-            true, false, false, true, true, true, witness, witness, true
+        prediction_core::attribute(
+            true,
+            false,
+            false,
+            true,
+            true,
+            true,
+            witness,
+            witness,
+            true
         ),
         int(Attribution::COMMAND)
     );
     NETW_CHECK_EQ(
-        NetwPredictionCore::attribute(
-            true, true, false, true, true, true, witness, witness, true
+        prediction_core::attribute(
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            witness,
+            witness,
+            true
         ),
         int(Attribution::ENVIRONMENT)
     );
     NETW_CHECK_EQ(
-        NetwPredictionCore::attribute(
-            true, true, true, true, true, true, witness, witness, true
+        prediction_core::attribute(
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            witness,
+            witness,
+            true
         ),
         int(Attribution::CLOSURE)
     );
@@ -601,23 +686,28 @@ TEST_CASE(
 ) {
     const int witness = 1;
     NETW_CHECK_EQ(
-        NetwPredictionCore::attribute(
-            true, true, true, true, true, true, witness, witness, false
+        prediction_core::attribute(
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            witness,
+            witness,
+            false
         ),
         int(Attribution::UNKNOWN)
     );
 
     NETW_CHECK_EQ(
-        NetwPredictionCore::attribute(
-            true, true, true, true, true, false, witness, 0, true
-        ),
+        prediction_core::
+            attribute(true, true, true, true, true, false, witness, 0, true),
         int(Attribution::UNKNOWN)
     );
 }
 
-TEST_CASE(
-    "[Networked][Predict] Fingerprints fold their keys in text order"
-) {
+TEST_CASE("[Networked][Predict] Fingerprints fold their keys in text order") {
     Dictionary forward;
     forward[StringName("alpha")] = 1;
     forward[StringName("zulu")] = 2;
@@ -626,20 +716,20 @@ TEST_CASE(
     reversed[StringName("alpha")] = 1;
 
     NETW_CHECK_EQ(
-        NetwPredictionCore::fact_fingerprint(forward),
-        NetwPredictionCore::fact_fingerprint(reversed)
+        prediction_core::fact_fingerprint(forward),
+        prediction_core::fact_fingerprint(reversed)
     );
     NETW_CHECK_EQ(
-        NetwPredictionCore::raw_state_fingerprint(forward),
-        NetwPredictionCore::raw_state_fingerprint(reversed)
+        prediction_core::raw_state_fingerprint(forward),
+        prediction_core::raw_state_fingerprint(reversed)
     );
 
     Dictionary moved;
     moved[StringName("alpha")] = 1;
     moved[StringName("zulu")] = 3;
     CHECK(
-        NetwPredictionCore::raw_state_fingerprint(forward)
-        != NetwPredictionCore::raw_state_fingerprint(moved)
+        prediction_core::raw_state_fingerprint(forward)
+        != prediction_core::raw_state_fingerprint(moved)
     );
 }
 
@@ -653,33 +743,25 @@ TEST_CASE(
     Dictionary causal;
     causal[StringName("position")] = true;
 
-    const Dictionary scoped = NetwPredictionCore::compared_state(
-        payload,
-        causal
-    );
+    const Dictionary scoped = prediction_core::compared_state(payload, causal);
     NETW_CHECK_EQ(scoped.size(), 1);
     CHECK(scoped.has(StringName("position")));
     CHECK_FALSE(scoped.has(StringName("tint")));
 
-    const Dictionary whole = NetwPredictionCore::compared_state(
-        payload,
-        Dictionary()
-    );
+    const Dictionary whole
+        = prediction_core::compared_state(payload, Dictionary());
     NETW_CHECK_EQ(whole.size(), payload.size());
 
     Dictionary absent;
     absent[StringName("never_declared")] = true;
-    NETW_CHECK_EQ(
-        NetwPredictionCore::compared_state(payload, absent).size(),
-        0
-    );
+    NETW_CHECK_EQ(prediction_core::compared_state(payload, absent).size(), 0);
 }
 
 TEST_CASE("[Networked][Predict] Contact counts bucket at four and above") {
-    NETW_CHECK_EQ(NetwPredictionCore::contact_count_bucket(0), 0);
-    NETW_CHECK_EQ(NetwPredictionCore::contact_count_bucket(3), 3);
-    NETW_CHECK_EQ(NetwPredictionCore::contact_count_bucket(4), 4);
-    NETW_CHECK_EQ(NetwPredictionCore::contact_count_bucket(99), 4);
+    NETW_CHECK_EQ(prediction_core::contact_count_bucket(0), 0);
+    NETW_CHECK_EQ(prediction_core::contact_count_bucket(3), 3);
+    NETW_CHECK_EQ(prediction_core::contact_count_bucket(4), 4);
+    NETW_CHECK_EQ(prediction_core::contact_count_bucket(99), 4);
 }
 
 TEST_CASE(
@@ -693,21 +775,21 @@ TEST_CASE(
 
     PackedInt32Array same = local;
     NETW_CHECK_EQ(
-        NetwPredictionCore::differing_family(local, same),
+        prediction_core::differing_family(local, same),
         int(StateFamily::NONE)
     );
 
     PackedInt32Array momentum = local;
     momentum.set(1, 9);
     NETW_CHECK_EQ(
-        NetwPredictionCore::differing_family(local, momentum),
+        prediction_core::differing_family(local, momentum),
         int(StateFamily::MOMENTUM)
     );
 
     PackedInt32Array short_peer;
     short_peer.push_back(9);
     NETW_CHECK_EQ(
-        NetwPredictionCore::differing_family(local, short_peer),
+        prediction_core::differing_family(local, short_peer),
         int(StateFamily::NONE)
     );
 }
@@ -716,12 +798,12 @@ TEST_CASE(
     "[Networked][Predict] A window covers the transition that opened it and "
     "merges rather than restarting"
 ) {
-    NETW_CHECK_EQ(NetwPredictionCore::window_after(10, 2, -1), (int64_t)13);
+    NETW_CHECK_EQ(prediction_core::window_after(10, 2, -1), (int64_t)13);
 
-    NETW_CHECK_EQ(NetwPredictionCore::window_after(10, -5, -1), (int64_t)11);
+    NETW_CHECK_EQ(prediction_core::window_after(10, -5, -1), (int64_t)11);
 
-    const int64_t wide = NetwPredictionCore::window_after(10, 20, -1);
-    NETW_CHECK_EQ(NetwPredictionCore::window_after(11, 1, wide), wide);
+    const int64_t wide = prediction_core::window_after(10, 20, -1);
+    NETW_CHECK_EQ(prediction_core::window_after(11, 1, wide), wide);
 }
 
 TEST_CASE(
@@ -736,31 +818,31 @@ TEST_CASE(
     reversed[StringName("a")] = 1.0;
 
     NETW_CHECK_EQ(
-        NetwPredictionCore::environment_digest(7, forward),
-        NetwPredictionCore::environment_digest(7, reversed)
+        prediction_core::environment_digest(7, forward),
+        prediction_core::environment_digest(7, reversed)
     );
     CHECK(
-        NetwPredictionCore::environment_digest(7, Dictionary())
-        != NetwPredictionCore::environment_digest(8, Dictionary())
+        prediction_core::environment_digest(7, Dictionary())
+        != prediction_core::environment_digest(8, Dictionary())
     );
     CHECK(
-        NetwPredictionCore::environment_digest(7, forward)
-        != NetwPredictionCore::environment_digest(7, Dictionary())
+        prediction_core::environment_digest(7, forward)
+        != prediction_core::environment_digest(7, Dictionary())
     );
 }
 
 TEST_CASE(
     "[Networked][Predict] A direction names the dominant axis and its sign"
 ) {
-    const Dictionary along
-        = NetwPredictionCore::delta_direction(
-            StringName("position"), Vector3(1.0, 0.0, -2.0)
-        );
+    const Dictionary along = prediction_core::delta_direction(
+        StringName("position"),
+        Vector3(1.0, 0.0, -2.0)
+    );
     CHECK(bool(String(along[StringName("key")]) == String("position:2")));
     NETW_CHECK_EQ((int)along[StringName("sign")], -1);
 
     const Dictionary none
-        = NetwPredictionCore::delta_direction(StringName("flag"), true);
+        = prediction_core::delta_direction(StringName("flag"), true);
     NETW_CHECK_EQ((int)none[StringName("sign")], 0);
     CHECK(String(none[StringName("key")]).is_empty());
 }
@@ -777,38 +859,17 @@ TEST_CASE(
     divergence[StringName("velocity")] = 10.0;
     divergence[StringName("spin")] = 0.0;
 
-    const Dictionary guarded = NetwPredictionCore::guard_projection(
-        projection, divergence, 0.1, Dictionary(), 8, 4, 1.0
+    const Dictionary guarded = prediction_core::guard_projection(
+        projection,
+        divergence,
+        0.1,
+        Dictionary(),
+        8,
+        4,
+        1.0
     );
     CHECK_FALSE(guarded.has(StringName("position")));
     CHECK(guarded.has(StringName("heading")));
 }
 
-TEST_CASE(
-    "[Networked][Predict] Transport composes an aligned delta and refuses an "
-    "incomplete one"
-) {
-    Dictionary pose_fields;
-    pose_fields[StringName("position")] = true;
-
-    Dictionary predicted;
-    predicted[StringName("position")] = 1.0;
-    Dictionary authority;
-    authority[StringName("position")] = 3.0;
-    Dictionary current;
-    current[StringName("position")] = 5.0;
-
-    const Dictionary moved = NetwPredictionCore::transport(
-        predicted, authority, current, pose_fields, Dictionary()
-    );
-    CHECK(bool(moved[StringName("valid")]));
-    const Dictionary restore = moved[StringName("restore")];
-    NETW_CHECK_EQ(double(restore[StringName("position")]), 7.0);
-
-    const Dictionary refused = NetwPredictionCore::transport(
-        Dictionary(), authority, current, pose_fields, Dictionary()
-    );
-    CHECK_FALSE(bool(refused[StringName("valid")]));
-}
-
-} // namespace TestNetwPredictionCore
+} // namespace TestPredictionCore

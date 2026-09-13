@@ -21,6 +21,10 @@ class EntityDecl {
     netw::CorrectionMode decl_correction = netw::CorrectionMode::AUTO;
     int decl_replay_buffer_depth = 0;
     int decl_consume_lag = 0;
+    bool decl_mounted = false;
+    bool decl_carries = false;
+    double decl_carry_gain = 1.0;
+    double decl_teleport_at = 0.0;
     godot::Vector<godot::StringName> decl_synced;
     godot::Variant decl_initial_pose;
 
@@ -74,6 +78,34 @@ public:
     EntityDecl &consume_lag(int p_ticks) {
         decl_consume_lag = p_ticks;
         return *this;
+    }
+
+    EntityDecl &mounted() {
+        decl_mounted = true;
+        return *this;
+    }
+
+    bool is_mounted() const {
+        return decl_mounted;
+    }
+
+    EntityDecl &carried(double p_gain, double p_teleport_at) {
+        decl_carries = true;
+        decl_carry_gain = p_gain;
+        decl_teleport_at = p_teleport_at;
+        return *this;
+    }
+
+    bool carries() const {
+        return decl_carries;
+    }
+
+    double carry_gain() const {
+        return decl_carry_gain;
+    }
+
+    double teleport_at() const {
+        return decl_teleport_at;
     }
 
     EntityDecl &scheduled(netw::Schedule p_schedule) {

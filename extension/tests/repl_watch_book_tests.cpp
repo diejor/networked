@@ -55,8 +55,10 @@ Owed owed(const WatchBook &p_book, int64_t p_peer) {
     return out;
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a peer with no baseline is owed the whole "
-          "row") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a peer with no baseline is owed the whole "
+    "row"
+) {
     WatchBook book;
     book.poll(KEY, row({1, 2, 3}), Array());
 
@@ -66,8 +68,10 @@ TEST_CASE("[Networked][Repl][Hosted] a peer with no baseline is owed the whole "
     NETW_CHECK_EQ(int64_t(first.values.size()), 3);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a committed peer is owed only what moved "
-          "after") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a committed peer is owed only what moved "
+    "after"
+) {
     WatchBook book;
     book.poll(KEY, row({1, 2, 3}), Array());
     book.commit(KEY, PEER);
@@ -82,8 +86,10 @@ TEST_CASE("[Networked][Repl][Hosted] a committed peer is owed only what moved "
     NETW_CHECK_EQ(int64_t(second.values[0]), 9);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] one peer's commit does not settle what "
-          "another is owed") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] one peer's commit does not settle what "
+    "another is owed"
+) {
     WatchBook book;
     book.poll(KEY, row({1}), Array());
     book.commit(KEY, PEER);
@@ -92,8 +98,10 @@ TEST_CASE("[Networked][Repl][Hosted] one peer's commit does not settle what "
     NETW_CHECK_EQ(int64_t(owed(book, OTHER).mask), 0b1);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] an unreadable field keeps its stamp "
-          "rather than reading as a change") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] an unreadable field keeps its stamp "
+    "rather than reading as a change"
+) {
     WatchBook book;
     book.poll(KEY, row({1, 2}), row({true, true}));
     book.commit(KEY, PEER);
@@ -104,8 +112,10 @@ TEST_CASE("[Networked][Repl][Hosted] an unreadable field keeps its stamp "
     NETW_CHECK_EQ(int64_t(owed(book, PEER).mask), 0);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a field the first poll could not read is "
-          "owed as soon as it can be") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a field the first poll could not read is "
+    "owed as soon as it can be"
+) {
     WatchBook book;
     book.poll(KEY, row({1, Variant()}), row({true, false}));
     book.commit(KEY, PEER);
@@ -117,8 +127,10 @@ TEST_CASE("[Networked][Repl][Hosted] a field the first poll could not read is "
     NETW_CHECK_EQ(int64_t(owed(book, PEER).mask), 0b10);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a container mutated in place is still "
-          "seen to change") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a container mutated in place is still "
+    "seen to change"
+) {
     WatchBook book;
     Array live;
     live.push_back(1);
@@ -133,8 +145,10 @@ TEST_CASE("[Networked][Repl][Hosted] a container mutated in place is still "
     NETW_CHECK_EQ(int64_t(owed(book, PEER).mask), 0b1);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a dictionary mutated in place is still "
-          "seen to change") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a dictionary mutated in place is still "
+    "seen to change"
+) {
     WatchBook book;
     Dictionary live;
     live[godot::StringName("hp")] = 10;
@@ -147,8 +161,10 @@ TEST_CASE("[Networked][Repl][Hosted] a dictionary mutated in place is still "
     NETW_CHECK_EQ(int64_t(owed(book, PEER).mask), 0b1);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a peer that leaves the recipients is owed "
-          "the whole row when it returns") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a peer that leaves the recipients is owed "
+    "the whole row when it returns"
+) {
     WatchBook book;
     book.poll(KEY, row({1, 2}), Array());
     book.commit(KEY, PEER);
@@ -160,8 +176,10 @@ TEST_CASE("[Networked][Repl][Hosted] a peer that leaves the recipients is owed "
     NETW_CHECK_EQ(int64_t(owed(book, OTHER).mask), 0);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a reconnecting peer is owed the whole row "
-          "on every stream") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a reconnecting peer is owed the whole row "
+    "on every stream"
+) {
     WatchBook book;
     book.poll(KEY, row({1}), Array());
     book.poll(KEY + 1, row({1}), Array());
@@ -177,8 +195,10 @@ TEST_CASE("[Networked][Repl][Hosted] a reconnecting peer is owed the whole row "
     NETW_CHECK_EQ(int64_t(other_mask), 0b1);
 }
 
-TEST_CASE("[Networked][Repl][Hosted] a reset reseeds the row and a cleared "
-          "baseline does not") {
+TEST_CASE(
+    "[Networked][Repl][Hosted] a reset reseeds the row and a cleared "
+    "baseline does not"
+) {
     WatchBook book;
     book.poll(KEY, row({1, 2}), Array());
     book.commit(KEY, PEER);

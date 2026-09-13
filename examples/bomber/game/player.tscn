@@ -4,8 +4,6 @@
 [ext_resource type="Texture2D" uid="uid://bnrgd1mws2s35" path="res://examples/bomber/game/charwalk.png" id="2"]
 [ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="3"]
 [ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
-[ext_resource type="Script" uid="uid://crm8bn0yry6g8" path="res://addons/networked/sync/sim/prediction_component.gd" id="8_pred"]
-[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="9_3dwf2"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_spawn"]
 properties/0/path = NodePath("sprite/label:text")
@@ -153,8 +151,6 @@ _data = {
 &"walk_up": SubResource("7")
 }
 
-[sub_resource type="NetwInterpolate" id="Resource_8jgcb"]
-
 [node name="player" type="CharacterBody2D" unique_id=1262329161]
 z_index = 10
 motion_mode = 1
@@ -195,17 +191,3 @@ libraries/ = SubResource("AnimationLibrary_yb83i")
 [node name="Inputs" type="Node" parent="." unique_id=531290523]
 script = ExtResource("4_k1vfr")
 tick_mode = true
-
-[node name="PredictionComponent" type="Node" parent="." unique_id=1650089842]
-unique_name_in_owner = true
-script = ExtResource("8_pred")
-archetype = 1
-
-[node name="MultiplayerInterpolator" type="Node" parent="." unique_id=1650089841]
-script = ExtResource("9_3dwf2")
-visual_root = NodePath("../sprite")
-property_interpolators = {
-&"position": SubResource("Resource_8jgcb")
-}
-predicted_mode = 1
-metadata/_custom_type_script = "uid://b21bbqt166ive"

@@ -30,33 +30,30 @@ TEST_CASE("[Networked][Scene] move snaps to the declared marker") {
     CHECK(marker->get_class() == StringName("Marker2D"));
     marker->set_position(Vector2(40.0, 25.0));
 
-    const RID entity = rig.declare_entity(
-        EntityDecl().named("Crate").on_route(91)
-    );
+    const RID entity
+        = rig.declare_entity(EntityDecl().named("Crate").on_route(91));
     rig.seat(entity, source);
 
-    Ref<netw::NetwReparentOpts> opts;
-    opts.instantiate();
-    opts->set_target_global_position(marker->get_global_position());
+    Node2D *body = Object::cast_to<Node2D>(rig.node_of(entity));
+    REQUIRE(body != nullptr);
+    body->set_global_position(marker->get_global_position());
 
     Ref<netw::NetwPromise> settled = rig.server()->call(
         "scene_move",
         entity,
         destination,
-        opts
+        Ref<netw::NetwReparentOpts>()
     );
     REQUIRE(settled.is_valid());
     REQUIRE(settled->get_is_settled());
     REQUIRE(settled->get_code() == 0);
 
-    Node2D *body = Object::cast_to<Node2D>(rig.node_of(entity));
-    REQUIRE(body != nullptr);
     if (body != nullptr) {
         CHECK(body->get_parent() == level);
         CHECK(body->get_global_position() == marker->get_global_position());
     }
 }
 
-}
+} // namespace TestZu28SceneSnapLaws
 
 #endif

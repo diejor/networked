@@ -3,16 +3,12 @@
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
-#include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 
 namespace netw {
 
-class NetwTxnBook : public godot::RefCounted {
-    GDCLASS(NetwTxnBook, godot::RefCounted)
-
-private:
+class NetwTxnBook {
     struct Txn {
         godot::PackedInt64Array addressed;
         int64_t deadline = 0;
@@ -22,9 +18,6 @@ private:
     int64_t next_id = 1;
 
     godot::LocalVector<int64_t> ids_in_order() const;
-
-protected:
-    static void _bind_methods();
 
 public:
     int64_t mint();

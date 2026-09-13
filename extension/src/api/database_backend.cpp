@@ -21,7 +21,7 @@ Ref<NetwPromise> answered(const Ref<NetwPromise> &p_ret, const char *p_verb) {
         "no result to settle",
         p_verb
     );
-    return NetwPromise::rejected(int(ERR_INVALID_DATA), String(p_verb));
+    return NetwPromise::rejected(ERR_INVALID_DATA, String(p_verb));
 }
 
 } // namespace
@@ -129,10 +129,7 @@ Ref<NetwPromise> NetwDatabaseBackend::commit(const Array &operations) {
                 "sequence them; this one left operation %d in flight",
                 i
             );
-            return NetwPromise::rejected(
-                int(ERR_UNAVAILABLE),
-                String("_commit")
-            );
+            return NetwPromise::rejected(ERR_UNAVAILABLE, String("_commit"));
         }
         if (wrote->get_is_failed()) {
             return wrote;

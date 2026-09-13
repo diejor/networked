@@ -53,7 +53,11 @@ bool WriteStream::bits(uint64_t &value, int count) {
     }
     if ((value & ~low_mask(count)) != 0) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Value does not fit its declared bit width.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "Value does not fit its declared bit width."
+        );
     }
     int written = 0;
     while (written < count) {
@@ -143,6 +147,30 @@ bool WriteStream::bytes_capped(PackedByteArray &value, int cap) {
     for (int64_t index = 0; index < length; ++index) {
         output.push_back(source[index]);
     }
+    bits_written += length * 8;
+    return true;
+}
+
+bool WriteStream::raw_bytes(PackedByteArray &value, int64_t count) {
+    if (!healthy) {
+        return false;
+    }
+    if (count < 0 || int64_t(value.size()) != count) {
+        healthy = false;
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "Opaque run does not match the length already written."
+        );
+    }
+    if (!align_verify()) {
+        return false;
+    }
+    const uint8_t *source = value.ptr();
+    for (int64_t index = 0; index < count; ++index) {
+        output.push_back(source[index]);
+    }
+    bits_written += count * 8;
     return true;
 }
 
@@ -167,9 +195,16 @@ PackedByteArray WriteStream::to_bytes() const {
     return out;
 }
 
-ReadStream::ReadStream(const PackedByteArray &bytes) : source(bytes) {
+ReadStream::ReadStream(const PackedByteArray &bytes) {
+    seat(bytes);
+}
+
+void ReadStream::seat(const PackedByteArray &bytes) {
+    source = bytes;
     input = source.ptr();
     input_size = source.size();
+    bits_read = 0;
+    healthy = true;
 }
 
 bool ReadStream::take(int count, uint64_t &out) {
@@ -315,6 +350,31 @@ bool ReadStream::bytes_capped(PackedByteArray &value, int cap) {
     return true;
 }
 
+bool ReadStream::raw_bytes(PackedByteArray &value, int64_t count) {
+    if (!healthy) {
+        return false;
+    }
+    if (count < 0) {
+        healthy = false;
+        NETW_ERR_V(false, sys::WIRE, "Opaque run length is negative.");
+    }
+    if (!align_verify()) {
+        return false;
+    }
+    if (count * 8 > bits_remaining()) {
+        healthy = false;
+        return false;
+    }
+    PackedByteArray staged;
+    staged.resize(count);
+    if (count > 0) {
+        memcpy(staged.ptrw(), input + (bits_read / 8), size_t(count));
+    }
+    bits_read += count * 8;
+    value = staged;
+    return true;
+}
+
 bool ReadStream::align_verify() {
     if (!healthy) {
         return false;
@@ -382,6 +442,16 @@ bool MeasureStream::bytes_capped(PackedByteArray &value, int cap) {
     bits_described += bits_required(uint64_t(cap));
     bits_described += pad_to_byte(bits_described);
     bits_described += int64_t(value.size()) * 8;
+    return true;
+}
+
+bool MeasureStream::raw_bytes(PackedByteArray &value, int64_t count) {
+    (void)value;
+    if (count < 0) {
+        NETW_ERR_V(false, sys::WIRE, "Opaque run length is negative.");
+    }
+    bits_described += pad_to_byte(bits_described);
+    bits_described += count * 8;
     return true;
 }
 

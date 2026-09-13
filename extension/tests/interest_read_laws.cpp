@@ -6,9 +6,9 @@ namespace TestNetwInterestReads {
 
 using namespace godot;
 using netw::NetwInterestLayer;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 
-RID entity_of(const Ref<NetwMultiplayerCore> &p_core) {
+RID entity_of(const Ref<NetwMultiplayer> &p_core) {
     return p_core->get_liveness_core()->entity_create();
 }
 
@@ -16,10 +16,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] IR1 a committed row reads by name, not by "
     "the order it was declared in"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID entity = entity_of(core);
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
 
     engine.membership_add(entity.get_id(), StringName("sight"));
     engine.membership_add(entity.get_id(), StringName("audio"));
@@ -37,23 +37,23 @@ TEST_CASE(
     "[Networked][Interest][Hosted] IR2 an entity the committed row does not "
     "name carries no filter"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID entity = entity_of(core);
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
 
     REQUIRE(core->is_server());
-    CHECK_FALSE(core->interest_has_filter(entity));
+    CHECK_FALSE(core->interest_is_filtered(entity));
     NETW_CHECK_EQ(core->interest_membership_ids(entity).size(), 0);
 
     engine.membership_add(entity.get_id(), StringName("sight"));
 
-    CHECK(core->interest_has_filter(entity));
+    CHECK(core->interest_is_filtered(entity));
     NETW_CHECK_EQ(core->interest_membership_ids(entity).size(), 1);
 
     engine.membership_remove(entity.get_id(), StringName("sight"));
 
-    CHECK_FALSE(core->interest_has_filter(entity));
+    CHECK_FALSE(core->interest_is_filtered(entity));
     NETW_CHECK_EQ(core->interest_membership_ids(entity).size(), 0);
 }
 
@@ -61,7 +61,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] IL1 a layer name is opened once, so the "
     "second ask is the first handle and the first view"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     const RID first = core->layer_open(StringName("sight"));
@@ -69,13 +69,12 @@ TEST_CASE(
 
     CHECK(first.is_valid());
     CHECK(first == again);
-    CHECK(core->layer_named(StringName("sight")) == first);
+    CHECK(core->interest_layer_find(StringName("sight")) == first);
     CHECK(core->layer_name_of(first) == StringName("sight"));
-    const Ref<NetwInterestLayer> view = core->interest_layer(
-        StringName("sight")
-    );
+    const Ref<NetwInterestLayer> view
+        = core->interest_layer(StringName("sight"));
     CHECK(view.is_valid());
-    CHECK(view == core->layer_view(first));
+    CHECK(view == core->interest_layer_view(first));
     CHECK(view->get_layer_id() == StringName("sight"));
 }
 
@@ -83,29 +82,32 @@ TEST_CASE(
     "[Networked][Interest][Hosted] IL2 closing a layer releases its name and "
     "its view together"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     const RID first = core->layer_open(StringName("sight"));
-    const Ref<RefCounted> before = core->layer_view(first);
+    const Ref<RefCounted> before = core->interest_layer_view(first);
     core->layer_close(first);
 
-    NETW_CHECK_EQ(core->layer_named(StringName("sight")).is_valid(), false);
-    NETW_CHECK_EQ(core->layer_view(first).is_valid(), false);
+    NETW_CHECK_EQ(
+        core->interest_layer_find(StringName("sight")).is_valid(),
+        false
+    );
+    NETW_CHECK_EQ(core->interest_layer_view(first).is_valid(), false);
 
     const RID reopened = core->layer_open(StringName("sight"));
 
     CHECK(reopened.is_valid());
     CHECK(reopened != first);
-    CHECK(core->layer_view(reopened) != before);
-    NETW_CHECK_EQ(core->layer_view(first).is_valid(), false);
+    CHECK(core->interest_layer_view(reopened) != before);
+    NETW_CHECK_EQ(core->interest_layer_view(first).is_valid(), false);
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] IL3 a layer with no name is refused rather "
     "than answered with a dead handle"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->layer_open(StringName()).is_valid(), false);
@@ -120,7 +122,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] IL4 forgetting the book frees every name "
     "and every view"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     const RID sight = core->layer_open(StringName("sight"));
@@ -129,10 +131,16 @@ TEST_CASE(
 
     core->layer_forget_all();
 
-    NETW_CHECK_EQ(core->layer_view(sight).is_valid(), false);
-    NETW_CHECK_EQ(core->layer_view(audio).is_valid(), false);
-    NETW_CHECK_EQ(core->layer_named(StringName("sight")).is_valid(), false);
-    NETW_CHECK_EQ(core->layer_named(StringName("audio")).is_valid(), false);
+    NETW_CHECK_EQ(core->interest_layer_view(sight).is_valid(), false);
+    NETW_CHECK_EQ(core->interest_layer_view(audio).is_valid(), false);
+    NETW_CHECK_EQ(
+        core->interest_layer_find(StringName("sight")).is_valid(),
+        false
+    );
+    NETW_CHECK_EQ(
+        core->interest_layer_find(StringName("audio")).is_valid(),
+        false
+    );
     NETW_CHECK_EQ(core->interest_layers().size(), 0);
 }
 

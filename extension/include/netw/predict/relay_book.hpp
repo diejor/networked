@@ -2,23 +2,21 @@
 
 #include <cstdint>
 
+#include "godot/hash_map.hpp"
 #include "godot/local_vector.hpp"
-#include "godot/ref_counted.hpp"
-#include "godot/rid.hpp"
 #include "godot/variant.hpp"
 
-namespace netw {
+namespace netw::predict {
 
-class NetwPredictRelayBook : public godot::RefCounted {
-    GDCLASS(NetwPredictRelayBook, godot::RefCounted)
-
+class RelayBook {
     godot::HashMap<int64_t, godot::LocalVector<int64_t>> rows;
 
-protected:
-    static void _bind_methods();
-
 public:
-    void set_subscribed(int64_t p_entity_slot, int64_t p_peer, bool p_subscribed);
+    void set_subscribed(
+        int64_t p_entity_slot,
+        int64_t p_peer,
+        bool p_subscribed
+    );
 
     bool subscribed(int64_t p_entity_slot, int64_t p_peer) const;
 
@@ -35,4 +33,4 @@ public:
     static int request_of(const godot::PackedByteArray &p_bytes);
 };
 
-} // namespace netw
+} // namespace netw::predict

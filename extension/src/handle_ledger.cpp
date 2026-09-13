@@ -2,8 +2,6 @@
 
 #include <vector>
 
-#include "godot/class_db.hpp"
-
 using namespace godot;
 
 namespace netw {
@@ -57,24 +55,6 @@ NetwHandleLedger::NetwHandleLedger() {
 
 NetwHandleLedger::~NetwHandleLedger() {
     clear();
-}
-
-void NetwHandleLedger::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("rid_create"), &NetwHandleLedger::rid_create);
-    ClassDB::bind_method(
-        D_METHOD("rid_is_valid", "rid"),
-        &NetwHandleLedger::rid_is_valid
-    );
-    ClassDB::bind_method(
-        D_METHOD("rid_free", "rid"),
-        &NetwHandleLedger::rid_free
-    );
-    ClassDB::bind_method(
-        D_METHOD("rid_from_id", "id"),
-        &NetwHandleLedger::rid_from_id
-    );
-    ClassDB::bind_method(D_METHOD("id_count"), &NetwHandleLedger::id_count);
-    ClassDB::bind_method(D_METHOD("clear"), &NetwHandleLedger::clear);
 }
 
 } // namespace netw

@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/networked/gdscript/connect/ui/ice_servers_edit.gd" id="1_edit"]
+
+[node name="IceServersEdit" type="VBoxContainer"]
+theme_override_constants/separation = 8
+script = ExtResource("1_edit")
+
+[node name="AddServerButton" type="Button" parent="."]
+layout_mode = 2
+text = "Add ICE server"

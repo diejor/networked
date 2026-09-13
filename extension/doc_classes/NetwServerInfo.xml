@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwServerInfo" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The server metadata an [code]NPRB[/code] probe reply carries.
+	</brief_description>
+	<description>
+		A probe asks a host what it is without joining it, and this is the answer: the fields a browser row needs to decide whether to connect at all. It is a plain record with a codec, so the same object crosses the wire and fills a list entry.
+		A session with no declared provider answers with [method from_session]. A game that wants more declares one through [method Netw.configure_server_info], and is handed that same base record to edit rather than an API to read.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_server_info(self, server_info)
+
+		func server_info(info: NetwServerInfo) -&gt; NetwServerInfo:
+		    info.motd = "Ranked, no friendly fire"
+		    info.game_mode = &amp;"ranked"
+		    return info
+		[/codeblock]
+		Returning [code]null[/code] or anything that is not a [NetwServerInfo] is a defect rather than a request for the default: the probe answers [constant NetwAuthProtocol.PROBE_ERROR], so a browser row reads a broken host as broken instead of as an empty one.
+		[member metadata] is the open field: anything a game wants a browser to read that the named fields do not carry, encoded and decoded with the rest of the record.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="from_payload" qualifiers="static">
+			<return type="NetwServerInfo" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Decodes [param bytes] into a fresh record, or [code]null[/code] when [param bytes] is empty or does not carry one.
+			</description>
+		</method>
+		<method name="from_session" qualifiers="static">
+			<return type="NetwServerInfo" />
+			<param index="0" name="api" type="NetwMultiplayer" />
+			<description>
+				The default probe reply: a copy of [member NetwSessionConfig.server_info] with the live fields overlaid, which are the connected participant count as [member players] and [member NetwSessionConfig.app_id]. [member is_local_listener] is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than answered, so replying to a probe can never write back into what the game authored.
+				This is what a probe answers with when no [method Netw.configure_server_info] declaration governs the session, and it is also the record a declared provider is handed.
+			</description>
+		</method>
+		<method name="to_payload" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="info" type="NetwServerInfo" />
+			<description>
+				Serializes [param info] to the probe wire format, or an empty array when [param info] is [code]null[/code].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="app_id" type="StringName" setter="set_app_id" getter="get_app_id" default="&amp;&quot;&quot;">
+			The application tag the host gates joins on, so a browser can hide a host running a different game or a different build.
+		</member>
+		<member name="game_mode" type="StringName" setter="set_game_mode" getter="get_game_mode" default="&amp;&quot;&quot;">
+			The mode the host is running, as the game names it. Unset by the built-in provider.
+		</member>
+		<member name="is_local_listener" type="bool" setter="set_is_local_listener" getter="get_is_local_listener" default="false">
+			Whether this record was built by a live host rather than assembled from a directory listing. A browser reads it to tell a host that answered from one it only heard about.
+		</member>
+		<member name="latency_ms" type="int" setter="set_latency_ms" getter="get_latency_ms" default="-1">
+			The round trip [method NetwMultiplayer.endpoint_probe] measured reaching this host, in milliseconds. [code]-1[/code] means unmeasured, which is what a row assembled from a listing carries.
+		</member>
+		<member name="max_players" type="int" setter="set_max_players" getter="get_max_players" default="0">
+			The cap the host advertises. Advisory: the host's own admission decides.
+		</member>
+		<member name="metadata" type="Dictionary" setter="set_metadata" getter="get_metadata" default="{}">
+			Free-form fields a game adds to the reply. Carried through the codec untouched.
+		</member>
+		<member name="motd" type="String" setter="set_motd" getter="get_motd" default="&quot;&quot;">
+			The message the host shows in a browser row. Unset by the built-in provider.
+		</member>
+		<member name="players" type="int" setter="set_players" getter="get_players" default="0">
+			The live participant count at the moment the reply was built.
+		</member>
+		<member name="version" type="String" setter="set_version" getter="get_version" default="&quot;&quot;">
+			The build string the game publishes. Unset by the built-in provider.
+		</member>
+		<member name="visibility" type="int" setter="set_visibility" getter="get_visibility" default="0">
+			How widely the host asked to be listed, as a [enum Visibility]. What a directory does with anything but [constant VISIBILITY_PUBLIC] belongs to that directory: this says what the host asked for, not what any service enforces.
+		</member>
+	</members>
+	<constants>
+		<constant name="VISIBILITY_PUBLIC" value="0" enum="Visibility">
+			Listed to anyone browsing.
+		</constant>
+		<constant name="VISIBILITY_FRIENDS_ONLY" value="1" enum="Visibility">
+			Listed only to players the host's platform calls friends. A directory with no such notion treats it as [constant VISIBILITY_PRIVATE].
+		</constant>
+		<constant name="VISIBILITY_PRIVATE" value="2" enum="Visibility">
+			Not listed at all. The host is still joinable by anyone holding its address.
+		</constant>
+	</constants>
+</class>

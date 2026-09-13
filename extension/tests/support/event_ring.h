@@ -23,21 +23,21 @@ public:
         return rows.is_empty();
     }
 
-    godot::Ref<netw::NetwEvent> at(int p_index) const {
+    godot::Dictionary at(int p_index) const {
         if (p_index < 0 || p_index >= int(rows.size())) {
-            return godot::Ref<netw::NetwEvent>();
+            return godot::Dictionary();
         }
-        return godot::Ref<netw::NetwEvent>(rows[p_index]);
+        return godot::Dictionary(rows[p_index]);
     }
 
     int64_t tick_at(int p_index) const {
-        const godot::Ref<netw::NetwEvent> row = at(p_index);
-        return row.is_valid() ? row->tick : -1;
+        const godot::Dictionary row = at(p_index);
+        return !row.is_empty() ? int64_t(row[netw::event_key::tick()]) : -1;
     }
 
     int64_t event_at(int p_index) const {
-        const godot::Ref<netw::NetwEvent> row = at(p_index);
-        return row.is_valid() ? row->event : -1;
+        const godot::Dictionary row = at(p_index);
+        return !row.is_empty() ? int64_t(row[netw::event_key::event()]) : -1;
     }
 };
 

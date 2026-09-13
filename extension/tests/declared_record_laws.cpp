@@ -26,9 +26,7 @@ EntityDecl recorded_platform() {
 Scenario recorded_lane() {
     Scenario scenario;
     scenario.label = "recorded-lane";
-    scenario.world.clocked(30, 3).lag_compensated().entity(
-        recorded_platform()
-    );
+    scenario.world.clocked(30, 3).lag_compensated().entity(recorded_platform());
     scenario.hold_input(1, "Platform", godot::Vector2(5.0, 0.0));
     scenario.sample_at(PAST_TICK, "Platform");
     return scenario.until(24);
@@ -89,9 +87,6 @@ Scenario retired_lane() {
     return scenario;
 }
 
-// What LagCompensationMonitor reads out of the session. A key it cannot
-// find reads as a rate of zero, which is why presence is the law rather than
-// the value.
 const char *const MONITOR_KEYS[] = {
     "entities",
     "timelines",
@@ -172,10 +167,7 @@ LawVerdict law_retired_history_answers_nothing(const ScenarioRun &p_run) {
         return law_broken("the body never moved, so nothing was retired");
     }
     if (lane.sample_found()) {
-        return law_broken(
-            "a retired timeline still reads %g",
-            lane.sample_x()
-        );
+        return law_broken("a retired timeline still reads %g", lane.sample_x());
     }
     return law_held();
 }

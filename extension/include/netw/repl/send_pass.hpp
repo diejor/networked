@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "godot/hash_map.hpp"
 #include "godot/local_vector.hpp"
 #include "netw/wire/ack_book.hpp"
 #include "netw/wire/fitter.hpp"
@@ -13,33 +14,41 @@ struct PassResult {
     godot::LocalVector<wire::FitCandidate> sent;
     godot::LocalVector<wire::FitCandidate> deferred;
     int64_t sent_bits = 0;
-    bool untrackable = false;
 };
 
 class SendPass {
-    wire::AckBook acks;
+    godot::HashMap<int, wire::AckBook> books;
 
 public:
     PassResult run(
         const wire::WireRegistry &p_registry,
+        int p_peer,
         godot::LocalVector<wire::FitCandidate> &p_offers,
-        int64_t p_max_bits,
+        int64_t p_max_bits
+    );
+
+    bool record_datagram(
+        int p_peer,
         uint16_t p_seq,
-        int64_t p_send_id
+        uint16_t p_frames,
+        int64_t p_bits
     );
 
     void acknowledge(
+        int p_peer,
         uint16_t p_ack_seq,
+        uint32_t p_history,
         godot::LocalVector<wire::AckEntry> &r_delivered,
         godot::LocalVector<wire::AckEntry> &r_lost
     );
 
-    int outstanding() const {
-        return acks.active_count();
-    }
+    void forget(int p_peer);
+
+    int outstanding() const;
+    int outstanding(int p_peer) const;
 
     void clear() {
-        acks.clear();
+        books.clear();
     }
 };
 

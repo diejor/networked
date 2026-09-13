@@ -1,5 +1,9 @@
 #include "support/netw_test.h"
 
+#include "godot/scene_tree.hpp"
+#include "godot/spatial_node.hpp"
+#include "netw/api/predict_island.hpp"
+#include "netw/api/prediction_handle.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/joint.hpp"
 
@@ -33,20 +37,9 @@ LocalVector<IslandCandidate> candidates(
     return out;
 }
 
-Ref<NetwPredictDeclaration> declaration() {
-    Ref<NetwPredictDeclaration> out;
-    out.instantiate();
-    out->append_field(
-        StringName("value"),
-        0,
-        StringName(),
-        0.0,
-        false,
-        false,
-        -1.0,
-        -1.0,
-        false
-    );
+LocalVector<FieldDecl> declaration() {
+    LocalVector<FieldDecl> out;
+    out.push_back(field_decl(StringName("value"), 0));
     return out;
 }
 
@@ -56,14 +49,8 @@ Array state(int p_value) {
     return out;
 }
 
-Ref<NetwPredictionEngine> pool() {
-    Ref<NetwPredictionEngine> out;
-    out.instantiate();
-    return out;
-}
-
 void configure_joint(
-    const Ref<NetwPredictionEngine> &p_pool,
+    NetwPredictionEngine *p_pool,
     int64_t p_owner,
     int64_t p_member
 ) {
@@ -88,7 +75,7 @@ void configure_joint(
 }
 
 PackedInt64Array commit_member(
-    const Ref<NetwPredictionEngine> &p_pool,
+    NetwPredictionEngine *p_pool,
     int64_t p_owner,
     int64_t p_member,
     int64_t p_frontier
@@ -167,7 +154,8 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] cell provenance is strict") {
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] a candidate joins undeclared") {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t owner = engine->open(declaration());
     const int64_t candidate_slot = engine->open(declaration());
     CHECK(engine->configure(
@@ -197,7 +185,8 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] a candidate joins undeclared") {
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] a framed candidate is refused") {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t owner = engine->open(declaration());
     const int64_t candidate_slot = engine->open(declaration());
     CHECK(engine->configure(
@@ -223,8 +212,11 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] a framed candidate is refused") {
     CHECK_FALSE(engine->island_promoted(owner, candidate_slot));
 }
 
-TEST_CASE("[Networked][Predict][Hosted][Joint] a declared island takes frames") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Hosted][Joint] a declared island takes frames"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t owner = engine->open(declaration());
     const int64_t candidate_slot = engine->open(declaration());
     CHECK(engine->configure(
@@ -330,7 +322,9 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] radius has exit margin") {
     CHECK_FALSE(island.member(1)->promoted);
 }
 
-TEST_CASE("[Networked][Predict][Hosted][Joint] a late command keeps the state") {
+TEST_CASE(
+    "[Networked][Predict][Hosted][Joint] a late command keeps the state"
+) {
     StateRow observed;
     observed.resize(1);
     observed.set(0, Variant(70));
@@ -346,7 +340,8 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] a late command keeps the state") 
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] a slot with no island records") {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(declaration());
     CHECK(engine->configure(
         slot,
@@ -424,7 +419,8 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] command provenance improves") {
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] support admits declared axes") {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     CHECK(engine->supports(
         int(Schedule::TICK),
         int(Role::SIMULATE),
@@ -457,7 +453,8 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] support admits declared axes") {
 TEST_CASE(
     "[Networked][Predict][Hosted][Joint] a stepped group commits and passes"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t owner = engine->open(declaration());
     const int64_t member = engine->open(declaration());
     CHECK(engine->configure(
@@ -481,23 +478,25 @@ TEST_CASE(
     NETW_CHECK_EQ(commit_member(engine, owner, member, 0).size(), 1);
 
     engine->joint_record(owner, 0, state(0), Variant(0), true, false, false);
-    engine->joint_record(member, 0, state(100), Variant(200), false, false, true);
+    engine
+        ->joint_record(member, 0, state(100), Variant(200), false, false, true);
     engine->joint_record(owner, 1, state(1), Variant(1), true, false, false);
-    engine->joint_record(member, 1, state(101), Variant(201), false, false, true);
+    engine
+        ->joint_record(member, 1, state(101), Variant(201), false, false, true);
     engine->joint_note_basis(owner, 0, NetwPredictionEngine::JOINT_FLOOR_STATE);
 
-    const Ref<NetwPredictJointPlan> plan = engine->joint_pass(owner, 1);
-    REQUIRE(plan.is_valid());
-    CHECK(plan->valid());
-    NETW_CHECK_EQ(plan->floor(), 0);
-    NETW_CHECK_EQ(plan->restore_count(), 2);
-    NETW_CHECK_EQ(plan->step_count(), 2);
+    const predict::JointPassPlan plan = engine->joint_pass(owner, 1);
+    CHECK(plan.valid);
+    NETW_CHECK_EQ(plan.floor, 0);
+    NETW_CHECK_EQ(int(plan.restores.size()), 2);
+    NETW_CHECK_EQ(int(plan.steps.size()), 2);
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Joint] pass is transition then member order"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t owner = engine->open(declaration());
     const int64_t member = engine->open(declaration());
     configure_joint(engine, owner, member);
@@ -528,22 +527,21 @@ TEST_CASE(
     engine->joint_note_basis(owner, 1, NetwPredictionEngine::JOINT_FLOOR_STATE);
     engine->joint_note_basis(owner, 0, NetwPredictionEngine::JOINT_FLOOR_STATE);
 
-    const Ref<NetwPredictJointPlan> plan = engine->joint_pass(owner, 3);
-    REQUIRE(plan.is_valid());
-    CHECK(plan->valid());
-    CHECK_FALSE(plan->heal());
-    NETW_CHECK_EQ(plan->floor(), 1);
-    NETW_CHECK_EQ(plan->restore_count(), 2);
-    NETW_CHECK_EQ(plan->restore_slot(0), member);
-    NETW_CHECK_EQ(plan->restore_slot(1), owner);
-    NETW_CHECK_EQ(plan->step_count(), 4);
-    NETW_CHECK_EQ(plan->step_transition(0), 2);
-    NETW_CHECK_EQ(plan->step_slot(0), member);
-    NETW_CHECK_EQ(plan->step_provenance(0), int(CellProvenance::RELAYED));
-    NETW_CHECK_EQ(int(plan->step_command(0)), 302);
-    NETW_CHECK_EQ(plan->step_slot(1), owner);
-    NETW_CHECK_EQ(plan->step_transition(2), 3);
-    NETW_CHECK_EQ(plan->step_slot(2), member);
+    const predict::JointPassPlan plan = engine->joint_pass(owner, 3);
+    CHECK(plan.valid);
+    CHECK_FALSE(plan.heal);
+    NETW_CHECK_EQ(plan.floor, 1);
+    NETW_CHECK_EQ(int(plan.restores.size()), 2);
+    NETW_CHECK_EQ(plan.restores[0].slot, member);
+    NETW_CHECK_EQ(plan.restores[1].slot, owner);
+    NETW_CHECK_EQ(int(plan.steps.size()), 4);
+    NETW_CHECK_EQ(plan.steps[0].transition, 2);
+    NETW_CHECK_EQ(plan.steps[0].slot, member);
+    NETW_CHECK_EQ(int(plan.steps[0].provenance), int(CellProvenance::RELAYED));
+    NETW_CHECK_EQ(int(plan.steps[0].command), 302);
+    NETW_CHECK_EQ(plan.steps[1].slot, owner);
+    NETW_CHECK_EQ(plan.steps[2].transition, 3);
+    NETW_CHECK_EQ(plan.steps[2].slot, member);
     NETW_CHECK_EQ(int(engine->state_at(member, 0)), 101);
 
     const PackedInt64Array stats = engine->joint_stats(owner);
@@ -558,7 +556,8 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] linger ends past tenure") {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t owner = engine->open(declaration());
     const int64_t member = engine->open(declaration());
     configure_joint(engine, owner, member);
@@ -604,9 +603,8 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] linger ends past tenure") {
         );
     }
     engine->joint_note_basis(owner, 8, NetwPredictionEngine::JOINT_FLOOR_STATE);
-    Ref<NetwPredictJointPlan> plan = engine->joint_pass(owner, 8);
-    REQUIRE(plan.is_valid());
-    NETW_CHECK_EQ(plan->restore_count(), 2);
+    predict::JointPassPlan plan = engine->joint_pass(owner, 8);
+    NETW_CHECK_EQ(int(plan.restores.size()), 2);
     NETW_CHECK_EQ(
         engine->joint_stats(
             owner
@@ -616,14 +614,306 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] linger ends past tenure") {
 
     engine->joint_note_basis(owner, 9, NetwPredictionEngine::JOINT_FLOOR_STATE);
     plan = engine->joint_pass(owner, 9);
-    REQUIRE(plan.is_valid());
-    NETW_CHECK_EQ(plan->restore_count(), 1);
+    NETW_CHECK_EQ(int(plan.restores.size()), 1);
     NETW_CHECK_EQ(
         engine->joint_stats(
             owner
         )[NetwPredictionEngine::STAT_JOINT_LINGER_HELD],
         0
     );
+}
+
+struct SeatedEntity {
+    Node *owner = nullptr;
+    Ref<NetwEntity> entity;
+
+    SeatedEntity(const char *p_id) {
+        owner = memnew(Node);
+        NetwEntity::bind(owner, p_id, 1);
+        entity = NetwEntity::of(owner);
+        REQUIRE(entity.is_valid());
+    }
+
+    ~SeatedEntity() {
+        memdelete(owner);
+    }
+};
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Island] the live participants are the "
+    "COMMITTED roster where one stands, and the declaration only until then"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    SeatedEntity owner_body("owner");
+    SeatedEntity declared_only("declared");
+    SeatedEntity committed("committed");
+
+    const int64_t owner = engine->slot_register(owner_body.entity);
+
+    Ref<NetwPredictIsland> rule;
+    rule.instantiate();
+    rule->add(declared_only.entity);
+
+    TypedArray<NetwEntity> live = engine->live_participants(owner, rule);
+    NETW_CHECK_EQ(live.size(), 1);
+    CHECK(Ref<NetwEntity>(live[0]) == declared_only.entity);
+
+    engine->roster_add(
+        owner,
+        NetwPredictionEngine::ROSTER_ISLAND_MEMBERS,
+        committed.entity
+    );
+    live = engine->live_participants(owner, rule);
+    NETW_CHECK_EQ(live.size(), 1);
+    CHECK(Ref<NetwEntity>(live[0]) == committed.entity);
+
+    engine->publish_topology_roster(owner, rule);
+    const PackedStringArray published = engine->island_participants(owner);
+    NETW_CHECK_EQ(published.size(), 1);
+    CHECK(published[0] == String("committed"));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Island] a promotion opens a tenure, a "
+    "demotion closes one and lingers, and the floor releases it"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    SeatedEntity owner_body("owner");
+    SeatedEntity member_body("member");
+
+    const int64_t owner = engine->slot_register(owner_body.entity);
+    const int64_t member = engine->slot_register(member_body.entity);
+    configure_joint(engine, owner, member);
+
+    Ref<NetwPredictIsland> rule;
+    rule.instantiate();
+
+    TypedArray<NetwEntity> promoted;
+    promoted.push_back(member_body.entity);
+    CHECK(engine->apply_island_promotions(owner, rule, promoted));
+    CHECK(engine->roster_has(
+        owner,
+        NetwPredictionEngine::ROSTER_SIMULATED,
+        member_body.entity
+    ));
+    CHECK_FALSE(engine->roster_has(
+        owner,
+        NetwPredictionEngine::ROSTER_JOINT_LINGERING,
+        member_body.entity
+    ));
+    NETW_CHECK_EQ(
+        engine->tenure_begin_of(member),
+        engine->drive_frontier(owner) + 1
+    );
+
+    CHECK_FALSE(engine->apply_island_promotions(owner, rule, promoted));
+
+    CHECK(
+        engine->apply_island_promotions(owner, rule, TypedArray<NetwEntity>())
+    );
+    CHECK_FALSE(engine->roster_has(
+        owner,
+        NetwPredictionEngine::ROSTER_SIMULATED,
+        member_body.entity
+    ));
+    CHECK(engine->roster_has(
+        owner,
+        NetwPredictionEngine::ROSTER_JOINT_LINGERING,
+        member_body.entity
+    ));
+
+    NETW_CHECK_EQ(
+        engine->release_lingering(owner, engine->tenure_end_of(member)),
+        1
+    );
+    NETW_CHECK_EQ(
+        engine->release_lingering(owner, engine->tenure_end_of(member) + 1),
+        0
+    );
+    CHECK_FALSE(engine->roster_has(
+        owner,
+        NetwPredictionEngine::ROSTER_JOINT_LINGERING,
+        member_body.entity
+    ));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Island] a contact is equivalent only where "
+    "every body it names is seated AND simulated, never merely seated"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    SeatedEntity owner_body("owner");
+    SeatedEntity member_body("member");
+
+    const int64_t owner = engine->slot_register(owner_body.entity);
+
+    Ref<NetwPredictIsland> rule;
+    rule.instantiate();
+    CHECK_FALSE(engine->contact_is_equivalent(owner, rule, false));
+
+    rule->add(member_body.entity);
+    const Ref<NetwPredictionHandle> handle
+        = member_body.entity->get_prediction();
+    REQUIRE(handle.is_valid());
+    handle->set_sim_mode(NetwPredict::SIM_MODE_DISPLAY);
+    CHECK_FALSE(engine->contact_is_equivalent(owner, rule, false));
+
+    handle->set_sim_mode(NetwPredict::SIM_MODE_SPECULATIVE);
+    CHECK(engine->contact_is_equivalent(owner, rule, false));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Island] the produced roster admits a named "
+    "participant once, in entity-id order, and never the owner"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    SeatedEntity owner_body("owner");
+    SeatedEntity zulu("zulu");
+    SeatedEntity alfa("alfa");
+
+    const int64_t owner = engine->slot_register(owner_body.entity);
+
+    Ref<NetwPredictIsland> rule;
+    rule.instantiate();
+    rule->add(zulu.entity);
+    rule->add(alfa.entity);
+    rule->add(zulu.entity);
+    rule->add(owner_body.entity);
+
+    const TypedArray<NetwEntity> roster
+        = engine->island_roster(owner, nullptr, rule);
+    NETW_CHECK_EQ(roster.size(), 2);
+    CHECK(Ref<NetwEntity>(roster[0]) == alfa.entity);
+    CHECK(Ref<NetwEntity>(roster[1]) == zulu.entity);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Island] the committed roster is the members "
+    "the pool seated, and the owner is never one of them"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    SeatedEntity owner_body("owner");
+    SeatedEntity member_body("member");
+    SeatedEntity stranger("stranger");
+
+    const int64_t owner = engine->slot_register(owner_body.entity);
+    const int64_t member = engine->slot_register(member_body.entity);
+    configure_joint(engine, owner, member);
+
+    Ref<NetwPredictIsland> rule;
+    rule.instantiate();
+    rule->simulate(member_body.entity);
+    rule->set_promotion(int(Promotion::ALL));
+
+    TypedArray<NetwEntity> members;
+    members.push_back(member_body.entity);
+    members.push_back(stranger.entity);
+    members.push_back(owner_body.entity);
+
+    const TypedArray<NetwEntity> promoted
+        = engine->island_commit_members(owner, members, rule, 0);
+    NETW_CHECK_EQ(promoted.size(), 1);
+    CHECK(Ref<NetwEntity>(promoted[0]) == member_body.entity);
+
+    NETW_CHECK_EQ(engine->island_member_count(owner), 1);
+}
+
+struct SeatedSpatial {
+    Node3D *owner = nullptr;
+    Ref<NetwEntity> entity;
+
+    SeatedSpatial(const char *p_id, const Vector3 &p_at) {
+        owner = memnew(Node3D);
+        netw::gd::scene_root()->add_child(owner);
+        owner->set_position(p_at);
+        NetwEntity::bind(owner, p_id, 1);
+        entity = NetwEntity::of(owner);
+        REQUIRE(entity.is_valid());
+    }
+
+    ~SeatedSpatial() {
+        netw::gd::scene_root()->remove_child(owner);
+        memdelete(owner);
+    }
+};
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][SceneTree][Island] the ranking distance is "
+    "the gap between the two nodes, which is what nearest and within spend"
+) {
+    CHECK(netw::gd::scene_root() != nullptr);
+    if (netw::gd::scene_root() == nullptr) {
+        return;
+    }
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    SeatedSpatial owner_body("owner", Vector3(0.0, 0.0, 0.0));
+    SeatedSpatial far_body("far", Vector3(10.0, 0.0, 0.0));
+    SeatedSpatial near_body("near", Vector3(1.0, 0.0, 0.0));
+    SeatedSpatial mid_body("mid", Vector3(0.0, 2.0, 0.0));
+
+    const int64_t owner = engine->slot_register(owner_body.entity);
+    const int64_t far = engine->slot_register(far_body.entity);
+    const int64_t near = engine->slot_register(near_body.entity);
+    const int64_t mid = engine->slot_register(mid_body.entity);
+    CHECK(engine->configure(
+        owner,
+        int(Schedule::TICK),
+        int(Role::PREDICT),
+        int(CorrectionMode::SNAP),
+        int(RestoreMode::EXACT),
+        6,
+        NetwPredictionEngine::ISLAND_JOINT
+    ));
+
+    Ref<NetwPredictIsland> rule;
+    rule.instantiate();
+    rule->simulate_nearest(2);
+
+    TypedArray<NetwEntity> members;
+    members.push_back(far_body.entity);
+    members.push_back(near_body.entity);
+    members.push_back(mid_body.entity);
+    engine->island_commit_members(owner, members, rule, 0);
+
+    NETW_CHECK_CLOSE(engine->island_distance_squared(owner, near), 1.0, 0.001);
+    NETW_CHECK_CLOSE(engine->island_distance_squared(owner, mid), 4.0, 0.001);
+    NETW_CHECK_CLOSE(engine->island_distance_squared(owner, far), 100.0, 0.001);
+}
+
+StateRow one_field(const Variant &p_value) {
+    StateRow out;
+    out.resize(1);
+    out.set(0, p_value);
+    return out;
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Joint] a late transition evicts the oldest"
+) {
+    JointTrack track;
+    for (int64_t transition = 1; transition <= 256; ++transition) {
+        track.record(
+            transition,
+            one_field(transition),
+            Variant(),
+            CellProvenance::COAST
+        );
+    }
+    NETW_CHECK_EQ(int(track.states.size()), 256);
+    CHECK((track.state_at(1) != nullptr));
+
+    track.record(0, one_field(0), Variant(), CellProvenance::COAST);
+
+    NETW_CHECK_EQ(int(track.states.size()), 256);
+    CHECK((track.state_at(0) == nullptr));
+    CHECK((track.state_at(1) != nullptr));
+    CHECK((track.state_at(256) != nullptr));
 }
 
 } // namespace TestNetwPredictJointLaws

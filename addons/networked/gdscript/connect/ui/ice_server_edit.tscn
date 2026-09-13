@@ -1,0 +1,52 @@
+[gd_scene format=3]
+
+[node name="IceServerEdit" type="VBoxContainer"]
+theme_override_constants/separation = 4
+
+[node name="Header" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "ICE server"
+
+[node name="Remove" type="Button" parent="Header"]
+layout_mode = 2
+text = "Remove"
+
+[node name="Fields" type="GridContainer" parent="."]
+layout_mode = 2
+columns = 2
+
+[node name="URLsLabel" type="Label" parent="Fields"]
+layout_mode = 2
+text = "URLs"
+
+[node name="URLsEdit" type="LineEdit" parent="Fields"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "stun:host:port, turn:host:port"
+tooltip_text = "Separate several URLs with commas."
+
+[node name="UsernameLabel" type="Label" parent="Fields"]
+layout_mode = 2
+text = "Username"
+
+[node name="UsernameEdit" type="LineEdit" parent="Fields"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Optional for STUN"
+
+[node name="CredentialLabel" type="Label" parent="Fields"]
+layout_mode = 2
+text = "Credential"
+
+[node name="CredentialEdit" type="LineEdit" parent="Fields"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Optional for STUN"
+secret = true
+
+[node name="Separator" type="HSeparator" parent="."]
+layout_mode = 2

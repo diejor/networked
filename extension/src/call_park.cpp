@@ -1,7 +1,5 @@
 #include "netw/call_park.hpp"
 
-#include "godot/class_db.hpp"
-
 using namespace godot;
 
 namespace netw {
@@ -71,26 +69,6 @@ int64_t NetwCallPark::route_of(int64_t id) const {
 void NetwCallPark::clear() {
     rows.clear();
     refused_calls = 0;
-}
-
-void NetwCallPark::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("park", "sender", "route", "deadline"),
-        &NetwCallPark::park
-    );
-    ClassDB::bind_method(D_METHOD("resolve", "id"), &NetwCallPark::resolve);
-    ClassDB::bind_method(D_METHOD("sweep", "now"), &NetwCallPark::sweep);
-    ClassDB::bind_method(
-        D_METHOD("active_count", "sender"),
-        &NetwCallPark::active_count
-    );
-    ClassDB::bind_method(D_METHOD("size"), &NetwCallPark::size);
-    ClassDB::bind_method(D_METHOD("refused"), &NetwCallPark::refused);
-    ClassDB::bind_method(
-        D_METHOD("route_of", "id"),
-        &NetwCallPark::route_of
-    );
-    ClassDB::bind_method(D_METHOD("clear"), &NetwCallPark::clear);
 }
 
 } // namespace netw

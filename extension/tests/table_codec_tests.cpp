@@ -1,6 +1,6 @@
 /* Round-trip, framing, and verdict laws for the TABLE codec.
  *
- * Two TableCore instances stand in for two peers, with no session and no
+ * Two Core instances stand in for two peers, with no session and no
  * carrier between them. What is proven is the property the wire design rests
  * on: every frame is a self-contained statement, so any subset of them, in any
  * order, leaves membership exact.
@@ -9,20 +9,20 @@
 #include "support/netw_test.h"
 
 #include "godot/math.hpp"
-#include "netw/handle_ledger.hpp"
 #include "netw/api/quantize.hpp"
-#include "netw/table/table_core.hpp"
+#include "netw/handle_ledger.hpp"
+#include "netw/table/core.hpp"
 
 namespace TestTableCodec {
 
 using namespace godot;
 using netw::NetwHandleLedger;
 using netw::NetwQuantize;
-using netw::NetwQuantizeFixed;
 using netw::NetwQuantizeQuaternion;
+using netw::NetwQuantizeScalar;
 using netw::SchemaCore;
-using netw::SchemaRecord;
-using netw::TableCore;
+using netw::table::Core;
+using netw::table::SchemaRecord;
 
 constexpr int BUDGET = 1200;
 
@@ -35,38 +35,40 @@ struct Spec {
 
 // Two peers and one handle mint, so a table's RID is the same shape on both.
 struct Peers {
-    Ref<TableCore> tx;
-    Ref<TableCore> rx;
-    Ref<NetwHandleLedger> ledger;
+    Ref<Core> tx;
+    Ref<Core> rx;
+    NetwHandleLedger ledger;
 
     Peers() {
         tx.instantiate();
         rx.instantiate();
-        ledger.instantiate();
     }
 
     RID declare_on(
-        const Ref<TableCore> &core,
+        const Ref<Core> &core,
         const StringName &name,
         const Vector<Spec> &specs
     ) {
-        Ref<SchemaRecord> schema;
-        schema.instantiate();
-        schema->name = name;
+        SchemaRecord schema;
+        schema.name = name;
         for (int i = 0; i < specs.size(); i++) {
             const int index = SchemaCore::append_column(
-                schema,
+                &schema,
                 specs[i].key,
                 specs[i].type,
                 specs[i].stride
             );
             if (specs[i].quantizer.is_valid()) {
-                SchemaCore::assign_quantizer(schema, index, specs[i].quantizer);
+                SchemaCore::assign_quantizer(
+                    &schema,
+                    index,
+                    specs[i].quantizer
+                );
             }
         }
-        SchemaCore::fix(schema);
-        const RID rid = ledger->rid_create();
-        core->declare(rid, schema);
+        SchemaCore::fix(&schema);
+        const RID rid = ledger.rid_create();
+        core->declare(rid, &schema);
         return rid;
     }
 
@@ -86,7 +88,7 @@ struct Peers {
         rx->begin_intake();
         for (int i = 0; i < frames.size(); i++) {
             const PackedByteArray frame = frames[i];
-            NETW_CHECK_EQ(rx->admit_header(TableCore::peek_header(frame)), OK);
+            NETW_CHECK_EQ(rx->admit_header(Core::peek_header(frame)), OK);
             NETW_CHECK_EQ(int64_t(rx->apply_frame(frame)["verdict"]), OK);
         }
     }
@@ -115,7 +117,7 @@ PackedInt32Array int32s(const std::initializer_list<int32_t> &values) {
 }
 
 void publish(
-    const Ref<TableCore> &tx,
+    const Ref<Core> &tx,
     const RID &table,
     const PackedInt64Array &routes,
     const PackedInt32Array &hp,
@@ -256,10 +258,10 @@ TEST_CASE(
     "[Networked][Table][Hosted] A quantized column round trips within its step"
 ) {
     Peers peers;
-    Ref<NetwQuantizeFixed> fixed;
+    Ref<NetwQuantizeScalar> fixed;
     fixed.instantiate();
-    fixed->step(0.03);
     fixed->limits(-512.0, 512.0);
+    fixed->step(0.03);
     Ref<NetwQuantizeQuaternion> smallest_three;
     smallest_three.instantiate();
     smallest_three->bits(10);
@@ -449,9 +451,8 @@ TEST_CASE("[Networked][Table][Hosted] A snapshot clears then applies") {
         = peers.tx->encode_frames(here, BUDGET, true);
     const PackedByteArray first = frames[0];
     NETW_CHECK_EQ(
-        int64_t(TableCore::peek_header(first)["flags"])
-            & TableCore::FLAG_SNAPSHOT,
-        TableCore::FLAG_SNAPSHOT
+        int64_t(Core::peek_header(first)["flags"]) & Core::FLAG_SNAPSHOT,
+        Core::FLAG_SNAPSHOT
     );
     peers.deliver(frames);
 
@@ -486,7 +487,7 @@ TEST_CASE("[Networked][Table][Hosted] Only the first snapshot frame clears") {
     CHECK(frames.size() > 1);
     // Ordered reliable delivery is the whole assembly protocol.
     const PackedByteArray second = frames[1];
-    NETW_CHECK_EQ(int64_t(TableCore::peek_header(second)["flags"]), 0);
+    NETW_CHECK_EQ(int64_t(Core::peek_header(second)["flags"]), 0);
     peers.deliver(frames);
     NETW_CHECK_EQ(peers.rx->read_routes(there).size(), 200);
 }
@@ -506,7 +507,7 @@ TEST_CASE(
     publish(peers.tx, b_here, int64s({1, 2}), int32s({5, 6}), 1);
     peers.deliver(peers.tx->encode_frames(b_here, BUDGET, false));
 
-    peers.deliver(TableCore::encode_lifecycle(int64s({2}), 2, BUDGET));
+    peers.deliver(Core::encode_lifecycle(int64s({2}), 2, BUDGET));
 
     NETW_CHECK_EQ(peers.rx->row_of(a_there, 2), -1);
     NETW_CHECK_EQ(peers.rx->row_of(b_there, 2), -1);
@@ -560,7 +561,7 @@ TEST_CASE(
     PackedByteArray unknown = good.duplicate();
     unknown.set(0, 99);
     NETW_CHECK_EQ(
-        peers.rx->admit_header(TableCore::peek_header(unknown)),
+        peers.rx->admit_header(Core::peek_header(unknown)),
         ERR_DOES_NOT_EXIST
     );
     NETW_CHECK_EQ(int64_t(peers.rx->counters()["drops_table_unknown"]), 1);
@@ -569,24 +570,21 @@ TEST_CASE(
     skewed.set(1, (skewed[1] + 1) % 256);
     skewed.set(2, (skewed[2] + 1) % 256);
     NETW_CHECK_EQ(
-        peers.rx->admit_header(TableCore::peek_header(skewed)),
+        peers.rx->admit_header(Core::peek_header(skewed)),
         ERR_INVALID_DATA
     );
     NETW_CHECK_EQ(int64_t(peers.rx->counters()["drops_table_schema"]), 1);
 
     PackedByteArray flagged = good.duplicate();
-    flagged.set(4, TableCore::FLAG_PAIR_KEY);
+    flagged.set(4, Core::FLAG_PAIR_KEY);
     NETW_CHECK_EQ(
-        peers.rx->admit_header(TableCore::peek_header(flagged)),
+        peers.rx->admit_header(Core::peek_header(flagged)),
         ERR_INVALID_DATA
     );
     NETW_CHECK_EQ(int64_t(peers.rx->counters()["drops_table_unknown_flag"]), 1);
 
     const PackedByteArray truncated = good.slice(0, good.size() - 2);
-    NETW_CHECK_EQ(
-        peers.rx->admit_header(TableCore::peek_header(truncated)),
-        OK
-    );
+    NETW_CHECK_EQ(peers.rx->admit_header(Core::peek_header(truncated)), OK);
     NETW_CHECK_EQ(
         int64_t(peers.rx->apply_frame(truncated)["verdict"]),
         ERR_INVALID_DATA

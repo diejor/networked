@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwQuantizeScalar" inherits="NetwQuantize" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		[NetwQuantize] that snaps a number, or each axis of a [Vector2] or [Vector3], onto a uniform grid across a bounded range.
+	</brief_description>
+	<description>
+		The grid is one number said two ways, and the class publishes both: [member bit_count] is the wire budget and [member resolution_step] is the precision it buys. Writing either derives the other from [member min_limit] and [member max_limit], so tuning a property by asking for 19 bits and tuning it by asking for 3cm of precision are the same act on the same object rather than two classes to choose between.
+		[codeblock]
+		var q := NetwQuantizeScalar.new().limits(-2048.0, 2048.0).bits(19)
+
+		# the same grid, said the other way, and the swap is one word:
+		var q := NetwQuantizeScalar.new().limits(-2048.0, 2048.0).step(0.0078)
+		[/codeblock]
+		[b]Declare the limits before the step.[/b] [member resolution_step] is a request rather than a stored field: setting it picks the smallest [member bit_count] whose grid is at least that fine over the range currently declared, so a step written before its limits is derived against the wrong range. [method bits] is exact at any point in a chain.
+		A [Vector3] or [Vector2] quantizes each axis the same way and costs [member bit_count] bits per axis. The per-axis error is at most half [member resolution_step].
+		Only the three stored fields decide the layout, so two of these that address the same grid answer [code]true[/code] to [method NetwQuantize.is_same_layout] however each was authored.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bits">
+			<return type="NetwQuantizeScalar" />
+			<param index="0" name="bits" type="int" />
+			<description>
+				Builder that sets [member bit_count] and returns this quantizer.
+			</description>
+		</method>
+		<method name="limits">
+			<return type="NetwQuantizeScalar" />
+			<param index="0" name="min" type="float" />
+			<param index="1" name="max" type="float" />
+			<description>
+				Builder that sets [member min_limit] and [member max_limit] and returns this quantizer. It leaves [member bit_count] alone, so widening the range on a fixed budget coarsens [member resolution_step] rather than spending more bits.
+			</description>
+		</method>
+		<method name="step">
+			<return type="NetwQuantizeScalar" />
+			<param index="0" name="step" type="float" />
+			<description>
+				Builder that asks for a grid at least as fine as [param step] over the current range, by raising [member bit_count] to suit, and returns this quantizer. Declare [method limits] first.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="bit_count" type="int" setter="set_bit_count" getter="get_bit_count" default="8">
+			Bits spent per axis, clamped to 1..32. This is the stored knob and the wire budget: the range is divided into [code]2 ** bit_count - 1[/code] equal steps, so a value at either limit round-trips exactly.
+		</member>
+		<member name="max_limit" type="float" setter="set_max_limit" getter="get_max_limit" default="1.0">
+			Inclusive upper bound of the encoded range. A value above it is clamped rather than wrapped, which is why an angle takes [NetwQuantizeAngle] instead.
+		</member>
+		<member name="min_limit" type="float" setter="set_min_limit" getter="get_min_limit" default="-1.0">
+			Inclusive lower bound of the encoded range. A value below it is clamped.
+		</member>
+		<member name="resolution_step" type="float" setter="set_resolution_step" getter="get_resolution_step" default="0.007874016">
+			Distance between two adjacent grid points, DERIVED from the other three rather than stored: reading it answers [code](max_limit - min_limit) / (2 ** bit_count - 1)[/code], and writing it moves [member bit_count] to the smallest budget that is at least that fine. A step of zero or less is refused, because no bit count satisfies it.
+		</member>
+	</members>
+</class>

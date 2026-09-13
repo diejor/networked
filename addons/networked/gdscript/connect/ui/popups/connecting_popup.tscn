@@ -1,0 +1,50 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked/gdscript/connect/ui/popups/connecting_popup.gd" id="1_connecting"]
+[ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/gdscript/connect/ui/connect_theme.tres" id="2_theme"]
+
+[node name="ConnectingPopup" type="PopupPanel"]
+size = Vector2i(500, 160)
+theme = ExtResource("2_theme")
+script = ExtResource("1_connecting")
+
+[node name="Margin" type="MarginContainer" parent="."]
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 496.0
+offset_bottom = 156.0
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Connecting..."
+horizontal_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+show_percentage = false
+
+[node name="Spacer" type="Control" parent="Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="CancelButton" type="Button" parent="Margin/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"

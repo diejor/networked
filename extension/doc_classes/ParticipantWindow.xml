@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="ParticipantWindow" inherits="Window" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		An isolated window and viewport tree for one local participant.
+	</brief_description>
+	<description>
+		Several participants sharing one process each need their own viewport, their own world and their own input, and a [Window] is the only node that gives all three. This is that window plus the identity of the participant mounted in it: [member mounted_tree], [member peer_id] and [member username] say whose it is, and [method ParticipantViewport.add_slot] places it.
+		A window arrives hidden and borderless, so a process that never asks for a display never opens one. Only a tiler or an author calling [method set_tiled_rect] makes it visible.
+		[codeblock]
+		var slot := ParticipantWindow.new()
+		slot.own_world_3d = true
+		slot.world_3d = World3D.new()
+		slot.username = &amp;"player_two"
+		add_child(slot)
+		tiler.add_slot(slot)
+		tiler.assign_device(1, slot)
+		[/codeblock]
+		The [code]stretch_[/code] knobs are [ParticipantView]'s, resolved the same way against the project's [code]display/window/stretch/*[/code] settings, and land on this window's own [member Window.content_scale_mode] family. A child [Window] inherits none of the root's content scaling on its own, so without this a tiled participant would draw at raw pixel size while the root window scaled.
+		[method send_input] is the routed path a container uses to deliver an event this window did not receive itself, such as a joypad bound to a particular seat. Events queue and flush deferred rather than being pushed where they arrive, because pushing input from inside an input callback re-enters the tree the caller is still walking.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="send_input">
+			<return type="void" />
+			<param index="0" name="event" type="InputEvent" />
+			<description>
+				Queues [param event] for this window's viewport, flushed as a local event on the next deferred pass. The routed path: use it when something outside this window decided the event belongs to it. Events this window receives through normal focus need no help.
+			</description>
+		</method>
+		<method name="set_tiled_rect">
+			<return type="void" />
+			<param index="0" name="rect" type="Rect2i" />
+			<description>
+				Places this window at [param rect] and re-resolves its content scaling for the new size. What [ParticipantViewport] calls on every slot when the tiling changes.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="borderless" type="bool" setter="set_flag" getter="get_flag" overrides="Window" default="true" />
+		<member name="mounted_tree" type="Node" setter="set_mounted_tree" getter="get_mounted_tree">
+			The session tree mounted inside this window. Identity rather than machinery: nothing here reads it, and it is how a caller holding a window finds the participant's session. Answers [code]null[/code] once that tree is freed.
+		</member>
+		<member name="oversampling_override" type="float" setter="set_oversampling_override" getter="get_oversampling_override" overrides="Viewport" default="1.0" />
+		<member name="peer_id" type="int" setter="set_peer_id" getter="get_peer_id" default="0">
+			The network peer id assigned to the participant in this window. Zero until the participant has joined.
+		</member>
+		<member name="stretch_aspect" type="int" setter="set_stretch_aspect" getter="get_stretch_aspect" enum="ParticipantView.StretchAspect" default="0">
+			How the design resolution is fitted into this window, resolved onto [member Window.content_scale_aspect]. Inherits the project's answer by default.
+		</member>
+		<member name="stretch_design_size" type="Vector2i" setter="set_stretch_design_size" getter="get_stretch_design_size" default="Vector2i(0, 0)">
+			The logical resolution this window's contents draw at, resolved onto [member Window.content_scale_size]. [code]Vector2i(0, 0)[/code] inherits the project's viewport size.
+		</member>
+		<member name="stretch_mode" type="int" setter="set_stretch_mode" getter="get_stretch_mode" enum="ParticipantView.StretchMode" default="0">
+			Which end of the fit this window renders at, resolved onto [member Window.content_scale_mode]. Inherits the project's answer by default.
+		</member>
+		<member name="stretch_scale" type="float" setter="set_stretch_scale" getter="get_stretch_scale" default="0.0">
+			Divides the design resolution, resolved onto [member Window.content_scale_factor]. Zero or less inherits the project's answer.
+		</member>
+		<member name="stretch_scale_mode" type="int" setter="set_stretch_scale_mode" getter="get_stretch_scale_mode" enum="ParticipantView.StretchScaleMode" default="0">
+			Whether the fit may land on a fractional multiple of the design, resolved onto [member Window.content_scale_stretch]. Inherits the project's answer by default.
+		</member>
+		<member name="username" type="StringName" setter="set_username" getter="get_username" default="&amp;&quot;&quot;">
+			The name the participant in this window joined under. Identity, like [member peer_id], and the readable half of it.
+		</member>
+		<member name="visible" type="bool" setter="set_visible" getter="is_visible" overrides="Window" default="false" />
+	</members>
+</class>

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPhysicsStepper" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The base a game subclasses to let one physics space be stepped, saved and rewound more than once inside a single frame.
+	</brief_description>
+	<description>
+		Godot advances a physics space once per physics frame, from the state that frame happens to hold. A rollback needs the opposite: the same space advanced several times inside one frame, each time from a state some earlier tick held. Nothing in the engine offers that, so the game owns it and [NetwPhysicsStepper] is where it plugs in. Once installed for a space, the engine holds that space inactive and steps it itself, on the forward path and on a joint replay alike.
+		[codeblock]
+		extends NetwPhysicsStepper
+
+		func _can_step() -&gt; bool:
+		    return true
+
+		func _step(space: RID, delta: float) -&gt; void:
+		    _solver.advance(space, delta)
+
+		api.predict_stepper_install(space_rid, MyStepper.new())
+		[/codeblock]
+		Install one per space with [method NetwMultiplayer.predict_stepper_install], which refuses a stepper whose [method _can_step] does not answer [code]true[/code]; installing with a [code]null[/code] stepper uninstalls. Read back what a space holds with [method NetwMultiplayer.predict_get_stepper]. Only a member declared [constant NetwPredict.SCHEDULE_STEPPED] reaches a stepper at all: a space with none downgrades that member to [constant NetwPredict.SCHEDULE_FRAME] instead, as [constant NetwPredict.SCHEDULE_STEPPED] describes, and a member on [constant NetwPredict.SCHEDULE_TICK] never asks for one.
+		The hold on a space starts at the first network tick a [constant NetwPredict.SCHEDULE_STEPPED] member stands in it, because [method NetwMultiplayer.predict_stepper_install] takes a bare [code]RID[/code] and only a member standing in it reveals the dimension the hold needs, and the hold ends when the stepper is uninstalled.
+		[b]Forward path.[/b] Once per network tick the engine drives every [constant NetwPredict.SCHEDULE_STEPPED] member standing in the space, applying that tick's command to each, and only then calls [method _step] and [method _snapshot], once for the space however many members or islands stand in it. That order is what makes one step integrate what the whole group authored rather than a world one member wrote alone.
+		[b]Joint replay.[/b] When a [NetwPredictIsland] whose owner is [constant NetwPredict.SCHEDULE_STEPPED] rebases to a basis tick, the engine restores every member's own columns from its timeline, calls [method _restore] once for the whole pass, then for each unacknowledged tick after the basis applies that tick's commands and calls [method _step] and [method _snapshot] once for the whole group.
+		[method _snapshot] and [method _restore] exist only for a stepped space holding dynamic bodies no entity governs, such as loose debris the engine cannot restore from an entity's own timeline. A stepper whose space holds only entities implements neither.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_can_step" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Whether this stepper can drive a space at all. Answering [code]false[/code], which is also what an unimplemented seam answers, makes [method NetwMultiplayer.predict_stepper_install] install nothing.
+			</description>
+		</method>
+		<method name="_restore" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Puts [param space] back into the state [method _snapshot] filed under [param tick]. A joint replay calls this once per pass, right after the engine restores every member's own columns from its timeline and before re-running the ticks after [param tick].
+			</description>
+		</method>
+		<method name="_snapshot" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Files [param space]'s current state under [param tick], so a later [method _restore] can name it. The engine calls this right after every [method _step], on the forward path and inside a joint replay alike.
+			</description>
+		</method>
+		<method name="_step" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="delta" type="float" />
+			<description>
+				Advances [param space] by exactly [param delta] and nothing else. Member state belongs to the engine, which restores it from each member's own timeline, so this must not read or write it. This runs inside a frame the engine is already stepping, once per network tick and again for each replayed tick during a joint rebase, so it must solve [param space] on demand rather than wait for the next physics frame.
+			</description>
+		</method>
+		<method name="can_step">
+			<return type="bool" />
+			<description>
+				Answers [method _can_step], or [code]false[/code] when nothing overrode it.
+			</description>
+		</method>
+		<method name="restore">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Calls [method _restore], and does nothing when nothing overrode it.
+			</description>
+		</method>
+		<method name="snapshot">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Calls [method _snapshot], and does nothing when nothing overrode it.
+			</description>
+		</method>
+		<method name="step">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="delta" type="float" />
+			<description>
+				Calls [method _step], and does nothing when nothing overrode it.
+			</description>
+		</method>
+	</methods>
+</class>

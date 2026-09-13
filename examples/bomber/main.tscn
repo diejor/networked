@@ -2,12 +2,9 @@
 
 [ext_resource type="Script" uid="uid://dkbxtbmxegbkx" path="res://examples/bomber/game/bomber_session.gd" id="1_sess"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
-[ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_wto4k"]
-[ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_p4o8j"]
 [ext_resource type="PackedScene" uid="uid://ca6gwo0u2m4y2" path="res://examples/bomber/game/lobby.tscn" id="9_gbknk"]
-[ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/addons/steam/steam_lobby_directory.gd" id="9_p4o8j"]
-[ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/addons/nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
-[ext_resource type="Script" uid="uid://7rlemmqrhvw7" path="res://addons/networked/sync/sim/lag_compensation.gd" id="10_lagcomp"]
+[ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/gdscript/steam/steam_lobby_directory.gd" id="9_p4o8j"]
+[ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/gdscript/nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
 [ext_resource type="Script" uid="uid://certc8teajoaj" path="res://addons/networked_activity/service/discord_activity_service.gd" id="11_disc"]
 [ext_resource type="Script" uid="uid://xsdb520sm4wk" path="res://addons/networked_activity/service/nakama_discord_rendezvous.gd" id="12_rdv"]
 
@@ -18,38 +15,24 @@ metadata/_custom_type_script = "uid://xsdb520sm4wk"
 [node name="Main" type="Node" unique_id=68306203]
 script = ExtResource("1_sess")
 
-[node name="Gamestate" type="Node" parent="." unique_id=487890910]
+[node name="Gamestate" type="NetwService" parent="." unique_id=487890910]
 unique_name_in_owner = true
 script = ExtResource("5_gbknk")
 
-[node name="MultiplayerClock" type="Node" parent="." unique_id=1936851771]
-script = ExtResource("7_wto4k")
-tickrate = 15
-metadata/_custom_type_script = "uid://domi8t23qrsdh"
-
-[node name="LagCompensation" type="Node" parent="." unique_id=1936851772]
-script = ExtResource("10_lagcomp")
-metadata/_custom_type_script = "uid://7rlemmqrhvw7"
-
 [node name="LobbyProviders" type="Node" parent="." unique_id=1033260268]
 
-[node name="SteamLobbyDirectory" type="Node" parent="LobbyProviders" unique_id=1067375394]
+[node name="SteamLobbyDirectory" type="LobbyDirectory" parent="LobbyProviders" unique_id=1067375394]
 script = ExtResource("9_p4o8j")
 allow_spacewar_fallback = true
 
-[node name="WebTorrentDirectory" type="Node" parent="LobbyProviders" unique_id=1506380482]
-script = ExtResource("8_p4o8j")
-browser_filter_uid = "networked-example-bomber"
-metadata/_custom_type_script = "uid://d1xugn0ypbbto"
-
-[node name="NakamaLobbyDirectory" type="Node" parent="LobbyProviders" unique_id=592217180]
+[node name="NakamaLobbyDirectory" type="LobbyDirectory" parent="LobbyProviders" unique_id=592217180]
 script = ExtResource("10_ej8d4")
 device_id = "bomber-host-diego-001"
 local_member_name = "diegote"
 browser_filter_uid = "networked-bomber"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 
-[node name="DiscordActivity" type="Node" parent="." unique_id=592217181]
+[node name="DiscordActivity" type="NetwService" parent="." unique_id=592217181]
 script = ExtResource("11_disc")
 client_id = "1519144648411447338"
 rendezvous = SubResource("Resource_disc_rdv")

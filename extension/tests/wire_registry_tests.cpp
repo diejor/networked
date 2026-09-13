@@ -19,7 +19,7 @@ TEST_CASE(
     "[Networked][Wire][Hosted] default registry populates built-in channels"
 ) {
     const WireRegistry reg = WireRegistry::create_default();
-    NETW_CHECK_EQ(reg.active_count(), 38);
+    NETW_CHECK_EQ(reg.active_count(), 40);
 
     const ChannelDecl *call = reg.find_channel(3);
     REQUIRE(call != nullptr);
@@ -90,8 +90,8 @@ TEST_CASE("[Networked][Wire][Hosted] reserved channel slots report invalid") {
 TEST_CASE("[Networked][Wire][Hosted] registry finds channel by StringName") {
     const WireRegistry reg = WireRegistry::create_default();
 
-    const ChannelDecl *predict =
-        reg.find_channel_by_name(godot::StringName("PREDICT_COMMAND"));
+    const ChannelDecl *predict
+        = reg.find_channel_by_name(godot::StringName("PREDICT_COMMAND"));
     REQUIRE(predict != nullptr);
     NETW_CHECK_EQ(predict->id, 35);
     CHECK(predict->kind == ChannelKind::ROUTED);
@@ -121,7 +121,7 @@ TEST_CASE(
     custom.reliability = Reliability::RELIABLE;
     reg3.register_channel(custom);
 
-    NETW_CHECK_EQ(reg3.active_count(), 39);
+    NETW_CHECK_EQ(reg3.active_count(), 41);
     CHECK(reg3.identity_hash() != hash1);
 }
 
@@ -134,15 +134,13 @@ TEST_CASE(
     // SYNC, SYNC_ROW, SYNC_ROW_DELTA, SYNC_ROW_WINDOW, SYNC_DELTA, TABLE,
     // SIGNAL and PROPERTY_SYNC are the lanes the tick pump flushes, and none
     // of their senders passes a batch flag.
-    for (const uint8_t id : { 5, 6, 17, 19, 20, 39, 40, 41 }) {
+    for (const uint8_t id : {5, 6, 17, 19, 20, 39, 40, 41}) {
         CHECK(reg.aggregates(id, false));
         CHECK(reg.aggregates(id, true));
     }
 }
 
-TEST_CASE(
-    "[Networked][Wire][Hosted] B2 an immediate channel refuses the ask"
-) {
+TEST_CASE("[Networked][Wire][Hosted] B2 an immediate channel refuses the ask") {
     const WireRegistry reg = WireRegistry::create_default();
 
     // CLOCK_PING and CLOCK_PONG time a round trip. Holding one for a flush

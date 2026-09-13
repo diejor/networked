@@ -67,7 +67,16 @@ Ref<NetwRingBuffer> NetwRingBuffer::create(int64_t requested) {
 }
 
 void NetwRingBuffer::record(int64_t tick, const Variant &value) {
-    NETW_ZONE_NC("NetwRingBuffer record", colors::INTERP);
+    NETW_ZONE_SYS(profile::SUBSYSTEM_INTERPOLATION);
+    if (count > 0 && tick <= newest_tick()) {
+        for (int64_t at = count - 1; at >= 0; --at) {
+            const int64_t held = (head + at) & mask;
+            if (ticks[held] == tick) {
+                slots[held] = value;
+                return;
+            }
+        }
+    }
     int64_t index;
     if (count < capacity) {
         index = (head + count) & mask;
@@ -91,7 +100,7 @@ Variant NetwRingBuffer::get_at(int64_t tick) const {
 }
 
 Vector2i NetwRingBuffer::bracketing_ticks(int64_t tick) const {
-    NETW_ZONE_NC("NetwRingBuffer bracketing_ticks", colors::INTERP);
+    NETW_ZONE_SYS(profile::SUBSYSTEM_INTERPOLATION);
     int32_t previous = -1;
     int32_t next = -1;
     for (int64_t i = 0; i < count; ++i) {

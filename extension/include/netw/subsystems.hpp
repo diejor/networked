@@ -13,6 +13,7 @@
     X(LIVENESS, "liveness", 7) \
     X(PREDICTION, "prediction", 8) \
     X(SCENE, "scene", 9) \
+    X(SCRIPT, "script", 17) \
     X(SESSION, "session", 10) \
     X(SPAWN, "spawn", 11) \
     X(TABLE, "table", 12) \
@@ -32,10 +33,14 @@ enum Subsystem : uint32_t {
         SUBSYSTEM_ALL = 0xffffffffU,
 };
 
+struct SubsystemName {
+    const char *text;
+};
+
 namespace sys {
 
 #define NETW_SUBSYSTEM_NAME(m_name, m_text, m_index) \
-    inline constexpr const char *m_name = m_text;
+    inline constexpr SubsystemName m_name{m_text};
 NETW_SUBSYSTEM_TABLE(NETW_SUBSYSTEM_NAME)
 #undef NETW_SUBSYSTEM_NAME
 

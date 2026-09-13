@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSchemaColumn" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One column exactly as a [NetwSchema] declares it, with no session behind it.
+	</brief_description>
+	<description>
+		A column as authored, before any session compiled it into a table. It carries no session state and no RID, which is what lets a declaration be written in a [code]static var[/code] initializer that runs before any session exists.
+		Columns are never built directly. [method NetwSchema.column] appends them in address order, and that order is the wire address every adopting peer seals in.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="key" type="StringName" setter="set_key" getter="get_key" default="&amp;&quot;&quot;">
+			The caller-facing name, unique within its declaration.
+		</member>
+		<member name="quantizer" type="NetwQuantize" setter="set_quantizer" getter="get_quantizer">
+			The bit packer, or [code]null[/code] for the raw memcpy path.
+		</member>
+		<member name="stride" type="int" setter="set_stride" getter="get_stride" default="1">
+			How many elements one row occupies.
+		</member>
+		<member name="type" type="int" setter="set_type" getter="get_type" enum="NetwMultiplayer.ColumnType" default="0">
+			One of [enum NetwMultiplayer.ColumnType].
+		</member>
+	</members>
+</class>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="WarmPolicy" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Strategy for deciding how each table pre-loads into a write-behind cache.
+	</brief_description>
+	<description>
+		Assign it to [member NetwDatabase.warm_policy]. The database walks the registered schema at init and asks the policy for one [WarmRequest] per table, then hands the batch to the backend.
+		A plain [WarmPolicy] warms EVERYTHING, and it is what [member NetwDatabase.warm_policy] holds by default, so a write-behind backend pre-loads the whole open slot before the first read. Warming nothing is a [code]null[/code] policy, not a bare one: the two are different answers and the class carries only the first.
+		Subclass it and override [method _plan_table] to narrow that default. An override that answers [code]null[/code] for a table leaves that table on the warm-everything answer, so a policy states only what it changes.
+		[codeblock]
+		# A policy that warms only the players table and leaves the rest lazy.
+		class_name WarmPlayersOnly
+		extends WarmPolicy
+
+		func _plan_table(table: StringName, _columns: Array[StringName]) -&gt; WarmRequest:
+		    return WarmRequest.all() if table == &amp;"players" else WarmRequest.none()
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_plan_table" qualifiers="virtual">
+			<return type="WarmRequest" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="columns" type="StringName[]" />
+			<description>
+				Override to return the [WarmRequest] for [param table] given its declared [param columns]. Answer [method WarmRequest.none] to leave a table lazy; answering [code]null[/code] is not a way to abstain from warming, because the warm-everything default is what stands when this answers nothing.
+				This is the override point only. Callers ask [method plan_table], which is what dispatches here.
+			</description>
+		</method>
+		<method name="plan_table">
+			<return type="WarmRequest" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="columns" type="StringName[]" />
+			<description>
+				Returns the [WarmRequest] this policy plans for [param table] given its declared [param columns], which is [method WarmRequest.all] unless [method _plan_table] answers otherwise.
+				Called once per registered table when the database initializes its backend. Synchronous backends ignore the result, so a policy can never break a read.
+			</description>
+		</method>
+	</methods>
+</class>

@@ -1,12 +1,3 @@
-// Laws for the transitions a slot did not author.
-//
-// A consuming peer re-runs a lane its owner already numbered, labelled and
-// folded, so the answers `open_drive` computes are answers it must not
-// recompute. The distinction is the whole reason `replay_drive` exists beside
-// it, and the clamp is where the two part company: an authoring pass opens at
-// most one transition per tick, where a consume pass replays every queued
-// entry at one timing.
-
 #include "support/netw_test.h"
 
 #include "netw/predict/engine.hpp"
@@ -17,10 +8,10 @@ using namespace godot;
 using namespace netw;
 using namespace netw::predict;
 
-const int SCHEDULES[] = { int(Schedule::TICK), int(Schedule::FRAME) };
+const int SCHEDULES[] = {int(Schedule::TICK), int(Schedule::FRAME)};
 
-int64_t consuming_slot(const Ref<NetwPredictionEngine> &p_pool, int p_schedule) {
-    const int64_t slot = p_pool->open(Ref<NetwPredictDeclaration>());
+int64_t consuming_slot(NetwPredictionEngine *p_pool, int p_schedule) {
+    const int64_t slot = p_pool->open();
     p_pool->configure(
         slot,
         p_schedule,
@@ -39,18 +30,30 @@ TEST_CASE(
 ) {
     for (const int schedule : SCHEDULES) {
         CAPTURE(schedule);
-        Ref<NetwPredictionEngine> pool;
-        pool.instantiate();
+        NetwPredictionEngine held_pool;
+        NetwPredictionEngine *const pool = &held_pool;
         const int64_t slot = consuming_slot(pool, schedule);
 
         pool->record_input(slot, 40, 0x5151);
-        const Ref<NetwPredictDrive> drive = pool->replay_drive(
-            slot, Dictionary(), 7, 40, int(DriveKind::FRESH), 0, 0, 1.0 / 60.0, 1, 3, 0, 0, 0
+        const netw::predict::DriveRecord drive = pool->replay_drive(
+            slot,
+            Dictionary(),
+            7,
+            40,
+            int(DriveKind::FRESH),
+            0,
+            0,
+            1.0 / 60.0,
+            1,
+            3,
+            0,
+            0,
+            0
         );
 
-        NETW_CHECK_EQ(drive->ran(), true);
-        NETW_CHECK_EQ(drive->transition(), 7);
-        NETW_CHECK_EQ(drive->label(), 40);
+        NETW_CHECK_EQ(drive.ran, true);
+        NETW_CHECK_EQ(drive.transition, 7);
+        NETW_CHECK_EQ(drive.label, 40);
         NETW_CHECK_EQ(pool->journal_size(slot), 1);
         NETW_CHECK_EQ(pool->journal_transition_at(slot, 0), 7);
         NETW_CHECK_EQ(pool->journal_label_at(slot, 0), 40);
@@ -58,16 +61,11 @@ TEST_CASE(
     }
 }
 
-// The tape is what an owner publishes and a consumer receives, so a slot that
-// authored an entry while replaying one would be claiming authorship of a lane
-// it is following.
-TEST_CASE(
-    "[Networked][Predict][Hosted][Law] a replay authors no tape entry"
-) {
+TEST_CASE("[Networked][Predict][Hosted][Law] a replay authors no tape entry") {
     for (const int schedule : SCHEDULES) {
         CAPTURE(schedule);
-        Ref<NetwPredictionEngine> pool;
-        pool.instantiate();
+        NetwPredictionEngine held_pool;
+        NetwPredictionEngine *const pool = &held_pool;
         const int64_t slot = consuming_slot(pool, schedule);
 
         for (int64_t transition = 0; transition < 4; transition++) {
@@ -98,13 +96,13 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] an authoring replay on a tick schedule "
     "advances the tape and numbers the transition the owner's drive would have"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = consuming_slot(pool, int(Schedule::TICK));
 
     for (int64_t tick = 0; tick < 3; tick++) {
         pool->record_input(slot, tick, 0x41 + tick);
-        const Ref<NetwPredictDrive> drive = pool->replay_drive(
+        const netw::predict::DriveRecord drive = pool->replay_drive(
             slot,
             Dictionary(),
             tick,
@@ -122,7 +120,7 @@ TEST_CASE(
             0,
             true
         );
-        NETW_CHECK_EQ(drive->transition(), tick);
+        NETW_CHECK_EQ(drive.transition, tick);
         NETW_CHECK_EQ(pool->tape_size(slot), tick + 1);
     }
 
@@ -134,8 +132,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] a frame slot authors no tape entry "
     "even when the caller says it is authoring, because the fold is the entry"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = consuming_slot(pool, int(Schedule::FRAME));
 
     for (int64_t entry = 0; entry < 3; entry++) {
@@ -164,18 +162,14 @@ TEST_CASE(
     NETW_CHECK_EQ(pool->journal_size(slot), 3);
 }
 
-// The one claim the shell's consume path could not make through `open_drive`.
-// A FRAME slot admits one authored transition per tick and a consume pass has
-// exactly one timing for however many entries it drains, so routing the replay
-// through the authoring verb loses every entry after the first.
 TEST_CASE(
     "[Networked][Predict][Hosted][Law] a frame slot replays every entry at "
     "one timing where it authors only the first"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t replaying = consuming_slot(pool, int(Schedule::FRAME));
-    const int64_t authoring = pool->open(Ref<NetwPredictDeclaration>());
+    const int64_t authoring = pool->open();
     pool->configure(
         authoring,
         int(Schedule::FRAME),
@@ -205,7 +199,19 @@ TEST_CASE(
         );
 
         pool->record_input(authoring, entry, 0x31 + entry);
-        pool->open_drive(authoring, Dictionary(), 9, 0, 1.0 / 60.0, 1, true, 1, 0, 0, 0);
+        pool->open_drive(
+            authoring,
+            Dictionary(),
+            9,
+            0,
+            1.0 / 60.0,
+            1,
+            true,
+            1,
+            0,
+            0,
+            0
+        );
     }
 
     NETW_CHECK_EQ(pool->journal_size(replaying), 3);
@@ -216,8 +222,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] the decoded window holds the first "
     "arrival of a transition and never a later one"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = consuming_slot(pool, int(Schedule::FRAME));
 
     Dictionary first;
@@ -231,15 +237,10 @@ TEST_CASE(
     CHECK(pool->command_is_fresh(slot, 4));
     NETW_CHECK_EQ(int(pool->command_payload_of(slot, 4)["motion"]), 1);
 
-    // The lane re-sends an overlapping window every frame, so a second arrival
-    // is the redundancy rather than a correction. Taking it would let a late
-    // duplicate rewrite a transition the consume cursor may have passed.
     CHECK_FALSE(pool->command_admit(slot, 4, 99, false, second));
     NETW_CHECK_EQ(pool->command_label_of(slot, 4), 40);
     NETW_CHECK_EQ(int(pool->command_payload_of(slot, 4)["motion"]), 1);
 
-    // A transition the window does not answer for reads as absent rather than
-    // as a cell of zeroes, which a cursor would replay.
     CHECK_FALSE(pool->command_has(slot, 5));
     NETW_CHECK_EQ(pool->command_label_of(slot, 5), -1);
     CHECK(pool->command_payload_of(slot, 5).is_empty());
@@ -249,16 +250,14 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] the consume depth stops at the first "
     "transition the window is missing"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = consuming_slot(pool, int(Schedule::FRAME));
 
     NETW_CHECK_EQ(pool->command_depth_from(slot, 0), 0);
     for (int64_t at = 0; at < 3; ++at) {
         CHECK(pool->command_admit(slot, at, at, true, Dictionary()));
     }
-    // The hole at 3 is a datagram the lane has not re-sent yet. Counting past
-    // it would step the cursor over a command that may still arrive.
     CHECK(pool->command_admit(slot, 4, 4, true, Dictionary()));
 
     NETW_CHECK_EQ(pool->command_depth_from(slot, 0), 3);
@@ -271,8 +270,6 @@ TEST_CASE(
     NETW_CHECK_EQ(int(held.size()), 4);
     NETW_CHECK_EQ(held[3], 4);
 
-    // An epoch re-key makes every held transition name a number the new epoch
-    // is about to reuse, so the window goes with the journal.
     pool->tape_reset(slot, 3);
     NETW_CHECK_EQ(pool->command_depth_from(slot, 0), 0);
     CHECK_FALSE(pool->command_has(slot, 0));
@@ -282,8 +279,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] the decoded window is bounded, and "
     "drops its oldest transition rather than its newest"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = consuming_slot(pool, int(Schedule::FRAME));
 
     const int over = TAPE_HISTORY_LIMIT + 8;
@@ -291,17 +288,102 @@ TEST_CASE(
         CHECK(pool->command_admit(slot, at, at, true, Dictionary()));
     }
 
-    NETW_CHECK_EQ(int(pool->command_transitions(slot).size()),
-        TAPE_HISTORY_LIMIT);
+    NETW_CHECK_EQ(
+        int(pool->command_transitions(slot).size()),
+        TAPE_HISTORY_LIMIT
+    );
     CHECK_FALSE(pool->command_has(slot, 7));
     CHECK(pool->command_has(slot, 8));
     CHECK(pool->command_has(slot, over - 1));
     NETW_CHECK_EQ(pool->command_depth_from(slot, 8), TAPE_HISTORY_LIMIT);
 
-    // A closed slot answers instead of writing into a live entity's window.
     CHECK_FALSE(pool->command_admit(slot + 9000, 0, 0, true, Dictionary()));
     CHECK_FALSE(pool->command_has(slot + 9000, 0));
     NETW_CHECK_EQ(pool->command_depth_from(slot + 9000, 0), 0);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Law] the replay depth is a high-water mark, "
+    "not the last window walked"
+) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = consuming_slot(pool, int(Schedule::TICK));
+
+    NETW_CHECK_EQ(
+        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        int64_t(0)
+    );
+
+    pool->note_replay_depth(slot, 3);
+    NETW_CHECK_EQ(
+        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        int64_t(3)
+    );
+
+    pool->note_replay_depth(slot, 11);
+    NETW_CHECK_EQ(
+        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        int64_t(11)
+    );
+
+    pool->note_replay_depth(slot, 1);
+    NETW_CHECK_EQ(
+        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        int64_t(11)
+    );
+
+    pool->note_replay_depth(slot, 0);
+    NETW_CHECK_EQ(
+        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        int64_t(11)
+    );
+
+    pool->note_replay_depth(slot + 9000, 40);
+    NETW_CHECK_EQ(
+        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        int64_t(11)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Law] the fingerprint ledger is one column "
+    "the rewire clears"
+) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = consuming_slot(pool, int(Schedule::TICK));
+
+    pool->record_input(slot, 0, 0x11);
+    pool->replay_drive(
+        slot,
+        Dictionary(),
+        0,
+        0,
+        int(DriveKind::FRESH),
+        0,
+        0,
+        1.0 / 60.0,
+        1,
+        3,
+        0,
+        0,
+        0
+    );
+    pool->admit_ack(slot, 0, netw::predict::EvidenceRow(), false);
+
+    PackedInt64Array ledger = pool->compare_stats(slot);
+    NETW_CHECK_EQ(ledger[NetwPredictionEngine::STAT_FP_VERIFIED], int64_t(1));
+
+    pool->reset_for_rewire(slot, true, true, false, Dictionary());
+
+    ledger = pool->compare_stats(slot);
+    NETW_CHECK_EQ(ledger[NetwPredictionEngine::STAT_FP_VERIFIED], int64_t(0));
+    NETW_CHECK_EQ(ledger[NetwPredictionEngine::STAT_FP_MISMATCHES], int64_t(0));
+    NETW_CHECK_EQ(
+        ledger[NetwPredictionEngine::STAT_FIRST_DIVERGENT_TRANSITION],
+        int64_t(-1)
+    );
 }
 
 } // namespace TestNetwPredictReplayLaws

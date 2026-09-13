@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPropertySet" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One row-major binding of a schema, the ordered subset of its columns a script replicates under one [enum Record] kind.
+	</brief_description>
+	<description>
+		The set owns no shape. A column's key, type, stride, and quantizer belong to the schema, which is also what the column-major table and [NetwDatabase] read, so the three consumers cannot drift. What the set owns is the binding: which columns are members, in what wire order, on which lane, and under which delivery knobs.
+		Membership is explicit because a script's schema holds every configured property, including the ones that only persist. A column that joins no set rides no lane, which is what keeps a persisted-only value off the wire by construction rather than by a negation mark.
+		The order is the wire order, so [method keys] and [method quantizers] are parallel arrays a positional codec walks in lockstep, and a receiver decodes by position with no per-column tag on the wire.
+		A set is compiled from the [NetwPropertyConfig] rows a script declares through [method Netw.configure_property], never assembled by hand.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bind">
+			<return type="NetwPropertySetColumn" />
+			<param index="0" name="column" type="NetwPropertySetColumn" />
+			<description>
+				Appends [param column] to the schema and to the membership, returning it. The column takes the next schema address, so binding is what fixes wire order.
+			</description>
+		</method>
+		<method name="column_type_for" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="script" type="Script" />
+			<param index="1" name="node" type="Node" />
+			<param index="2" name="property" type="StringName" />
+			<description>
+				Returns the [NetwMultiplayer] column type [param property] compiles to on [param script], reflected through [param node] when the script's own property list does not carry it.
+				Half the properties a game replicates are engine properties of the node's native class, which a [Script] cannot see, so a lookup without a node types those [constant NetwMultiplayer.COLUMN_VARIANT].
+			</description>
+		</method>
+		<method name="compile_against">
+			<return type="void" />
+			<param index="0" name="node" type="Node" />
+			<description>
+				Types every member column against [param node] and seals the set.
+				A column's declared type is what a lane plans its row against, and half the properties a game replicates are engine properties of the node's native class that a [Script]'s own list cannot see, so the node is the only place the shape can be read from. An already sealed set is left alone, because its shape is what its peers agreed on.
+			</description>
+		</method>
+		<method name="keys" qualifiers="const">
+			<return type="StringName[]" />
+			<description>
+				Returns the member keys in wire order.
+			</description>
+		</method>
+		<method name="member" qualifiers="const">
+			<return type="NetwPropertySetColumn" />
+			<param index="0" name="schema_column" type="int" />
+			<description>
+				Returns the member column at [param schema_column], or [code]null[/code] when the schema declares that column but this set does not bind it.
+			</description>
+		</method>
+		<method name="quantizers" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Returns the per-column quantizers in wire order, parallel to [method keys], [code]null[/code] where a column is self-describing.
+			</description>
+		</method>
+		<method name="reproject_lanes">
+			<return type="void" />
+			<description>
+				Drops the cached per-lane schema projections so the next send splits the columns as they stand now.
+				The two projections are subsequences of the declaration selected by [member NetwPropertySetColumn.lane], so anything that moves a column between lanes has to call this or the two lanes keep sending each other's columns.
+			</description>
+		</method>
+		<method name="seal">
+			<return type="void" />
+			<description>
+				Freezes the wire fingerprint after every column and axis is compiled. Sealing is what fixes membership order, and membership order is wire order.
+			</description>
+		</method>
+		<method name="stamp_column_types" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="set" type="NetwPropertySet" />
+			<param index="1" name="script" type="Script" />
+			<param index="2" name="node" type="Node" />
+			<description>
+				Types every member column of [param set] from [param node], falling back to [param script]'s own property list. A node rather than the script, because position, velocity, and rotation are engine properties of the native class and a script's own property list does not carry them.
+			</description>
+		</method>
+		<method name="wire_hash" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the 16-bit fingerprint of this binding: each member's shape folded with its membership position and its lane.
+				The shape half is what the schema fixed, so a peer that declared a different key, type, stride, or quantizer disagrees here. The binding half is membership, order, and lane, so a peer that bound a different subset, in a different order, or moved a column between lanes disagrees too. The two lanes ride separate channels, which is why a lane change is a wire change rather than a local one.
+				The schema's own name is deliberately absent. A schema is named by the script that declared it, and a script with no resource path has no name two peers can agree on, so folding one would poison a binding over a purely local fact.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="audience" type="int" setter="set_audience" getter="get_audience" default="0">
+			Which peers the set reaches.
+		</member>
+		<member name="cadence" type="int" setter="set_cadence" getter="get_cadence" default="0">
+			When the set's values leave this peer.
+		</member>
+		<member name="channel" type="int" setter="set_channel" getter="get_channel" default="-1">
+			The wire channel id the set rides, unset until a factory derives it from the declaration. The ids are the built-in channel table's, written down in [code]extension/WIRE.md[/code] section 3.
+		</member>
+		<member name="columns" type="NetwPropertySetColumn[]" setter="set_columns" getter="get_columns" default="[]">
+			Ordered member columns, the wire order both peers walk positionally.
+		</member>
+		<member name="masked" type="bool" setter="set_masked" getter="get_masked" default="false">
+			Whether the volatile lane rides the masked per-recipient diff instead of a shared broadcast row. Illegal combined with [member window], since a redundant sample already defeats masking.
+		</member>
+		<member name="policy" type="int" setter="set_policy" getter="get_policy" enum="NetwMemberConfig.Policy" default="0">
+			Who may author the stream, as a [enum NetwMemberConfig.Policy] ordinal, checked on the receiver against the target's script.
+		</member>
+		<member name="profile" type="int" setter="set_profile" getter="get_profile" default="0">
+			How the payload bytes are framed.
+		</member>
+		<member name="record" type="int" setter="set_record" getter="get_record" default="0">
+			The timeline a received set captures into, always explicit.
+		</member>
+		<member name="reliable" type="bool" setter="set_reliable" getter="get_reliable" default="true">
+			Whether a [constant ON_DEMAND] send transmits reliably. A [constant TICK] set's reliability is chosen per send by its sender, so this default governs only the on-demand door.
+		</member>
+		<member name="rid" type="RID" setter="set_rid_handle" getter="get_rid_handle" default="RID()">
+			The flat property set handle, or an invalid RID for a compatibility-only set.
+		</member>
+		<member name="sealed" type="bool" setter="set_sealed" getter="get_sealed" default="false">
+			[code]true[/code] after the compiler fixes the wire hash and freezes mutation.
+		</member>
+		<member name="stamp" type="int" setter="set_stamp" getter="get_stamp" default="0">
+			The tick framing on the payload, the axis form of [member profile].
+		</member>
+		<member name="trigger" type="int" setter="set_trigger" getter="get_trigger" default="0">
+			The send condition for the set, the axis form of [member cadence].
+		</member>
+		<member name="window" type="int" setter="set_window" getter="get_window" default="0">
+			Redundant volatile sample count, [code]0[/code] for none. Only a volatile-lane set with a windowed input stream sets this.
+		</member>
+	</members>
+	<constants>
+		<constant name="TICK" value="0" enum="Cadence">
+			Rides the per-tick sender pump.
+		</constant>
+		<constant name="ON_DEMAND" value="1" enum="Cadence">
+			Leaves only on an explicit request.
+		</constant>
+		<constant name="ON_CHANGE" value="2" enum="Cadence">
+			Rides the same pump but only when a field changed.
+		</constant>
+		<constant name="PLAIN" value="0" enum="Profile">
+			The bare positional payload.
+		</constant>
+		<constant name="STAMPED" value="1" enum="Profile">
+			Prepends the authoring-tick framing the interpolation and prediction clocks read.
+		</constant>
+		<constant name="TRIGGER_TICK" value="0" enum="Trigger">
+			Sends every eligible pass.
+		</constant>
+		<constant name="TRIGGER_ON_CHANGE" value="1" enum="Trigger">
+			Sends only when a field changed.
+		</constant>
+		<constant name="TRIGGER_ON_DEMAND" value="2" enum="Trigger">
+			Sends only on an explicit request.
+		</constant>
+		<constant name="STAMP_NONE" value="0" enum="Stamp">
+			The bare payload.
+		</constant>
+		<constant name="STAMP_TICK" value="1" enum="Stamp">
+			Frames the authoring tick the interpolation and prediction clocks read.
+		</constant>
+		<constant name="STAMP_TICK_ACK" value="2" enum="Stamp">
+			Additionally carries the reconciliation ack, the state stream's framing.
+		</constant>
+		<constant name="RECORD_NONE" value="0" enum="Record">
+			A field synced on demand, in no per-tick set.
+		</constant>
+		<constant name="RECORD_STATE" value="1" enum="Record">
+			The server's own truth, kept in a [NetwEntity] timeline for rewind.
+		</constant>
+		<constant name="RECORD_INPUT" value="2" enum="Record">
+			A claim the server verifies, kept in a timeline for rewind.
+		</constant>
+		<constant name="RECORD_BROADCAST" value="3" enum="Record">
+			Trusted display, which keeps nothing.
+		</constant>
+		<constant name="VOLATILE" value="0" enum="Lane">
+			Rides the sync frame freshest-wins.
+		</constant>
+		<constant name="RETAINED" value="1" enum="Lane">
+			Rides the reliable delta lane only when it changes.
+		</constant>
+		<constant name="CAUSAL" value="0" enum="PropertyClass">
+			An antecedent of the recurrence, so it is compared and restored.
+		</constant>
+		<constant name="DERIVED" value="1" enum="PropertyClass">
+			Recomputed by the body from causal ones, so restoring it writes a value the next step overwrites.
+		</constant>
+		<constant name="COSMETIC" value="2" enum="PropertyClass">
+			Reaches display only, so comparing it would correct a simulation over a value no simulation reads.
+		</constant>
+		<constant name="AUDIENCE_PUBLIC" value="0" enum="Audience">
+			Reaches every admitted recipient.
+		</constant>
+		<constant name="AUDIENCE_SERVER_ONLY" value="1" enum="Audience">
+			Narrows the set to the server, the input stream's reach.
+		</constant>
+	</constants>
+</class>

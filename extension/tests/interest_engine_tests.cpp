@@ -2,29 +2,27 @@
 
 #include "godot/templates.hpp"
 #include "godot/utility.hpp"
-#include "netw/interest_engine.hpp"
+#include "netw/interest/engine.hpp"
 
-namespace TestInterestEngine {
+namespace TestEngine {
 
 using namespace godot;
-using netw::InterestBitSet;
-using netw::NetwInterestDecl;
-using netw::InterestDelta;
-using netw::InterestEngine;
+using netw::interest::BitSet;
+using netw::interest::Decl;
+using netw::interest::Delta;
+using netw::interest::Engine;
 
 constexpr int64_t ROOT = 1;
 constexpr int64_t CHILD = 2;
 constexpr int64_t LEAF = 3;
 
-constexpr InterestEngine::Policy OUTSIDERS
-    = InterestEngine::HIDE_FROM_OUTSIDERS;
-constexpr InterestEngine::Policy INSIDERS
-    = InterestEngine::HIDE_FROM_INSIDERS;
+constexpr Engine::Policy OUTSIDERS = Engine::HIDE_FROM_OUTSIDERS;
+constexpr Engine::Policy INSIDERS = Engine::HIDE_FROM_INSIDERS;
 
 PackedInt64Array bits(std::initializer_list<int> p_bits) {
     PackedInt64Array out;
     for (const int bit : p_bits) {
-        out = InterestBitSet::with_bit(out, bit, true);
+        out = BitSet::with_bit(out, bit, true);
     }
     return out;
 }
@@ -46,12 +44,12 @@ void check_line(const String &p_produced, const char *p_expected) {
     CHECK(matches);
 }
 
-InterestEngine fresh() {
-    InterestEngine engine;
+Engine fresh() {
+    Engine engine;
     return engine;
 }
 
-void commit(InterestEngine &p_engine) {
+void commit(Engine &p_engine) {
     p_engine.commit(p_engine.recompute());
 }
 
@@ -79,13 +77,11 @@ int missing_bits(
     const PackedInt64Array &p_left,
     const PackedInt64Array &p_right
 ) {
-    return InterestBitSet::popcount(
-        InterestBitSet::subtract(p_left, p_right)
-    );
+    return BitSet::popcount(BitSet::subtract(p_left, p_right));
 }
 
-InterestEngine chain_engine() {
-    InterestEngine engine = fresh();
+Engine chain_engine() {
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1, 2}));
     engine.set_order_key(ROOT, 0, 1);
     engine.set_order_key(CHILD, 1, 2);
@@ -95,8 +91,8 @@ InterestEngine chain_engine() {
     return engine;
 }
 
-InterestEngine configured_engine() {
-    InterestEngine engine = chain_engine();
+Engine configured_engine() {
+    Engine engine = chain_engine();
     engine.set_layer(StringName("near"), bits({0, 2}), OUTSIDERS);
     engine.set_layer(StringName("blind"), bits({2}), INSIDERS);
     engine.set_membership(ROOT, names({"near"}));
@@ -106,8 +102,8 @@ InterestEngine configured_engine() {
     return engine;
 }
 
-InterestEngine scripted_engine(bool p_reverse) {
-    InterestEngine engine = fresh();
+Engine scripted_engine(bool p_reverse) {
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1, 2}));
     const int64_t keys[3] = {ROOT, CHILD, LEAF};
     for (int step = 0; step < 3; ++step) {
@@ -131,10 +127,8 @@ InterestEngine scripted_engine(bool p_reverse) {
     return engine;
 }
 
-InterestEngine single_entity_engine(
-    InterestEngine::Policy p_policy
-) {
-    InterestEngine engine = fresh();
+Engine single_entity_engine(Engine::Policy p_policy) {
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1, 2}));
     engine.set_layer(StringName("test"), PackedInt64Array(), p_policy);
     engine.set_membership(ROOT, names({"test"}));
@@ -150,16 +144,16 @@ PackedInt64Array random_bits() {
     PackedInt64Array out;
     for (int bit = 0; bit < 3; ++bit) {
         if (netw::gd::randi_range(0, 1) == 1) {
-            out = InterestBitSet::with_bit(out, bit, true);
+            out = BitSet::with_bit(out, bit, true);
         }
     }
     return out;
 }
 
-InterestEngine random_state_engine(int p_seed, bool p_reverse) {
+Engine random_state_engine(int p_seed, bool p_reverse) {
     netw::gd::seed(p_seed);
     PackedInt64Array layer_viewers[2];
-    InterestEngine::Policy policies[2];
+    Engine::Policy policies[2];
     for (int index = 0; index < 2; ++index) {
         layer_viewers[index] = random_bits();
         policies[index]
@@ -176,7 +170,7 @@ InterestEngine random_state_engine(int p_seed, bool p_reverse) {
         intents[entity] = random_bits();
     }
 
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1, 2}));
     for (int step = 0; step < 2; ++step) {
         const int at = p_reverse ? 1 - step : step;
@@ -194,13 +188,11 @@ InterestEngine random_state_engine(int p_seed, bool p_reverse) {
     return engine;
 }
 
-TEST_CASE(
-    "[Networked][Interest][Hosted] the same state yields the same rows"
-) {
-    InterestEngine first = configured_engine();
-    InterestEngine second = configured_engine();
-    InterestDelta first_delta = first.recompute();
-    InterestDelta second_delta = second.recompute();
+TEST_CASE("[Networked][Interest][Hosted] the same state yields the same rows") {
+    Engine first = configured_engine();
+    Engine second = configured_engine();
+    Delta first_delta = first.recompute();
+    Delta second_delta = second.recompute();
 
     CHECK(same(first_delta.to_array(), second_delta.to_array()));
     first.commit(first_delta);
@@ -212,12 +204,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] mutation order does not move the "
     "matrix"
 ) {
-    InterestEngine forward = scripted_engine(false);
-    InterestEngine reverse = scripted_engine(true);
+    Engine forward = scripted_engine(false);
+    Engine reverse = scripted_engine(true);
 
-    CHECK(
-        same(forward.recompute().to_array(), reverse.recompute().to_array())
-    );
+    CHECK(same(forward.recompute().to_array(), reverse.recompute().to_array()));
 }
 
 TEST_CASE(
@@ -226,9 +216,8 @@ TEST_CASE(
 ) {
     int diverged = -1;
     for (int seed = 0; seed < 64 && diverged < 0; ++seed) {
-        InterestEngine forward
-            = random_state_engine(seed, false);
-        InterestEngine reverse = random_state_engine(seed, true);
+        Engine forward = random_state_engine(seed, false);
+        Engine reverse = random_state_engine(seed, true);
         if (!same(
                 forward.recompute().to_array(),
                 reverse.recompute().to_array()
@@ -243,19 +232,21 @@ TEST_CASE(
     "[Networked][Interest][Hosted] repeating a mutation and a flush "
     "changes nothing"
 ) {
-    InterestEngine engine = configured_engine();
+    Engine engine = configured_engine();
     engine.commit(engine.recompute());
     engine.set_membership(ROOT, names({"near"}));
     engine.set_layer(StringName("near"), bits({0, 2}), OUTSIDERS);
-    InterestDelta second = engine.recompute();
+    Delta second = engine.recompute();
 
     CHECK(second.is_empty());
     engine.commit(second);
     CHECK(engine.recompute().is_empty());
 }
 
-TEST_CASE("[Networked][Interest][Hosted] more viewers only ever grants more peers") {
-    InterestEngine engine = single_entity_engine(OUTSIDERS);
+TEST_CASE(
+    "[Networked][Interest][Hosted] more viewers only ever grants more peers"
+) {
+    Engine engine = single_entity_engine(OUTSIDERS);
     engine.set_layer(StringName("test"), bits({0}), OUTSIDERS);
     commit(engine);
     const PackedInt64Array smaller = engine.row_of(ROOT);
@@ -264,11 +255,13 @@ TEST_CASE("[Networked][Interest][Hosted] more viewers only ever grants more peer
     const PackedInt64Array larger = engine.row_of(ROOT);
 
     NETW_CHECK_EQ(missing_bits(smaller, larger), 0);
-    CHECK(InterestBitSet::test(larger, 1));
+    CHECK(BitSet::test(larger, 1));
 }
 
-TEST_CASE("[Networked][Interest][Hosted] more viewers only ever hides from more peers") {
-    InterestEngine engine = single_entity_engine(INSIDERS);
+TEST_CASE(
+    "[Networked][Interest][Hosted] more viewers only ever hides from more peers"
+) {
+    Engine engine = single_entity_engine(INSIDERS);
     engine.set_layer(StringName("test"), bits({0}), INSIDERS);
     commit(engine);
     const PackedInt64Array larger = engine.row_of(ROOT);
@@ -277,14 +270,14 @@ TEST_CASE("[Networked][Interest][Hosted] more viewers only ever hides from more 
     const PackedInt64Array smaller = engine.row_of(ROOT);
 
     NETW_CHECK_EQ(missing_bits(smaller, larger), 0);
-    CHECK(!InterestBitSet::test(smaller, 1));
+    CHECK(!BitSet::test(smaller, 1));
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] an ancestor row always clamps its "
     "descendants"
 ) {
-    InterestEngine engine = configured_engine();
+    Engine engine = configured_engine();
     commit(engine);
 
     NETW_CHECK_EQ(missing_bits(engine.row_of(CHILD), engine.row_of(ROOT)), 0);
@@ -295,7 +288,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] an entity in no layer is granted by "
     "intent alone"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1, 2}));
     engine.set_membership(ROOT, Array());
     engine.set_order_key(ROOT, 0, 1);
@@ -309,11 +302,11 @@ TEST_CASE(
     "[Networked][Interest][Hosted] the delta names what changed and "
     "nothing else"
 ) {
-    InterestEngine engine = single_entity_engine(OUTSIDERS);
+    Engine engine = single_entity_engine(OUTSIDERS);
     engine.set_layer(StringName("test"), bits({0}), OUTSIDERS);
     commit(engine);
     engine.set_layer(StringName("test"), bits({1, 2}), OUTSIDERS);
-    InterestDelta delta = engine.recompute();
+    Delta delta = engine.recompute();
 
     Array expected_shows;
     Array first_show;
@@ -337,8 +330,8 @@ TEST_CASE(
     if (delta.keys.size() != 1) {
         return;
     }
-    const int changed = InterestBitSet::popcount(
-        InterestBitSet::symmetric_difference(
+    const int changed = BitSet::popcount(
+        BitSet::symmetric_difference(
             PackedInt64Array(delta.old_rows[0]),
             PackedInt64Array(delta.new_rows[0])
         )
@@ -350,7 +343,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] hides run child-first and shows "
     "parent-first"
 ) {
-    InterestEngine engine = chain_engine();
+    Engine engine = chain_engine();
     engine.set_membership(ROOT, names({"test"}));
     engine.set_membership(CHILD, names({"test"}));
     engine.set_membership(LEAF, names({"test"}));
@@ -358,7 +351,7 @@ TEST_CASE(
     commit(engine);
 
     engine.set_layer(StringName("test"), PackedInt64Array(), OUTSIDERS);
-    InterestDelta hiding = engine.recompute();
+    Delta hiding = engine.recompute();
     Array expected_hides;
     for (const int64_t key : {LEAF, CHILD, ROOT}) {
         Array entry;
@@ -370,7 +363,7 @@ TEST_CASE(
 
     engine.commit(hiding);
     engine.set_layer(StringName("test"), bits({0}), OUTSIDERS);
-    InterestDelta showing = engine.recompute();
+    Delta showing = engine.recompute();
     Array expected_shows;
     for (const int64_t key : {ROOT, CHILD, LEAF}) {
         Array entry;
@@ -403,12 +396,12 @@ bool oracle_grant(
     return has_membership ? admitted : true;
 }
 
-InterestEngine small_model_engine(
+Engine small_model_engine(
     int p_policy_bits,
     int p_viewer_bits,
     int p_membership_bits
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1}));
     engine.set_order_key(ROOT, 0, 1);
     engine.set_order_key(CHILD, 1, 2);
@@ -417,7 +410,7 @@ InterestEngine small_model_engine(
         PackedInt64Array viewers;
         for (int peer_bit = 0; peer_bit < 2; ++peer_bit) {
             if ((p_viewer_bits & (1 << (layer * 2 + peer_bit))) != 0) {
-                viewers = InterestBitSet::with_bit(viewers, peer_bit, true);
+                viewers = BitSet::with_bit(viewers, peer_bit, true);
             }
         }
         engine.set_layer(
@@ -447,7 +440,7 @@ TEST_CASE(
         for (int viewer_bits = 0; viewer_bits < 16; ++viewer_bits) {
             for (int membership_bits = 0; membership_bits < 16;
                  ++membership_bits) {
-                InterestEngine engine = small_model_engine(
+                Engine engine = small_model_engine(
                     policy_bits,
                     viewer_bits,
                     membership_bits
@@ -481,10 +474,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a replayed script produces an "
     "identical delta, matrix and counters"
 ) {
-    InterestEngine first = scripted_engine(false);
-    InterestEngine second = scripted_engine(false);
-    InterestDelta first_delta = first.recompute();
-    InterestDelta second_delta = second.recompute();
+    Engine first = scripted_engine(false);
+    Engine second = scripted_engine(false);
+    Delta first_delta = first.recompute();
+    Delta second_delta = second.recompute();
     first.commit(first_delta);
     second.commit(second_delta);
 
@@ -493,11 +486,11 @@ TEST_CASE(
     CHECK(bool(first.stats().to_array() == second.stats().to_array()));
 }
 
-InterestEngine permuted_engine(
+Engine permuted_engine(
     std::initializer_list<int64_t> p_keys,
     std::initializer_list<const char *> p_layers
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1}));
     for (const char *id : p_layers) {
         const StringName name(id);
@@ -523,21 +516,17 @@ TEST_CASE(
     "[Networked][Interest][Hosted] registration and layer order do "
     "not change the output"
 ) {
-    InterestEngine first
-        = permuted_engine({ROOT, CHILD, LEAF}, {"near", "far"});
-    InterestEngine second
-        = permuted_engine({LEAF, ROOT, CHILD}, {"far", "near"});
+    Engine first = permuted_engine({ROOT, CHILD, LEAF}, {"near", "far"});
+    Engine second = permuted_engine({LEAF, ROOT, CHILD}, {"far", "near"});
 
-    CHECK(
-        same(first.recompute().to_array(), second.recompute().to_array())
-    );
+    CHECK(same(first.recompute().to_array(), second.recompute().to_array()));
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] the null slot is refused rather "
     "than stored"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1}));
 
     ERR_PRINT_OFF;
@@ -558,14 +547,14 @@ TEST_CASE(
     "[Networked][Interest][Hosted] entities sharing an order key still "
     "order deterministically"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0}));
     engine.set_layer(StringName("arena"), bits({0}), OUTSIDERS);
     for (const int64_t key : {LEAF, ROOT, CHILD}) {
         engine.set_order_key(key, 0, 1);
         engine.set_membership(key, names({"arena"}));
     }
-    InterestDelta shows = engine.recompute();
+    Delta shows = engine.recompute();
 
     Array expected;
     for (const int64_t key : {ROOT, CHILD, LEAF}) {
@@ -581,7 +570,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a layer's viewer set answers in peer ids "
     "and reports only real edges"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
 
     CHECK(engine.layer_add_viewer(near, 11));
@@ -607,7 +596,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a viewer edge makes the layer's members "
     "owe a pass"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
     const int bit = engine.peer_bit_for(11);
     engine.set_live_peers(bits({bit}));
@@ -629,7 +618,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a layer's policy is what the verdict "
     "composes with, and replacing it reports the change"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName blind("blind");
     const int bit = engine.peer_bit_for(11);
     engine.set_live_peers(bits({bit}));
@@ -652,7 +641,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] one layer's verdict on one peer is its "
     "policy composed with viewer membership and nothing else"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName sight("sight");
     engine.declare_layer(sight);
 
@@ -692,7 +681,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] the layer explanation names the verdict, "
     "the membership and the policy that composed them"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName sight("sight");
     engine.layer_add_viewer(sight, 7);
 
@@ -720,7 +709,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] the dirty set is the engine's, and a "
     "commit that saw every mutation empties it"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
     engine.set_live_peers(bits({0}));
     engine.set_order_key(ROOT, 0, 1);
@@ -735,7 +724,7 @@ TEST_CASE(
     engine.membership_add(ROOT, near);
     NETW_CHECK_EQ(engine.dirty_count(), 2);
 
-    InterestDelta stale = engine.recompute();
+    Delta stale = engine.recompute();
     engine.membership_add(CHILD, near);
     engine.commit(stale);
     NETW_CHECK_EQ(engine.dirty_count(), 2);
@@ -748,7 +737,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a membership moves one layer at a time and "
     "keeps the order it joined in"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
     const StringName far("far");
 
@@ -782,7 +771,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a membership edge makes the entity owe a "
     "pass, and the keys name who is owed one"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName empty("empty");
     const int bit = engine.peer_bit_for(11);
     engine.set_live_peers(bits({bit}));
@@ -809,7 +798,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] an intent row is a different thing from "
     "the default of admitting every live peer"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1}));
     engine.set_order_key(ROOT, 0, 1);
 
@@ -832,7 +821,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] what the committed matrix was computed "
     "with is answered by the commit, not by intake"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.set_live_peers(bits({0, 1}));
     engine.set_order_key(ROOT, 0, 1);
 
@@ -861,7 +850,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a layer's departure policies are declared "
     "on it and never composed into a row"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
     const int bit = engine.peer_bit_for(11);
     engine.set_live_peers(bits({bit}));
@@ -898,7 +887,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a layer's roster is its own book, not the "
     "memberships read backwards"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
 
     CHECK(engine.roster_add(near, ROOT));
@@ -936,7 +925,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a layer counts the edges it reported, "
     "since it was declared"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
 
     NETW_CHECK_EQ(engine.transitions(near), 0);
@@ -960,7 +949,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a viewer bit that names no peer is not a "
     "viewer"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
     engine.set_layer(near, bits({0, 1}), OUTSIDERS);
 
@@ -977,7 +966,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] the viewer peers are the union across "
     "every layer"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.layer_add_viewer(StringName("near"), 11);
     engine.layer_add_viewer(StringName("near"), 4);
     engine.layer_add_viewer(StringName("far"), 4);
@@ -996,7 +985,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Interest][Hosted] a declared layer exists admitting nobody"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const StringName near("near");
     CHECK(!engine.has_layer(near));
 
@@ -1011,7 +1000,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] an entity with no route is ordered by an "
     "ordinal minted once"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
 
     NETW_CHECK_EQ(engine.order_route_for(ROOT), 1);
     NETW_CHECK_EQ(engine.order_route_for(CHILD), 2);
@@ -1032,7 +1021,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a peer's bit is minted once and stays "
     "dense from zero"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
 
     NETW_CHECK_EQ(engine.peer_bit_for(7), 0);
     NETW_CHECK_EQ(engine.peer_bit_for(3), 1);
@@ -1051,7 +1040,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a bit and its peer resolve back to each "
     "other, and nothing else does"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     const int bit = engine.peer_bit_for(42);
 
     NETW_CHECK_EQ(engine.peer_of_bit(bit), 42);
@@ -1063,7 +1052,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] reading a peer's bit does not enrol the "
     "peer"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
 
     NETW_CHECK_EQ(engine.peer_bit_of(5), -1);
     NETW_CHECK_EQ(engine.known_peers().size(), 0);
@@ -1075,7 +1064,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] peer id zero is refused a bit rather "
     "than given one"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
 
     ERR_PRINT_OFF;
     NETW_CHECK_EQ(engine.peer_bit_for(0), -1);
@@ -1090,7 +1079,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a cleared engine mints the next session's "
     "bits from zero again"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     engine.peer_bit_for(7);
     engine.peer_bit_for(3);
 
@@ -1105,41 +1094,38 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a peer that computes no admission projects "
     "from what the entity declares"
 ) {
-    InterestEngine engine;
-    Ref<NetwInterestDecl> silent;
-    silent.instantiate();
-    Ref<NetwInterestDecl> declared;
-    declared.instantiate();
-    declared->join(StringName("arena"));
-    declared->join(StringName("stealth"));
+    Engine engine;
+    Decl silent;
+    Decl declared;
+    declared.join(StringName("arena"));
+    declared.join(StringName("stealth"));
 
     engine.declare_layer(StringName("arena"));
     engine.declare_layer(StringName("stealth"));
 
-    CHECK(engine.projection_admits(1, silent));
-    CHECK_FALSE(engine.projection_admits(1, declared));
+    CHECK(engine.projection_admits(1, &silent));
+    CHECK_FALSE(engine.projection_admits(1, &declared));
 
     engine.roster_add(StringName("stealth"), 1);
-    CHECK(engine.projection_admits(1, declared));
-    CHECK_FALSE(engine.projection_admits(2, declared));
+    CHECK(engine.projection_admits(1, &declared));
+    CHECK_FALSE(engine.projection_admits(2, &declared));
 
     engine.roster_remove(StringName("stealth"), 1);
-    CHECK_FALSE(engine.projection_admits(1, declared));
+    CHECK_FALSE(engine.projection_admits(1, &declared));
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] a projection over a layer nobody declared "
     "admits nobody, and no declaration at all is refused"
 ) {
-    InterestEngine engine;
-    Ref<NetwInterestDecl> declared;
-    declared.instantiate();
-    declared->join(StringName("nowhere"));
+    Engine engine;
+    Decl declared;
+    declared.join(StringName("nowhere"));
 
-    CHECK_FALSE(engine.projection_admits(1, declared));
+    CHECK_FALSE(engine.projection_admits(1, &declared));
 
     ERR_PRINT_OFF;
-    CHECK_FALSE(engine.projection_admits(1, Ref<NetwInterestDecl>()));
+    CHECK_FALSE(engine.projection_admits(1, nullptr));
     ERR_PRINT_ON;
 }
 
@@ -1147,7 +1133,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] sharing a scope is every enrolled entity "
     "but the asker, named once"
 ) {
-    InterestEngine engine;
+    Engine engine;
     engine.declare_layer(StringName("arena"));
     engine.declare_layer(StringName("stealth"));
     engine.roster_add(StringName("arena"), 1);
@@ -1179,7 +1165,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] the churn of the plane is every layer's, "
     "and a layer nothing reported for contributes nothing"
 ) {
-    InterestEngine engine;
+    Engine engine;
     engine.declare_layer(StringName("arena"));
     engine.declare_layer(StringName("stealth"));
     engine.declare_layer(StringName("quiet"));
@@ -1198,7 +1184,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a scene membership moves once per move, and "
     "an empty name forgets the entity"
 ) {
-    InterestEngine engine;
+    Engine engine;
 
     CHECK(engine.scene_membership(1) == StringName());
     CHECK_FALSE(engine.set_scene_membership(1, StringName()));
@@ -1220,7 +1206,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] the scene memberships end with the session, "
     "so a second one starts naming nothing"
 ) {
-    InterestEngine engine;
+    Engine engine;
     engine.set_scene_membership(1, StringName("level-1"));
     engine.set_scene_membership(2, StringName("level-2"));
 
@@ -1234,11 +1220,11 @@ TEST_CASE(
     "[Networked][Interest][Hosted] an entity's departure is watched through "
     "exactly one handler, handed back to disconnect it"
 ) {
-    InterestEngine engine;
-    Ref<NetwInterestDecl> holder;
+    Engine engine;
+    Ref<RefCounted> holder;
     holder.instantiate();
-    const Callable first(holder.ptr(), StringName("clear"));
-    const Callable second(holder.ptr(), StringName("labels"));
+    const Callable first(holder.ptr(), StringName("get_class"));
+    const Callable second(holder.ptr(), StringName("get_instance_id"));
 
     CHECK_FALSE(engine.exit_handler(1).is_valid());
 
@@ -1260,10 +1246,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] the committed row answers as peer ids, so "
     "no caller outside the engine has to know the bit numbering"
 ) {
-    InterestEngine engine = fresh();
-    engine.set_layer(StringName("arena"), bits({ 0, 1 }), OUTSIDERS);
-    engine.set_membership(ROOT, names({ "arena" }));
-    engine.set_live_peer_ids(PackedInt64Array({ 11, 22 }));
+    Engine engine = fresh();
+    engine.set_layer(StringName("arena"), bits({0, 1}), OUTSIDERS);
+    engine.set_membership(ROOT, names({"arena"}));
+    engine.set_live_peer_ids(PackedInt64Array({11, 22}));
     commit(engine);
 
     const PackedInt64Array admitted = engine.admitted_peers(ROOT);
@@ -1278,10 +1264,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a bit that names no peer is dropped from "
     "the admitted ids rather than reported as peer zero"
 ) {
-    InterestEngine engine = fresh();
-    engine.set_layer(StringName("arena"), bits({ 0, 1, 2 }), OUTSIDERS);
-    engine.set_membership(ROOT, names({ "arena" }));
-    engine.set_live_peers(bits({ 0, 1, 2 }));
+    Engine engine = fresh();
+    engine.set_layer(StringName("arena"), bits({0, 1, 2}), OUTSIDERS);
+    engine.set_membership(ROOT, names({"arena"}));
+    engine.set_live_peers(bits({0, 1, 2}));
     commit(engine);
 
     const PackedInt64Array admitted = engine.admitted_peers(ROOT);
@@ -1294,15 +1280,15 @@ TEST_CASE(
     "[Networked][Interest][Hosted] live peers stated as ids mint the bits the "
     "engine numbers them by, and report the minting"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
 
-    CHECK(engine.set_live_peer_ids(PackedInt64Array({ 11, 22 })));
+    CHECK(engine.set_live_peer_ids(PackedInt64Array({11, 22})));
     NETW_CHECK_EQ(engine.peer_bit_of(11), 0);
     NETW_CHECK_EQ(engine.peer_bit_of(22), 1);
 
-    CHECK_FALSE(engine.set_live_peer_ids(PackedInt64Array({ 22, 11 })));
+    CHECK_FALSE(engine.set_live_peer_ids(PackedInt64Array({22, 11})));
 
-    CHECK(engine.set_live_peer_ids(PackedInt64Array({ 11, 22, 33 })));
+    CHECK(engine.set_live_peer_ids(PackedInt64Array({11, 22, 33})));
     NETW_CHECK_EQ(engine.peer_bit_of(33), 2);
 }
 
@@ -1310,10 +1296,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a live peer id of zero is refused, and the "
     "peers beside it are still numbered"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     ERR_PRINT_OFF;
 
-    CHECK(engine.set_live_peer_ids(PackedInt64Array({ 11, 0, 22 })));
+    CHECK(engine.set_live_peer_ids(PackedInt64Array({11, 0, 22})));
 
     ERR_PRINT_ON;
     NETW_CHECK_EQ(engine.peer_bit_of(0), -1);
@@ -1326,20 +1312,17 @@ TEST_CASE(
     "[Networked][Interest][Hosted] intent stated as peer ids is the mask the "
     "engine would have composed from the same ids"
 ) {
-    InterestEngine engine = fresh();
-    engine.set_live_peer_ids(PackedInt64Array({ 11, 22, 33 }));
+    Engine engine = fresh();
+    engine.set_live_peer_ids(PackedInt64Array({11, 22, 33}));
 
-    engine.set_intent_for_peers(ROOT, PackedInt64Array({ 11, 33 }));
+    engine.set_intent_for_peers(ROOT, PackedInt64Array({11, 33}));
     engine.set_intent(
         CHILD,
-        bits({ engine.peer_bit_of(11), engine.peer_bit_of(33) })
+        bits({engine.peer_bit_of(11), engine.peer_bit_of(33)})
     );
     commit(engine);
 
-    CHECK(InterestBitSet::equals(
-        engine.row_of(ROOT),
-        engine.row_of(CHILD)
-    ));
+    CHECK(BitSet::equals(engine.row_of(ROOT), engine.row_of(CHILD)));
     NETW_CHECK_EQ(engine.admitted_peers(ROOT).size(), 2);
     CHECK(engine.admitted_peers(ROOT).has(11));
     CHECK(engine.admitted_peers(ROOT).has(33));
@@ -1350,15 +1333,15 @@ TEST_CASE(
     "[Networked][Interest][Hosted] intent by peer id mints a bit for a peer "
     "the engine has never numbered, and refuses peer zero"
 ) {
-    InterestEngine engine = fresh();
+    Engine engine = fresh();
     ERR_PRINT_OFF;
 
-    engine.set_intent_for_peers(ROOT, PackedInt64Array({ 44, 0 }));
-    engine.set_intent_for_peers(0, PackedInt64Array({ 44 }));
+    engine.set_intent_for_peers(ROOT, PackedInt64Array({44, 0}));
+    engine.set_intent_for_peers(0, PackedInt64Array({44}));
 
     ERR_PRINT_ON;
     NETW_CHECK_EQ(engine.peer_bit_of(44), 0);
     NETW_CHECK_EQ(engine.peer_bit_of(0), -1);
 }
 
-} // namespace TestInterestEngine
+} // namespace TestEngine

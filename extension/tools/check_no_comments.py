@@ -1,28 +1,11 @@
 #!/usr/bin/env python
 """Hold `extension/**` to the zero-comment law, as a ratchet rather than a wall.
 
-AGENTS.md §2: a bound class states what it is, the invariant that makes it
-correct, and its usage contract in `doc_classes/<Class>.xml`, which is the
-published doc and the only copy. An unbound core documents itself through the
-bound surface that publishes it. So a comment under `extension/` is either a
-fact the XML is missing, a name that should have been better, or plan knowledge
-that belongs in `.agents/`. None of the three is fixed by leaving it here.
-
-The tree did not start at zero, so a wall would only teach people to skip the
-check. The ratchet instead holds every file to the count recorded in
-`comment_census.txt`: a file may lose comments freely and may never gain one.
-The census is therefore also the campaign's progress meter, one row per file
-that still carries any.
-
-    check_no_comments.py              # the census, newest offenders first
-    check_no_comments.py --ratchet    # exit 1 if any file gained a comment
-    check_no_comments.py --record     # rewrite the census from the tree
-    check_no_comments.py --strict     # exit 1 on any comment anywhere
-    check_no_comments.py --self-test  # proves itself red, then green
-
-A file absent from the census is expected to hold none, so a new file starts at
-the law rather than at its own first draft. `--record` is the deliberate act
-that admits an exception, and its diff is what a reviewer reads.
+check_no_comments.py              # the census, newest offenders first
+check_no_comments.py --ratchet    # exit 1 if any file gained a comment
+check_no_comments.py --record     # rewrite the census from the tree
+check_no_comments.py --strict     # exit 1 on any comment anywhere
+check_no_comments.py --self-test  # proves itself red, then green
 """
 
 import re
@@ -37,19 +20,7 @@ MARKER = re.compile(r"^\}\s*//\s*namespace(\s+\S+)?\s*$")
 
 
 def comment_lines(text):
-    """The lines carrying comment text, split into prose and scope markers.
-
-    A `//` inside a string literal is not a comment, and a line holding the
-    tail of a block comment is a line carrying comment text whether or not it
-    opened one. Counting lines rather than comments is what makes the census
-    comparable with a `grep -c` and with the mass the campaign measured.
-
-    A closing `} // namespace <name>` is counted apart from prose, because the
-    ratchet is about knowledge that belongs in the XML and a scope delimiter
-    carries none. Whether the marker itself survives the campaign is a Z7
-    question, so `--strict` counts it and the ratchet does not: the two
-    numbers are reported side by side rather than one hidden inside the other.
-    """
+    """The lines carrying comment text, split into prose and scope markers."""
     lines = set()
     line = 1
     at = 0
@@ -157,8 +128,7 @@ def render_census(counts, markers):
         "# never gain one: check_no_comments.py --ratchet holds this line.\n"
         "# A file absent here is expected to hold none.\n"
         "# total %d prose lines across %d files, plus %d `} // namespace`\n"
-        "# scope markers the ratchet does not count and --strict does.\n"
-        % (sum(counts.values()), len(counts), markers)
+        "# scope markers the ratchet does not count and --strict does.\n" % (sum(counts.values()), len(counts), markers)
     ) + body
 
 
@@ -167,22 +137,12 @@ def check_ratchet(counts, recorded, out=print):
     for name in sorted(counts):
         allowed = recorded.get(name, 0)
         if counts[name] > allowed:
-            refusals.append(
-                "%s carries %d prose lines and may carry %d"
-                % (name, counts[name], allowed)
-            )
-    stale = [
-        name
-        for name in sorted(recorded)
-        if recorded[name] > counts.get(name, 0)
-    ]
+            refusals.append("%s carries %d prose lines and may carry %d" % (name, counts[name], allowed))
+    stale = [name for name in sorted(recorded) if recorded[name] > counts.get(name, 0)]
     for line in refusals:
         out("REFUSED %s" % line)
     for name in stale:
-        out(
-            "STALE   %s is down to %d from %d; re-record the census"
-            % (name, counts.get(name, 0), recorded[name])
-        )
+        out("STALE   %s is down to %d from %d; re-record the census" % (name, counts.get(name, 0), recorded[name]))
     out(
         "COMMENTS files=%d prose=%d refusals=%d stale=%d"
         % (len(counts), sum(counts.values()), len(refusals), len(stale))
@@ -284,10 +244,7 @@ def main(argv):
 
     if "--record" in argv:
         CENSUS.write_text(render_census(counts, markers))
-        print(
-            "RECORDED %d files, %d prose lines -> %s"
-            % (len(counts), sum(counts.values()), CENSUS.name)
-        )
+        print("RECORDED %d files, %d prose lines -> %s" % (len(counts), sum(counts.values()), CENSUS.name))
         return 0
 
     if "--strict" in argv:
@@ -309,10 +266,7 @@ def main(argv):
 
     for name in sorted(counts, key=lambda row: (-counts[row], row)):
         print("%6d %s" % (counts[name], name))
-    print(
-        "COMMENTS files=%d prose=%d markers=%d"
-        % (len(counts), sum(counts.values()), markers)
-    )
+    print("COMMENTS files=%d prose=%d markers=%d" % (len(counts), sum(counts.values()), markers))
     return 0
 
 

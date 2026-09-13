@@ -1,156 +1,138 @@
 #include "netw/api/clock_handle.hpp"
 
+#include "godot/callable.hpp"
 #include "godot/class_db.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 
 using namespace godot;
 
 namespace netw {
 
-#define NETW_CLOCK_RW(m_name, m_variant) \
-    ClassDB::bind_method( \
-        D_METHOD("set_" #m_name, "value"), \
-        &NetwClockHandle::set_##m_name \
-    ); \
-    ClassDB::bind_method( \
-        D_METHOD("get_" #m_name), \
-        &NetwClockHandle::get_##m_name \
-    ); \
-    ADD_PROPERTY( \
-        PropertyInfo(m_variant, #m_name), \
-        "set_" #m_name, \
-        "get_" #m_name \
-    )
+namespace {
 
-#define NETW_CLOCK_RO(m_name, m_variant) \
-    ClassDB::bind_method( \
-        D_METHOD("get_" #m_name), \
-        &NetwClockHandle::get_##m_name \
-    ); \
-    ADD_PROPERTY(PropertyInfo(m_variant, #m_name), "", "get_" #m_name)
+const char *SIG_BEFORE_TICK = "before_tick";
+const char *SIG_ON_TICK = "on_tick";
 
-void NetwClockHandle::_bind_methods() {
-    ClassDB::bind_static_method(
-        "NetwClockHandle",
-        D_METHOD("pumps_for", "seconds", "rate"),
-        &NetwClockHandle::pumps_for
-    );
+} // namespace
 
-    NETW_CLOCK_RW(tickrate, Variant::INT);
-    NETW_CLOCK_RW(max_ticks_per_frame, Variant::INT);
-    NETW_CLOCK_RW(stall_threshold, Variant::FLOAT);
-    NETW_CLOCK_RW(use_physics_interpolation, Variant::BOOL);
-    NETW_CLOCK_RW(panic_snap_threshold, Variant::INT);
-    NETW_CLOCK_RW(stretch_nudge_factor, Variant::FLOAT);
-    NETW_CLOCK_RW(ping_interval, Variant::FLOAT);
-    NETW_CLOCK_RW(lead_ticks, Variant::FLOAT);
-    NETW_CLOCK_RW(display_offset, Variant::INT);
-    NETW_CLOCK_RW(jitter_multiplier, Variant::FLOAT);
-    NETW_CLOCK_RW(jitter_window, Variant::INT);
-    NETW_CLOCK_RW(jitter_stability_threshold, Variant::FLOAT);
-    NETW_CLOCK_RW(enable_drift_logging, Variant::BOOL);
-    NETW_CLOCK_RW(tick, Variant::INT);
-    NETW_CLOCK_RW(is_synchronized, Variant::BOOL);
-    NETW_CLOCK_RW(is_configured, Variant::BOOL);
-    NETW_CLOCK_RW(manual_tick, Variant::BOOL);
-    NETW_CLOCK_RW(node_pumped, Variant::BOOL);
-    NETW_CLOCK_RW(tick_factor_override, Variant::FLOAT);
-
-    ClassDB::bind_method(
-        D_METHOD("set_sync_mode", "value"),
-        &NetwClockHandle::set_sync_mode
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_sync_mode"),
-        &NetwClockHandle::get_sync_mode
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "sync_mode",
-            PROPERTY_HINT_ENUM,
-            "Snap,Stretch"
-        ),
-        "set_sync_mode",
-        "get_sync_mode"
-    );
-
-    NETW_CLOCK_RO(ticktime, Variant::FLOAT);
-    NETW_CLOCK_RO(tick_factor, Variant::FLOAT);
-    NETW_CLOCK_RO(tick_phase, Variant::FLOAT);
-    NETW_CLOCK_RO(tick_accumulator, Variant::FLOAT);
-    NETW_CLOCK_RO(display_tick, Variant::INT);
-    NETW_CLOCK_RO(physics_factor, Variant::FLOAT);
-    NETW_CLOCK_RO(physics_steps_per_tick, Variant::INT);
-    NETW_CLOCK_RO(is_simulating, Variant::BOOL);
-    NETW_CLOCK_RO(is_gated, Variant::BOOL);
-    NETW_CLOCK_RO(simulation_behind_count, Variant::INT);
-    NETW_CLOCK_RO(rtt, Variant::FLOAT);
-    NETW_CLOCK_RO(rtt_avg, Variant::FLOAT);
-    NETW_CLOCK_RO(rtt_jitter, Variant::FLOAT);
-    NETW_CLOCK_RO(one_way_latency, Variant::FLOAT);
-    NETW_CLOCK_RO(recommended_display_offset, Variant::INT);
-    NETW_CLOCK_RO(is_stable, Variant::BOOL);
-
-    ClassDB::bind_method(
-        D_METHOD("physics_step", "delta"),
-        &NetwClockHandle::physics_step
-    );
-    ClassDB::bind_method(
-        D_METHOD("force_step", "count"),
-        &NetwClockHandle::force_step
-    );
-    ClassDB::bind_method(
-        D_METHOD("begin_tick_loop"),
-        &NetwClockHandle::begin_tick_loop
-    );
-    ClassDB::bind_method(
-        D_METHOD("end_tick_loop"),
-        &NetwClockHandle::end_tick_loop
-    );
-    ClassDB::bind_method(
-        D_METHOD("poll_step"),
-        &NetwClockHandle::poll_step
-    );
-    ClassDB::bind_method(
-        D_METHOD("count_poll"),
-        &NetwClockHandle::count_poll
-    );
-    ClassDB::bind_method(D_METHOD("arm_gate"), &NetwClockHandle::arm_gate);
-    ClassDB::bind_method(
-        D_METHOD("release_gate"),
-        &NetwClockHandle::release_gate
-    );
-    ClassDB::bind_method(
-        D_METHOD("mark_step", "seconds_ago"),
-        &NetwClockHandle::mark_step,
-        DEFVAL(0.0)
-    );
-    ClassDB::bind_method(
-        D_METHOD("seconds_since_step"),
-        &NetwClockHandle::seconds_since_step
-    );
-    ClassDB::bind_method(
-        D_METHOD("consume_ping_due", "delta"),
-        &NetwClockHandle::consume_ping_due
-    );
-    ClassDB::bind_method(D_METHOD("clear"), &NetwClockHandle::clear);
-    ClassDB::bind_method(D_METHOD("cadence"), &NetwClockHandle::cadence);
-    ClassDB::bind_method(
-        D_METHOD(
-            "handle_pong",
-            "sample",
-            "server_tick_at_pong",
-            "server_tick_phase",
-            "apply_lead"
-        ),
-        &NetwClockHandle::handle_pong
-    );
-
-    BIND_ENUM_CONSTANT(SYNC_SNAP);
-    BIND_ENUM_CONSTANT(SYNC_STRETCH);
+NetwMultiplayer *NetwClockHandle::session() const {
+    return Object::cast_to<NetwMultiplayer>(gd::object_of(session_id));
 }
 
-#undef NETW_CLOCK_RW
-#undef NETW_CLOCK_RO
+void NetwClockHandle::bind_session(NetwMultiplayer *p_session) {
+    session_id = gd::instance_id(p_session);
+    if (p_session == nullptr) {
+        return;
+    }
+    p_session->connect(
+        StringName("clock_before_tick"),
+        callable_mp(this, &NetwClockHandle::relay_before_tick)
+    );
+    p_session->connect(
+        StringName("clock_on_tick"),
+        callable_mp(this, &NetwClockHandle::relay_on_tick)
+    );
+}
+
+void NetwClockHandle::relay_before_tick(double p_delta, int64_t p_tick) {
+    emit_signal(StringName(SIG_BEFORE_TICK), p_delta, p_tick);
+}
+
+void NetwClockHandle::relay_on_tick(double p_delta, int64_t p_tick) {
+    emit_signal(StringName(SIG_ON_TICK), p_delta, p_tick);
+}
+
+int64_t NetwClockHandle::get_tick() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->clock_get_tick() : 0;
+}
+
+bool NetwClockHandle::get_is_synchronized() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr && api->clock_is_synchronized();
+}
+
+bool NetwClockHandle::get_is_configured() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr && api->clock_is_configured();
+}
+
+int64_t NetwClockHandle::get_behind_count() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->clock_get_simulation_behind_count() : 0;
+}
+
+double NetwClockHandle::monitor(int64_t p_monitor) const {
+    NetwMultiplayer *api = session();
+    return api != nullptr
+        ? api->clock_get_monitor(NetwMultiplayer::ClockMonitor(p_monitor))
+        : 0.0;
+}
+
+Variant NetwClockHandle::param(int64_t p_param) const {
+    NetwMultiplayer *api = session();
+    return api != nullptr
+        ? api->clock_get_param(NetwMultiplayer::ClockParam(p_param))
+        : Variant();
+}
+
+Error NetwClockHandle::set_param(int64_t p_param, const Variant &p_value) {
+    NetwMultiplayer *api = session();
+    return api != nullptr
+        ? api->clock_set_param(NetwMultiplayer::ClockParam(p_param), p_value)
+        : ERR_UNCONFIGURED;
+}
+
+void NetwClockHandle::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_tick"), &NetwClockHandle::get_tick);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "tick"), "", "get_tick");
+    ClassDB::bind_method(
+        D_METHOD("get_is_synchronized"),
+        &NetwClockHandle::get_is_synchronized
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "is_synchronized"),
+        "",
+        "get_is_synchronized"
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_is_configured"),
+        &NetwClockHandle::get_is_configured
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "is_configured"),
+        "",
+        "get_is_configured"
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_behind_count"),
+        &NetwClockHandle::get_behind_count
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::INT, "behind_count"),
+        "",
+        "get_behind_count"
+    );
+    ClassDB::bind_method(
+        D_METHOD("monitor", "monitor"),
+        &NetwClockHandle::monitor
+    );
+    ClassDB::bind_method(D_METHOD("param", "param"), &NetwClockHandle::param);
+    ClassDB::bind_method(
+        D_METHOD("set_param", "param", "value"),
+        &NetwClockHandle::set_param
+    );
+
+    ADD_SIGNAL(MethodInfo(
+        SIG_BEFORE_TICK,
+        PropertyInfo(Variant::FLOAT, "delta"),
+        PropertyInfo(Variant::INT, "tick")
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_ON_TICK,
+        PropertyInfo(Variant::FLOAT, "delta"),
+        PropertyInfo(Variant::INT, "tick")
+    ));
+}
 
 } // namespace netw

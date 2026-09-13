@@ -30,7 +30,7 @@
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
 				Enrols [param entity] in this layer and returns whether the roster changed. Idempotent.
-				[br][br][b]Server Only.[/b]
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="add_viewer">
@@ -47,7 +47,7 @@
 			<param index="2" name="visible" type="bool" />
 			<description>
 				Emits one committed server edge: [signal interest_enter] or [signal interest_exit] on this layer, then the same edge on [param entity], then the entity's own enter and leave callbacks. The interest flush calls this once per transition the engine committed, so calling it by hand announces an edge nothing else believes in.
-				[br][br][b]Server Only.[/b]
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="client_admit">
@@ -76,16 +76,15 @@
 			<param index="0" name="peer_id" type="int" default="0" />
 			<description>
 				Returns this layer's state and the engine's own explanation of [param peer_id]'s verdict.
-				[codeblock]
-				{
-				  ┠╴ layer_id: String
-				  ┠╴ policy: int          # a Policy value
-				  ┠╴ viewers: Array       # peer ids
-				  ┠╴ entities: int        # roster size
-				  ┠╴ peer_id: int
-				  ┠╴ verdict: bool        # what verdict_for(peer_id) answers
-				  ┖╴ explanation: String  # why the engine answered that
-				}
+				[codeblock lang=text]
+				Dictionary
+				┠╴layer_id     String   this layer
+				┠╴policy       int      a Policy value
+				┠╴viewers      Array    the peer ids watching
+				┠╴entities     int      roster size
+				┠╴peer_id      int      the peer asked about
+				┠╴verdict      bool     what verdict_for answers for that peer
+				┖╴explanation  String   why the engine answered that
 				[/codeblock]
 			</description>
 		</method>
@@ -100,7 +99,7 @@
 			<return type="bool" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Whether [param peer_id] is in [member viewers]. Membership is not a verdict: under [constant HIDE_FROM_INSIDERS] a viewer is exactly who cannot see.
+				Whether [param peer_id] is in [member viewers]. Membership is not a verdict: under [constant NetwMultiplayer.LAYER_POLICY_HIDE_FROM_INSIDERS] a viewer is exactly who cannot see.
 			</description>
 		</method>
 		<method name="is_visible_to">
@@ -115,13 +114,12 @@
 			<return type="Dictionary" />
 			<description>
 				Returns aggregate occupancy counters.
-				[codeblock]
-				{
-				  ┠╴ viewers: int            # size of viewers
-				  ┠╴ entities: int           # size of entities
-				  ┠╴ visible_edges: int      # admitted (entity, peer) pairs
-				  ┖╴ transitions_total: int  # summed show plus hide since creation
-				}
+				[codeblock lang=text]
+				Dictionary
+				┠╴viewers            int   how many peers watch this layer
+				┠╴entities           int   how many entities it carries
+				┠╴visible_edges      int   admitted entity and peer pairs
+				┖╴transitions_total  int   summed show plus hide since creation
 				[/codeblock]
 				[code]transitions_total[/code] is cumulative since this layer was created, so a monitor reads it as a delta over an interval to surface churn.
 			</description>
@@ -131,7 +129,7 @@
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
 				Removes [param entity] from this layer and returns whether the roster changed. An unknown entity is a no-op, so teardown may run it twice, and the visibility exits arrive at the next interest flush.
-				[br][br][b]Server Only.[/b]
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="remove_viewer">
@@ -164,10 +162,10 @@
 	</methods>
 	<members>
 		<member name="default_leave_policy" type="int" setter="set_default_leave_policy" getter="get_default_leave_policy" default="0">
-			Wire behavior when this layer stops admitting an entity and the entity carries no per-entity override. A [constant NetwMultiplayer.LeavePolicy] value.
+			What happens to a peer's copy when this layer stops admitting an entity, for an entity that declared nothing of its own. It is a [enum NetwMultiplayer.LeavePolicy] value.
 		</member>
 		<member name="default_perception_policy" type="int" setter="set_default_perception_policy" getter="get_default_perception_policy" default="0">
-			Local presentation behavior when this layer stops admitting an entity and no per-entity override is configured. A [constant NetwMultiplayer.PerceptionPolicy] value.
+			Whether a kept copy is still drawn when this layer stops admitting an entity, for an entity that declared nothing of its own. It is a [enum NetwMultiplayer.PerceptionPolicy] value.
 		</member>
 		<member name="entities" type="Dictionary" setter="" getter="get_entities" default="{}">
 			The entity set, keyed for membership tests. On the server this is every entity registered through [method add_entity]; on a client it is every entity currently admitted to this layer for the local peer.
@@ -236,12 +234,4 @@
 			</description>
 		</signal>
 	</signals>
-	<constants>
-		<constant name="HIDE_FROM_OUTSIDERS" value="0" enum="Policy">
-			Peers in [member viewers] see [member entities]; outsiders do not.
-		</constant>
-		<constant name="HIDE_FROM_INSIDERS" value="1" enum="Policy">
-			Peers in [member viewers] do [b]not[/b] see [member entities]; outsiders do.
-		</constant>
-	</constants>
 </class>

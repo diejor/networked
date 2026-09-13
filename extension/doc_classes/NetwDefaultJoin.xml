@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDefaultJoin" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The join handler a session falls back to when a game registered none, spawning the joining player at the template the client named.
+	</brief_description>
+	<description>
+		Used when a session declared no handler of its own through [method Netw.configure_join]. It puts a joining player into a scene and spawns them at the template the client named, which resolves to a [SpawnSlot].
+		A client sends [code](scene_stem, spawner_path)[/code] as its join arguments, and those are [method spawn]'s parameters after the [NetwParticipant] every handler takes first. A game wanting a different arrangement declares its own handler with [method Netw.configure_join].
+		[codeblock]
+		api.session_prepare_join(username, [&amp;"Arena", ^"Player"])
+		api.multiplayer_peer = peer
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="spawn">
+			<return type="NetwPromise" />
+			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="1" name="scene_stem" type="StringName" />
+			<param index="2" name="spawner_path" type="NodePath" />
+			<description>
+				Activates [param scene_stem], resolves the template at [param spawner_path], and adds the node [param participant] plays. The returned promise settles with the entered [NetwSceneHandle].
+				[param scene_stem] is a declared scene's stem, the name [method NetwMultiplayer.scene_find] answers to, never a [code]res://[/code] path or a [code]uid://[/code] reference.
+				A persistence hydration the player's engine asked for completes before the player is seated, so a returning player enters with its saved state already applied. That hydration is why this answers a promise rather than the handle. See [method NetwMultiplayer.scene_activate] and [method NetwMultiplayer.scene_find].
+				A game that restores a player to whichever scene it left from registers its own handler with [method Netw.configure_join] and reads that scene itself, because only the game knows where it recorded one.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+	</methods>
+</class>

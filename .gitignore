@@ -1,15 +1,13 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
-/reports
-# gdUnit writes here when a run is pinned with `-rd res://reports_scoped`.
-/reports_scoped
-# And here for the NETW_MARGINAL=1 racing measurement, which is read against
-# the same baseline but must not overwrite the gated run's report.
-/reports_marginal
+# gdUnit report output. The glob is deliberate: a scoped run is pinned with
+# `-rd res://reports_<name>` and every new suffix someone invents is generated
+# output too, so ignoring the known names alone always falls behind the tools.
+/reports*
 *.tmp
 
-# Export outputs (CI exports the itch.io web demo here; see itch-demo.yml)
+# Export outputs (CI stages the examples site here; see pages-examples.yml)
 /build/
 
 # Native artifacts stay local until the WS-6 distribution decision.
@@ -17,6 +15,16 @@
 
 # SCons object cache for the native build.
 /.scons_cache/
+
+# Staged cells, packaged addons and release manifests, produced by ci/build.py
+# and ci/package.py. Everything here is rebuildable from a source revision.
+/dist/
+
+# Engines ci/engine.py installs from the catalog.
+/.engines/
+
+# Pinned lint and rehearsal binaries ci/bootstrap.py installs.
+/ci/.tools/
 
 addons/gdUnit4/GdUnitRunner.cfg
 
@@ -36,7 +44,6 @@ docs/_build/
 docs/api/
 docs/api_filtered/
 docs/api_probe/
-docs/classes/
 # Staging dirs for `make api`. It renames them into place on success, so they
 # only survive a run that stopped early, which is any run while the class
 # reference still reports errors.
@@ -54,3 +61,4 @@ node_modules/
 .wrangler/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+__pycache__/

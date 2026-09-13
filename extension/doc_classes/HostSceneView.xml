@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="HostSceneView" inherits="ParticipantView" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Draws a listen-server host's offscreen player scene edge to edge, so the host sees what a client sees.
+	</brief_description>
+	<description>
+		Only a scene declaring [constant NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD] is hosted in an offscreen [SubViewport], so this view exists only for one. A dedicated server renders no scene and a host whose scene shares the session's world already renders in the root viewport, so neither builds this view.
+		[b]You normally do not add this node yourself.[/b] The session mounts one when [member NetwMultiplayer.role] is [constant NetwMultiplayer.ROLE_LISTEN_SERVER], a live scene owns its own world, and no [ParticipantView] already stands under the session root. Drop one into your scene only to place or configure that window yourself, and the session will find it and leave the display alone. [method NetwMultiplayer.scene_set_host_view_factory] replaces the mint outright when a project wants a different node.
+		It follows [signal NetwMultiplayer.participant_viewport_changed] to retarget, and re-announces on [signal NetwMultiplayer.scene_local_player_changed] because the display can resolve before the local player has spawned into it. On every announce it emits [signal NetwEntity.view_activated] on the local player's entity, and when nothing is listening to that signal it makes the first conventional camera in the player branch current, falling back to the scene's level. Connect the signal to take that decision with a custom camera rig.
+		[codeblock]
+		func _ready() -&gt; void:
+		    var entity := Netw.entity(self)
+		    entity.view_activated.connect(_on_view_activated)
+
+		func _on_view_activated() -&gt; void:
+		    $Rig/SpringArm3D/Camera3D.make_current()
+		[/codeblock]
+		Stretch behaviour is [ParticipantView]'s, defaulting to the project's own [code]display/window/stretch/*[/code] answers, and the view fills its parent rect. The mouse passes through to whatever is under it while the keyboard and joypad events nothing else handled are forwarded into the target, so ordinary UI over the top of the game still works.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="suppressed" type="bool" setter="set_suppressed" getter="get_suppressed" default="false">
+			Whether this view stands down. A suppressed view hides itself, drops its target and stops forwarding input, which is how a game shows something else over the whole window without losing the view or the display it was tracking. Clearing it re-adopts whatever [method NetwMultiplayer.scene_participant_viewport] now answers.
+		</member>
+	</members>
+</class>

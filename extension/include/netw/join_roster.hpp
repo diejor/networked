@@ -27,12 +27,12 @@ public:
     bool remember(const godot::Ref<ResolvedJoin> &rj);
     godot::Ref<ResolvedJoin> accepted_join(int64_t peer_id) const;
     godot::Array accepted_joins() const;
-    godot::Array serialize_accepted() const;
+    godot::PackedByteArray roster_frame() const;
 
     int name_verdict(
         const godot::StringName &name,
         const godot::PackedStringArray &taken,
-        bool is_debug,
+        bool renames_on_collision,
         bool has_identity
     ) const;
     godot::StringName free_name(

@@ -11,7 +11,7 @@ struct Row {
 
 constexpr Row ROWS[] = {
 #define NETW_SUBSYSTEM_ROW(m_name, m_text, m_index) \
-    { SUBSYSTEM_##m_name, m_text },
+    {SUBSYSTEM_##m_name, m_text},
     NETW_SUBSYSTEM_TABLE(NETW_SUBSYSTEM_ROW)
 #undef NETW_SUBSYSTEM_ROW
 };

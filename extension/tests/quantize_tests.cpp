@@ -4,17 +4,19 @@
 #include <cstdint>
 
 #include "netw/api/quantize.hpp"
+#include "netw/api/schema_core.hpp"
+#include "netw/wire/value_row.hpp"
+#if defined(NETW_TIER_HOSTED)
+#include "support/minted_script.h"
+#endif
 
 namespace TestNetwQuantize {
 
 using namespace godot;
-using netw::NetwBitBufferReader;
-using netw::NetwBitBufferWriter;
 using netw::NetwQuantize;
 using netw::NetwQuantizeAngle;
-using netw::NetwQuantizeBits;
-using netw::NetwQuantizeFixed;
 using netw::NetwQuantizeQuaternion;
+using netw::NetwQuantizeScalar;
 using netw::NetwQuantizeTransform2D;
 using netw::NetwQuantizeTransform3D;
 
@@ -24,17 +26,22 @@ constexpr double TAU_VALUE = PI_VALUE * 2.0;
 Variant round_trip(
     const Ref<NetwQuantize> &quantizer,
     const Variant &value,
-    int type
+    Variant::Type type
 ) {
-    Ref<NetwBitBufferWriter> w;
-    w.instantiate();
-    quantizer->write(w, value);
-    Ref<NetwBitBufferReader> r = NetwBitBufferReader::create(w->to_bytes());
-    return quantizer->read(r, type);
+    netw::wire::WriteStream writing;
+    if (!quantizer->write(writing, value)) {
+        return Variant();
+    }
+    netw::wire::ReadStream reading(writing.to_bytes());
+    Variant out;
+    if (!quantizer->read(reading, type, out)) {
+        return Variant();
+    }
+    return out;
 }
 
-Ref<NetwQuantizeBits> bits_quantizer(int count, double low, double high) {
-    Ref<NetwQuantizeBits> made;
+Ref<NetwQuantizeScalar> bits_quantizer(int count, double low, double high) {
+    Ref<NetwQuantizeScalar> made;
     made.instantiate();
     made->set_bit_count(count);
     made->set_min_limit(low);
@@ -42,12 +49,12 @@ Ref<NetwQuantizeBits> bits_quantizer(int count, double low, double high) {
     return made;
 }
 
-Ref<NetwQuantizeFixed> fixed_quantizer(double step, double low, double high) {
-    Ref<NetwQuantizeFixed> made;
+Ref<NetwQuantizeScalar> fixed_quantizer(double step, double low, double high) {
+    Ref<NetwQuantizeScalar> made;
     made.instantiate();
-    made->set_resolution_step(step);
     made->set_min_limit(low);
     made->set_max_limit(high);
+    made->set_resolution_step(step);
     return made;
 }
 
@@ -85,7 +92,7 @@ double shortest_arc(double from, double to) {
 TEST_CASE(
     "[Networked][Codec][Hosted] a bit quantizer packs scalars and vectors"
 ) {
-    Ref<NetwQuantizeBits> q = bits_quantizer(8, -1.0, 1.0);
+    Ref<NetwQuantizeScalar> q = bits_quantizer(8, -1.0, 1.0);
 
     const double eight_bit_span_error_bound = 0.01;
     NETW_CHECK_CLOSE(
@@ -103,9 +110,11 @@ TEST_CASE(
             .distance_to(Vector3(0.25, -0.75, 0.5))
         < 0.02
     );
-    CHECK(q->bit_width(Variant::VECTOR3) == 24);
-    CHECK(q->bit_width(Variant::VECTOR2) == 16);
-    CHECK(q->bit_width(Variant::FLOAT) == 8);
+    NETW_CHECK_EQ(q->bit_width(Variant::VECTOR3), 8);
+    NETW_CHECK_EQ(q->stride(Variant::VECTOR3), 3);
+    NETW_CHECK_EQ(q->total_bits(Variant::VECTOR3), 24);
+    NETW_CHECK_EQ(q->total_bits(Variant::VECTOR2), 16);
+    NETW_CHECK_EQ(q->total_bits(Variant::FLOAT), 8);
 
     const bool rest_is_exact
         = double(round_trip(q, 0.0, Variant::FLOAT)) == 0.0;
@@ -120,42 +129,62 @@ TEST_CASE(
     );
 }
 
-TEST_CASE("[Networked][Codec][Hosted] a fixed quantizer is exact on its grid") {
-    Ref<NetwQuantizeFixed> q = fixed_quantizer(0.5, -100.0, 100.0);
+TEST_CASE(
+    "[Networked][Codec][Hosted] a step is a request for a grid at least that "
+    "fine, and the bits it buys are spent over the whole declared range"
+) {
+    Ref<NetwQuantizeScalar> q = fixed_quantizer(0.5, -100.0, 100.0);
 
+    const double granted = q->get_resolution_step();
+    CHECK(granted <= 0.5);
+    NETW_CHECK_EQ(q->get_bit_count(), 9);
+
+    const double axis_error = q->max_error(Variant::FLOAT);
     CHECK(
         Vector2(round_trip(q, Vector2(10.0, -20.5), Variant::VECTOR2))
-        == Vector2(10.0, -20.5)
+            .distance_to(Vector2(10.0, -20.5))
+        <= q->max_error(Variant::VECTOR2)
     );
     CHECK(
         Vector3(round_trip(q, Vector3(10.0, -20.5, 30.0), Variant::VECTOR3))
-        == Vector3(10.0, -20.5, 30.0)
+            .distance_to(Vector3(10.0, -20.5, 30.0))
+        <= q->max_error(Variant::VECTOR3)
     );
-    const double half_step_tolerance = 0.26;
-    NETW_CHECK_CLOSE(
-        round_trip(q, 3.3, Variant::FLOAT),
-        3.3,
-        half_step_tolerance
-    );
+    NETW_CHECK_CLOSE(round_trip(q, 3.3, Variant::FLOAT), 3.3, axis_error);
+}
+
+TEST_CASE(
+    "[Networked][Codec][Hosted] bits and step are one grid said two ways, so "
+    "asking for the step a bit count buys answers that bit count back"
+) {
+    Ref<NetwQuantizeScalar> q = bits_quantizer(11, -100.0, 100.0);
+
+    const double granted = q->get_resolution_step();
+    q->step(granted);
+
+    NETW_CHECK_EQ(q->get_bit_count(), 11);
+    NETW_CHECK_CLOSE(q->get_resolution_step(), granted, 1e-12);
 }
 
 TEST_CASE(
     "[Networked][Codec][Hosted] the reported max error matches the resolution"
 ) {
-    Ref<NetwQuantizeFixed> fixed = fixed_quantizer(0.5, -2048.0, 2048.0);
-    NETW_CHECK_CLOSE(fixed->max_error(Variant::FLOAT), 0.25, 0.0001);
+    Ref<NetwQuantizeScalar> fixed = fixed_quantizer(0.5, -2048.0, 2048.0);
+    const double half = fixed->get_resolution_step() * 0.5;
+    CHECK(half <= 0.25);
+    NETW_CHECK_CLOSE(fixed->max_error(Variant::FLOAT), half, 0.0001);
     NETW_CHECK_CLOSE(
         fixed->max_error(Variant::VECTOR2),
-        0.25 * std::sqrt(2.0),
+        half * std::sqrt(2.0),
         0.0001
     );
     NETW_CHECK_CLOSE(
         fixed->max_error(Variant::VECTOR3),
-        0.25 * std::sqrt(3.0),
+        half * std::sqrt(3.0),
         0.0001
     );
 
-    Ref<NetwQuantizeBits> bits = bits_quantizer(8, -1.0, 1.0);
+    Ref<NetwQuantizeScalar> bits = bits_quantizer(8, -1.0, 1.0);
     const double axis_error = 2.0 / 256.0 * 0.5;
     NETW_CHECK_CLOSE(bits->max_error(Variant::FLOAT), axis_error, 0.0001);
     NETW_CHECK_CLOSE(
@@ -230,11 +259,16 @@ TEST_CASE(
     const Transform2D got = round_trip(q, value, Variant::TRANSFORM2D);
 
     CHECK(q->bit_width(Variant::TRANSFORM2D) == 38);
-    CHECK(got.get_origin() == Vector2(3.25, -4.5));
+    CHECK(
+        got.get_origin().distance_to(Vector2(3.25, -4.5))
+        <= q->get_origin_quantizer()->max_error(Variant::VECTOR2)
+    );
     const bool rotation_ok
         = std::abs(got.get_rotation() - value.get_rotation()) < 0.002;
     CHECK(rotation_ok);
-    CHECK(got.get_scale().distance_to(value.get_scale()) < 0.002);
+    const bool scale_ok = got.get_scale().distance_to(value.get_scale())
+        <= q->get_scale_quantizer()->max_error(Variant::VECTOR2);
+    CHECK(scale_ok);
 }
 
 TEST_CASE(
@@ -258,29 +292,36 @@ TEST_CASE(
 
     const bool width_ok = q->bit_width(Variant::TRANSFORM3D) == 77;
     CHECK(width_ok);
-    const bool origin_ok = got.origin == Vector3(1.25, -2.5, 3.75);
+    const bool origin_ok = got.origin.distance_to(Vector3(1.25, -2.5, 3.75))
+        <= q->get_origin_quantizer()->max_error(Variant::VECTOR3);
     CHECK(origin_ok);
     const bool rotation_ok
         = angle_error(rotation, got.basis.get_rotation_quaternion())
         <= rotation_quantizer->max_error(Variant::QUATERNION);
     CHECK(rotation_ok);
     const bool scale_ok
-        = got.basis.get_scale().distance_to(value.basis.get_scale()) < 0.002;
+        = got.basis.get_scale().distance_to(value.basis.get_scale())
+        <= q->get_scale_quantizer()->max_error(Variant::VECTOR3);
     CHECK(scale_ok);
 }
 
 TEST_CASE(
-    "[Networked][Codec][Hosted] layout equality matches class and parameters"
+    "[Networked][Codec][Hosted] layout equality matches the grid, however "
+    "each side was authored"
 ) {
-    Ref<NetwQuantizeFixed> a = fixed_quantizer(0.25, -10.0, 10.0);
-    Ref<NetwQuantizeFixed> b = fixed_quantizer(0.25, -10.0, 10.0);
+    Ref<NetwQuantizeScalar> a = fixed_quantizer(0.25, -10.0, 10.0);
+    Ref<NetwQuantizeScalar> b = fixed_quantizer(0.25, -10.0, 10.0);
     CHECK(a->is_same_layout(b));
 
-    Ref<NetwQuantizeFixed> c = fixed_quantizer(0.5, -10.0, 10.0);
+    Ref<NetwQuantizeScalar> c = fixed_quantizer(0.5, -10.0, 10.0);
     CHECK_FALSE(a->is_same_layout(c));
 
-    Ref<NetwQuantizeBits> bits = bits_quantizer(8, -10.0, 10.0);
-    CHECK_FALSE(a->is_same_layout(bits));
+    Ref<NetwQuantizeScalar> by_bits
+        = bits_quantizer(a->get_bit_count(), -10.0, 10.0);
+    CHECK(a->is_same_layout(by_bits));
+
+    Ref<NetwQuantizeScalar> elsewhere = bits_quantizer(8, -10.0, 10.0);
+    CHECK_FALSE(a->is_same_layout(elsewhere));
     CHECK_FALSE(a->is_same_layout(Ref<NetwQuantize>()));
 }
 
@@ -289,7 +330,7 @@ TEST_CASE(
     "rest point"
 ) {
     for (int count : {2, 4, 8, 16}) {
-        Ref<NetwQuantizeBits> q = bits_quantizer(count, -1.0, 1.0);
+        Ref<NetwQuantizeScalar> q = bits_quantizer(count, -1.0, 1.0);
         const double low = round_trip(q, -1.0, Variant::FLOAT);
         const double high = round_trip(q, 1.0, Variant::FLOAT);
         const double rest = round_trip(q, 0.0, Variant::FLOAT);
@@ -299,7 +340,7 @@ TEST_CASE(
         NETW_CHECK_CLOSE(rest, 0.0, 0.000001);
     }
 
-    Ref<NetwQuantizeBits> thin = bits_quantizer(1, -1.0, 1.0);
+    Ref<NetwQuantizeScalar> thin = bits_quantizer(1, -1.0, 1.0);
     NETW_CHECK_CLOSE(round_trip(thin, -1.0, Variant::FLOAT), -1.0, 1e-6);
     NETW_CHECK_CLOSE(round_trip(thin, 1.0, Variant::FLOAT), 1.0, 1e-6);
 }
@@ -308,7 +349,7 @@ TEST_CASE(
     "[Networked][Codec][Hosted] a bit quantizer round trips an asymmetric "
     "range's limits, with no rest point to protect"
 ) {
-    Ref<NetwQuantizeBits> q = bits_quantizer(8, 0.0, 100.0);
+    Ref<NetwQuantizeScalar> q = bits_quantizer(8, 0.0, 100.0);
 
     NETW_CHECK_CLOSE(round_trip(q, 0.0, Variant::FLOAT), 0.0, 0.000001);
     NETW_CHECK_CLOSE(round_trip(q, 100.0, Variant::FLOAT), 100.0, 1e-4);
@@ -320,7 +361,7 @@ TEST_CASE(
 ) {
     double previous = 1.0;
     for (int count : {4, 8, 16, 24}) {
-        Ref<NetwQuantizeBits> q = bits_quantizer(count, -1.0, 1.0);
+        Ref<NetwQuantizeScalar> q = bits_quantizer(count, -1.0, 1.0);
         const double high = round_trip(q, 1.0, Variant::FLOAT);
         const double error = std::abs(1.0 - high);
         const bool error_shrinks = error <= previous;
@@ -369,5 +410,76 @@ TEST_CASE(
         = std::abs(shortest_arc(below, above)) < 3.0 * step;
     CHECK(neighbours_stay_close);
 }
+
+TEST_CASE(
+    "[Networked][Codec][Hosted] Q2 a built-in quantizer answers its own codes, "
+    "because only an object carrying a script enters the script hop and the "
+    "unimplemented hop answers a stride of one and a code of zero"
+) {
+    Ref<NetwQuantizeScalar> built_in = bits_quantizer(8, -1.0, 1.0);
+    NETW_CHECK_EQ(built_in->bit_width(Variant::VECTOR3), 8);
+    NETW_CHECK_EQ(built_in->stride(Variant::VECTOR3), 3);
+    NETW_CHECK_EQ(built_in->encode(Vector3(1.0, -1.0, 0.0), 0), 254);
+    NETW_CHECK_EQ(built_in->encode(Vector3(1.0, -1.0, 0.0), 1), 0);
+
+    Ref<NetwQuantize> bare;
+    bare.instantiate();
+    NETW_CHECK_EQ(bare->bit_width(Variant::VECTOR3), 0);
+    NETW_CHECK_EQ(bare->stride(Variant::VECTOR3), 1);
+    NETW_CHECK_EQ(bare->encode(Vector3(1.0, -1.0, 0.0), 0), 0);
+}
+
+#if defined(NETW_TIER_HOSTED)
+
+TEST_CASE(
+    "[Networked][Codec] Q1 a script quantizer is asked for one code per "
+    "element and is handed no stream, so the row it fills is the core's"
+) {
+    const Ref<Script> script = netw_test::script_from(
+        "res://tests/support/chains/quantize_counting.gd"
+    );
+    REQUIRE(script.is_valid());
+
+    Ref<NetwQuantize> counting;
+    counting.instantiate();
+    counting->set_script(script);
+
+    NETW_CHECK_EQ(counting->bit_width(Variant::VECTOR2), 10);
+    NETW_CHECK_EQ(counting->stride(Variant::VECTOR2), 2);
+    NETW_CHECK_EQ(counting->total_bits(Variant::VECTOR2), 20);
+
+    netw::table::SchemaRecord schema;
+    schema.name = StringName("ScriptQuantized");
+    netw::SchemaCore::append_column(
+        &schema,
+        StringName("move"),
+        netw::SchemaCore::VECTOR2,
+        1
+    );
+    netw::SchemaCore::assign_quantizer(&schema, 0, counting);
+    REQUIRE(netw::SchemaCore::fix(&schema) == Error::OK);
+
+    const netw::wire::WirePlan plan = netw::wire::WirePlan::compile(schema);
+    REQUIRE(plan.valid());
+    NETW_CHECK_EQ(plan.column(0).width, 10);
+    NETW_CHECK_EQ(plan.column(0).stride, 2);
+
+    Array values;
+    values.push_back(Vector2(7.0, 9.0));
+    netw::wire::CodeRow row;
+    REQUIRE(netw::wire::encode_scalar_row(schema, values, row));
+
+    NETW_CHECK_EQ(int64_t(counting->get("encodes")), 2);
+    NETW_CHECK_EQ(row.read(plan.column(0), 0), 7);
+    NETW_CHECK_EQ(row.read(plan.column(0), 1), 9);
+
+    Array decoded;
+    REQUIRE(netw::wire::decode_scalar_row(schema, row, decoded));
+    NETW_CHECK_EQ(int64_t(counting->get("decodes")), 1);
+    NETW_CHECK_EQ(int64_t(counting->get("encodes")), 2);
+    CHECK(Vector2(decoded[0]) == Vector2(7.0, 9.0));
+}
+
+#endif
 
 } // namespace TestNetwQuantize

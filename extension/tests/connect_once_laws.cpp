@@ -10,22 +10,15 @@ namespace TestConnectOnceLaws {
 
 using namespace godot;
 using namespace netw_test;
-using netw::NetwMultiplayerCore;
-
-NetwMultiplayerCore *session_core(Object *p_api) {
-    NetwMultiplayerCore *core = Object::cast_to<NetwMultiplayerCore>(
-        p_api->get("_native_core")
-    );
-    REQUIRE(core != nullptr);
-    return core;
-}
+using netw::NetwMultiplayer;
 
 TEST_CASE(
     "[Networked][Session] CO1 connecting an edge twice leaves one "
     "connection, so a caller may arm without asking whether it already did"
 ) {
     LoopbackRig rig(0);
-    NetwMultiplayerCore *core = session_core(rig.server());
+    NetwMultiplayer *core = rig.server();
+    REQUIRE(core != nullptr);
 
     Node *source = memnew(Node);
     netw::gd::add_signal(source, StringName("armed"), 1);
@@ -48,15 +41,16 @@ TEST_CASE(
     "gate verdict, so a dropped connection is visible rather than silent"
 ) {
     LoopbackRig rig(0);
-    NetwMultiplayerCore *core = session_core(rig.server());
+    NetwMultiplayer *core = rig.server();
+    REQUIRE(core != nullptr);
 
     Node *source = memnew(Node);
     netw::gd::add_signal(source, StringName("armed"), 1);
 
-    const int64_t before = core->verdict_total(ERR_UNAVAILABLE);
+    const int64_t before = core->stats_get_verdict_count(ERR_UNAVAILABLE);
     const Signal edge(source, StringName("armed"));
     NETW_CHECK_EQ(int(core->connect_once(edge, Callable())), 0);
-    NETW_CHECK_EQ(core->verdict_total(ERR_UNAVAILABLE), before + 1);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_UNAVAILABLE), before + 1);
 
     memdelete(source);
 }

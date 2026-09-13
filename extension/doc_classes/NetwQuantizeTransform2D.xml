@@ -5,10 +5,10 @@
 	</brief_description>
 	<description>
 		[member origin_quantizer] writes [member Transform2D.origin]. [member rotation_quantizer] writes [method Transform2D.get_rotation]. [member scale_quantizer] writes [method Transform2D.get_scale] when present. Skew is not encoded.
-		A fresh instance already carries an origin and a rotation quantizer, so it encodes without any configuration. A transform whose parts were never declared would otherwise write nothing and decode to identity.
+		An unset origin or rotation encodes through a stock quantizer, so a fresh instance encodes without any configuration. A transform whose parts were never declared would otherwise write nothing and decode to identity. The stock is not the member's value: both read [code]null[/code] until something assigns them.
 		[codeblock]
 		var q := NetwQuantizeTransform2D.new()
-		q.origin_quantizer = NetwQuantizeFixed.new()
+		q.origin_quantizer = NetwQuantizeScalar.new()
 		q.rotation_quantizer = NetwQuantizeAngle.new()
 		[/codeblock]
 	</description>
@@ -16,10 +16,10 @@
 	</tutorials>
 	<members>
 		<member name="origin_quantizer" type="NetwQuantize" setter="set_origin_quantizer" getter="get_origin_quantizer">
-			Quantizer for [member Transform2D.origin]. Defaults to a [NetwQuantizeFixed].
+			Quantizer for [member Transform2D.origin]. Unset, the origin encodes through a stock [NetwQuantizeScalar] spanning [code]-2048[/code] to [code]2048[/code] in steps of [code]0.5[/code].
 		</member>
 		<member name="rotation_quantizer" type="NetwQuantize" setter="set_rotation_quantizer" getter="get_rotation_quantizer">
-			Quantizer for [method Transform2D.get_rotation]. Defaults to a [NetwQuantizeAngle].
+			Quantizer for [method Transform2D.get_rotation]. Unset, the rotation encodes through a stock [NetwQuantizeAngle].
 		</member>
 		<member name="scale_quantizer" type="NetwQuantize" setter="set_scale_quantizer" getter="get_scale_quantizer">
 			Optional quantizer for [method Transform2D.get_scale]. Left unset, scale is not encoded and decodes as one.

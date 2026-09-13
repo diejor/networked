@@ -30,25 +30,22 @@ namespace netw_test {
 class EntityFactories {
     godot::Callable held[netw::NetwEntityRecord::PART_MAX];
     godot::Callable held_wrapper;
-    godot::Callable held_declaration;
 
 public:
     EntityFactories() {
         for (int at = 0; at < netw::NetwEntityRecord::PART_MAX; at++) {
             held[at] = netw::NetwEntityRecord::part_factory(at);
         }
-        held_wrapper = netw::NetwMultiplayerCore::wrapper_factory();
-        held_declaration = netw::NetwEntityRecord::scene_declaration_reader();
+        held_wrapper = netw::NetwMultiplayer::wrapper_factory();
         netw::NetwEntityRecord::clear_part_factories();
-        netw::NetwMultiplayerCore::clear_wrapper_factory();
+        netw::NetwMultiplayer::clear_wrapper_factory();
     }
 
     ~EntityFactories() {
         for (int at = 0; at < netw::NetwEntityRecord::PART_MAX; at++) {
             netw::NetwEntityRecord::set_part_factory(at, held[at]);
         }
-        netw::NetwMultiplayerCore::set_wrapper_factory(held_wrapper);
-        netw::NetwEntityRecord::set_scene_declaration_reader(held_declaration);
+        netw::NetwMultiplayer::set_wrapper_factory(held_wrapper);
     }
 };
 

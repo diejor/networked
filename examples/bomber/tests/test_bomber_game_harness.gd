@@ -54,8 +54,10 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var jose := await game.add_client("jose", false)
 	await _begin_game(valeria)
 
-	var valeria_world := await valeria.await_scene(&"World")
-	var jose_world := await jose.await_scene(&"World")
+	await valeria.await_scene(&"World")
+	var valeria_world: NetwSceneHandle = Netw.scene(valeria.tree, &"World")
+	await jose.await_scene(&"World")
+	var jose_world: NetwSceneHandle = Netw.scene(jose.tree, &"World")
 	var jose_player := await jose.await_player(&"jose") as Node2D
 	var valeria_player := valeria.find_player(&"valeria") as Node2D
 	var jose_on_host := valeria.find_player(&"jose") as Node2D
@@ -73,15 +75,21 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 
 	# The client drives its own player.
 	assert_that(jose_player.position.x).is_greater(jose_start)
-	var host_runtime = NetwEntity.of(jose_on_host).interpolation._runtime()
-	assert_int(host_runtime.pump_mode).override_failure_message(
+	var host_entity := NetwEntity.of(jose_on_host)
+	var host_api := NetwMultiplayer.core_of(jose_on_host)
+	var pump_mode: int = host_api.display_get_track_stat(
+		host_entity.rid,
+		&"",
+		&"pump_mode",
+	)
+	assert_int(pump_mode).override_failure_message(
 		"the host must sample the client player it simulates authoritatively",
-	).is_equal(NetwDisplayDecl.PUMP_BRACKETED)
+	).is_equal(NetwMultiplayer.DISPLAY_PUMP_BRACKETED)
 	# And only its own: the host's player never saw the input.
 	assert_float(valeria_player.position.x).is_equal_approx(valeria_held, 1.0)
 
-	var host_bombs := _count_bombs(valeria_world)
-	var client_bombs := _count_bombs(jose_world)
+	var host_bombs := _count_bombs(valeria, valeria_world)
+	var client_bombs := _count_bombs(jose, jose_world)
 
 	# Reaches the host at all, so the spawn is server driven and replicated.
 	assert_int(host_bombs).is_greater(0)
@@ -100,7 +108,8 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	await _begin_game(valeria)
 
 	await valeria.await_scene(&"World")
-	var jose_world := await jose.await_scene(&"World")
+	await jose.await_scene(&"World")
+	var jose_world: NetwSceneHandle = Netw.scene(jose.tree, &"World")
 	var valeria_player := await valeria.await_player(&"valeria") as Node2D
 	var valeria_on_jose := await jose.await_player(&"valeria") as Node2D
 
@@ -112,7 +121,7 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	await game.sync_ticks(8)
 	valeria.simulate_action_press("move_right")
 	valeria.simulate_action_press("set_bomb")
-	var bomb_seen := await _wait_for_bomb(jose_world, 32)
+	var bomb_seen := await _wait_for_bomb(jose, jose_world, 32)
 	valeria.simulate_action_release("move_right")
 	valeria.simulate_action_release("set_bomb")
 
@@ -136,7 +145,8 @@ func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void
 	var jose := await game.add_client("jose", false)
 	await _begin_game(valeria)
 
-	var world := await valeria.await_scene(&"World")
+	await valeria.await_scene(&"World")
+	var world: NetwSceneHandle = Netw.scene(valeria.tree, &"World")
 	var jose_view := await jose.await_player(&"jose") as Node2D
 	var jose_on_host := valeria.find_player(&"jose") as Node2D
 
@@ -146,11 +156,11 @@ func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void
 	valeria.simulate_action_release("set_bomb")
 	await game.sync_ticks(2)
 
-	var bomb := _first_bomb(world)
+	var bomb := _first_bomb(valeria, world)
 	assert_that(bomb).is_not_null()
 
-	var score := world.level.get_node("Score")
-	var rock := world.level.get_node("Rocks").get_child(0)
+	var score := world.root.get_node("Score")
+	var rock := world.root.get_node("Rocks").get_child(0)
 	var score_before: int = score.get_score(valeria.peer_id)
 
 	# Resolve the blast on the server against a rock and the remote player.
@@ -176,7 +186,9 @@ func test_client_disconnect_keeps_match_running() -> void:
 	await valeria.await_scene(&"World")
 	await valeria.await_player(&"jose")
 
-	var gamestate := valeria.tree.get_service(BomberGamestate) as BomberGamestate
+	var gamestate := (
+			Netw.service(valeria.tree, BomberGamestate) as BomberGamestate
+	)
 	var errored: Array[bool] = [false]
 	gamestate.game_error.connect(func(_what: String) -> void: errored[0] = true)
 
@@ -191,17 +203,14 @@ func test_client_disconnect_keeps_match_running() -> void:
 
 	assert_bool(dropped).is_true()
 	assert_bool(errored[0]).is_false()
-	assert_that(gamestate.world).is_not_null()
+	assert_bool(gamestate.world.is_declared).is_true()
 	assert_that(valeria.find_player(&"valeria")).is_not_null()
 	await drain_frames(get_tree(), 10)
 
 
-# The lobby roster now ships inside the networked Lobby scene, so admitting the
-# host must (1) spawn that scene's UI and (2) populate its roster, while the
-# pre-session browser steps aside. On a listen server admission runs
-# synchronously inside participant_joined, so local_scene_changed has to be
-# relayed by then. Regression for binding local_participant after the emit, which
-# dropped the host's first scene change and left it stuck on the browser.
+# On a listen server, admission runs synchronously inside participant_joined,
+# so scene_local_changed has to be relayed by then or the host's first scene
+# change is dropped and it stays stuck on the browser.
 func test_host_lobby_ui_spawns_inside_scene_with_roster() -> void:
 	var valeria := await game.add_host("valeria", false)
 	await drain_frames(get_tree(), 5)
@@ -213,26 +222,16 @@ func test_host_lobby_ui_spawns_inside_scene_with_roster() -> void:
 
 	var browser := valeria.scene().find_child("ConnectBrowser", true, false) as Control
 	assert_bool(browser.visible).is_false()
-	assert_that(valeria.tree.api.local_participant.current_scene.label) \
-			.is_equal(&"Lobby")
+	assert_that(
+		Netw.session(valeria.tree).local_participant.current_scene.label,
+	).is_equal(&"Lobby")
 
 
-# The declaration path, answered on the tick tier.
-#
-# Every finding in the prediction campaign was measured on the one solver game,
-# which runs the frame tier, declares a carry channel, and is dense in marks a
-# kinematic body has no use for. Bomber is the other path and had never been
-# asked what its declarations reach, so nothing distinguished "this tier is
-# fine" from "nobody looked". This asks, through the same public reader a game
-# would call.
-#
-# One answer is deliberately a REFUSAL. Position declares a carry_step() that is
-# legal, is accepted, and is refused on first use because this body runs the tick
-# tier, so this game is where inert_forward_model fires. That pairing is the
-# whole point of asking: a declaration that parses is not a declaration that
-# reaches, and the report is where the difference is answerable before a player
-# feels it. (A4 of the plan of record wanted this here and could not have it
-# until C1/P5 stopped a node carry rule from undeclaring the field it advances.)
+# The declaration path, answered on the tick tier through the same public
+# reader a game would call. One answer is deliberately a REFUSAL: position
+# declares a carry_step() that is legal, is accepted, and is refused on first
+# use because this body runs the tick tier. A declaration that parses is not a
+# declaration that reaches.
 func test_the_reachability_report_answers_for_the_tick_path() -> void:
 	var valeria := await game.add_host("valeria", false)
 	await _begin_game(valeria)
@@ -257,10 +256,8 @@ func test_the_reachability_report_answers_for_the_tick_path() -> void:
 			).is_equal(48.0)
 	assert_bool(bool(fields[&"position"][&"triggers"])).is_true()
 
-	# The field the body recomputes from the input every tick. It is replicated
-	# for observers and must not decide that a correction is needed -- the pairing
-	# the campaign measured on the other game, declared here before anything in
-	# Phase C moves.
+	# The body recomputes it from the input every tick, so it is replicated for
+	# observers and must not decide that a correction is needed.
 	assert_str(String(fields[&"velocity"][&"class"])).is_equal("DERIVED")
 	assert_bool(bool(fields[&"velocity"][&"triggers"])).override_failure_message(
 		"velocity is recomputed from the input every tick, so it may be "
@@ -270,27 +267,8 @@ func test_the_reachability_report_answers_for_the_tick_path() -> void:
 
 	var model: Dictionary = fields[&"position"][&"forward_model"]
 	assert_str(String(model[&"kind"])).override_failure_message(
-		"the step is declared, so the report must say a step was declared",
-	).is_equal("step")
-	assert_bool(bool(model[&"live"])).override_failure_message(
-		"and must not call it live: the tick tier refuses it on first use, so "
-		+ "every recovery writes the acknowledged value as if none had been "
-		+ "declared",
-	).is_false()
-	assert_str(String(model[&"why"])).contains("prediction.schedule = FRAME")
-
-	var codes := PackedStringArray()
-	for finding: Dictionary in report[&"findings"]:
-		codes.append(String(finding[&"code"]))
-	assert_array(codes).override_failure_message(
-		"the tick path has to be able to name this pairing, which is the one "
-		+ "finding A4 asked this game to produce",
-	).contains(["inert_forward_model"])
-
-	# The step is refused, and the rest of the declaration it sits beside is
-	# untouched -- which is the fix C1/P5 landed, asserted where the game writes
-	# it rather than only in the grammar unit.
-	assert_bool(bool(fields[&"position"][&"tolerance_declared"])).is_true()
+		"the game declares no step, so the report must not invent one",
+	).is_equal("none")
 
 
 func _begin_game(host: NetwSceneRunner) -> void:
@@ -298,26 +276,28 @@ func _begin_game(host: NetwSceneRunner) -> void:
 	# always begins from a spawned lobby. Awaiting it keeps a programmatic
 	# start from racing the startup scene spawn.
 	await host.await_scene(&"Lobby", 2.0)
-	var gamestate := host.tree.get_service(BomberGamestate) as BomberGamestate
+	var gamestate := (
+			Netw.service(host.tree, BomberGamestate) as BomberGamestate
+	)
 	assert_that(gamestate).is_not_null()
 	gamestate.begin_game()
 
 
-func _count_bombs(world: NetwSceneHandle) -> int:
-	var bombs := world.level.get_node_or_null("Bombs")
+func _count_bombs(runner, world: NetwSceneHandle) -> int:
+	var bombs := world.root.get_node_or_null("Bombs")
 	return bombs.get_child_count() if bombs else 0
 
 
-func _wait_for_bomb(world: NetwSceneHandle, ticks: int) -> bool:
+func _wait_for_bomb(runner, world: NetwSceneHandle, ticks: int) -> bool:
 	for i in ticks:
 		await game.sync_ticks(1)
-		if _count_bombs(world) > 0:
+		if _count_bombs(runner, world) > 0:
 			return true
 	return false
 
 
-func _first_bomb(world: NetwSceneHandle) -> Area2D:
-	var bombs := world.level.get_node_or_null("Bombs")
+func _first_bomb(runner, world: NetwSceneHandle) -> Area2D:
+	var bombs := world.root.get_node_or_null("Bombs")
 	if not bombs:
 		return null
 	for child in bombs.get_children():

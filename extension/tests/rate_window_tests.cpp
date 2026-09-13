@@ -53,8 +53,8 @@ TEST_CASE(
     RateWindow window;
     bool refused = false;
     for (int step = 0; step < STEADY_STEPS; ++step) {
-        refused = refused
-            || window.exceeded(7, NOW + int64_t(step) * STEADY_GAP);
+        refused
+            = refused || window.exceeded(7, NOW + int64_t(step) * STEADY_GAP);
     }
     CHECK_FALSE(refused);
 }
@@ -95,12 +95,14 @@ TEST_CASE(
     }
 
     SUBCASE("a peer whose spend aged out is dropped and spends again") {
-        CHECK(spending_whole_budget_refuses_the_next(window, 3, NOW + 5 * SPAN)
+        CHECK(
+            spending_whole_budget_refuses_the_next(window, 3, NOW + 5 * SPAN)
         );
     }
 
     SUBCASE("the peer whose request triggered the prune survives it") {
-        CHECK(spending_whole_budget_refuses_the_next(window, 3, NOW + 5 * SPAN)
+        CHECK(
+            spending_whole_budget_refuses_the_next(window, 3, NOW + 5 * SPAN)
         );
         for (int peer = 2; peer < tracked + 4; ++peer) {
             window.exceeded(peer, NOW + 5 * SPAN);

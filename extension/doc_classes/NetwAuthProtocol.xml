@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwAuthProtocol" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Wire-format codec for the packets Networked exchanges during [SceneMultiplayer]'s authentication phase.
+	</brief_description>
+	<description>
+		Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single provider byte. A packet matching neither magic is [constant KIND_UNKNOWN] and the receiver fails closed on it, because an auth phase that guesses at an unrecognised packet is an auth phase that can be walked past. Only the provider payload below reaches a [NetwAuthFlow].
+		[codeblock lang=text]
+		auth packet
+		 ┠╴ "NHEL"   a player opening a session
+		 ┃   ┠╴ version(1)    the framing this packet was written against
+		 ┃   ┠╴ app_tag(8)    the game build folded with the wire identity,
+		 ┃   ┃                so a mismatched build is refused before the
+		 ┃   ┃                provider payload is read
+		 ┃   ┠╴ flags(1)      reserved
+		 ┃   ┖╴ provider payload, which is all a flow ever sees
+		 ┖╴ "NPRB"   a browser asking what this server is
+		     ┠╴ version(1)
+		     ┖╴ status-or-flags(1), then the reply payload
+		[/codeblock]
+		A probe peer is answered and disconnected without completing auth, so it never enters [method MultiplayerPeer.get_unique_id]'s peer list. This class is the only place that framing is written or read, so a change to it moves both sides at once.
+		Every verb is static and the class is never instantiated.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="classify" qualifiers="static">
+			<return type="int" enum="NetwAuthProtocol.Kind" />
+			<param index="0" name="data" type="PackedByteArray" />
+			<description>
+				Which [enum Kind] [param data]'s magic prefix names. A packet shorter than a header, or carrying neither magic, is [constant KIND_UNKNOWN].
+			</description>
+		</method>
+		<method name="decode_client_hello" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="data" type="PackedByteArray" />
+			<param index="1" name="local_app_tag" type="int" default="0" />
+			<description>
+				Reads a hello packet, refusing it when its build tag differs from [param local_app_tag].
+				[codeblock lang=text]
+				Dictionary
+				┠╴ok                bool             false on a refusal
+				┠╴reason            String           "framing", "version" or "app", empty when ok
+				┠╴version           int              the framing version the packet carried
+				┠╴app_tag           int              the 64-bit build tag the packet carried
+				┠╴flags             int              reserved
+				┖╴provider_payload  PackedByteArray  empty on a refusal
+				[/codeblock]
+				A refusal still reports the [code]version[/code] and [code]app_tag[/code] it read, so the refusing side can say what the peer claimed rather than only that it said no.
+			</description>
+		</method>
+		<method name="decode_probe_reply" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="data" type="PackedByteArray" />
+			<description>
+				Reads a probe reply. A packet with the wrong magic, a short header, or a foreign version answers [code]ok[/code] false and an empty payload. The status it carries is one value of [enum ProbeStatus].
+				[codeblock lang=text]
+				Dictionary
+				┠╴ok       bool             false on a refusal
+				┠╴version  int              the framing version the packet carried
+				┠╴status   int              what the server said about answering
+				┖╴payload  PackedByteArray  the provider's own reply, empty on a refusal
+				[/codeblock]
+			</description>
+		</method>
+		<method name="decode_probe_request" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="data" type="PackedByteArray" />
+			<description>
+				Reads a probe request. A packet with the wrong magic, a short header, or a foreign version answers [code]ok[/code] false.
+				[codeblock lang=text]
+				Dictionary
+				┠╴ok       bool  false on a refusal
+				┠╴version  int   the framing version the packet carried
+				┖╴flags    int   reserved
+				[/codeblock]
+			</description>
+		</method>
+		<method name="encode_client_hello" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="provider_payload" type="PackedByteArray" />
+			<param index="1" name="app_tag" type="int" default="0" />
+			<param index="2" name="flags" type="int" default="0" />
+			<description>
+				Wraps [param provider_payload] in a hello header stamped with [param app_tag], the 64-bit build tag folded from [member MultiplayerTree.app_id] and the wire identity by [method NetwMultiplayer.auth_set_app_tag]. There is no ungated value. An empty [member MultiplayerTree.app_id] still carries the wire the build speaks, so two builds that disagree about the format or the channel table are refused whether or not the game named itself. [param flags] is reserved.
+			</description>
+		</method>
+		<method name="encode_probe_reply" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="status" type="int" />
+			<param index="1" name="payload" type="PackedByteArray" default="PackedByteArray()" />
+			<description>
+				Wraps [param payload] in a probe-reply header stamped with [param status], one of [enum ProbeStatus].
+			</description>
+		</method>
+		<method name="encode_probe_request" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="flags" type="int" default="0" />
+			<description>
+				Builds a probe request. [param flags] is reserved.
+			</description>
+		</method>
+		<method name="magic_hello" qualifiers="static">
+			<return type="PackedByteArray" />
+			<description>
+				The four bytes a hello packet opens with, [code]"NHEL"[/code].
+			</description>
+		</method>
+		<method name="magic_probe" qualifiers="static">
+			<return type="PackedByteArray" />
+			<description>
+				The four bytes a probe packet opens with, [code]"NPRB"[/code].
+			</description>
+		</method>
+		<method name="protocol_version" qualifiers="static">
+			<return type="int" />
+			<description>
+				The framing version this build writes and is the only one it accepts. It is bumped when the framing changes in a way an older peer cannot read, which is what makes a version mismatch a clean refusal rather than a misparse.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="KIND_UNKNOWN" value="0" enum="Kind">
+			The packet carries neither magic, or is shorter than a header. The receiver fails closed on it.
+		</constant>
+		<constant name="KIND_HELLO" value="1" enum="Kind">
+			A player opening a session.
+		</constant>
+		<constant name="KIND_PROBE" value="2" enum="Kind">
+			A browser asking what this server is. It is answered and dropped without ever joining.
+		</constant>
+		<constant name="PROBE_OK" value="0" enum="ProbeStatus">
+			The reply carries server metadata.
+		</constant>
+		<constant name="PROBE_BUSY" value="1" enum="ProbeStatus">
+			The server is up but will not answer this probe now.
+		</constant>
+		<constant name="PROBE_UNSUPPORTED" value="2" enum="ProbeStatus">
+			The server does not answer probes at all.
+		</constant>
+		<constant name="PROBE_ERROR" value="3" enum="ProbeStatus">
+			The server tried to answer and could not.
+		</constant>
+	</constants>
+</class>

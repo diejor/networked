@@ -4,12 +4,14 @@
 
 #include "godot/local_vector.hpp"
 #include "godot/rid.hpp"
+#include "netw/api/schema_core.hpp"
 #include "netw/repl/retained_lane.hpp"
 #include "netw/repl/row_lane.hpp"
 #include "netw/repl/window_ring.hpp"
-#include "netw/api/schema_core.hpp"
 
 namespace netw::repl {
+
+using netw::table::SchemaRecord;
 
 class LaneSet {
     static uint64_t address(int64_t p_route, uint8_t p_comp) {
@@ -24,7 +26,7 @@ public:
     RowLane *open(
         int64_t p_route,
         uint8_t p_comp,
-        const godot::Ref<SchemaRecord> &p_schema
+        const SchemaRecord &p_schema
     );
 
     RowLane *find(int64_t p_route, uint8_t p_comp);
@@ -32,7 +34,7 @@ public:
     RetainedLane *open_retained(
         int64_t p_route,
         uint8_t p_comp,
-        const godot::Ref<SchemaRecord> &p_schema
+        const SchemaRecord &p_schema
     );
 
     RetainedLane *find_retained(int64_t p_route, uint8_t p_comp);
@@ -40,7 +42,7 @@ public:
     WindowRing *open_window(
         int64_t p_route,
         uint8_t p_comp,
-        const godot::Ref<SchemaRecord> &p_schema,
+        const SchemaRecord &p_schema,
         uint32_t p_depth
     );
 
@@ -56,7 +58,7 @@ public:
 
     void forget_peer(int p_peer);
 
-    void acknowledge_peer(int p_peer, uint16_t p_acked_seq);
+    void acknowledge_peer(int p_peer, uint16_t p_acked_seq, uint32_t p_history);
 
     void clear();
 

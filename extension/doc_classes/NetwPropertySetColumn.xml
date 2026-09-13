@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPropertySetColumn" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One member column of a [NetwPropertySet], positioned in wire order inside [member NetwPropertySet.columns].
+	</brief_description>
+	<description>
+		What the column holds is read from [member schema_column], the schema's own declaration, so a set never carries a second copy of a key or a quantizer that could disagree with the table and the database. Everything else here says how the column travels and what a correction does with it.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="create" qualifiers="static">
+			<return type="NetwPropertySetColumn" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
+			<param index="2" name="watch" type="bool" default="false" />
+			<param index="3" name="type" type="int" default="15" />
+			<description>
+				Builds a member whose shape is a fresh single-column declaration.
+				A set compiled from a declaration passes its column through [member schema_column] instead, so this form is for a set assembled by hand with no schema of its own.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="carry_channel" type="StringName" setter="set_carry_channel" getter="get_carry_channel" default="&amp;&quot;&quot;">
+			The sibling column a recovery advances this value along, from the transition it acknowledged to the present, or empty when the acknowledged value is written as it stands.
+		</member>
+		<member name="converge_stiffness" type="float" setter="set_converge_stiffness" getter="get_converge_stiffness" default="0.0">
+			How firmly a restored value is pulled toward the authoritative one instead of being written to it, or [code]0.0[/code] to write it outright.
+		</member>
+		<member name="delta_mode" type="int" setter="set_delta_mode" getter="get_delta_mode" default="0">
+			Whether the column spends a per-element selector to write a signed step from the baseline its frame names, or writes its whole code every time.
+			[constant DELTA_AUTO] derives the answer from the declaration, and the derivation is the measured one: a ladder pays 39 to 71 percent on a value a solver integrates and costs 12.5 percent on one a player authors or one that wraps, so it is taken only for a quantized column wider than eight bits on a set whose [member NetwPropertySet.record] is [constant NetwPropertySet.RECORD_STATE], and never for a [NetwQuantizeAngle].
+			Override it where the declaration cannot see what the value does. An integrated column on a set that is not state is one such case, and an authored one whose declaration looks integrated is the other.
+			A column narrower than five bits is [constant DELTA_FULL] whatever this says, because no bucket is narrower than the code it would replace.
+			The answer folds into [method NetwPropertySet.wire_hash], so two builds that disagree about it refuse to pair rather than misdecoding each other.
+		</member>
+		<member name="epsilon_override" type="float" setter="set_epsilon_override" getter="get_epsilon_override" default="-1.0">
+			The column's own divergence threshold, or a negative value to inherit the entity's default.
+		</member>
+		<member name="explicit_reconcile_only" type="bool" setter="set_explicit_reconcile_only" getter="get_explicit_reconcile_only" default="false">
+			When [code]true[/code] the column never triggers a correction on its own, while a correction another column triggers still restores it.
+		</member>
+		<member name="explicit_teleport_only" type="bool" setter="set_explicit_teleport_only" getter="get_explicit_teleport_only" default="false">
+			When [code]true[/code] the column is restored only by a teleport-tier recovery, never by an ordinary one.
+		</member>
+		<member name="key" type="StringName" setter="" getter="get_key" default="&amp;&quot;&quot;">
+			Payload name, stable across peers because both read it off the same declaration.
+		</member>
+		<member name="lane" type="int" setter="set_lane" getter="get_lane" default="0">
+			The delivery lane, the axis form of [member watch].
+		</member>
+		<member name="property_class" type="int" setter="set_property_class" getter="get_property_class" default="0">
+			What the column's value does in the simulation, which decides whether a reconciliation compares it, restores it, or leaves it to display.
+		</member>
+		<member name="quantizer" type="NetwQuantize" setter="set_quantizer" getter="get_quantizer">
+			Bit-packer for this column, or [code]null[/code] for a self-describing raw [Variant] on the wire. Part of the schema's shape, so two peers that packed it differently disagree on [method NetwPropertySet.wire_hash].
+		</member>
+		<member name="schema_column" type="int" setter="set_schema_column" getter="get_schema_column" default="-1">
+			The address this column has in the schema its set was declared from, the one address it has anywhere.
+		</member>
+		<member name="teleport_at_override" type="float" setter="set_teleport_at_override" getter="get_teleport_at_override" default="-1.0">
+			The column's own teleport-tier distance, or a negative value to inherit the entity's default.
+		</member>
+		<member name="type" type="int" setter="" getter="get_type" default="15">
+			The declared [NetwMultiplayer] column type fixed into the schema.
+		</member>
+		<member name="watch" type="bool" setter="set_watch" getter="get_watch" default="false">
+			When [code]true[/code] the column replicates reliably on change, otherwise it is volatile and freshest-wins.
+		</member>
+	</members>
+	<constants>
+		<constant name="DELTA_AUTO" value="0" enum="Delta">
+			The core derives [member delta_mode] from the declaration.
+		</constant>
+		<constant name="DELTA_FULL" value="1" enum="Delta">
+			Every element writes its whole code, which is what a peer holding no baseline can read.
+		</constant>
+		<constant name="DELTA_LADDER" value="2" enum="Delta">
+			Every element writes a two-bit selector and either its whole code or a signed step in the smallest bucket that holds it.
+		</constant>
+	</constants>
+</class>

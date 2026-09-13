@@ -9,11 +9,11 @@
 		[method restore] and [method write] are keyed by property name, which is the altitude the seam speaks: the engine's own plan is keyed by field slot.
 		[codeblock]
 		var staged := NetwPredictRecovery.of(restore, restore, false, false)
-		staged.restore()    the payload to apply, by property name
-		staged.write()      what the display is told moved
-		staged.teleport()   the body kept nothing worth blending from
-		staged.skip()       this recovery declines to write at all
 		[/codeblock]
+		- [method restore] the payload to apply, by property name
+		- [method write] what the display is told moved
+		- [method teleport] the body kept nothing worth blending from
+		- [method skip] this recovery declines to write at all
 	</description>
 	<tutorials>
 	</tutorials>
@@ -50,6 +50,7 @@
 			<return type="Dictionary" />
 			<description>
 				What the display is told moved. It is empty for a recovery that restores without a visible correction, which is what a replay does.
+				Separate from [method restore] because the two serve different readers rather than because they hold different values: the restore is applied to the simulated state, and this is the copy something drains onto the bound node. Wherever both carry a field they carry the same value, and a driver with nothing to drain reads the restored state and leaves this undrained rather than being handed a second truth.
 			</description>
 		</method>
 	</methods>

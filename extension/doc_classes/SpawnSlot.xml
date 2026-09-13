@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SpawnSlot" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The resolved placement target for one player spawn.
+	</brief_description>
+	<description>
+		A slot answers one question, "where does this player node go", and it answers it the same way whether the destination is a declared network scene or a plain branch of the tree. That is what lets a spawner be written once: it asks [method for_scene] for a slot and hands the player to [method place_player], instead of branching on whether the scene was declared.
+		A slot resolves at the moment it is asked for, so it is a value to use now rather than a handle to keep. A session that declares no scene under the requested stem answers a slot that [method is_valid] rejects, and placing into it does nothing.
+		[codeblock]
+		var slot := SpawnSlot.for_scene(Netw.of(self), &amp;"Arena")
+		if slot.is_valid():
+		    slot.place_player(player)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="for_scene" qualifiers="static">
+			<return type="SpawnSlot" />
+			<param index="0" name="session" type="NetwMultiplayer" />
+			<param index="1" name="scene_stem" type="StringName" />
+			<description>
+				Resolves the slot for the scene [param session] declares under [param scene_stem].
+				This is the verb a spawner calls. A session declaring no such scene, and a null [param session], both answer a slot [method is_valid] rejects rather than an error, so a spawner asks once and tests the answer.
+				[codeblock]
+				var slot := SpawnSlot.for_scene(Netw.of(self), &amp;"Arena")
+				if slot.is_valid():
+				    slot.place_player(player)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="get_scene" qualifiers="const">
+			<return type="NetwSceneHandle" />
+			<description>
+				Returns the declared [NetwSceneHandle] this slot places into, or [code]null[/code] when it places under a plain parent instead.
+			</description>
+		</method>
+		<method name="has_scene" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] when this slot carries a scene that is still declared. A handle to a scene the session has since dropped answers [code]false[/code], which is why this is asked rather than the handle being tested for null.
+			</description>
+		</method>
+		<method name="in_scene" qualifiers="static">
+			<return type="SpawnSlot" />
+			<param index="0" name="scene" type="NetwSceneHandle" />
+			<description>
+				Returns a slot that places players into [param scene] through [method NetwSceneHandle.add_player], so the spawned node is registered with the session rather than only parented.
+			</description>
+		</method>
+		<method name="is_valid" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] when this slot still has somewhere to put a player: a declared scene, or a parent node that has not been freed.
+			</description>
+		</method>
+		<method name="place_player">
+			<return type="void" />
+			<param index="0" name="player" type="Node" />
+			<description>
+				Puts [param player] where this slot points. A scene slot adds it through [method NetwSceneHandle.add_player] as the [NetwEntity] the node carries; a parent slot adds it as a plain child. An invalid slot places nothing.
+			</description>
+		</method>
+		<method name="under" qualifiers="static">
+			<return type="SpawnSlot" />
+			<param index="0" name="parent" type="Node" />
+			<description>
+				Returns a slot that adds players as children of [param parent], with no scene declaration involved. The parent is held weakly, so a slot outliving its parent reports [method is_valid] as [code]false[/code] instead of placing into a freed node.
+			</description>
+		</method>
+	</methods>
+</class>

@@ -1,8 +1,6 @@
 #include "netw/predict/axes.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 ArchetypeAxes archetype_axes(int p_archetype) {
     ArchetypeAxes axes;
@@ -34,9 +32,8 @@ int role_for_axes(int p_input_source, int p_sim_mode) {
         return int(Role::REMOTE);
     }
     if (p_input_source == int(InputSource::LOCAL)) {
-        return p_sim_mode == int(SimMode::AUTHORITATIVE)
-            ? int(Role::HOST_LOCAL)
-            : int(Role::PREDICT);
+        return p_sim_mode == int(SimMode::AUTHORITATIVE) ? int(Role::HOST_LOCAL)
+                                                         : int(Role::PREDICT);
     }
     if (p_input_source == int(InputSource::RECEIVED)
         && p_sim_mode == int(SimMode::AUTHORITATIVE)) {
@@ -45,6 +42,10 @@ int role_for_axes(int p_input_source, int p_sim_mode) {
     if (p_input_source == int(InputSource::PREDICTED)
         && p_sim_mode == int(SimMode::SPECULATIVE)) {
         return int(Role::SIMULATE);
+    }
+    if (p_input_source == int(InputSource::NONE)) {
+        return p_sim_mode == int(SimMode::AUTHORITATIVE) ? int(Role::HOST_LOCAL)
+                                                         : int(Role::SIMULATE);
     }
     return int(Role::REMOTE);
 }
@@ -55,6 +56,4 @@ int correction_for_recovery_policy(int p_policy) {
         : int(CorrectionMode::SNAP);
 }
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

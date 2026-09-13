@@ -7,8 +7,6 @@
 [ext_resource type="AudioStream" uid="uid://j6x2is8pyt8y" path="res://examples/racing/audio/engine.ogg" id="5_kcati"]
 [ext_resource type="AudioStream" uid="uid://io4pmr3lo1dy" path="res://examples/racing/audio/impact.ogg" id="6_v3p7b"]
 [ext_resource type="Script" uid="uid://45owoqnpmvfm" path="res://examples/racing/scripts/vehicle_controls.gd" id="7_ctl"]
-[ext_resource type="Script" uid="uid://crm8bn0yry6g8" path="res://addons/networked/sync/sim/prediction_component.gd" id="8_pred"]
-[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="9_interp"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tfk12"]
 transparency = 1
@@ -59,11 +57,6 @@ friction = 5.0
 rough = true
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_hhncp"]
-
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_spawn"]
-properties/0/path = NodePath(".:heading")
-properties/0/spawn = true
-properties/0/replication_mode = 0
 
 [node name="Vehicle" type="Node3D" unique_id=1867641805]
 script = ExtResource("1_e2g1l")
@@ -127,20 +120,8 @@ angular_damp = 4.0
 [node name="CollisionShape" type="CollisionShape3D" parent="Sphere" unique_id=503279956]
 shape = SubResource("SphereShape3D_hhncp")
 
-[node name="SpawnSync" type="MultiplayerSynchronizer" parent="." unique_id=150389728]
-replication_config = SubResource("SceneReplicationConfig_spawn")
-
 [node name="Inputs" type="Node" parent="." unique_id=1215178954]
 script = ExtResource("7_ctl")
 tick_mode = true
-
-[node name="PredictionComponent" type="Node" parent="." unique_id=1682018892]
-unique_name_in_owner = true
-script = ExtResource("8_pred")
-archetype = 2
-
-[node name="MultiplayerInterpolator" type="Node" parent="." unique_id=2035980158]
-script = ExtResource("9_interp")
-metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [connection signal="body_entered" from="Sphere" to="." method="_on_sphere_body_entered"]

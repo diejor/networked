@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSceneHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The scene an entity belongs to, reached as [member NetwEntity.scene].
+	</brief_description>
+	<description>
+		The view a game holds for one scene: who is in it, who may enter it, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so [code]==[/code] answers "the same scene" and a listener connected through any route hears every edge. Reach it with [method Netw.scene] or [member NetwEntity.scene]. Never [code]null[/code] for an entity in a session: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask [member is_declared] when the difference matters.
+		[codeblock]
+		func _on_scene_live(track: NetwSceneHandle) -&gt; void:
+		    track.player_entered.connect(_on_car_entered)
+		    track.player_left.connect(_on_car_left)
+		    for participant in track.participants:
+		        track.admit(participant)
+		[/codeblock]
+		A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree answers [member is_declared] [code]false[/code] and every other member empty.
+		[NetwMultiplayer] keeps the same surface keyed by [RID] for callers that already hold one, and [member entity] is the bridge to it: [method NetwMultiplayer.scene_get_players], [method NetwMultiplayer.scene_admit] and [method NetwMultiplayer.scene_observe] are the flat spellings of [member players], [method admit] and the signals here.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="add_player">
+			<return type="int" enum="Error" />
+			<param index="0" name="player" type="NetwEntity" />
+			<description>
+				Seats [param player] in this scene through [method NetwMultiplayer.scene_add_player], which admits the player and parents its node under [member root].
+				The one call that seats a freshly instantiated player: parenting alone makes it a member, because membership is ancestry, but its peer still has to be admitted before the subtree is replicated to it. Admission is flushed before the node enters the tree, so the spawn packets the subtree produces already target the peer about to receive them. Only authority admits; every peer still parents its own copy.
+				[codeblock]
+				var node := template.instantiate_player(participant)
+				NetwEntity.of(self).scene.add_player(NetwEntity.of(node))
+				[/codeblock]
+				[codeblock lang=text]
+				Error
+				┠╴OK                      parented, and admitted when this peer is authority
+				┠╴ERR_INVALID_PARAMETER   peer_id 0, while admitting
+				┠╴ERR_DOES_NOT_EXIST      this scene names no live node
+				┖╴ERR_UNAVAILABLE         no player, no session, or admission failed
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="admit">
+			<return type="int" enum="Error" />
+			<param index="0" name="participant" type="NetwParticipant" />
+			<description>
+				Admits [param participant] to this scene, which is what makes the scene's subtree replicate to that peer and what seats the participant here.
+				Idempotent, so admitting a participant this scene already admits changes nothing.
+				[codeblock lang=text]
+				Error
+				┠╴OK                      admitted
+				┠╴ERR_UNAUTHORIZED        this peer is not the server
+				┠╴ERR_INVALID_PARAMETER   a null participant, outside a session, or a peer id of 0
+				┠╴ERR_DOES_NOT_EXIST      this scene names no live node
+				┖╴ERR_UNAVAILABLE         admission did not take, after everything else succeeded
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="admits" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="participant" type="NetwParticipant" />
+			<description>
+				Whether this scene currently admits [param participant]. Reads the admission boundary rather than the seat, so it answers for a participant admitted before it was seated.
+			</description>
+		</method>
+		<method name="move">
+			<return type="NetwPromise" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="opts" type="NetwReparentOpts" default="null" />
+			<description>
+				Moves [param entity] into THIS scene, answering the [NetwPromise] the settle carries. [method NetwMultiplayer.scene_move] holds the law, the carry window included; what differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
+				[codeblock]
+				var moved := destination.move(NetwEntity.of(player), opts)
+				await moved.wait()
+				[/codeblock]
+				Answers an already-settled [constant @GlobalScope.ERR_INVALID_PARAMETER] for a null [param entity] or outside a session.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="observe">
+			<return type="void" />
+			<param index="0" name="event" type="int" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Calls [param callback] whenever this scene gains or loses a subject of [param event], one of [enum NetwMultiplayer.SceneEvent]. Registering the same [param callback] for the same [param event] twice does nothing.
+				[b]The callback is handed the subject as the object a game holds, never as the internal handle the scene book keys its rows by.[/b] That is the one place this class does more than forward: [method NetwMultiplayer.scene_observe] hands a raw subject straight through, and a game writing this signature would have to name an [RID] it can do nothing with.
+				[codeblock]
+				arena.observe(NetwMultiplayer.SCENE_EVENT_PLAYER, on_car_edge)
+
+				func on_car_edge(present: bool, car: NetwEntity) -&gt; bool:
+				        reshuffle(car)
+				        return false        # true drops the subscription
+				[/codeblock]
+				[constant NetwMultiplayer.SCENE_EVENT_PARTICIPANT] carries a [NetwParticipant]; [constant NetwMultiplayer.SCENE_EVENT_PLAYER] and [constant NetwMultiplayer.SCENE_EVENT_ENTITY] carry a [NetwEntity]. Returning [code]true[/code] from the callback withdraws it, exactly as the flat verb's does, and [method unobserve] withdraws it by name.
+			</description>
+		</method>
+		<method name="release">
+			<return type="int" enum="Error" />
+			<param index="0" name="participant" type="NetwParticipant" />
+			<description>
+				Withdraws [param participant]'s admission, so the scene's subtree stops replicating to that peer.
+				[codeblock lang=text]
+				Error
+				┠╴OK                     the admission is withdrawn
+				┠╴ERR_INVALID_PARAMETER  this handle has no session, or a null participant
+				┖╴ERR_DOES_NOT_EXIST     the scene did not admit them
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="unobserve">
+			<return type="void" />
+			<param index="0" name="event" type="int" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Withdraws the [param callback] a [method observe] call registered for [param event]. It must be the same [Callable] that was passed to [method observe], because that is the name the relay is filed under; a fresh [Callable] over the same method is a different name and withdraws nothing.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
+			Every entity standing in this scene, as the [NetwEntity] each one is read through. [method NetwMultiplayer.scene_get_entities] answers the same set under the flat spelling, as the internal handles the session keys its rows by; this member resolves each one so a caller never holds an [RID] it would only hand straight back.
+		</member>
+		<member name="entity" type="RID" setter="" getter="get_entity" default="RID()">
+			The resolved scene's entity RID, or an invalid RID outside a session.
+			Resolution is self-inclusive and walks the parent-entity chain, so it follows the tree and self-heals on reparent without anything re-enrolling the entity. This is the identity every [method NetwMultiplayer.scene_find]-family verb works on, and the bridge from the entity sugar to the flat surface.
+		</member>
+		<member name="is_declared" type="bool" setter="" getter="get_is_declared" default="false">
+			Whether a scene resolved at all. [code]false[/code] for an entity outside every scene, where every other member reads empty. The session-keyed read for a resolved scene is [method NetwMultiplayer.scene_is_declared] over [member entity].
+		</member>
+		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
+			The name this scene was declared under, which is the name [method Netw.scene] and [method NetwMultiplayer.scene_find] resolve.
+		</member>
+		<member name="local_player" type="NetwEntity" setter="" getter="get_local_player">
+			The player entity this peer represents in this scene, or [code]null[/code] when this peer has none here.
+		</member>
+		<member name="participants" type="NetwParticipant[]" setter="" getter="get_participants" default="[]">
+			Every participant seated in this scene. A participant is a person in the session; a player is the entity they steer, and [member players] answers those.
+		</member>
+		<member name="players" type="NetwEntity[]" setter="" getter="get_players" default="[]">
+			Every player entity in this scene, in no declared order.
+		</member>
+		<member name="root" type="Node" setter="" getter="get_root">
+			The authored node this scene was declared on, which is the scene's own identity, or [code]null[/code] outside a session.
+			This is the node a game parents content under and reparents players into. [method Netw.spawn] answers [member world] rather than this node when the scene declared [method NetwSceneConfig.isolated], so a caller that spawned an isolated scene reads the root back through here.
+		</member>
+		<member name="world" type="Node" setter="" getter="get_world">
+			The [SubViewport] the framework inserted above [member root] to give this scene a [World2D] and [World3D] of its own, or [code]null[/code] for a scene that shares the session's world.
+			Only a [Viewport] owns a world in Godot, so [method NetwSceneConfig.isolated] is delivered by inserting one rather than by a flag on the authored root. It carries no scene identity of its own and every materializing peer inserts the same one.
+		</member>
+	</members>
+	<signals>
+		<signal name="participant_entered">
+			<param index="0" name="participant" type="NetwParticipant" />
+			<description>
+				Emitted when [param participant] is seated in this scene, after the admission boundary is written, so a listener reading [member participants] sees them.
+			</description>
+		</signal>
+		<signal name="participant_left">
+			<param index="0" name="participant" type="NetwParticipant" />
+			<description>
+				Emitted when [param participant] leaves this scene, whether by moving to another or by leaving the session.
+			</description>
+		</signal>
+		<signal name="player_entered">
+			<param index="0" name="player" type="NetwEntity" />
+			<description>
+				Emitted when [param player] joins this scene's roster. A join changes what every other player in the scene is compared against, so a listener that maintains per-player state rebuilds the whole roster here rather than only the newcomer.
+			</description>
+		</signal>
+		<signal name="player_left">
+			<param index="0" name="player" type="NetwEntity" />
+			<description>
+				Emitted when [param player] leaves this scene's roster.
+			</description>
+		</signal>
+	</signals>
+</class>

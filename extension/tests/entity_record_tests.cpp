@@ -1,11 +1,18 @@
 #include "support/netw_test.h"
 
+#if defined(NETW_TIER_HOSTED)
+#include "godot/script.hpp"
+#include <godot_cpp/classes/class_db_singleton.hpp>
+#endif
+
 #include "godot/multiplayer_synchronizer.hpp"
 #include "godot/node.hpp"
-#include "netw/entity_ids.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/entity_record.hpp"
-#include "netw/entity_stage.hpp"
+#include "netw/entity/ids.hpp"
+#include "netw/entity/stage.hpp"
+#include "netw/scene_decl.hpp"
+#include "netw/script/model.hpp"
 #include <memory>
 
 #include "support/entity_facets.h"
@@ -14,13 +21,40 @@
 namespace TestNetwEntityRecord {
 
 using namespace godot;
-using netw::EntityStage;
 using netw::NetwEntityRecord;
+using netw::entity::Stage;
 using netw_test::CallLog;
 using netw_test::EntityFactories;
 
+struct Record {
+    NetwEntityRecord *row = memnew(NetwEntityRecord);
+
+    Record() = default;
+    Record(const Record &) = delete;
+    Record &operator=(const Record &) = delete;
+
+    ~Record() {
+        unref();
+    }
+
+    void unref() {
+        if (row != nullptr) {
+            godot::memdelete(row);
+            row = nullptr;
+        }
+    }
+
+    NetwEntityRecord *operator->() const {
+        return row;
+    }
+
+    operator NetwEntityRecord *() const {
+        return row;
+    }
+};
+
 class WindowProbe final : public godot::CallableCustom {
-    Ref<NetwEntityRecord> record;
+    NetwEntityRecord *record = nullptr;
     std::shared_ptr<bool> held;
     godot::ObjectID anchor;
 
@@ -34,11 +68,12 @@ class WindowProbe final : public godot::CallableCustom {
 
 public:
     WindowProbe(
-        const Ref<NetwEntityRecord> &p_record,
-        const std::shared_ptr<bool> &p_held
+        NetwEntityRecord *p_record,
+        const std::shared_ptr<bool> &p_held,
+        godot::Object *p_anchor
     )
         : record(p_record), held(p_held),
-          anchor(netw::gd::instance_id(p_record.ptr())) {
+          anchor(netw::gd::instance_id(p_anchor)) {
     }
 
     uint32_t hash() const override {
@@ -132,38 +167,32 @@ Ref<RefCounted> make_wrapper() {
     return wrapper;
 }
 
-Ref<NetwEntityRecord> make_record() {
-    Ref<NetwEntityRecord> record;
-    record.instantiate();
-    return record;
-}
-
 TEST_CASE(
     "[Networked][Entity][Hosted] R1 a record is born whole and shares no part"
 ) {
-    Ref<NetwEntityRecord> a = make_record();
-    Ref<NetwEntityRecord> b = make_record();
+    Record a;
+    Record b;
 
-    CHECK(netw::entity_ids::minted(a->get_handle()));
-    CHECK(netw::entity_ids::minted(b->get_handle()));
+    CHECK(netw::entity::minted(a->get_handle()));
+    CHECK(netw::entity::minted(b->get_handle()));
     CHECK(a->get_handle() != b->get_handle());
-    NETW_CHECK_EQ(netw::entity_ids::holders(a->get_handle()), 1);
+    NETW_CHECK_EQ(netw::entity::holders(a->get_handle()), 1);
 
-    CHECK(a->get_control().is_valid());
+    CHECK(a->get_control() != nullptr);
     CHECK(a->get_control() != b->get_control());
     a->get_control()->set_controller(7);
     NETW_CHECK_EQ(b->get_control()->get_controller(), 0);
 
     SUBCASE("a fresh record is unbound, unrouted and unnamed") {
-        NETW_CHECK_EQ(a->get_stage(), int(EntityStage::UNBOUND));
+        NETW_CHECK_EQ(a->get_stage(), int(Stage::UNBOUND));
         NETW_CHECK_EQ(a->get_route(), 0);
         NETW_CHECK_EQ(a->get_peer_id(), 0);
         CHECK(a->get_entity_id() == StringName());
     }
 
     SUBCASE("the stage moves without disturbing its neighbour") {
-        CHECK(a->advance(int(EntityStage::ARMED)));
-        NETW_CHECK_EQ(b->get_stage(), int(EntityStage::UNBOUND));
+        CHECK(a->advance(int(Stage::ARMED)));
+        NETW_CHECK_EQ(b->get_stage(), int(Stage::UNBOUND));
     }
 }
 
@@ -171,50 +200,50 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R2 a record's handle lives exactly as long as "
     "the record"
 ) {
-    const int before = netw::entity_ids::outstanding();
+    const int before = netw::entity::outstanding();
     RID handle;
     {
-        Ref<NetwEntityRecord> record = make_record();
+        Record record;
         handle = record->get_handle();
-        NETW_CHECK_EQ(netw::entity_ids::outstanding(), before + 1);
-        CHECK(netw::entity_ids::minted(handle));
+        NETW_CHECK_EQ(netw::entity::outstanding(), before + 1);
+        CHECK(netw::entity::minted(handle));
     }
-    CHECK_FALSE(netw::entity_ids::minted(handle));
-    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before);
+    CHECK_FALSE(netw::entity::minted(handle));
+    NETW_CHECK_EQ(netw::entity::outstanding(), before);
 }
 
 TEST_CASE(
     "[Networked][Entity][Hosted] R3 adopting a handle lets go of the one it "
     "replaces"
 ) {
-    const int before = netw::entity_ids::outstanding();
-    Ref<NetwEntityRecord> standing = make_record();
-    Ref<NetwEntityRecord> arriving = make_record();
+    const int before = netw::entity::outstanding();
+    Record standing;
+    Record arriving;
     const RID birth = arriving->get_handle();
     const RID held = standing->get_handle();
 
     CHECK(arriving->adopt_handle(held));
 
     CHECK(arriving->get_handle() == held);
-    CHECK_FALSE(netw::entity_ids::minted(birth));
-    NETW_CHECK_EQ(netw::entity_ids::holders(held), 2);
-    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before + 1);
+    CHECK_FALSE(netw::entity::minted(birth));
+    NETW_CHECK_EQ(netw::entity::holders(held), 2);
+    NETW_CHECK_EQ(netw::entity::outstanding(), before + 1);
 
     SUBCASE("adopting what it already holds costs nothing") {
         CHECK(arriving->adopt_handle(held));
-        NETW_CHECK_EQ(netw::entity_ids::holders(held), 2);
+        NETW_CHECK_EQ(netw::entity::holders(held), 2);
     }
 
     SUBCASE("a handle the mint never issued is refused, and nothing is lost") {
         CHECK_FALSE(arriving->adopt_handle(RID()));
         CHECK(arriving->get_handle() == held);
-        NETW_CHECK_EQ(netw::entity_ids::holders(held), 2);
+        NETW_CHECK_EQ(netw::entity::holders(held), 2);
     }
 
     SUBCASE("the standing record letting go leaves the adopter holding") {
         standing.unref();
-        CHECK(netw::entity_ids::minted(held));
-        NETW_CHECK_EQ(netw::entity_ids::holders(held), 1);
+        CHECK(netw::entity::minted(held));
+        NETW_CHECK_EQ(netw::entity::holders(held), 1);
     }
 }
 
@@ -222,47 +251,47 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R4 a record moves by the stage table and a "
     "refused move changes nothing"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
 
-    CHECK(record->advance(int(EntityStage::ARMED)));
-    CHECK(record->advance(int(EntityStage::LIVE)));
-    NETW_CHECK_EQ(record->get_stage(), int(EntityStage::LIVE));
+    CHECK(record->advance(int(Stage::ARMED)));
+    CHECK(record->advance(int(Stage::LIVE)));
+    NETW_CHECK_EQ(record->get_stage(), int(Stage::LIVE));
 
     SUBCASE("a stage is never re-entered") {
-        CHECK_FALSE(record->advance(int(EntityStage::LIVE)));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::LIVE));
+        CHECK_FALSE(record->advance(int(Stage::LIVE)));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::LIVE));
     }
 
     SUBCASE("a backward move is refused and costs the record nothing") {
-        CHECK_FALSE(record->advance(int(EntityStage::ARMED)));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::LIVE));
+        CHECK_FALSE(record->advance(int(Stage::ARMED)));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::LIVE));
     }
 
     SUBCASE("the terminal stage is terminal") {
-        CHECK(record->advance(int(EntityStage::DESPAWNING)));
-        CHECK(record->advance(int(EntityStage::FREED)));
-        CHECK_FALSE(record->advance(int(EntityStage::LIVE)));
-        CHECK_FALSE(record->advance(int(EntityStage::ARMED)));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::FREED));
+        CHECK(record->advance(int(Stage::DESPAWNING)));
+        CHECK(record->advance(int(Stage::FREED)));
+        CHECK_FALSE(record->advance(int(Stage::LIVE)));
+        CHECK_FALSE(record->advance(int(Stage::ARMED)));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::FREED));
     }
 
     SUBCASE("the record has no second opinion about the table") {
-        for (int from = 0; from <= int(EntityStage::FREED); ++from) {
-            for (int to = 0; to <= int(EntityStage::FREED); ++to) {
-                Ref<NetwEntityRecord> probe = make_record();
-                if (!netw::stage_edge_is_legal(
-                        int(EntityStage::UNBOUND),
+        for (int from = 0; from <= int(Stage::FREED); ++from) {
+            for (int to = 0; to <= int(Stage::FREED); ++to) {
+                Record probe;
+                if (!netw::entity::stage_edge_is_legal(
+                        int(Stage::UNBOUND),
                         from
                     )
-                    && from != int(EntityStage::UNBOUND)) {
+                    && from != int(Stage::UNBOUND)) {
                     continue;
                 }
-                if (from != int(EntityStage::UNBOUND)) {
+                if (from != int(Stage::UNBOUND)) {
                     probe->advance(from);
                 }
                 NETW_CHECK_EQ(
                     probe->advance(to),
-                    netw::stage_edge_is_legal(from, to)
+                    netw::entity::stage_edge_is_legal(from, to)
                 );
             }
         }
@@ -279,7 +308,7 @@ TEST_CASE(
         NetwEntityRecord::PART_SCENE,
         log.minting("scene")
     );
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
 
     const Ref<RefCounted> first
@@ -298,7 +327,7 @@ TEST_CASE(
     CHECK(again == first);
     NETW_CHECK_EQ(log.count("scene"), 1);
 
-    Ref<NetwEntityRecord> other = make_record();
+    Record other;
     const Ref<RefCounted> theirs
         = other->part(NetwEntityRecord::PART_SCENE, make_wrapper().ptr());
     CHECK(theirs.is_valid());
@@ -311,18 +340,24 @@ TEST_CASE(
     "not a guess"
 ) {
     EntityFactories factories;
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
 
     CHECK_FALSE(
         NetwEntityRecord::has_part_factory(NetwEntityRecord::PART_INTEREST)
     );
     CHECK(
-        record->part(NetwEntityRecord::PART_INTEREST, wrapper.ptr()).is_null()
+        Ref<RefCounted>(
+            record->part(NetwEntityRecord::PART_INTEREST, wrapper.ptr())
+        )
+            .is_null()
     );
 
-    CHECK(record->part(NetwEntityRecord::PART_MAX, wrapper.ptr()).is_null());
-    CHECK(record->part(-1, wrapper.ptr()).is_null());
+    CHECK(
+        Ref<RefCounted>(record->part(NetwEntityRecord::PART_MAX, wrapper.ptr()))
+            .is_null()
+    );
+    CHECK(Ref<RefCounted>(record->part(-1, wrapper.ptr())).is_null());
     CHECK_FALSE(NetwEntityRecord::has_part_factory(-1));
 
     CallLog log;
@@ -331,7 +366,10 @@ TEST_CASE(
         log.minting("interest")
     );
     CHECK(
-        record->part(NetwEntityRecord::PART_INTEREST, wrapper.ptr()).is_valid()
+        Ref<RefCounted>(
+            record->part(NetwEntityRecord::PART_INTEREST, wrapper.ptr())
+        )
+            .is_valid()
     );
     NETW_CHECK_EQ(log.count("interest"), 1);
 }
@@ -348,7 +386,7 @@ TEST_CASE(
     Ref<RefCounted> wrapper = make_wrapper();
     Ref<RefCounted> facet;
     {
-        Ref<NetwEntityRecord> record = make_record();
+        Record record;
         facet = record->part(NetwEntityRecord::PART_DISPLAY, wrapper.ptr());
         REQUIRE(facet.is_valid());
         NETW_CHECK_EQ(facet->get_reference_count(), 2);
@@ -360,7 +398,7 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R8 a deactivated owner stops processing, "
     "showing and replicating"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Node *owner = memnew(Node);
     MultiplayerSynchronizer *sync = memnew(MultiplayerSynchronizer);
     owner->add_child(sync);
@@ -380,14 +418,14 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R9 a template is declared once and stays "
     "terminal"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Node *owner = memnew(Node);
 
     CHECK(record->mark_template(owner));
-    NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
+    NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
 
     CHECK(record->mark_template(owner));
-    NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
+    NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
 
     SUBCASE("a marked record is not carried down the go-live path") {
         CHECK_FALSE(record->classify_activation(owner));
@@ -403,47 +441,47 @@ TEST_CASE(
     Node *scene = memnew(Node);
 
     SUBCASE("a bound identity goes live") {
-        Ref<NetwEntityRecord> record = make_record();
+        Record record;
         Node *owner = memnew(Node);
         record->set_entity_id("crate");
         CHECK(record->classify_activation(owner));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::UNBOUND));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::UNBOUND));
         memdelete(owner);
     }
 
     SUBCASE("an editor-placed factory declares itself a template") {
-        Ref<NetwEntityRecord> record = make_record();
+        Record record;
         Node *owner = memnew(Node);
         scene->add_child(owner);
         owner->set_owner(scene);
         CHECK(NetwEntityRecord::declares_template(owner));
         CHECK_FALSE(record->classify_activation(owner));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
     }
 
     SUBCASE("a scene assembled without ownership declares it by mark") {
-        Ref<NetwEntityRecord> record = make_record();
+        Record record;
         Node *owner = memnew(Node);
         owner->set_meta(NetwEntityRecord::template_meta(), true);
         CHECK(NetwEntityRecord::declares_template(owner));
         CHECK_FALSE(record->classify_activation(owner));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
         memdelete(owner);
     }
 
     SUBCASE("a bare programmatic node stays inert rather than becoming one") {
-        Ref<NetwEntityRecord> record = make_record();
+        Record record;
         Node *owner = memnew(Node);
         CHECK_FALSE(NetwEntityRecord::declares_template(owner));
         CHECK_FALSE(record->classify_activation(owner));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::UNBOUND));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::UNBOUND));
         memdelete(owner);
     }
 
     SUBCASE("a record past UNBOUND is already classified") {
-        Ref<NetwEntityRecord> record = make_record();
+        Record record;
         Node *owner = memnew(Node);
-        REQUIRE(record->advance(int(EntityStage::ARMED)));
+        REQUIRE(record->advance(int(Stage::ARMED)));
         CHECK(record->classify_activation(owner));
         memdelete(owner);
     }
@@ -455,22 +493,22 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R11 a teardown window opens once, and the "
     "options are in flight only inside it"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
     netw::gd::add_signal(wrapper.ptr(), "despawning", 1);
     auto seen = std::make_shared<bool>(false);
     wrapper->connect(
         "despawning",
-        Callable(memnew(WindowProbe(record, seen)))
+        Callable(memnew(WindowProbe(record, seen, wrapper.ptr())))
     );
-    REQUIRE(record->advance(int(EntityStage::ARMED)));
+    REQUIRE(record->advance(int(Stage::ARMED)));
     Ref<netw::NetwDespawnOpts> opts;
     opts.instantiate();
     opts->set_reason("killed");
 
     CHECK(record->begin_despawn(wrapper.ptr(), nullptr, opts));
 
-    NETW_CHECK_EQ(record->get_stage(), int(EntityStage::DESPAWNING));
+    NETW_CHECK_EQ(record->get_stage(), int(Stage::DESPAWNING));
     CHECK(*seen);
     CHECK(record->get_active_despawn_opts().is_null());
 
@@ -478,7 +516,7 @@ TEST_CASE(
         *seen = false;
         CHECK_FALSE(record->begin_despawn(wrapper.ptr(), nullptr, opts));
         CHECK_FALSE(*seen);
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::DESPAWNING));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::DESPAWNING));
     }
 }
 
@@ -486,19 +524,19 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R12 a record that cannot tear down changes "
     "nothing"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
     REQUIRE(record->mark_template(nullptr));
 
     Ref<netw::NetwDespawnOpts> none;
     CHECK_FALSE(record->begin_despawn(wrapper.ptr(), nullptr, none));
-    NETW_CHECK_EQ(record->get_stage(), int(EntityStage::TEMPLATE));
+    NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
     CHECK(record->get_active_despawn_opts().is_null());
 
     SUBCASE("an unbound record with no options tears down by default") {
-        Ref<NetwEntityRecord> fresh = make_record();
+        Record fresh;
         CHECK(fresh->begin_despawn(wrapper.ptr(), nullptr, none));
-        NETW_CHECK_EQ(fresh->get_stage(), int(EntityStage::DESPAWNING));
+        NETW_CHECK_EQ(fresh->get_stage(), int(Stage::DESPAWNING));
     }
 }
 
@@ -506,7 +544,7 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R13 authority follows the controller, and the "
     "server is the one peer the two sides spell differently"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
     netw::gd::add_signal(wrapper.ptr(), "control_changed", 2);
     netw_test::CallLog log;
@@ -556,7 +594,7 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R15 a recursive write reaches the children "
     "the entity replicates through"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Node *owner = memnew(Node);
     Node *child = memnew(Node);
     owner->add_child(child);
@@ -574,22 +612,22 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R16 only a teardown already in flight ends at "
     "freed"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
     netw::gd::add_signal(wrapper.ptr(), "despawned");
     netw_test::CallLog log;
     wrapper->connect("despawned", log.callable("gone"));
-    REQUIRE(record->advance(int(EntityStage::ARMED)));
-    REQUIRE(record->advance(int(EntityStage::LIVE)));
+    REQUIRE(record->advance(int(Stage::ARMED)));
+    REQUIRE(record->advance(int(Stage::LIVE)));
 
     CHECK_FALSE(record->finish_teardown(wrapper.ptr()));
-    NETW_CHECK_EQ(record->get_stage(), int(EntityStage::LIVE));
+    NETW_CHECK_EQ(record->get_stage(), int(Stage::LIVE));
     NETW_CHECK_EQ(log.count("gone"), 0);
 
     SUBCASE("a despawning record ends and says so once") {
-        REQUIRE(record->advance(int(EntityStage::DESPAWNING)));
+        REQUIRE(record->advance(int(Stage::DESPAWNING)));
         CHECK(record->finish_teardown(wrapper.ptr()));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::FREED));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::FREED));
         NETW_CHECK_EQ(log.count("gone"), 1);
 
         CHECK_FALSE(record->finish_teardown(wrapper.ptr()));
@@ -597,10 +635,10 @@ TEST_CASE(
     }
 
     SUBCASE("a lingering record ends the same way") {
-        REQUIRE(record->advance(int(EntityStage::DESPAWNING)));
-        REQUIRE(record->advance(int(EntityStage::LINGERING)));
+        REQUIRE(record->advance(int(Stage::DESPAWNING)));
+        REQUIRE(record->advance(int(Stage::LINGERING)));
         CHECK(record->finish_teardown(wrapper.ptr()));
-        NETW_CHECK_EQ(record->get_stage(), int(EntityStage::FREED));
+        NETW_CHECK_EQ(record->get_stage(), int(Stage::FREED));
         NETW_CHECK_EQ(log.count("gone"), 1);
     }
 }
@@ -609,7 +647,7 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R17 a control request is arbitrated once, and "
     "the strictest listener wins"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
     netw::gd::add_signal(wrapper.ptr(), "control_requested", 2);
     netw_test::CallLog log;
@@ -620,7 +658,7 @@ TEST_CASE(
 
     SUBCASE("a requestable entity asks, and grants when nobody refuses") {
         record->get_control()->set_transfer(
-            int(netw::Transfer::REQUESTABLE)
+            int(netw::entity::Control::Transfer::REQUESTABLE)
         );
         NETW_CHECK_EQ(record->admit_control_request(wrapper.ptr(), 9), 9);
         NETW_CHECK_EQ(log.count("asked"), 1);
@@ -630,7 +668,7 @@ TEST_CASE(
 
     SUBCASE("a listener that denies stops the grant") {
         record->get_control()->set_transfer(
-            int(netw::Transfer::REQUESTABLE)
+            int(netw::entity::Control::Transfer::REQUESTABLE)
         );
         wrapper->connect(
             "control_requested",
@@ -645,7 +683,7 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R18 an unset identity is filled from the node "
     "name, and a bound one is not"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Node *owner = memnew(Node);
     owner->set_name("valeria|7");
 
@@ -655,7 +693,7 @@ TEST_CASE(
     NETW_CHECK_EQ(record->get_peer_id(), 7);
 
     SUBCASE("a caller that already bound the identity keeps it") {
-        Ref<NetwEntityRecord> bound = make_record();
+        Record bound;
         bound->set_entity_id("crate");
         bound->set_peer_id(3);
         bound->hydrate_identity(owner);
@@ -664,7 +702,7 @@ TEST_CASE(
     }
 
     SUBCASE("a name that spells no identity fills nothing") {
-        Ref<NetwEntityRecord> plain = make_record();
+        Record plain;
         owner->set_name("JustANode");
         plain->hydrate_identity(owner);
         CHECK(plain->get_entity_id() == StringName());
@@ -678,7 +716,7 @@ TEST_CASE(
     "[Networked][Entity][Hosted] R19 the controller is written once and the "
     "move is announced once"
 ) {
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Ref<RefCounted> wrapper = make_wrapper();
     netw::gd::add_signal(wrapper.ptr(), "control_changed", 2);
     netw_test::CallLog log;
@@ -698,20 +736,25 @@ TEST_CASE(
     }
 }
 
+#if defined(NETW_TIER_HOSTED)
+
 TEST_CASE(
-    "[Networked][Entity][Hosted] R20 an instance's own scene declaration "
+    "[Networked][Entity] R20 an instance's own scene declaration "
     "outranks the one its script made"
 ) {
     EntityFactories factories;
-    Ref<NetwEntityRecord> record = make_record();
+    Record record;
     Node *owner = memnew(Node);
-    netw_test::CallLog log;
-    Dictionary declared;
-    declared["label"] = StringName("Arena");
-    declared["isolation"] = 1;
-    NetwEntityRecord::set_scene_declaration_reader(
-        log.answering("declared", declared)
-    );
+    const Ref<Script> made
+        = ClassDBSingleton::get_singleton()->instantiate("GDScript");
+    made->set_source_code(String("extends Node\n"));
+    made->reload();
+    netw::SceneDecl decl;
+    decl.declared = true;
+    decl.label = StringName("Arena");
+    decl.isolation = 1;
+    netw::script::model::declare_scene(made, decl);
+    owner->set_script(made);
 
     CHECK(record->scene_label_of(owner) == StringName("Arena"));
     NETW_CHECK_EQ(record->scene_isolation_of(owner), 1);
@@ -723,14 +766,20 @@ TEST_CASE(
         NETW_CHECK_EQ(record->scene_isolation_of(owner), 0);
     }
 
-    SUBCASE("a build that declares nothing answers the unisolated default") {
-        NetwEntityRecord::set_scene_declaration_reader(Callable());
-        Ref<NetwEntityRecord> plain = make_record();
-        CHECK(plain->scene_label_of(owner) == StringName());
-        NETW_CHECK_EQ(plain->scene_isolation_of(owner), 0);
+    SUBCASE(
+        "a build whose owner carries no declaration answers the "
+        "unisolated default"
+    ) {
+        Node *plain_owner = memnew(Node);
+        Record plain;
+        CHECK(plain->scene_label_of(plain_owner) == StringName());
+        NETW_CHECK_EQ(plain->scene_isolation_of(plain_owner), 0);
+        memdelete(plain_owner);
     }
 
     memdelete(owner);
 }
+
+#endif
 
 } // namespace TestNetwEntityRecord

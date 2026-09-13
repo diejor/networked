@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "site": {
+    "title": "Networked examples"
+  },
+  "examples": [
+    {
+      "slug": "quick-start",
+      "title": "quick start",
+      "scene": "uid://bi445hl7e416b"
+    },
+    {
+      "slug": "bomber",
+      "title": "bomber",
+      "scene": "uid://3a3852p4fypv"
+    },
+    {
+      "slug": "racing",
+      "title": "racing",
+      "scene": "uid://bf1wcp2g0linw"
+    },
+    {
+      "slug": "rocket-league",
+      "title": "godot-rocket-league",
+      "scene": "uid://c7rlmainscene"
+    }
+  ]
+}

@@ -5,14 +5,14 @@ extends MultiplayerSpawner
 const PLAYER_SCENE := preload("res://examples/bomber/game/player.tscn")
 
 @onready var ctx := Netw.of(self)
-@onready var gamestate: BomberGamestate = ctx.get_service(BomberGamestate)
+@onready var gamestate: BomberGamestate = ctx.service_get(BomberGamestate)
 
 
 func _ready() -> void:
 	spawn_function = _spawn_player
 	if multiplayer.is_server():
-		var scene: NetwSceneHandle = NetwEntity.of(self).scene
-		scene.on_participant_entered(_on_participant_entered)
+		var scene := Netw.scene(self)
+		scene.participant_entered.connect(_on_participant_entered)
 		for participant: NetwParticipant in scene.participants:
 			_on_participant_entered(participant)
 
@@ -26,21 +26,22 @@ func spawn_participant(participant: NetwParticipant) -> void:
 	assert(multiplayer.is_server())
 	if participant == null or participant.join == null:
 		return
-	if _has_player(participant.join):
+	if _has_player(participant):
 		return
 
-	var scene: NetwSceneHandle = NetwEntity.of(self).scene
-	var ordered := scene.participants
+	var ordered := Netw.scene(self).participants
 	ordered.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id
 	)
 	var spawn_index := maxi(ordered.find(participant), 0)
-	spawn({
-		peer_id = participant.peer_id,
-		spawn_index = spawn_index,
-		username = participant.username,
-	})
+	spawn(
+		{
+			peer_id = participant.peer_id,
+			spawn_index = spawn_index,
+			username = participant.username,
+		},
+	)
 
 
 func _spawn_player(data: Dictionary) -> Node:
@@ -50,8 +51,7 @@ func _spawn_player(data: Dictionary) -> Node:
 	var spawn_index := int(data.spawn_index)
 	NetwEntity.bind(player, StringName(username), peer_id)
 
-	var scene: NetwSceneHandle = NetwEntity.of(self).scene
-	var world := scene.level
+	var world := _level()
 	var score := world.get_node("Score")
 	score.add_player(peer_id, username)
 
@@ -63,14 +63,21 @@ func _spawn_player(data: Dictionary) -> Node:
 	return player
 
 
-func _has_player(rj: ResolvedJoin) -> bool:
+func _has_player(participant: NetwParticipant) -> bool:
 	var players_root := get_node_or_null(spawn_path)
-	return NetwEntity.find(players_root, rj) != null if players_root else false
+	return (
+			NetwEntity.find(players_root, participant) != null
+			if players_root
+			else false
+	)
+
+
+func _level() -> Node:
+	return Netw.scene(self).root
 
 
 func _get_spawn_position(spawn_index: int) -> Vector2:
-	var scene: NetwSceneHandle = NetwEntity.of(self).scene
-	var world := scene.level
+	var world := _level()
 
 	var spawn_points := world.get_node("SpawnPoints")
 

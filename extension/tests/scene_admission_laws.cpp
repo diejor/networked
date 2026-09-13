@@ -9,31 +9,31 @@
 namespace TestNetwSceneAdmissionLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::CallLog;
 
 struct DeclaredScene {
-    Node *container = nullptr;
+    Node *root = nullptr;
     Ref<netw::NetwEntity> entity;
     RID handle;
 };
 
 DeclaredScene declare_scene(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     const char *p_stem
 ) {
     DeclaredScene made;
-    made.container = memnew(Node);
-    if (p_stem != nullptr) {
-        Node *level = memnew(Node);
-        level->set_name(p_stem);
-        made.container->add_child(level);
-    }
     made.entity.instantiate();
-    made.entity->attach_to(made.container);
+    if (p_stem != nullptr) {
+        made.root = memnew(Node);
+        made.root->set_name(p_stem);
+        made.entity->attach_to(made.root);
+    }
     made.handle = p_core->get_liveness_core()->entity_create();
     made.entity->get_record()->adopt_handle(made.handle);
-    REQUIRE(p_core->entity_of(made.container) == made.handle);
+    if (made.root != nullptr) {
+        REQUIRE(p_core->entity_of(made.root) == made.handle);
+    }
     return made;
 }
 
@@ -42,12 +42,12 @@ TEST_CASE(
     "requests the flush that publishes it, and admitting the same peer again "
     "writes nothing and requests nothing"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
     const DeclaredScene arena = declare_scene(core, "Arena");
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
 
     REQUIRE(core->scene_layer_id(arena.handle) == StringName("scene:Arena"));
     CHECK_FALSE(core->interest_flush_pending());
@@ -64,7 +64,7 @@ TEST_CASE(
     CHECK_FALSE(core->scene_admit_peer(arena.handle, 7));
     CHECK_FALSE(core->interest_flush_pending());
 
-    memdelete(arena.container);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
@@ -72,12 +72,12 @@ TEST_CASE(
     "requests the flush in the same act, so a release nothing follows cannot "
     "leave a departed peer admitted"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
     const DeclaredScene arena = declare_scene(core, "Arena");
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
 
     REQUIRE(core->scene_admit_peer(arena.handle, 7));
     core->settle_drain();
@@ -93,19 +93,19 @@ TEST_CASE(
     CHECK_FALSE(core->scene_release_peer(arena.handle, 7));
     CHECK_FALSE(core->interest_flush_pending());
 
-    memdelete(arena.container);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SA3 the admission itself mints the boundary, "
     "so a scene armed this frame admits rather than dropping the admission"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
     const DeclaredScene arena = declare_scene(core, "Arena");
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
 
     CHECK_FALSE(engine.has_layer(StringName("scene:Arena")));
 
@@ -118,15 +118,16 @@ TEST_CASE(
     CHECK_FALSE(core->scene_release_peer(annex.handle, 7));
     CHECK_FALSE(engine.has_layer(StringName("scene:Annex")));
 
-    memdelete(annex.container);
-    memdelete(arena.container);
+    memdelete(annex.root);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SA4 a scene naming no boundary and a peer of "
-    "zero admit nobody and request no flush, so a refusal costs no recompute"
+    "[Networked][Scene][Hosted] SA4 a scene bound to no node names no "
+    "boundary, so it and a peer of zero admit nobody and request no flush, "
+    "and a refusal costs no recompute"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
@@ -144,8 +145,7 @@ TEST_CASE(
     CHECK_FALSE(core->interest_flush_pending());
     NETW_CHECK_EQ(flushed.count("flush"), 0);
 
-    memdelete(arena.container);
-    memdelete(hollow.container);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
@@ -153,10 +153,11 @@ TEST_CASE(
     "still writes the boundary and schedules nothing, so the rows it wrote "
     "stay uncommitted rather than the write being lost"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
+    core->set_interest_flush(Callable());
     const DeclaredScene arena = declare_scene(core, "Arena");
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
 
     ERR_PRINT_OFF;
     CHECK(core->scene_admit_peer(arena.handle, 7));
@@ -166,7 +167,7 @@ TEST_CASE(
     CHECK_FALSE(core->interest_flush_pending());
     NETW_CHECK_EQ(core->settle_pending(), 0);
 
-    memdelete(arena.container);
+    memdelete(arena.root);
 }
 
 TEST_CASE(
@@ -174,7 +175,7 @@ TEST_CASE(
     "under the session's own flush key, so a cascade settles once and settles "
     "after the whole cascade"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
@@ -182,7 +183,7 @@ TEST_CASE(
     const DeclaredScene annex = declare_scene(core, "Annex");
 
     CHECK(
-        NetwMultiplayerCore::interest_flush_key()
+        NetwMultiplayer::interest_flush_key()
         == StringName("interest_visibility")
     );
 
@@ -197,8 +198,8 @@ TEST_CASE(
 
     NETW_CHECK_EQ(flushed.count("flush"), 1);
 
-    memdelete(annex.container);
-    memdelete(arena.container);
+    memdelete(annex.root);
+    memdelete(arena.root);
 }
 
 } // namespace TestNetwSceneAdmissionLaws

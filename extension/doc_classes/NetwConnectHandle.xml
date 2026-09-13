@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwConnectHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The connect plane of one session, gathered onto one object.
+	</brief_description>
+	<description>
+		A client over the [code]endpoint_*[/code], [code]transport_*[/code], [code]discovery_*[/code] and [code]peer_*[/code] families on [NetwMultiplayer], reached as [method Netw.connection] from any [Node]. Every member forwards to a flat verb, and the flat verb is the stable spelling: this repository's own suites, examples and browser call [NetwMultiplayer] directly, and a game reaches for this when it would rather hold the plane as one object.
+		[codeblock]
+		var c := Netw.connection(self)
+		c.endpoint_add(ENetMultiplayerPeer, "203.0.113.42:21253")
+		var ticket := c.create_peer(
+		        ENetMultiplayerPeer,
+		        NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+		        "203.0.113.42:21253", {}, take_the_peer)
+		[/codeblock]
+		An endpoint is addressed by the pair it actually is, a transport and an address, never by a handle a caller must hold onto: every method on this axis takes a transport named any way [method transport] accepts (the peer class itself, a [Script], a [StringName], a live peer, or a handle already in hand) together with an address, and answers a snapshot [Dictionary] rather than a resource. The session still keys a row by [RID] internally, because it is the one thing here that outlives a file and a listing republish, but that [RID] never crosses onto this view. An endpoint snapshot carries [code]peer_class[/code], [code]address[/code], [code]display_name[/code], [code]status[/code], [code]info[/code], [code]is_caller_added[/code], [code]is_available[/code] and [code]is_observed[/code]. A transport snapshot carries [code]peer_class[/code], [code]display_name[/code], [code]address_label[/code], [code]address_placeholder[/code], [code]address_help[/code], [code]capabilities[/code], [code]host_settings[/code] and [code]client_settings[/code]. An empty [Dictionary] means absent, everywhere on this object.
+		[b]This view holds no connection attempt state, and it never brings a session up.[/b] A session comes online the ordinary Godot way, by assigning a [MultiplayerPeer] to [member MultiplayerAPI.multiplayer_peer]. [method create_peer] is here for the peer a provider rather than the game knows how to build, and it answers that one operation through the callables it was handed: the outcome reaches [code]completed[/code], each named step reaches [code]progress[/code], and [method cancel_peer_creation] withdraws exactly that ticket. What the SESSION is doing is read from the session, through [signal NetwMultiplayer.session_state_changed] and [signal NetwMultiplayer.session_entered].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="cancel_peer_creation">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<description>
+				[method NetwMultiplayer.transport_cancel_peer_creation] for the ticket [method create_peer] answered. The request settles with one [code](null, ERR_SKIP, "")[/code] callback and no peer is offered. A ticket that already completed, or one this session never minted, is a no-op, so a view may cancel unconditionally before starting the next creation.
+				The caller's own [Callable] is not what names the work: two creations sharing one bound [Callable] would be ambiguous, and the ticket never is.
+			</description>
+		</method>
+		<method name="create_peer">
+			<return type="RID" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="mode" type="int" />
+			<param index="2" name="address" type="String" />
+			<param index="3" name="settings" type="Dictionary" />
+			<param index="4" name="completed" type="Callable" />
+			<param index="5" name="progress" type="Callable" default="Callable()" />
+			<description>
+				[method NetwMultiplayer.transport_create_peer] with [param transport] named the way every verb on this view names one: the peer class itself, a game transport's [Script], a [StringName], or a live peer of that class. That document carries the law, and it is short: [param completed] runs once in a later frame as [code]completed(peer, error, detail)[/code], and [b]the peer is assigned inside it, before it returns[/b]. Returning without assigning declines the offer, and the session closes the peer.
+				The answer is a [RID] and it is the one on this view. It is the ticket [method cancel_peer_creation] consumes, and it is a bridge rather than an identity: it is write-once, use-once, it has no name and no pair to be spelled by, and it retires itself the moment [param completed] has run. Everything else this view answers is a [Dictionary] or a [bool], and everything it takes is named on the [Variant] axis.
+				[codeblock]
+				var _ticket := RID()
+
+				func join(address: String) -&gt; void:
+				    abort_join()
+				    _ticket = _c.create_peer(
+				            MyRelayTransport,
+				            NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+				            address, {}, _created, _progressed)
+
+				func abort_join() -&gt; void:
+				    _c.cancel_peer_creation(_ticket)
+				    _ticket = RID()
+
+				func _created(peer: MultiplayerPeer, error: Error, detail: String):
+				    _ticket = RID()
+				    if error == OK:
+				        Netw.of(self).multiplayer_peer = peer
+				    elif error != ERR_SKIP:
+				        _say(detail)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="diagnostics" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				What the session knows about its connection to [param peer_id], empty when it holds nothing for that peer.
+			</description>
+		</method>
+		<method name="endpoint" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="address" type="String" />
+			<description>
+				The snapshot for the endpoint [param transport] and [param address] name, empty when this session holds no such row.
+				[codeblock lang=text]
+				Dictionary
+				┠╴peer_class       StringName      ENetMultiplayerPeer, or a game's own
+				┃                                  transport
+				┠╴address          String          "203.0.113.42:21253"
+				┠╴display_name     String          what a server browser draws in the row
+				┠╴status           int             a MultiplayerPeer.ConnectionStatus value
+				┠╴info             NetwServerInfo  what this row last advertised, or null
+				┠╴is_caller_added  bool            true when this session's own endpoint_add
+				┃                                  added the row
+				┠╴is_available     bool            false while a probe is outstanding
+				┖╴is_observed      bool            true once a probe has reported back
+				[/codeblock]
+			</description>
+		</method>
+		<method name="endpoint_add">
+			<return type="bool" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="address" type="String" />
+			<param index="2" name="display_name" type="String" default="&quot;&quot;" />
+			<description>
+				[method NetwMultiplayer.endpoint_add]. Answers [code]true[/code] once the row exists, [code]false[/code] when [param transport] names nothing this build carries.
+			</description>
+		</method>
+		<method name="endpoint_probe">
+			<return type="void" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="address" type="String" />
+			<description>
+				[method NetwMultiplayer.endpoint_probe] for the endpoint [param transport] and [param address] name, answering through [signal endpoint_updated].
+			</description>
+		</method>
+		<method name="endpoint_refresh">
+			<return type="void" />
+			<description>
+				[method NetwMultiplayer.endpoint_refresh]: re-probes every known row and reports each answer through [signal endpoint_updated].
+				Discovery has its own lifetime, separate from the connection. A query opened here is torn down when the session is disposed or the provider behind it is withdrawn, and that teardown releases the query alone: it never closes the assigned peer, and never abandons a lobby the session is already in. A browser may therefore refresh, close, or be freed at any moment, including after the match it found has started, and the match outlives it.
+			</description>
+		</method>
+		<method name="endpoint_remove">
+			<return type="void" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="address" type="String" />
+			<description>
+				[method NetwMultiplayer.endpoint_remove] for the endpoint [param transport] and [param address] name.
+			</description>
+		</method>
+		<method name="endpoint_set_display_name">
+			<return type="int" enum="Error" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="address" type="String" />
+			<param index="2" name="display_name" type="String" />
+			<description>
+				Renames the endpoint [param transport] and [param address] name.
+				[codeblock lang=text]
+				Error
+				┠╴OK                   written
+				┠╴ERR_UNCONFIGURED     this view has no session
+				┖╴ERR_DOES_NOT_EXIST   no such row exists
+				[/codeblock]
+			</description>
+		</method>
+		<method name="join_schema" qualifiers="const">
+			<return type="Array" />
+			<description>
+				[method NetwMultiplayer.session_get_join_schema], the wire parameters a Join form draws.
+				[codeblock lang=text]
+				Array[Dictionary]
+				┖╴entry
+				  ┠╴name        String      the argument's name
+				  ┠╴type        int         a Variant.Type value
+				  ┠╴class_name  StringName  empty for every type this build resolves
+				  ┖╴default     Variant     the value a Join form pre-fills, or null
+				[/codeblock]
+			</description>
+		</method>
+		<method name="register_transport">
+			<return type="bool" />
+			<param index="0" name="type" type="Script" />
+			<description>
+				Registers a [NetwTransport] subclass with the session this view sees, so its peer class joins [method transports] and can be named anywhere a transport is. [code]true[/code] when the session took it. [method NetwMultiplayer.transport_register] is the same operation and carries the ownership law: the registration belongs to the session and is released with it, a peer class is unique within a session, and the stock transports need no registration at all.
+				Registering the same [param type] twice is not an error and changes nothing, so a scene that re-enters the tree may call this again. A [i]different[/i] script for a peer class this session already registers answers [code]false[/code] with a logged reason: call [method unregister_transport] first.
+				[codeblock]
+				func _ready() -&gt; void:
+				    var c := Netw.connection(self)
+				    if c.register_transport(MyRelayTransport):
+				        c.create_peer(
+				                MyRelayTransport,
+				                NetwMultiplayer.TRANSPORT_MODE_HOST,
+				                "", {region = "eu"}, take_the_peer)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="transport" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="of" type="Variant" />
+			<description>
+				The snapshot for a transport named any way a caller has it: the peer class itself ([code]ENetMultiplayerPeer[/code]), a game transport's [Script], a [StringName], a live peer, or a handle already in hand. This is the view's whole job on this axis, so a game never types a class name and [NetwMultiplayer] can take nothing but the handle. Empty when this session holds no such transport.
+				[codeblock lang=text]
+				Dictionary
+				┠╴peer_class            StringName  the key this transport is registered under
+				┠╴display_name          String      what a Host or Add form's picker names it
+				┠╴address_label         String      what the address field is titled
+				┠╴address_placeholder   String      what the empty address field shows
+				┠╴address_help          String      the sentence under the address field
+				┠╴capabilities          int         a NetwMultiplayer.TransportCapability
+				┃                                   flag combination
+				┠╴host_settings         Dictionary  the fields a host form asks for, named
+				┃                                   by this transport alone
+				┖╴client_settings       Dictionary  the fields a join form asks for, which
+				                                    overlap the host ones by however much
+				                                    the two modes share
+				[/codeblock]
+				[codeblock]
+				var c := Netw.connection(self)
+				var enet := c.transport(ENetMultiplayerPeer)
+				prints(enet["display_name"], enet["address_placeholder"])
+				[/codeblock]
+			</description>
+		</method>
+		<method name="transports" qualifiers="const">
+			<return type="Array" />
+			<description>
+				Every transport this session can reach, as transport snapshots shaped like [method transport] answers.
+			</description>
+		</method>
+		<method name="unregister_transport">
+			<return type="bool" />
+			<param index="0" name="of" type="Variant" />
+			<description>
+				Withdraws a registration [method register_transport] made, naming it the way every verb on this view names a transport: the [Script] that was registered, its peer class as a [StringName], or a live peer of that class. [code]true[/code] when this session held it, [code]false[/code] for anything it did not register, a stock transport included.
+				[b]It is not a disconnect.[/b] A peer this transport already handed over stays assigned, exactly as [method NetwMultiplayer.transport_unregister] describes. What ends is unfinished work: a build still in flight settles with [constant @GlobalScope.ERR_UNAVAILABLE], and the transport's browsing closes, so its rows stop arriving on [signal endpoint_added].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="endpoints" type="Array" setter="" getter="endpoints" default="[]">
+			Every row this session knows how to reach, as endpoint snapshots. Equivalent to [method endpoints].
+		</member>
+		<member name="join_address" type="String" setter="" getter="get_join_address" default="&quot;&quot;">
+			[method NetwMultiplayer.peer_join_address]: the address another player would use to reach this session.
+		</member>
+	</members>
+	<signals>
+		<signal name="endpoint_added">
+			<param index="0" name="peer_class" type="StringName" />
+			<param index="1" name="address" type="String" />
+			<description>
+				[signal NetwMultiplayer.endpoint_added], relayed by the pair it names. A row already known announces nothing.
+			</description>
+		</signal>
+		<signal name="endpoint_removed">
+			<param index="0" name="peer_class" type="StringName" />
+			<param index="1" name="address" type="String" />
+			<description>
+				[signal NetwMultiplayer.endpoint_removed], relayed by the pair it named.
+			</description>
+		</signal>
+		<signal name="endpoint_updated">
+			<param index="0" name="peer_class" type="StringName" />
+			<param index="1" name="address" type="String" />
+			<description>
+				[signal NetwMultiplayer.endpoint_updated], relayed by the pair it names. What changed is read back through [method endpoint].
+			</description>
+		</signal>
+		<signal name="join_failed">
+			<param index="0" name="error" type="int" />
+			<param index="1" name="reason" type="String" />
+			<description>
+				This peer's own join was refused, locally or by the server, and no player was seated for it. [param reason] is the server's own words where the refusal came from one, and [param error] is why.
+				A refusal is not a disconnect notice: it is the answer to the join this peer asked for, so a game shows it where it asked, beside its username field rather than in a lobby-lost banner. A server refuses when the handler declared through [method Netw.configure_join] is unavailable, when the join carried no arguments a declared handler needs, or when that handler answered something that is not a placement.
+				[codeblock]
+				func _ready() -&gt; void:
+				    Netw.connection(self).join_failed.connect(show_refusal)
+
+				func show_refusal(_error: int, reason: String) -&gt; void:
+				    status.text = reason
+				[/codeblock]
+			</description>
+		</signal>
+	</signals>
+</class>

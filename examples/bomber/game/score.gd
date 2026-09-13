@@ -43,7 +43,7 @@ func add_player(id: int, new_player_name: String) -> void:
 	label.text = new_player_name + "\n" + "0"
 	var ctx := Netw.of(self)
 	var gamestate: BomberGamestate = \
-			ctx.get_service(BomberGamestate) if ctx else null
+			ctx.service_get(BomberGamestate) if ctx else null
 	if gamestate:
 		label.modulate = gamestate.get_player_color(new_player_name)
 	label.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -77,6 +77,6 @@ func _ready() -> void:
 func _on_exit_game_pressed() -> void:
 	var ctx := Netw.of(self)
 	var gamestate: BomberGamestate = \
-			ctx.get_service(BomberGamestate) if ctx else null
+			ctx.service_get(BomberGamestate) if ctx else null
 	if gamestate:
 		gamestate.end_game()

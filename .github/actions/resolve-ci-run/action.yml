@@ -1,0 +1,62 @@
+name: Resolve CI run
+description: >
+  Name the run whose libraries a deployment builds against, and the revision
+  it was built at. A workflow_run event carries both; a manual dispatch takes
+  the newest successful run of the named workflow on the named branch.
+
+inputs:
+  workflow:
+    description: Workflow file to fall back to on a manual dispatch.
+    required: false
+    default: ci.yml
+  branch:
+    description: Branch whose newest successful run a dispatch resolves to.
+    required: false
+    default: main
+  github-token:
+    description: "Token used to list workflow runs. Needs `actions: read`."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  run-id:
+    description: Workflow run that uploaded the native artifacts.
+    value: ${{ steps.source.outputs.id }}
+  sha:
+    description: Revision those artifacts were built at.
+    value: ${{ steps.source.outputs.sha }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/github-script@v7
+      id: source
+      env:
+        FALLBACK_WORKFLOW: ${{ inputs.workflow }}
+        FALLBACK_BRANCH: ${{ inputs.branch }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          if (context.eventName === 'workflow_run') {
+            core.setOutput('id', String(context.payload.workflow_run.id));
+            core.setOutput('sha', context.payload.workflow_run.head_sha);
+            return;
+          }
+          const workflow = process.env.FALLBACK_WORKFLOW;
+          const branch = process.env.FALLBACK_BRANCH;
+          const runs = await github.rest.actions.listWorkflowRuns({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: workflow,
+            status: 'success',
+            branch,
+            per_page: 1,
+          });
+          const run = runs.data.workflow_runs[0];
+          if (!run) {
+            throw new Error(
+              `no successful ${workflow} run on ${branch} to take libraries from`
+            );
+          }
+          core.setOutput('id', String(run.id));
+          core.setOutput('sha', run.head_sha);

@@ -17,6 +17,7 @@ class BaselineBook {
 
     struct Peer {
         CodeRow confirmed;
+        uint16_t confirmed_seq = 0;
         bool has_confirmed = false;
         uint64_t sticky = 0;
         godot::LocalVector<Staged> in_flight;
@@ -26,12 +27,20 @@ class BaselineBook {
 
 public:
     static constexpr uint32_t MAX_IN_FLIGHT = 64;
+    static constexpr uint16_t HISTORY_DEPTH = 32;
+
+    struct Baseline {
+        const CodeRow *row = nullptr;
+        uint16_t seq = 0;
+    };
+
+    Baseline baseline(int peer) const;
 
     uint64_t mask_to_send(int peer, const WirePlan &plan, const CodeRow &row);
 
     void stage(int peer, uint16_t seq, const CodeRow &row);
 
-    void acknowledge(int peer, uint16_t acked_seq);
+    void acknowledge(int peer, uint16_t acked_seq, uint32_t history);
 
     void retain(const godot::LocalVector<int> &recipients);
 
@@ -40,6 +49,7 @@ public:
 
     bool has_baseline(int peer) const;
     uint32_t in_flight_count(int peer) const;
+    uint64_t sticky_mask(int peer) const;
 };
 
 } // namespace netw::wire

@@ -16,15 +16,14 @@
 ## Children inherit the parent's environment, so [method spawn] takes an
 ## explicit environment map and restores the parent's values afterward: an
 ## empty value unsets, anything else sets. Instruments that read only the
-## environment ([code]NETW_NETLOG[/code], [code]NETW_PREDICT_TAP[/code]) are
-## cleared by default so an armed parent can never silently arm its children.
+## environment ([code]NETW_PREDICT_TAP[/code]) are cleared by default so an
+## armed parent can never silently arm its children.
 class_name NetwProcessRig
 extends RefCounted
 
 # Environment keys cleared for every child unless the caller sets them, so a
 # capture's instruments are always a decision rather than an inheritance.
 const _CLEARED_ENV: Array[String] = [
-	"NETW_NETLOG",
 	"NETW_PREDICT_TAP",
 	"NETW_PREDICT_TAP_EVERY",
 	"NETW_TEST_LOG",

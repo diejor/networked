@@ -3,13 +3,20 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include "godot/object.hpp"
 #include "godot/variant.hpp"
 
 #if defined(NETW_MODULE)
 #include "core/error/error_macros.h"
+#include "core/object/ref_counted.h"
 #include "core/string/print_string.h"
 #include "core/variant/variant_utility.h"
+
+namespace godot {
+using ::WeakRef;
+} // namespace godot
 #elif defined(NETW_GDEXTENSION)
+#include <godot_cpp/classes/weak_ref.hpp>
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #else
@@ -42,6 +49,14 @@ inline void push_error(const godot::String &message) {
 #endif
 }
 
+inline godot::String error_name(int64_t code) {
+#if defined(NETW_MODULE)
+    return godot::String(::error_names[code]);
+#else
+    return godot::UtilityFunctions::error_string(code);
+#endif
+}
+
 inline void push_warning_at(
     const char *function,
     const char *file,
@@ -71,6 +86,21 @@ inline void push_error_at(
 [[noreturn]] inline void crash() {
     GENERATE_TRAP();
     std::abort();
+}
+
+inline godot::Variant weak_ref(const godot::Variant &value) {
+#if defined(NETW_MODULE)
+    Callable::CallError error;
+    return VariantUtilityFunctions::weakref(value, error);
+#else
+    return godot::UtilityFunctions::weakref(value);
+#endif
+}
+
+inline godot::Object *held_by_weak_ref(const godot::Variant &value) {
+    const godot::Ref<godot::WeakRef> holder = value;
+    return holder.is_valid() ? holder->get_ref().operator godot::Object *()
+                             : nullptr;
 }
 
 inline godot::PackedByteArray var_to_bytes(const godot::Variant &value) {

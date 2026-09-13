@@ -7,7 +7,7 @@
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
-#include "netw/api/project.hpp"
+#include "netw/project.hpp"
 
 using namespace godot;
 
@@ -147,16 +147,12 @@ bool project_restore(
             continue;
         }
         const Variant value = r_restore.values[uint32_t(at)];
-        if (!NetwProject::supports(value.get_type())) {
+        if (!project::supports(value.get_type())) {
             continue;
         }
         r_restore.set(
             at,
-            NetwProject::project(
-                value,
-                r_restore.values[uint32_t(channel)],
-                age
-            )
+            project::forward(value, r_restore.values[uint32_t(channel)], age)
         );
         projected = true;
     }
@@ -338,7 +334,6 @@ int escalation_field(const Wiring &p_wiring, const RecoveryRequest &p_request) {
     return dominant;
 }
 
-
 void RecoveryState::reset_trackers() {
     nonshrink_streak = 0;
     last_field = -1;
@@ -503,12 +498,12 @@ StateRow advance_seed(
             continue;
         }
         const Variant value = out.values[uint32_t(at)];
-        if (!NetwProject::supports(value.get_type())) {
+        if (!project::supports(value.get_type())) {
             continue;
         }
         out.set(
             at,
-            NetwProject::project(value, out.values[uint32_t(channel)], age)
+            project::forward(value, out.values[uint32_t(channel)], age)
         );
     }
     return out;

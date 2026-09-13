@@ -6,9 +6,7 @@
 
 using namespace godot;
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 StateRow::StateRow(const StateRow &p_other) {
     *this = p_other;
@@ -372,6 +370,4 @@ StateVerdict compare_state(
     return out;
 }
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

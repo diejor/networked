@@ -6,17 +6,29 @@
 #include "godot/ref_counted.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/database.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/snapshot_book.hpp"
 
 namespace netw {
+
+struct PersistedWrite {
+    godot::Ref<NetwDatabase> database;
+    godot::StringName table;
+    godot::StringName record;
+    godot::Dictionary values;
+
+    bool is_addressed() const {
+        return database.is_valid() && table != godot::StringName();
+    }
+};
 
 class NetwPersistenceEngine : public godot::RefCounted {
     GDCLASS(NetwPersistenceEngine, godot::RefCounted)
 
 private:
     godot::ObjectID entity_id;
-    godot::Variant declared_database;
+    godot::Ref<NetwDatabase> declared_database;
     godot::StringName declared_table;
     godot::StringName record_id_provider;
     bool hydrate_on_spawn = false;
@@ -31,7 +43,7 @@ private:
 
     void build_columns();
     void ensure_schema();
-    void claim_record_id(godot::Object *p_database);
+    void claim_record_id(const godot::Ref<NetwDatabase> &p_database);
     void warn_duplicate(const godot::StringName &p_property) const;
     void settle_hydrated(
         const godot::Dictionary &p_record,
@@ -69,7 +81,7 @@ public:
 
     godot::Node *owner_node() const;
     bool columns_empty() const;
-    godot::Variant database() const;
+    godot::Ref<NetwDatabase> database() const;
     godot::StringName record_id() const;
     bool wants_spawn_hydration() const;
 
@@ -79,6 +91,8 @@ public:
 
     godot::Ref<NetwPromise> hydrate();
     godot::Ref<NetwPromise> flush(const godot::Array &p_keys);
+    PersistedWrite capture_write() const;
+    godot::Ref<NetwPromise> submit(const PersistedWrite &p_write);
 
     godot::Dictionary snapshot_tick(double p_delta);
     void commit_snapshot(const godot::Dictionary &p_values);

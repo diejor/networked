@@ -100,6 +100,8 @@ class LocalMultiplayerPeer : public MultiplayerPeerBase {
     bool server_side = false;
     bool closed = false;
     bool closing = false;
+    int refused_send_count = 0;
+    int delivered_send_count = 0;
     ConnectionStatus status = CONNECTION_DISCONNECTED;
 
     LocalMultiplayerPeer *peer_at(int p_peer_id) const;
@@ -125,6 +127,7 @@ public:
 
     void force_connect_peer(int p_peer_id, LocalMultiplayerPeer *p_peer);
     bool is_linked_to(int p_peer_id) const;
+    bool has_link_listener() const;
     godot::PackedInt32Array linked_peer_ids() const;
 
     void set_loopback_session(LocalLoopbackSession *p_session);
@@ -171,6 +174,17 @@ public:
         const godot::PackedByteArray &p_buffer
     ) override;
 #endif
+
+    int refused_sends() const {
+        return refused_send_count;
+    }
+    int delivered_sends() const {
+        return delivered_send_count;
+    }
+    void clear_refused_sends() {
+        refused_send_count = 0;
+        delivered_send_count = 0;
+    }
 };
 
 class LocalLoopbackSession : public godot::Resource {

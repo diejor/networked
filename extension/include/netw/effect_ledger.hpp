@@ -3,16 +3,12 @@
 #include <cstdint>
 
 #include "godot/callable.hpp"
-#include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 
 namespace netw {
 
-class NetwEffectLedger : public godot::RefCounted {
-    GDCLASS(NetwEffectLedger, godot::RefCounted)
-
-private:
+class NetwEffectLedger {
     struct Entry {
         godot::Callable revert;
         int64_t deadline_tick = 0;
@@ -27,9 +23,6 @@ private:
     godot::HashMap<godot::StringName, Watcher> watchers;
 
     void resolve(const godot::StringName &p_key, bool p_keep);
-
-protected:
-    static void _bind_methods();
 
 public:
     void arm(

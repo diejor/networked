@@ -6,33 +6,31 @@
 
 namespace netw::wire {
 
-// Per-peer tracking of in-flight sends mapped to sequence numbers for acking.
 struct AckEntry {
     uint16_t seq = 0;
-    uint8_t channel_id = 0;
-    int64_t send_id = 0;
+    uint16_t frames = 0;
+    int64_t bits = 0;
 };
 
 class AckBook {
 public:
     static constexpr int MAX_IN_FLIGHT = 128;
+    static constexpr int HISTORY_DEPTH = 32;
 
 private:
     AckEntry ring[MAX_IN_FLIGHT];
-    bool active[MAX_IN_FLIGHT] = { false };
+    bool active[MAX_IN_FLIGHT] = {false};
     uint16_t highest_acked_seq = 0;
     bool has_acked = false;
 
-public:
-    // Records a pending send tied to a datagram sequence number. False when
-    // the slot already holds a live send for a different seq: taking it would
-    // drop that send with nothing left to ack it or report it lost, so the
-    // caller would never learn the send it was told had been recorded is gone.
-    bool record_send(uint16_t seq, uint8_t channel_id, int64_t send_id);
+    bool take(uint16_t seq, AckEntry &r_entry);
 
-    // Processes an inbound ack sequence. Returns delivered and lost sends.
+public:
+    bool record_send(uint16_t seq, uint16_t frames, int64_t bits);
+
     void process_ack(
         uint16_t ack_seq,
+        uint32_t history,
         godot::LocalVector<AckEntry> &out_delivered,
         godot::LocalVector<AckEntry> &out_lost
     );

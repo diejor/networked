@@ -1,51 +1,53 @@
 #include "support/netw_test.h"
 
-#include "netw/interest_leave.hpp"
+#include "netw/interest/leave.hpp"
 
-namespace TestInterestLeave {
+namespace TestLeave {
 
 using namespace godot;
-using netw::NetwInterestDecl;
-using netw::InterestEngine;
-using netw::InterestLeave;
+using netw::interest::Decl;
+using netw::interest::Engine;
+using netw::interest::Leave;
 
 constexpr int64_t ROOT = 1;
 constexpr int64_t OTHER = 2;
-constexpr int DESPAWN = NetwInterestDecl::LEAVE_DESPAWN;
-constexpr int RETAIN = NetwInterestDecl::LEAVE_RETAIN;
-constexpr int CUSTOM = NetwInterestDecl::LEAVE_CUSTOM;
+constexpr int HIDE = Decl::LEAVE_HIDE;
+constexpr int RETAIN = Decl::LEAVE_RETAIN;
+constexpr int CUSTOM = Decl::LEAVE_CUSTOM;
 
-StringName despawn_key() {
-    return StringName("despawn");
+StringName hide_key() {
+    return StringName("hide");
 }
 
 StringName custom_key() {
     return StringName("custom");
 }
 
-InterestLeave fresh() {
-    return InterestLeave();
+Leave fresh() {
+    return Leave();
 }
 
-Ref<NetwInterestDecl> declaration() {
-    Ref<NetwInterestDecl> decl;
-    decl.instantiate();
-    return decl;
+const Decl *undeclared() {
+    static const Decl blank;
+    return &blank;
 }
 
-InterestEngine engine_with(
-    std::initializer_list<const char *> p_layers,
-    int p_policy
-) {
-    InterestEngine engine;
+Ref<RefCounted> callable_holder() {
+    Ref<RefCounted> holder;
+    holder.instantiate();
+    return holder;
+}
+
+Engine engine_with(std::initializer_list<const char *> p_layers, int p_policy) {
+    Engine engine;
     for (const char *id : p_layers) {
         engine.layer_set_leave_policy(StringName(id), p_policy);
     }
     return engine;
 }
 
-bool despawns(const Dictionary &p_verdict) {
-    return bool(p_verdict[despawn_key()]);
+bool hides(const Dictionary &p_verdict) {
+    return bool(p_verdict[hide_key()]);
 }
 
 Array custom_of(const Dictionary &p_verdict) {
@@ -53,56 +55,55 @@ Array custom_of(const Dictionary &p_verdict) {
 }
 
 TEST_CASE(
-    "[Networked][Interest][Hosted] a loss with no attribution despawns "
+    "[Networked][Interest][Hosted] a loss with no attribution hides "
     "unless the copy is retained"
 ) {
-    InterestLeave book = fresh();
+    Leave book = fresh();
 
-    InterestEngine none;
+    Engine none;
 
-    CHECK(despawns(book.resolve(ROOT, 4, declaration(), none)));
+    CHECK(hides(book.resolve(ROOT, 4, undeclared(), none)));
 
     Dictionary retain;
-    retain[despawn_key()] = false;
+    retain[hide_key()] = false;
     book.commit(ROOT, 4, retain, false);
 
     CHECK(book.is_retained(ROOT, 4));
-    CHECK(!despawns(book.resolve(ROOT, 4, declaration(), none)));
-    CHECK(despawns(book.resolve(ROOT, 9, declaration(), none)));
+    CHECK(!hides(book.resolve(ROOT, 4, undeclared(), none)));
+    CHECK(hides(book.resolve(ROOT, 9, undeclared(), none)));
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] an entity override resolves before the "
     "layer default"
 ) {
-    InterestLeave book = fresh();
-    InterestEngine engine = engine_with({"arena"}, DESPAWN);
-    const Ref<NetwInterestDecl> decl = declaration();
+    Leave book = fresh();
+    Engine engine = engine_with({"arena"}, HIDE);
+    Decl decl;
     book.record(ROOT, 4, StringName("arena"));
 
-    CHECK(despawns(book.resolve(ROOT, 4, decl, engine)));
+    CHECK(hides(book.resolve(ROOT, 4, &decl, engine)));
 
-    decl->set_leave_policy(StringName("arena"), RETAIN, Callable());
-    CHECK(!despawns(book.resolve(ROOT, 4, decl, engine)));
+    decl.set_leave_policy(StringName("arena"), RETAIN, Callable());
+    CHECK(!hides(book.resolve(ROOT, 4, &decl, engine)));
 
-    InterestEngine retaining = engine_with({"arena"}, RETAIN);
-    CHECK(!despawns(book.resolve(ROOT, 4, declaration(), retaining)));
+    Engine retaining = engine_with({"arena"}, RETAIN);
+    CHECK(!hides(book.resolve(ROOT, 4, undeclared(), retaining)));
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] one layer wanting the copy gone ends the "
     "resolution"
 ) {
-    InterestLeave book = fresh();
-    InterestEngine engine
-        = engine_with({"arena", "stealth"}, RETAIN);
-    engine.layer_set_leave_policy(StringName("stealth"), DESPAWN);
+    Leave book = fresh();
+    Engine engine = engine_with({"arena", "stealth"}, RETAIN);
+    engine.layer_set_leave_policy(StringName("stealth"), HIDE);
     book.record(ROOT, 4, StringName("arena"));
     book.record(ROOT, 4, StringName("stealth"));
 
-    const Dictionary verdict = book.resolve(ROOT, 4, declaration(), engine);
+    const Dictionary verdict = book.resolve(ROOT, 4, undeclared(), engine);
 
-    CHECK(despawns(verdict));
+    CHECK(hides(verdict));
     NETW_CHECK_EQ(custom_of(verdict).size(), 0);
 }
 
@@ -110,19 +111,18 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a CUSTOM leave is carried as its callback "
     "and the layer that owes it"
 ) {
-    InterestLeave book = fresh();
-    InterestEngine engine
-        = engine_with({"arena", "stealth"}, RETAIN);
-    const Ref<NetwInterestDecl> decl = declaration();
-    const Ref<NetwInterestDecl> holder = declaration();
-    const Callable callback(holder.ptr(), StringName("clear"));
-    decl->set_leave_policy(StringName("stealth"), CUSTOM, callback);
+    Leave book = fresh();
+    Engine engine = engine_with({"arena", "stealth"}, RETAIN);
+    Decl decl;
+    const Ref<RefCounted> holder = callable_holder();
+    const Callable callback(holder.ptr(), StringName("get_class"));
+    decl.set_leave_policy(StringName("stealth"), CUSTOM, callback);
     book.record(ROOT, 4, StringName("arena"));
     book.record(ROOT, 4, StringName("stealth"));
 
-    const Dictionary verdict = book.resolve(ROOT, 4, decl, engine);
+    const Dictionary verdict = book.resolve(ROOT, 4, &decl, engine);
 
-    CHECK(!despawns(verdict));
+    CHECK(!hides(verdict));
     const Array actions = custom_of(verdict);
     NETW_CHECK_EQ(actions.size(), 1);
     if (actions.size() == 1) {
@@ -136,56 +136,56 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Interest][Hosted] a CUSTOM leave whose callback is gone "
-    "despawns rather than keeping a copy nothing stands in for"
+    "hides rather than keeping a copy nothing stands in for"
 ) {
-    InterestLeave book = fresh();
-    InterestEngine engine = engine_with({"stealth"}, RETAIN);
-    const Ref<NetwInterestDecl> decl = declaration();
-    Ref<NetwInterestDecl> holder = declaration();
-    decl->set_leave_policy(
+    Leave book = fresh();
+    Engine engine = engine_with({"stealth"}, RETAIN);
+    Decl decl;
+    Ref<RefCounted> holder = callable_holder();
+    decl.set_leave_policy(
         StringName("stealth"),
         CUSTOM,
-        Callable(holder.ptr(), StringName("clear"))
+        Callable(holder.ptr(), StringName("get_class"))
     );
     book.record(ROOT, 4, StringName("stealth"));
     holder.unref();
 
     ERR_PRINT_OFF;
-    const Dictionary verdict = book.resolve(ROOT, 4, decl, engine);
+    const Dictionary verdict = book.resolve(ROOT, 4, &decl, engine);
     ERR_PRINT_ON;
 
-    CHECK(despawns(verdict));
+    CHECK(hides(verdict));
     NETW_CHECK_EQ(custom_of(verdict).size(), 0);
 }
 
 TEST_CASE(
-    "[Networked][Interest][Hosted] a committed despawn releases the copy and "
+    "[Networked][Interest][Hosted] a committed hide releases the copy and "
     "consumes its attribution"
 ) {
-    InterestLeave book = fresh();
+    Leave book = fresh();
     book.record(ROOT, 4, StringName("arena"));
     Dictionary retain;
-    retain[despawn_key()] = false;
+    retain[hide_key()] = false;
     book.commit(ROOT, 4, retain, false);
     CHECK(book.is_retained(ROOT, 4));
     NETW_CHECK_EQ(book.pending_layers(ROOT, 4).size(), 0);
 
     book.record(ROOT, 4, StringName("arena"));
-    Dictionary despawn;
-    despawn[despawn_key()] = true;
-    book.commit(ROOT, 4, despawn, false);
+    Dictionary hide;
+    hide[hide_key()] = true;
+    book.commit(ROOT, 4, hide, false);
 
     CHECK(!book.is_retained(ROOT, 4));
     NETW_CHECK_EQ(book.pending_layers(ROOT, 4).size(), 0);
 }
 
 TEST_CASE(
-    "[Networked][Interest][Hosted] an ancestor's despawn overrides a row's "
+    "[Networked][Interest][Hosted] an ancestor's hide overrides a row's "
     "own answer"
 ) {
-    InterestLeave book = fresh();
+    Leave book = fresh();
     Dictionary retain;
-    retain[despawn_key()] = false;
+    retain[hide_key()] = false;
 
     book.commit(ROOT, 4, retain, true);
 
@@ -195,7 +195,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Interest][Hosted] an attribution lasts exactly one pass"
 ) {
-    InterestLeave book = fresh();
+    Leave book = fresh();
     book.record(ROOT, 4, StringName("arena"));
     book.record(ROOT, 4, StringName("arena"));
     book.record(ROOT, 4, StringName("stealth"));
@@ -215,9 +215,9 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a peer that left and an entity that died "
     "keep nothing"
 ) {
-    InterestLeave book = fresh();
+    Leave book = fresh();
     Dictionary retain;
-    retain[despawn_key()] = false;
+    retain[hide_key()] = false;
     book.commit(ROOT, 4, retain, false);
     book.commit(ROOT, 9, retain, false);
     book.commit(OTHER, 4, retain, false);
@@ -239,4 +239,4 @@ TEST_CASE(
     CHECK(!book.is_retained(OTHER, 9));
 }
 
-} // namespace TestInterestLeave
+} // namespace TestLeave

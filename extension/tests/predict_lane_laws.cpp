@@ -100,7 +100,8 @@ LawVerdict law_undisturbed_lanes_never_correct(const ScenarioRun &p_run) {
     const Lane lane = p_run.lane("P");
     if (lane.corrections() != 0) {
         return law_broken(
-            "an undisturbed lane took %d correction(s)", lane.corrections()
+            "an undisturbed lane took %d correction(s)",
+            lane.corrections()
         );
     }
     if (lane.tail_divergence(p_run.scenario().run_ticks) > 0.0) {
@@ -149,26 +150,27 @@ LawVerdict law_only_a_non_shrinking_run_escalates(const ScenarioRun &p_run) {
     }
     if (lane.escalations() != 0) {
         return law_broken(
-            "a converging lane escalated %d time(s)", lane.escalations()
+            "a converging lane escalated %d time(s)",
+            lane.escalations()
         );
     }
     return law_held();
 }
 
 const LawRow LAWS[] = {
-    { "L-DRIVE",
-      "a lane drives once per fresh input and repeats through every other "
-      "tick",
-      law_drives_on_fresh_input_only },
-    { "L-QUIET",
-      "a lane nothing disturbed neither diverges nor corrects",
-      law_undisturbed_lanes_never_correct },
-    { "L-CONV",
-      "after its last stimulus a lane reconverges under epsilon",
-      law_reconverges_after_its_last_stimulus },
-    { "L-ESC",
-      "escalation follows a non-shrinking run of divergence and nothing else",
-      law_only_a_non_shrinking_run_escalates },
+    {"L-DRIVE",
+     "a lane drives once per fresh input and repeats through every other "
+     "tick",
+     law_drives_on_fresh_input_only},
+    {"L-QUIET",
+     "a lane nothing disturbed neither diverges nor corrects",
+     law_undisturbed_lanes_never_correct},
+    {"L-CONV",
+     "after its last stimulus a lane reconverges under epsilon",
+     law_reconverges_after_its_last_stimulus},
+    {"L-ESC",
+     "escalation follows a non-shrinking run of divergence and nothing else",
+     law_only_a_non_shrinking_run_escalates},
 };
 
 TEST_CASE(
@@ -204,10 +206,10 @@ struct RedProof {
 };
 
 const RedProof RED_PROOFS[] = {
-    { LAWS[0], clean_lane, PLANT_DRIVE_EVERY_TICK },
-    { LAWS[1], clean_lane, PLANT_PHANTOM_PERTURB },
-    { LAWS[2], perturbed_lane, PLANT_NO_RECOVER },
-    { LAWS[3], perturbed_lane, PLANT_CARRY_STREAK },
+    {LAWS[0], clean_lane, PLANT_DRIVE_EVERY_TICK},
+    {LAWS[1], clean_lane, PLANT_PHANTOM_PERTURB},
+    {LAWS[2], perturbed_lane, PLANT_NO_RECOVER},
+    {LAWS[3], perturbed_lane, PLANT_CARRY_STREAK},
 };
 
 TEST_CASE(
@@ -216,8 +218,7 @@ TEST_CASE(
 ) {
     for (const RedProof &proof : RED_PROOFS) {
         const Scenario scenario = proof.scenario();
-        const ScenarioRun planted
-            = ScenarioRun::kernel(scenario, proof.plant);
+        const ScenarioRun planted = ScenarioRun::kernel(scenario, proof.plant);
         REQUIRE(planted.decisions() > 0);
         NETW_CELL(proof.law, scenario);
         NETW_LAW_BREAKS(proof.law, planted);

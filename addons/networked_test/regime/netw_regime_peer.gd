@@ -1,6 +1,6 @@
-## One scripted peer of a two-process regime capture.
+## One scripted peer of a multi-process regime capture.
 ##
-## The rendered regime that decides lag-compensation questions is two OS
+## The rendered regime that decides lag-compensation questions is several OS
 ## processes with independent wall clocks speaking real sockets. This node is
 ## the child-process half: it connects a session, waits for its entity, runs
 ## a scripted gesture for a fixed horizon, and exits with a
@@ -24,7 +24,8 @@
 ## because a spawned process inherits its parent's environment and two peers
 ## of one capture must never share a config by accident.
 ## [codeblock]
-## --regime-role=host|client      NETW_REGIME_ROLE
+## --regime-role=host|client1     NETW_REGIME_ROLE
+## --regime-peers=3               NETW_REGIME_PEERS
 ## --regime-port=31201            NETW_REGIME_PORT
 ## --regime-seconds=30            NETW_REGIME_SECONDS
 ## --regime-gesture=laps          NETW_REGIME_GESTURE
@@ -42,11 +43,20 @@
 ## full-length capture of a regime it never entered.
 class_name NetwRegimePeer
 extends Node
-const Async := preload("res://addons/networked/utils/async.gd")
+
+const Async := preload("res://addons/networked/gdscript/async.gd")
 
 
 const ROLE_HOST := "host"
 const ROLE_CLIENT := "client"
+
+
+## True when [param p_role] names the peer that hosts. Every other spelling
+## joins, so a capture of more than two processes names its clients apart
+## without teaching this node a second vocabulary.
+static func role_is_host(p_role: String) -> bool:
+	return p_role == ROLE_HOST
+
 
 # Exit codes an orchestrator reads. Zero is a completed run.
 const EXIT_WATCHDOG := 2
@@ -56,8 +66,9 @@ const EXIT_GESTURE := 5
 const EXIT_CONDITION := 6
 
 # Seconds granted beyond the run itself for connect, spawn, and quiesce
-# before the watchdog declares the child wedged.
-const WATCHDOG_MARGIN := 20.0
+# before the watchdog declares the child wedged. A capture that gathers its
+# peers in a lobby before anything starts spends most of it there.
+const WATCHDOG_MARGIN := 45.0
 
 # Seconds between cadence samples. Interval rates come from consecutive
 # samples, so this is also the resolution of the p10 the summary reports.
@@ -89,6 +100,10 @@ var summary_handles: Callable
 var condition_evidence: Callable = Callable()
 
 var role := ROLE_HOST
+## How many processes the whole capture runs, the host included. A host sizes
+## its transport and its advertised capacity from it, so a third peer is
+## admitted rather than refused at the door.
+var peers := 2
 var port := 31201
 var seconds := 30.0
 var gesture := "laps"
@@ -137,6 +152,7 @@ static func armed() -> bool:
 ## user args with environment fallback. Call before [method run].
 func configure_from_args() -> void:
 	role = _setting("regime-role", "NETW_REGIME_ROLE", role).to_lower()
+	peers = int(_setting("regime-peers", "NETW_REGIME_PEERS", str(peers)))
 	port = int(_setting("regime-port", "NETW_REGIME_PORT", str(port)))
 	seconds = float(_setting("regime-seconds", "NETW_REGIME_SECONDS", str(seconds)))
 	gesture = _setting("regime-gesture", "NETW_REGIME_GESTURE", gesture)
@@ -174,8 +190,10 @@ func run() -> void:
 		gesture,
 		seconds,
 	])
-	if api and api.clock.is_configured:
-		_cadence_baseline = api.clock.cadence()
+	if api and api.clock_is_configured():
+		_cadence_baseline = _cadence()
+	if api:
+		api.attribution_set_armed(true)
 	_sample_cadence_loop.call_deferred()
 	await gestures[gesture].call(seconds)
 	_snapshot_entities()
@@ -225,7 +243,7 @@ func _finish(code: int, exit_kind: String) -> void:
 	_completed = true
 	_write_summary(exit_kind)
 	if api and api:
-		api.flush_tap()
+		api.predict_flush_tap()
 	print("[regime] %s %s" % [role, exit_kind])
 	get_tree().quit(code)
 
@@ -247,8 +265,8 @@ func _arm_watchdog() -> void:
 func _sample_cadence_loop() -> void:
 	while not _completed:
 		await get_tree().create_timer(CADENCE_SAMPLE_SECONDS).timeout
-		if api and api.clock.is_configured:
-			_cadence_samples.append(api.clock.cadence())
+		if api and api.clock_is_configured():
+			_cadence_samples.append(_cadence())
 		_snapshot_entities()
 
 
@@ -300,6 +318,7 @@ func _write_summary(exit_kind: String) -> void:
 		"role": role,
 		"exit": exit_kind,
 		"config": {
+			"peers": peers,
 			"port": port,
 			"seconds": seconds,
 			"gesture": gesture,
@@ -309,7 +328,9 @@ func _write_summary(exit_kind: String) -> void:
 		"condition": _condition_report(),
 		"clock": _clock_report(),
 		"entities": _entity_snapshots,
-		"instrument_cost": _instrument_report(),
+		"attribution": api.attribution_snapshot() if api else { },
+		"stats": api.stats_snapshot() if api else { },
+		"instrument_cost": { "tap": api.predict_get_tap_cost() },
 	}
 	var file := FileAccess.open(
 		artifact_dir.path_join("summary.json"),
@@ -326,8 +347,7 @@ func _write_summary(exit_kind: String) -> void:
 # reads first. Rates are measured from the gesture-start baseline, because a
 # whole-process mean dilutes the run with boot and asset load.
 func _condition_report() -> Dictionary:
-	var cadence: Dictionary = api.clock.cadence() \
-	if api and api.clock.is_configured else { }
+	var cadence := _cadence() if api and api.clock_is_configured() else { }
 	var wall := float(cadence.get(&"wall_seconds", 0.0)) \
 			- float(_cadence_baseline.get(&"wall_seconds", 0.0))
 	var physics_frames := int(cadence.get(&"physics_frames", 0)) \
@@ -350,33 +370,35 @@ func _condition_report() -> Dictionary:
 	return out
 
 
-func _clock_report() -> Dictionary:
-	if not api or not api.clock.is_configured:
-		return { }
+# The cadence counters the condition block measures its rates from, read off
+# the monitor door rather than a fixed-key dictionary the session hands over.
+func _cadence() -> Dictionary:
 	return {
-		"tick": api.clock.tick,
-		"synchronized": api.clock.is_synchronized,
-		"behind": api.clock.simulation_behind_count,
-		"rtt_avg": api.clock.rtt_avg,
-		"rtt_jitter": api.clock.rtt_jitter,
+		&"wall_seconds": api.clock_get_monitor(
+			NetwMultiplayer.CLOCK_MONITOR_WALL_SECONDS
+		),
+		&"physics_frames": int(api.clock_get_monitor(
+			NetwMultiplayer.CLOCK_MONITOR_PHYSICS_FRAMES
+		)),
+		&"polls": int(api.clock_get_monitor(
+			NetwMultiplayer.CLOCK_MONITOR_POLLS
+		)),
 	}
 
 
-func _instrument_report() -> Dictionary:
-	var netlog_bytes := 0
-	if not artifact_dir.is_empty():
-		var dir := DirAccess.open(artifact_dir)
-		if dir:
-			for name in dir.get_files():
-				if name.begins_with("netlog_"):
-					netlog_bytes += FileAccess.open(
-						artifact_dir.path_join(name),
-						FileAccess.READ,
-					).get_length()
+func _clock_report() -> Dictionary:
+	if not api or not api.clock_is_configured():
+		return { }
 	return {
-		"tap": api.tap_cost() \
-				if api and api else { },
-		"netlog_bytes": netlog_bytes,
+		"tick": api.clock_get_tick(),
+		"synchronized": api.clock_is_synchronized(),
+		"behind": api.clock_get_simulation_behind_count(),
+		"rtt_avg": api.clock_get_monitor(
+			NetwMultiplayer.CLOCK_MONITOR_RTT_AVG
+		),
+		"rtt_jitter": api.clock_get_monitor(
+			NetwMultiplayer.CLOCK_MONITOR_RTT_JITTER
+		),
 	}
 
 

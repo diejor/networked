@@ -14,11 +14,10 @@ class ScenarioRun;
 
 struct LawVerdict {
     bool held = true;
-    char detail[192] = { 0 };
+    char detail[192] = {0};
 };
 
-template <typename Run>
-struct LawRowFor {
+template <typename Run> struct LawRowFor {
     const char *name;
     const char *claim;
     LawVerdict (*check)(const Run &);
@@ -123,7 +122,8 @@ public:
     NETW_FORMAT_TEXT( \
         netw_cell_text, \
         netw_test::Cells::record( \
-            (m_law).name, (m_scenario).label.utf8().get_data() \
+            (m_law).name, \
+            (m_scenario).label.utf8().get_data() \
         ) \
     ); \
     CAPTURE(netw_cell_text); \

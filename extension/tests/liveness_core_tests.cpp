@@ -1,8 +1,8 @@
 
 #include "support/netw_test.h"
 
-#include "netw/entity_ids.hpp"
-#include "netw/api/liveness_core.hpp"
+#include "netw/entity/ids.hpp"
+#include "netw/liveness_core.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwLivenessCore {
@@ -78,6 +78,16 @@ TEST_CASE("[Networked][Liveness][Hosted] L2 set_state moves forward only") {
     SUBCASE("an unknown entity refuses every edge") {
         const RID stranger;
         CHECK_FALSE(core->set_state(stranger, NetwLivenessCore::STATE_LIVE));
+    }
+
+    SUBCASE("set_state is not a door to absent") {
+        CHECK_FALSE(core->set_state(entity, NetwLivenessCore::STATE_ABSENT));
+        CHECK(core->state_of(entity) == NetwLivenessCore::STATE_LIVE);
+        core->set_state(entity, NetwLivenessCore::STATE_LINGERING);
+        CHECK_FALSE(core->set_state(entity, NetwLivenessCore::STATE_ABSENT));
+        core->set_state(entity, NetwLivenessCore::STATE_DEAD);
+        CHECK_FALSE(core->set_state(entity, NetwLivenessCore::STATE_ABSENT));
+        CHECK(core->state_of(entity) == NetwLivenessCore::STATE_DEAD);
     }
 }
 
@@ -178,6 +188,14 @@ TEST_CASE(
         CHECK_FALSE(core->set_state(entity, NetwLivenessCore::STATE_LIVE));
         CHECK(core->state_of(entity) == NetwLivenessCore::STATE_DEAD);
     }
+
+    SUBCASE("a return from absence spends no epoch") {
+        int hidden_route = 0;
+        const RID other = spawn(core, &hidden_route);
+        CHECK(core->hide_route(hidden_route));
+        CHECK(core->bind_route(other, hidden_route));
+        NETW_CHECK_EQ(core->epoch_of(other), 0);
+    }
 }
 
 TEST_CASE(
@@ -211,6 +229,13 @@ TEST_CASE(
     SUBCASE("the holder may still bind its own route") {
         CHECK(core->bind_route(holder, route));
     }
+
+    SUBCASE("an absent holder holds its route against a newcomer") {
+        CHECK(core->hide_route(route));
+        CHECK_FALSE(core->bind_route(stranger, route));
+        CHECK(core->rid_from_route(route) == holder);
+        CHECK(core->route_state(route) == NetwLivenessCore::STATE_ABSENT);
+    }
 }
 
 TEST_CASE(
@@ -233,15 +258,23 @@ TEST_CASE(
         NETW_CHECK_EQ(core->epoch_of(entity), 0);
     }
 
+    SUBCASE("absence is the same life") {
+        for (int i = 0; i < 8; i++) {
+            CHECK(core->hide_route(route));
+            CHECK(core->bind_route(entity, route));
+        }
+        NETW_CHECK_EQ(core->epoch_of(entity), 0);
+    }
+
     SUBCASE("an unbound record is on its first life") {
         NETW_CHECK_EQ(core->epoch_of(core->entity_create()), 0);
     }
 
     SUBCASE("a record this plane never knew has no life at all") {
         NETW_CHECK_EQ(core->epoch_of(RID()), -1);
-        const RID loose = netw::entity_ids::mint();
+        const RID loose = netw::entity::mint();
         NETW_CHECK_EQ(core->epoch_of(loose), -1);
-        netw::entity_ids::release(loose);
+        netw::entity::release(loose);
     }
 
     SUBCASE("the bulk door revives on the same edge") {
@@ -251,6 +284,102 @@ TEST_CASE(
         core->bind_routes_data(one);
         NETW_CHECK_EQ(core->epoch_of(entity), 1);
         CHECK(core->rid_from_route(route) == entity);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] L13 hide_route is the only door into "
+    "absence and live is the only door in"
+) {
+    Ref<NetwLivenessCore> core = make_core();
+    int route = 0;
+    const RID entity = spawn(core, &route);
+
+    CHECK(core->hide_route(route));
+    CHECK(core->route_state(route) == NetwLivenessCore::STATE_ABSENT);
+
+    SUBCASE("set_state refuses absent from every state") {
+        int other_route = 0;
+        const RID other = spawn(core, &other_route);
+        CHECK_FALSE(core->set_state(other, NetwLivenessCore::STATE_ABSENT));
+        CHECK(core->set_state(other, NetwLivenessCore::STATE_LINGERING));
+        CHECK_FALSE(core->set_state(other, NetwLivenessCore::STATE_ABSENT));
+        CHECK(core->set_state(other, NetwLivenessCore::STATE_DEAD));
+        CHECK_FALSE(core->set_state(other, NetwLivenessCore::STATE_ABSENT));
+        CHECK_FALSE(core->set_state(RID(), NetwLivenessCore::STATE_ABSENT));
+    }
+
+    SUBCASE("hide_route is refused from unknown, absent, lingering and dead") {
+        CHECK_FALSE(core->hide_route(route + 1000));
+        CHECK_FALSE(core->hide_route(route));
+        CHECK(core->route_state(route) == NetwLivenessCore::STATE_ABSENT);
+
+        int lingering_route = 0;
+        const RID lingering = spawn(core, &lingering_route);
+        core->set_state(lingering, NetwLivenessCore::STATE_LINGERING);
+        CHECK_FALSE(core->hide_route(lingering_route));
+        CHECK(
+            core->route_state(lingering_route)
+            == NetwLivenessCore::STATE_LINGERING
+        );
+
+        int dead_route = 0;
+        const RID dead = spawn(core, &dead_route);
+        core->set_state(dead, NetwLivenessCore::STATE_DEAD);
+        CHECK_FALSE(core->hide_route(dead_route));
+        CHECK(core->route_state(dead_route) == NetwLivenessCore::STATE_DEAD);
+    }
+
+    SUBCASE("a hidden route still names its entity") {
+        CHECK(core->rid_from_route(route) == entity);
+        NETW_CHECK_EQ(core->route_of(entity), route);
+        CHECK(core->entity_is_valid(entity));
+        CHECK(core->live_routes().is_empty());
+    }
+}
+
+TEST_CASE(
+    "[Networked][Liveness][Hosted] L14 a return from absence is the same life"
+) {
+    Ref<NetwLivenessCore> core = make_core();
+    int route = 0;
+    const RID entity = spawn(core, &route);
+    CHECK(core->hide_route(route));
+
+    SUBCASE("bind_route reaches live and spends no epoch") {
+        CHECK(core->bind_route(entity, route));
+        CHECK(core->route_state(route) == NetwLivenessCore::STATE_LIVE);
+        NETW_CHECK_EQ(core->epoch_of(entity), 0);
+        CHECK(core->rid_from_route(route) == entity);
+    }
+
+    SUBCASE("set_state is not the way back, so bind_route is the only one") {
+        CHECK_FALSE(core->set_state(entity, NetwLivenessCore::STATE_LIVE));
+        CHECK(core->route_state(route) == NetwLivenessCore::STATE_ABSENT);
+    }
+
+    SUBCASE("a wait armed on an absent route is answered by the return") {
+        CallLog log;
+        core->when_live(
+            route,
+            log.callable("live"),
+            1000,
+            true,
+            log.callable("out")
+        );
+        NETW_CHECK_EQ(core->pending_live_count(), 1);
+        CHECK(core->bind_route(entity, route));
+        core->flush_live(route);
+        NETW_CHECK_EQ(log.count("live"), 1);
+        NETW_CHECK_EQ(log.count("out"), 0);
+    }
+
+    SUBCASE("a tombstone reaches an absent record and wins") {
+        CHECK(core->set_state(entity, NetwLivenessCore::STATE_DEAD));
+        CHECK(core->route_state(route) == NetwLivenessCore::STATE_DEAD);
+        CHECK_FALSE(core->hide_route(route));
+        CHECK(core->bind_route(entity, route));
+        NETW_CHECK_EQ(core->epoch_of(entity), 1);
     }
 }
 
@@ -292,8 +421,9 @@ TEST_CASE(
 
     CHECK(core->live_routes().size() == 3);
     for (int i = 0; i < routes.size(); i++) {
-        CHECK(core->route_state(int(routes[i]))
-              == NetwLivenessCore::STATE_LIVE);
+        CHECK(
+            core->route_state(int(routes[i])) == NetwLivenessCore::STATE_LIVE
+        );
     }
 
     SUBCASE("a route a wrapper already holds is reused, never minted past") {
@@ -315,12 +445,15 @@ TEST_CASE(
         one.push_back(routes[1]);
         core->tombstone_routes_data(one);
 
-        CHECK(core->route_state(int(routes[0]))
-              == NetwLivenessCore::STATE_LIVE);
-        CHECK(core->route_state(int(routes[1]))
-              == NetwLivenessCore::STATE_DEAD);
-        CHECK(core->route_state(int(routes[2]))
-              == NetwLivenessCore::STATE_LIVE);
+        CHECK(
+            core->route_state(int(routes[0])) == NetwLivenessCore::STATE_LIVE
+        );
+        CHECK(
+            core->route_state(int(routes[1])) == NetwLivenessCore::STATE_DEAD
+        );
+        CHECK(
+            core->route_state(int(routes[2])) == NetwLivenessCore::STATE_LIVE
+        );
         CHECK(core->live_routes().size() == 2);
     }
 
@@ -362,14 +495,25 @@ TEST_CASE(
         NETW_CHECK_EQ(core->pending_live_count(), 0);
     }
 
+    SUBCASE("another route's binding leaves the wait parked") {
+        const int mine = core->reserve_route() + 1;
+        core->when_live(mine, log.callable("mine"), 4, false, Callable());
+
+        PackedInt64Array elsewhere;
+        elsewhere.push_back(core->reserve_route() + 1);
+        core->bind_routes_data(elsewhere);
+
+        NETW_CHECK_EQ(log.count("mine"), 0);
+        NETW_CHECK_EQ(core->pending_live_count(), 1);
+    }
+
     SUBCASE("waits are answered in the order they were parked") {
         const int other = core->reserve_route() + 1;
         core->when_live(other, log.callable("first"), 4, false, Callable());
         core->when_live(other, log.callable("second"), 4, false, Callable());
         core->flush_live(other);
 
-        CHECK(log.order()
-              == Vector<StringName>({"live", "first", "second"}));
+        CHECK(log.order() == Vector<StringName>({"live", "first", "second"}));
     }
 }
 
@@ -475,12 +619,13 @@ TEST_CASE(
         NETW_CHECK_EQ(log.count("out"), 1);
     }
 
-    SUBCASE("a route that dies drops its waits unanswered") {
-        core->abandon_live(route);
+    SUBCASE("a route that dies answers its waits with their timeout") {
+        core->fail_live(route);
+        NETW_CHECK_EQ(log.count("out"), 1);
         NETW_CHECK_EQ(core->pending_live_count(), 0);
         core->poll(10);
         core->flush_live(route);
-        NETW_CHECK_EQ(log.count("out"), 0);
+        NETW_CHECK_EQ(log.count("out"), 1);
         NETW_CHECK_EQ(log.count("live"), 0);
     }
 }
@@ -514,10 +659,10 @@ TEST_CASE(
     "[Networked][Liveness][Hosted] M1 the mint and the record plane answer "
     "different questions"
 ) {
-    const RID loose = netw::entity_ids::mint();
+    const RID loose = netw::entity::mint();
     Ref<NetwLivenessCore> core = make_core();
 
-    CHECK(netw::entity_ids::minted(loose));
+    CHECK(netw::entity::minted(loose));
     CHECK_FALSE(core->entity_is_valid(loose));
 
     CHECK(core->adopt(loose));
@@ -529,10 +674,10 @@ TEST_CASE(
 
     core->clear();
     CHECK_FALSE(core->entity_is_valid(loose));
-    CHECK(netw::entity_ids::minted(loose));
+    CHECK(netw::entity::minted(loose));
 
-    netw::entity_ids::release(loose);
-    CHECK_FALSE(netw::entity_ids::minted(loose));
+    netw::entity::release(loose);
+    CHECK_FALSE(netw::entity::minted(loose));
 }
 
 TEST_CASE(
@@ -546,7 +691,7 @@ TEST_CASE(
 
     const RID retired = core->entity_create();
     core->clear();
-    CHECK_FALSE(netw::entity_ids::minted(retired));
+    CHECK_FALSE(netw::entity::minted(retired));
     CHECK_FALSE(core->adopt(retired));
     CHECK_FALSE(core->entity_is_valid(retired));
 }
@@ -578,72 +723,72 @@ TEST_CASE(
     "[Networked][Liveness][Hosted] M4 a plane releases every handle it "
     "adopted, routed or not"
 ) {
-    const int before = netw::entity_ids::outstanding();
+    const int before = netw::entity::outstanding();
     Ref<NetwLivenessCore> core = make_core();
 
     const RID routed = core->entity_create();
     core->entity_create();
     core->bind_route(routed, core->reserve_route());
-    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before + 2);
+    NETW_CHECK_EQ(netw::entity::outstanding(), before + 2);
 
     core->clear();
-    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before);
+    NETW_CHECK_EQ(netw::entity::outstanding(), before);
 }
 
 TEST_CASE(
     "[Networked][Liveness][Hosted] M5 a handle outlives every holder but the "
     "last"
 ) {
-    const int before = netw::entity_ids::outstanding();
+    const int before = netw::entity::outstanding();
 
-    const RID carried = netw::entity_ids::mint();
-    NETW_CHECK_EQ(netw::entity_ids::holders(carried), 1);
+    const RID carried = netw::entity::mint();
+    NETW_CHECK_EQ(netw::entity::holders(carried), 1);
 
     Ref<NetwLivenessCore> a = make_core();
     Ref<NetwLivenessCore> b = make_core();
     CHECK(a->adopt(carried));
     CHECK(b->adopt(carried));
-    NETW_CHECK_EQ(netw::entity_ids::holders(carried), 3);
-    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before + 1);
+    NETW_CHECK_EQ(netw::entity::holders(carried), 3);
+    NETW_CHECK_EQ(netw::entity::outstanding(), before + 1);
 
     a->clear();
-    CHECK(netw::entity_ids::minted(carried));
+    CHECK(netw::entity::minted(carried));
     CHECK_FALSE(a->entity_is_valid(carried));
     CHECK(b->entity_is_valid(carried));
 
     b->clear();
-    CHECK(netw::entity_ids::minted(carried));
-    NETW_CHECK_EQ(netw::entity_ids::holders(carried), 1);
+    CHECK(netw::entity::minted(carried));
+    NETW_CHECK_EQ(netw::entity::holders(carried), 1);
 
-    netw::entity_ids::release(carried);
-    CHECK_FALSE(netw::entity_ids::minted(carried));
-    NETW_CHECK_EQ(netw::entity_ids::outstanding(), before);
+    netw::entity::release(carried);
+    CHECK_FALSE(netw::entity::minted(carried));
+    NETW_CHECK_EQ(netw::entity::outstanding(), before);
 
     SUBCASE("a second adoption by one plane claims no second hold") {
-        const RID once = netw::entity_ids::mint();
+        const RID once = netw::entity::mint();
         Ref<NetwLivenessCore> plane = make_core();
         CHECK(plane->adopt(once));
         CHECK(plane->adopt(once));
-        NETW_CHECK_EQ(netw::entity_ids::holders(once), 2);
+        NETW_CHECK_EQ(netw::entity::holders(once), 2);
         plane->clear();
-        NETW_CHECK_EQ(netw::entity_ids::holders(once), 1);
-        netw::entity_ids::release(once);
+        NETW_CHECK_EQ(netw::entity::holders(once), 1);
+        netw::entity::release(once);
     }
 
     SUBCASE("a handle the mint never issued is retained by nobody") {
-        CHECK_FALSE(netw::entity_ids::retain(RID()));
-        NETW_CHECK_EQ(netw::entity_ids::holders(RID()), 0);
+        CHECK_FALSE(netw::entity::retain(RID()));
+        NETW_CHECK_EQ(netw::entity::holders(RID()), 0);
         Ref<NetwLivenessCore> plane = make_core();
         CHECK_FALSE(plane->adopt(RID()));
     }
 
     SUBCASE("releasing past the last holder is not a way back") {
-        const RID gone = netw::entity_ids::mint();
-        netw::entity_ids::release(gone);
-        netw::entity_ids::release(gone);
-        CHECK_FALSE(netw::entity_ids::minted(gone));
-        NETW_CHECK_EQ(netw::entity_ids::holders(gone), 0);
-        CHECK_FALSE(netw::entity_ids::retain(gone));
+        const RID gone = netw::entity::mint();
+        netw::entity::release(gone);
+        netw::entity::release(gone);
+        CHECK_FALSE(netw::entity::minted(gone));
+        NETW_CHECK_EQ(netw::entity::holders(gone), 0);
+        CHECK_FALSE(netw::entity::retain(gone));
     }
 }
 

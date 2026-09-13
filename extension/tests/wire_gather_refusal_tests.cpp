@@ -14,20 +14,19 @@ namespace TestNetwWireGatherRefusal {
 
 using godot::Array;
 using godot::Ref;
-using netw::NetwQuantizeBits;
+using netw::NetwQuantizeScalar;
 using netw::SchemaCore;
-using netw::SchemaColumn;
-using netw::SchemaRecord;
+using netw::table::SchemaColumn;
+using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 using netw::wire::encode_scalar_row;
 using netw::wire::WirePlan;
 
-Ref<SchemaRecord> sealed(int type, int stride = 1) {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = godot::StringName("Probe");
-    SchemaCore::append_column(record, godot::StringName("a"), type, stride);
-    SchemaCore::fix(record);
+SchemaRecord sealed(int type, int stride = 1) {
+    SchemaRecord record;
+    record.name = godot::StringName("Probe");
+    SchemaCore::append_column(&record, godot::StringName("a"), type, stride);
+    SchemaCore::fix(&record);
     return record;
 }
 
@@ -41,7 +40,7 @@ TEST_CASE(
     "[Networked][WireValue][Hosted] a row with the wrong number of values is "
     "refused"
 ) {
-    const Ref<SchemaRecord> schema = sealed(SchemaCore::I32);
+    SchemaRecord schema = sealed(SchemaCore::I32);
     CodeRow row = CodeRow::for_plan(WirePlan::compile(schema));
 
     Array none;
@@ -61,7 +60,7 @@ TEST_CASE(
     "[Networked][WireValue][Hosted] a value that is not its declared type is "
     "refused rather than coerced"
 ) {
-    const Ref<SchemaRecord> schema = sealed(SchemaCore::I32);
+    SchemaRecord schema = sealed(SchemaCore::I32);
     CodeRow row = CodeRow::for_plan(WirePlan::compile(schema));
 
     ERR_PRINT_OFF;
@@ -73,22 +72,21 @@ TEST_CASE(
     "[Networked][WireValue][Hosted] a quantizer that does not support its "
     "column's type is refused"
 ) {
-    Ref<SchemaRecord> schema;
-    schema.instantiate();
-    schema->name = godot::StringName("Probe");
+    SchemaRecord schema;
+    schema.name = godot::StringName("Probe");
     SchemaCore::append_column(
-        schema,
+        &schema,
         godot::StringName("flag"),
         SchemaCore::BOOL,
         1
     );
-    Ref<NetwQuantizeBits> packer;
+    Ref<NetwQuantizeScalar> packer;
     packer.instantiate();
     packer->bits(8);
     packer->limits(0.0, 1.0);
     REQUIRE_FALSE(packer->supports_type(godot::Variant::BOOL));
-    schema->at(0)->quantizer = packer;
-    SchemaCore::fix(schema);
+    schema.at(0)->quantizer = packer;
+    SchemaCore::fix(&schema);
 
     CodeRow row = CodeRow::for_plan(WirePlan::compile(schema));
     ERR_PRINT_OFF;
@@ -99,7 +97,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][WireValue][Hosted] a strided column has no scalar gather"
 ) {
-    const Ref<SchemaRecord> schema = sealed(SchemaCore::I32, 4);
+    SchemaRecord schema = sealed(SchemaCore::I32, 4);
     CodeRow row = CodeRow::for_plan(WirePlan::compile(schema));
 
     ERR_PRINT_OFF;
@@ -111,7 +109,7 @@ TEST_CASE(
     "[Networked][WireValue][Hosted] a self-describing column has no plan and "
     "so no row"
 ) {
-    const Ref<SchemaRecord> schema = sealed(SchemaCore::VARIANT);
+    SchemaRecord schema = sealed(SchemaCore::VARIANT);
     const WirePlan plan = WirePlan::compile(schema);
 
     CHECK_FALSE(plan.valid());
@@ -126,7 +124,7 @@ TEST_CASE(
     "[Networked][WireValue][Hosted] a refused gather leaves the row it was "
     "handed alone"
 ) {
-    const Ref<SchemaRecord> schema = sealed(SchemaCore::I32);
+    SchemaRecord schema = sealed(SchemaCore::I32);
     const WirePlan plan = WirePlan::compile(schema);
     CodeRow row = CodeRow::for_plan(plan);
 

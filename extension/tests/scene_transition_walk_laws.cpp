@@ -67,26 +67,28 @@ TEST_CASE(
 
     NETW_CHECK_EQ(log.count(roster_tag()), 0);
 
-    CHECK(bool(
-        core->transition_next_mover(roster_of) == Variant(StringName("p1"))
-    ));
+    CHECK(
+        bool(
+            core->transition_next_mover(roster_of) == Variant(StringName("p1"))
+        )
+    );
     NETW_CHECK_EQ(log.count(roster_tag()), 1);
-    CHECK(bool(
-        log.args(roster_tag(), 0)[0] == Variant(StringName("A"))
-    ));
+    CHECK(bool(log.args(roster_tag(), 0)[0] == Variant(StringName("A"))));
 
-    CHECK(bool(
-        core->transition_next_mover(roster_of) == Variant(StringName("p2"))
-    ));
+    CHECK(
+        bool(
+            core->transition_next_mover(roster_of) == Variant(StringName("p2"))
+        )
+    );
     NETW_CHECK_EQ(log.count(roster_tag()), 1);
 
-    CHECK(bool(
-        core->transition_next_mover(roster_of) == Variant(StringName("p1"))
-    ));
+    CHECK(
+        bool(
+            core->transition_next_mover(roster_of) == Variant(StringName("p1"))
+        )
+    );
     NETW_CHECK_EQ(log.count(roster_tag()), 2);
-    CHECK(bool(
-        log.args(roster_tag(), 1)[0] == Variant(StringName("B"))
-    ));
+    CHECK(bool(log.args(roster_tag(), 1)[0] == Variant(StringName("B"))));
 
     core->transition_next_mover(roster_of);
     NETW_CHECK_EQ(
@@ -178,10 +180,7 @@ TEST_CASE(
 
     CHECK(promise->get_is_completed());
     NETW_CHECK_EQ(promise->get_code(), int(OK));
-    NETW_CHECK_EQ(
-        int(core->transition_target().get_type()),
-        int(Variant::NIL)
-    );
+    NETW_CHECK_EQ(int(core->transition_target().get_type()), int(Variant::NIL));
     NETW_CHECK_EQ(int(core->transition_sources().size()), 0);
     CHECK_FALSE(core->transition_moved(7));
 }
@@ -209,13 +208,13 @@ TEST_CASE(
     CHECK(core->transition_open());
     core->transition_arm(StringName("Annex"), two_sources(), second);
 
-    CHECK(bool(
-        core->transition_next_mover(roster_of) == Variant(StringName("p1"))
-    ));
+    CHECK(
+        bool(
+            core->transition_next_mover(roster_of) == Variant(StringName("p1"))
+        )
+    );
     NETW_CHECK_EQ(log.count(roster_tag()), 3);
-    CHECK(bool(
-        log.args(roster_tag(), 2)[0] == Variant(StringName("A"))
-    ));
+    CHECK(bool(log.args(roster_tag(), 2)[0] == Variant(StringName("A"))));
 }
 
 } // namespace TestSceneTransitionWalkLaws

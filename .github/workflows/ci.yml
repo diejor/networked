@@ -5,92 +5,115 @@ on:
   push:
     branches:
       - main
+      - total-native
     paths-ignore:
       - '**.md'
   pull_request:
     branches:
       - main
+      - total-native
     paths-ignore:
       - '**.md'
-  # A tier nothing schedules only goes red inside the change that needed it.
   schedule:
     - cron: '17 5 * * 1'
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Library profile from ci/platforms.json.
+        type: string
+        required: false
+        default: pr
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-tests-${{ github.event.number || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  # The addon's classes live in the native library, so the tests cannot run
-  # without one. The whole default matrix builds here rather than only the
-  # cell the tests need: a pull request that breaks the Windows or release
-  # build should fail on the pull request, and the two demo deployments
-  # trigger off this workflow and fetch its web artifact.
+  changes:
+    name: "Lanes"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.lanes.outputs.native }}
+      hosted: ${{ steps.lanes.outputs.hosted }}
+      module: ${{ steps.lanes.outputs.module }}
+      gdscript: ${{ steps.lanes.outputs.gdscript }}
+      examples: ${{ steps.lanes.outputs.examples }}
+      docs: ${{ steps.lanes.outputs.docs }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Lanes
+        id: lanes
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -eu
+          resolved="${BASE:-}"
+          if [ "$resolved" = "0000000000000000000000000000000000000000" ]; then
+            resolved=""
+          fi
+          if [ -n "$resolved" ] && ! git cat-file -e "$resolved^{commit}" 2>/dev/null; then
+            resolved=""
+          fi
+          python3 ci/changed.py --base "$resolved"
+
+  checks:
+    name: "Static checks"
+    uses: ./.github/workflows/static-checks.yml
+
   native:
     name: "Native"
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     uses: ./.github/workflows/gdextension.yml
+    with:
+      profile: ${{ inputs.profile || 'pr' }}
 
-  # The suite compiled into the library and run through a stock Godot, so the
-  # cases can reach `res://` and the registered classes at once. `module.yml`
-  # runs the same cases against the engine's own headers and is path-gated
-  # because it builds a whole engine. This one is cheap enough to ride every
-  # run.
-  #
-  # It builds its own library rather than fetching the `native` artifact,
-  # because `netw_tests=yes` produces a different library and the addon zip
-  # must not ship the test cases.
-  native-test:
-    name: "Embedded Suite"
+  hosted:
+    name: "Embedded Suite (${{ matrix.engine }})"
+    needs: changes
+    if: needs.changes.outputs.hosted == 'true'
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [normal, stepping]
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Read Dependency Pins
-        id: pins
-        shell: bash
-        run: cat extension/deps.env >> "$GITHUB_OUTPUT"
-
       - uses: ./.github/actions/build-native
         with:
+          cell: linux:x86_64:template_debug
           platform: linux
-          arch: x86_64
-          target: template_debug
-          scons-flags: netw_tests=yes
+          suffix: .linux.template_debug.x86_64
+          scons-args: netw_tests=yes
 
-      - name: Install Godot
+      - name: Install The Engine
+        id: engine
         shell: bash
-        env:
-          GODOT_REF: ${{ steps.pins.outputs.GODOT_REF }}
-        run: |
-          set -eu
-          version="${GODOT_REF%-*}"
-          channel="${GODOT_REF#*-}"
-          name="Godot_v${version}-${channel}_linux.x86_64"
-          curl -fsSL -o godot.zip \
-            "https://github.com/godotengine/godot/releases/download/${version}-${channel}/${name}.zip"
-          unzip -q godot.zip
-          mv "$name" godot
-          chmod +x godot
-          ./godot --version
+        run: python3 ci/engine.py --engine ${{ matrix.engine }} install
 
-      # A first headless open imports the project. Without it the run reports
-      # missing resources rather than the state of the cases.
       - name: Import The Project
         shell: bash
-        run: timeout 300 ./godot --headless --import || true
+        run: python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" import
 
       - name: Run The Embedded Suite
         shell: bash
-        run: ./godot --headless --path . -s res://tests/native/run_native_tests.gd
+        run: python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" native
 
-      # The only check that can catch the code and its own documentation
-      # disagreeing: a round trip through one implementation agrees with itself
-      # whatever either of them says.
       - name: Hold The Descriptors To The Prose
+        if: always()
         shell: bash
         run: |
           set -eu
@@ -98,94 +121,36 @@ jobs:
           python3 extension/tools/wire_decode.py --self-test \
             --spec reports/native/wire.spec.json
 
-      # The channel byte the shell sends and the contract the registry declares
-      # for it have to be one table. When they are not, the payload still
-      # crosses and the identity hash still matches, because the hash folds only
-      # what the registry holds.
-      - name: Hold The Channel Enum To The Registry
-        shell: bash
-        run: |
-          set -eu
-          python3 extension/tools/check_channel_table.py \
-            --spec reports/native/wire.spec.json
-
-      # The whole point of reading the XML. Four shapes that a run reporting
-      # zero failures can still be in, and every one of them reads as green
-      # from the exit code alone.
       - name: Read The Report
+        if: always()
         shell: bash
         run: |
-          set -eu
-          python3 - <<'PY'
-          import sys
-          import xml.etree.ElementTree as ET
+          python3 ci/reports.py reports/native/results.xml \
+            --floor tests/native/hosted_floor.txt
 
-          root = ET.parse("reports/native/results.xml").getroot()
-          suites = list(root.iter("testsuite"))
-          claimed = sum(int(s.attrib.get("tests", 0)) for s in suites)
-          failures = sum(int(s.attrib.get("failures", 0)) for s in suites)
-          errors = sum(int(s.attrib.get("errors", 0)) for s in suites)
-          cases = [c for s in suites for c in s.iter("testcase")]
-          rows = len(cases)
+      - name: Upload The Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-${{ matrix.engine }}
+          path: |
+            reports/native
+            tmp/native.log
+          if-no-files-found: warn
+          retention-days: 7
 
-          # The floor the corpus was last counted at. A case file the recursive
-          # glob missed reads as "fewer cases", never as an error.
-          floor = 0
-          with open("tests/native/hosted_floor.txt") as handle:
-              for line in handle:
-                  line = line.split("#", 1)[0].strip()
-                  if line:
-                      floor = int(line)
-
-          print("tests=%d rows=%d fail=%d err=%d floor=%d"
-                % (claimed, rows, failures, errors, floor))
-
-          refused = []
-          for case in cases:
-              for kind in ("failure", "error"):
-                  for node in case.findall(kind):
-                      body = (node.get("message") or "") + (node.text or "")
-                      refused.append("%s %s\n%s"
-                                     % (kind.upper(), case.get("name"), body.strip()))
-          if refused:
-              print("\n\n".join(refused))
-              sys.exit("cases failed")
-          # A case that segfaults ends the run, so the rows stop where it died.
-          if rows < claimed:
-              sys.exit("truncated: %d of %d cases wrote a row" % (rows, claimed))
-          # A filter matching nothing still exits zero.
-          if claimed == 0:
-              sys.exit("no case ran")
-          if claimed < floor:
-              sys.exit("corpus shrank: %d cases ran, %d in the census" % (claimed, floor))
-          PY
-
-  # Tier 2b: the same cases built into the engine and checked against the
-  # engine's own headers, which is where godot-cpp's divergences from the
-  # engine stop being invisible. Scheduled and dispatched only, because a
-  # 90-minute engine build on every pull request would buy a signal
-  # `module.yml`'s own path gate already gives for the changes that can break
-  # it.
   module:
     name: "Engine Module"
-    if: >-
-      github.event_name == 'schedule'
-      || github.event_name == 'workflow_dispatch'
+    needs: changes
+    if: needs.changes.outputs.module == 'true'
     uses: ./.github/workflows/module.yml
     with:
       profiler: none
 
-  # `doc_classes/*.xml` is generated from what `_bind_methods` registers and
-  # then hand-written into, so it is a file nobody regenerates by habit. A
-  # renamed or dropped binding leaves the old member described, the editor's
-  # help shows something that no longer exists, and every build stays green
-  # because the XML still compiles.
-  #
-  # Regenerate and diff. That is the whole check, and it is only possible
-  # because the generator is deterministic: doctool reads the registry rather
-  # than the source.
   doc-drift:
     name: "Doc Drift"
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.native == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
@@ -193,61 +158,33 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Read Dependency Pins
-        id: pins
-        shell: bash
-        run: cat extension/deps.env >> "$GITHUB_OUTPUT"
-
       - uses: ./.github/actions/build-native
         with:
+          cell: linux:x86_64:template_debug
           platform: linux
-          arch: x86_64
-          target: template_debug
+          suffix: .linux.template_debug.x86_64
 
-      - name: Install Godot
+      - name: Install The Engine
+        id: engine
         shell: bash
-        env:
-          GODOT_REF: ${{ steps.pins.outputs.GODOT_REF }}
-        run: |
-          set -eu
-          version="${GODOT_REF%-*}"
-          channel="${GODOT_REF#*-}"
-          name="Godot_v${version}-${channel}_linux.x86_64"
-          curl -fsSL -o godot.zip \
-            "https://github.com/godotengine/godot/releases/download/${version}-${channel}/${name}.zip"
-          unzip -q godot.zip
-          mv "$name" godot
-          chmod +x godot
-          ./godot --version
+        run: python3 ci/engine.py install
 
-      # Resolves UIDs so doctool does not abort before it reaches the registry.
       - name: Import The Project
         shell: bash
-        run: timeout 300 ./godot --headless --import || true
+        run: python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" import
 
-      # Regenerated IN PLACE, which is load-bearing: doctool merges the
-      # hand-written prose back into the skeleton it emits, and generating into
-      # an empty directory instead would silently return every description to
-      # blank.
-      #
-      # `--gdextension-docs` emits the classes of EVERY extension the project
-      # loads, not just this one, so the others are dropped afterward. They
-      # belong to their own repositories. Which ones are ours is read from the
-      # registry rather than assumed from a name prefix: not every class this
-      # extension registers is called Netw-something.
-      #
-      # The library above is built without `netw_tests`, and that is what makes
-      # the set deterministic: the committed reference is the SHIPPING set, and
-      # a test build would add `NetwNativeTests` to it.
       - name: Regenerate The Class Reference
         shell: bash
+        env:
+          GODOT: ${{ steps.engine.outputs.binary }}
         run: |
           set -eu
-          ./godot --doctool extension --gdextension-docs \
+          "$GODOT" --doctool extension --gdextension-docs \
             --headless --path . --quit
           sed -n 's/.*GDREGISTER_[A-Z_]*CLASS(netw::\([A-Za-z0-9_]*\)).*/\1.xml/p' \
             extension/register_types.cpp | sort > /tmp/netw-registered.txt
-          ls extension/doc_classes | sort > /tmp/netw-emitted.txt
+          find extension/doc_classes -maxdepth 1 -name '*.xml' -printf '%f\n' \
+            | sort > /tmp/netw-emitted.txt
           comm -13 /tmp/netw-registered.txt /tmp/netw-emitted.txt \
             | while read -r name; do rm -f "extension/doc_classes/$name"; done
 
@@ -255,8 +192,6 @@ jobs:
         shell: bash
         run: |
           set -eu
-          # `git status`, not `git diff`: a class that gained a binding arrives
-          # as an untracked file, and a diff would not see it at all.
           drift="$(git status --porcelain -- extension/doc_classes)"
           if [ -n "$drift" ]; then
             printf '%s\n' "$drift"
@@ -268,48 +203,147 @@ jobs:
             echo "::error::NetwNativeTests, which is not part of the shipping reference."
             exit 1
           fi
-          # A registry that answered with nothing would also read clean.
-          test "$(ls extension/doc_classes/Netw*.xml | wc -l)" -gt 0
+          test "$(find extension/doc_classes -maxdepth 1 -name 'Netw*.xml' | wc -l)" -gt 0
 
-  unit-test:
-    name: "GdUnit4 Tests (${{ matrix.godot-version }})"
-    runs-on: 'ubuntu-22.04'
-    timeout-minutes: 15
-    needs: native
-    strategy:
-      fail-fast: false
-      matrix:
-        godot-version: ['4.7']
-    permissions:
-      actions: write
-      checks: write
-      contents: write
-      pull-requests: write
-      statuses: write
-
+  gdscript-tests:
+    name: "GdUnit4 res://tests"
+    needs: changes
+    if: needs.changes.outputs.gdscript == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      # addons/networked/bin is git-ignored, so the manifest and the library
-      # both arrive here rather than from the checkout. The editor loads the
-      # debug target, and extension/deps.env pins GODOT_CPP_API_VERSION to the
-      # oldest engine supported, so one library serves every newer one.
-      - uses: ./.github/actions/fetch-native-artifact
+      - uses: ./.github/actions/build-native
         with:
-          pattern: native-linux-x86_64-template_debug
+          cell: linux:x86_64:template_debug
+          platform: linux
+          suffix: .linux.template_debug.x86_64
+          scons-args: netw_tests=yes
 
-      - name: Run GdUnit4 Tests
-        uses: MikeSchulze/gdUnit4-action@v1.0.2
+      - name: Install The Engine
+        id: engine
+        shell: bash
+        run: python3 ci/engine.py install
+
+      - name: Import The Project
+        shell: bash
+        run: python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" import
+
+      - name: Parse Every Script
+        shell: bash
+        run: |
+          python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" \
+            parse res://tests res://addons/networked
+
+      - name: Run The Suites
+        shell: bash
+        run: |
+          python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" \
+            gdunit --name tests --path res://tests/
+
+      - name: Read The Report
+        if: always()
+        shell: bash
+        run: |
+          python3 ci/reports.py reports/tests/report_1 \
+            --log tmp/gdunit-tests.log --allow-stale
+
+      - name: Upload The Report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          godot-version: ${{ matrix.godot-version }}
-          # Use the repo's vendored addons/gdUnit4 (6.0.0) instead of cloning
-          # gdUnit4 'latest' at run time, so CI runs the same gdUnit as local.
-          version: 'installed'
-          paths: |
-            res://tests/
-            res://examples/
-          timeout: 10
-          report-name: test_report_${{ matrix.godot-version }}.xml
+          name: gdunit-tests
+          path: |
+            reports/tests
+            tmp/gdunit-tests.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  gdscript-examples:
+    name: "GdUnit4 res://examples"
+    needs: changes
+    if: needs.changes.outputs.examples == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/build-native
+        with:
+          cell: linux:x86_64:template_debug
+          platform: linux
+          suffix: .linux.template_debug.x86_64
+          scons-args: netw_tests=yes
+
+      - name: Install The Engine
+        id: engine
+        shell: bash
+        run: python3 ci/engine.py install
+
+      - name: Import The Project
+        shell: bash
+        run: python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" import
+
+      - name: Run The Suites
+        shell: bash
+        run: |
+          python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" \
+            gdunit --name examples --path res://examples/
+
+      - name: Read The Report
+        if: always()
+        shell: bash
+        run: |
+          python3 ci/reports.py reports/examples/report_1 \
+            --log tmp/gdunit-examples.log --allow-stale
+
+      - name: Upload The Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdunit-examples
+          path: |
+            reports/examples
+            tmp/gdunit-examples.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  verified:
+    name: "Verified"
+    if: always()
+    needs:
+      - checks
+      - native
+      - hosted
+      - module
+      - doc-drift
+      - gdscript-tests
+      - gdscript-examples
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Refuse A Failed Or Cancelled Lane
+        shell: bash
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          results = json.loads(os.environ["RESULTS"])
+          for name, entry in sorted(results.items()):
+              print("%-20s %s" % (name, entry["result"]))
+          refused = [
+              name
+              for name, entry in results.items()
+              if entry["result"] not in ("success", "skipped")
+          ]
+          if refused:
+              sys.exit("refused by %s" % ", ".join(sorted(refused)))
+          PY

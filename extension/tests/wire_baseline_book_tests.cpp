@@ -15,7 +15,7 @@ namespace TestNetwWireBaselineBook {
 using godot::LocalVector;
 using godot::Ref;
 using netw::SchemaCore;
-using netw::SchemaRecord;
+using netw::table::SchemaRecord;
 using netw::wire::BaselineBook;
 using netw::wire::CodeRow;
 using netw::wire::WirePlan;
@@ -23,28 +23,27 @@ using netw::wire::WirePlan;
 const int PEER = 7;
 
 WirePlan body_plan() {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = godot::StringName("Body");
+    SchemaRecord record;
+    record.name = godot::StringName("Body");
     SchemaCore::append_column(
-        record,
+        &record,
         godot::StringName("x"),
         SchemaCore::I16,
         1
     );
     SchemaCore::append_column(
-        record,
+        &record,
         godot::StringName("y"),
         SchemaCore::I16,
         1
     );
     SchemaCore::append_column(
-        record,
+        &record,
         godot::StringName("spin"),
         SchemaCore::I16,
         1
     );
-    SchemaCore::fix(record);
+    SchemaCore::fix(&record);
     return WirePlan::compile(record);
 }
 
@@ -82,7 +81,7 @@ TEST_CASE("[Networked][Wire][Hosted] a caught-up peer is sent nothing") {
 
     book.mask_to_send(PEER, plan, row);
     book.stage(PEER, 500, row);
-    book.acknowledge(PEER, 500);
+    book.acknowledge(PEER, 500, 0);
 
     REQUIRE(book.has_baseline(PEER));
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 0);
@@ -96,7 +95,7 @@ TEST_CASE("[Networked][Wire][Hosted] only the columns that moved are sent") {
 
     book.mask_to_send(PEER, plan, row);
     book.stage(PEER, 500, row);
-    book.acknowledge(PEER, 500);
+    book.acknowledge(PEER, 500, 0);
 
     fill(plan, row, 10, 20, 31);
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 4);
@@ -113,7 +112,7 @@ TEST_CASE(
     fill(plan, row, 10, 20, 30);
 
     book.stage(PEER, 500, row);
-    book.acknowledge(PEER, 500);
+    book.acknowledge(PEER, 500, 0);
 
     fill(plan, row, 10, 20, 31);
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 4);
@@ -131,18 +130,18 @@ TEST_CASE("[Networked][Wire][Hosted] the ack that carries a column stops it") {
     fill(plan, row, 10, 20, 30);
 
     book.stage(PEER, 500, row);
-    book.acknowledge(PEER, 500);
+    book.acknowledge(PEER, 500, 0);
 
     fill(plan, row, 10, 20, 31);
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 4);
     book.stage(PEER, 501, row);
-    book.acknowledge(PEER, 501);
+    book.acknowledge(PEER, 501, 0);
 
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 0);
 }
 
 TEST_CASE(
-    "[Networked][Wire][Hosted] an ack promotes the freshest row at or under it"
+    "[Networked][Wire][Hosted] an ack retires every staged row it passed"
 ) {
     const WirePlan plan = body_plan();
     BaselineBook book;
@@ -155,7 +154,7 @@ TEST_CASE(
     fill(plan, row, 3, 0, 0);
     book.stage(PEER, 502, row);
 
-    book.acknowledge(PEER, 501);
+    book.acknowledge(PEER, 501, 0);
 
     fill(plan, row, 2, 0, 0);
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 0);
@@ -171,7 +170,7 @@ TEST_CASE(
     fill(plan, row, 1, 0, 0);
 
     book.stage(PEER, 500, row);
-    book.acknowledge(PEER, 499);
+    book.acknowledge(PEER, 499, 0);
 
     REQUIRE_FALSE(book.has_baseline(PEER));
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), plan.full_mask());
@@ -192,7 +191,7 @@ TEST_CASE("[Networked][Wire][Hosted] a seq that wrapped is still older") {
     fill(plan, row, 2, 0, 0);
     book.stage(PEER, after_wrap, row);
 
-    book.acknowledge(PEER, after_wrap);
+    book.acknowledge(PEER, after_wrap, 0);
     fill(plan, row, 2, 0, 0);
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 0);
     NETW_CHECK_EQ(book.in_flight_count(PEER), 0);
@@ -214,7 +213,7 @@ TEST_CASE(
     fill(plan, row, 2, 0, 0);
     book.stage(PEER, after_wrap, row);
 
-    book.acknowledge(PEER, before_wrap);
+    book.acknowledge(PEER, before_wrap, 0);
     fill(plan, row, 1, 0, 0);
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 0);
     NETW_CHECK_EQ(book.in_flight_count(PEER), 1);
@@ -229,8 +228,8 @@ TEST_CASE("[Networked][Wire][Hosted] a peer that loses the book heals whole") {
     const int kept_peer = 8;
     book.stage(PEER, 500, row);
     book.stage(kept_peer, 500, row);
-    book.acknowledge(PEER, 500);
-    book.acknowledge(kept_peer, 500);
+    book.acknowledge(PEER, 500, 0);
+    book.acknowledge(kept_peer, 500, 0);
 
     LocalVector<int> recipients;
     recipients.push_back(kept_peer);
@@ -257,13 +256,51 @@ TEST_CASE("[Networked][Wire][Hosted] the in-flight ring is bounded") {
     }
     NETW_CHECK_EQ(book.in_flight_count(PEER), BaselineBook::MAX_IN_FLIGHT);
 
-    book.acknowledge(PEER, 1);
+    book.acknowledge(PEER, 1, 0);
     REQUIRE_FALSE(book.has_baseline(PEER));
 
-    book.acknowledge(PEER, 2);
+    book.acknowledge(PEER, 2, 0);
     REQUIRE(book.has_baseline(PEER));
     fill(plan, row, 2, 0, 0);
     NETW_CHECK_EQ(book.mask_to_send(PEER, plan, row), 0);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] only a delivered seq promotes to the baseline"
+) {
+    const WirePlan plan = body_plan();
+    BaselineBook book;
+    CodeRow row = CodeRow::for_plan(plan);
+
+    fill(plan, row, 1, 0, 0);
+    book.stage(PEER, 8, row);
+    fill(plan, row, 2, 0, 0);
+    book.stage(PEER, 9, row);
+
+    const uint32_t eight_arrived_nine_did_not = 0x2;
+    book.acknowledge(PEER, 10, eight_arrived_nine_did_not);
+
+    fill(plan, row, 1, 0, 0);
+    const bool holds_the_delivered_row
+        = book.mask_to_send(PEER, plan, row) == 0;
+    CHECK(holds_the_delivered_row);
+}
+
+TEST_CASE("[Networked][Wire][Hosted] a lost seq leaves the in-flight ring") {
+    const WirePlan plan = body_plan();
+    BaselineBook book;
+    CodeRow row = CodeRow::for_plan(plan);
+
+    fill(plan, row, 1, 0, 0);
+    book.stage(PEER, 8, row);
+    fill(plan, row, 2, 0, 0);
+    book.stage(PEER, 9, row);
+
+    const uint32_t eight_arrived_nine_did_not = 0x2;
+    book.acknowledge(PEER, 10, eight_arrived_nine_did_not);
+
+    const bool nothing_stays_in_flight = book.in_flight_count(PEER) == 0;
+    CHECK(nothing_stays_in_flight);
 }
 
 } // namespace TestNetwWireBaselineBook

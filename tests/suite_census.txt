@@ -1,194 +1,33 @@
 # The GDScript suite disposition ledger (ring-0 plan of record ZT-5).
-# One row per GDScript suite file under tests/: `<path> keep <reason>` or
-# `<path> port <band>`. A suite is a .gd whose first `extends` names
+#
+# One row per GDScript suite file under tests/: `<path> boundary <reason>`
+# or `<path> port <band>`. A suite is a .gd whose first `extends` names
 # NetwTestSuite or GdUnitTestSuite.
 #
-# keep requires an argument, and the only admissible arguments are the
-# clauses of the plan's §9 (what stays GDScript forever). port names the
-# band whose crossing writes the native law and deletes the suite, and it
-# is the DEFAULT: a suite with nothing to argue is debt.
+# boundary requires an argument, and the only admissible arguments are the
+# clauses of the plan's §9. A boundary row records WHERE THE LINE SITS
+# TODAY and is NEVER a reason to stop a migration (ZD-50): re-argue or
+# drop it in the slice that needs to cross it.
+#
+# port names the band whose crossing writes the native law and deletes the
+# suite, and it is the DEFAULT: a suite with nothing to argue is debt.
 #
 # check_suite_census.py refuses a suite with no row and reports a row with
 # no suite as STALE, so the slice that deletes a suite deletes its row and
 # a forgotten row stays visible.
-
-tests/conformance/test_embedding_conformance.gd keep §9.1 stock-engine conformance
-tests/integration/connection/test_application_auth_callback.gd port session
-tests/integration/connection/test_auth_pipeline.gd port session
-tests/integration/connection/test_auto_connect_probe_path.gd keep §9.6 the connect kit
-tests/integration/connection/test_connect_browser_smoke.gd keep §9.6 the connect kit
-tests/integration/connection/test_connector_host_admit.gd keep §9.6 the connect kit
-tests/integration/connection/test_enet_session_lifecycle.gd keep §9.3 real sockets, ENet
-tests/integration/connection/test_harness_disconnect.gd keep §9.4 the published test kit
-tests/integration/connection/test_host_fallback_lands_in_one_session.gd keep §9.6 the connect kit
-tests/integration/connection/test_join_player_end_to_end.gd port session
-tests/integration/connection/test_mixed_topology_spike.gd keep §9.3 real sockets, mixed topology
-tests/integration/connection/test_multi_client_connection.gd keep §9.3 real sockets, ENet
-tests/integration/connection/test_multiplayer_tree_connect.gd port session
-tests/integration/connection/test_root_override_install.gd port session
-tests/integration/connection/test_server_predicate.gd port session
-tests/integration/database/test_database_flow.gd keep §9.6 the authoring tier, the NetwDatabase facade
-tests/integration/entity/test_control_axis.gd port replication
-tests/integration/entity/test_spawn_property_transport.gd port replication
-tests/integration/gameplay/test_display_smoothness_probe.gd port gameplay
-tests/integration/gameplay/test_game_harness_link_conditions.gd keep §9.4 the published test kit
-tests/integration/gameplay/test_game_harness_treeless_wrap.gd keep §9.4 the published test kit
-tests/integration/gameplay/test_scene_runner_slots.gd keep §9.4 the published test kit
-tests/integration/gameplay/test_tp_flow.gd port gameplay
-tests/integration/interest/test_ancestor_interest_composition.gd port interest
-tests/integration/interest/test_leave_policy.gd port interest
-tests/integration/interest/test_perception_policy.gd port interest
-tests/integration/interest/test_scene_membership_is_ancestry.gd port interest
-tests/integration/interest/test_shared_scope_on_the_owner.gd port interest
-tests/integration/lagcomp/test_carried_recovery.gd port lagcomp
-tests/integration/lagcomp/test_command_lane.gd port lagcomp
-tests/integration/lagcomp/test_episode_reports.gd port lagcomp
-tests/integration/lagcomp/test_frame_schedule.gd port lagcomp
-tests/integration/lagcomp/test_input_backed_rewind.gd port lagcomp
-tests/integration/lagcomp/test_kinematic_replay.gd port lagcomp
-tests/integration/lagcomp/test_lag_compensation_config_lifetime.gd port lagcomp
-tests/integration/lagcomp/test_netw_action.gd port lagcomp
-tests/integration/lagcomp/test_scene_rewind.gd port lagcomp
-tests/integration/lagcomp/test_server_rewind.gd port lagcomp
-tests/integration/lagcomp/test_simulation_gate_semantics.gd port lagcomp
-tests/integration/liveness/test_entity_life_reports.gd port liveness
-tests/integration/liveness/test_group_request_settle.gd port liveness
-tests/integration/liveness/test_relay_races.gd port liveness
-tests/integration/liveness/test_teardown_settles_without_frames.gd port liveness
-tests/integration/save/test_save_flow.gd port persistence
-tests/integration/save/test_save_overlap_lint.gd port persistence
-tests/integration/save/test_save_security.gd port persistence
-tests/integration/scene/test_bare_scene_adoption.gd keep §9.6 the authoring tier, the scene manager's bare-level adoption
-tests/integration/scene/test_net_scene_context.gd port scenes
-tests/integration/scene/test_peer_context_lifecycle.gd port session
-tests/integration/scene/test_player_spawn.gd port scenes
-tests/integration/scene/test_scene_capture_matrix.gd port scenes
-tests/integration/scene/test_scene_custom_spawn.gd keep §9.6 the authoring tier, the scene manager's level spawn function
-tests/integration/scene/test_scene_entity_conformance.gd port scenes
-tests/integration/scene/test_scene_interest_membership.gd port scenes
-tests/integration/scene/test_scene_lifecycle.gd port scenes
-tests/integration/scene/test_session_relifecycle.gd port session
-tests/integration/spawn/test_netw_spawn_nesting.gd port spawn
-tests/integration/spawn/test_netw_spawn_verbs.gd port spawn
-tests/integration/spawn/test_spawn_interest_flap.gd port spawn
-tests/integration/spawn/test_spawn_settles_without_frames.gd port spawn
-tests/integration/spawn/test_spawner_conformance.gd port spawn
-tests/integration/sync/test_broadcast_masked_flow.gd port display
-tests/integration/sync/test_clock_configure_settle.gd port display
-tests/integration/sync/test_consumed_interpolation_revival.gd port display
-tests/integration/sync/test_derived_loopback.gd port display
-tests/integration/sync/test_interpolator_authoring_tick.gd port display
-tests/integration/sync/test_latency_accuracy.gd port display
-tests/integration/sync/test_masked_reconstruction.gd port display
-tests/integration/sync/test_nested_visibility_conformance.gd port display
-tests/integration/sync/test_sync_loss_reorder.gd port display
-tests/integration/sync/test_synchronizer_conformance.gd port display
-tests/integration/table/test_table_persistence.gd port table
-tests/integration/table/test_table_session_flow.gd port table
-tests/integration/transport/test_observer_relay.gd port session
-tests/integration/transport/test_probe_isolation.gd keep §9.6 the connect kit probe
-tests/integration/transport/test_probe_server_info.gd keep §9.6 the connect kit probe
-tests/integration/transport/test_tracker_signaler_bundling.gd keep §9.6 the transports
-tests/integration/transport/test_webrtc_probe_server_info.gd keep §9.6 the transports
-tests/live/nakama/test_discord_rendezvous.gd keep §9.3 real sockets, live Nakama
-tests/live/nakama/test_nakama_database.gd keep §9.3 real sockets, live Nakama
-tests/live/nakama/test_nakama_lobby_browse.gd keep §9.3 real sockets, live Nakama
-tests/live/nakama/test_nakama_peer_awareness.gd keep §9.3 real sockets, live Nakama
-tests/live/nakama/test_nakama_replication.gd keep §9.3 real sockets, live Nakama
-tests/regime/test_racing_regime.gd keep §9.3 real sockets, two-process ENet
-tests/slow/transport/webrtc/test_webrtc_session_paired.gd keep §9.3 real sockets, WebRTC
-tests/slow/transport/webrtc/test_webrtc_session_recovery.gd keep §9.3 real sockets, WebRTC
-tests/unit/activity/test_discord_activity.gd keep §9.6 vendored SDK glue
-tests/unit/clock/test_clock_config_lifetime.gd port clock
-tests/unit/clock/test_multiplayer_clock.gd port clock
-tests/unit/context/test_entity_slots.gd port session
-tests/unit/context/test_peer_context.gd port session
-tests/unit/core/test_async_mutex.gd port session
-tests/unit/core/test_auth_protocol.gd port session
-tests/unit/core/test_benign_error_seam.gd port session
-tests/unit/core/test_builders.gd keep §9.4 the published test kit
-tests/unit/core/test_decision_seams.gd port session
-tests/unit/core/test_deferred_call_park.gd port session
-tests/unit/core/test_event_shell_emitters.gd port session
-tests/unit/core/test_flat_prediction_lagcomp.gd port session
-tests/unit/core/test_input_component.gd port session
-tests/unit/core/test_intake_security.gd port session
-tests/unit/core/test_multiplayer_extension.gd port session
-tests/unit/core/test_netw_debug_scope.gd keep §9.8 the surviving voice
-tests/unit/core/test_netw_discipline_lint.gd port session
-tests/unit/core/test_netw_log_scope.gd keep §9.8 the surviving voice
-tests/unit/core/test_netw_multiplayer_stats.gd port session
-tests/unit/core/test_property_set_surface.gd port session
-tests/unit/core/test_seam_funnel.gd port session
-tests/unit/core/test_seam_registration.gd port session
-tests/unit/core/test_settle_queue.gd port session
-tests/unit/core/test_spawn_frame_refusal.gd port session
-tests/unit/data/test_dictionary_record.gd keep §9.6 authoring records
-tests/unit/data/test_netw_record.gd keep §9.6 authoring records
-tests/unit/database/test_async_backend_contract.gd keep §9.6 the authoring tier, the NetwDatabase facade
-tests/unit/database/test_database_slots.gd keep §9.6 the authoring tier, the NetwDatabase facade
-tests/unit/database/test_file_system_database.gd keep §9.3 a Ring 2 backend, the filesystem walker
-tests/unit/database/test_networked_backend.gd keep §9.6 the authoring tier, the two dispatcher refusals only a GDScript override can provoke
-tests/unit/database/test_networked_database.gd keep §9.6 the authoring tier, the NetwDatabase facade
-tests/unit/database/test_schema_drift.gd keep §9.6 the authoring tier, the NetwDatabase facade
-tests/unit/database/test_typed_schema.gd keep §9.6 the authoring tier, the NetwDatabase facade
-tests/unit/database/test_warm_policy.gd keep §9.6 the authoring tier, the warm policy base
-tests/unit/entity/test_entity_reparent_settle.gd port replication
-tests/unit/interest/test_interest_handle.gd port interest
-tests/unit/interest/test_interest_monitor_snapshot.gd port interest
-tests/unit/interest/test_interest_service.gd port interest
-tests/unit/interest/test_interest_settle.gd port interest
-tests/unit/interest/test_netw_interest.gd port interest
-tests/unit/interest/test_netw_interest_layer.gd port interest
-tests/unit/interpolation/test_netw_interp_calculus.gd port display
-tests/unit/interpolation/test_netw_interp_engine_purity.gd port display
-tests/unit/interpolation/test_netw_interp_self_feedback_guard.gd port display
-tests/unit/lagcomp/test_lagcomp_observe_settle.gd port lagcomp
-tests/unit/liveness/test_entity_call.gd port liveness
-tests/unit/liveness/test_liveness_core.gd port liveness
-tests/unit/liveness/test_liveness_service.gd port liveness
-tests/unit/liveness/test_multiplayer_entity.gd port liveness
-tests/unit/repl/test_replication_send_bridge.gd port replication
-tests/unit/save/test_persist_pump.gd port persistence
-tests/unit/scene/test_host_scene_view.gd keep §9.6 presentation sugar, the host scene view
-tests/unit/scene/test_scene_interface.gd keep §9.6 the authoring tier, the scene mark and its native-entry tripwires
-tests/unit/scene/test_scene_manager_config.gd keep §9.6 the authoring tier, the scene manager's snapshot
-tests/unit/scene/test_tp_component.gd port scenes
-tests/unit/schema/test_schema_declaration.gd port table
-tests/unit/schema/test_schema_model.gd port table
-tests/unit/session/test_session_assignment_edge.gd port session
-tests/unit/session/test_session_bringup.gd port session
-tests/unit/session/test_session_roster_names.gd port session
-tests/unit/sync/test_derived_display_authorship.gd port display
-tests/unit/sync/test_display_port_3d_space.gd port display
-tests/unit/sync/test_display_settle.gd port display
-tests/unit/sync/test_interp_node_semantics.gd port display
-tests/unit/sync/test_netw_effects.gd port display
-tests/unit/sync/test_netw_timeline.gd port display
-tests/unit/sync/test_predicted_display_roles.gd port display
-tests/unit/sync/test_prediction_contract_settle.gd port display
-tests/unit/sync/test_replication_engine_laws.gd port display
-tests/unit/sync/test_script_sync_sets.gd port display
-tests/unit/table/test_table_carrier.gd port table
-tests/unit/table/test_table_declaration.gd port table
-tests/unit/table/test_table_identity.gd port table
-tests/unit/table/test_table_publish.gd port table
-tests/unit/transport/test_connect_kit_browser.gd keep §9.6 the connect kit
-tests/unit/transport/test_connect_kit_lobby.gd keep §9.6 the connect kit
-tests/unit/transport/test_connect_kit_scaffold.gd keep §9.6 the connect kit
-tests/unit/transport/test_connect_kit_transports.gd keep §9.6 the connect kit
-tests/unit/transport/test_connect_kit_webrtc.gd keep §9.6 the connect kit
-tests/unit/transport/test_frame_service_order.gd port session
-tests/unit/transport/test_harness_session.gd keep §9.4 the published test kit
-tests/unit/transport/test_steam_transport.gd keep §9.6 the transports
-tests/unit/transport/test_tracker_signaler.gd keep §9.6 the transports
-tests/unit/wire/test_acked_datagram_magic.gd port wire
-tests/unit/wire/test_datagram_sequencing.gd port wire
-tests/unit/wire/test_replication_wire_laws.gd port wire
-tests/unit/wire/test_script_sync_wire.gd port wire
-tests/unit/wire/test_sync_decode.gd port wire
-tests/unit/wire/test_sync_flags_grammar.gd port wire
-tests/unit/wire/test_sync_frame_codec.gd port wire
-tests/unit/wrappers/test_nakama_proxy_override.gd keep §9.6 vendored SDK glue
-tests/unit/wrappers/test_nakama_wrapper_shape.gd keep §9.6 vendored SDK glue
-tests/unit/wrappers/test_steam_wrapper_live.gd keep §9.6 vendored SDK glue
+tests/nakama/test_discord_rendezvous.gd boundary §9.3 real sockets, live Nakama
+tests/nakama/test_nakama_database.gd boundary §9.3 real sockets, live Nakama
+tests/nakama/test_nakama_lobby_browse.gd boundary §9.3 real sockets, live Nakama
+tests/nakama/test_nakama_peer_awareness.gd boundary §9.3 real sockets, live Nakama
+tests/nakama/test_nakama_proxy_override.gd boundary §9.6 vendored SDK glue
+tests/nakama/test_nakama_replication.gd boundary §9.3 real sockets, live Nakama
+tests/nakama/test_nakama_wrapper_shape.gd boundary §9.6 vendored SDK glue
+tests/regime/test_rocket_league_regime.gd boundary §9.3 real sockets, two-process ENet
+tests/steam/test_steam_lobby_directory.gd port connect-plane-b2
+tests/steam/test_steam_wrapper_live.gd boundary §9.6 vendored SDK glue
+tests/test_connect_browser_smoke.gd port connect-plane-b4
+tests/test_discord_activity.gd boundary §9.6 vendored SDK glue
+tests/test_embedding_conformance.gd port embedding-equivalence
+tests/test_harness_session.gd boundary §9.4 the published test kit
+tests/test_mixed_topology_spike.gd port connect-plane-b5
+tests/test_scene_runner_slots.gd boundary §9.4 the published test kit

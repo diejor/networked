@@ -22,12 +22,6 @@ using netw::NetwCarrierBuffers;
 constexpr int64_t PEER = 7;
 constexpr int64_t BUDGET = 100;
 
-Ref<NetwCarrierBuffers> fresh() {
-    Ref<NetwCarrierBuffers> buffers;
-    buffers.instantiate();
-    return buffers;
-}
-
 PackedByteArray frame(int p_size, uint8_t p_fill) {
     PackedByteArray out;
     out.resize(p_size);
@@ -41,7 +35,8 @@ TEST_CASE(
     "[Networked][Carrier][Hosted] A1 frames accumulate into one run until the "
     "budget stops them"
 ) {
-    Ref<NetwCarrierBuffers> buffers = fresh();
+    NetwCarrierBuffers held;
+    NetwCarrierBuffers *const buffers = &held;
 
     CHECK(buffers->append(PEER, frame(40, 1), false, BUDGET).is_empty());
     NETW_CHECK_EQ(buffers->pending(PEER, false), 40);
@@ -50,7 +45,8 @@ TEST_CASE(
 
     // The third would take the run past the budget, so the first two go out
     // and the third opens the next datagram rather than joining theirs.
-    const PackedByteArray owed = buffers->append(PEER, frame(40, 3), false, BUDGET);
+    const PackedByteArray owed
+        = buffers->append(PEER, frame(40, 3), false, BUDGET);
     NETW_CHECK_EQ(owed.size(), 80);
     if (owed.size() == 80) {
         NETW_CHECK_EQ(owed[0], 1);
@@ -71,7 +67,8 @@ TEST_CASE(
     "[Networked][Carrier][Hosted] A2 a frame that alone exceeds the budget "
     "rides rather than being refused"
 ) {
-    Ref<NetwCarrierBuffers> buffers = fresh();
+    NetwCarrierBuffers held;
+    NetwCarrierBuffers *const buffers = &held;
 
     // Nothing is owed, because there is nothing held to owe. Refusing here
     // would drop a frame the caller has no other way to send.
@@ -80,7 +77,8 @@ TEST_CASE(
 
     // And it does not swallow the next frame with it: the oversized run is
     // handed back exactly once.
-    const PackedByteArray owed = buffers->append(PEER, frame(10, 8), false, BUDGET);
+    const PackedByteArray owed
+        = buffers->append(PEER, frame(10, 8), false, BUDGET);
     NETW_CHECK_EQ(owed.size(), 400);
     NETW_CHECK_EQ(buffers->pending(PEER, false), 10);
 }
@@ -89,7 +87,8 @@ TEST_CASE(
     "[Networked][Carrier][Hosted] A3 the reliable lane has no budget, and the "
     "two lanes are separate datagrams"
 ) {
-    Ref<NetwCarrierBuffers> buffers = fresh();
+    NetwCarrierBuffers held;
+    NetwCarrierBuffers *const buffers = &held;
 
     for (int i = 0; i < 10; ++i) {
         CHECK(buffers->append(PEER, frame(40, 1), true, BUDGET).is_empty());
@@ -108,10 +107,12 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Carrier][Hosted] A4 a run is one peer's, and taking it empties "
+    "[Networked][Carrier][Hosted] A4 a run is one peer's, and taking it "
+    "empties "
     "the lane"
 ) {
-    Ref<NetwCarrierBuffers> buffers = fresh();
+    NetwCarrierBuffers held;
+    NetwCarrierBuffers *const buffers = &held;
     buffers->append(3, frame(10, 1), false, BUDGET);
     buffers->append(1, frame(10, 2), false, BUDGET);
     buffers->append(2, frame(10, 3), true, BUDGET);
@@ -138,7 +139,8 @@ TEST_CASE(
     "[Networked][Carrier][Hosted] A5 clearing drops both lanes, which is what "
     "a session ending is"
 ) {
-    Ref<NetwCarrierBuffers> buffers = fresh();
+    NetwCarrierBuffers held;
+    NetwCarrierBuffers *const buffers = &held;
     buffers->append(PEER, frame(10, 1), false, BUDGET);
     buffers->append(PEER, frame(10, 2), true, BUDGET);
 

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwService" inherits="Node" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Opt-in base for a [Node] that registers itself as a session service on the [NetwMultiplayer] of its branch.
+	</brief_description>
+	<description>
+		Registration is bound to tree membership. The service enters the registry when the node enters the tree and leaves when it exits, skipping the editor, so it is discoverable through [method NetwMultiplayer.service_get] exactly while it is mounted under a live tree. The lifecycle is sealed: a subclass overrides [method _service_entered] and [method _service_exiting] rather than the tree notifications, so no forgotten [code]super[/code] call can silently drop registration. The lifecycle resolves the session through the branch [NetwMultiplayer], not through a [MultiplayerTree], so a service configures under a root install with no owning tree exactly as it does under a scoped tree.
+		[codeblock]
+		class_name MatchClock
+		extends NetwService
+
+		func _service_type() -&gt; Script:
+		    return MatchClock           # register under a family base, optional
+
+		func _service_entered(api: NetwMultiplayer) -&gt; void:
+		    api.session_entered.connect(_on_session_entered)
+
+		func _service_exiting(api: NetwMultiplayer) -&gt; void:
+		    api.session_entered.disconnect(_on_session_entered)
+		[/codeblock]
+		A node that already extends a non-[Node] base cannot adopt this one under GDScript single inheritance. It calls [method register] and [method unregister] directly instead.
+		A subclass written in C++ rather than GDScript overrides the [code]service_entered[/code] and [code]service_exiting[/code] C++ virtuals instead, and skips [method _service_type] entirely: a class with no script attached has no [Script] to answer with, and [method NetwMultiplayer.service_register] keys it by its own class name. [LobbyDirectory] is the shipped example.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_service_entered" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="api" type="NetwMultiplayer" />
+			<description>
+				Called after the service registers, with the [param api] of its branch.
+				Override for per-service setup such as signal wiring or clock binding. It does not run in the editor, when [method _should_register] answers [code]false[/code], or when the node resolves no session at all.
+			</description>
+		</method>
+		<method name="_service_exiting" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="api" type="NetwMultiplayer" />
+			<description>
+				Called before the service unregisters, with the [param api] of its branch.
+				Override to tear down whatever [method _service_entered] set up. Mirrors the conditions of [method _service_entered].
+			</description>
+		</method>
+		<method name="_service_type" qualifiers="virtual">
+			<return type="Script" />
+			<description>
+				Override to return the registration key for this service.
+				Return a family base type so [method NetwMultiplayer.service_get] and [method NetwMultiplayer.service_get_all] resolve subclasses under it. Return [code]null[/code], which is also what an unoverridden service answers, to register under the concrete script, so each instance keeps a unique key. Several instances sharing one key overwrite each other in the registry, so a family with many instances keeps the concrete answer and is collected through [method NetwMultiplayer.service_get_all].
+			</description>
+		</method>
+		<method name="_should_register" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Override to answer [code]false[/code] when this service should not register on entering the tree, for example under a test runner or behind a feature flag. A service that does not override this always registers.
+				A transport service that needs peer-to-peer or a native client consults [method is_transport_restricted] here to stay dormant in a restricted environment.
+			</description>
+		</method>
+		<method name="get_transport_restricted_probe" qualifiers="static">
+			<return type="Callable" />
+			<description>
+				Returns the probe [method set_transport_restricted_probe] installed, or an invalid [Callable] when none is.
+			</description>
+		</method>
+		<method name="is_transport_restricted" qualifiers="static">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] when the probe installed through [method set_transport_restricted_probe] reports that the environment forbids peer-to-peer and native transports. Returns [code]false[/code] when no probe is installed, which is the normal case.
+			</description>
+		</method>
+		<method name="register" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="service" type="Node" />
+			<param index="1" name="type" type="Script" default="null" />
+			<description>
+				Registers [param service] as a session service on the [NetwMultiplayer] of its branch, reached through [member Node.multiplayer]. When [param type] is [code]null[/code], the script class of [param service] is the registration key.
+				This is the entry point for a node that cannot extend [NetwService], and it seals nothing: such a caller owns the matching [method unregister]. A branch whose API is a plain [SceneMultiplayer] is a silent no-op, so the node still works as an ordinary [Node] and features degrade rather than error.
+				[codeblock]
+				func _enter_tree() -&gt; void:
+				    NetwService.register(self)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="set_transport_restricted_probe" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="probe" type="Callable" />
+			<description>
+				Installs the [param probe] an embedding addon calls when the runtime environment allows only a WebSocket or HTTP relay, such as a Discord iframe that forbids WebRTC and native SDKs. The probe answers a [bool] and [method is_transport_restricted] is what reads it. Nothing installs one in a normal build, so nothing pays for it.
+			</description>
+		</method>
+		<method name="unregister" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="service" type="Node" />
+			<param index="1" name="type" type="Script" default="null" />
+			<description>
+				Unregisters [param service] from the [NetwMultiplayer] of its branch, under the same [param type] key [method register] used.
+				[codeblock]
+				func _exit_tree() -&gt; void:
+				    NetwService.unregister(self)
+				[/codeblock]
+			</description>
+		</method>
+	</methods>
+</class>

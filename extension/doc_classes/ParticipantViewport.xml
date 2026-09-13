@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="ParticipantViewport" inherits="Node" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Tiles several [ParticipantWindow] nodes into the enclosing viewport, one per local participant.
+	</brief_description>
+	<description>
+		Several participants running in one process each hold their own [ParticipantWindow], and this node is what puts all of them on one screen. Registered slots partition the enclosing viewport into the squarest grid that holds them, re-tiled whenever a slot is added, removed, or the enclosing viewport resizes.
+		Mouse and keyboard follow native window focus, which the engine already routes, so this node does not touch them. Joypads have no focus, so they are routed by device id: [method assign_device] binds one device to one slot and every joypad event from that device is delivered there and marked handled.
+		[codeblock]
+		var tiler := ParticipantViewport.new()
+		add_child(tiler)
+		for seat in seats:
+		    tiler.add_slot(seat.window)
+		    tiler.assign_device(seat.device_id, seat.window)
+		[/codeblock]
+		A slot must be registered before it can take a device, because a binding to an unplaced window would swallow that player's input into something nothing is drawing. Removing a slot drops its device bindings with it, so a device whose window left routes nowhere rather than somewhere invisible.
+		Registration is not parenthood: this node tiles the windows it is given and never reparents or frees them, so a slot may live anywhere in the tree and outlive the tiling.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="add_slot">
+			<return type="ParticipantWindow" />
+			<param index="0" name="slot" type="ParticipantWindow" />
+			<description>
+				Registers [param slot] for tiling, makes it visible and re-tiles every slot. Answers [param slot] so a caller can build and place in one expression, or [code]null[/code] when handed nothing. Registering a slot twice is inert.
+			</description>
+		</method>
+		<method name="assign_device">
+			<return type="void" />
+			<param index="0" name="device_id" type="int" />
+			<param index="1" name="slot" type="ParticipantWindow" />
+			<description>
+				Routes every joypad event carrying [param device_id] into [param slot]. Refused, with an error, when [param slot] is not registered here, because a binding this node cannot tile would drop that player's input where nobody can see it. One device binds to one slot; binding it again replaces the first.
+			</description>
+		</method>
+		<method name="device_slot" qualifiers="const">
+			<return type="ParticipantWindow" />
+			<param index="0" name="device_id" type="int" />
+			<description>
+				The slot [param device_id] is routed to, or [code]null[/code] when the device is unbound or its slot has since been removed or freed.
+			</description>
+		</method>
+		<method name="get_slots" qualifiers="const">
+			<return type="ParticipantWindow[]" />
+			<description>
+				The registered slots, in tiling order, skipping any that have been freed. Position in this array is position in the grid: index zero is the top left cell and the row fills left to right.
+			</description>
+		</method>
+		<method name="has_slot" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="slot" type="ParticipantWindow" />
+			<description>
+				Whether [param slot] is registered for tiling here. [code]false[/code] for [code]null[/code] and for a window this node has never been given.
+			</description>
+		</method>
+		<method name="remove_slot">
+			<return type="void" />
+			<param index="0" name="slot" type="ParticipantWindow" />
+			<description>
+				Unregisters [param slot], hides it, drops every device bound to it and re-tiles the rest. Does not free it. Removing a slot that was never registered is inert.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="embeds_subwindows" type="bool" setter="set_embeds_subwindows" getter="get_embeds_subwindows" default="true">
+			Whether the enclosing viewport draws child [Window] nodes inside itself rather than as real OS windows. On by default, because a tiling of native windows is a tiling the window manager gets a vote on. Turn it off to give each participant a real window to move around.
+		</member>
+	</members>
+</class>

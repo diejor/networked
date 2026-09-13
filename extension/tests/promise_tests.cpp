@@ -35,7 +35,7 @@ TEST_CASE("[Networked][Promise][Hosted] P1 a promise settles exactly once") {
     NETW_CHECK_EQ(int(promise->get_result()), 7);
 
     promise->resolve(9);
-    promise->reject(int(ERR_TIMEOUT), "late");
+    promise->reject(ERR_TIMEOUT, "late");
 
     NETW_CHECK_EQ(int(promise->get_result()), 7);
     NETW_CHECK_EQ(promise->get_code(), int(OK));
@@ -55,7 +55,7 @@ TEST_CASE(
     CallLog log;
     promise->catch_error(log.callable("caught"));
 
-    promise->reject(int(ERR_UNAUTHORIZED), "refused");
+    promise->reject(ERR_UNAUTHORIZED, "refused");
 
     CHECK(promise->get_is_failed());
     CHECK(promise->get_is_settled());
@@ -64,7 +64,7 @@ TEST_CASE(
     CHECK(promise->get_detail() == String("refused"));
     NETW_CHECK_EQ(log.count("caught"), 1);
 
-    promise->reject(int(ERR_TIMEOUT), "later");
+    promise->reject(ERR_TIMEOUT, "later");
     NETW_CHECK_EQ(promise->get_code(), int(ERR_UNAUTHORIZED));
     NETW_CHECK_EQ(log.count("caught"), 1);
 }
@@ -93,7 +93,7 @@ TEST_CASE(
     broken->then(log.callable("broken then"));
     broken->catch_error(log.callable("broken catch"));
 
-    broken->reject(int(ERR_UNAVAILABLE), "");
+    broken->reject(ERR_UNAVAILABLE, "");
 
     NETW_CHECK_EQ(log.count("broken then"), 0);
     NETW_CHECK_EQ(log.count("broken catch"), 1);
@@ -125,7 +125,7 @@ TEST_CASE(
         Vector<StringName>({"completed", "failed", "settled"})
     );
 
-    broken->reject(int(ERR_TIMEOUT), "gone");
+    broken->reject(ERR_TIMEOUT, "gone");
 
     NETW_CHECK_EQ(on_broken.count("failed"), 1);
     NETW_CHECK_EQ(on_broken.count("settled"), 1);

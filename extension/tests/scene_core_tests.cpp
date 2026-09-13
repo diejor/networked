@@ -1,8 +1,8 @@
 #include "support/netw_test.h"
 
 #include "netw/scene_core.hpp"
+#include "netw/session/frames.hpp"
 #include "support/netw_call_log.h"
-#include "support/netw_recorder.h"
 
 #include <memory>
 
@@ -14,7 +14,6 @@ namespace TestNetwSceneCore {
 using namespace godot;
 using netw::NetwSceneCore;
 using netw_test::CallLog;
-using netw_test::Recorder;
 
 constexpr int EVENT_PARTICIPANT = 0;
 constexpr int EVENT_PLAYER = 1;
@@ -230,8 +229,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] N7 clearing forgets the routing table and "
-    "restarts the counter"
+    "[Networked][Scene][Hosted] N7 clearing forgets the routing table but "
+    "never a request id it has already handed out, because an answer owed to "
+    "the session that ended must not settle a request in the one that "
+    "replaced it"
 ) {
     Ref<NetwSceneCore> core = fresh();
     CallLog log;
@@ -244,7 +245,8 @@ TEST_CASE(
 
     NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER), 0);
     NETW_CHECK_EQ(core->get_pending_request_id(), 0);
-    NETW_CHECK_EQ(core->open_request(), before);
+    NETW_CHECK_EQ(core->open_request(), before + 1);
+    CHECK_FALSE(core->is_current(before));
 }
 
 TEST_CASE(
@@ -443,7 +445,8 @@ TEST_CASE(
         == String("res://a/level.scn")
     );
     CHECK(NetwSceneCore::verify_requested_path("res://a/level.gd").is_empty());
-    CHECK(NetwSceneCore::verify_requested_path("user://a/level.tscn").is_empty()
+    CHECK(
+        NetwSceneCore::verify_requested_path("user://a/level.tscn").is_empty()
     );
     CHECK(NetwSceneCore::verify_requested_path("").is_empty());
     CHECK(NetwSceneCore::verify_requested_path("res://a/level").is_empty());
@@ -456,163 +459,22 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] N11 the mark is the consent line a request "
-    "clears"
+    "[Networked][Scene][Hosted] N11 an ordinal is an operation only when it "
+    "names one of the three scopes, so nothing outside them is dispatched"
 ) {
-    const String path = "res://a/level.tscn";
-
-    CHECK(NetwSceneCore::admits_request(true, false, false, path));
-    CHECK(NetwSceneCore::admits_request(false, true, false, path));
-
-    CHECK_FALSE(NetwSceneCore::admits_request(false, false, false, path));
-    CHECK_FALSE(NetwSceneCore::admits_request(true, true, true, path));
-    CHECK_FALSE(NetwSceneCore::admits_request(true, true, false, ""));
-}
-
-int entry_verdict(int p_bits, bool p_has_path, bool p_is_server) {
-    return NetwSceneCore::native_entry_verdict(
-        p_has_path,
-        p_is_server,
-        (p_bits & 1) != 0,
-        (p_bits & 2) != 0,
-        (p_bits & 4) != 0,
-        (p_bits & 8) != 0,
-        (p_bits & 16) != 0
+    CHECK(
+        NetwSceneCore::scope_names_an_operation(NetwSceneCore::SCOPE_SESSION)
     );
-}
+    CHECK(
+        NetwSceneCore::scope_names_an_operation(
+            NetwSceneCore::SCOPE_PARTICIPANT
+        )
+    );
+    CHECK(NetwSceneCore::scope_names_an_operation(NetwSceneCore::SCOPE_SCENE));
 
-TEST_CASE(
-    "[Networked][Scene][Hosted] how far a request reaches is server policy, "
-    "and a reach naming nothing is refused"
-) {
-    Ref<NetwSceneCore> core = fresh();
-
-    NETW_CHECK_EQ(
-        core->get_request_reach(),
-        int(NetwSceneCore::REACH_PARTICIPANT)
-    );
-
-    CHECK(core->set_request_reach(NetwSceneCore::REACH_SESSION));
-    NETW_CHECK_EQ(
-        core->get_request_reach(),
-        int(NetwSceneCore::REACH_SESSION)
-    );
-
-    SUBCASE("an ordinal outside the enum names nothing and is refused") {
-        ERR_PRINT_OFF;
-        CHECK_FALSE(core->set_request_reach(NetwSceneCore::REACH_MAX));
-        CHECK_FALSE(core->set_request_reach(-1));
-        ERR_PRINT_ON;
-        NETW_CHECK_EQ(
-            core->get_request_reach(),
-            int(NetwSceneCore::REACH_SESSION)
-        );
-    }
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] N16 a marked native entry reads one verdict "
-    "from the local presentation"
-) {
-    for (int bits = 0; bits < 32; ++bits) {
-        NETW_CHECK_EQ(
-            entry_verdict(bits, false, true),
-            int(NetwSceneCore::CAPTURE_REFUSED)
-        );
-        NETW_CHECK_EQ(
-            entry_verdict(bits, false, false),
-            int(NetwSceneCore::CAPTURE_REFUSED)
-        );
-        NETW_CHECK_EQ(
-            entry_verdict(bits, true, false),
-            int(NetwSceneCore::CAPTURE_REQUEST)
-        );
-    }
-
-    NETW_CHECK_EQ(
-        NetwSceneCore::native_entry_verdict(
-            true,
-            true,
-            true,
-            true,
-            true,
-            true,
-            true
-        ),
-        int(NetwSceneCore::CAPTURE_CHANGE_SESSION)
-    );
-    NETW_CHECK_EQ(
-        NetwSceneCore::native_entry_verdict(
-            true,
-            true,
-            true,
-            false,
-            false,
-            false,
-            false
-        ),
-        int(NetwSceneCore::CAPTURE_ACTIVATE)
-    );
-
-    NETW_CHECK_EQ(
-        NetwSceneCore::native_entry_verdict(
-            true,
-            true,
-            false,
-            true,
-            true,
-            true,
-            true
-        ),
-        int(NetwSceneCore::CAPTURE_MOVE_ME)
-    );
-    NETW_CHECK_EQ(
-        NetwSceneCore::native_entry_verdict(
-            true,
-            true,
-            false,
-            true,
-            false,
-            true,
-            true
-        ),
-        int(NetwSceneCore::CAPTURE_ACTIVATE)
-    );
-    NETW_CHECK_EQ(
-        NetwSceneCore::native_entry_verdict(
-            true,
-            true,
-            false,
-            true,
-            true,
-            false,
-            true
-        ),
-        int(NetwSceneCore::CAPTURE_ACTIVATE)
-    );
-    NETW_CHECK_EQ(
-        NetwSceneCore::native_entry_verdict(
-            true,
-            true,
-            false,
-            true,
-            true,
-            true,
-            false
-        ),
-        int(NetwSceneCore::CAPTURE_ACTIVATE)
-    );
-    NETW_CHECK_EQ(
-        NetwSceneCore::native_entry_verdict(
-            true,
-            true,
-            false,
-            false,
-            false,
-            false,
-            false
-        ),
-        int(NetwSceneCore::CAPTURE_ACTIVATE)
+    CHECK_FALSE(NetwSceneCore::scope_names_an_operation(-1));
+    CHECK_FALSE(
+        NetwSceneCore::scope_names_an_operation(NetwSceneCore::SCOPE_MAX)
     );
 }
 
@@ -621,7 +483,7 @@ TEST_CASE(
     "answered, and only it"
 ) {
     Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> promise = core->request_open(false);
+    const Ref<netw::NetwPromise> promise = core->request_open();
     const int opened = core->get_pending_request_id();
     REQUIRE(promise.is_valid());
 
@@ -645,10 +507,10 @@ TEST_CASE(
     "in flight, and an answer resolves rather than rejects"
 ) {
     Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> first = core->request_open(false);
+    const Ref<netw::NetwPromise> first = core->request_open();
     first->catch_error(Callable());
 
-    const Ref<netw::NetwPromise> second = core->request_open(false);
+    const Ref<netw::NetwPromise> second = core->request_open();
 
     CHECK(first->get_is_failed());
     NETW_CHECK_EQ(first->get_code(), int(ERR_SKIP));
@@ -659,7 +521,7 @@ TEST_CASE(
     CHECK(second->get_is_completed());
     NETW_CHECK_EQ(second->get_code(), int(OK));
 
-    const Ref<netw::NetwPromise> third = core->request_open(false);
+    const Ref<netw::NetwPromise> third = core->request_open();
     core->request_abandon(int(ERR_UNAVAILABLE));
     CHECK(third->get_is_failed());
     NETW_CHECK_EQ(third->get_code(), int(ERR_UNAVAILABLE));
@@ -671,63 +533,29 @@ TEST_CASE(
     "and only a well-formed one settles"
 ) {
     Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> promise = core->request_open(false);
+    const Ref<netw::NetwPromise> promise = core->request_open();
     const int opened = core->get_pending_request_id();
 
-    Array answer;
-    answer.push_back(opened);
-    answer.push_back(int(ERR_UNAUTHORIZED));
-    const PackedByteArray payload = netw::gd::var_to_bytes(answer);
+    netw::session::SceneResult answer;
+    answer.request_id = uint64_t(opened);
+    answer.code = int(ERR_UNAUTHORIZED);
+    const PackedByteArray payload = netw::session::frame_write(answer);
 
     CHECK_FALSE(core->receive_result_frame(payload, 2));
     CHECK_FALSE(promise->get_is_settled());
     NETW_CHECK_EQ(core->get_pending_request_id(), opened);
 
-    Array short_row;
-    short_row.push_back(opened);
-    CHECK_FALSE(core->receive_result_frame(
-        netw::gd::var_to_bytes(short_row),
-        1
-    ));
-    CHECK_FALSE(core->receive_result_frame(
-        netw::gd::var_to_bytes(Variant(7)),
-        1
-    ));
+    CHECK_FALSE(
+        core->receive_result_frame(payload.slice(0, payload.size() - 1), 1)
+    );
+    PackedByteArray extended = payload;
+    extended.push_back(0x00);
+    CHECK_FALSE(core->receive_result_frame(extended, 1));
     CHECK_FALSE(promise->get_is_settled());
 
     CHECK(core->receive_result_frame(payload, 1));
     CHECK(promise->get_is_failed());
     NETW_CHECK_EQ(promise->get_code(), int(ERR_UNAUTHORIZED));
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] N20 a request opened from a capture announces "
-    "its outcome, and one that was not stays quiet"
-) {
-    Ref<NetwSceneCore> core = fresh();
-    Recorder announced(
-        core.ptr(),
-        Vector<StringName>({"native_change_settled"})
-    );
-
-    core->request_open(false);
-    core->request_settle(core->get_pending_request_id(), int(OK));
-    NETW_CHECK_EQ(announced.count("native_change_settled"), 0);
-
-    const Ref<netw::NetwPromise> captured = core->request_open(true);
-    captured->catch_error(Callable());
-    core->request_settle(core->get_pending_request_id(), int(ERR_TIMEOUT));
-
-    NETW_CHECK_EQ(announced.count("native_change_settled"), 1);
-    REQUIRE(announced.args("native_change_settled").size() == 1);
-    NETW_CHECK_EQ(
-        int(announced.args("native_change_settled")[0]),
-        int(ERR_TIMEOUT)
-    );
-
-    core->request_open(false);
-    core->request_abandon(int(ERR_UNAVAILABLE));
-    NETW_CHECK_EQ(announced.count("native_change_settled"), 1);
 }
 
 TEST_CASE(
@@ -833,19 +661,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] N26 a native scene change strands this peer "
-    "only while a session is live and the scene is not one it agreed to"
-) {
-    NETW_CHECK_EQ(NetwSceneCore::native_change_strands(false, false), false);
-    NETW_CHECK_EQ(NetwSceneCore::native_change_strands(false, true), false);
-
-    NETW_CHECK_EQ(NetwSceneCore::native_change_strands(true, true), false);
-
-    NETW_CHECK_EQ(NetwSceneCore::native_change_strands(true, false), true);
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] N27 a whole-session transition claims one slot, "
+    "[Networked][Scene][Hosted] N27 a whole-session transition claims one "
+    "slot, "
     "and a second entered while it is held is refused rather than interleaved"
 ) {
     Ref<NetwSceneCore> core;

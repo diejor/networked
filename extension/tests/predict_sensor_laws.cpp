@@ -12,6 +12,10 @@ using namespace godot;
 using namespace netw;
 using namespace netw::predict;
 
+bool declared_rule(int64_t, const StringName &) {
+    return true;
+}
+
 WitnessContact contact(
     const char *p_identity,
     int p_class,
@@ -31,17 +35,13 @@ TEST_CASE(
     "while realization and boundary stay local"
 ) {
     LocalVector<WitnessContact> forward;
-    forward.push_back(
-        contact("entity:7", SENSOR_WITNESS_DYNAMIC_ENTITY, 3)
-    );
+    forward.push_back(contact("entity:7", SENSOR_WITNESS_DYNAMIC_ENTITY, 3));
     forward.push_back(contact("path:/ground", SENSOR_WITNESS_SUPPORT, 1));
     LocalVector<WitnessContact> reversed;
     reversed.push_back(
         contact("path:/ground", SENSOR_WITNESS_SUPPORT, 4, true)
     );
-    reversed.push_back(
-        contact("entity:7", SENSOR_WITNESS_DYNAMIC_ENTITY, 5)
-    );
+    reversed.push_back(contact("entity:7", SENSOR_WITNESS_DYNAMIC_ENTITY, 5));
 
     const WitnessSummary first = summarize_witness(forward, false);
     const WitnessSummary second = summarize_witness(reversed, false);
@@ -170,16 +170,13 @@ TEST_CASE(
     "[Networked][Predict][Hosted][SceneTree] the declared support outranks "
     "what the collider is, and everything unshared is a dynamic entity"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     StaticBody2D *wall = memnew(StaticBody2D);
     AnimatableBody2D *platform = memnew(AnimatableBody2D);
 
     NETW_CHECK_EQ(pool->witness_class(wall, false), int(SENSOR_WITNESS_STATIC));
-    NETW_CHECK_EQ(
-        pool->witness_class(wall, true),
-        int(SENSOR_WITNESS_SUPPORT)
-    );
+    NETW_CHECK_EQ(pool->witness_class(wall, true), int(SENSOR_WITNESS_SUPPORT));
     NETW_CHECK_EQ(
         pool->witness_class(platform, false),
         int(SENSOR_WITNESS_DYNAMIC_ENTITY)
@@ -193,24 +190,13 @@ TEST_CASE(
     memdelete(platform);
 }
 
-Ref<NetwPredictDeclaration> carry_field(const char *p_key) {
-    Ref<NetwPredictDeclaration> out;
-    out.instantiate();
-    out->append_field(
-        StringName(p_key),
-        int(PropertyClass::CAUSAL),
-        StringName(),
-        0.0,
-        false,
-        false,
-        -1.0,
-        -1.0,
-        false
-    );
+LocalVector<FieldDecl> carry_field(const char *p_key) {
+    LocalVector<FieldDecl> out;
+    out.push_back(field_decl(StringName(p_key), int(PropertyClass::CAUSAL)));
     return out;
 }
 
-int64_t carrying_slot(const Ref<NetwPredictionEngine> &p_pool, int p_schedule) {
+int64_t carrying_slot(NetwPredictionEngine *p_pool, int p_schedule) {
     const int64_t slot = p_pool->open(carry_field("spin"));
     p_pool->configure(
         slot,
@@ -220,8 +206,12 @@ int64_t carrying_slot(const Ref<NetwPredictionEngine> &p_pool, int p_schedule) {
         int(RestoreMode::EXACT),
         6,
         NetwPredictionEngine::ISLAND_NONE,
-        true,
         false
+    );
+    p_pool->set_carry(
+        slot,
+        StringName("spin"),
+        callable_mp_static(&declared_rule)
     );
     return slot;
 }
@@ -230,8 +220,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted] the pool judges a carry by declared field "
     "name and reports its retirement once"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
     const StringName spin("spin");
 
@@ -261,8 +251,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted] a refusal with no invocation convicts a "
     "carry only of the schedule it was declared on"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const StringName spin("spin");
 
     const int64_t framed = carrying_slot(pool, int(Schedule::FRAME));
@@ -285,8 +275,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted] a rule the pool has convicted is never "
     "eligible to run again"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const StringName spin("spin");
 
     const int64_t framed = carrying_slot(pool, int(Schedule::FRAME));
@@ -298,18 +288,17 @@ TEST_CASE(
     }
     CHECK(!pool->carry_eligible(framed, spin));
 
-    CHECK(!pool->carry_eligible(
-        carrying_slot(pool, int(Schedule::TICK)),
-        spin
-    ));
+    CHECK(
+        !pool->carry_eligible(carrying_slot(pool, int(Schedule::TICK)), spin)
+    );
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted] a rewire discards the rules declared "
     "against the field table it replaced"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
     const StringName spin("spin");
     const StringName charge("charge");
@@ -319,9 +308,16 @@ TEST_CASE(
         int(NetwPredictionEngine::CARRY_UNFAITHFUL)
     );
 
-    pool->rewire(slot, carry_field("charge"), Ref<NetwPredictDeclaration>());
+    pool->rewire(slot, carry_field("charge"));
 
     NETW_CHECK_EQ(int64_t(pool->carry_stats(slot, spin)[2]), int64_t(0));
+    NETW_CHECK_EQ(pool->carry_rule_count(slot), 0);
+    NETW_CHECK_EQ(
+        pool->judge_carry(slot, charge, true, true, true, true, false),
+        int(NetwPredictionEngine::CARRY_DECLINED)
+    );
+
+    pool->set_carry(slot, charge, callable_mp_static(&declared_rule));
     NETW_CHECK_EQ(
         pool->judge_carry(slot, charge, true, true, true, true, false),
         int(NetwPredictionEngine::CARRY_UNFAITHFUL)
@@ -345,7 +341,8 @@ TEST_CASE(
     first.frame = 10;
     first.quantum = 1;
     slot.record_input(1, 11);
-    const DriveRecord opened = slot.open_drive(first, Dictionary(), StateStamp());
+    const DriveRecord opened
+        = slot.open_drive(first, Dictionary(), StateStamp());
     REQUIRE(opened.ran);
     slot.close_drive(opened.transition, StateStamp());
     slot.acknowledge(opened.transition, true);
@@ -363,9 +360,7 @@ TEST_CASE(
     Dictionary topology;
     topology[StringName("schedule")] = int(Schedule::FRAME);
     LocalVector<WitnessContact> contacts;
-    contacts.push_back(
-        contact("path:/ground", SENSOR_WITNESS_SUPPORT, 1)
-    );
+    contacts.push_back(contact("path:/ground", SENSOR_WITNESS_SUPPORT, 1));
     REQUIRE(slot.record_evidence(
         measured.transition,
         9,
@@ -387,13 +382,10 @@ TEST_CASE(
         evidence.witness_fp,
         summarize_witness(contacts, false).fingerprint
     );
-    NETW_CHECK_EQ(
-        evidence.evidence_mask,
-        EVIDENCE_RAW | EVIDENCE_WITNESS
-    );
+    NETW_CHECK_EQ(evidence.evidence_mask, EVIDENCE_RAW | EVIDENCE_WITNESS);
 }
 
-int64_t witnessing_slot(const Ref<NetwPredictionEngine> &p_pool) {
+int64_t witnessing_slot(NetwPredictionEngine *p_pool) {
     const int64_t slot = p_pool->open(carry_field("position"));
     p_pool->configure(
         slot,
@@ -403,14 +395,13 @@ int64_t witnessing_slot(const Ref<NetwPredictionEngine> &p_pool) {
         int(RestoreMode::EXACT),
         6,
         NetwPredictionEngine::ISLAND_NONE,
-        false,
         true
     );
     return slot;
 }
 
 void record_one(
-    const Ref<NetwPredictionEngine> &p_pool,
+    NetwPredictionEngine *p_pool,
     int64_t p_slot,
     int64_t p_transition,
     int p_realization,
@@ -451,55 +442,89 @@ TEST_CASE(
         bool clean;
     };
     const Row rows[] = {
-        {"the declared support", int(ContactClass::DECLARED_SUPPORT), false,
-         false, true},
-        {"other static geometry", int(ContactClass::OTHER_STATIC), false,
-         false, true},
+        {"the declared support",
+         int(ContactClass::DECLARED_SUPPORT),
+         false,
+         false,
+         true},
+        {"other static geometry",
+         int(ContactClass::OTHER_STATIC),
+         false,
+         false,
+         true},
         {"no contact at all", int(ContactClass::NONE), false, false, true},
-        {"a predicted body", int(ContactClass::PREDICTED_DYNAMIC), false,
-         false, false},
-        {"an unpredicted body", int(ContactClass::UNPREDICTED_DYNAMIC), false,
-         false, false},
-        {"a kinematic proxy", int(ContactClass::KINEMATIC_PROXY), false,
-         false, false},
-        {"a sleeping solve", int(ContactClass::OTHER_STATIC), true, false,
+        {"a predicted body",
+         int(ContactClass::PREDICTED_DYNAMIC),
+         false,
+         false,
          false},
-        {"a solve it woke into", int(ContactClass::OTHER_STATIC), false, true,
+        {"an unpredicted body",
+         int(ContactClass::UNPREDICTED_DYNAMIC),
+         false,
+         false,
+         false},
+        {"a kinematic proxy",
+         int(ContactClass::KINEMATIC_PROXY),
+         false,
+         false,
+         false},
+        {"a sleeping solve",
+         int(ContactClass::OTHER_STATIC),
+         true,
+         false,
+         false},
+        {"a solve it woke into",
+         int(ContactClass::OTHER_STATIC),
+         false,
+         true,
          false},
     };
     for (const Row &row : rows) {
         NETW_FORMAT_TEXT(row_text, row.name);
         CAPTURE(row_text);
-        Ref<NetwPredictionEngine> pool;
-        pool.instantiate();
+        NetwPredictionEngine held_pool;
+        NetwPredictionEngine *const pool = &held_pool;
         const int64_t slot = witnessing_slot(pool);
         int64_t tick = 1;
         if (row.woke) {
             // The rest state that makes the NEXT solve one the solver started
             // rather than continued.
             pool->record_input(slot, tick, int32_t(tick));
-            const Ref<NetwPredictDrive> asleep = pool->open_drive(
-                slot, Dictionary(), tick, tick, 1.0 / 60.0, 1, true, 0, 0, 0, 0
+            const netw::predict::DriveRecord asleep = pool->open_drive(
+                slot,
+                Dictionary(),
+                tick,
+                tick,
+                1.0 / 60.0,
+                1,
+                true,
+                0,
+                0,
+                0,
+                0
             );
-            REQUIRE(asleep.is_valid());
-            record_one(pool, slot, asleep->transition(), row.realization, true);
-            pool->close_drive(slot, asleep->transition(), 0, 0, 0, 0);
+            record_one(pool, slot, asleep.transition, row.realization, true);
+            pool->close_drive(slot, asleep.transition, 0, 0, 0, 0);
             tick += 1;
         }
         pool->record_input(slot, tick, int32_t(tick));
-        const Ref<NetwPredictDrive> drive = pool->open_drive(
-            slot, Dictionary(), tick, tick, 1.0 / 60.0, 1, true, 0, 0, 0, 0
-        );
-        REQUIRE(drive.is_valid());
-        record_one(
-            pool,
+        const netw::predict::DriveRecord drive = pool->open_drive(
             slot,
-            drive->transition(),
-            row.realization,
-            row.sleeping
+            Dictionary(),
+            tick,
+            tick,
+            1.0 / 60.0,
+            1,
+            true,
+            0,
+            0,
+            0,
+            0
         );
-        CHECK(pool->witness_row_clean(slot, drive->transition(), true)
-              == row.clean);
+        record_one(pool, slot, drive.transition, row.realization, row.sleeping);
+        CHECK(
+            pool->witness_row_clean(slot, drive.transition, true) == row.clean
+        );
     }
 }
 
@@ -507,8 +532,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted] an unwitnessed transition is never clean, "
     "and a peer's disagreement withdraws a local one"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = pool->open(carry_field("position"));
     pool->configure(
         slot,
@@ -518,15 +543,24 @@ TEST_CASE(
         int(RestoreMode::EXACT),
         6,
         NetwPredictionEngine::ISLAND_NONE,
-        false,
         true
     );
 
     pool->record_input(slot, 1, 11);
-    const Ref<NetwPredictDrive> drive
-        = pool->open_drive(slot, Dictionary(), 1, 10, 1.0 / 60.0, 1, true, 0, 0, 0, 0);
-    REQUIRE(drive.is_valid());
-    const int64_t transition = drive->transition();
+    const netw::predict::DriveRecord drive = pool->open_drive(
+        slot,
+        Dictionary(),
+        1,
+        10,
+        1.0 / 60.0,
+        1,
+        true,
+        0,
+        0,
+        0,
+        0
+    );
+    const int64_t transition = drive.transition;
 
     // No evidence recorded at all, so the row carries no witness mask.
     CHECK(!pool->witness_row_clean(slot, transition, false));
@@ -560,37 +594,31 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Hosted] a sensor and carry declaration narrows no "
-    "schedule and no island"
+    "[Networked][Predict][Hosted] a stepped schedule admits every island and "
+    "a frame schedule refuses the joint one"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     CHECK(pool->supports(
         int(Schedule::STEPPED),
         int(Role::PREDICT),
         int(CorrectionMode::SNAP),
         int(RestoreMode::EXACT),
-        NetwPredictionEngine::ISLAND_DECLARED,
-        true,
-        true
+        NetwPredictionEngine::ISLAND_DECLARED
     ));
     CHECK(pool->supports(
         int(Schedule::STEPPED),
         int(Role::PREDICT),
         int(CorrectionMode::SNAP),
         int(RestoreMode::EXACT),
-        NetwPredictionEngine::ISLAND_JOINT,
-        true,
-        true
+        NetwPredictionEngine::ISLAND_JOINT
     ));
     CHECK(!pool->supports(
         int(Schedule::FRAME),
         int(Role::PREDICT),
         int(CorrectionMode::SNAP),
         int(RestoreMode::EXACT),
-        NetwPredictionEngine::ISLAND_JOINT,
-        true,
-        true
+        NetwPredictionEngine::ISLAND_JOINT
     ));
 }
 
@@ -598,15 +626,24 @@ TEST_CASE(
     "[Networked][Predict][Hosted] a witness verdict that never arrived is not "
     "a verdict of differs"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = witnessing_slot(pool);
     pool->record_input(slot, 1, 1);
-    const Ref<NetwPredictDrive> drive = pool->open_drive(
-        slot, Dictionary(), 1, 1, 1.0 / 60.0, 1, true, 0, 0, 0, 0
+    const netw::predict::DriveRecord drive = pool->open_drive(
+        slot,
+        Dictionary(),
+        1,
+        1,
+        1.0 / 60.0,
+        1,
+        true,
+        0,
+        0,
+        0,
+        0
     );
-    REQUIRE(drive.is_valid());
-    const int64_t at = drive->transition();
+    const int64_t at = drive.transition;
     pool->close_drive(slot, at, 0, 0, 0, 0);
 
     // A conditional operator waits on "has authority answered", and both
@@ -632,15 +669,15 @@ TEST_CASE(
     "[Networked][Predict][Hosted] a recorded state that is not a drive result "
     "bars the two transitions it bounds from judging a rule"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
     // A rule is never invoked from here. What the book needs is a slot that
     // declares one, and any valid callable declares it.
     pool->set_carry(
         slot,
         StringName("spin"),
-        Callable(pool.ptr(), "carry_retired")
+        callable_mp_static(&declared_rule)
     );
 
     CHECK(pool->carry_judgeable(slot, 4));
@@ -668,16 +705,29 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Predict][Hosted] a slot declaring no rule records no mark"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
-    const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = pool->open(carry_field("spin"));
+    REQUIRE(pool->configure(
+        slot,
+        int(Schedule::FRAME),
+        int(Role::PREDICT),
+        int(CorrectionMode::SNAP),
+        int(RestoreMode::EXACT),
+        6,
+        NetwPredictionEngine::ISLAND_NONE,
+        false
+    ));
+    NETW_CHECK_EQ(pool->carry_rule_count(slot), 0);
 
     pool->mark_carry_dirty(slot, 5);
     CHECK(pool->carry_judgeable(slot, 5));
 }
 
-TEST_CASE("[Networked][Predict][Hosted] the bound topology fingerprint is the "
-          "core's, folding the quantum in and nothing else") {
+TEST_CASE(
+    "[Networked][Predict][Hosted] the bound topology fingerprint is the "
+    "core's, folding the quantum in and nothing else"
+) {
     Dictionary facts;
     facts[StringName("floor")] = true;
 
@@ -685,25 +735,104 @@ TEST_CASE("[Networked][Predict][Hosted] the bound topology fingerprint is the "
     folded[StringName("quantum")] = 7;
 
     NETW_CHECK_EQ(
-        netw::NetwPredictionCore::topology_fingerprint(facts, 7),
-        netw::NetwPredictionCore::fact_fingerprint(folded)
+        netw::prediction_core::topology_fingerprint(facts, 7),
+        netw::prediction_core::fact_fingerprint(folded)
     );
     NETW_CHECK_EQ(
-        netw::NetwPredictionCore::topology_fingerprint(facts, 7),
+        netw::prediction_core::topology_fingerprint(facts, 7),
         int64_t(netw::predict::topology_fingerprint(facts, 7))
     );
 }
 
-TEST_CASE("[Networked][Predict][Hosted] a different quantum is a different "
-          "topology, which is the whole reason it is folded in") {
+TEST_CASE(
+    "[Networked][Predict][Hosted] a different quantum is a different "
+    "topology, which is the whole reason it is folded in"
+) {
     Dictionary facts;
     facts[StringName("floor")] = true;
 
     NETW_CHECK_ORDER(
-        netw::NetwPredictionCore::topology_fingerprint(facts, 7),
-        netw::NetwPredictionCore::topology_fingerprint(facts, 8),
+        netw::prediction_core::topology_fingerprint(facts, 7),
+        netw::prediction_core::topology_fingerprint(facts, 8),
         !=
     );
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted] the declared rules ARE the carry "
+    "declaration, and withdrawing the last one disarms the path"
+) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = pool->open(carry_field("spin"));
+    REQUIRE(pool->configure(
+        slot,
+        int(Schedule::FRAME),
+        int(Role::PREDICT),
+        int(CorrectionMode::SNAP),
+        int(RestoreMode::EXACT),
+        6,
+        NetwPredictionEngine::ISLAND_NONE,
+        false
+    ));
+    const StringName spin("spin");
+
+    NETW_CHECK_EQ(pool->carry_rule_count(slot), 0);
+    CHECK_FALSE(pool->has_carry_rule(slot, spin));
+    CHECK_FALSE(pool->carry_eligible(slot, spin));
+
+    pool->set_carry(slot, spin, callable_mp_static(&declared_rule));
+    NETW_CHECK_EQ(pool->carry_rule_count(slot), 1);
+    CHECK(pool->has_carry_rule(slot, spin));
+    CHECK(pool->carry_eligible(slot, spin));
+
+    pool->set_carry(slot, spin, Callable());
+    NETW_CHECK_EQ(pool->carry_rule_count(slot), 0);
+    CHECK_FALSE(pool->has_carry_rule(slot, spin));
+    CHECK_FALSE(pool->carry_eligible(slot, spin));
+
+    NETW_CHECK_EQ(pool->carry_rule_count(slot + 9000), 0);
+    CHECK_FALSE(pool->has_carry_rule(slot + 9000, spin));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted] the carry roster reads in the slot's own "
+    "field order, and a rewire empties it"
+) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    LocalVector<FieldDecl> declaration;
+    const char *keys[] = {"spin", "throttle", "yaw"};
+    for (const char *key : keys) {
+        declaration.push_back(
+            field_decl(StringName(key), int(PropertyClass::CAUSAL))
+        );
+    }
+    const int64_t slot = pool->open(declaration);
+    REQUIRE(pool->configure(
+        slot,
+        int(Schedule::FRAME),
+        int(Role::PREDICT),
+        int(CorrectionMode::SNAP),
+        int(RestoreMode::EXACT),
+        6,
+        NetwPredictionEngine::ISLAND_NONE,
+        false
+    ));
+
+    const Callable rule = callable_mp_static(&declared_rule);
+    pool->set_carry(slot, StringName("yaw"), rule);
+    pool->set_carry(slot, StringName("spin"), rule);
+
+    const Array fields = pool->carry_rule_fields(slot);
+    NETW_CHECK_EQ(fields.size(), 2);
+    CHECK(StringName(fields[0]) == StringName("spin"));
+    CHECK(StringName(fields[1]) == StringName("yaw"));
+
+    pool->rewire(slot, carry_field("spin"), carry_field("throttle"));
+    NETW_CHECK_EQ(pool->carry_rule_count(slot), 0);
+    NETW_CHECK_EQ(pool->carry_rule_fields(slot).size(), 0);
+    NETW_CHECK_EQ(pool->carry_rule_fields(slot + 9000).size(), 0);
 }
 
 } // namespace TestNetwPredictSensorLaws

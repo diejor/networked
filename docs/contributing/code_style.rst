@@ -3,9 +3,11 @@
 Code style
 ==========
 
-Networked follows Godot's GDScript style where possible. Existing files in
-``addons/networked/`` are the best reference for formatting, naming, and
-structure.
+Networked follows Godot's GDScript style where possible. The existing files
+in ``addons/networked/`` are the specification for formatting, naming, and
+structure: match the pattern repeated around the code you are writing. A rule
+the surrounding code already shows needs no other enforcement, so nothing here
+is policed by a tool that reads the tree and has an opinion about style.
 
 Keep changes small and direct. Multiplayer code is easier to review when a
 patch changes one behavior, includes the tests for that behavior, and avoids

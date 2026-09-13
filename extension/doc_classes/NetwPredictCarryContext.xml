@@ -10,7 +10,7 @@
 		    var axis := _drive_axis(ctx.state[&amp;"heading"])
 		    return value + axis * ctx.state[&amp;"speed"] * ctx.delta
 		[/codeblock]
-		Declared through [method NetwScriptModel.PropertyConfig.carry_step]. The record is minted by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
+		Declared through [method NetwPropertyConfig.carry_step]. The record is minted by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -19,13 +19,13 @@
 			This transition's width in simulated seconds.
 		</member>
 		<member name="input" type="Dictionary" setter="" getter="get_input" default="{}">
-			The command this transition ran, as [method NetwScriptModel.PropertyConfig.input] declares it.
+			The command this transition ran, as [method NetwPropertyConfig.input] declares it.
 		</member>
 		<member name="label" type="int" setter="" getter="get_label" default="-1">
 			The input tick this transition was labelled with.
 		</member>
 		<member name="state" type="Dictionary" setter="" getter="get_state" default="{}">
-			The declared state the owner recorded before this transition drove, the same values [method NetwScriptModel.PropertyConfig.state] names.
+			The declared state the owner recorded before this transition drove, the same values [method NetwPropertyConfig.state] names.
 		</member>
 	</members>
 </class>

@@ -1,18 +1,12 @@
-// What a one-byte component address names, and what it refuses to name.
-//
-// Two laws here are about disagreement rather than about lookup. Ids come from
-// the sorted order because registration order differs between peers and the
-// wire cannot carry it, and a table whose digest the authority did not author
-// answers nothing at all rather than answering the wrong node.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <initializer_list>
 
+#include "godot/node.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/comp_table.hpp"
+#include "netw/comp_table.hpp"
 
 using namespace godot;
 
@@ -31,10 +25,9 @@ PackedStringArray registered(std::initializer_list<const char *> p_paths) {
     return out;
 }
 
-Ref<NetwCompTable> table(std::initializer_list<const char *> p_paths) {
-    Ref<NetwCompTable> out;
-    out.instantiate();
-    out->assign(registered(p_paths));
+NetwCompTable table(std::initializer_list<const char *> p_paths) {
+    NetwCompTable out;
+    out.assign(registered(p_paths));
     return out;
 }
 
@@ -47,19 +40,20 @@ String numbered(int64_t p_index) {
 TEST_CASE(
     "[Networked][Comp][Hosted] two registration orders assign the same ids"
 ) {
-    const Ref<NetwCompTable> first = table({"Gun", "Body", "Wheel"});
-    const Ref<NetwCompTable> second = table({"Wheel", "Gun", "Body"});
+    const NetwCompTable first = table({"Gun", "Body", "Wheel"});
+    const NetwCompTable second = table({"Wheel", "Gun", "Body"});
 
-    NETW_CHECK_EQ(first->id_for_path(String("Body")), 1);
-    NETW_CHECK_EQ(first->id_for_path(String("Gun")), 2);
-    NETW_CHECK_EQ(first->id_for_path(String("Wheel")), 3);
+    NETW_CHECK_EQ(first.id_for_path(String("Body")), 1);
+    NETW_CHECK_EQ(first.id_for_path(String("Gun")), 2);
+    NETW_CHECK_EQ(first.id_for_path(String("Wheel")), 3);
     for (int64_t id = 1; id <= 3; ++id) {
-        CHECK(first->path_for_id(id) == second->path_for_id(id));
+        CHECK(first.path_for_id(id) == second.path_for_id(id));
     }
 }
 
 TEST_CASE("[Networked][Comp][Hosted] an id round trips to its own path") {
-    const Ref<NetwCompTable> ids = table({"Body", "Gun"});
+    NetwCompTable held = table({"Body", "Gun"});
+    NetwCompTable *const ids = &held;
 
     NETW_CHECK_EQ(ids->id_for_path(ids->path_for_id(1)), 1);
     CHECK(ids->has_path(String("Gun")));
@@ -77,8 +71,8 @@ TEST_CASE(
     for (int64_t i = 0; i < 300; ++i) {
         many.push_back(numbered(i));
     }
-    Ref<NetwCompTable> ids;
-    ids.instantiate();
+    NetwCompTable held;
+    NetwCompTable *const ids = &held;
     ids->assign(many);
 
     NETW_CHECK_EQ(ids->sorted_paths().size(), 300);
@@ -89,7 +83,8 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Comp][Hosted] comp 0 is the entity root") {
-    const Ref<NetwCompTable> ids = table({"Gun"});
+    NetwCompTable held = table({"Gun"});
+    NetwCompTable *const ids = &held;
 
     NETW_CHECK_EQ(ids->classify(0, String()), NetwCompTable::ADDRESS_ROOT);
 }
@@ -98,7 +93,8 @@ TEST_CASE(
     "[Networked][Comp][Hosted] a fallback path that can leave the subtree is "
     "refused on its shape"
 ) {
-    const Ref<NetwCompTable> ids = table({"Gun"});
+    NetwCompTable held = table({"Gun"});
+    NetwCompTable *const ids = &held;
     const int64_t fallback = 255;
 
     NETW_CHECK_EQ(
@@ -128,7 +124,8 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Comp][Hosted] an id no path carries names nothing") {
-    const Ref<NetwCompTable> ids = table({"Gun"});
+    NetwCompTable held = table({"Gun"});
+    NetwCompTable *const ids = &held;
 
     NETW_CHECK_EQ(ids->classify(1, String()), NetwCompTable::ADDRESS_MAPPED);
     NETW_CHECK_EQ(ids->classify(2, String()), NetwCompTable::ADDRESS_UNMAPPED);
@@ -138,7 +135,8 @@ TEST_CASE(
     "[Networked][Comp][Hosted] a poisoned table answers no id, including ones "
     "it holds"
 ) {
-    Ref<NetwCompTable> ids = table({"Gun", "Body"});
+    NetwCompTable held = table({"Gun", "Body"});
+    NetwCompTable *const ids = &held;
     ids->poisoned = true;
 
     NETW_CHECK_EQ(ids->classify(1, String()), NetwCompTable::ADDRESS_UNMAPPED);
@@ -154,23 +152,48 @@ TEST_CASE(
     "[Networked][Comp][Hosted] authority authors the digest and a peer that "
     "disagrees with it poisons"
 ) {
-    Ref<NetwCompTable> authority = table({"Gun"});
-    authority->table_hash = 4242;
-    CHECK_FALSE(authority->reconcile(true));
-    NETW_CHECK_EQ(authority->wire_hash, 4242);
-    CHECK_FALSE(authority->poisoned);
+    NetwCompTable authority = table({"Gun"});
+    authority.table_hash = 4242;
+    CHECK_FALSE(authority.reconcile(true));
+    NETW_CHECK_EQ(authority.wire_hash, 4242);
+    CHECK_FALSE(authority.poisoned);
 
-    Ref<NetwCompTable> agreeing = table({"Gun"});
-    agreeing->table_hash = 4242;
-    agreeing->wire_hash = 4242;
-    CHECK_FALSE(agreeing->reconcile(false));
-    CHECK_FALSE(agreeing->poisoned);
+    NetwCompTable agreeing = table({"Gun"});
+    agreeing.table_hash = 4242;
+    agreeing.wire_hash = 4242;
+    CHECK_FALSE(agreeing.reconcile(false));
+    CHECK_FALSE(agreeing.poisoned);
 
-    Ref<NetwCompTable> diverged = table({"Gun"});
-    diverged->table_hash = 4242;
-    diverged->wire_hash = 9999;
-    CHECK(diverged->reconcile(false));
-    CHECK(diverged->poisoned);
+    NetwCompTable diverged = table({"Gun"});
+    diverged.table_hash = 4242;
+    diverged.wire_hash = 9999;
+    CHECK(diverged.reconcile(false));
+    CHECK(diverged.poisoned);
+}
+
+TEST_CASE(
+    "[Networked][Comp][Hosted] an id the table cannot map resolves to nothing "
+    "rather than to the entity root, because a row addressed by an id carries "
+    "no path to fall back to"
+) {
+    Node *owner = memnew(Node);
+    owner->set_name("Owner");
+    Node *gun = memnew(Node);
+    gun->set_name("Gun");
+    owner->add_child(gun);
+    NetwCompTable held = table({"Gun"});
+    NetwCompTable *const ids = &held;
+
+    NETW_CHECK_EQ(ids->resolve_node(owner, 1, String()), gun);
+    NETW_CHECK_EQ(ids->resolve_node(owner, 0, String()), owner);
+    NETW_CHECK_EQ(ids->resolve_node(owner, 2, String()), nullptr);
+
+    ids->poisoned = true;
+    NETW_CHECK_EQ(ids->resolve_node(owner, 1, String()), nullptr);
+    NETW_CHECK_EQ(ids->resolve_node(owner, 0, String()), owner);
+    NETW_CHECK_EQ(ids->resolve_node(owner, 255, String("Gun")), gun);
+
+    memdelete(owner);
 }
 
 } // namespace TestNetwCompTable

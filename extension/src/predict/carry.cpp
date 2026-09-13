@@ -6,9 +6,7 @@
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 void CarryDirty::clear() {
     marks.clear();
@@ -151,6 +149,4 @@ CarryVerdict CarryTrack::decline(int p_field, int p_schedule) {
     return CarryVerdict::DECLINED;
 }
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

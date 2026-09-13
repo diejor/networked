@@ -4,9 +4,7 @@
 
 #include "godot/local_vector.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 enum class Attribution : uint8_t {
     UNKNOWN = 0,
@@ -106,6 +104,33 @@ struct JournalEvidence {
     int32_t witness_fp = 0;
     int32_t raw_fp = 0;
     uint8_t evidence_mask = 0;
+    bool present = false;
+};
+
+struct JournalRow {
+    int64_t transition = -1;
+    int64_t label = -1;
+    int64_t basis = -1;
+    FamilyFingerprints pre_families;
+    FamilyFingerprints post_families;
+    float aligned_error = 0.0f;
+    int32_t c_hash = 0;
+    int32_t e_digest = 0;
+    int32_t pre_fp = 0;
+    int32_t post_fp = 0;
+    int32_t topo_fp = 0;
+    int32_t raw_fp = 0;
+    int32_t witness_fp = 0;
+    int32_t episode_id = 0;
+    int32_t write_id = 0;
+    uint8_t kind = 0;
+    uint8_t witness_class_bits = 0;
+    uint8_t evidence_mask = 0;
+    uint8_t op = 0;
+    uint8_t differing_family = 0;
+    uint8_t domain = 0;
+    uint8_t attribution = 0;
+    uint8_t flags = 0;
     bool present = false;
 };
 
@@ -240,6 +265,4 @@ public:
     JournalEvidence evidence_of(int64_t p_transition) const;
 };
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

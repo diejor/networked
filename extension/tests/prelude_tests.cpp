@@ -59,7 +59,7 @@ int guarded_value(bool condition, int &evaluations) {
     NETW_ERR_COND_V(
         (++evaluations, condition),
         -1,
-        "test",
+        netw::sys::TEST,
         "the planted condition fired"
     );
     return 1;
@@ -67,7 +67,7 @@ int guarded_value(bool condition, int &evaluations) {
 
 int failed_value() {
     if (false) {
-        NETW_ERR_V(-1, "test", "the compile-only failure fired");
+        NETW_ERR_V(-1, netw::sys::TEST, "the compile-only failure fired");
     }
     return 1;
 }
@@ -81,12 +81,16 @@ TEST_CASE(
     CHECK(evaluations == 1);
 
     int message_builds = 0;
-    NETW_WARN_COND(false, "test", godot::String::num_int64(++message_builds));
+    NETW_WARN_COND(
+        false,
+        netw::sys::TEST,
+        godot::String::num_int64(++message_builds)
+    );
     CHECK(message_builds == 0);
     CHECK(failed_value() == 1);
 
     if (false) {
-        NETW_ASSERT(false, "test", "the compile-only assertion fired");
+        NETW_ASSERT(false, netw::sys::TEST, "the compile-only assertion fired");
     }
 }
 

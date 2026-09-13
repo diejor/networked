@@ -1,11 +1,9 @@
 #include "netw/wire/frame.hpp"
 
-#include <cstring>
-
-#include "netw/api/codec.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/wire/describe.hpp"
 
 using namespace godot;
 
@@ -13,61 +11,50 @@ namespace netw::wire {
 
 namespace {
 
-constexpr int VARINT_MAX_BYTES = 5;
+constexpr int PATH_CAP = 1023;
 
-int varint_width(int64_t p_value) {
-    int64_t value = p_value;
-    for (int index = 0; index < VARINT_MAX_BYTES; ++index) {
-        value >>= 7;
-        if (value <= 0) {
-            return index + 1;
-        }
-    }
-    return VARINT_MAX_BYTES;
-}
+struct FrameHeader {
+    uint64_t route = 0;
+    uint8_t comp = 0;
+    uint8_t channel = 0;
+    uint64_t length = 0;
 
-int put_varint(uint8_t *p_at, int64_t p_value) {
-    int64_t value = p_value;
-    for (int index = 0; index < VARINT_MAX_BYTES; ++index) {
-        const uint8_t byte = uint8_t(value & 0x7f);
-        value >>= 7;
-        if (value > 0) {
-            p_at[index] = uint8_t(byte | 0x80);
-        } else {
-            p_at[index] = byte;
-            return index + 1;
-        }
-    }
-    return VARINT_MAX_BYTES;
-}
+    static constexpr auto wire = describe(
+        field<&FrameHeader::route>("route", varuint(5)),
+        field<&FrameHeader::comp>("comp", bits(8)),
+        field<&FrameHeader::channel>("channel", bits(8)),
+        field<&FrameHeader::length>("length", varuint(3))
+    );
+};
 
-PackedByteArray path_prefixed(
+bool path_body(
     const PackedByteArray &p_payload,
-    const String &p_path
+    const String &p_path,
+    PackedByteArray &r_body
 ) {
-    const PackedByteArray path = p_path.to_utf8_buffer();
-    const int length_width = varint_width(path.size());
-
-    PackedByteArray out;
-    out.resize(length_width + path.size() + p_payload.size());
-    uint8_t *at = out.ptrw();
-    at += put_varint(at, path.size());
-    if (path.size() > 0) {
-        memcpy(at, path.ptr(), size_t(path.size()));
-        at += path.size();
+    WriteStream stream;
+    PackedByteArray utf8 = p_path.to_utf8_buffer();
+    if (!stream.bytes_capped(utf8, PATH_CAP)) {
+        return false;
     }
-    if (p_payload.size() > 0) {
-        memcpy(at, p_payload.ptr(), size_t(p_payload.size()));
-    }
-    return out;
+    r_body = stream.to_bytes();
+    r_body.append_array(p_payload);
+    return true;
 }
 
-int byte_count(int64_t p_value) {
-    constexpr int64_t COUNT_CEILING = 0x7fffffff;
-    if (p_value <= 0) {
-        return 0;
+bool split_path_body(const PackedByteArray &p_body, Frame &r_frame) {
+    ReadStream stream(p_body);
+    PackedByteArray utf8;
+    if (!stream.bytes_capped(utf8, PATH_CAP)) {
+        return false;
     }
-    return int(p_value < COUNT_CEILING ? p_value : COUNT_CEILING);
+    PackedByteArray inner;
+    if (!stream.raw_bytes(inner, stream.bits_remaining() / 8)) {
+        return false;
+    }
+    r_frame.path = gd::utf8_string(utf8);
+    r_frame.payload = inner;
+    return true;
 }
 
 } // namespace
@@ -81,96 +68,85 @@ PackedByteArray frame_pack(
 ) {
     NETW_ZONE_NC("wire frame pack", colors::WIRE);
 
-    const PackedByteArray body = p_comp == FRAME_COMP_PATH
-        ? path_prefixed(p_payload, p_path)
-        : p_payload;
-
-    const int route_width = varint_width(p_route);
-    const int length_width = varint_width(body.size());
-
-    PackedByteArray out;
-    out.resize(route_width + 2 + length_width + body.size());
-    uint8_t *at = out.ptrw();
-    at += put_varint(at, p_route);
-    *at++ = p_comp;
-    *at++ = p_channel;
-    at += put_varint(at, body.size());
-    if (body.size() > 0) {
-        memcpy(at, body.ptr(), size_t(body.size()));
+    if (p_route < 0) {
+        NETW_TRACE(
+            sys::WIRE,
+            "channel %d asked for a frame at route %d, which no varuint "
+            "spells",
+            int(p_channel),
+            int(p_route)
+        );
+        return PackedByteArray();
     }
+
+    PackedByteArray body;
+    if (p_comp == FRAME_COMP_PATH) {
+        if (!path_body(p_payload, p_path, body)) {
+            return PackedByteArray();
+        }
+    } else {
+        body = p_payload;
+    }
+
+    FrameHeader header;
+    header.route = uint64_t(p_route);
+    header.comp = p_comp;
+    header.channel = p_channel;
+    header.length = uint64_t(body.size());
+
+    WriteStream stream;
+    if (!FrameHeader::wire.run(stream, header)) {
+        return PackedByteArray();
+    }
+
+    PackedByteArray out = stream.to_bytes();
+    out.append_array(body);
     return out;
 }
 
-bool frame_unpack_next(
-    const Ref<NetwBitBufferReader> &p_reader,
-    Frame &r_frame
-) {
+bool frame_unpack_next(ReadStream &p_stream, Frame &r_frame) {
     NETW_ZONE_NC("wire frame unpack next", colors::WIRE);
 
-    NETW_ERR_COND_V(
-        p_reader.is_null(),
-        false,
-        sys::WIRE,
-        "a frame walk was handed no reader"
-    );
-
-    const int64_t route = NetwCodec::get_safe_varint(p_reader);
-    if (route < 0) {
-        NETW_TRACE(sys::WIRE, "a frame opened with a corrupt route varint");
+    FrameHeader header;
+    if (!FrameHeader::wire.run(p_stream, header)) {
+        NETW_TRACE(sys::WIRE, "a frame opened with a header it cannot hold");
         return false;
     }
 
-    const uint8_t comp = uint8_t(p_reader->get_aligned_u8());
-    const uint8_t channel = uint8_t(p_reader->get_aligned_u8());
-    const int64_t body_length = NetwCodec::get_safe_varint(p_reader);
-    if (body_length < 0) {
+    PackedByteArray body;
+    if (!p_stream.raw_bytes(body, int64_t(header.length))) {
         NETW_TRACE(
             sys::WIRE,
-            "route %d channel %d carried a corrupt body length varint",
-            int(route),
-            int(channel)
+            "route %d channel %d claimed %d payload bytes the datagram does "
+            "not hold",
+            int(header.route),
+            int(header.channel),
+            int(header.length)
         );
         return false;
     }
 
-    const PackedByteArray body
-        = p_reader->get_aligned_bytes(byte_count(body_length));
-
-    r_frame.route = route;
-    r_frame.comp = comp;
-    r_frame.channel = channel;
+    r_frame.route = int64_t(header.route);
+    r_frame.comp = header.comp;
+    r_frame.channel = header.channel;
     r_frame.path = String();
     r_frame.payload = body;
 
-    if (comp != FRAME_COMP_PATH) {
+    if (header.comp != FRAME_COMP_PATH) {
         return true;
     }
-
-    const Ref<NetwBitBufferReader> body_reader
-        = NetwBitBufferReader::create(body);
-    const int64_t path_length = NetwCodec::get_safe_varint(body_reader);
-    if (path_length < 0) {
+    if (!split_path_body(body, r_frame)) {
         NETW_TRACE(
             sys::WIRE,
-            "route %d carried a corrupt path length, so its body stays whole",
-            int(route)
+            "route %d carried a path its own body cannot hold",
+            int(header.route)
         );
-        return true;
+        return false;
     }
-
-    r_frame.path
-        = gd::utf8_string(body_reader->get_aligned_bytes(
-            byte_count(path_length)
-        ));
-    r_frame.payload
-        = body_reader->get_aligned_bytes(body_reader->remaining_bytes());
     return true;
 }
 
-FrameWalk frame_unpack_all(
-    const PackedByteArray &p_framed,
-    int64_t p_from
-) {
+FrameWalk frame_unpack_all(const PackedByteArray &p_framed, int64_t p_from) {
     NETW_ZONE_NC("wire frame unpack all", colors::WIRE);
 
     FrameWalk walk;
@@ -183,19 +159,25 @@ FrameWalk frame_unpack_all(
         int(p_framed.size())
     );
 
-    const Ref<NetwBitBufferReader> reader = NetwBitBufferReader::create(
+    ReadStream stream(
         p_from == 0 ? p_framed : p_framed.slice(int(p_from), p_framed.size())
     );
 
     Frame frame;
-    while (reader->remaining_bytes() > 0) {
-        if (!frame_unpack_next(reader, frame)) {
+    while (stream.bits_remaining() > 0) {
+        if (!frame_unpack_next(stream, frame)) {
             return walk;
         }
         walk.frames.push_back(frame);
     }
-    walk.whole = reader->ok();
+    walk.whole = stream.ok();
     return walk;
+}
+
+Dictionary frame_spec_records() {
+    Dictionary out;
+    out["FrameHeader"] = FrameHeader::wire.spec_dump();
+    return out;
 }
 
 } // namespace netw::wire

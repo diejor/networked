@@ -8,8 +8,8 @@ var target: Vehicle
 
 # Functions
 
-func _physics_process(delta):
 
+func _physics_process(delta):
 	if not is_instance_valid(target):
 		target = _find_local_vehicle()
 	if not is_instance_valid(target):

@@ -18,14 +18,10 @@ boot_splash/image="uid://b8cn2fun55jsg"
 config/icon="uid://cv7fmxmauvaxo"
 config/macos_native_icon="res://assets/networked.icns"
 
-[autoload]
-
-NetworkedDebugger="*uid://cqxvql5nj11ji"
-NetworkedSession="*uid://ckux2yhycljvt"
-
 [debug]
 
 file_logging/enable_file_logging=true
+gdscript/warnings/missing_await=2
 
 [display]
 
@@ -119,8 +115,7 @@ limits/debugger/max_chars_per_second=262144
 
 [networked]
 
-logging/active_profile="uid://44kyyxwgimkd"
-webrtc/turn_credentials_url="https://bomber.diejorarr.workers.dev/"
+webrtc/turn_credentials_url="/turn"
 tests/nakama_host="127.0.0.1"
 install_as_default=true
 

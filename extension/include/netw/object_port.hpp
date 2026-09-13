@@ -13,6 +13,7 @@
 
 #include "godot/object.hpp"
 #include "godot/variant.hpp"
+#include "netw/subsystems.hpp"
 
 namespace netw {
 
@@ -23,18 +24,18 @@ struct ObjectPort {
     bool bound() const;
     bool bind(godot::Object *p_owner);
     void unbind();
-    godot::Object *resolve(const char *p_module);
+    godot::Object *resolve(SubsystemName p_module);
 };
 
 godot::Dictionary port_capture(
     ObjectPort &r_port,
-    const char *p_module,
+    SubsystemName p_module,
     const godot::Array &p_keys
 );
 
 bool port_apply(
     ObjectPort &r_port,
-    const char *p_module,
+    SubsystemName p_module,
     const godot::Dictionary &p_payload
 );
 

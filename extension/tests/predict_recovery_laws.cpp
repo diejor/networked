@@ -84,10 +84,10 @@ bool writes_every_restore(const WritePlan &p_plan) {
         }
         if (!p_plan.write.has(at)
             || value_error(
-                p_plan.restore.values[uint32_t(at)],
-                p_plan.write.values[uint32_t(at)],
-                false
-            ) > 0.000001) {
+                   p_plan.restore.values[uint32_t(at)],
+                   p_plan.write.values[uint32_t(at)],
+                   false
+               ) > 0.000001) {
             return false;
         }
     }
@@ -121,12 +121,7 @@ TEST_CASE(
     request.domain = predict::Domain::OUT_OF_DOMAIN;
     request.suppressed = true;
     RecoveryState state;
-    WritePlan plan = stage_recovery(
-        wiring,
-        snap_config(),
-        request,
-        state
-    );
+    WritePlan plan = stage_recovery(wiring, snap_config(), request, state);
     CHECK_FALSE(plan.skip);
     CHECK_FALSE(plan.teleport);
     CHECK(plan.restore.has(1));
@@ -265,21 +260,12 @@ TEST_CASE(
     current.set(0, Vector2(12.0, 5.0));
     current.set(1, -165.0 * PI / 180.0);
 
-    const TransportPlan plan = transport(
-        wiring,
-        predicted,
-        authority,
-        current
-    );
+    const TransportPlan plan = transport(wiring, predicted, authority, current);
     CHECK(plan.valid);
     const Vector2 restored_position = plan.restore.values[0];
     NETW_CHECK_CLOSE(restored_position.x, 12.5, 0.000001);
     NETW_CHECK_CLOSE(restored_position.y, 4.75, 0.000001);
-    NETW_CHECK_CLOSE(
-        double(plan.delta.values[1]),
-        2.0 * PI / 180.0,
-        0.000001
-    );
+    NETW_CHECK_CLOSE(double(plan.delta.values[1]), 2.0 * PI / 180.0, 0.000001);
     CHECK_FALSE(plan.restore.has(2));
 }
 
@@ -290,12 +276,8 @@ TEST_CASE(
     RecoveryRequest request = recovery_request();
     request.policy = int(RecoveryPolicy::OBSERVE);
     RecoveryState state;
-    const WritePlan observed = stage_recovery(
-        recovery_wiring(),
-        snap_config(),
-        request,
-        state
-    );
+    const WritePlan observed
+        = stage_recovery(recovery_wiring(), snap_config(), request, state);
     CHECK(observed.skip);
     CHECK_FALSE(observed.restore.any());
 

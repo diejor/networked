@@ -10,6 +10,8 @@
 
 namespace netw::repl {
 
+using netw::table::SchemaRecord;
+
 struct WindowSample {
     int64_t tick = -1;
     wire::CodeRow row;
@@ -17,7 +19,7 @@ struct WindowSample {
 
 class WindowRing {
     godot::LocalVector<WindowSample> samples;
-    godot::Ref<SchemaRecord> declaration;
+    SchemaRecord declaration;
     wire::WirePlan compiled;
     uint32_t depth = 1;
     int64_t confirmed = -1;
@@ -25,10 +27,7 @@ class WindowRing {
 public:
     static WindowRing open(uint32_t p_depth);
 
-    static WindowRing declare(
-        const godot::Ref<SchemaRecord> &p_schema,
-        uint32_t p_depth
-    );
+    static WindowRing declare(const SchemaRecord &p_schema, uint32_t p_depth);
 
     bool valid() const {
         return compiled.valid();

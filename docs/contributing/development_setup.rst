@@ -15,10 +15,10 @@ Godot will import resources the first time you open it. After import finishes,
 make sure the *Networked* and *GdUnit4* plugins are enabled in
 :menu:`Project > Project Settings > Plugins`.
 
-The project is currently developed and tested with the Godot version used by
-CI. See ``.github/workflows/ci.yml`` and
-``.github/actions/build-docs-classes/action.yml`` for the exact versions used
-by tests and documentation builds.
+The Godot builds this project is verified against are declared in
+``ci/engines.json``, and ``python3 ci/engine.py install`` fetches and
+qualifies one. :ref:`doc_contributing_pipeline` describes the build, test and
+release scripts that CI and a developer shell share.
 
 Running tests
 -------------

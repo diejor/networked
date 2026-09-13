@@ -12,7 +12,7 @@ extends InputComponent
 # to its unit square and bombing raw, the same quantization the wire carried when
 # a synchronizer node owned the stream.
 func _init() -> void:
-	var motion_quantizer := NetwQuantizeBits.new()
+	var motion_quantizer := NetwQuantizeScalar.new()
 	motion_quantizer.bit_count = 16
 	Netw.configure_property(self, &"motion").input().quantize(motion_quantizer)
 	Netw.configure_property(self, &"bombing").input()
@@ -42,7 +42,7 @@ func _get_inputs() -> Array:
 
 ## Refreshes [member motion] and [member bombing] from tracked input state each
 ## tick. Called by [method InputComponent.gather] at
-## [signal NetwMultiplayer.before_tick] on the controlling client.
+## [signal NetwMultiplayer.clock_before_tick] on the controlling client.
 func _gather() -> void:
 	motion = get_vector2(
 		move_left,

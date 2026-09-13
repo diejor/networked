@@ -4,9 +4,7 @@
 
 using namespace godot;
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 bool CommandQueue::admit(
     int64_t p_transition,
@@ -93,6 +91,4 @@ void CommandQueue::clear() {
     newest = -1;
 }
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

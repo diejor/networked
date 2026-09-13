@@ -70,6 +70,53 @@ instead. The script warns when that checkout is not at the pinned ref, since
 the module is only certified against the pin. On Windows, run it from a shell
 with symlinks enabled (Git Bash with Developer Mode).
 
+### The engine pin is a fork
+
+`deps.env` pins `albertok/godot`, branch `4.7.2-stepphysics`, which adds
+`PhysicsServer3D.space_step(space, delta)`. The prediction tier's stepper
+drive calls it to integrate a held space once per network tick, a stock
+engine has no such method, and a module built against stock runs a stepped
+schedule as a ticked one instead. `setup_godot.sh` therefore greps the
+checkout for `space_step` and refuses outright when it is absent, while the
+version and SHA checks around it only warn.
+
+`GODOT_REF` is the SHA and `GODOT_VERSION` is the human-readable version the
+checkout's `version.py` is compared against. They are two fields because a
+SHA can never equal `4.7.2-stable`, and one field cannot answer both
+questions.
+
+While another campaign shares `extension/thirdparty/godot`, clone the fork
+somewhere of its own and point this band's builds at it, rather than
+replacing a checkout every other band's module tier reads:
+
+```sh
+git clone --depth 1 --branch 4.7.2-stepphysics \
+  https://github.com/albertok/godot ../godot-stepphysics
+GODOT_SRC=../godot-stepphysics extension/tools/setup_godot.sh
+scons -C ../godot-stepphysics -j"$(nproc)" target=editor tests=yes
+```
+
+### The `[Frame]` stepper laws want the fork's editor
+
+`physics_stepper_frame_laws.cpp` drives real bodies through `space_step`, so
+it needs an editor binary carrying the fork. Install the fork's release asset
+and run the hosted tier with it:
+
+```sh
+curl -fsSLO https://github.com/albertok/godot/releases/download/v4.7.2-stepping-physics/Godot_v4.7-stable_linux.x86_64.zip
+unzip -q Godot_v4.7-stable_linux.x86_64.zip
+./godot.linuxbsd.editor.x86_64 --headless --fixed-fps 60 \
+  --script tests/native/run_native_tests.gd
+```
+
+A stock editor runs everything else, and those laws pass without exercising
+anything: each reads `PhysicsServer3D.has_method("space_step")` and returns.
+Rocket league plays on a stock editor too, on `SOLVER_BODY`, because its
+bodies ask `RocketJoltStepper.schedule()` what to declare and get
+`SCHEDULE_FRAME` where the fork is absent. A member that declares
+`SCHEDULE_STEPPED` anyway still runs, resolved down to the frame tier with one
+error naming it, and that error is what the example exists to not raise.
+
 The cases under `tests/` are auto-discovered by the engine's test runner:
 
 ```sh

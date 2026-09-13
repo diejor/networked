@@ -1,10 +1,14 @@
-# Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
 
-# Exclude everything from `git archive` by default.
-* export-ignore
+*.cmd text eol=crlf
+*.bat text eol=crlf
 
-# Keep the `addons/networked` directory in archives.
-addons/ -export-ignore
-addons/networked/ -export-ignore
-addons/networked/** -export-ignore
+addons/gdUnit4/** linguist-vendored
+addons/com.heroiclabs.nakama/** linguist-vendored
+addons/godotsteam/** linguist-vendored
+addons/webrtc/** linguist-vendored
+addons/laggy-multiplayer-peer/** linguist-vendored
+extension/thirdparty/** linguist-vendored
+docs/tools/vendor/** linguist-vendored
+
+docs/tools/make_rst.py linguist-generated

@@ -33,12 +33,12 @@ bool row_authors(
     if (p_row.record == SET_RECORD_STATE) {
         return p_local_id == 1;
     }
-    switch (WritePolicy(p_row.policy)) {
-        case WritePolicy::AUTHORITY:
+    switch (entity::Control::WritePolicy(p_row.policy)) {
+        case entity::Control::WritePolicy::AUTHORITY:
             return p_node_authority;
-        case WritePolicy::CONTROLLER:
+        case entity::Control::WritePolicy::CONTROLLER:
             return p_local_id == p_controller;
-        case WritePolicy::ANY_PEER:
+        case entity::Control::WritePolicy::ANY_PEER:
             return true;
     }
     return false;
@@ -99,7 +99,7 @@ bool row_admits_sender(
     if (p_row.record == SET_RECORD_STATE) {
         return false;
     }
-    return NetwEntityControl::policy_admits(
+    return entity::Control::policy_admits(
         int(p_row.policy),
         p_sender,
         p_node_authority,
@@ -203,7 +203,8 @@ void SetModel::drop(
 
 const SetRow *SetModel::row(int64_t p_route, int64_t p_ordinal) const {
     const LocalVector<SetRow> *rows = route_rows(p_route);
-    if (rows == nullptr || p_ordinal < 0 || p_ordinal >= int64_t(rows->size())) {
+    if (rows == nullptr || p_ordinal < 0
+        || p_ordinal >= int64_t(rows->size())) {
         return nullptr;
     }
     return &(*rows)[uint32_t(p_ordinal)];
@@ -237,10 +238,6 @@ void SetModel::note_descriptors(
     int64_t p_route,
     const HashMap<int64_t, int64_t> &p_descriptors
 ) {
-    if (p_descriptors.is_empty()) {
-        descriptors.erase(p_route);
-        return;
-    }
     descriptors[p_route] = p_descriptors;
 }
 
@@ -253,7 +250,7 @@ bool SetModel::admits_schema(int64_t p_route, int64_t p_ordinal) const {
     HashMap<int64_t, int64_t>::ConstIterator declared
         = noted->value.find(p_ordinal);
     if (declared == noted->value.end()) {
-        return true;
+        return false;
     }
     const SetRow *found = row(p_route, p_ordinal);
     return found != nullptr && found->schema_hash == declared->value;

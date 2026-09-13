@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterestHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Which layers one entity is in, who may therefore see it, and what it is told when that changes.
+	</brief_description>
+	<description>
+		Membership declarations survive tree exits and reapply when the entity enters a session, so a layer declared in [method Object._init] is the same layer the server admits later. The server owns the real [NetwInterestLayer] membership. Clients keep the same labels and callback surface for local visibility and observer-awareness events.
+		Declaring interest and reading it back are ONE type: [method Netw.configure_interest] answers this handle and so does [member NetwEntity.interest], so a helper takes either and a chain in [method Object._init] is the same object a later frame mutates. Every verb answers the handle, so one chained expression declares an entity's layers and the callbacks that ride them.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_interest(self) \
+		            .join(&amp;"team:red", NetwMultiplayer.LEAVE_POLICY_RETAIN) \
+		            .join(&amp;"sight") \
+		            .on_enter(_on_interest_enter)
+
+		# and the same handle, later:
+		Netw.configure_entity(self).interest.join(&amp;"team:blue")
+		[/codeblock]
+		The handle holds no interest state of its own. Every declaration lives on the entity's own row, which is why a chain declared before the entity attaches to a session is the state the session adopts rather than a copy it has to replay.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="entity" qualifiers="const">
+			<return type="NetwEntity" />
+			<description>
+				The [NetwEntity] this handle was bound to, or [code]null[/code] once that entity is gone.
+			</description>
+		</method>
+		<method name="join">
+			<return type="NetwInterestHandle" />
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="leave_policy" type="int" default="-1" />
+			<param index="2" name="perception_policy" type="int" default="-1" />
+			<description>
+				Adds the entity to [param layer_id] and returns this handle. Idempotent.
+				[param leave_policy] is one of [enum NetwMultiplayer.LeavePolicy] and [param perception_policy] one of [enum NetwMultiplayer.PerceptionPolicy], each declared in passing for the layer being joined. [code]-1[/code] declares neither and leaves whatever [method on_leave_policy] and [method on_perception_policy] already set, which are also the door for the [code]CUSTOM[/code] rows because those need a callback.
+				The declaration is safe in [method Object._init] on every peer. Only server authority mutates the live [NetwInterestLayer] entity set.
+			</description>
+		</method>
+		<method name="layer_ids" qualifiers="const">
+			<return type="StringName[]" />
+			<description>
+				Returns a copy of the locally known layer labels.
+			</description>
+		</method>
+		<method name="leave">
+			<return type="NetwInterestHandle" />
+			<param index="0" name="layer_id" type="StringName" />
+			<description>
+				Removes the entity from [param layer_id] and returns this handle. Idempotent.
+			</description>
+		</method>
+		<method name="of" qualifiers="static">
+			<return type="NetwInterestHandle" />
+			<param index="0" name="node" type="Node" />
+			<description>
+				Ensures the entity rooted at [param node] and answers its [member NetwEntity.interest]. [method Netw.configure_interest] is the front door and this is what it answers with. A [param node] that roots no entity is reported and answered [code]null[/code].
+			</description>
+		</method>
+		<method name="on_enter">
+			<return type="NetwInterestHandle" />
+			<param index="0" name="callback" type="Callable" />
+			<param index="1" name="layer_id" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Calls [param callback] with [code](layer_id, peer_id)[/code] whenever this entity becomes visible through [param layer_id], and returns this handle.
+				An empty [param layer_id] registers [param callback] against every layer [method layer_ids] currently answers, which is what lets one chain declare a set of layers and then give them all one callback. It reads what the entity has joined, not what this expression joined, so a callback declared after a later [method join] does not reach back to it.
+			</description>
+		</method>
+		<method name="on_leave">
+			<return type="NetwInterestHandle" />
+			<param index="0" name="callback" type="Callable" />
+			<param index="1" name="layer_id" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Calls [param callback] with [code](layer_id, peer_id)[/code] whenever this entity stops being visible through [param layer_id], and returns this handle.
+				An empty [param layer_id] registers against every layer [method layer_ids] currently answers, as [method on_enter] does.
+			</description>
+		</method>
+		<method name="on_leave_policy">
+			<return type="NetwInterestHandle" />
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="policy" type="int" enum="NetwMultiplayer.LeavePolicy" />
+			<param index="2" name="custom_callback" type="Callable" default="Callable()" />
+			<description>
+				Overrides the wire behavior for [param layer_id] with one of [enum NetwMultiplayer.LeavePolicy], and returns this handle.
+				[constant NetwMultiplayer.LEAVE_POLICY_CUSTOM] requires [param custom_callback], called with [code](peer_id, layer_id)[/code] on server authority. Other policies reject a callback so configuration mistakes fail at declaration time.
+			</description>
+		</method>
+		<method name="on_perception_policy">
+			<return type="NetwInterestHandle" />
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="policy" type="int" enum="NetwMultiplayer.PerceptionPolicy" />
+			<param index="2" name="custom_callback" type="Callable" default="Callable()" />
+			<description>
+				Overrides local presentation behavior for [param layer_id] with one of [enum NetwMultiplayer.PerceptionPolicy], and returns this handle.
+				[constant NetwMultiplayer.PERCEPTION_POLICY_CUSTOM] requires [param custom_callback]. The callback receives [code](visible, peer_id, layer_id)[/code] on both local participant edges. Other policies reject a callback.
+			</description>
+		</method>
+	</methods>
+</class>

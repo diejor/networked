@@ -1,0 +1,187 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Profile to build the candidate from.
+        type: string
+        required: false
+        default: release
+      unqualified:
+        description: Platforms this candidate cannot qualify, recorded in the manifest.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: "Verification"
+    uses: ./.github/workflows/static-checks.yml
+
+  candidate:
+    name: "Candidate"
+    uses: ./.github/workflows/gdextension.yml
+    with:
+      profile: ${{ inputs.profile || 'release' }}
+      package: true
+      unqualified: ${{ inputs.unqualified || '' }}
+
+  inventory:
+    name: "Inventory gate"
+    needs: [verify, candidate]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    outputs:
+      publishable: ${{ steps.gate.outputs.publishable }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download The Candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: networked-addon
+          path: dist
+
+      - name: Hold The Candidate To Its Profile
+        id: gate
+        shell: bash
+        env:
+          PROFILE: ${{ inputs.profile || 'release' }}
+          TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        run: |
+          set -eu
+          python3 ci/release.py \
+            --profile "$PROFILE" \
+            --tag "$TAG" \
+            --sha "$GITHUB_SHA" \
+            --record dist/inventory.json
+          if [ -n "$TAG" ]; then
+            echo "publishable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publishable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install The Engine
+        id: engine
+        shell: bash
+        run: python3 ci/engine.py install
+
+      - name: Load The Archive In A Clean Consumer
+        shell: bash
+        run: |
+          set -eu
+          archive="$(find dist -maxdepth 1 -name 'networked-*.zip' -print -quit)"
+          test -n "$archive"
+          python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" \
+            consumer --zip "$archive"
+
+      - name: Upload The Inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-inventory
+          path: dist/inventory.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: "Publish"
+    needs: inventory
+    if: needs.inventory.outputs.publishable == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download The Candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: networked-addon
+          path: dist
+
+      - name: Hold The Candidate To Its Profile Again
+        shell: bash
+        run: |
+          set -eu
+          python3 ci/release.py \
+            --tag "$GITHUB_REF_NAME" \
+            --sha "$GITHUB_SHA" \
+            --publish
+
+      - name: Stage A Draft And Upload Every Asset
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const tag = context.ref.replace('refs/tags/', '');
+            const files = fs.readdirSync('dist')
+              .filter(name => name !== 'inventory.json')
+              .map(name => path.join('dist', name));
+            if (files.length === 0) {
+              throw new Error('the candidate carries no assets to publish');
+            }
+            let release;
+            const existing = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            release = existing.data.find(entry => entry.tag_name === tag);
+            if (release && !release.draft) {
+              throw new Error(`${tag} is already published; a corrected build needs a new version`);
+            }
+            if (!release) {
+              release = (await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: tag,
+                draft: true,
+                generate_release_notes: true,
+              })).data;
+            }
+            const present = new Set(
+              (await github.rest.repos.listReleaseAssets({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                per_page: 100,
+              })).data.map(asset => asset.name)
+            );
+            for (const file of files) {
+              const name = path.basename(file);
+              if (present.has(name)) {
+                core.info(`${name} is already uploaded; a retry does not replace it`);
+                continue;
+              }
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                name,
+                data: fs.readFileSync(file),
+              });
+              core.info(`uploaded ${name}`);
+            }
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              draft: false,
+            });
+            core.info(`published ${tag}`);

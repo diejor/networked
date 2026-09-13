@@ -1,18 +1,9 @@
 [gd_scene format=3 uid="uid://bo5hexvshy77x"]
 
 [ext_resource type="Script" uid="uid://d3hydnehhflk" path="res://examples/quick_start/player.gd" id="1_kne1u"]
-[ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/nodes/tp/tp_component.gd" id="4_e80uo"]
-[ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
-[ext_resource type="Script" uid="uid://cwf8sf34fk0ib" path="res://addons/networked/nodes/input/move_input_component.gd" id="9_5h0xu"]
+[ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://examples/quick_start/tp_component.gd" id="4_e80uo"]
+[ext_resource type="Script" uid="uid://cwf8sf34fk0ib" path="res://examples/quick_start/move_input_component.gd" id="9_5h0xu"]
 [ext_resource type="Texture2D" uid="uid://b8cn2fun55jsg" path="res://assets/networked.png" id="9_u2lnn"]
-[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="9_wi0c6"]
-
-[sub_resource type="Resource" id="Resource_tdg3f"]
-script = ExtResource("5_cxr5p")
-scene_path = "uid://bqi7mvxdnvgch"
-node_path = "MultiplayerSpawner"
-
-[sub_resource type="NetwInterpolate" id="Resource_interp"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
 properties/0/path = NodePath(".:position")
@@ -49,16 +40,8 @@ speed = 256.0
 [node name="TPComponent" type="Node" parent="Components" unique_id=1784597384]
 unique_name_in_owner = true
 script = ExtResource("4_e80uo")
-starting_scene_path = SubResource("Resource_tdg3f")
+starting_scene = "res://examples/quick_start/Level1.tscn"
 metadata/_custom_type_script = "uid://c4gt8tvkmcals"
-
-[node name="MultiplayerInterpolator" type="Node" parent="Components" unique_id=616016356]
-script = ExtResource("9_wi0c6")
-visual_root = NodePath("../../Icon")
-property_interpolators = {
-&"position": SubResource("Resource_interp")
-}
-metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [node name="InputComponent" type="Node" parent="Components" unique_id=2127544558]
 unique_name_in_owner = true

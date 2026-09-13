@@ -1,0 +1,23 @@
+[gd_scene load_steps=4 format=3 uid="uid://c7rlwheelrktl"]
+
+[ext_resource type="Script" path="res://examples/rocket_league/scripts/wheel.gd" id="1_wheel"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_wheel"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wheel"]
+albedo_color = Color(0.0078223, 0.00212023, 0.00175743, 1)
+metallic = 0.18
+roughness = 0.67
+
+[node name="RayWheel" type="RayCast3D"]
+enabled = false
+hit_from_inside = true
+script = ExtResource("1_wheel")
+is_front_wheel = true
+
+[node name="Wheel" type="Node3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Wheel"]
+transform = Transform3D(-2.18557e-08, 0.1, -2.18557e-08, 0, -4.37114e-09, -0.5, -0.5, -4.37114e-09, 9.55343e-16, 0, 0, 0)
+mesh = SubResource("CylinderMesh_wheel")
+surface_material_override/0 = SubResource("StandardMaterial3D_wheel")

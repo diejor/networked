@@ -16,14 +16,13 @@ namespace netw {
 
 namespace {
 
-const char *SIG_BEFORE_TICK = "before_tick";
-const char *SIG_ON_TICK = "on_tick";
-const char *SIG_AFTER_TICK = "after_tick";
-const char *SIG_BEFORE_TICK_LOOP = "before_tick_loop";
-const char *SIG_AFTER_TICK_LOOP = "after_tick_loop";
+const char *SIG_CLOCK_BEFORE_TICK = "clock_before_tick";
+const char *SIG_CLOCK_ON_TICK = "clock_on_tick";
+const char *SIG_CLOCK_AFTER_TICK = "clock_after_tick";
+const char *SIG_CLOCK_BEFORE_TICK_LOOP = "clock_before_tick_loop";
+const char *SIG_CLOCK_AFTER_TICK_LOOP = "clock_after_tick_loop";
 const char *SIG_CLOCK_SYNCHRONIZED = "clock_synchronized";
-const char *SIG_STABILITY_CHANGED = "stability_changed";
-const char *SIG_DISPLAY_OFFSET_INSUFFICIENT = "display_offset_insufficient";
+const char *SIG_CLOCK_STABILITY_CHANGED = "clock_stability_changed";
 
 int physics_ticks_per_second() {
     const Engine *engine = Engine::get_singleton();
@@ -97,11 +96,7 @@ NETW_CLOCK_ACCESSOR(
 NETW_CLOCK_ACCESSOR(int, tick, tick)
 NETW_CLOCK_ACCESSOR(bool, synchronized, is_synchronized)
 NETW_CLOCK_ACCESSOR(bool, configured, configured)
-NETW_CLOCK_ACCESSOR(
-    bool,
-    use_physics_interpolation,
-    use_physics_interpolation
-)
+NETW_CLOCK_ACCESSOR(bool, use_physics_interpolation, use_physics_interpolation)
 NETW_CLOCK_ACCESSOR(double, tick_factor_override, tick_factor_override)
 
 #undef NETW_CLOCK_ACCESSOR
@@ -170,14 +165,13 @@ double ClockEngine::seconds_since_step() const {
     if (step_stamp_usec == NEVER_STAMPED) {
         return -1.0;
     }
-    return double(wall_usec() - step_stamp_usec) / 1'000'000.0;
+    return double(int64_t(wall_usec()) - step_stamp_usec) / 1'000'000.0;
 }
 
 void ClockEngine::mark_step(double seconds_ago) {
-    const uint64_t now = wall_usec();
-    const uint64_t back
-        = seconds_ago > 0.0 ? uint64_t(seconds_ago * 1'000'000.0) : 0;
-    step_stamp_usec = back < now ? now - back : NEVER_STAMPED + 1;
+    const int64_t back
+        = seconds_ago > 0.0 ? int64_t(seconds_ago * 1'000'000.0) : 0;
+    step_stamp_usec = int64_t(wall_usec()) - back;
 }
 
 double ClockEngine::rtt() const {
@@ -248,9 +242,9 @@ void ClockEngine::emit_tick() {
     NETW_ZONE_VALUE(tick);
     NETW_TICK_MARK();
     const double step = ticktime();
-    announce(SIG_BEFORE_TICK, step, tick);
-    announce(SIG_ON_TICK, step, tick);
-    announce(SIG_AFTER_TICK, step, tick);
+    announce(SIG_CLOCK_BEFORE_TICK, step, tick);
+    announce(SIG_CLOCK_ON_TICK, step, tick);
+    announce(SIG_CLOCK_AFTER_TICK, step, tick);
     tick += 1;
 }
 
@@ -322,23 +316,6 @@ bool ClockEngine::get_enable_drift_logging() const {
     return enable_drift_logging;
 }
 
-void ClockEngine::set_node_pumped(bool value) {
-    node_pumped = value;
-}
-
-bool ClockEngine::get_node_pumped() const {
-    return node_pumped;
-}
-
-void ClockEngine::poll_step() {
-    const double span = seconds_since_step();
-    if (node_pumped || manual_tick || !configured || span < 0.0) {
-        mark_step();
-        return;
-    }
-    physics_step(span);
-}
-
 void ClockEngine::count_poll() {
     polls += 1;
     if (cadence_started_usec == 0) {
@@ -361,11 +338,11 @@ Dictionary ClockEngine::cadence() const {
 }
 
 void ClockEngine::begin_tick_loop() {
-    announce(SIG_BEFORE_TICK_LOOP);
+    announce(SIG_CLOCK_BEFORE_TICK_LOOP);
 }
 
 void ClockEngine::end_tick_loop() {
-    announce(SIG_AFTER_TICK_LOOP);
+    announce(SIG_CLOCK_AFTER_TICK_LOOP);
 }
 
 void ClockEngine::resolve_simulation_gate(int ticks_this_frame) {
@@ -411,7 +388,7 @@ Dictionary ClockEngine::handle_pong(
     stats.record(sample, jitter_stability_threshold, jitter_window);
 
     if (stats.is_stable != was_stable) {
-        announce(SIG_STABILITY_CHANGED, stats.is_stable);
+        announce(SIG_CLOCK_STABILITY_CHANGED, stats.is_stable);
     }
 
     const double lead
@@ -421,7 +398,6 @@ Dictionary ClockEngine::handle_pong(
     const int pre_calibrate_diff = int(std::lround(target)) - tick;
 
     calibrate(target);
-    notify_display_offset();
 
     Dictionary metrics;
     metrics["rtt_raw"] = sample;
@@ -470,19 +446,6 @@ void ClockEngine::nudge_toward_estimate() {
     accumulator += divergence * step * stretch_nudge_factor;
 }
 
-void ClockEngine::notify_display_offset() {
-    const bool insufficient = recommended_display_offset() > display_offset;
-    if (insufficient && !display_offset_insufficient_latched) {
-        display_offset_insufficient_latched = true;
-        announce(
-            SIG_DISPLAY_OFFSET_INSUFFICIENT,
-            recommended_display_offset()
-        );
-    } else if (!insufficient && display_offset_insufficient_latched) {
-        display_offset_insufficient_latched = false;
-    }
-}
-
 bool ClockEngine::consume_ping_due(double delta) {
     ping_timer += delta;
     if (ping_timer >= ping_interval) {
@@ -500,11 +463,9 @@ void ClockEngine::clear() {
     accumulator = 0.0;
     target_tick_estimate = 0.0;
     ping_timer = 0.0;
-    display_offset_insufficient_latched = false;
     step_stamp_usec = NEVER_STAMPED;
     simulation_gates = 0;
     simulation_credit = 0;
-    node_pumped = false;
     physics_frames = 0;
     polls = 0;
     cadence_started_usec = 0;

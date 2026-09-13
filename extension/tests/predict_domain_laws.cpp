@@ -14,16 +14,17 @@ namespace TestNetwPredictDomain {
 
 using godot::Dictionary;
 using godot::StringName;
-using netw::NetwPredictionCore;
 using netw::predict::Domain;
 using netw::predict::Journal;
 using netw::predict::JournalOpen;
+
+namespace prediction_core = netw::prediction_core;
 
 constexpr int DOMAIN_IN = int(Domain::IN_DOMAIN);
 constexpr int DOMAIN_OUT = int(Domain::OUT_OF_DOMAIN);
 
 int declared_domain(int64_t p_label, int64_t p_window_until) {
-    return NetwPredictionCore::domain_of(true, false, p_label, p_window_until);
+    return prediction_core::domain_of(true, false, p_label, p_window_until);
 }
 
 Journal opened(int p_capacity, int64_t p_transition) {
@@ -39,7 +40,7 @@ TEST_CASE(
     "[Networked][Predict][Hosted] A contact covers its own transition and "
     "every tick of its cooldown"
 ) {
-    const int64_t until = NetwPredictionCore::window_after(10, 3, -1);
+    const int64_t until = prediction_core::window_after(10, 3, -1);
     for (int64_t label = 10; label <= 13; ++label) {
         CAPTURE(label);
         NETW_CHECK_EQ(declared_domain(label, until), DOMAIN_OUT);
@@ -48,8 +49,8 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Predict][Hosted] A later fact extends an open window") {
-    const int64_t first = NetwPredictionCore::window_after(10, 2, -1);
-    const int64_t extended = NetwPredictionCore::window_after(20, 2, first);
+    const int64_t first = prediction_core::window_after(10, 2, -1);
+    const int64_t extended = prediction_core::window_after(20, 2, first);
     NETW_CHECK_GT(extended, first);
     NETW_CHECK_EQ(declared_domain(21, extended), DOMAIN_OUT);
 }
@@ -63,8 +64,8 @@ TEST_CASE(
     Dictionary ground_high;
     ground_high[StringName("ground")] = 1.5;
     CHECK(
-        NetwPredictionCore::environment_digest(7, ground_low)
-        != NetwPredictionCore::environment_digest(7, ground_high)
+        prediction_core::environment_digest(7, ground_low)
+        != prediction_core::environment_digest(7, ground_high)
     );
 
     Dictionary forward;
@@ -74,8 +75,8 @@ TEST_CASE(
     swapped[StringName("a")] = 2.0;
     swapped[StringName("b")] = 1.0;
     CHECK(
-        NetwPredictionCore::environment_digest(0, forward)
-        != NetwPredictionCore::environment_digest(0, swapped)
+        prediction_core::environment_digest(0, forward)
+        != prediction_core::environment_digest(0, swapped)
     );
 }
 

@@ -1,0 +1,135 @@
+name: Deploy examples to Cloudflare Pages
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages-examples
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: "Resolve the source run"
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run-id: ${{ steps.source.outputs.run-id }}
+      sha: ${{ steps.source.outputs.sha }}
+      examples: ${{ steps.catalog.outputs.examples }}
+      branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/resolve-ci-run
+        id: source
+        with:
+          branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+      - name: Read The Published Set
+        id: catalog
+        run: python3 ci/export.py examples --format github
+
+  export:
+    name: "Export ${{ matrix.example.title }}"
+    needs: resolve
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.7
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        example: ${{ fromJson(needs.resolve.outputs.examples) }}
+    steps:
+      - name: Checkout The Resolved Revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - uses: ./.github/actions/export-web-demo
+        with:
+          scene: ${{ matrix.example.scene }}
+          out: build/web/${{ matrix.example.slug }}
+          run-id: ${{ needs.resolve.outputs.run-id }}
+          expect-sha: ${{ needs.resolve.outputs.sha }}
+          turn-auth-token: ${{ secrets.TURN_AUTH_TOKEN }}
+          record: build/${{ matrix.example.slug }}-export.json
+
+      - name: Stage The Export
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-${{ matrix.example.slug }}
+          path: build/web/${{ matrix.example.slug }}
+          retention-days: 1
+
+  deploy:
+    name: "Assemble the site and deploy"
+    needs: [resolve, export]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout The Resolved Revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Collect Every Export Into Its Subpath
+        uses: actions/download-artifact@v4
+        with:
+          pattern: site-*
+          path: build/staged
+
+      - name: Lay The Site Out
+        run: |
+          set -eu
+          rm -rf build/site
+          mkdir -p build/site
+          for staged in build/staged/site-*; do
+            slug="$(basename "$staged" | sed 's/^site-//')"
+            mv "$staged" "build/site/$slug"
+          done
+          find build/site -maxdepth 2 -type d | sort
+
+      - name: Write The Landing Page
+        run: python3 ci/export.py site --dir build/site --revision ${{ needs.resolve.outputs.sha }}
+
+      - name: Compress wasm (Brotli) and write Cloudflare headers
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends brotli
+          python3 ci/export.py cloudflare --dir build/site
+          cat build/site/_redirects
+
+      - name: Mount The Credential Function
+        run: |
+          set -eu
+          mkdir -p functions build/site/functions
+          cp ci/pages/functions/*.js functions/
+          cp ci/pages/functions/*.js build/site/functions/
+          ls -l functions
+          ls -l build/site/functions
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >
+            pages deploy build/site
+            --project-name=${{ vars.CF_EXAMPLES_PROJECT }}
+            --branch=${{ needs.resolve.outputs.branch }}

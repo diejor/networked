@@ -9,6 +9,8 @@ namespace netw::wire {
 
 struct FitCandidate {
     uint8_t channel_id = 0;
+    int peer = 0;
+    int64_t bytes = 0;
     int64_t payload_bits = 0;
     float priority = 1.0f;
     float accumulated_priority = 1.0f;
@@ -21,7 +23,6 @@ struct FitResult {
     int64_t total_bits = 0;
 };
 
-// Priority packing of frame candidates against MTU budget constants.
 class WireFitter {
 public:
     static FitResult fit(

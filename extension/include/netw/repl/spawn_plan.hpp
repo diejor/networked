@@ -8,10 +8,10 @@
 
 namespace netw::repl {
 
-enum class SpawnAction { SPAWN, RETAIN, DESPAWN };
+enum class SpawnAction { SPAWN, RETAIN, HIDE };
 
 struct LeaveDecision {
-    bool despawn = true;
+    bool hide = true;
     godot::Array custom;
 };
 

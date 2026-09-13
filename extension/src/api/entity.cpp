@@ -4,13 +4,16 @@
 #include "godot/multiplayer.hpp"
 #include "godot/object.hpp"
 #include "godot/utility.hpp"
-#include "netw/entity_control.hpp"
-#include "netw/entity_identity.hpp"
-#include "netw/entity_stage.hpp"
-#include "netw/log.hpp"
+#include "netw/api/interest_handle.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/prediction_handle.hpp"
+#include "netw/api/replication_core.hpp"
+#include "netw/entity/control.hpp"
+#include "netw/entity/identity.hpp"
+#include "netw/entity/stage.hpp"
+#include "netw/log.hpp"
 #include "netw/repl/set_model.hpp"
-#include "netw/api/synchronizers.hpp"
+#include "netw/synchronizers.hpp"
 
 using namespace godot;
 using namespace netw;
@@ -23,6 +26,7 @@ constexpr const char *SIG_SPAWNING = "spawning";
 constexpr const char *SIG_SPAWNED = "spawned";
 constexpr const char *SIG_DESPAWNING = "despawning";
 constexpr const char *SIG_DESPAWNED = "despawned";
+constexpr const char *SIG_HIDDEN = "hidden";
 constexpr const char *SIG_INTEREST_ENTER = "interest_enter";
 constexpr const char *SIG_INTEREST_EXIT = "interest_exit";
 constexpr const char *SIG_OBSERVER_ENTERED = "observer_entered";
@@ -32,26 +36,12 @@ constexpr const char *SIG_CONTROL_REQUESTED = "control_requested";
 constexpr const char *SIG_REPARENTED = "reparented";
 constexpr const char *SIG_VIEW_ACTIVATED = "view_activated";
 
-Callable &session_lookup() {
-    static Callable lookup;
-    return lookup;
-}
-
-Object *session_on_branch(Object *p_node) {
-    Node *node = Object::cast_to<Node>(p_node);
-    if (node == nullptr || !node->is_inside_tree()) {
+NetwMultiplayer *session_on_branch(Node *p_node) {
+    if (p_node == nullptr || !p_node->is_inside_tree()) {
         return nullptr;
     }
-    const Ref<MultiplayerAPI> api = node->get_multiplayer();
-    if (api.is_null()) {
-        return nullptr;
-    }
-    if (Object::cast_to<NetwMultiplayerCore>(api->get(StringName("_native_core"))
-        )
-        == nullptr) {
-        return nullptr;
-    }
-    return api.ptr();
+    const Ref<MultiplayerAPI> api = p_node->get_multiplayer();
+    return Object::cast_to<NetwMultiplayer>(api.ptr());
 }
 
 Ref<NetwEntity> as_entity(const Ref<RefCounted> &p_wrapper) {
@@ -60,148 +50,129 @@ Ref<NetwEntity> as_entity(const Ref<RefCounted> &p_wrapper) {
 
 } // namespace
 
-NetwEntity::NetwEntity() : record(memnew(NetwEntityRecord)) { }
+NetwEntity::NetwEntity() : record(memnew(NetwEntityRecord)) {
+}
 
-NetwEntity::~NetwEntity() { }
+NetwEntity::~NetwEntity() {
+    godot::memdelete(record);
+}
 
 StringName NetwEntity::meta_key() {
-    return NetwMultiplayerCore::wrapper_meta();
+    return NetwMultiplayer::wrapper_meta();
 }
 
 StringName NetwEntity::template_meta() {
     return NetwEntityRecord::template_meta();
 }
 
-void NetwEntity::set_session_lookup(const Callable &p_lookup) {
-    session_lookup() = p_lookup;
+Ref<NetwMultiplayer> NetwEntity::session_plane_for(Node *p_node) {
+    return Ref<NetwMultiplayer>(session_core_for(p_node));
 }
 
-Ref<NetwMultiplayerCore> NetwEntity::session_plane_for(Object *p_node) {
-    return Ref<NetwMultiplayerCore>(session_core_for(p_node));
-}
-
-NetwMultiplayerCore *NetwEntity::session_core_for(Object *p_node) {
-    Object *api = session_on_branch(p_node);
+NetwMultiplayer *NetwEntity::session_core_for(Node *p_node) {
+    NetwMultiplayer *api = session_on_branch(p_node);
     if (api != nullptr) {
-        return Object::cast_to<NetwMultiplayerCore>(
-            api->get(StringName("_native_core"))
-        );
+        return api;
     }
-    if (!session_lookup().is_valid()) {
-        return nullptr;
-    }
-    return Object::cast_to<NetwMultiplayerCore>(
-        session_lookup().call(p_node)
-    );
+    return NetwMultiplayer::of(p_node);
 }
 
-Ref<NetwEntity> NetwEntity::of(Object *p_node) {
-    return as_entity(NetwMultiplayerCore::wrapper_at(p_node));
+Ref<NetwEntity> NetwEntity::of(Node *p_node) {
+    return as_entity(NetwMultiplayer::wrapper_at(p_node));
 }
 
-Ref<NetwEntity> NetwEntity::ensure(Object *p_root) {
-    return as_entity(NetwMultiplayerCore::wrapper_ensure(p_root));
+Ref<NetwEntity> NetwEntity::ensure(Node *p_root) {
+    return as_entity(NetwMultiplayer::wrapper_ensure(p_root));
 }
 
-Ref<NetwEntity> NetwEntity::resolve(Object *p_node) {
-    return as_entity(NetwMultiplayerCore::wrapper_resolve(p_node));
+Ref<NetwEntity> NetwEntity::resolve(Node *p_node) {
+    return as_entity(NetwMultiplayer::wrapper_resolve(p_node));
 }
 
-Ref<NetwEntity> NetwEntity::from_rid(const RID &p_entity, Object *p_api) {
-    NetwMultiplayerCore *core = p_api == nullptr
-        ? nullptr
-        : Object::cast_to<NetwMultiplayerCore>(
-              p_api->get(StringName("_native_core"))
-          );
-    if (core == nullptr) {
+Ref<NetwEntity> NetwEntity::from_rid(
+    const RID &p_entity,
+    const Ref<NetwMultiplayer> &p_api
+) {
+    if (p_api.is_null()) {
         return Ref<NetwEntity>();
     }
-    return as_entity(core->wrapper_of(p_entity));
+    return as_entity(p_api->entity_get_view(p_entity));
 }
 
-Ref<NetwEntity> NetwEntity::by_route(int64_t p_route, Object *p_api) {
-    NetwMultiplayerCore *core = p_api == nullptr
-        ? nullptr
-        : Object::cast_to<NetwMultiplayerCore>(
-              p_api->get(StringName("_native_core"))
-          );
-    if (core == nullptr) {
+Ref<NetwEntity> NetwEntity::by_route(
+    int64_t p_route,
+    const Ref<NetwMultiplayer> &p_api
+) {
+    if (p_api.is_null()) {
         return Ref<NetwEntity>();
     }
-    return as_entity(core->wrapper_for_route(p_route));
+    return as_entity(p_api->wrapper_for_route(p_route));
 }
 
 StringName NetwEntity::parse_entity(const String &p_node_name) {
-    return EntityIdentity::parse_entity(p_node_name);
+    return entity::Identity::parse_entity(p_node_name);
 }
 
 int64_t NetwEntity::parse_peer(const String &p_node_name) {
-    return EntityIdentity::parse_peer(p_node_name);
+    return entity::Identity::parse_peer(p_node_name);
 }
 
-String NetwEntity::name_for(Object *p_join) {
-    if (p_join == nullptr) {
+String NetwEntity::name_for(const Ref<NetwParticipant> &p_participant) {
+    if (p_participant.is_null()) {
         return String();
     }
-    return EntityIdentity::format(
-        String(p_join->get(StringName("username"))),
-        int64_t(p_join->get(StringName("peer_id")))
+    return entity::Identity::format(
+        String(p_participant->get_username()),
+        p_participant->get_peer_id()
     );
 }
 
-Node *NetwEntity::find(Object *p_root, Object *p_join) {
-    Node *root = Object::cast_to<Node>(p_root);
-    if (root == nullptr || p_join == nullptr) {
+Node *NetwEntity::find(
+    Node *p_root,
+    const Ref<NetwParticipant> &p_participant
+) {
+    if (p_root == nullptr || p_participant.is_null()) {
         return nullptr;
     }
-    return root->get_node_or_null(NodePath(name_for(p_join)));
+    return p_root->get_node_or_null(NodePath(name_for(p_participant)));
 }
 
 Node *NetwEntity::bind(
-    Object *p_node,
+    Node *p_node,
     const StringName &p_entity_id,
     int64_t p_peer_id
 ) {
     return Object::cast_to<Node>(
-        NetwMultiplayerCore::wrapper_bind(p_node, p_entity_id, p_peer_id)
+        NetwMultiplayer::wrapper_bind(p_node, p_entity_id, p_peer_id)
     );
 }
 
 Node *NetwEntity::instantiate_from(
-    Object *p_template,
+    Node *p_template,
     const Callable &p_configure
 ) {
-    Object *api = session_on_branch(p_template);
-    if (api != nullptr) {
-        NetwMultiplayerCore *core = Object::cast_to<NetwMultiplayerCore>(
-            api->get(StringName("_native_core"))
-        );
-        if (core != nullptr) {
-            return core->entity_instantiate_from(p_template, p_configure);
-        }
+    NetwMultiplayer *core = session_on_branch(p_template);
+    if (core != nullptr) {
+        return core->entity_instantiate_from(p_template, p_configure);
     }
-    return NetwMultiplayerCore::entity_instantiate_copy(
-        p_template,
-        p_configure
-    );
+    return NetwMultiplayer::entity_instantiate_copy(p_template, p_configure);
 }
 
-void NetwEntity::attach_to(Object *p_root) {
-    Node *root = Object::cast_to<Node>(p_root);
-    if (root == nullptr) {
+void NetwEntity::attach_to(Node *p_root) {
+    if (p_root == nullptr) {
         return;
     }
-    owner_id = gd::instance_id(root);
-    root->set_meta(NetwMultiplayerCore::wrapper_meta(), this);
+    owner_id = gd::instance_id(p_root);
+    p_root->set_meta(NetwMultiplayer::wrapper_meta(), this);
     const Callable entered(this, StringName("_handle_tree_entered"));
-    if (!root->is_connected(StringName("tree_entered"), entered)) {
-        root->connect(StringName("tree_entered"), entered);
+    if (!p_root->is_connected(StringName("tree_entered"), entered)) {
+        p_root->connect(StringName("tree_entered"), entered);
     }
     const Callable exiting(this, StringName("_handle_tree_exiting"));
-    if (!root->is_connected(StringName("tree_exiting"), exiting)) {
-        root->connect(StringName("tree_exiting"), exiting);
+    if (!p_root->is_connected(StringName("tree_exiting"), exiting)) {
+        p_root->connect(StringName("tree_exiting"), exiting);
     }
-    if (root->is_inside_tree()) {
+    if (p_root->is_inside_tree()) {
         entered.call_deferred();
     }
 }
@@ -210,38 +181,28 @@ Node *NetwEntity::get_owner() const {
     return Object::cast_to<Node>(gd::object_of(owner_id));
 }
 
-void NetwEntity::set_owner(Object *p_owner) {
+void NetwEntity::set_owner(Node *p_owner) {
     owner_id = gd::instance_id(p_owner);
 }
 
-Ref<NetwEntityControl> NetwEntity::control() const {
+entity::Control *NetwEntity::control() const {
     return record->get_control();
 }
 
-Object *NetwEntity::session() const {
-    return gd::object_of(session_id);
+NetwMultiplayer *NetwEntity::session_core() const {
+    return Object::cast_to<NetwMultiplayer>(gd::object_of(session_id));
 }
 
-NetwMultiplayerCore *NetwEntity::session_core() const {
-    Object *api = session();
-    if (api == nullptr) {
-        return nullptr;
-    }
-    return Object::cast_to<NetwMultiplayerCore>(
-        api->get(StringName("_native_core"))
-    );
+Ref<MultiplayerAPI> NetwEntity::get_multiplayer() const {
+    return Ref<MultiplayerAPI>(session_core());
 }
 
-Variant NetwEntity::get_multiplayer() const {
-    return gd::held(session());
-}
-
-void NetwEntity::stamp_multiplayer(Object *p_api) {
-    if (p_api == nullptr) {
+void NetwEntity::stamp_multiplayer(const Ref<NetwMultiplayer> &p_api) {
+    if (p_api.is_null()) {
         return;
     }
-    Object *current = session();
-    if (current == p_api) {
+    NetwMultiplayer *current = session_core();
+    if (current == p_api.ptr()) {
         return;
     }
     NETW_ERR_COND(
@@ -249,7 +210,7 @@ void NetwEntity::stamp_multiplayer(Object *p_api) {
         sys::ENTITY,
         "multiplayer is immutable once stamped"
     );
-    session_id = gd::instance_id(p_api);
+    session_id = gd::instance_id(p_api.ptr());
 }
 
 StringName NetwEntity::get_entity_id() const {
@@ -349,13 +310,13 @@ bool NetwEntity::get_is_controlled_locally() const {
     return control()->controlled_by(local_peer(), get_peer_id());
 }
 
-Variant NetwEntity::get_controller_participant() const {
-    Object *api = session();
+Ref<NetwParticipant> NetwEntity::get_controller_participant() const {
+    NetwMultiplayer *core = session_core();
     const int64_t steering = get_controller();
-    if (api == nullptr || steering == 0) {
-        return Variant();
+    if (core == nullptr || steering == 0) {
+        return Ref<NetwParticipant>();
     }
-    return api->call(StringName("peer_get_participant"), steering);
+    return core->participant_of(steering);
 }
 
 int64_t NetwEntity::local_peer() const {
@@ -363,7 +324,7 @@ int64_t NetwEntity::local_peer() const {
     if (owner == nullptr) {
         return 0;
     }
-    Object *api = session();
+    NetwMultiplayer *api = session_core();
     Ref<MultiplayerAPI> resolved;
     if (api != nullptr) {
         resolved = Ref<MultiplayerAPI>(api);
@@ -384,12 +345,12 @@ bool NetwEntity::ensure_server_action(const StringName &p_action) {
     return false;
 }
 
-Object *NetwEntity::replication_plane() const {
-    Object *api = session();
-    if (api == nullptr) {
+ReplicationCore *NetwEntity::get_replication_plane() const {
+    NetwMultiplayer *core = session_core();
+    if (core == nullptr) {
         return nullptr;
     }
-    return gd::live_object(api->get(StringName("_replication")));
+    return core->get_replication_plane();
 }
 
 void NetwEntity::set_controller_internal(int64_t p_value) {
@@ -408,7 +369,7 @@ void NetwEntity::set_controller_internal(int64_t p_value) {
     if (!record->set_controller(this, p_value)) {
         return;
     }
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core == nullptr) {
         return;
     }
@@ -430,13 +391,24 @@ void NetwEntity::apply_control() {
     record->apply_control(this, get_owner(), get_is_authority());
 }
 
+int64_t NetwEntity::resolve_initial_controller() const {
+    const int64_t resolved = control()->resolve(get_peer_id());
+    if (resolved != 0) {
+        return resolved;
+    }
+    Node *owner = get_owner();
+    const int64_t claimed
+        = owner != nullptr ? int64_t(owner->get_multiplayer_authority()) : 1;
+    return claimed != 1 ? claimed : 0;
+}
+
 void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
     Node *owner = get_owner();
     if (owner == nullptr || !owner->is_inside_tree() || !get_is_authority()) {
         return;
     }
     switch (control()->disconnect_verdict(p_peer_id, get_peer_id())) {
-        case NetwEntityControl::DESPAWN_REPRESENTED: {
+        case entity::Control::DESPAWN_REPRESENTED: {
             NETW_INFO(
                 sys::ENTITY,
                 "peer %d disconnected, despawning represented entity '%s'",
@@ -445,10 +417,10 @@ void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
             );
             despawn(NetwDespawnOpts::create(StringName("peer_disconnected")));
         } break;
-        case NetwEntityControl::REVERT_TO_SERVER:
+        case entity::Control::REVERT_TO_SERVER:
             apply_control_change(0);
             break;
-        case NetwEntityControl::DESPAWN_CONTROLLER:
+        case entity::Control::DESPAWN_CONTROLLER:
             despawn(
                 NetwDespawnOpts::create(StringName("controller_disconnected"))
             );
@@ -459,10 +431,10 @@ void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
 }
 
 void NetwEntity::request_control() {
-    NetwMultiplayerCore::entity_request_control(
+    NetwMultiplayer::entity_wrapper_request_control(
         this,
         get_owner(),
-        replication_plane()
+        get_replication_plane()
     );
 }
 
@@ -497,7 +469,7 @@ void NetwEntity::_handle_control_request(int64_t p_sender) {
         requester = api->get_unique_id();
     }
     const int64_t granted = record->admit_control_request(this, requester);
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core != nullptr) {
         Dictionary detail;
         detail["requester"] = requester;
@@ -520,9 +492,9 @@ void NetwEntity::_handle_control_request(int64_t p_sender) {
 void NetwEntity::apply_control_change(int64_t p_peer) {
     set_controller_internal(p_peer);
     apply_control();
-    NetwMultiplayerCore::entity_broadcast_control(
+    NetwMultiplayer::entity_broadcast_control(
         this,
-        replication_plane(),
+        get_replication_plane(),
         p_peer
     );
 }
@@ -533,20 +505,20 @@ void NetwEntity::_handle_control_apply(int64_t p_peer) {
 }
 
 bool NetwEntity::get_is_authority() const {
-    Object *api = session();
+    NetwMultiplayer *api = session_core();
     if (api == nullptr) {
         return true;
     }
-    return bool(api->call(StringName("is_server")));
+    return api->is_server();
 }
 
-Variant NetwEntity::get_participant() const {
-    Object *api = session();
+Ref<NetwParticipant> NetwEntity::get_participant() const {
+    NetwMultiplayer *core = session_core();
     const int64_t represented = get_peer_id();
-    if (api == nullptr || represented == 0) {
-        return Variant();
+    if (core == nullptr || represented == 0) {
+        return Ref<NetwParticipant>();
     }
-    return api->call(StringName("peer_get_participant"), represented);
+    return core->participant_of(represented);
 }
 
 int64_t NetwEntity::get_ownership() const {
@@ -558,16 +530,8 @@ bool NetwEntity::get_is_player() const {
     return get_peer_id() != 0;
 }
 
-Ref<NetwReparentOpts> NetwEntity::get_reparenting() const {
-    return record->get_reparenting();
-}
-
-void NetwEntity::set_reparenting(const Ref<NetwReparentOpts> &p_opts) {
-    record->set_reparenting(p_opts);
-}
-
 bool NetwEntity::get_is_template() const {
-    return get_stage() == int64_t(EntityStage::TEMPLATE);
+    return get_stage() == int64_t(entity::Stage::TEMPLATE);
 }
 
 int64_t NetwEntity::get_stage() const {
@@ -579,7 +543,7 @@ Ref<NetwDespawnOpts> NetwEntity::get_active_despawn_opts() const {
 }
 
 void NetwEntity::note_stage(int64_t p_from) {
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core != nullptr) {
         core->entity_note_stage(record, p_from);
     }
@@ -597,25 +561,24 @@ void NetwEntity::mark_template() {
     note_stage(from);
 }
 
-void NetwEntity::arm(Object *p_api) {
+void NetwEntity::arm(const Ref<NetwMultiplayer> &p_api) {
     NETW_ERR_COND(
-        get_stage() != int64_t(EntityStage::UNBOUND),
+        get_stage() != int64_t(entity::Stage::UNBOUND),
         sys::ENTITY,
         "arm requires an unbound record"
     );
     stamp_multiplayer(p_api);
     if (!control()->get_configured()) {
-        set_controller_internal(control()->resolve(get_peer_id()));
+        set_controller_internal(resolve_initial_controller());
     }
     apply_control();
-    transition(int64_t(EntityStage::ARMED));
+    transition(int64_t(entity::Stage::ARMED));
 }
 
 void NetwEntity::linger_then_free(const Ref<NetwDespawnOpts> &p_opts) {
-    Object *api = session();
     Node *owner = get_owner();
-    NetwMultiplayerCore *core = session_core();
-    if (api == nullptr || core == nullptr) {
+    NetwMultiplayer *core = session_core();
+    if (core == nullptr) {
         record->deactivate(owner);
         if (owner != nullptr) {
             owner->queue_free();
@@ -625,17 +588,12 @@ void NetwEntity::linger_then_free(const Ref<NetwDespawnOpts> &p_opts) {
     core->entity_linger(
         record,
         owner,
-        int64_t(
-            api->call(
-                StringName("_linger_pumps"),
-                p_opts->get_linger_seconds()
-            )
-        )
+        core->linger_pumps(p_opts->get_linger_seconds())
     );
 }
 
 void NetwEntity::_go_live_if_armed() {
-    if (get_stage() != int64_t(EntityStage::ARMED)) {
+    if (get_stage() != int64_t(entity::Stage::ARMED)) {
         return;
     }
     Node *owner = get_owner();
@@ -651,10 +609,10 @@ void NetwEntity::_go_live_if_armed() {
 void NetwEntity::_handle_tree_entered() {
     owner_exiting_tree = false;
     Node *owner = get_owner();
-    if (session() == nullptr) {
+    if (session_core() == nullptr) {
         stamp_multiplayer(session_on_branch(owner));
     }
-    NetwMultiplayerCore::entity_enter_tree(
+    NetwMultiplayer::entity_enter_tree(
         this,
         owner,
         record,
@@ -663,33 +621,83 @@ void NetwEntity::_handle_tree_entered() {
     );
 }
 
-void NetwEntity::_on_identity_hydrated() {
-    Ref<RefCounted> map = record->part(NetwEntityRecord::PART_COMPONENTS, this);
-    if (map.is_null()) {
-        return;
-    }
-    map->call(StringName("hydrate"));
-    map->call(StringName("reconcile"));
-}
-
-void NetwEntity::_settle_emit_reparented(const Ref<NetwReparentOpts> &p_opts) {
-    NetwMultiplayerCore *core = session_core();
-    if (core == nullptr) {
-        Array bound;
-        bound.push_back(p_opts);
-        Callable(this, StringName("_do_emit_reparented")).bindv(bound)
-            .call_deferred();
-        return;
-    }
-    core->entity_settle_reparented(this, get_owner(), p_opts);
-}
-
-void NetwEntity::_do_emit_reparented(const Ref<NetwReparentOpts> &p_opts) {
+void NetwEntity::hydrate_components() {
     Node *owner = get_owner();
-    if (owner == nullptr || !owner->is_inside_tree()) {
-        return;
+    LocalVector<ObjectID> &registered = record->get_comp_registered();
+    PackedStringArray paths;
+    for (uint32_t at = 0; at < registered.size(); at++) {
+        Object *component = gd::object_of(registered[at]);
+        if (component == nullptr) {
+            continue;
+        }
+        const NodePath relative
+            = NetwMultiplayer::relative_path(owner, component);
+        if (!relative.is_empty()) {
+            paths.push_back(String(relative));
+        }
     }
-    emit_signal(SIG_REPARENTED, p_opts);
+    NetwCompTable &table = record->get_comp_table();
+    table.assign(paths);
+    table.set_table_hash(comp_structure_hash(table.sorted_paths()));
+    if (table.reconcile(get_is_authority())) {
+        NETW_WARN(
+            sys::ENTITY,
+            "component table hash mismatch on entity '%s': server=%d, "
+            "client=%d, so the table is poisoned",
+            String(get_entity_id()),
+            int(table.get_wire_hash()),
+            int(table.get_table_hash())
+        );
+    }
+    if (NetwMultiplayer *core = session_core()) {
+        core->sync_pipeline_recapture_entity(this);
+    }
+}
+
+int64_t NetwEntity::comp_structure_hash(
+    const PackedStringArray &p_paths
+) const {
+    String seed;
+    for (int at = 0; at < p_paths.size(); at++) {
+        seed += p_paths[at] + String(",");
+    }
+    seed += "|methods:";
+
+    LocalVector<Ref<Script>> scripts;
+    Node *owner = get_owner();
+    if (owner != nullptr) {
+        const Ref<Script> declared = owner->get_script();
+        if (declared.is_valid()) {
+            scripts.push_back(declared);
+        }
+    }
+    const LocalVector<ObjectID> &registered = record->get_comp_registered();
+    for (uint32_t at = 0; at < registered.size(); at++) {
+        Object *component = gd::object_of(registered[at]);
+        if (component == nullptr) {
+            continue;
+        }
+        const Ref<Script> declared = component->get_script();
+        if (declared.is_valid()) {
+            scripts.push_back(declared);
+        }
+    }
+
+    for (uint32_t at = 0; at < scripts.size(); at++) {
+        PackedStringArray methods;
+        gd::script_rpc_method_names(scripts[at], methods);
+        methods.sort();
+        seed += "|m:" + String("/").join(methods);
+
+        PackedStringArray properties;
+        PackedStringArray signals;
+        gd::script_property_and_signal_names(scripts[at], properties, signals);
+        properties.sort();
+        signals.sort();
+        seed += "|p:" + String("/").join(properties);
+        seed += "|s:" + String("/").join(signals);
+    }
+    return seed.hash() & 0xFFFF;
 }
 
 void NetwEntity::_on_owner_ready() {
@@ -697,65 +705,85 @@ void NetwEntity::_on_owner_ready() {
         return;
     }
     ready_once_fired = true;
+    if (get_controller() != 0) {
+        apply_control();
+    }
+    hydrate_components();
+    if (NetwMultiplayer *core = session_core()) {
+        core->predict_reconcile_declaration(this);
+    }
     emit_signal(SIG_SPAWNED);
-    emit_signal(SIG_REPARENTED, get_reparenting());
 }
 
 void NetwEntity::_handle_tree_exiting() {
     owner_exiting_tree = true;
+    if (NetwMultiplayer *core = session_core()) {
+        core->entity_capture_exit(this);
+        return;
+    }
     const int64_t from = get_stage();
-    record->finish_teardown(this);
+    record->complete_departure(this);
     note_stage(from);
 }
 
-Node *NetwEntity::spawn_under(Object *p_parent, const StringName &p_id) {
+Node *NetwEntity::spawn_under(Node *p_parent, const StringName &p_id) {
     if (!ensure_server_action(StringName("spawn_under"))) {
         return nullptr;
     }
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core != nullptr) {
         return core->entity_spawn_under(get_owner(), p_parent, p_id);
     }
-    return NetwMultiplayerCore::entity_spawn_copy_under(
+    return NetwMultiplayer::entity_spawn_copy_under(
         get_owner(),
         p_parent,
         p_id
     );
 }
 
-Node *NetwEntity::instantiate_player(Object *p_participant) {
+Node *NetwEntity::instantiate_player(
+    const Ref<NetwParticipant> &p_participant
+) {
     if (!ensure_server_action(StringName("instantiate_player"))) {
         return nullptr;
     }
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core == nullptr) {
         return nullptr;
     }
-    return core->entity_instantiate_player(get_owner(), p_participant);
+    return core->entity_instantiate_player(get_owner(), p_participant.ptr());
 }
 
-Node *NetwEntity::spawn_player(Object *p_participant, Object *p_scene) {
+Node *NetwEntity::spawn_player(
+    const Ref<NetwParticipant> &p_participant,
+    const Ref<NetwSceneHandle> &p_scene
+) {
     if (!ensure_server_action(StringName("spawn_player"))) {
         return nullptr;
     }
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core == nullptr) {
         return nullptr;
     }
-    return core->entity_spawn_player(get_owner(), p_participant, p_scene);
+    return core
+        ->entity_spawn_player(get_owner(), p_participant.ptr(), p_scene.ptr());
 }
 
 void NetwEntity::reparent_to(
-    Object *p_new_parent,
+    Node *p_new_parent,
     const Ref<NetwReparentOpts> &p_opts
 ) {
     if (!ensure_server_action(StringName("reparent_to"))) {
         return;
     }
     Node *owner = get_owner();
-    NETW_ERR_COND(owner == nullptr, sys::ENTITY, "reparent_to requires an owner");
     NETW_ERR_COND(
-        Object::cast_to<Node>(p_new_parent) == nullptr,
+        owner == nullptr,
+        sys::ENTITY,
+        "reparent_to requires an owner"
+    );
+    NETW_ERR_COND(
+        p_new_parent == nullptr,
         sys::ENTITY,
         "reparent_to requires a parent"
     );
@@ -763,9 +791,9 @@ void NetwEntity::reparent_to(
     if (opts.is_null()) {
         opts.instantiate();
     }
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core == nullptr) {
-        NetwMultiplayerCore::entity_move(record, owner, p_new_parent, opts);
+        NetwMultiplayer::entity_move(record, owner, p_new_parent, opts);
         return;
     }
     core->entity_reparent(record, owner, p_new_parent, opts);
@@ -786,9 +814,9 @@ void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
     }
     note_stage(from);
     if (opts->get_flush_save()) {
-        Object *engine = gd::live_object(get_persistence());
-        if (engine != nullptr) {
-            engine->call(StringName("flush"));
+        const Ref<NetwPersistenceEngine> engine = get_persistence();
+        if (engine.is_valid()) {
+            engine->flush(Array());
         }
     }
     if (owner == nullptr) {
@@ -798,7 +826,7 @@ void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
         owner->set_multiplayer_authority(1);
     }
     if (opts->get_linger()) {
-        transition(int64_t(EntityStage::LINGERING));
+        transition(int64_t(entity::Stage::LINGERING));
         linger_then_free(opts);
         return;
     }
@@ -822,52 +850,107 @@ void NetwEntity::_remote_despawn(
     }
     note_stage(from);
     if (opts->get_linger()) {
-        transition(int64_t(EntityStage::LINGERING));
+        transition(int64_t(entity::Stage::LINGERING));
     }
 }
 
-Variant NetwEntity::get_components() const {
-    return const_cast<NetwEntity *>(this)->record->part(
-        NetwEntityRecord::PART_COMPONENTS,
-        const_cast<NetwEntity *>(this)
+void NetwEntity::_remote_hide() {
+    emit_signal(SIG_HIDDEN);
+}
+
+NetwCompTable &NetwEntity::comp_table() {
+    return record->get_comp_table();
+}
+
+const NetwCompTable &NetwEntity::comp_table() const {
+    return record->get_comp_table();
+}
+
+bool NetwEntity::get_comps_poisoned() const {
+    return record->get_comp_table().get_poisoned();
+}
+
+bool NetwEntity::has_comp_path(const NodePath &p_path) const {
+    return record->get_comp_table().has_path(String(p_path));
+}
+
+Node *NetwEntity::comp_node_of(int64_t p_comp) const {
+    return record->get_comp_table().resolve_node(get_owner(), p_comp, String());
+}
+
+void NetwEntity::register_component(Node *p_component) {
+    Node *owner = get_owner();
+    if (p_component == nullptr || p_component == owner) {
+        return;
+    }
+    LocalVector<ObjectID> &registered = record->get_comp_registered();
+    const ObjectID id = gd::instance_id(p_component);
+    for (uint32_t at = 0; at < registered.size(); at++) {
+        if (registered[at] == id) {
+            return;
+        }
+    }
+    registered.push_back(id);
+    NETW_WARN_COND(
+        record->get_comp_table().get_table_hash() != 0,
+        sys::ENTITY,
+        "component '%s' registered after the table hydrated, so it is too "
+        "late to ride the spawn packet. Configure networked properties "
+        "inside _init()",
+        String(p_component->get_name())
     );
 }
 
-void NetwEntity::register_component(Object *p_component) {
-    Ref<RefCounted> map = record->part(NetwEntityRecord::PART_COMPONENTS, this);
-    if (map.is_valid()) {
-        map->call(StringName("register"), p_component);
-    }
+NodePath NetwEntity::relative_path(Node *p_source, Node *p_target) const {
+    return NetwMultiplayer::relative_path(p_source, p_target);
 }
 
-NodePath NetwEntity::relative_path(Object *p_source, Object *p_target) const {
-    return NetwMultiplayerCore::relative_path(p_source, p_target);
+int64_t NetwEntity::comp_of(Node *p_node) const {
+    Node *owner = get_owner();
+    if (p_node == nullptr || owner == nullptr || p_node == owner) {
+        return 0;
+    }
+    const NodePath rel = relative_path(owner, p_node);
+    const NetwCompTable &table = record->get_comp_table();
+    if (table.get_poisoned() || !table.has_path(String(rel))) {
+        return NetwCompTable::FALLBACK_COMP;
+    }
+    return table.id_for_path(String(rel));
+}
+
+String NetwEntity::comp_path_of(Node *p_node) const {
+    if (comp_of(p_node) != NetwCompTable::FALLBACK_COMP) {
+        return String();
+    }
+    return String(relative_path(get_owner(), p_node));
 }
 
 NodePath NetwEntity::property_path(
-    Object *p_source,
+    Node *p_source,
     const StringName &p_property,
-    Object *p_base
+    Node *p_base
 ) const {
-    return NetwMultiplayerCore::property_path(
+    return NetwMultiplayer::property_path(
         p_source,
         p_property,
         p_base != nullptr ? p_base : get_owner()
     );
 }
 
-Variant NetwEntity::get_persistence() const {
-    NetwMultiplayerCore *core = session_core();
+Ref<NetwPersistenceEngine> NetwEntity::get_persistence() const {
+    NetwMultiplayer *core = session_core();
     if (core == nullptr) {
-        return Variant();
+        return Ref<NetwPersistenceEngine>();
     }
     return core->persistence_engine_for(const_cast<NetwEntity *>(this));
 }
 
-Variant NetwEntity::derived_binding(int64_t p_record) const {
-    NetwMultiplayerCore *core = session_core();
+Ref<NetwPropertySetBinding> NetwEntity::derived_binding(
+    int64_t p_record
+) const {
+    NetwMultiplayer *core = session_core();
     if (core == nullptr) {
-        return Variant();
+        return Ref<NetwPropertySetBinding>();
     }
     return core->entity_derived_binding(
         get_owner(),
@@ -876,58 +959,60 @@ Variant NetwEntity::derived_binding(int64_t p_record) const {
     );
 }
 
-Variant NetwEntity::get_state_binding() const {
+Ref<NetwPropertySetBinding> NetwEntity::get_state_binding() const {
     return derived_binding(repl::SET_RECORD_STATE);
 }
 
-Variant NetwEntity::get_input_binding() const {
+Ref<NetwPropertySetBinding> NetwEntity::get_input_binding() const {
     return derived_binding(repl::SET_RECORD_INPUT);
 }
 
-Variant NetwEntity::get_broadcast_binding() const {
+Ref<NetwPropertySetBinding> NetwEntity::get_broadcast_binding() const {
     return derived_binding(repl::SET_RECORD_BROADCAST);
 }
 
-Variant NetwEntity::get_interest() const {
+Ref<NetwInterestHandle> NetwEntity::get_interest() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_INTEREST,
         const_cast<NetwEntity *>(this)
     );
 }
 
-Variant NetwEntity::own_scene() {
+Ref<NetwSceneHandle> NetwEntity::own_scene() {
     return record->part(NetwEntityRecord::PART_SCENE, this);
 }
 
-Variant NetwEntity::get_scene() const {
+Ref<NetwSceneHandle> NetwEntity::get_scene() const {
     NetwEntity *self = const_cast<NetwEntity *>(this);
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core == nullptr || get_owner() == nullptr) {
         return self->own_scene();
     }
     return core->entity_scene_facet(record, self);
 }
 
-Variant NetwEntity::get_prediction() const {
+Ref<NetwPredictionHandle> NetwEntity::get_prediction() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_PREDICTION,
         const_cast<NetwEntity *>(this)
     );
 }
 
-Variant NetwEntity::get_interpolation() const {
+Ref<NetwDisplayHandle> NetwEntity::get_interpolation() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_DISPLAY,
         const_cast<NetwEntity *>(this)
     );
 }
 
-Variant NetwEntity::get_timeline() const {
-    return gd::held(gd::object_of(timeline_id));
+Ref<NetwTimeline> NetwEntity::get_timeline() const {
+    return Ref<NetwTimeline>(
+        Object::cast_to<NetwTimeline>(gd::object_of(timeline_id))
+    );
 }
 
-void NetwEntity::set_timeline(Object *p_timeline) {
-    timeline_id = gd::instance_id(p_timeline);
+void NetwEntity::set_timeline(const Ref<NetwTimeline> &p_timeline) {
+    timeline_id = gd::instance_id(p_timeline.ptr());
 }
 
 TypedArray<MultiplayerSynchronizer> NetwEntity::synchronizers() {
@@ -939,7 +1024,7 @@ TypedArray<MultiplayerSynchronizer> NetwEntity::synchronizers() {
         return synchronizers_cache;
     }
     const TypedArray<MultiplayerSynchronizer> found
-        = NetwSynchronizers::of_node(owner);
+        = synchronizers::of_node(owner);
     if (!found.is_empty() || !owner_exiting_tree) {
         synchronizers_cache = found;
     }
@@ -949,9 +1034,9 @@ TypedArray<MultiplayerSynchronizer> NetwEntity::synchronizers() {
 
 bool NetwEntity::governs_property(
     const NodePath &p_real_path,
-    Object *p_exclude
+    Node *p_exclude
 ) const {
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core == nullptr) {
         return false;
     }
@@ -967,17 +1052,17 @@ void NetwEntity::invalidate_synchronizers_cache() {
     synchronizers_dirty = true;
     Node *owner = get_owner();
     if (owner != nullptr) {
-        NetwSynchronizers::clear_cache(owner);
+        synchronizers::clear_cache(owner);
     }
 }
 
 Ref<NetwEntity> NetwEntity::parent_entity() const {
-    NetwMultiplayerCore *core = session_core();
+    NetwMultiplayer *core = session_core();
     if (core == nullptr || get_owner() == nullptr) {
         return Ref<NetwEntity>();
     }
     return as_entity(
-        core->wrapper_of(core->entity_parent_of(record->get_handle()))
+        core->entity_get_view(core->entity_parent_of(record->get_handle()))
     );
 }
 
@@ -999,11 +1084,6 @@ void NetwEntity::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwEntity",
-        D_METHOD("set_session_lookup", "lookup"),
-        &NetwEntity::set_session_lookup
-    );
-    ClassDB::bind_static_method(
-        "NetwEntity",
         D_METHOD("of", "node"),
         &NetwEntity::of
     );
@@ -1011,11 +1091,6 @@ void NetwEntity::_bind_methods() {
         "NetwEntity",
         D_METHOD("ensure", "root"),
         &NetwEntity::ensure
-    );
-    ClassDB::bind_static_method(
-        "NetwEntity",
-        D_METHOD("resolve", "node"),
-        &NetwEntity::resolve
     );
     ClassDB::bind_static_method(
         "NetwEntity",
@@ -1039,7 +1114,7 @@ void NetwEntity::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwEntity",
-        D_METHOD("name_for", "join"),
+        D_METHOD("name_for", "participant"),
         &NetwEntity::name_for
     );
     ClassDB::bind_static_method(
@@ -1069,6 +1144,8 @@ void NetwEntity::_bind_methods() {
             Variant::OBJECT,
             "owner",
             PROPERTY_HINT_NODE_TYPE,
+            "Node",
+            PROPERTY_USAGE_DEFAULT,
             "Node"
         ),
         "set_owner",
@@ -1102,18 +1179,10 @@ void NetwEntity::_bind_methods() {
         D_METHOD("set_route", "route"),
         &NetwEntity::set_route
     );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "route"),
-        "set_route",
-        "get_route"
-    );
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "route"), "set_route", "get_route");
 
     ClassDB::bind_method(D_METHOD("get_rid"), &NetwEntity::get_rid_handle);
-    ClassDB::bind_method(
-        D_METHOD("set_rid", "rid"),
-        &NetwEntity::set_rid_handle
-    );
-    ADD_PROPERTY(PropertyInfo(Variant::RID, "rid"), "set_rid", "get_rid");
+    ADD_PROPERTY(PropertyInfo(Variant::RID, "rid"), "", "get_rid");
 
     ClassDB::bind_method(
         D_METHOD("get_multiplayer"),
@@ -1123,16 +1192,12 @@ void NetwEntity::_bind_methods() {
         PropertyInfo(
             Variant::OBJECT,
             "multiplayer",
-            PROPERTY_HINT_NONE,
-            "",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "MultiplayerAPI",
             PROPERTY_USAGE_NONE
         ),
         "",
         "get_multiplayer"
-    );
-    ClassDB::bind_method(
-        D_METHOD("_stamp_multiplayer", "api"),
-        &NetwEntity::stamp_multiplayer
     );
 
     ClassDB::bind_method(
@@ -1178,13 +1243,9 @@ void NetwEntity::_bind_methods() {
         D_METHOD("get_declares_scene"),
         &NetwEntity::get_declares_scene
     );
-    ClassDB::bind_method(
-        D_METHOD("set_declares_scene", "value"),
-        &NetwEntity::set_declares_scene
-    );
     ADD_PROPERTY(
         PropertyInfo(Variant::BOOL, "declares_scene"),
-        "set_declares_scene",
+        "",
         "get_declares_scene"
     );
 
@@ -1192,13 +1253,9 @@ void NetwEntity::_bind_methods() {
         D_METHOD("get_scene_label"),
         &NetwEntity::get_scene_label
     );
-    ClassDB::bind_method(
-        D_METHOD("set_scene_label", "value"),
-        &NetwEntity::set_scene_label
-    );
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING_NAME, "scene_label"),
-        "set_scene_label",
+        "",
         "get_scene_label"
     );
 
@@ -1206,17 +1263,16 @@ void NetwEntity::_bind_methods() {
         D_METHOD("get_scene_isolation"),
         &NetwEntity::get_scene_isolation
     );
-    ClassDB::bind_method(
-        D_METHOD("set_scene_isolation", "value"),
-        &NetwEntity::set_scene_isolation
-    );
     ADD_PROPERTY(
         PropertyInfo(Variant::INT, "scene_isolation"),
-        "set_scene_isolation",
+        "",
         "get_scene_isolation"
     );
 
-    ClassDB::bind_method(D_METHOD("get_controller"), &NetwEntity::get_controller);
+    ClassDB::bind_method(
+        D_METHOD("get_controller"),
+        &NetwEntity::get_controller
+    );
     ClassDB::bind_method(
         D_METHOD("set_controller", "value"),
         &NetwEntity::set_controller
@@ -1265,11 +1321,10 @@ void NetwEntity::_bind_methods() {
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "controller_participant",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwParticipant"
         ),
         "",
         "get_controller_participant"
@@ -1279,13 +1334,9 @@ void NetwEntity::_bind_methods() {
         D_METHOD("get_action_spawn_tick"),
         &NetwEntity::get_action_spawn_tick
     );
-    ClassDB::bind_method(
-        D_METHOD("set_action_spawn_tick", "tick"),
-        &NetwEntity::set_action_spawn_tick
-    );
     ADD_PROPERTY(
         PropertyInfo(Variant::INT, "action_spawn_tick"),
-        "set_action_spawn_tick",
+        "",
         "get_action_spawn_tick"
     );
 
@@ -1293,13 +1344,9 @@ void NetwEntity::_bind_methods() {
         D_METHOD("get_action_requester"),
         &NetwEntity::get_action_requester
     );
-    ClassDB::bind_method(
-        D_METHOD("set_action_requester", "peer"),
-        &NetwEntity::set_action_requester
-    );
     ADD_PROPERTY(
         PropertyInfo(Variant::INT, "action_requester"),
-        "set_action_requester",
+        "",
         "get_action_requester"
     );
 
@@ -1314,14 +1361,6 @@ void NetwEntity::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("revoke_control"),
         &NetwEntity::revoke_control
-    );
-    ClassDB::bind_method(
-        D_METHOD("_handle_control_request", "sender"),
-        &NetwEntity::_handle_control_request
-    );
-    ClassDB::bind_method(
-        D_METHOD("_handle_control_apply", "peer"),
-        &NetwEntity::_handle_control_apply
     );
 
     ClassDB::bind_method(
@@ -1346,11 +1385,10 @@ void NetwEntity::_bind_methods() {
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "participant",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwParticipant"
         ),
         "",
         "get_participant"
@@ -1380,25 +1418,6 @@ void NetwEntity::_bind_methods() {
         ),
         "",
         "get_is_player"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_reparenting"),
-        &NetwEntity::get_reparenting
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_reparenting", "opts"),
-        &NetwEntity::set_reparenting
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "reparenting",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwReparentOpts"
-        ),
-        "set_reparenting",
-        "get_reparenting"
     );
 
     ClassDB::bind_method(
@@ -1450,12 +1469,12 @@ void NetwEntity::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("arm", "api"),
         &NetwEntity::arm,
-        DEFVAL(Variant())
+        DEFVAL(Ref<NetwMultiplayer>())
     );
     ClassDB::bind_method(
         D_METHOD("spawn_under", "parent", "id"),
         &NetwEntity::spawn_under,
-        DEFVAL(Variant()),
+        DEFVAL((Node *)nullptr),
         DEFVAL(StringName())
     );
     ClassDB::bind_method(
@@ -1477,14 +1496,6 @@ void NetwEntity::_bind_methods() {
         DEFVAL(Ref<NetwDespawnOpts>())
     );
     ClassDB::bind_method(
-        D_METHOD("_remote_despawn", "reason", "linger_seconds"),
-        &NetwEntity::_remote_despawn
-    );
-    ClassDB::bind_method(
-        D_METHOD("_go_live_if_armed"),
-        &NetwEntity::_go_live_if_armed
-    );
-    ClassDB::bind_method(
         D_METHOD("_handle_tree_entered"),
         &NetwEntity::_handle_tree_entered
     );
@@ -1501,52 +1512,38 @@ void NetwEntity::_bind_methods() {
         &NetwEntity::_on_peer_disconnected
     );
     ClassDB::bind_method(
-        D_METHOD("_on_identity_hydrated"),
-        &NetwEntity::_on_identity_hydrated
-    );
-    ClassDB::bind_method(
-        D_METHOD("_settle_emit_reparented", "opts"),
-        &NetwEntity::_settle_emit_reparented
-    );
-    ClassDB::bind_method(
-        D_METHOD("_do_emit_reparented", "opts"),
-        &NetwEntity::_do_emit_reparented
-    );
-
-    ClassDB::bind_method(D_METHOD("get_components"), &NetwEntity::get_components);
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::NIL,
-            "components",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
-        ),
-        "",
-        "get_components"
-    );
-    ClassDB::bind_method(
         D_METHOD("register_component", "component"),
         &NetwEntity::register_component
     );
     ClassDB::bind_method(
-        D_METHOD("relative_path", "source", "target"),
-        &NetwEntity::relative_path
+        D_METHOD("comp_node_of", "comp"),
+        &NetwEntity::comp_node_of
     );
     ClassDB::bind_method(
-        D_METHOD("property_path", "source", "property", "base"),
-        &NetwEntity::property_path,
-        DEFVAL(Variant())
+        D_METHOD("get_comps_poisoned"),
+        &NetwEntity::get_comps_poisoned
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "comps_poisoned"),
+        "",
+        "get_comps_poisoned"
+    );
+    ClassDB::bind_method(D_METHOD("comp_of", "node"), &NetwEntity::comp_of);
+    ClassDB::bind_method(
+        D_METHOD("comp_path_of", "node"),
+        &NetwEntity::comp_path_of
     );
 
-    ClassDB::bind_method(D_METHOD("get_persistence"), &NetwEntity::get_persistence);
+    ClassDB::bind_method(
+        D_METHOD("get_persistence"),
+        &NetwEntity::get_persistence
+    );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "persistence",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwPersistenceEngine"
         ),
         "",
         "get_persistence"
@@ -1558,11 +1555,11 @@ void NetwEntity::_bind_methods() {
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "state_binding",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwPropertySetBinding",
+            PROPERTY_USAGE_NONE
         ),
         "",
         "get_state_binding"
@@ -1573,11 +1570,11 @@ void NetwEntity::_bind_methods() {
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "input_binding",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwPropertySetBinding",
+            PROPERTY_USAGE_NONE
         ),
         "",
         "get_input_binding"
@@ -1588,11 +1585,11 @@ void NetwEntity::_bind_methods() {
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "broadcast_binding",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwPropertySetBinding",
+            PROPERTY_USAGE_NONE
         ),
         "",
         "get_broadcast_binding"
@@ -1601,11 +1598,11 @@ void NetwEntity::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_interest"), &NetwEntity::get_interest);
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "interest",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwInterestHandle",
+            PROPERTY_USAGE_NONE
         ),
         "",
         "get_interest"
@@ -1613,23 +1610,26 @@ void NetwEntity::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_scene"), &NetwEntity::get_scene);
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "scene",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwSceneHandle",
+            PROPERTY_USAGE_NONE
         ),
         "",
         "get_scene"
     );
-    ClassDB::bind_method(D_METHOD("get_prediction"), &NetwEntity::get_prediction);
+    ClassDB::bind_method(
+        D_METHOD("get_prediction"),
+        &NetwEntity::get_prediction
+    );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "prediction",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwPredictionHandle",
+            PROPERTY_USAGE_NONE
         ),
         "",
         "get_prediction"
@@ -1640,11 +1640,11 @@ void NetwEntity::_bind_methods() {
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::NIL,
+            Variant::OBJECT,
             "interpolation",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NIL_IS_VARIANT
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwDisplayHandle",
+            PROPERTY_USAGE_NONE
         ),
         "",
         "get_interpolation"
@@ -1666,33 +1666,15 @@ void NetwEntity::_bind_methods() {
         "get_timeline"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("synchronizers"),
-        &NetwEntity::synchronizers
-    );
-    ClassDB::bind_method(
-        D_METHOD("governs_property", "real_path", "exclude"),
-        &NetwEntity::governs_property,
-        DEFVAL(Variant())
-    );
-    ClassDB::bind_method(
-        D_METHOD("invalidate_synchronizers_cache"),
-        &NetwEntity::invalidate_synchronizers_cache
-    );
-    ClassDB::bind_method(
-        D_METHOD("parent_entity"),
-        &NetwEntity::parent_entity
-    );
+    ClassDB::bind_method(D_METHOD("parent_entity"), &NetwEntity::parent_entity);
 
     ADD_SIGNAL(MethodInfo(SIG_SPAWNING));
     ADD_SIGNAL(MethodInfo(SIG_SPAWNED));
     ADD_SIGNAL(
-        MethodInfo(
-            SIG_DESPAWNING,
-            PropertyInfo(Variant::STRING_NAME, "reason")
-        )
+        MethodInfo(SIG_DESPAWNING, PropertyInfo(Variant::STRING_NAME, "reason"))
     );
     ADD_SIGNAL(MethodInfo(SIG_DESPAWNED));
+    ADD_SIGNAL(MethodInfo(SIG_HIDDEN));
     ADD_SIGNAL(
         MethodInfo(SIG_INTEREST_ENTER, PropertyInfo(Variant::INT, "peer_id"))
     );
@@ -1724,15 +1706,7 @@ void NetwEntity::_bind_methods() {
             "NetwControlRequest"
         )
     ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_REPARENTED,
-        PropertyInfo(
-            Variant::OBJECT,
-            "reparent",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwReparentOpts"
-        )
-    ));
+    ADD_SIGNAL(MethodInfo(SIG_REPARENTED));
     ADD_SIGNAL(MethodInfo(SIG_VIEW_ACTIVATED));
 
     ClassDB::bind_integer_constant(
@@ -1763,79 +1737,79 @@ void NetwEntity::_bind_methods() {
         get_class_static(),
         "InitialController",
         "INITIAL_SERVER",
-        int(InitialController::SERVER)
+        int(entity::Control::InitialController::SERVER)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "InitialController",
         "INITIAL_REPRESENTED_PEER",
-        int(InitialController::REPRESENTED_PEER)
+        int(entity::Control::InitialController::REPRESENTED_PEER)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Transfer",
         "TRANSFER_FIXED",
-        int(Transfer::FIXED)
+        int(entity::Control::Transfer::FIXED)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Transfer",
         "TRANSFER_REQUESTABLE",
-        int(Transfer::REQUESTABLE)
+        int(entity::Control::Transfer::REQUESTABLE)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "DisconnectRule",
         "DISCONNECT_REVERT_TO_SERVER",
-        int(DisconnectRule::REVERT_TO_SERVER)
+        int(entity::Control::DisconnectRule::REVERT_TO_SERVER)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "DisconnectRule",
         "DISCONNECT_DESPAWN",
-        int(DisconnectRule::DESPAWN)
+        int(entity::Control::DisconnectRule::DESPAWN)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Stage",
         "STAGE_UNBOUND",
-        int(EntityStage::UNBOUND)
+        int(entity::Stage::UNBOUND)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Stage",
         "STAGE_TEMPLATE",
-        int(EntityStage::TEMPLATE)
+        int(entity::Stage::TEMPLATE)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Stage",
         "STAGE_ARMED",
-        int(EntityStage::ARMED)
+        int(entity::Stage::ARMED)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Stage",
         "STAGE_LIVE",
-        int(EntityStage::LIVE)
+        int(entity::Stage::LIVE)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Stage",
         "STAGE_DESPAWNING",
-        int(EntityStage::DESPAWNING)
+        int(entity::Stage::DESPAWNING)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Stage",
         "STAGE_LINGERING",
-        int(EntityStage::LINGERING)
+        int(entity::Stage::LINGERING)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Stage",
         "STAGE_FREED",
-        int(EntityStage::FREED)
+        int(entity::Stage::FREED)
     );
 }
 

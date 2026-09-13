@@ -8,80 +8,205 @@ namespace netw {
 
 namespace {
 
-const NetwPredictStats::Fact FACTS[] = {
-    { "authoring_clamped", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_AUTHORING_CLAMPED, 0 },
-    { "speculation_held", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_SPECULATION_HELD, 0 },
-    { "quantum_steps", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_QUANTUM_STEPS, 0 },
-    { "quantum_declared", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_QUANTUM_DECLARED, 1 },
-    { "quantum_faults", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_QUANTUM_FAULTS, 0 },
-    { "corrections", NetwPredictStats::SOURCE_HELD, 0, 0 },
-    { "max_replay_depth", NetwPredictStats::SOURCE_HELD, 1, 0 },
-    { "consumed", NetwPredictStats::SOURCE_HELD, 2, 0 },
-    { "missing", NetwPredictStats::SOURCE_HELD, 3, 0 },
-    { "starved", NetwPredictStats::SOURCE_HELD, 4, 0 },
-    { "held", NetwPredictStats::SOURCE_HELD, 5, 0 },
-    { "folded", NetwPredictStats::SOURCE_HELD, 6, 0 },
-    { "drive_seq", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_DRIVE_SEQ, 0 },
-    { "last_drive_label", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_LAST_DRIVE_LABEL, -1 },
-    { "last_drive_kind", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_LAST_DRIVE_KIND, 0 },
-    { "tape_epoch", NetwPredictStats::SOURCE_HELD, 7, -1 },
-    { "tape_index", NetwPredictStats::SOURCE_HELD, 8, -1 },
-    { "tape_queue_depth", NetwPredictStats::SOURCE_HELD, 9, 0 },
-    { "resync", NetwPredictStats::SOURCE_HELD, 10, 0 },
-    { "skipped", NetwPredictStats::SOURCE_HELD, 11, 0 },
-    { "frames_dropped_invalid", NetwPredictStats::SOURCE_HELD, 12, 0 },
-    { "command_frames_sent", NetwPredictStats::SOURCE_HELD, 13, 0 },
-    { "command_frames_received", NetwPredictStats::SOURCE_HELD, 14, 0 },
-    { "command_queue_depth", NetwPredictStats::SOURCE_HELD, 15, 0 },
-    { "relayed_recorded", NetwPredictStats::SOURCE_HELD, 16, 0 },
-    { "relayed_dropped_late", NetwPredictStats::SOURCE_HELD, 17, 0 },
-    { "ack_confirmed", NetwPredictStats::SOURCE_HELD, 18, -1 },
-    { "ack_frontier", NetwPredictStats::SOURCE_HELD, 19, -1 },
-    { "journal_closed", NetwPredictStats::SOURCE_HELD, 20, -1 },
-    { "comparisons_ran", NetwPredictStats::SOURCE_HELD, 21, 0 },
-    { "comparisons_skipped", NetwPredictStats::SOURCE_HELD, 22, 0 },
-    { "substituted", NetwPredictStats::SOURCE_HELD, 23, 0 },
-    { "arrivals", NetwPredictStats::SOURCE_ARRIVALS, 0, 0 },
-    { "replay_depth", NetwPredictStats::SOURCE_REPLAY_DEPTH, 0, 0 },
-    { "consume_shape", NetwPredictStats::SOURCE_CONSUME_SHAPE, 0, 0 },
-    { "fp_verified", NetwPredictStats::SOURCE_HELD, 24, 0 },
-    { "fp_mismatches", NetwPredictStats::SOURCE_HELD, 25, 0 },
-    { "first_divergent_transition", NetwPredictStats::SOURCE_HELD, 26, -1 },
-    { "chain_breaks", NetwPredictStats::SOURCE_DRIVE,
-      NetwPredictionEngine::STAT_CHAIN_BREAKS, 0 },
-    { "client_fp_verified", NetwPredictStats::SOURCE_HELD, 27, 0 },
-    { "client_mismatches", NetwPredictStats::SOURCE_HELD, 28, 0 },
-    { "island_members", NetwPredictStats::SOURCE_ISLAND_MEMBERS, 0, 0 },
-    { "simulated_members", NetwPredictStats::SOURCE_SIMULATED_MEMBERS, 0, 0 },
-    { "joint_passes", NetwPredictStats::SOURCE_JOINT,
-      NetwPredictionEngine::STAT_JOINT_PASSES, 0 },
-    { "joint_depth", NetwPredictStats::SOURCE_JOINT_DEPTH, 0, 0 },
-    { "joint_floor", NetwPredictStats::SOURCE_JOINT,
-      NetwPredictionEngine::STAT_JOINT_FLOOR, -1 },
-    { "joint_present", NetwPredictStats::SOURCE_JOINT,
-      NetwPredictionEngine::STAT_JOINT_PRESENT, -1 },
-    { "joint_members", NetwPredictStats::SOURCE_JOINT,
-      NetwPredictionEngine::STAT_JOINT_MEMBERS, 0 },
-    { "cells_relayed", NetwPredictStats::SOURCE_JOINT,
-      NetwPredictionEngine::STAT_JOINT_CELLS_RELAYED, 0 },
-    { "cells_substituted", NetwPredictStats::SOURCE_JOINT,
-      NetwPredictionEngine::STAT_JOINT_CELLS_SUBSTITUTED, 0 },
-    { "floor_moves_by_source", NetwPredictStats::SOURCE_FLOOR_MOVES, 0, 0 },
-    { "heal_snaps", NetwPredictStats::SOURCE_JOINT,
-      NetwPredictionEngine::STAT_JOINT_HEAL_SNAPS, 0 },
-    { "linger_held", NetwPredictStats::SOURCE_HELD, 29, 0 },
+constexpr NetwPredictStats::Fact FACTS[] = {
+    {"authoring_clamped",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_AUTHORING_CLAMPED,
+     0},
+    {"speculation_held",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_SPECULATION_HELD,
+     0},
+    {"quantum_steps",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_QUANTUM_STEPS,
+     0},
+    {"quantum_declared",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_QUANTUM_DECLARED,
+     1},
+    {"quantum_faults",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_QUANTUM_FAULTS,
+     0},
+    {"corrections", NetwPredictStats::SOURCE_HELD, 0, 0},
+    {"max_replay_depth",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH,
+     0},
+    {"consumed", NetwPredictStats::SOURCE_HELD, 2, 0},
+    {"missing", NetwPredictStats::SOURCE_HELD, 3, 0},
+    {"starved", NetwPredictStats::SOURCE_HELD, 4, 0},
+    {"held", NetwPredictStats::SOURCE_HELD, 5, 0},
+    {"folded", NetwPredictStats::SOURCE_HELD, 6, 0},
+    {"drive_seq",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_DRIVE_SEQ,
+     0},
+    {"last_drive_label",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_LAST_DRIVE_LABEL,
+     -1},
+    {"last_drive_kind",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_LAST_DRIVE_KIND,
+     0},
+    {"tape_epoch", NetwPredictStats::SOURCE_HELD, 7, -1},
+    {"tape_index", NetwPredictStats::SOURCE_HELD, 8, -1},
+    {"tape_queue_depth", NetwPredictStats::SOURCE_HELD, 9, 0},
+    {"resync", NetwPredictStats::SOURCE_HELD, 10, 0},
+    {"skipped", NetwPredictStats::SOURCE_HELD, 11, 0},
+    {"frames_dropped_invalid", NetwPredictStats::SOURCE_HELD, 12, 0},
+    {"command_frames_sent", NetwPredictStats::SOURCE_HELD, 13, 0},
+    {"command_frames_received", NetwPredictStats::SOURCE_HELD, 14, 0},
+    {"command_queue_depth", NetwPredictStats::SOURCE_HELD, 15, 0},
+    {"relayed_recorded", NetwPredictStats::SOURCE_HELD, 16, 0},
+    {"relayed_dropped_late", NetwPredictStats::SOURCE_HELD, 17, 0},
+    {"ack_confirmed", NetwPredictStats::SOURCE_HELD, 18, -1},
+    {"ack_frontier", NetwPredictStats::SOURCE_HELD, 19, -1},
+    {"journal_closed", NetwPredictStats::SOURCE_HELD, 20, -1},
+    {"comparisons_ran",
+     NetwPredictStats::SOURCE_COMPARE,
+     NetwPredictionEngine::STAT_COMPARISONS_RAN,
+     0},
+    {"comparisons_skipped",
+     NetwPredictStats::SOURCE_COMPARE,
+     NetwPredictionEngine::STAT_COMPARISONS_SKIPPED,
+     0},
+    {"substituted", NetwPredictStats::SOURCE_HELD, 23, 0},
+    {"arrivals", NetwPredictStats::SOURCE_ARRIVALS, 0, 0},
+    {"replay_depth", NetwPredictStats::SOURCE_REPLAY_DEPTH, 0, 0},
+    {"consume_shape", NetwPredictStats::SOURCE_CONSUME_SHAPE, 0, 0},
+    {"fp_verified",
+     NetwPredictStats::SOURCE_COMPARE,
+     NetwPredictionEngine::STAT_FP_VERIFIED,
+     0},
+    {"fp_mismatches",
+     NetwPredictStats::SOURCE_COMPARE,
+     NetwPredictionEngine::STAT_FP_MISMATCHES,
+     0},
+    {"first_divergent_transition",
+     NetwPredictStats::SOURCE_COMPARE,
+     NetwPredictionEngine::STAT_FIRST_DIVERGENT_TRANSITION,
+     -1},
+    {"chain_breaks",
+     NetwPredictStats::SOURCE_DRIVE,
+     NetwPredictionEngine::STAT_CHAIN_BREAKS,
+     0},
+    {"client_fp_verified", NetwPredictStats::SOURCE_HELD, 27, 0},
+    {"client_mismatches", NetwPredictStats::SOURCE_HELD, 28, 0},
+    {"island_members", NetwPredictStats::SOURCE_ISLAND_MEMBERS, 0, 0},
+    {"simulated_members", NetwPredictStats::SOURCE_SIMULATED_MEMBERS, 0, 0},
+    {"joint_passes",
+     NetwPredictStats::SOURCE_JOINT,
+     NetwPredictionEngine::STAT_JOINT_PASSES,
+     0},
+    {"joint_depth", NetwPredictStats::SOURCE_JOINT_DEPTH, 0, 0},
+    {"joint_floor",
+     NetwPredictStats::SOURCE_JOINT,
+     NetwPredictionEngine::STAT_JOINT_FLOOR,
+     -1},
+    {"joint_present",
+     NetwPredictStats::SOURCE_JOINT,
+     NetwPredictionEngine::STAT_JOINT_PRESENT,
+     -1},
+    {"joint_members",
+     NetwPredictStats::SOURCE_JOINT,
+     NetwPredictionEngine::STAT_JOINT_MEMBERS,
+     0},
+    {"cells_relayed",
+     NetwPredictStats::SOURCE_JOINT,
+     NetwPredictionEngine::STAT_JOINT_CELLS_RELAYED,
+     0},
+    {"cells_substituted",
+     NetwPredictStats::SOURCE_JOINT,
+     NetwPredictionEngine::STAT_JOINT_CELLS_SUBSTITUTED,
+     0},
+    {"floor_moves_by_source", NetwPredictStats::SOURCE_FLOOR_MOVES, 0, 0},
+    {"heal_snaps",
+     NetwPredictStats::SOURCE_JOINT,
+     NetwPredictionEngine::STAT_JOINT_HEAL_SNAPS,
+     0},
+    {"linger_held", NetwPredictStats::SOURCE_HELD, 29, 0},
 };
 
 constexpr int FACT_COUNT = int(sizeof(FACTS) / sizeof(FACTS[0]));
 constexpr int HELD_COUNT = 30;
+
+constexpr bool fact_named(int p_at, const char *p_name) {
+    const char *held = FACTS[p_at].name;
+    while (*held == *p_name) {
+        if (*held == '\0') {
+            return true;
+        }
+        ++held;
+        ++p_name;
+    }
+    return false;
+}
+
+static_assert(
+    fact_named(NetwPredictStats::FACT_QUANTUM_STEPS, "quantum_steps")
+);
+static_assert(fact_named(NetwPredictStats::FACT_CONSUMED, "consumed"));
+static_assert(fact_named(NetwPredictStats::FACT_MISSING, "missing"));
+static_assert(fact_named(NetwPredictStats::FACT_STARVED, "starved"));
+static_assert(fact_named(NetwPredictStats::FACT_HELD, "held"));
+static_assert(fact_named(NetwPredictStats::FACT_DRIVE_SEQ, "drive_seq"));
+static_assert(
+    fact_named(NetwPredictStats::FACT_LAST_DRIVE_LABEL, "last_drive_label")
+);
+static_assert(
+    fact_named(NetwPredictStats::FACT_ACK_CONFIRMED, "ack_confirmed")
+);
+static_assert(fact_named(NetwPredictStats::FACT_SUBSTITUTED, "substituted"));
+static_assert(fact_named(NetwPredictStats::FACT_ARRIVALS, "arrivals"));
+static_assert(fact_named(NetwPredictStats::FACT_REPLAY_DEPTH, "replay_depth"));
+static_assert(
+    fact_named(NetwPredictStats::FACT_CONSUME_SHAPE, "consume_shape")
+);
+static_assert(fact_named(NetwPredictStats::FACT_JOINT_DEPTH, "joint_depth"));
+static_assert(fact_named(NetwPredictStats::FACT_LINGER_HELD, "linger_held"));
+static_assert(fact_named(NetwPredictStats::FACT_TAPE_EPOCH, "tape_epoch"));
+static_assert(fact_named(NetwPredictStats::FACT_TAPE_INDEX, "tape_index"));
+static_assert(
+    fact_named(NetwPredictStats::FACT_TAPE_QUEUE_DEPTH, "tape_queue_depth")
+);
+static_assert(fact_named(NetwPredictStats::FACT_RESYNC, "resync"));
+static_assert(fact_named(NetwPredictStats::FACT_SKIPPED, "skipped"));
+static_assert(fact_named(
+    NetwPredictStats::FACT_FRAMES_DROPPED_INVALID,
+    "frames_dropped_invalid"
+));
+static_assert(fact_named(
+    NetwPredictStats::FACT_COMMAND_FRAMES_SENT,
+    "command_frames_sent"
+));
+static_assert(fact_named(
+    NetwPredictStats::FACT_COMMAND_FRAMES_RECEIVED,
+    "command_frames_received"
+));
+static_assert(fact_named(
+    NetwPredictStats::FACT_COMMAND_QUEUE_DEPTH,
+    "command_queue_depth"
+));
+static_assert(
+    fact_named(NetwPredictStats::FACT_RELAYED_RECORDED, "relayed_recorded")
+);
+static_assert(fact_named(
+    NetwPredictStats::FACT_RELAYED_DROPPED_LATE,
+    "relayed_dropped_late"
+));
+static_assert(fact_named(NetwPredictStats::FACT_ACK_FRONTIER, "ack_frontier"));
+static_assert(
+    fact_named(NetwPredictStats::FACT_JOURNAL_CLOSED, "journal_closed")
+);
+static_assert(
+    fact_named(NetwPredictStats::FACT_CLIENT_FP_VERIFIED, "client_fp_verified")
+);
+static_assert(
+    fact_named(NetwPredictStats::FACT_CLIENT_MISMATCHES, "client_mismatches")
+);
 
 } // namespace
 
@@ -105,15 +230,15 @@ NetwPredictStats::NetwPredictStats() {
 }
 
 void NetwPredictStats::bind_slot(
-    const Ref<NetwPredictionEngine> &p_pool,
-    const Ref<RefCounted> &p_entity
+    NetwPredictionEngine *p_pool,
+    const Ref<NetwEntity> &p_entity
 ) {
     pool = p_pool;
     entity = p_entity;
 }
 
 int64_t NetwPredictStats::slot() const {
-    if (pool.is_null() || entity.is_null()) {
+    if (pool == nullptr || entity.is_null()) {
         return -1;
     }
     return pool->slot_of(entity);
@@ -299,10 +424,6 @@ Dictionary NetwPredictStats::to_dictionary() const {
 }
 
 void NetwPredictStats::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("bind_slot", "pool", "entity"),
-        &NetwPredictStats::bind_slot
-    );
     ClassDB::bind_method(
         D_METHOD("to_dictionary"),
         &NetwPredictStats::to_dictionary

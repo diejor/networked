@@ -4,7 +4,7 @@
 
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/bit_buffer.hpp"
+#include "netw/wire/stream.hpp"
 
 namespace netw::wire {
 
@@ -31,14 +31,13 @@ godot::PackedByteArray frame_pack(
     const godot::String &p_path
 );
 
-bool frame_unpack_next(
-    const godot::Ref<NetwBitBufferReader> &p_reader,
-    Frame &r_frame
-);
+bool frame_unpack_next(ReadStream &p_stream, Frame &r_frame);
 
 FrameWalk frame_unpack_all(
     const godot::PackedByteArray &p_framed,
     int64_t p_from
 );
+
+godot::Dictionary frame_spec_records();
 
 } // namespace netw::wire

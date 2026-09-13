@@ -53,8 +53,9 @@ TEST_CASE(
     NETW_CHECK_EQ(result.packed.size(), 1);
     NETW_CHECK_EQ(result.deferred.size(), 1);
 
-    CHECK(result.deferred[0].accumulated_priority
-          > result.deferred[0].priority);
+    CHECK(
+        result.deferred[0].accumulated_priority > result.deferred[0].priority
+    );
 }
 
 TEST_CASE(
@@ -125,9 +126,7 @@ TEST_CASE(
     }
 }
 
-TEST_CASE(
-    "[Networked][Wire][Hosted] one offer answers the same way twice"
-) {
+TEST_CASE("[Networked][Wire][Hosted] one offer answers the same way twice") {
     const WireRegistry registry = fitted_registry();
     LocalVector<FitCandidate> first;
     LocalVector<FitCandidate> second;

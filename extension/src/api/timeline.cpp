@@ -119,10 +119,7 @@ void NetwTimeline::_bind_methods() {
         D_METHOD("record_input", "tick", "snapshot"),
         &NetwTimeline::record_input
     );
-    ClassDB::bind_method(
-        D_METHOD("state_at", "tick"),
-        &NetwTimeline::state_at
-    );
+    ClassDB::bind_method(D_METHOD("state_at", "tick"), &NetwTimeline::state_at);
     ClassDB::bind_method(
         D_METHOD("latest_state_at_or_before", "tick"),
         &NetwTimeline::latest_state_at_or_before
@@ -131,10 +128,7 @@ void NetwTimeline::_bind_methods() {
         D_METHOD("latest_state_tick_at_or_before", "tick"),
         &NetwTimeline::latest_state_tick_at_or_before
     );
-    ClassDB::bind_method(
-        D_METHOD("input_at", "tick"),
-        &NetwTimeline::input_at
-    );
+    ClassDB::bind_method(D_METHOD("input_at", "tick"), &NetwTimeline::input_at);
     ClassDB::bind_method(
         D_METHOD("has_input_at", "tick"),
         &NetwTimeline::has_input_at

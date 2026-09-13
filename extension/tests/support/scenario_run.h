@@ -287,13 +287,13 @@ inline void ScenarioRun::drive(int p_tick, Plant p_plant) {
     for (int at = 0; at < tracks.size(); ++at) {
         Track &track = rows[at];
         const godot::Ref<netw::NetwPredictFold> fold
-            = netw::NetwPredictionCore::predict_fold(
+            = netw::prediction_core::predict_fold(
                 track.latest_input_tick,
                 track.last_driven_input_tick,
                 p_tick
             );
-        const bool fresh = p_plant == PLANT_DRIVE_EVERY_TICK
-            || fold->kind() == DRIVE_FRESH;
+        const bool fresh
+            = p_plant == PLANT_DRIVE_EVERY_TICK || fold->kind() == DRIVE_FRESH;
         if (fresh) {
             track.last_driven_input_tick = track.latest_input_tick;
             track.lane.lane_consumed += 1;
@@ -318,10 +318,10 @@ inline void ScenarioRun::judge(int p_tick, Plant p_plant) {
         const godot::Dictionary wiring = wiring_for(ran, track.field);
 
         const int domain
-            = netw::NetwPredictionCore::domain_of(true, false, p_tick, -1);
+            = netw::prediction_core::domain_of(true, false, p_tick, -1);
         godot::Dictionary pose_errors;
         const godot::Ref<netw::NetwPredictJudgement> judgement
-            = netw::NetwPredictionCore::evaluate(
+            = netw::prediction_core::evaluate(
                 domain,
                 VERDICT_UNJUDGED,
                 predicted,
@@ -339,7 +339,7 @@ inline void ScenarioRun::judge(int p_tick, Plant p_plant) {
         godot::Dictionary verdict;
         verdict[godot::StringName("domain")] = domain;
         const godot::Ref<netw::NetwPredictRecovery> plan
-            = netw::NetwPredictionCore::recover(
+            = netw::prediction_core::recover(
                 payload,
                 POLICY_RECOVER,
                 CORRECTION_SNAP,
@@ -355,7 +355,7 @@ inline void ScenarioRun::judge(int p_tick, Plant p_plant) {
         const double gap = track.authority.x - track.predicted.x;
         const int sign = gap > 0.0 ? 1 : (gap < 0.0 ? -1 : 0);
         const godot::Dictionary escalation
-            = netw::NetwPredictionCore::escalation_after(
+            = netw::prediction_core::escalation_after(
                 track.streak,
                 track.last_sign,
                 track.last_divergence,
@@ -389,9 +389,7 @@ inline int32_t ScenarioRun::stamp(const godot::Vector2 &p_value) {
     );
 }
 
-inline godot::Vector2 ScenarioRun::motion_of(
-    const godot::Variant &p_command
-) {
+inline godot::Vector2 ScenarioRun::motion_of(const godot::Variant &p_command) {
     if (p_command.get_type() == godot::Variant::VECTOR2) {
         return godot::Vector2(p_command);
     }
@@ -401,9 +399,8 @@ inline godot::Vector2 ScenarioRun::motion_of(
     const godot::Dictionary command = p_command;
     const godot::Variant motion
         = command.get(godot::StringName("motion"), godot::Vector2());
-    return motion.get_type() == godot::Variant::VECTOR2
-        ? godot::Vector2(motion)
-        : godot::Vector2();
+    return motion.get_type() == godot::Variant::VECTOR2 ? godot::Vector2(motion)
+                                                        : godot::Vector2();
 }
 
 inline void ScenarioRun::seed_tracks(const Scenario &p_scenario) {
@@ -448,8 +445,8 @@ inline void ScenarioRun::settle_regime(const Scenario &p_scenario) {
                 && tracks[at].lane.drives() > 0;
         }
     }
-    reached_regime = p_scenario.run_ticks > p_scenario.warmup_ticks
-        && evidenced && disturbed;
+    reached_regime = p_scenario.run_ticks > p_scenario.warmup_ticks && evidenced
+        && disturbed;
 
     Track *rows = tracks.ptrw();
     for (int at = 0; at < tracks.size(); ++at) {
@@ -664,29 +661,26 @@ inline ScenarioRun ScenarioRun::session(
         const godot::StringName &name = run.tracks[index].name;
         const int client = run.tracks[index].client;
         godot::Object *handle = p_rig.prediction_handle(name, client);
-        godot::Object *owner_api
+        netw::NetwMultiplayer *owner_api
             = client < 0 ? p_rig.server() : p_rig.client(client);
         if (p_plant == PLANT_NO_RECOVER) {
-            owner_api->call(
-                "predict_set_param",
+            owner_api->predict_set_param(
                 p_rig.entity_of(name, client),
-                3,
+                netw::NetwMultiplayer::PREDICT_PARAM_RECOVERY_POLICY,
                 3
             );
         }
         if (p_plant == PLANT_UNBUFFERED) {
-            p_rig.server()->call(
-                "predict_set_param",
+            p_rig.server()->predict_set_param(
                 p_rig.entity_of(name),
-                14,
+                netw::NetwMultiplayer::PREDICT_PARAM_REPLAY_BUFFER_DEPTH,
                 0
             );
         }
         if (p_plant == PLANT_REPLAY_UNDER_SNAP) {
-            owner_api->call(
-                "predict_set_param",
+            owner_api->predict_set_param(
                 p_rig.entity_of(name, client),
-                5,
+                netw::NetwMultiplayer::PREDICT_PARAM_CORRECTION_MODE,
                 int(netw::CorrectionMode::REPLAY)
             );
         }
@@ -707,15 +701,10 @@ inline ScenarioRun ScenarioRun::session(
     for (int tick = 1; tick <= p_scenario.run_ticks; ++tick) {
         Track *tick_tracks = run.tracks.ptrw();
         for (int at = 0; at < run.tracks.size(); ++at) {
-            Carrier *owner = godot::Object::cast_to<Carrier>(
-                p_rig.node_of(
-                    p_rig.entity_of(
-                        tick_tracks[at].name,
-                        tick_tracks[at].client
-                    ),
-                    tick_tracks[at].client
-                )
-            );
+            Carrier *owner = godot::Object::cast_to<Carrier>(p_rig.node_of(
+                p_rig.entity_of(tick_tracks[at].name, tick_tracks[at].client),
+                tick_tracks[at].client
+            ));
             REQUIRE_MESSAGE(owner != nullptr, "prediction needs a carrier");
             if (owner != nullptr) {
                 owner->set("motion", tick_tracks[at].input);
@@ -795,8 +784,7 @@ inline ScenarioRun ScenarioRun::session(
             int frame_tick_count = tick <= p_scenario.frame_ticks.size()
                 ? p_scenario.frame_ticks[tick - 1]
                 : 0;
-            if (p_plant == PLANT_DRIVE_HELD_FRAME
-                && frame_tick_count == 0) {
+            if (p_plant == PLANT_DRIVE_HELD_FRAME && frame_tick_count == 0) {
                 frame_tick_count = 1;
             }
             int authority_tick_count = frame_tick_count;
@@ -815,20 +803,16 @@ inline ScenarioRun ScenarioRun::session(
                 || p_plant == PLANT_LOCKSTEP_AUTHORITY) {
                 p_rig.step_frame(frame_tick_count);
             } else {
-                p_rig.step_split_frame(
-                    frame_tick_count,
-                    authority_tick_count
-                );
+                p_rig.step_split_frame(frame_tick_count, authority_tick_count);
             }
         }
         for (int at = 0; at < run.tracks.size(); ++at) {
             Track &track = tick_tracks[at];
-            Carrier *client_owner = godot::Object::cast_to<Carrier>(
-                p_rig.node_of(
+            Carrier *client_owner
+                = godot::Object::cast_to<Carrier>(p_rig.node_of(
                     p_rig.entity_of(track.name, track.client),
                     track.client
-                )
-            );
+                ));
             Carrier *server_owner = godot::Object::cast_to<Carrier>(
                 p_rig.node_of(p_rig.entity_of(track.name))
             );
@@ -848,13 +832,16 @@ inline ScenarioRun ScenarioRun::session(
     ScenarioRun::Track *tracks = run.tracks.ptrw();
     for (int index = 0; index < run.tracks.size(); ++index) {
         Track &track = tracks[index];
-        godot::Object *client_handle
+        netw::NetwPredictionHandle *client_handle
             = p_rig.prediction_handle(track.name, track.client);
-        godot::Object *server_handle = p_rig.prediction_handle(track.name);
-        godot::Object *client_stats = client_handle->get("stats");
-        godot::Object *server_stats = server_handle->get("stats");
-        REQUIRE(client_stats != nullptr);
-        REQUIRE(server_stats != nullptr);
+        netw::NetwPredictionHandle *server_handle
+            = p_rig.prediction_handle(track.name);
+        const godot::Ref<netw::NetwPredictStats> client_stats
+            = client_handle->get_stats();
+        const godot::Ref<netw::NetwPredictStats> server_stats
+            = server_handle->get_stats();
+        REQUIRE(client_stats.is_valid());
+        REQUIRE(server_stats.is_valid());
         track.lane.lane_corrections = int(client_stats->get("corrections"));
         track.lane.lane_drives = int(client_stats->get("drive_seq"));
         track.lane.lane_frames = p_scenario.run_ticks;
@@ -862,8 +849,7 @@ inline ScenarioRun ScenarioRun::session(
             = int(client_stats->get("authoring_clamped"));
         track.lane.lane_quantum_declared
             = int(client_stats->get("quantum_declared"));
-        track.lane.lane_quantum_steps
-            = int(client_stats->get("quantum_steps"));
+        track.lane.lane_quantum_steps = int(client_stats->get("quantum_steps"));
         track.lane.lane_quantum_faults
             = int(client_stats->get("quantum_faults"));
         track.lane.lane_max_replay_depth
@@ -872,14 +858,13 @@ inline ScenarioRun ScenarioRun::session(
             track.lane.lane_max_replay_depth = p_scenario.run_ticks;
         }
         track.lane.lane_fp_verified = int(client_stats->get("fp_verified"));
-        track.lane.lane_fp_mismatches
-            = int(client_stats->get("fp_mismatches"));
+        track.lane.lane_fp_mismatches = int(client_stats->get("fp_mismatches"));
         track.lane.lane_first_divergence
             = int(client_stats->get("first_divergent_transition"));
-        const godot::Ref<godot::RefCounted> owner_journal
-            = client_handle->call("journal");
+        const godot::Ref<netw::NetwPredictJournal> owner_journal
+            = client_handle->journal();
         track.lane.lane_journal_rows
-            = owner_journal.is_valid() ? int(owner_journal->call("size")) : 0;
+            = owner_journal.is_valid() ? owner_journal->size() : 0;
         track.lane.lane_consumed = int(server_stats->get("consumed"));
         track.lane.lane_missing = int(server_stats->get("missing"));
         track.lane.lane_held = int(server_stats->get("held"));
@@ -890,14 +875,12 @@ inline ScenarioRun ScenarioRun::session(
         track.lane.lane_skipped = int(server_stats->get("skipped"));
         track.lane.lane_queue_depth
             = int(server_stats->get("tape_queue_depth"));
-        const godot::Ref<godot::RefCounted> authority_journal
-            = server_handle->call("journal");
-        track.lane.lane_authority_journal_rows = authority_journal.is_valid()
-            ? int(authority_journal->call("size"))
-            : 0;
+        const godot::Ref<netw::NetwPredictJournal> authority_journal
+            = server_handle->journal();
+        track.lane.lane_authority_journal_rows
+            = authority_journal.is_valid() ? authority_journal->size() : 0;
         track.lane.lane_joint_passes = int(client_stats->get("joint_passes"));
-        track.lane.lane_joint_members
-            = int(client_stats->get("joint_members"));
+        track.lane.lane_joint_members = int(client_stats->get("joint_members"));
         track.lane.lane_epsilon = p_scenario.epsilon;
 
         Recorder &recorder = *recorders[size_t(index)];
@@ -916,7 +899,6 @@ inline ScenarioRun ScenarioRun::session(
     return run;
 }
 
-
 inline ScenarioRun ScenarioRun::record(
     LoopbackRig &p_rig,
     const Scenario &p_scenario,
@@ -930,8 +912,7 @@ inline ScenarioRun ScenarioRun::record(
     Track *rows = run.tracks.ptrw();
     for (int at = 0; at < run.tracks.size(); ++at) {
         if (p_plant == PLANT_NO_HISTORY) {
-            p_rig.server()->call(
-                "timeline_undeclare",
+            p_rig.server()->lagcomp_timeline_undeclare(
                 p_rig.entity_of(rows[at].name)
             );
         }
@@ -961,10 +942,11 @@ inline ScenarioRun ScenarioRun::record(
                     track.input = motion_of(step.value);
                 } else if (step.verb == godot::StringName("release_input")) {
                     track.input = godot::Vector2();
-                } else if (step.verb == godot::StringName("undeclare")
-                           && p_plant != PLANT_KEEP_HISTORY) {
-                    p_rig.server()->call(
-                        "timeline_undeclare",
+                } else if (
+                    step.verb == godot::StringName("undeclare")
+                    && p_plant != PLANT_KEEP_HISTORY
+                ) {
+                    p_rig.server()->lagcomp_timeline_undeclare(
                         p_rig.entity_of(track.name)
                     );
                 }
@@ -1005,38 +987,31 @@ inline ScenarioRun ScenarioRun::record(
         if (p_plant == PLANT_RETAINED_SAMPLE && sample_tick < 0) {
             sample_tick = 0;
         }
-        const godot::Ref<godot::RefCounted> past = p_rig.server()->call(
-            "lagcomp_sample",
-            p_rig.entity_of(track.name),
-            sample_tick
-        );
-        if (past.is_valid()
-            && bool(past->call("has_value", track.field))) {
+        const godot::Ref<netw::DictionaryRecord> past
+            = p_rig.server()->lagcomp_sample(
+                p_rig.entity_of(track.name),
+                sample_tick
+            );
+        if (past.is_valid() && past->has_value(track.field)) {
             track.lane.lane_sample_found = true;
-            track.lane.lane_sample_x
-                = godot::Vector2(past->get(track.field)).x;
+            track.lane.lane_sample_x = godot::Vector2(past->get(track.field)).x;
         }
         if (p_rig.client_count() > 0) {
             const godot::RID peer_entity
                 = p_rig.client_entity_of(0, track.name);
             track.lane.lane_peer_asked = peer_entity.is_valid();
             if (peer_entity.is_valid()) {
-                godot::Object *asked_peer = p_plant
-                        == PLANT_PEER_READS_AUTHORITY
-                    ? p_rig.server()
-                    : p_rig.client(0);
-                const godot::RID asked_entity = p_plant
-                        == PLANT_PEER_READS_AUTHORITY
+                netw::NetwMultiplayer *asked_peer
+                    = p_plant == PLANT_PEER_READS_AUTHORITY ? p_rig.server()
+                                                            : p_rig.client(0);
+                const godot::RID asked_entity
+                    = p_plant == PLANT_PEER_READS_AUTHORITY
                     ? p_rig.entity_of(track.name)
                     : peer_entity;
-                const godot::Ref<godot::RefCounted> peer_past
-                    = asked_peer->call(
-                        "lagcomp_sample",
-                        asked_entity,
-                        sample_tick
-                    );
-                track.lane.lane_peer_sample_found = peer_past.is_valid()
-                    && bool(peer_past->call("has_value", track.field));
+                const godot::Ref<netw::DictionaryRecord> peer_past
+                    = asked_peer->lagcomp_sample(asked_entity, sample_tick);
+                track.lane.lane_peer_sample_found
+                    = peer_past.is_valid() && peer_past->has_value(track.field);
             }
         }
 
@@ -1052,8 +1027,7 @@ inline ScenarioRun ScenarioRun::record(
         }
         godot::TypedArray<godot::RID> targets;
         targets.push_back(p_rig.entity_of(track.name));
-        p_rig.server()->call(
-            "lagcomp_rewind",
+        p_rig.server()->lagcomp_rewind(
             targets,
             rewind_tick,
             godot::Callable(carrier, godot::StringName("observe_self"))
@@ -1062,7 +1036,7 @@ inline ScenarioRun ScenarioRun::record(
         track.lane.lane_rewound_x = carrier->observed_x();
         track.lane.lane_restored_x = carrier->get_position().x;
     }
-    const godot::Dictionary metrics = p_rig.server()->call("lagcomp_metrics");
+    const godot::Dictionary metrics = p_rig.server()->lagcomp_metrics();
     const godot::Array reported = metrics.keys();
     for (int index = 0; index < reported.size(); ++index) {
         run.held.occupancy_keys.push_back(godot::StringName(reported[index]));
@@ -1074,7 +1048,6 @@ inline ScenarioRun ScenarioRun::record(
     return run;
 }
 
-
 inline ScenarioRun ScenarioRun::scenes(
     LoopbackRig &p_rig,
     const Scenario &p_scenario,
@@ -1083,7 +1056,7 @@ inline ScenarioRun ScenarioRun::scenes(
     ScenarioRun run;
     run.ran = p_scenario;
     p_rig.declare_world(p_scenario.world);
-    p_rig.server()->call("interest_flush");
+    p_rig.flush_interest();
     p_rig.pump(2);
 
     if (p_scenario.declares("move")) {
@@ -1124,15 +1097,14 @@ inline ScenarioRun ScenarioRun::scenes(
                 admit_declared(p_rig, p_scenario, step, p_plant);
                 run.judged += 1;
             } else if (step.verb == godot::StringName("release")) {
-                p_rig.server()->call(
-                    "scene_release",
+                p_rig.server()->scene_release(
                     p_rig.entity_of(step.subject),
                     p_rig.peer_id(int(step.value))
                 );
                 run.judged += 1;
             }
         }
-        p_rig.server()->call("interest_flush");
+        p_rig.flush_interest();
         p_rig.pump();
     }
 
@@ -1155,7 +1127,7 @@ inline void ScenarioRun::admit_declared(
     Plant p_plant
 ) {
     const int peer = p_rig.peer_id(int(p_step.value));
-    p_rig.server()->call("scene_admit", p_rig.entity_of(p_step.subject), peer);
+    p_rig.server()->scene_admit(p_rig.entity_of(p_step.subject), peer);
     if (p_plant != PLANT_SHARED_ADMISSION) {
         return;
     }
@@ -1169,11 +1141,7 @@ inline void ScenarioRun::admit_declared(
     for (int index = 0; index < p_scenario.world.scene_count(); ++index) {
         const WorldDecl::SceneRow &row = p_scenario.world.scene_at(index);
         if (row.name != p_step.subject && row.stem == stem) {
-            p_rig.server()->call(
-                "scene_admit",
-                p_rig.entity_of(row.name),
-                peer
-            );
+            p_rig.server()->scene_admit(p_rig.entity_of(row.name), peer);
         }
     }
 }
@@ -1193,12 +1161,11 @@ inline godot::Vector<Membership> ScenarioRun::read_scene_rows(
         row.asked = true;
 
         godot::TypedArray<godot::RID> members
-            = p_rig.server()->call("scene_get_entities", scene);
+            = p_rig.server()->scene_get_entities(scene);
         if (p_plant == PLANT_TRANSPARENT_NESTING) {
             for (int index = 0; index < members.size(); ++index) {
                 const godot::TypedArray<godot::RID> inner
-                    = p_rig.server()->call(
-                        "scene_get_entities",
+                    = p_rig.server()->scene_get_entities(
                         godot::RID(members[index])
                     );
                 members.append_array(inner);
@@ -1219,15 +1186,9 @@ inline godot::Vector<Membership> ScenarioRun::read_scene_rows(
             }
         }
 
-        row.boundary
-            = godot::RID(p_rig.server()->call("scene_get_layer", scene))
-                  .is_valid();
+        row.boundary = p_rig.server()->scene_get_layer(scene).is_valid();
         for (int client = 0; client < p_rig.count(); ++client) {
-            if (bool(p_rig.server()->call(
-                    "scene_admits",
-                    scene,
-                    p_rig.peer_id(client)
-                ))) {
+            if (p_rig.server()->scene_admits(scene, p_rig.peer_id(client))) {
                 row.admitted.push_back(client);
             }
         }

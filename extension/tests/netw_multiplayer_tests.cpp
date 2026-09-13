@@ -1,31 +1,38 @@
 #include "support/netw_test.h"
 
-#include "netw/carrier_frame.hpp"
-#include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/loopback.hpp"
 #include "godot/multiplayer_synchronizer.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "godot/resource.hpp"
+#include "godot/scene_tree.hpp"
 #include "godot/script.hpp"
 #include "godot/utility.hpp"
 #include "godot/viewport.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
+#include "netw/api/loopback.hpp"
+#include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
+#include "netw/api/replication_core.hpp"
+#include "netw/api/scene_handle.hpp"
+#include "netw/api/session_config.hpp"
+#include "netw/carrier_frame.hpp"
+#include "netw/session/frames.hpp"
 #include "netw/wire/registry.hpp"
-#include "support/event_ring.h"
 #include "support/entity_facets.h"
+#include "support/entity_record_box.h"
+#include "support/event_ring.h"
 #include "support/netw_call_log.h"
 #include "support/netw_recorder.h"
 
 namespace TestNetwMultiplayer {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw::SchemaCore;
 
 TEST_CASE("[Networked][Multiplayer][Hosted] offline core is server-shaped") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->get_unique_id(), 1);
@@ -35,7 +42,7 @@ TEST_CASE("[Networked][Multiplayer][Hosted] offline core is server-shaped") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] peer ids are a native read view") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     PackedInt32Array ids;
     ids.push_back(2);
@@ -48,52 +55,80 @@ TEST_CASE("[Networked][Multiplayer][Hosted] peer ids are a native read view") {
     NETW_CHECK_EQ(core->NETW_API_VIRTUAL(get_peer_ids)()[1], 7);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] the session owns one core a plane") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] AV1 a seated transport owns the peer "
+    "list, so a stale cache cannot outlive the connection it was taken from"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    PackedInt32Array stale;
+    stale.push_back(2);
+    stale.push_back(7);
+    core->set_peer_ids(stale);
+    NETW_CHECK_EQ(core->NETW_API_VIRTUAL(get_peer_ids)().size(), 2);
+
+    Ref<netw::LocalMultiplayerPeer> peer;
+    peer.instantiate();
+    peer->create_server();
+    core->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
+
+    NETW_CHECK_EQ(core->NETW_API_VIRTUAL(get_peer_ids)().size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] AV2 the remote sender is the relayed "
+    "frame's sender while one is dispatching, and the transport's own answer "
+    "otherwise, so a handler reached through the carrier reads what a native "
+    "rpc handler would"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+
+    NETW_CHECK_EQ(int(core->NETW_API_VIRTUAL(get_remote_sender_id)()), 0);
+
+    core->set_relay_sender(5);
+    NETW_CHECK_EQ(int(core->NETW_API_VIRTUAL(get_remote_sender_id)()), 5);
+
+    core->set_relay_sender(0);
+    NETW_CHECK_EQ(int(core->NETW_API_VIRTUAL(get_remote_sender_id)()), 0);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] the session owns one core a plane"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->get_liveness_core().is_valid(), true);
-    NETW_CHECK_EQ(core->get_clock_handle().is_valid(), true);
     NETW_CHECK_EQ(core->get_scene_core().is_valid(), true);
 
-    NETW_CHECK_EQ(
-        core->get_liveness_core() == core->get_liveness_core(),
-        true
-    );
-    NETW_CHECK_EQ(
-        &core->interest_plane() == &core->interest_plane(),
-        true
-    );
+    NETW_CHECK_EQ(&core->clock_engine() == &core->clock_engine(), true);
+
+    NETW_CHECK_EQ(core->get_liveness_core() == core->get_liveness_core(), true);
+    NETW_CHECK_EQ(&core->interest_plane() == &core->interest_plane(), true);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] two sessions share no core") {
-    Ref<NetwMultiplayerCore> first;
+    Ref<NetwMultiplayer> first;
     first.instantiate();
-    Ref<NetwMultiplayerCore> second;
+    Ref<NetwMultiplayer> second;
     second.instantiate();
 
-    NETW_CHECK_EQ(first->get_liveness_core() == second->get_liveness_core(),
-        false);
     NETW_CHECK_EQ(
-        &first->session_plane() == &second->session_plane(),
+        first->get_liveness_core() == second->get_liveness_core(),
         false
     );
-    NETW_CHECK_EQ(
-        first->get_clock_handle() == second->get_clock_handle(),
-        false
-    );
+    NETW_CHECK_EQ(&first->session_plane() == &second->session_plane(), false);
+    NETW_CHECK_EQ(&first->clock_engine() == &second->clock_engine(), false);
     NETW_CHECK_EQ(first->get_scene_core() == second->get_scene_core(), false);
-    NETW_CHECK_EQ(
-        &first->interest_plane() == &second->interest_plane(),
-        false
-    );
+    NETW_CHECK_EQ(&first->interest_plane() == &second->interest_plane(), false);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] a drained awareness relay hands back one "
     "row per target that has edges, and comes back empty"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     CHECK(core->interest_awareness_drain().is_empty());
@@ -119,7 +154,7 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] an awareness edge addressed to peer 0 is "
     "refused rather than queued under an id no drain can send to"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     ERR_PRINT_OFF;
 
@@ -137,7 +172,7 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] forgetting a peer drops that peer's "
     "awareness edges and leaves every other peer's queued"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     core->interest_awareness_queue_layer(7, 42, StringName("sight"), 1);
     core->interest_awareness_queue_layer(9, 42, StringName("sight"), 1);
@@ -153,7 +188,7 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] clearing the awareness relay sends "
     "nothing and leaves nothing to drain"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     core->interest_awareness_queue_layer(7, 42, StringName("sight"), 1);
 
@@ -163,9 +198,9 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] interest resets without a swap") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
     engine.set_intent_all(4);
     NETW_CHECK_EQ(engine.has_entity(4), true);
 
@@ -175,71 +210,132 @@ TEST_CASE("[Networked][Multiplayer][Hosted] interest resets without a swap") {
     NETW_CHECK_EQ(engine.has_entity(4), false);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] the session reads its own machine") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] the session reads its own machine"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
-    NETW_CHECK_EQ(core->get_state(), netw::SessionCore::STATE_OFFLINE);
-    NETW_CHECK_EQ(core->get_role(), netw::SessionCore::ROLE_NONE);
+    NETW_CHECK_EQ(core->session_get_state(), netw::SessionCore::STATE_OFFLINE);
+    NETW_CHECK_EQ(core->session_get_role(), netw::SessionCore::ROLE_NONE);
     NETW_CHECK_EQ(core->is_online(), false);
 
     core->session_plane().transition(netw::SessionCore::STATE_CONNECTING);
     core->session_plane().transition(netw::SessionCore::STATE_ONLINE);
 
-    NETW_CHECK_EQ(core->get_state(), netw::SessionCore::STATE_ONLINE);
+    NETW_CHECK_EQ(core->session_get_state(), netw::SessionCore::STATE_ONLINE);
     NETW_CHECK_EQ(core->is_online(), true);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a listen server is both faces") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     core->session_plane().set_role(netw::SessionCore::ROLE_CLIENT);
     NETW_CHECK_EQ(core->is_host(), false);
     NETW_CHECK_EQ(core->is_local_client(), true);
 
-    core->session_plane().set_role(
-        netw::SessionCore::ROLE_DEDICATED_SERVER
-    );
+    core->session_plane().set_role(netw::SessionCore::ROLE_DEDICATED_SERVER);
     NETW_CHECK_EQ(core->is_host(), true);
     NETW_CHECK_EQ(core->is_local_client(), false);
 
-    core->session_plane().set_role(
-        netw::SessionCore::ROLE_LISTEN_SERVER
-    );
+    core->session_plane().set_role(netw::SessionCore::ROLE_LISTEN_SERVER);
     NETW_CHECK_EQ(core->is_host(), true);
     NETW_CHECK_EQ(core->is_local_client(), true);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] peer identity is not a role") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->is_server(), true);
-    NETW_CHECK_EQ(core->is_host(), false);
+    NETW_CHECK_EQ(core->session_get_role(), netw::SessionCore::ROLE_NONE);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] the uncrossed verbs refuse") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] an offline session is its own host"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+
+    NETW_CHECK_EQ(core->session_get_state(), netw::SessionCore::STATE_OFFLINE);
+    NETW_CHECK_EQ(core->session_get_role(), netw::SessionCore::ROLE_NONE);
+    NETW_CHECK_EQ(core->is_host(), true);
+    NETW_CHECK_EQ(core->is_online(), false);
+
+    core->session_plane().set_role(netw::SessionCore::ROLE_CLIENT);
+    NETW_CHECK_EQ(core->is_host(), false);
+
+    core->session_plane().transition(netw::SessionCore::STATE_CONNECTING);
+    core->session_plane().transition(netw::SessionCore::STATE_ONLINE);
+    NETW_CHECK_EQ(core->is_host(), false);
+
+    core->session_plane().clear();
+    NETW_CHECK_EQ(core->session_get_state(), netw::SessionCore::STATE_OFFLINE);
+    NETW_CHECK_EQ(core->is_host(), true);
+}
+
+TEST_CASE("[Networked][Multiplayer][Hosted] an offline session admits") {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    const RID entity = core->entity_create();
+
+    NETW_CHECK_EQ(core->is_host(), true);
+    NETW_CHECK_GT(core->entity_admit(entity), 0);
+    NETW_CHECK_EQ(core->liveness_claim_routes(2).size(), 2);
+
+    core->session_set_role(NetwMultiplayer::ROLE_CLIENT);
+    NETW_CHECK_EQ(core->is_host(), false);
+    NETW_CHECK_EQ(core->liveness_claim_routes(2).size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a registration the session does not own "
+    "rides its transport, and so does an rpc on a node no entity claims"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(
-        core->NETW_API_VIRTUAL(object_configuration_add)(nullptr, Variant()),
-        ERR_UNAVAILABLE
+        int(
+            core->NETW_API_VIRTUAL(object_configuration_add)(nullptr, Variant())
+        ),
+        int(ERR_INVALID_PARAMETER)
     );
     NETW_CHECK_EQ(
-        core->NETW_API_VIRTUAL(object_configuration_remove)(nullptr, Variant()),
-        ERR_UNAVAILABLE
+        int(core->NETW_API_VIRTUAL(object_configuration_remove)(
+            nullptr,
+            Variant()
+        )),
+        int(ERR_INVALID_PARAMETER)
     );
+
+    Ref<netw::NetwSessionConfig> declared;
+    declared.instantiate();
+    NETW_CHECK_EQ(
+        int(
+            core->NETW_API_VIRTUAL(object_configuration_add)(nullptr, declared)
+        ),
+        int(ERR_UNAVAILABLE)
+    );
+
+    Node *stray = memnew(Node);
 #if defined(NETW_MODULE)
-    NETW_CHECK_EQ(core->rpcp(nullptr, 1, "m", nullptr, 0), ERR_UNAVAILABLE);
+    NETW_CHECK_EQ(
+        int(core->rpcp(stray, 1, "m", nullptr, 0)),
+        int(ERR_INVALID_PARAMETER)
+    );
 #else
-    NETW_CHECK_EQ(core->_rpc(1, nullptr, "m", Array()), ERR_UNAVAILABLE);
+    NETW_CHECK_EQ(
+        int(core->_rpc(1, stray, "m", Array())),
+        int(ERR_INVALID_PARAMETER)
+    );
 #endif
+    memdelete(stray);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a packet counts with its bytes") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     core->count_sent(40);
@@ -253,7 +349,7 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a packet counts with its bytes") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a standalone ack is a state ack") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     core->count_state_ack_out();
@@ -266,7 +362,7 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a standalone ack is a state ack") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] the first poll has no delta") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->poll_delta(9000), 0.0);
@@ -275,7 +371,7 @@ TEST_CASE("[Networked][Multiplayer][Hosted] the first poll has no delta") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] the frame counter is the stamp") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->get_frame_counter(), 0);
@@ -285,15 +381,15 @@ TEST_CASE("[Networked][Multiplayer][Hosted] the frame counter is the stamp") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] freshness reads the half window") {
-    NETW_CHECK_EQ(NetwMultiplayerCore::seq_is_fresher(5, 4), true);
-    NETW_CHECK_EQ(NetwMultiplayerCore::seq_is_fresher(4, 5), false);
-    NETW_CHECK_EQ(NetwMultiplayerCore::seq_is_fresher(5, 5), false);
-    NETW_CHECK_EQ(NetwMultiplayerCore::seq_is_fresher(2, 65534), true);
-    NETW_CHECK_EQ(NetwMultiplayerCore::seq_is_fresher(65534, 2), false);
+    NETW_CHECK_EQ(NetwMultiplayer::seq_is_fresher(5, 4), true);
+    NETW_CHECK_EQ(NetwMultiplayer::seq_is_fresher(4, 5), false);
+    NETW_CHECK_EQ(NetwMultiplayer::seq_is_fresher(5, 5), false);
+    NETW_CHECK_EQ(NetwMultiplayer::seq_is_fresher(2, 65534), true);
+    NETW_CHECK_EQ(NetwMultiplayer::seq_is_fresher(65534, 2), false);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a send seq never repeats") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->next_send_seq(7), 1);
@@ -303,7 +399,7 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a send seq never repeats") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a reordered datagram is dropped") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->has_inbound_seq(3), false);
@@ -315,20 +411,22 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a reordered datagram is dropped") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a stalled ack holds its baseline") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->peer_ack(4), -1);
-    NETW_CHECK_EQ(core->note_peer_ack(4, 0), true);
+    NETW_CHECK_EQ(core->note_peer_ack(4, 0, 0), true);
     NETW_CHECK_EQ(core->peer_ack(4), 0);
-    NETW_CHECK_EQ(core->note_peer_ack(4, 900), true);
-    NETW_CHECK_EQ(core->note_peer_ack(4, 900), false);
-    NETW_CHECK_EQ(core->note_peer_ack(4, 800), false);
+    NETW_CHECK_EQ(core->note_peer_ack(4, 900, 0xF0), true);
+    NETW_CHECK_EQ(int64_t(core->peer_ack_history(4)), int64_t(0xF0));
+    NETW_CHECK_EQ(core->note_peer_ack(4, 900, 0), false);
+    NETW_CHECK_EQ(core->note_peer_ack(4, 800, 0), false);
+    NETW_CHECK_EQ(int64_t(core->peer_ack_history(4)), int64_t(0xF0));
     NETW_CHECK_EQ(core->peer_ack(4), 900);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] an unechoed peer is owed one") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->peers_owed_echo().size(), 0);
@@ -344,11 +442,11 @@ TEST_CASE("[Networked][Multiplayer][Hosted] an unechoed peer is owed one") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a departed peer keeps no book") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     core->next_send_seq(8);
     core->note_inbound_seq(8, 5);
-    core->note_peer_ack(8, 5);
+    core->note_peer_ack(8, 5, 0);
 
     core->forget_peer_seqs(8);
 
@@ -358,37 +456,39 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a departed peer keeps no book") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] the verdict partition is closed") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
-    NETW_CHECK_EQ(NetwMultiplayerCore::counts_verdict(ERR_BUSY), true);
-    NETW_CHECK_EQ(NetwMultiplayerCore::counts_verdict(OK), false);
-    NETW_CHECK_EQ(NetwMultiplayerCore::counts_verdict(ERR_UNCONFIGURED), false);
+    NETW_CHECK_EQ(NetwMultiplayer::counts_verdict(ERR_BUSY), true);
+    NETW_CHECK_EQ(NetwMultiplayer::counts_verdict(OK), false);
+    NETW_CHECK_EQ(NetwMultiplayer::counts_verdict(ERR_UNCONFIGURED), false);
 
     NETW_CHECK_EQ(core->count_verdict(ERR_BUSY), true);
     NETW_CHECK_EQ(core->count_verdict(ERR_BUSY), true);
     NETW_CHECK_EQ(core->count_verdict(OK), false);
 
-    NETW_CHECK_EQ(core->verdict_total(ERR_BUSY), 2);
-    NETW_CHECK_EQ(core->verdict_total(ERR_SKIP), 0);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 2);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_SKIP), 0);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] what a verdict is worth saying is "
-          "a closed partition") {
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] what a verdict is worth saying is "
+    "a closed partition"
+) {
     struct Row {
         int64_t verdict;
         netw::GateVerdictBook::Report report;
     };
     const Row TABLE[] = {
-        { OK, netw::GateVerdictBook::QUIET },
-        { ERR_DOES_NOT_EXIST, netw::GateVerdictBook::QUIET },
-        { ERR_SKIP, netw::GateVerdictBook::QUIET },
-        { ERR_UNAVAILABLE, netw::GateVerdictBook::QUIET },
-        { ERR_UNAUTHORIZED, netw::GateVerdictBook::WARN },
-        { ERR_INVALID_DATA, netw::GateVerdictBook::WARN },
-        { ERR_BUSY, netw::GateVerdictBook::WARN },
-        { ERR_UNCONFIGURED, netw::GateVerdictBook::DEFECT },
-        { ERR_PARSE_ERROR, netw::GateVerdictBook::DEFECT },
+        {OK, netw::GateVerdictBook::QUIET},
+        {ERR_DOES_NOT_EXIST, netw::GateVerdictBook::QUIET},
+        {ERR_SKIP, netw::GateVerdictBook::QUIET},
+        {ERR_UNAVAILABLE, netw::GateVerdictBook::QUIET},
+        {ERR_UNAUTHORIZED, netw::GateVerdictBook::WARN},
+        {ERR_INVALID_DATA, netw::GateVerdictBook::WARN},
+        {ERR_BUSY, netw::GateVerdictBook::WARN},
+        {ERR_UNCONFIGURED, netw::GateVerdictBook::DEFECT},
+        {ERR_PARSE_ERROR, netw::GateVerdictBook::DEFECT},
     };
     for (const Row &row : TABLE) {
         NETW_CHECK_EQ(
@@ -398,23 +498,25 @@ TEST_CASE("[Networked][Multiplayer][Hosted] what a verdict is worth saying is "
     }
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] a sink counts every verdict but "
-          "OK, and answers what it was handed") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a sink counts every verdict but "
+    "OK, and answers what it was handed"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->sink_verdict(OK, 4), int64_t(OK));
     NETW_CHECK_EQ(core->sink_verdict(ERR_SKIP, 4), int64_t(ERR_SKIP));
     NETW_CHECK_EQ(core->sink_verdict(ERR_BUSY, 4), int64_t(ERR_BUSY));
 
-    NETW_CHECK_EQ(core->verdict_total(ERR_SKIP), 1);
-    NETW_CHECK_EQ(core->verdict_total(ERR_BUSY), 1);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_SKIP), 1);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 1);
     NETW_CHECK_EQ(core->claim_verdict_warning(ERR_BUSY, 4), false);
     NETW_CHECK_EQ(core->claim_verdict_warning(ERR_SKIP, 4), true);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a route warns once per verdict") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->claim_verdict_warning(ERR_BUSY, 12), true);
@@ -425,11 +527,13 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a route warns once per verdict") {
     core->clear_verdicts();
 
     NETW_CHECK_EQ(core->claim_verdict_warning(ERR_BUSY, 12), true);
-    NETW_CHECK_EQ(core->verdict_total(ERR_BUSY), 0);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 0);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] a redeclared name keeps its handle") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a redeclared name keeps its handle"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     const RID first = core->schema_create("pose");
@@ -440,24 +544,36 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a redeclared name keeps its handle")
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] an empty schema name is refused") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->schema_create(StringName()).is_valid(), false);
     NETW_CHECK_EQ(core->schema_find("nothing").is_valid(), false);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] columns address in declared order") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] columns address in declared order"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID schema = core->schema_create("pose");
 
     NETW_CHECK_EQ(
-        core->schema_add_column(schema, "at", SchemaCore::VECTOR3, 1),
+        core->schema_add_column(
+            schema,
+            "at",
+            NetwMultiplayer::COLUMN_VECTOR3,
+            1
+        ),
         0
     );
     NETW_CHECK_EQ(
-        core->schema_add_column(schema, "cooldowns", SchemaCore::F32, 8),
+        core->schema_add_column(
+            schema,
+            "cooldowns",
+            NetwMultiplayer::COLUMN_F32,
+            8
+        ),
         1
     );
     NETW_CHECK_EQ(core->schema_seal(schema), OK);
@@ -470,25 +586,24 @@ TEST_CASE("[Networked][Multiplayer][Hosted] columns address in declared order") 
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] two sessions share no schema") {
-    Ref<NetwMultiplayerCore> first;
+    Ref<NetwMultiplayer> first;
     first.instantiate();
-    Ref<NetwMultiplayerCore> second;
+    Ref<NetwMultiplayer> second;
     second.instantiate();
 
     first->schema_create("pose");
 
     NETW_CHECK_EQ(second->schema_find("pose").is_valid(), false);
-    NETW_CHECK_EQ(
-        first->get_schema_core() == second->get_schema_core(),
-        false
-    );
+    NETW_CHECK_EQ(first->get_schema_core() == second->get_schema_core(), false);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] an unsealed schema binds no table") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] an unsealed schema binds no table"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID schema = core->schema_create("pose");
-    core->schema_add_column(schema, "at", SchemaCore::F32, 1);
+    core->schema_add_column(schema, "at", NetwMultiplayer::COLUMN_F32, 1);
 
     NETW_CHECK_EQ(core->table_create(schema).is_valid(), false);
 
@@ -498,10 +613,10 @@ TEST_CASE("[Networked][Multiplayer][Hosted] an unsealed schema binds no table") 
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a rebound schema keeps its table") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID schema = core->schema_create("pose");
-    core->schema_add_column(schema, "at", SchemaCore::F32, 1);
+    core->schema_add_column(schema, "at", NetwMultiplayer::COLUMN_F32, 1);
     core->schema_seal(schema);
 
     const RID table = core->table_create(schema);
@@ -515,14 +630,16 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a rebound schema keeps its table") {
     );
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] a commit is stamped by the session") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a commit is stamped by the session"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID schema = core->schema_create("pose");
-    core->schema_add_column(schema, "hp", SchemaCore::F32, 1);
+    core->schema_add_column(schema, "hp", NetwMultiplayer::COLUMN_F32, 1);
     core->schema_seal(schema);
     const RID table = core->table_create(schema);
-    core->get_clock_handle()->engine.set_tick(41);
+    core->clock_engine().set_tick(41);
 
     PackedInt64Array routes;
     routes.push_back(7);
@@ -538,64 +655,72 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a commit is stamped by the session")
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] an unbound table name is invalid") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(core->table_find("never-bound").is_valid(), false);
     NETW_CHECK_EQ(core->table_get_schema(RID()).is_valid(), false);
 }
 
-TEST_CASE("[Networked][Multiplayer][Hosted] an effect deadline is the session's") {
-    Ref<NetwMultiplayerCore> core;
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] an effect deadline is the session's"
+) {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->get_clock_handle()->engine.set_tick(10);
+    core->clock_engine().set_tick(10);
 
-    core->effect_arm("act", Callable(), 5);
-    NETW_CHECK_EQ(core->effect_pending("act"), true);
-    NETW_CHECK_EQ(core->effect_count(), 1);
+    core->lagcomp_effect_arm("act", Callable(), 5);
+    NETW_CHECK_EQ(core->lagcomp_effect_pending("act"), true);
+    NETW_CHECK_EQ(core->lagcomp_effect_count(), 1);
 
-    core->effect_sweep(14);
-    NETW_CHECK_EQ(core->effect_pending("act"), true);
+    core->lagcomp_effect_sweep(14);
+    NETW_CHECK_EQ(core->lagcomp_effect_pending("act"), true);
 
-    core->effect_sweep(15);
-    NETW_CHECK_EQ(core->effect_pending("act"), false);
+    core->lagcomp_effect_sweep(15);
+    NETW_CHECK_EQ(core->lagcomp_effect_pending("act"), false);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a zero wait takes the default") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->get_clock_handle()->engine.set_tick(0);
+    core->clock_engine().set_tick(0);
 
-    core->effect_arm("act", Callable(), 0);
+    core->lagcomp_effect_arm("act", Callable(), 0);
 
-    core->effect_sweep(NetwMultiplayerCore::EFFECT_TIMEOUT_TICKS - 1);
-    NETW_CHECK_EQ(core->effect_pending("act"), true);
-    core->effect_sweep(NetwMultiplayerCore::EFFECT_TIMEOUT_TICKS);
-    NETW_CHECK_EQ(core->effect_pending("act"), false);
+    core->lagcomp_effect_sweep(NetwMultiplayer::EFFECT_TIMEOUT_TICKS - 1);
+    NETW_CHECK_EQ(core->lagcomp_effect_pending("act"), true);
+    core->lagcomp_effect_sweep(NetwMultiplayer::EFFECT_TIMEOUT_TICKS);
+    NETW_CHECK_EQ(core->lagcomp_effect_pending("act"), false);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] watching an unarmed key refuses") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     NETW_CHECK_EQ(
-        core->effect_watch("never-armed", Callable(), Callable()),
+        core->lagcomp_effect_watch("never-armed", Callable(), Callable()),
         false
     );
 
-    core->effect_arm("act", Callable(), 5);
-    NETW_CHECK_EQ(core->effect_watch("act", Callable(), Callable()), true);
+    core->lagcomp_effect_arm("act", Callable(), 5);
+    NETW_CHECK_EQ(
+        core->lagcomp_effect_watch("act", Callable(), Callable()),
+        true
+    );
 
-    core->effect_adopt("act");
-    NETW_CHECK_EQ(core->effect_pending("act"), false);
-    NETW_CHECK_EQ(core->effect_watch("act", Callable(), Callable()), false);
+    core->lagcomp_effect_adopt("act");
+    NETW_CHECK_EQ(core->lagcomp_effect_pending("act"), false);
+    NETW_CHECK_EQ(
+        core->lagcomp_effect_watch("act", Callable(), Callable()),
+        false
+    );
 }
 
-static Ref<RefCounted> a_seated_peer(
-    const Ref<NetwMultiplayerCore> &p_core,
+static Ref<netw::NetwParticipant> a_seated_peer(
+    const Ref<NetwMultiplayer> &p_core,
     int64_t p_peer
 ) {
-    Ref<RefCounted> row;
+    Ref<netw::NetwParticipant> row;
     row.instantiate();
     p_core->participant_adopt(p_peer, row);
     return row;
@@ -606,7 +731,7 @@ TEST_CASE(
     "re-seating where a peer already sits announces the change exactly once, "
     "and a peer holding no row has no seat to take"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID scene = core->get_liveness_core()->entity_create();
     a_seated_peer(core, 7);
@@ -626,7 +751,7 @@ TEST_CASE(
     "before the scene it left can release it, so a release clears only its "
     "own seat"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID left = core->get_liveness_core()->entity_create();
     const RID arrived = core->get_liveness_core()->entity_create();
@@ -648,7 +773,7 @@ TEST_CASE(
     "forgotten peer leaves no seat and a new peer at the same id inherits "
     "nothing"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID scene = core->get_liveness_core()->entity_create();
     a_seated_peer(core, 7);
@@ -670,6 +795,111 @@ TEST_CASE(
     NETW_CHECK_EQ(core->participant_seated_in(RID()).size(), 0);
 }
 
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] the send gate refuses an entity that is "
+    "not live, whoever is asking, and the server is exempt from interest but "
+    "never from liveness"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    Node *root = memnew(Node);
+    const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(root);
+
+    CHECK_FALSE(core->send_admits(1, entity));
+    CHECK_FALSE(core->send_admits(7, entity));
+
+    PackedInt32Array peers;
+    peers.push_back(1);
+    peers.push_back(7);
+    CHECK(core->send_recipients(entity, peers).is_empty());
+    memdelete(root);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] the recipient list is the gate applied "
+    "peer by peer, in the order it was given"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+
+    PackedInt32Array peers;
+    peers.push_back(9);
+    peers.push_back(2);
+    peers.push_back(7);
+
+    CHECK(core->send_recipients(Ref<netw::NetwEntity>(), peers).is_empty());
+    CHECK_FALSE(core->send_admits(1, Ref<netw::NetwEntity>()));
+    CHECK(core->send_recipients(Ref<netw::NetwEntity>(), PackedInt32Array())
+              .is_empty());
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] an anchor outside the session addresses "
+    "nothing, and refuses rather than writing a path nobody can resolve"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    netw::wire::WriteStream stream;
+    Node *stray = memnew(Node);
+
+    CHECK_FALSE(core->anchor_encode(stream, stray));
+    CHECK_FALSE(core->anchor_encode(stream, nullptr));
+    NETW_CHECK_EQ(int64_t(stream.to_bytes().size()), 0);
+    memdelete(stray);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] an anchor decodes the kind it was "
+    "written with, and a root-relative one carries no route"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    netw::wire::WriteStream writer;
+    bool root_relative = false;
+    bool entity_relative = true;
+    uint64_t route = 7;
+    String root_path("Arena/Spawner");
+    String routed_path("Turret");
+    REQUIRE(writer.bool1(root_relative));
+    REQUIRE(netw::wire::string_field(writer, root_path));
+    REQUIRE(writer.bool1(entity_relative));
+    REQUIRE(writer.varuint(route, 5));
+    REQUIRE(netw::wire::string_field(writer, routed_path));
+
+    netw::wire::ReadStream reader(writer.to_bytes());
+
+    Dictionary root_side;
+    REQUIRE(core->anchor_decode(reader, root_side));
+    NETW_CHECK_EQ(int64_t(root_side[StringName("kind")]), 0);
+    NETW_CHECK_EQ(int64_t(root_side[StringName("route")]), 0);
+    CHECK(String(root_side[StringName("path")]) == String("Arena/Spawner"));
+
+    Dictionary routed;
+    REQUIRE(core->anchor_decode(reader, routed));
+    NETW_CHECK_EQ(int64_t(routed[StringName("kind")]), 1);
+    NETW_CHECK_EQ(int64_t(routed[StringName("route")]), 7);
+    CHECK(String(routed[StringName("path")]) == String("Turret"));
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a routed anchor whose route names no "
+    "live entity resolves to nothing rather than to the session root"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    Dictionary routed;
+    routed[StringName("kind")] = int64_t(1);
+    routed[StringName("route")] = int64_t(4242);
+    routed[StringName("path")] = String("Turret");
+
+    CHECK(core->anchor_resolve(routed) == nullptr);
+
+    Dictionary rooted;
+    rooted[StringName("kind")] = int64_t(0);
+    rooted[StringName("route")] = int64_t(0);
+    rooted[StringName("path")] = String("Nothing/Here");
+    CHECK(core->anchor_resolve(rooted) == nullptr);
+}
 
 } // namespace TestNetwMultiplayer
 
@@ -678,13 +908,12 @@ namespace TestNetwMultiplayerDatagram {
 using namespace godot;
 using netw::NetwCarrierDatagram;
 using netw::NetwCarrierFrame;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 
 constexpr int64_t PEER = 4;
 
-
-Ref<NetwMultiplayerCore> fresh_core() {
-    Ref<NetwMultiplayerCore> core;
+Ref<NetwMultiplayer> fresh_core() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     return core;
 }
@@ -699,53 +928,52 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] D1 the bytes and the stamp come back "
     "together, and they agree"
 ) {
-    Ref<NetwMultiplayerCore> core = fresh_core();
+    Ref<NetwMultiplayer> core = fresh_core();
 
-    const Ref<NetwCarrierDatagram> sent
-        = core->frame_datagram(PEER, body(6), false);
+    const NetwCarrierDatagram sent = core->frame_datagram(PEER, body(6), false);
 
-    const Ref<NetwCarrierFrame> header = NetwCarrierFrame::read(sent->bytes);
-    NETW_CHECK_EQ(header->kind, NetwCarrierFrame::UNRELIABLE);
-    NETW_CHECK_EQ(header->seq, sent->seq);
-    NETW_CHECK_EQ(sent->bytes.size(), 9);
+    const NetwCarrierFrame header = NetwCarrierFrame::read(sent.bytes);
+    NETW_CHECK_EQ(header.kind, NetwCarrierFrame::UNRELIABLE);
+    NETW_CHECK_EQ(header.seq, sent.seq);
+    NETW_CHECK_EQ(header.tick, 0);
+    NETW_CHECK_EQ(sent.bytes.size(), 10);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] D2 a reliable datagram is unstamped and "
     "spends no sequence"
 ) {
-    Ref<NetwMultiplayerCore> core = fresh_core();
+    Ref<NetwMultiplayer> core = fresh_core();
 
-    const Ref<NetwCarrierDatagram> reliable
+    const NetwCarrierDatagram reliable
         = core->frame_datagram(PEER, body(6), true);
-    NETW_CHECK_EQ(reliable->seq, -1);
+    NETW_CHECK_EQ(reliable.seq, -1);
     NETW_CHECK_EQ(
-        NetwCarrierFrame::read(reliable->bytes)->kind,
+        NetwCarrierFrame::read(reliable.bytes).kind,
         NetwCarrierFrame::RELIABLE
     );
 
-    const Ref<NetwCarrierDatagram> first
+    const NetwCarrierDatagram first
         = core->frame_datagram(PEER, body(1), false);
-    Ref<NetwMultiplayerCore> untouched = fresh_core();
-    const Ref<NetwCarrierDatagram> baseline
+    Ref<NetwMultiplayer> untouched = fresh_core();
+    const NetwCarrierDatagram baseline
         = untouched->frame_datagram(PEER, body(1), false);
-    NETW_CHECK_EQ(first->seq, baseline->seq);
+    NETW_CHECK_EQ(first.seq, baseline.seq);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] D3 hearing from a peer turns the next "
     "datagram into the echo, and settles the debt"
 ) {
-    Ref<NetwMultiplayerCore> core = fresh_core();
+    Ref<NetwMultiplayer> core = fresh_core();
 
     core->note_inbound_seq(PEER, 21);
     NETW_CHECK_EQ(core->peers_owed_echo().size(), 1);
 
-    const Ref<NetwCarrierDatagram> sent
-        = core->frame_datagram(PEER, body(2), false);
-    const Ref<NetwCarrierFrame> header = NetwCarrierFrame::read(sent->bytes);
-    NETW_CHECK_EQ(header->kind, NetwCarrierFrame::UNRELIABLE_ACKED);
-    NETW_CHECK_EQ(header->ack, 21);
+    const NetwCarrierDatagram sent = core->frame_datagram(PEER, body(2), false);
+    const NetwCarrierFrame header = NetwCarrierFrame::read(sent.bytes);
+    NETW_CHECK_EQ(header.kind, NetwCarrierFrame::UNRELIABLE_ACKED);
+    NETW_CHECK_EQ(header.ack, 21);
 
     NETW_CHECK_EQ(core->peers_owed_echo().size(), 0);
 }
@@ -754,17 +982,17 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] D4 the stamp advances per peer and the "
     "payload rides behind the header"
 ) {
-    Ref<NetwMultiplayerCore> core = fresh_core();
+    Ref<NetwMultiplayer> core = fresh_core();
 
-    const Ref<NetwCarrierDatagram> a = core->frame_datagram(PEER, body(2), false);
-    const Ref<NetwCarrierDatagram> b = core->frame_datagram(PEER, body(2), false);
-    const Ref<NetwCarrierDatagram> other = core->frame_datagram(9, body(2), false);
+    const NetwCarrierDatagram a = core->frame_datagram(PEER, body(2), false);
+    const NetwCarrierDatagram b = core->frame_datagram(PEER, body(2), false);
+    const NetwCarrierDatagram other = core->frame_datagram(9, body(2), false);
 
-    NETW_CHECK_EQ(b->seq, a->seq + 1);
-    NETW_CHECK_EQ(other->seq, a->seq);
+    NETW_CHECK_EQ(b.seq, a.seq + 1);
+    NETW_CHECK_EQ(other.seq, a.seq);
 
-    const Ref<NetwCarrierFrame> header = NetwCarrierFrame::read(b->bytes);
-    NETW_CHECK_EQ(b->bytes.size() - header->payload_offset, 2);
+    const NetwCarrierFrame header = NetwCarrierFrame::read(b.bytes);
+    NETW_CHECK_EQ(b.bytes.size() - header.payload_offset, 2);
 }
 
 TEST_CASE(
@@ -773,36 +1001,37 @@ TEST_CASE(
     "spends no sequence"
 ) {
     ERR_PRINT_OFF;
-    Ref<NetwMultiplayerCore> core = fresh_core();
+    Ref<NetwMultiplayer> core = fresh_core();
 
     NETW_CHECK_EQ(core->send_datagram(PEER, body(4), false), -1);
 
     Ref<SceneMultiplayer> transport;
     transport.instantiate();
-    core->set_inner(transport);
+    core->session_set_inner(transport);
 
     NETW_CHECK_EQ(core->send_datagram(PEER, body(4), false), -1);
     NETW_CHECK_EQ(core->send_datagram(PEER, PackedByteArray(), false), -1);
 
-    Ref<NetwMultiplayerCore> untouched = fresh_core();
+    Ref<NetwMultiplayer> untouched = fresh_core();
     NETW_CHECK_EQ(
-        core->frame_datagram(PEER, body(1), false)->seq,
-        untouched->frame_datagram(PEER, body(1), false)->seq
+        core->frame_datagram(PEER, body(1), false).seq,
+        untouched->frame_datagram(PEER, body(1), false).seq
     );
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] D6 the datagram budget floors at 128 "
     "rather than answering a size nothing fits in, whether the transport is "
-    "unset or clamps to its own minimum"
+    "cleared or clamps to its own minimum"
 ) {
-    Ref<NetwMultiplayerCore> core = fresh_core();
+    Ref<NetwMultiplayer> core = fresh_core();
+    core->session_set_inner(Ref<SceneMultiplayer>());
 
     NETW_CHECK_EQ(core->datagram_budget(), 128);
 
     Ref<SceneMultiplayer> transport;
     transport.instantiate();
-    core->set_inner(transport);
+    core->session_set_inner(transport);
 
     transport->set_max_sync_packet_size(1400);
     NETW_CHECK_EQ(core->datagram_budget(), 1250);
@@ -815,7 +1044,7 @@ struct CoreWithPeerTransport {
     Ref<netw::LocalLoopbackSession> bus;
     Ref<SceneMultiplayer> transport;
     Ref<netw::LocalMultiplayerPeer> client;
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     int64_t first = 0;
     int64_t second = 0;
 };
@@ -832,7 +1061,7 @@ CoreWithPeerTransport wired_core() {
     out.first = out.client->get_unique_id();
     out.second = other->get_unique_id();
     out.core = fresh_core();
-    out.core->set_inner(out.transport);
+    out.core->session_set_inner(out.transport);
     return out;
 }
 
@@ -908,7 +1137,7 @@ TEST_CASE(
 namespace TestNetwMultiplayerSessionBand {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
 constexpr int EXACT_BINARY_TICKRATE = 8;
@@ -916,18 +1145,18 @@ constexpr double ONE_TICK_AT_EXACT_BINARY_RATE = 0.125;
 
 Vector<StringName> declared_tick_band() {
     return Vector<StringName>({
-        "before_tick_loop",
-        "before_tick",
-        "on_tick",
-        "after_tick",
-        "after_tick_loop",
+        "clock_before_tick_loop",
+        "clock_before_tick",
+        "clock_on_tick",
+        "clock_after_tick",
+        "clock_after_tick_loop",
     });
 }
 
-Ref<NetwMultiplayerCore> clocked_core() {
-    Ref<NetwMultiplayerCore> core;
+Ref<NetwMultiplayer> clocked_core() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->get_clock_handle()->engine.set_tickrate(EXACT_BINARY_TICKRATE);
+    core->clock_engine().set_tickrate(EXACT_BINARY_TICKRATE);
     return core;
 }
 
@@ -936,10 +1165,10 @@ TEST_CASE(
     "band in one order, carrying the clock's own advancing tick rather than "
     "a constant an announcer could invent"
 ) {
-    Ref<NetwMultiplayerCore> core = clocked_core();
+    Ref<NetwMultiplayer> core = clocked_core();
     Recorder session(core.ptr(), declared_tick_band());
 
-    netw::ClockEngine &clock = core->get_clock_handle()->engine;
+    netw::ClockEngine &clock = core->clock_engine();
     clock.physics_step(ONE_TICK_AT_EXACT_BINARY_RATE);
     clock.physics_step(ONE_TICK_AT_EXACT_BINARY_RATE);
 
@@ -947,22 +1176,22 @@ TEST_CASE(
     twice.append_array(declared_tick_band());
     CHECK(session.order() == twice);
 
-    REQUIRE(session.args("on_tick", 0).size() == 2);
+    REQUIRE(session.args("clock_on_tick", 0).size() == 2);
     NETW_CHECK_EQ(
-        double(session.args("on_tick", 0)[0]),
+        double(session.args("clock_on_tick", 0)[0]),
         ONE_TICK_AT_EXACT_BINARY_RATE
     );
-    NETW_CHECK_EQ(int(session.args("on_tick", 0)[1]), 0);
-    REQUIRE(session.args("after_tick", 1).size() == 2);
-    NETW_CHECK_EQ(int(session.args("after_tick", 1)[1]), 1);
+    NETW_CHECK_EQ(int(session.args("clock_on_tick", 0)[1]), 0);
+    REQUIRE(session.args("clock_after_tick", 1).size() == 2);
+    NETW_CHECK_EQ(int(session.args("clock_after_tick", 1)[1]), 1);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] a calibration edge reaches the session "
     "with its argument type intact, driven rather than staged"
 ) {
-    Ref<NetwMultiplayerCore> core = clocked_core();
-    netw::ClockEngine &clock = core->get_clock_handle()->engine;
+    Ref<NetwMultiplayer> core = clocked_core();
+    netw::ClockEngine &clock = core->clock_engine();
     clock.set_jitter_window(4);
     clock.set_jitter_stability_threshold(0.01);
     clock.set_jitter_multiplier(2.0);
@@ -971,8 +1200,7 @@ TEST_CASE(
         core.ptr(),
         Vector<StringName>({
             "clock_synchronized",
-            "display_offset_insufficient",
-            "stability_changed",
+            "clock_stability_changed",
         })
     );
 
@@ -981,30 +1209,23 @@ TEST_CASE(
     clock.handle_pong(0.2, 100, 0.0, true);
 
     NETW_CHECK_EQ(session.count("clock_synchronized"), 1);
-    REQUIRE(session.args("display_offset_insufficient").size() == 1);
-    NETW_CHECK_EQ(
-        int(session.args("display_offset_insufficient")[0]),
-        clock.recommended_display_offset()
-    );
-    REQUIRE(session.args("stability_changed").size() == 1);
-    NETW_CHECK_EQ(bool(session.args("stability_changed")[0]), false);
+    REQUIRE(session.args("clock_stability_changed").size() == 1);
+    NETW_CHECK_EQ(bool(session.args("clock_stability_changed")[0]), false);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] two sessions announce their own tick "
     "band, the one wiring error a single session cannot show"
 ) {
-    Ref<NetwMultiplayerCore> first = clocked_core();
-    Ref<NetwMultiplayerCore> second = clocked_core();
+    Ref<NetwMultiplayer> first = clocked_core();
+    Ref<NetwMultiplayer> second = clocked_core();
     Recorder watched(first.ptr(), declared_tick_band());
     Recorder quiet(second.ptr(), declared_tick_band());
 
-    first->get_clock_handle()->engine.physics_step(
-        ONE_TICK_AT_EXACT_BINARY_RATE
-    );
+    first->clock_engine().physics_step(ONE_TICK_AT_EXACT_BINARY_RATE);
 
-    NETW_CHECK_EQ(watched.count("on_tick"), 1);
-    NETW_CHECK_EQ(quiet.count("on_tick"), 0);
+    NETW_CHECK_EQ(watched.count("clock_on_tick"), 1);
+    NETW_CHECK_EQ(quiet.count("clock_on_tick"), 0);
 }
 
 } // namespace TestNetwMultiplayerSessionBand
@@ -1012,16 +1233,209 @@ TEST_CASE(
 namespace TestNetwMultiplayerSessionEdges {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::LocalMultiplayerPeer;
+using netw::NetwMultiplayer;
 using netw::SessionCore;
 using netw_test::Recorder;
 
 Vector<StringName> session_edges() {
     return Vector<StringName>({
-        "state_changed",
+        "session_state_changed",
         "session_entered",
         "session_ended",
     });
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] assigning a peer seats the wrapped "
+    "transport and drives the session from the same edge"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    Ref<LocalMultiplayerPeer> peer;
+    peer.instantiate();
+    peer->create_server();
+
+    core->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
+
+    CHECK(
+        core->session_get_inner()->get_multiplayer_peer().ptr() == peer.ptr()
+    );
+    NETW_CHECK_EQ(
+        int(core->session_get_state()),
+        int(SessionCore::STATE_ONLINE)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] connection results drive only the "
+    "session carrying the transport that announced them"
+) {
+    Ref<NetwMultiplayer> connected;
+    connected.instantiate();
+    const Ref<SceneMultiplayer> retired = connected->session_get_inner();
+    Ref<SceneMultiplayer> transport;
+    transport.instantiate();
+    connected->session_set_inner(transport);
+    Ref<LocalMultiplayerPeer> client;
+    client.instantiate();
+    client->create_client(7);
+    connected->NETW_API_VIRTUAL(set_multiplayer_peer)(client);
+
+    retired->emit_signal("connected_to_server");
+    NETW_CHECK_EQ(
+        int(connected->session_get_state()),
+        int(SessionCore::STATE_CONNECTING)
+    );
+    transport->emit_signal("connected_to_server");
+    NETW_CHECK_EQ(
+        int(connected->session_get_state()),
+        int(SessionCore::STATE_ONLINE)
+    );
+
+    Ref<NetwMultiplayer> failed;
+    failed.instantiate();
+    failed->NETW_API_VIRTUAL(set_multiplayer_peer)(client);
+    failed->session_get_inner()->emit_signal("connection_failed");
+    NETW_CHECK_EQ(
+        int(failed->session_get_state()),
+        int(SessionCore::STATE_OFFLINE)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted][SceneTree] a session announces a pause "
+    "once and writes the tree itself, and an ended session schedules its own "
+    "clear"
+) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    SceneTree *loop = netw::gd::scene_tree();
+    REQUIRE(loop != nullptr);
+    REQUIRE(loop->is_paused() == false);
+
+    session->emit_signal("session_tree_paused", String("intermission"));
+    NETW_CHECK_EQ(loop->is_paused(), true);
+    session->emit_signal("session_tree_unpaused");
+    NETW_CHECK_EQ(loop->is_paused(), false);
+
+    session->session_flush_deferred();
+    NETW_CHECK_EQ(session->settle_pending(), 0);
+    session->emit_signal("session_ended");
+    NETW_CHECK_GT(session->settle_pending(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] the tick pump is the session's own, so "
+    "an announced tick drives and settles with nothing installed"
+) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    session->session_defer(
+        callable_mp(session.ptr(), &NetwMultiplayer::clear_seq_books),
+        StringName("tick-drains-the-frame")
+    );
+    NETW_CHECK_EQ(session->settle_pending(), 1);
+
+    session->emit_signal("clock_after_tick", 0.0, 9);
+    NETW_CHECK_EQ(session->settle_pending(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] the session's own poll is the idle "
+    "pump: it services the transport and drains what the frame scheduled"
+) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    session->session_defer(
+        callable_mp(session.ptr(), &NetwMultiplayer::clear_seq_books),
+        StringName("poll-drains-the-frame")
+    );
+    NETW_CHECK_EQ(session->settle_pending(), 1);
+
+    NETW_CHECK_EQ(int(session->NETW_API_VIRTUAL(poll)()), int(OK));
+    NETW_CHECK_EQ(session->settle_pending(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a session demuxes its own transport's "
+    "datagrams, so an acknowledging one advances a peer's baseline"
+) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    NETW_CHECK_EQ(int(session->peer_ack(4)), -1);
+
+    PackedByteArray body;
+    body.push_back(0);
+    const PackedByteArray acked
+        = netw::NetwCarrierFrame::build(body, false, 11, 900, 0, -1);
+    session->session_get_inner()->emit_signal("peer_packet", 4, acked);
+    NETW_CHECK_EQ(int(session->peer_ack(4)), 900);
+
+    PackedByteArray foreign;
+    foreign.push_back(1);
+    Recorder passthrough(session.ptr(), Vector<StringName>({"peer_packet"}));
+    session->session_get_inner()->emit_signal("peer_packet", 4, foreign);
+    NETW_CHECK_EQ(passthrough.count("peer_packet"), 1);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a vanished server ends an online "
+    "session, and a session already disposing reads the same edge as its own"
+) {
+    Ref<NetwMultiplayer> crashed;
+    crashed.instantiate();
+    Ref<LocalMultiplayerPeer> client;
+    client.instantiate();
+    client->create_client(7);
+    crashed->NETW_API_VIRTUAL(set_multiplayer_peer)(client);
+    crashed->session_get_inner()->emit_signal("connected_to_server");
+    NETW_CHECK_EQ(
+        int(crashed->session_get_state()),
+        int(SessionCore::STATE_ONLINE)
+    );
+    crashed->session_get_inner()->emit_signal("server_disconnected");
+    NETW_CHECK_EQ(
+        int(crashed->session_get_state()),
+        int(SessionCore::STATE_OFFLINE)
+    );
+
+    Ref<NetwMultiplayer> torn;
+    torn.instantiate();
+    Ref<LocalMultiplayerPeer> leaving;
+    leaving.instantiate();
+    leaving->create_client(8);
+    torn->NETW_API_VIRTUAL(set_multiplayer_peer)(leaving);
+    torn->session_get_inner()->emit_signal("connected_to_server");
+    NETW_CHECK_EQ(torn->embed_claim_dispose(), true);
+    NETW_CHECK_EQ(torn->embed_claim_dispose(), false);
+    torn->session_get_inner()->emit_signal("server_disconnected");
+    NETW_CHECK_EQ(
+        int(torn->session_get_state()),
+        int(SessionCore::STATE_ONLINE)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a session wires its own scene machine, "
+    "so the participant and reclaim edges reach it with nothing installed"
+) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    session->session_flush_deferred();
+    NETW_CHECK_EQ(session->settle_pending(), 0);
+
+    Ref<netw::NetwParticipant> local;
+    local.instantiate();
+    local->seat_at(session.ptr(), 7);
+    session->participant_adopt(7, local);
+    const RID arena = session->get_liveness_core()->entity_create();
+    session->participant_seat_move(7, arena);
+    session->emit_signal("participant_local_joined", local);
+    NETW_CHECK_GT(session->settle_pending(), 0);
+
+    session->emit_signal("session_reclaimed");
+    CHECK(local->get_current_scene().is_null());
 }
 
 TEST_CASE(
@@ -1030,7 +1444,7 @@ TEST_CASE(
     "departure, and the two bracket the session rather than both landing on "
     "one edge"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Recorder session(core.ptr(), session_edges());
 
@@ -1041,20 +1455,20 @@ TEST_CASE(
     CHECK(
         session.order()
         == Vector<StringName>({
-            "state_changed",
-            "state_changed",
+            "session_state_changed",
+            "session_state_changed",
             "session_entered",
             "session_ended",
-            "state_changed",
+            "session_state_changed",
         })
     );
-    REQUIRE(session.args("state_changed", 1).size() == 2);
+    REQUIRE(session.args("session_state_changed", 1).size() == 2);
     NETW_CHECK_EQ(
-        int(session.args("state_changed", 1)[0]),
+        int(session.args("session_state_changed", 1)[0]),
         int(SessionCore::STATE_CONNECTING)
     );
     NETW_CHECK_EQ(
-        int(session.args("state_changed", 1)[1]),
+        int(session.args("session_state_changed", 1)[1]),
         int(SessionCore::STATE_ONLINE)
     );
 }
@@ -1063,7 +1477,7 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a transition the machine refuses, "
     "OFFLINE straight to ONLINE with no connect between, publishes nothing"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Recorder session(core.ptr(), session_edges());
 
@@ -1082,7 +1496,7 @@ namespace TestNetwMultiplayerAuthEdges {
 
 using namespace godot;
 using netw::EventPlane;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::EventRing;
 using netw_test::Recorder;
 
@@ -1094,7 +1508,7 @@ Vector<StringName> auth_edges() {
 }
 
 struct Transported {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     Ref<SceneMultiplayer> inner;
 };
 
@@ -1102,7 +1516,7 @@ Transported transported_core() {
     Transported rig;
     rig.core.instantiate();
     rig.inner.instantiate();
-    rig.core->set_inner(rig.inner);
+    rig.core->session_set_inner(rig.inner);
     return rig;
 }
 
@@ -1146,7 +1560,7 @@ TEST_CASE(
     const EventRing ring(rig.core->event_ring(0));
     REQUIRE(ring.size() == 1);
     NETW_CHECK_EQ(ring.event_at(0), int64_t(EventPlane::PEER_AUTH_FAILED));
-    NETW_CHECK_EQ(ring.at(0)->peer, int64_t(7));
+    NETW_CHECK_EQ(int64_t(ring.at(0)[netw::event_key::peer()]), int64_t(7));
 }
 
 TEST_CASE(
@@ -1159,7 +1573,7 @@ TEST_CASE(
     replacement.instantiate();
     Recorder session(rig.core.ptr(), auth_edges());
 
-    rig.core->set_inner(replacement);
+    rig.core->session_set_inner(replacement);
     rig.inner->emit_signal("peer_authenticating", 7);
     replacement->emit_signal("peer_authenticating", 9);
 
@@ -1173,7 +1587,8 @@ TEST_CASE(
 namespace TestNetwMultiplayerGateDefaults {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
+using netw::ReplicationCore;
 
 constexpr int64_t SERVER = 1;
 constexpr int64_t CLIENT = 4;
@@ -1222,7 +1637,7 @@ TEST_CASE(
     "client is refused for who it is even on a channel this gate would "
     "never admit"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const GateIds ids = gate_ids();
 
@@ -1286,7 +1701,7 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] the table gate counts the sender it "
     "refuses"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const GateIds ids = gate_ids();
 
@@ -1303,7 +1718,7 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] the table gate refuses a frame by "
     "shape, including a truncated header that names no table to look for"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const GateIds ids = gate_ids();
 
@@ -1321,12 +1736,107 @@ TEST_CASE(
     );
 }
 
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted][SceneTree] the spawn, table, sync and "
+    "predict gate doors answer exactly their stock default when no script "
+    "overrides the virtual, because nothing is installed to answer otherwise"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    const GateIds ids = gate_ids();
+
+    NETW_CHECK_EQ(
+        core->spawn_admit_frame(SERVER, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
+        core->spawn_admit_frame_default(
+            SERVER,
+            PRE_ADMIT_ROUTE,
+            ids.spawn,
+            body(4)
+        )
+    );
+    NETW_CHECK_EQ(
+        core->spawn_admit_frame(CLIENT, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
+        ERR_UNAUTHORIZED
+    );
+
+    NETW_CHECK_EQ(
+        core->table_admit_frame(SERVER, ids.table, body(4)),
+        core->table_admit_frame_default(SERVER, ids.table, body(4))
+    );
+    NETW_CHECK_EQ(
+        core->table_admit_frame(CLIENT, ids.table, body(4)),
+        ERR_UNAUTHORIZED
+    );
+
+    Node *owner = memnew(Node);
+    netw::gd::scene_root()->add_child(owner);
+    const Ref<netw::NetwEntity> wrapper = netw::NetwEntity::ensure(owner);
+    REQUIRE(core->liveness_bind_route(51, wrapper.ptr()));
+    REQUIRE(int(core->entity_frame_verdict(51)) == int(OK));
+
+    const PackedByteArray carried({1});
+    NETW_CHECK_EQ(
+        core->sync_admit_frame(2, 51, 0, ids.sync, 0, -1, carried),
+        core->sync_admit_frame_default(2, 51, 0, ids.sync, 0, -1, carried)
+    );
+    NETW_CHECK_EQ(
+        core->sync_admit_frame(2, 51, 0, ids.sync, 0, -1, PackedByteArray()),
+        ERR_INVALID_DATA
+    );
+
+    NETW_CHECK_EQ(
+        core->predict_admit_frame(2, 51, ids.spawn, carried),
+        core->predict_admit_frame_default(2, 51, ids.spawn, carried)
+    );
+
+    owner->queue_free();
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] declaring an entity is eligible only "
+    "for a route this peer already holds a wrapper for"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+
+    const RID unknown = core->get_liveness_core()->entity_create();
+    NETW_CHECK_EQ(
+        core->spawn_declare_default(unknown, Variant()),
+        ERR_DOES_NOT_EXIST
+    );
+
+    const RID entity = core->get_liveness_core()->entity_create();
+    const int64_t route = core->get_liveness_core()->reserve_route();
+    Ref<netw::NetwEntity> wrapper;
+    wrapper.instantiate();
+    netw::NetwEntityRecord *const record = wrapper->get_record();
+    record->set_peer_id(0);
+    record->set_route(route);
+    REQUIRE(core->liveness_bind(entity, route, wrapper, record, nullptr));
+
+    NETW_CHECK_EQ(core->spawn_declare_default(entity, Variant()), OK);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] a session owns its replication plane "
+    "from birth, so committing a sent sequence always has one to tell"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+
+    ReplicationCore *plane = core->get_replication_plane();
+    REQUIRE(plane != nullptr);
+    REQUIRE(plane->get_sync_pipeline() != nullptr);
+
+    core->sync_note_sent_default(1, 1);
+}
+
 } // namespace TestNetwMultiplayerGateDefaults
 
 namespace TestNetwMultiplayerPumpEdges {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw::SchemaCore;
 using netw_test::Recorder;
 
@@ -1336,40 +1846,44 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] marking a poll announces it with the "
     "gap since the last mark, zero on the first poll"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    Recorder session(core.ptr(), Vector<StringName>({"poll_started"}));
+    Recorder session(core.ptr(), Vector<StringName>({"session_poll_started"}));
 
     core->poll_delta(9000);
     core->poll_delta(9000 + SECOND / 2);
 
-    NETW_CHECK_EQ(session.count("poll_started"), 2);
-    REQUIRE(session.args("poll_started", 0).size() == 1);
-    NETW_CHECK_EQ(double(session.args("poll_started", 0)[0]), 0.0);
-    REQUIRE(session.args("poll_started", 1).size() == 1);
-    NETW_CHECK_CLOSE(double(session.args("poll_started", 1)[0]), 0.5, 1e-9);
+    NETW_CHECK_EQ(session.count("session_poll_started"), 2);
+    REQUIRE(session.args("session_poll_started", 0).size() == 1);
+    NETW_CHECK_EQ(double(session.args("session_poll_started", 0)[0]), 0.0);
+    REQUIRE(session.args("session_poll_started", 1).size() == 1);
+    NETW_CHECK_CLOSE(
+        double(session.args("session_poll_started", 1)[0]),
+        0.5,
+        1e-9
+    );
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a second reader marked no poll") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    Recorder session(core.ptr(), Vector<StringName>({"poll_started"}));
+    Recorder session(core.ptr(), Vector<StringName>({"session_poll_started"}));
 
     core->poll_delta(9000);
     const double again = core->poll_delta(9000);
 
     NETW_CHECK_EQ(again, 0.0);
-    NETW_CHECK_EQ(session.count("poll_started"), 1);
+    NETW_CHECK_EQ(session.count("session_poll_started"), 1);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] an intake announces what it touched, "
     "not a table it only committed and published locally, and reopens"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID schema = core->schema_create("Row");
-    core->schema_add_column(schema, "value", int(Variant::INT), 0);
+    core->schema_add_column(schema, "value", NetwMultiplayer::COLUMN_I8, 0);
     core->schema_seal(schema);
     const RID table = core->table_create(schema);
     Recorder session(core.ptr(), Vector<StringName>({"table_received"}));
@@ -1399,18 +1913,16 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a packet that is not ours is announced, "
     "not counted"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Recorder session(core.ptr(), Vector<StringName>({"peer_packet"}));
     PackedByteArray foreign;
     foreign.push_back(0x01);
     foreign.push_back(0x02);
 
-    const Ref<netw::NetwCarrierFrame> header
-        = core->receive_header(4, foreign);
+    const netw::NetwCarrierFrame header = core->receive_header(4, foreign);
 
-    REQUIRE(header.is_valid());
-    NETW_CHECK_EQ(header->kind, int64_t(netw::NetwCarrierFrame::FOREIGN));
+    NETW_CHECK_EQ(header.kind, int64_t(netw::NetwCarrierFrame::FOREIGN));
     NETW_CHECK_EQ(session.count("peer_packet"), 1);
     REQUIRE(session.args("peer_packet").size() == 2);
     NETW_CHECK_EQ(int(session.args("peer_packet")[0]), 4);
@@ -1422,17 +1934,15 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a malformed datagram is ours and is "
     "neither announced nor counted"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Recorder session(core.ptr(), Vector<StringName>({"peer_packet"}));
     PackedByteArray truncated;
     truncated.push_back(netw::NetwCarrierFrame::MAGIC_UNRELIABLE);
 
-    const Ref<netw::NetwCarrierFrame> header
-        = core->receive_header(4, truncated);
+    const netw::NetwCarrierFrame header = core->receive_header(4, truncated);
 
-    REQUIRE(header.is_valid());
-    NETW_CHECK_EQ(header->kind, int64_t(netw::NetwCarrierFrame::MALFORMED));
+    NETW_CHECK_EQ(header.kind, int64_t(netw::NetwCarrierFrame::MALFORMED));
     NETW_CHECK_EQ(session.count("peer_packet"), 0);
     NETW_CHECK_EQ(core->get_received_packets(), 0);
 }
@@ -1441,18 +1951,17 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] our own datagram counts its body, not "
     "the wire size, so two peers' throughput is comparable"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Recorder session(core.ptr(), Vector<StringName>({"peer_packet"}));
     PackedByteArray body;
     body.resize(8);
     const PackedByteArray sent
-        = netw::NetwCarrierFrame::build(body, true, 0, -1);
+        = netw::NetwCarrierFrame::build(body, true, 0, -1, 0, -1);
 
-    const Ref<netw::NetwCarrierFrame> header = core->receive_header(4, sent);
+    const netw::NetwCarrierFrame header = core->receive_header(4, sent);
 
-    REQUIRE(header.is_valid());
-    NETW_CHECK_EQ(header->kind, int64_t(netw::NetwCarrierFrame::RELIABLE));
+    NETW_CHECK_EQ(header.kind, int64_t(netw::NetwCarrierFrame::RELIABLE));
     NETW_CHECK_EQ(session.count("peer_packet"), 0);
     NETW_CHECK_EQ(core->get_received_packets(), 1);
     NETW_CHECK_EQ(core->get_received_bytes(), 8);
@@ -1463,7 +1972,7 @@ TEST_CASE(
 namespace TestNetwMultiplayerControlBand {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
 constexpr int64_t SERVER = 1;
@@ -1471,10 +1980,10 @@ constexpr int64_t CLIENT = 4;
 
 Vector<StringName> control_band() {
     return Vector<StringName>({
-        "kicked",
-        "server_disconnecting",
-        "kick_requested",
-        "disconnect_requested",
+        "peer_kicked",
+        "session_server_disconnecting",
+        "peer_kick_requested",
+        "session_disconnect_requested",
     });
 }
 
@@ -1487,8 +1996,21 @@ int64_t control_channel(const char *p_name) {
     return int64_t(decl->id);
 }
 
-Ref<NetwMultiplayerCore> session_at_peer_one() {
-    Ref<NetwMultiplayerCore> core;
+PackedByteArray reason_frame(const char *p_reason) {
+    netw::session::SessionReason stated;
+    stated.reason = String(p_reason);
+    return netw::session::frame_write(stated);
+}
+
+PackedByteArray kick_frame(int64_t p_peer, const char *p_reason) {
+    netw::session::KickRequest asked;
+    asked.peer = p_peer;
+    asked.reason = String(p_reason);
+    return netw::session::frame_write(asked);
+}
+
+Ref<NetwMultiplayer> session_at_peer_one() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     return core;
 }
@@ -1499,31 +2021,23 @@ TEST_CASE(
     "falls through and routes it elsewhere, but only the server ever "
     "speaks for the session"
 ) {
-    Ref<NetwMultiplayerCore> core = session_at_peer_one();
+    Ref<NetwMultiplayer> core = session_at_peer_one();
     Recorder session(core.ptr(), control_band());
     const int64_t kicked = control_channel("SESSION_KICKED");
     const int64_t shutdown = control_channel("SESSION_SHUTDOWN");
 
     NETW_CHECK_EQ(
-        core->session_publish_control(
-            kicked,
-            SERVER,
-            netw::gd::var_to_bytes("rude")
-        ),
+        core->session_publish_control(kicked, SERVER, reason_frame("rude")),
         true
     );
     NETW_CHECK_EQ(
-        core->session_publish_control(
-            shutdown,
-            CLIENT,
-            netw::gd::var_to_bytes("bye")
-        ),
+        core->session_publish_control(shutdown, CLIENT, reason_frame("bye")),
         true
     );
 
-    CHECK(session.order() == Vector<StringName>({"kicked"}));
-    REQUIRE(session.args("kicked").size() == 1);
-    CHECK(String(session.args("kicked")[0]) == String("rude"));
+    CHECK(session.order() == Vector<StringName>({"peer_kicked"}));
+    REQUIRE(session.args("peer_kicked").size() == 1);
+    CHECK(String(session.args("peer_kicked")[0]) == String("rude"));
 }
 
 TEST_CASE(
@@ -1532,29 +2046,18 @@ TEST_CASE(
     "requester it announces is the frame's own sender, never anything the "
     "payload claims"
 ) {
-    Ref<NetwMultiplayerCore> core = session_at_peer_one();
+    Ref<NetwMultiplayer> core = session_at_peer_one();
     Recorder session(core.ptr(), control_band());
     const int64_t request = control_channel("SESSION_KICK_REQUEST");
 
-    Array pair;
-    pair.push_back(9);
-    pair.push_back("afk");
-    core->session_publish_control(
-        request,
-        CLIENT,
-        netw::gd::var_to_bytes(pair)
-    );
-    core->session_publish_control(
-        request,
-        CLIENT,
-        netw::gd::var_to_bytes("afk")
-    );
+    core->session_publish_control(request, CLIENT, kick_frame(9, "afk"));
+    core->session_publish_control(request, CLIENT, reason_frame("afk"));
 
-    NETW_CHECK_EQ(session.count("kick_requested"), 1);
-    REQUIRE(session.args("kick_requested").size() == 3);
-    NETW_CHECK_EQ(int(session.args("kick_requested")[0]), int(CLIENT));
-    NETW_CHECK_EQ(int(session.args("kick_requested")[1]), 9);
-    CHECK(String(session.args("kick_requested")[2]) == String("afk"));
+    NETW_CHECK_EQ(session.count("peer_kick_requested"), 1);
+    REQUIRE(session.args("peer_kick_requested").size() == 3);
+    NETW_CHECK_EQ(int(session.args("peer_kick_requested")[0]), int(CLIENT));
+    NETW_CHECK_EQ(int(session.args("peer_kick_requested")[1]), 9);
+    CHECK(String(session.args("peer_kick_requested")[2]) == String("afk"));
 }
 
 TEST_CASE(
@@ -1562,34 +2065,33 @@ TEST_CASE(
     "edge, not applied, so every reactor including this addon reads the "
     "same announcement, and a client's unpause is not an edge at all"
 ) {
-    Ref<NetwMultiplayerCore> core = session_at_peer_one();
+    Ref<NetwMultiplayer> core = session_at_peer_one();
     Recorder session(
         core.ptr(),
-        Vector<StringName>({"tree_paused", "tree_unpaused"})
+        Vector<StringName>({"session_tree_paused", "session_tree_unpaused"})
     );
     const int64_t pause = control_channel("SESSION_PAUSE");
     const int64_t unpause = control_channel("SESSION_UNPAUSE");
 
-    core->session_publish_control(
-        pause,
-        SERVER,
-        netw::gd::var_to_bytes("intermission")
-    );
+    core->session_publish_control(pause, SERVER, reason_frame("intermission"));
     core->session_publish_control(unpause, CLIENT, PackedByteArray());
     core->session_publish_control(unpause, SERVER, PackedByteArray());
 
     CHECK(
-        session.order() == Vector<StringName>({"tree_paused", "tree_unpaused"})
+        session.order()
+        == Vector<StringName>({"session_tree_paused", "session_tree_unpaused"})
     );
-    REQUIRE(session.args("tree_paused").size() == 1);
-    CHECK(String(session.args("tree_paused")[0]) == String("intermission"));
+    REQUIRE(session.args("session_tree_paused").size() == 1);
+    CHECK(
+        String(session.args("session_tree_paused")[0]) == String("intermission")
+    );
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] a channel this band does not own is not "
     "consumed"
 ) {
-    Ref<NetwMultiplayerCore> core = session_at_peer_one();
+    Ref<NetwMultiplayer> core = session_at_peer_one();
     Recorder session(core.ptr(), control_band());
 
     NETW_CHECK_EQ(
@@ -1609,7 +2111,7 @@ TEST_CASE(
 namespace TestNetwMultiplayerServices {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
 Vector<StringName> service_edges() {
@@ -1626,25 +2128,25 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] registering is announcing, and "
     "re-registering the identical instance is inert"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Recorder session(core.ptr(), service_edges());
     const Ref<Resource> type = an_identity_only_type();
     Node *service = memnew(Node);
 
-    core->service_register(type.ptr(), service);
-    core->service_register(type.ptr(), service);
+    core->service_register(service, type.ptr());
+    core->service_register(service, type.ptr());
 
     NETW_CHECK_EQ(session.count("service_registered"), 1);
-    NETW_CHECK_EQ(core->service_of(type.ptr()), service);
+    NETW_CHECK_EQ(core->get_service(type.ptr()), service);
 
-    core->service_unregister(type.ptr(), service);
+    core->service_unregister(service, type.ptr());
 
     CHECK(
         session.order()
         == Vector<StringName>({"service_registered", "service_unregistered"})
     );
-    NETW_CHECK_EQ(core->service_of(type.ptr()), nullptr);
+    NETW_CHECK_EQ(core->get_service(type.ptr()), nullptr);
     memdelete(service);
 }
 
@@ -1654,19 +2156,19 @@ TEST_CASE(
     "replacement now and honoring a stale unregister would drop the live "
     "service and announce the wrong one gone"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const Ref<Resource> type = an_identity_only_type();
     Node *first = memnew(Node);
     Node *second = memnew(Node);
-    core->service_register(type.ptr(), first);
-    core->service_register(type.ptr(), second);
+    core->service_register(first, type.ptr());
+    core->service_register(second, type.ptr());
     Recorder session(core.ptr(), service_edges());
 
-    core->service_unregister(type.ptr(), first);
+    core->service_unregister(first, type.ptr());
 
     NETW_CHECK_EQ(session.count("service_unregistered"), 0);
-    NETW_CHECK_EQ(core->service_of(type.ptr()), second);
+    NETW_CHECK_EQ(core->get_service(type.ptr()), second);
     memdelete(first);
     memdelete(second);
 }
@@ -1675,15 +2177,15 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a freed service reads as absent, "
     "because the book holds an id rather than a live reference"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const Ref<Resource> type = an_identity_only_type();
     Node *service = memnew(Node);
-    core->service_register(type.ptr(), service);
+    core->service_register(service, type.ptr());
 
     memdelete(service);
 
-    NETW_CHECK_EQ(core->service_of(type.ptr()), nullptr);
+    NETW_CHECK_EQ(core->get_service(type.ptr()), nullptr);
 }
 
 } // namespace TestNetwMultiplayerServices
@@ -1692,7 +2194,7 @@ namespace TestNetwMultiplayerWrapperIndex {
 
 using namespace godot;
 using netw::NetwLivenessCore;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
 Vector<StringName> entity_edges() {
@@ -1703,21 +2205,20 @@ Vector<StringName> entity_edges() {
     });
 }
 
-Ref<RefCounted> an_identity_only_wrapper() {
-    Ref<RefCounted> wrapper;
+Ref<netw::NetwEntity> an_identity_only_wrapper() {
+    Ref<netw::NetwEntity> wrapper;
     wrapper.instantiate();
     return wrapper;
 }
 
-Ref<netw::NetwEntityRecord> a_record_holding_peer_and_route(
+netw::NetwEntityRecord *a_record_holding_peer_and_route(
+    netw_test::RecordBox &p_box,
     int64_t p_peer,
     int64_t p_route = 0
 ) {
-    Ref<netw::NetwEntityRecord> record;
-    record.instantiate();
-    record->set_peer_id(p_peer);
-    record->set_route(p_route);
-    return record;
+    p_box->set_peer_id(p_peer);
+    p_box->set_route(p_route);
+    return p_box;
 }
 
 TEST_CASE(
@@ -1725,39 +2226,41 @@ TEST_CASE(
     "letting go of the only other reference does not free it and does not "
     "leave a dead object for the rest of the route's life"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID entity = core->get_liveness_core()->entity_create();
     const int64_t route = core->get_liveness_core()->reserve_route();
-    Ref<RefCounted> wrapper = an_identity_only_wrapper();
-    RefCounted *raw = wrapper.ptr();
+    Ref<netw::NetwEntity> wrapper = an_identity_only_wrapper();
+    netw::NetwEntity *raw = wrapper.ptr();
+    netw_test::RecordBox seated;
     core->liveness_bind(
         entity,
         route,
         wrapper,
-        a_record_holding_peer_and_route(0),
+        a_record_holding_peer_and_route(seated, 0),
         nullptr
     );
 
     wrapper.unref();
 
-    NETW_CHECK_EQ(core->wrapper_of(entity).ptr(), raw);
+    NETW_CHECK_EQ(core->entity_get_view(entity).ptr(), raw);
     NETW_CHECK_EQ(core->wrapper_for_route(route).ptr(), raw);
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] a route's life is three edges") {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID entity = core->get_liveness_core()->entity_create();
     const int64_t route = core->get_liveness_core()->reserve_route();
     Recorder session(core.ptr(), entity_edges());
+    netw_test::RecordBox seated;
 
     NETW_CHECK_EQ(
         core->liveness_bind(
             entity,
             route,
             an_identity_only_wrapper(),
-            a_record_holding_peer_and_route(0),
+            a_record_holding_peer_and_route(seated, 0),
             nullptr
         ),
         true
@@ -1787,24 +2290,25 @@ TEST_CASE(
     "waiting in the retired book rather than being dropped, because its "
     "last act is a hide the delta names only in the NEXT cycle"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID entity = core->get_liveness_core()->entity_create();
     const int64_t route = core->get_liveness_core()->reserve_route();
-    Ref<RefCounted> wrapper = an_identity_only_wrapper();
-    RefCounted *raw = wrapper.ptr();
+    Ref<netw::NetwEntity> wrapper = an_identity_only_wrapper();
+    netw::NetwEntity *raw = wrapper.ptr();
+    netw_test::RecordBox seated;
     core->liveness_bind(
         entity,
         route,
         wrapper,
-        a_record_holding_peer_and_route(0),
+        a_record_holding_peer_and_route(seated, 0),
         nullptr
     );
     wrapper.unref();
 
     core->liveness_retire(route);
 
-    NETW_CHECK_EQ(core->wrapper_of(entity).is_valid(), false);
+    NETW_CHECK_EQ(core->entity_get_view(entity).is_valid(), false);
     NETW_CHECK_EQ(core->wrapper_for_id(entity.get_id()).ptr(), raw);
     NETW_CHECK_EQ(
         int(core->get_liveness_core()->state_of(entity)),
@@ -1822,16 +2326,18 @@ TEST_CASE(
     "wrapper arriving for a live route is refused rather than allowed to "
     "rename it"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID first = core->get_liveness_core()->entity_create();
     const RID second = core->get_liveness_core()->entity_create();
     const int64_t route = core->get_liveness_core()->reserve_route();
+    netw_test::RecordBox seated;
+    netw_test::RecordBox arriving;
     core->liveness_bind(
         first,
         route,
         an_identity_only_wrapper(),
-        a_record_holding_peer_and_route(0),
+        a_record_holding_peer_and_route(seated, 0),
         nullptr
     );
     Recorder session(core.ptr(), entity_edges());
@@ -1841,14 +2347,14 @@ TEST_CASE(
             second,
             route,
             an_identity_only_wrapper(),
-            a_record_holding_peer_and_route(0),
+            a_record_holding_peer_and_route(arriving, 0),
             nullptr
         ),
         false
     );
 
     NETW_CHECK_EQ(session.order().size(), 0);
-    NETW_CHECK_EQ(core->wrapper_of(second).is_valid(), false);
+    NETW_CHECK_EQ(core->entity_get_view(second).is_valid(), false);
 }
 
 TEST_CASE(
@@ -1857,50 +2363,55 @@ TEST_CASE(
     "nothing, and once the owning route retires it represents nobody until "
     "another route says otherwise"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Ref<netw::LocalMultiplayerPeer> peer;
     peer.instantiate();
     peer->create_server();
     core->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
     const int64_t mine = core->get_unique_id();
-    Recorder session(core.ptr(), Vector<StringName>({"local_player_changed"}));
+    Recorder session(
+        core.ptr(),
+        Vector<StringName>({"scene_local_player_changed"})
+    );
 
     const RID theirs = core->get_liveness_core()->entity_create();
     const int64_t their_route = core->get_liveness_core()->reserve_route();
+    netw_test::RecordBox their_seat;
+    netw_test::RecordBox our_seat;
     core->liveness_bind(
         theirs,
         their_route,
         an_identity_only_wrapper(),
-        a_record_holding_peer_and_route(mine + 1, their_route),
+        a_record_holding_peer_and_route(their_seat, mine + 1, their_route),
         nullptr
     );
     core->liveness_publish_live(their_route);
     core->liveness_settle_local_player(their_route);
 
-    NETW_CHECK_EQ(session.count("local_player_changed"), 0);
-    NETW_CHECK_EQ(core->get_local_player().is_valid(), false);
+    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 0);
+    NETW_CHECK_EQ(core->scene_player_local().is_valid(), false);
 
     const RID ours = core->get_liveness_core()->entity_create();
     const int64_t our_route = core->get_liveness_core()->reserve_route();
-    const Ref<RefCounted> wrapper = an_identity_only_wrapper();
+    const Ref<netw::NetwEntity> wrapper = an_identity_only_wrapper();
     core->liveness_bind(
         ours,
         our_route,
         wrapper,
-        a_record_holding_peer_and_route(mine, our_route),
+        a_record_holding_peer_and_route(our_seat, mine, our_route),
         nullptr
     );
     core->liveness_publish_live(our_route);
     core->liveness_settle_local_player(our_route);
 
-    NETW_CHECK_EQ(session.count("local_player_changed"), 1);
-    NETW_CHECK_EQ(core->get_local_player().ptr(), wrapper.ptr());
+    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 1);
+    NETW_CHECK_EQ(core->scene_player_local().ptr(), wrapper.ptr());
 
     core->liveness_retire(our_route);
 
-    NETW_CHECK_EQ(session.count("local_player_changed"), 2);
-    NETW_CHECK_EQ(core->get_local_player().is_valid(), false);
+    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 2);
+    NETW_CHECK_EQ(core->scene_player_local().is_valid(), false);
 }
 
 TEST_CASE(
@@ -1909,25 +2420,29 @@ TEST_CASE(
     "session answers, which would look local to a check that skipped the "
     "transport"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    Recorder session(core.ptr(), Vector<StringName>({"local_player_changed"}));
+    Recorder session(
+        core.ptr(),
+        Vector<StringName>({"scene_local_player_changed"})
+    );
     const RID entity = core->get_liveness_core()->entity_create();
     const int64_t route = core->get_liveness_core()->reserve_route();
+    netw_test::RecordBox seated;
 
     core->liveness_bind(
         entity,
         route,
         an_identity_only_wrapper(),
-        a_record_holding_peer_and_route(1, route),
+        a_record_holding_peer_and_route(seated, 1, route),
         nullptr
     );
     core->liveness_publish_live(route);
     core->liveness_settle_local_player(route);
 
     NETW_CHECK_EQ(core->has_multiplayer_peer(), false);
-    NETW_CHECK_EQ(session.count("local_player_changed"), 0);
-    NETW_CHECK_EQ(core->get_local_player().is_valid(), false);
+    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 0);
+    NETW_CHECK_EQ(core->scene_player_local().is_valid(), false);
 }
 
 TEST_CASE(
@@ -1937,7 +2452,7 @@ TEST_CASE(
     "whether it represents this peer, which would answer yes for every "
     "entity that has one and drop a local player that had already moved on"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Ref<netw::LocalMultiplayerPeer> peer;
     peer.instantiate();
@@ -1947,11 +2462,13 @@ TEST_CASE(
 
     const RID before = core->get_liveness_core()->entity_create();
     const int64_t before_route = core->get_liveness_core()->reserve_route();
+    netw_test::RecordBox before_seat;
+    netw_test::RecordBox after_seat;
     core->liveness_bind(
         before,
         before_route,
         an_identity_only_wrapper(),
-        a_record_holding_peer_and_route(mine, before_route),
+        a_record_holding_peer_and_route(before_seat, mine, before_route),
         nullptr
     );
     core->liveness_publish_live(before_route);
@@ -1964,17 +2481,20 @@ TEST_CASE(
         after,
         after_route,
         replacement,
-        a_record_holding_peer_and_route(mine, after_route),
+        a_record_holding_peer_and_route(after_seat, mine, after_route),
         nullptr
     );
     core->liveness_publish_live(after_route);
     core->liveness_settle_local_player(after_route);
-    Recorder session(core.ptr(), Vector<StringName>({"local_player_changed"}));
+    Recorder session(
+        core.ptr(),
+        Vector<StringName>({"scene_local_player_changed"})
+    );
 
     core->liveness_retire(before_route);
 
-    NETW_CHECK_EQ(session.count("local_player_changed"), 0);
-    NETW_CHECK_EQ(core->get_local_player().ptr(), replacement.ptr());
+    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 0);
+    NETW_CHECK_EQ(core->scene_player_local().ptr(), replacement.ptr());
 }
 
 TEST_CASE(
@@ -1983,17 +2503,16 @@ TEST_CASE(
     "stamps the route onto the record, so a caller never reads a route "
     "the plane refused to give"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const int64_t route = core->get_liveness_core()->reserve_route();
     Ref<RefCounted> first = an_identity_only_wrapper();
-    Ref<netw::NetwEntityRecord> held = a_record_holding_peer_and_route(0);
+    netw_test::RecordBox held_seat;
+    netw::NetwEntityRecord *const held
+        = a_record_holding_peer_and_route(held_seat, 0);
     core->get_liveness_core()->adopt(held->get_handle());
 
-    NETW_CHECK_EQ(
-        core->liveness_adopt_route(route, first, held, nullptr),
-        OK
-    );
+    NETW_CHECK_EQ(core->liveness_adopt_route(route, first, held, nullptr), OK);
 
     NETW_CHECK_EQ(held->get_route(), route);
     NETW_CHECK_EQ(core->wrapper_for_route(route).ptr(), first.ptr());
@@ -2007,8 +2526,9 @@ TEST_CASE(
 
     SUBCASE("a second wrapper is refused the route, which keeps its own") {
         Ref<RefCounted> second = an_identity_only_wrapper();
-        Ref<netw::NetwEntityRecord> arriving
-            = a_record_holding_peer_and_route(0);
+        netw_test::RecordBox arriving_seat;
+        netw::NetwEntityRecord *const arriving
+            = a_record_holding_peer_and_route(arriving_seat, 0);
         NETW_CHECK_EQ(
             core->liveness_adopt_route(route, second, arriving, nullptr),
             ERR_UNAVAILABLE
@@ -2033,11 +2553,13 @@ TEST_CASE(
     "the arriving record takes the standing handle rather than minting a "
     "second name for it"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const int64_t route = core->get_liveness_core()->reserve_route();
     Ref<RefCounted> died = an_identity_only_wrapper();
-    Ref<netw::NetwEntityRecord> record = a_record_holding_peer_and_route(0);
+    netw_test::RecordBox record_seat;
+    netw::NetwEntityRecord *const record
+        = a_record_holding_peer_and_route(record_seat, 0);
     const RID standing = record->get_handle();
     core->get_liveness_core()->adopt(standing);
     REQUIRE(core->liveness_adopt_route(route, died, record, nullptr) == OK);
@@ -2049,7 +2571,9 @@ TEST_CASE(
     const int before = core->get_liveness_core()->epoch_of(standing);
 
     Ref<RefCounted> revived = an_identity_only_wrapper();
-    Ref<netw::NetwEntityRecord> arriving = a_record_holding_peer_and_route(0);
+    netw_test::RecordBox arriving_seat;
+    netw::NetwEntityRecord *const arriving
+        = a_record_holding_peer_and_route(arriving_seat, 0);
     NETW_CHECK_EQ(
         core->liveness_adopt_route(route, revived, arriving, nullptr),
         OK
@@ -2071,12 +2595,12 @@ TEST_CASE(
     ) {
         core->liveness_retire(route);
         Ref<RefCounted> known = an_identity_only_wrapper();
-        Ref<netw::NetwEntityRecord> mine = a_record_holding_peer_and_route(0);
+        netw_test::RecordBox mine_seat;
+        netw::NetwEntityRecord *const mine
+            = a_record_holding_peer_and_route(mine_seat, 0);
         const int64_t other = core->get_liveness_core()->reserve_route();
         core->get_liveness_core()->adopt(mine->get_handle());
-        REQUIRE(
-            core->liveness_adopt_route(other, known, mine, nullptr) == OK
-        );
+        REQUIRE(core->liveness_adopt_route(other, known, mine, nullptr) == OK);
 
         NETW_CHECK_EQ(
             core->liveness_adopt_route(route, known, mine, nullptr),
@@ -2091,24 +2615,24 @@ TEST_CASE(
 namespace TestNetwMultiplayerParticipants {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
 Vector<StringName> join_edges() {
     return Vector<StringName>({
-        "local_participant_joined",
+        "participant_local_joined",
         "participant_joined",
     });
 }
 
-Ref<RefCounted> a_row() {
-    Ref<RefCounted> row;
+Ref<netw::NetwParticipant> a_row() {
+    Ref<netw::NetwParticipant> row;
     row.instantiate();
     return row;
 }
 
-Ref<NetwMultiplayerCore> peered_core() {
-    Ref<NetwMultiplayerCore> core;
+Ref<NetwMultiplayer> peered_core() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Ref<netw::LocalMultiplayerPeer> peer;
     peer.instantiate();
@@ -2122,8 +2646,8 @@ TEST_CASE(
     "callers reading it never end up with two different objects for one "
     "participant"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
-    const Ref<RefCounted> first = a_row();
+    Ref<NetwMultiplayer> core = peered_core();
+    const Ref<netw::NetwParticipant> first = a_row();
 
     core->participant_adopt(7, first);
     core->participant_adopt(7, a_row());
@@ -2142,7 +2666,7 @@ TEST_CASE(
     "listener that handles both sees itself arrive before it sees the "
     "roster grow, and a peer that is not this one is never announced local"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const int64_t mine = core->get_unique_id();
     core->participant_adopt(mine, a_row());
     core->participant_adopt(mine + 1, a_row());
@@ -2155,7 +2679,7 @@ TEST_CASE(
         session.order()
         == Vector<StringName>({
             "participant_joined",
-            "local_participant_joined",
+            "participant_local_joined",
             "participant_joined",
         })
     );
@@ -2166,7 +2690,7 @@ TEST_CASE(
     "because it has not been admitted and announcing it would put a null "
     "participant in front of every listener"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     Recorder session(core.ptr(), join_edges());
 
     core->participant_publish_joined(9);
@@ -2179,14 +2703,14 @@ TEST_CASE(
     "reads in one frame agree rather than following whatever order a hash "
     "happened to hold"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
-    const Ref<RefCounted> low = a_row();
-    const Ref<RefCounted> high = a_row();
+    Ref<NetwMultiplayer> core = peered_core();
+    const Ref<netw::NetwParticipant> low = a_row();
+    const Ref<netw::NetwParticipant> high = a_row();
 
     core->participant_adopt(9, high);
     core->participant_adopt(2, low);
 
-    const TypedArray<Object> all = core->participant_all();
+    const TypedArray<netw::NetwParticipant> all = core->participant_all();
     REQUIRE(all.size() == 2);
     NETW_CHECK_EQ(Object::cast_to<Object>(all[0]), low.ptr());
     NETW_CHECK_EQ(Object::cast_to<Object>(all[1]), high.ptr());
@@ -2196,48 +2720,29 @@ TEST_CASE(
     NETW_CHECK_EQ(core->participant_all().size(), 0);
 }
 
-Ref<RefCounted> a_row_with_instance_scene_changed_signal() {
-    Ref<RefCounted> row;
-    row.instantiate();
-    Array args;
-    Dictionary from;
-    from["name"] = "from";
-    from["type"] = int(Variant::OBJECT);
-    Dictionary to;
-    to["name"] = "to";
-    to["type"] = int(Variant::OBJECT);
-    args.push_back(from);
-    args.push_back(to);
-    netw::gd::add_user_signal(row.ptr(), "scene_changed", args);
-    return row;
-}
-
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] only the local participant's scene "
     "change is the session's, never another peer's, and the published "
     "edge names WHICH participant moved because each row names itself as "
     "the scene it moved to"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const int64_t mine = core->get_unique_id();
-    const Ref<RefCounted> ours = a_row_with_instance_scene_changed_signal();
-    const Ref<RefCounted> theirs = a_row_with_instance_scene_changed_signal();
+    const Ref<netw::NetwParticipant> ours = a_row();
+    const Ref<netw::NetwParticipant> theirs = a_row();
     core->participant_adopt(mine, ours);
     core->participant_adopt(mine + 1, theirs);
     core->participant_publish_joined(mine);
     core->participant_publish_joined(mine + 1);
-    Recorder session(
-        core.ptr(),
-        Vector<StringName>({"local_scene_changed"})
-    );
+    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
 
     theirs->emit_signal("scene_changed", Variant(), theirs);
     ours->emit_signal("scene_changed", Variant(), ours);
 
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 1);
-    REQUIRE(session.args("local_scene_changed").size() == 2);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 1);
+    REQUIRE(session.args("scene_local_changed").size() == 2);
     NETW_CHECK_EQ(
-        Object::cast_to<Object>(session.args("local_scene_changed")[1]),
+        Object::cast_to<Object>(session.args("scene_local_changed")[1]),
         ours.ptr()
     );
 }
@@ -2247,20 +2752,17 @@ TEST_CASE(
     "speaking for the session, because a row the roster dropped is no "
     "longer this peer"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const int64_t mine = core->get_unique_id();
-    const Ref<RefCounted> ours = a_row_with_instance_scene_changed_signal();
+    const Ref<netw::NetwParticipant> ours = a_row();
     core->participant_adopt(mine, ours);
     core->participant_publish_joined(mine);
-    Recorder session(
-        core.ptr(),
-        Vector<StringName>({"local_scene_changed"})
-    );
+    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
 
     core->participant_forget(mine);
     ours->emit_signal("scene_changed", Variant(), ours);
 
-    NETW_CHECK_EQ(session.count("local_scene_changed"), 0);
+    NETW_CHECK_EQ(session.count("scene_local_changed"), 0);
 }
 
 } // namespace TestNetwMultiplayerParticipants
@@ -2268,21 +2770,21 @@ TEST_CASE(
 namespace TestNetwMultiplayerEntityTree {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
 constexpr const char *ENTITY_ROOT_META_KEY = "netw_entity";
 
 struct Bound {
-    Ref<NetwMultiplayerCore> core;
-    Ref<RefCounted> wrapper;
-    Ref<netw::NetwEntityRecord> record;
+    Ref<NetwMultiplayer> core;
+    Ref<netw::NetwEntity> wrapper;
+    netw::NetwEntityRecord *record = nullptr;
     RID handle;
     Node *owner = nullptr;
 };
 
 Bound bind_under(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     bool p_marked,
     bool p_declares_scene = false,
@@ -2296,12 +2798,13 @@ Bound bind_under(
     }
     out.wrapper.instantiate();
     out.handle = p_core->get_liveness_core()->entity_create();
-    out.record.instantiate();
+    out.record = out.wrapper->get_record();
     out.record->adopt_handle(out.handle);
     out.record->set_declares_scene(p_declares_scene);
     out.record->set_peer_id(p_peer_id);
     const int64_t route = p_core->get_liveness_core()->reserve_route();
-    p_core->liveness_bind(out.handle, route, out.wrapper, out.record, out.owner);
+    p_core
+        ->liveness_bind(out.handle, route, out.wrapper, out.record, out.owner);
     if (p_marked) {
         out.owner->set_meta(ENTITY_ROOT_META_KEY, out.wrapper);
     }
@@ -2314,7 +2817,7 @@ TEST_CASE(
     "than stopping there, and a node's own mark is not its parent's, so a "
     "root answers invalid rather than answering itself"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound grandparent = bind_under(core, root, true);
@@ -2333,14 +2836,14 @@ TEST_CASE(
     "a wrapper this session never adopted has no handle here, which is "
     "what separates another session's entity from one of ours"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound bound = bind_under(core, root, true);
 
     CHECK(core->handle_of_wrapper(bound.wrapper.ptr()) == bound.handle);
     NETW_CHECK_EQ(core->wrapper_owner(bound.handle), bound.owner);
-    Ref<RefCounted> stranger;
+    Ref<netw::NetwEntity> stranger;
     stranger.instantiate();
     NETW_CHECK_EQ(core->handle_of_wrapper(stranger.ptr()).is_valid(), false);
 
@@ -2360,24 +2863,27 @@ TEST_CASE(
     root->add_child(child);
     Node *orphan = memnew(Node);
 
-    CHECK(String(NetwMultiplayerCore::relative_path(root, child))
-          == String("Body"));
-    CHECK(String(NetwMultiplayerCore::property_path(child, "position", root))
-          == String("Body:position"));
-    CHECK(String(NetwMultiplayerCore::property_path(root, "position", root))
-          == String(".:position"));
+    CHECK(
+        String(NetwMultiplayer::relative_path(root, child)) == String("Body")
+    );
+    CHECK(
+        String(NetwMultiplayer::property_path(child, "position", root))
+        == String("Body:position")
+    );
+    CHECK(
+        String(NetwMultiplayer::property_path(root, "position", root))
+        == String(".:position")
+    );
     NETW_CHECK_EQ(
-        NetwMultiplayerCore::property_path(child, "position", nullptr)
-            .is_empty(),
+        NetwMultiplayer::property_path(child, "position", nullptr).is_empty(),
         true
     );
     NETW_CHECK_EQ(
-        NetwMultiplayerCore::property_path(nullptr, "position", root)
-            .is_empty(),
+        NetwMultiplayer::property_path(nullptr, "position", root).is_empty(),
         true
     );
     NETW_CHECK_EQ(
-        NetwMultiplayerCore::relative_path(nullptr, child).is_empty(),
+        NetwMultiplayer::relative_path(nullptr, child).is_empty(),
         true
     );
 
@@ -2392,20 +2898,13 @@ TEST_CASE(
     "nobody holds; the facet an entity belongs to is its scene's, and a "
     "scene's own facet is itself, both resolved through that same walk"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound container = bind_under(core, root, true, true);
     const Bound inside = bind_under(core, container.owner, true, false);
-    netw_test::EntityFactories factories;
-    netw_test::CallLog facets;
-    netw::NetwEntityRecord::set_part_factory(
-        netw::NetwEntityRecord::PART_SCENE,
-        facets.minting("scene")
-    );
-    const Ref<RefCounted> container_handle = core->scene_handle_of(
-        container.handle
-    );
+    const Ref<netw::NetwSceneHandle> container_handle
+        = core->scene_handle_of(container.handle);
     Recorder session(core.ptr(), Vector<StringName>({"scene_live"}));
 
     core->scene_publish_live(
@@ -2420,7 +2919,7 @@ TEST_CASE(
         container_handle.ptr()
     );
     CHECK(core->scene_handle_of(inside.handle) != container_handle);
-    CHECK(core->entity_scene_of(inside.handle) == container.handle);
+    CHECK(core->scene_of(inside.handle) == container.handle);
     CHECK(
         core->entity_scene_facet(inside.record, inside.wrapper.ptr())
         == container_handle
@@ -2439,8 +2938,11 @@ TEST_CASE(
         const Bound middle = bind_under(core, container.owner, true, false);
         const Bound deep = bind_under(core, middle.owner, true, false);
         CHECK(core->entity_parent_of(deep.handle) == middle.handle);
-        CHECK(core->entity_scene_of(deep.handle) == container.handle);
-        CHECK(core->entity_scene_facet(deep.record, deep.wrapper.ptr()) == container_handle);
+        CHECK(core->scene_of(deep.handle) == container.handle);
+        CHECK(
+            core->entity_scene_facet(deep.record, deep.wrapper.ptr())
+            == container_handle
+        );
         CHECK(
             core->entity_scene_facet(deep.record, deep.wrapper.ptr())
             != core->scene_handle_of(middle.handle)
@@ -2453,9 +2955,8 @@ TEST_CASE(
         "adopts it, so a record the index does not hold must still answer "
         "its own rather than nothing"
     ) {
-        Ref<netw::NetwEntityRecord> stranger;
-        stranger.instantiate();
-        Ref<RefCounted> its_wrapper;
+        netw_test::RecordBox stranger;
+        Ref<netw::NetwEntity> its_wrapper;
         its_wrapper.instantiate();
         CHECK(core->entity_scene_facet(stranger, its_wrapper.ptr()).is_valid());
     }
@@ -2479,72 +2980,91 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a scene request flood bounds a peer and "
     "never the host"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     const int64_t now = 1000;
 
     for (int at = 0; at < 20; ++at) {
         CHECK_FALSE(core->scene_request_flooded(1, now));
     }
-    NETW_CHECK_EQ(core->verdict_total(int64_t(ERR_BUSY)), 0);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 0);
 
     for (int at = 0; at < 8; ++at) {
         CHECK_FALSE(core->scene_request_flooded(42, now));
     }
     CHECK(core->scene_request_flooded(42, now));
-    NETW_CHECK_EQ(core->verdict_total(int64_t(ERR_BUSY)), 1);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 1);
 
     CHECK_FALSE(core->scene_request_flooded(43, now));
-    NETW_CHECK_EQ(core->verdict_total(int64_t(ERR_BUSY)), 1);
+    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 1);
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a scene container is built for the "
-    "isolation it declared"
+    "[Networked][Multiplayer][Hosted] a shared scene root is its own outer "
+    "node and no viewport is inserted"
 ) {
-    Node *shared = NetwMultiplayerCore::scene_build_container(true, false);
-    Node *viewed = NetwMultiplayerCore::scene_build_container(false, true);
-    Node *isolated = NetwMultiplayerCore::scene_build_container(true, true);
+    Node *shared = memnew(Node);
+    shared->set_name("Lobby");
+    const Ref<netw::NetwEntity> seat = netw::NetwEntity::ensure(shared);
+    REQUIRE(seat.is_valid());
+    seat->set_declares_scene(true);
+    seat->set_scene_isolation(int64_t(netw::NetwSceneCore::ISOLATION_NONE));
 
-    const StringName mark("_netw_scene_container");
-    for (Node *container : {shared, viewed, isolated}) {
-        CHECK(bool(container->get_name() == StringName("Scene")));
-        CHECK(container->has_meta(mark));
-        CHECK(container->get_script().get_type() == Variant::NIL);
-        NETW_CHECK_EQ(container->get_child_count(), 0);
-    }
-
-    CHECK(Object::cast_to<SubViewport>(shared) == nullptr);
-    CHECK(Object::cast_to<SubViewport>(viewed) == nullptr);
-    REQUIRE(Object::cast_to<SubViewport>(isolated) != nullptr);
-    CHECK(Object::cast_to<SubViewport>(isolated)->is_using_own_world_3d());
-    NETW_CHECK_EQ(
-        int(Object::cast_to<SubViewport>(isolated)->get_update_mode()),
-        int(SubViewport::UPDATE_DISABLED)
-    );
-
-    Node *level = memnew(Node);
-    level->set_name("Arena");
-    NetwMultiplayerCore::scene_install_level(shared, level);
-
-    CHECK(bool(shared->get_name() == StringName("ArenaScene")));
-    REQUIRE(shared->get_child_count() == 1);
-    CHECK(shared->get_child(0) == level);
-    CHECK(level->get_owner() == shared);
-
-    NetwMultiplayerCore::scene_install_level(nullptr, level);
-    NetwMultiplayerCore::scene_install_level(viewed, nullptr);
-    NETW_CHECK_EQ(viewed->get_child_count(), 0);
+    CHECK_FALSE(NetwMultiplayer::scene_root_is_isolated(shared));
+    CHECK(NetwMultiplayer::scene_wrap_world(shared) == shared);
+    CHECK(NetwMultiplayer::scene_world_of(shared) == nullptr);
+    CHECK(NetwMultiplayer::scene_outer_of(shared) == shared);
+    CHECK(NetwMultiplayer::scene_inner_of(shared) == shared);
+    CHECK(shared->get_parent() == nullptr);
 
     memdelete(shared);
-    memdelete(viewed);
-    memdelete(isolated);
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] an isolated scene root is wrapped in a "
+    "viewport that owns both worlds and carries no identity"
+) {
+    Node *arena = memnew(Node);
+    arena->set_name("Arena");
+    const Ref<netw::NetwEntity> seat = netw::NetwEntity::ensure(arena);
+    REQUIRE(seat.is_valid());
+    seat->set_declares_scene(true);
+    seat->set_scene_isolation(
+        int64_t(netw::NetwSceneCore::ISOLATION_OWN_WORLD)
+    );
+
+    REQUIRE(NetwMultiplayer::scene_root_is_isolated(arena));
+    Node *outer = NetwMultiplayer::scene_wrap_world(arena);
+    REQUIRE(outer != nullptr);
+    REQUIRE(outer != arena);
+
+    SubViewport *world = Object::cast_to<SubViewport>(outer);
+    REQUIRE(world != nullptr);
+    CHECK(world->is_using_own_world_3d());
+    CHECK(world->get_world_2d().is_valid());
+    NETW_CHECK_EQ(
+        int(world->get_update_mode()),
+        int(SubViewport::UPDATE_DISABLED)
+    );
+    CHECK(world->has_meta(StringName("_netw_scene_container")));
+    CHECK(netw::NetwEntity::of(world).is_null());
+    CHECK(bool(world->get_name() == StringName("ArenaWorld")));
+
+    CHECK(arena->get_parent() == world);
+    CHECK(NetwMultiplayer::scene_world_of(arena) == world);
+    CHECK(NetwMultiplayer::scene_outer_of(arena) == world);
+    CHECK(NetwMultiplayer::scene_inner_of(world) == arena);
+
+    CHECK(NetwMultiplayer::scene_wrap_world(arena) == world);
+    NETW_CHECK_EQ(world->get_child_count(), 1);
+
+    memdelete(world);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] a mounted scene resolves in one stage"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
 
@@ -2554,8 +3074,8 @@ TEST_CASE(
     container.owner->add_child(level);
     const Bound seated = bind_under(core, level, true, false);
 
-    CHECK(core->entity_scene_of(seated.handle) == container.handle);
-    CHECK(core->entity_scene_of(container.handle) == container.handle);
+    CHECK(core->scene_of(seated.handle) == container.handle);
+    CHECK(core->scene_of(container.handle) == container.handle);
 
     const Bound bare = bind_under(core, root, true, false);
     Node *bare_level = memnew(Node);
@@ -2563,7 +3083,7 @@ TEST_CASE(
     bare.owner->add_child(bare_level);
     const Bound stranded = bind_under(core, bare_level, true, false);
 
-    NETW_CHECK_EQ(core->entity_scene_of(stranded.handle).is_valid(), false);
+    NETW_CHECK_EQ(core->scene_of(stranded.handle).is_valid(), false);
 
     memdelete(root);
 }
@@ -2576,7 +3096,7 @@ TEST_CASE(
     "a server-owned entity is admitted nowhere because admission is a "
     "peer's"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound here = bind_under(core, root, true, true);
@@ -2598,7 +3118,7 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a move outside the tree is the two steps "
     "the engine would refuse to take as one"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound inside = bind_under(core, root, true);
@@ -2610,7 +3130,6 @@ TEST_CASE(
     core->entity_reparent(inside.record, inside.owner, destination, opts);
 
     NETW_CHECK_EQ(inside.owner->get_parent(), destination);
-    CHECK(inside.record->get_reparenting().is_null());
 
     SUBCASE("an owner no parent holds still moves") {
         Node *orphan_target = memnew(Node);
@@ -2620,7 +3139,6 @@ TEST_CASE(
         core->entity_reparent(orphan.record, orphan.owner, orphan_target, opts);
 
         NETW_CHECK_EQ(orphan.owner->get_parent(), orphan_target);
-        CHECK(orphan.record->get_reparenting().is_null());
         memdelete(orphan_target);
     }
 
@@ -2628,12 +3146,11 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a refused move leaves nothing in "
-    "flight, because a record left holding one would read every later "
-    "tree exit as a reparent and keep a dead route alive; a destination "
-    "that is not a node is the whole of what a move can refuse"
+    "[Networked][Multiplayer][Hosted] a refused move leaves the owner "
+    "exactly where it stood, and a destination that is not a node is the "
+    "whole of what a move can refuse"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound bound = bind_under(core, root, true);
@@ -2645,7 +3162,6 @@ TEST_CASE(
     ERR_PRINT_ON;
 
     NETW_CHECK_EQ(bound.owner->get_parent(), root);
-    CHECK(bound.record->get_reparenting().is_null());
 
     memdelete(root);
 }
@@ -2655,10 +3171,12 @@ TEST_CASE(
 ) {
     netw_test::EntityFactories factories;
     netw_test::CallLog log;
-    NetwMultiplayerCore::set_wrapper_factory(log.minting("wrapper"));
+    NetwMultiplayer::set_wrapper_factory(
+        log.minting<netw::NetwEntity>("wrapper")
+    );
     Node *root = memnew(Node);
 
-    const Ref<RefCounted> minted = NetwMultiplayerCore::wrapper_ensure(root);
+    const Ref<RefCounted> minted = NetwMultiplayer::wrapper_ensure(root);
 
     CHECK(minted.is_valid());
     NETW_CHECK_EQ(log.count("wrapper"), 1);
@@ -2666,21 +3184,21 @@ TEST_CASE(
     NETW_CHECK_EQ(Object::cast_to<Node>(log.args("wrapper")[0]), root);
 
     SUBCASE("a node that already carries one is not given a second") {
-        root->set_meta(NetwMultiplayerCore::wrapper_meta(), minted);
-        CHECK(NetwMultiplayerCore::wrapper_ensure(root) == minted);
+        root->set_meta(NetwMultiplayer::wrapper_meta(), minted);
+        CHECK(NetwMultiplayer::wrapper_ensure(root) == minted);
         NETW_CHECK_EQ(log.count("wrapper"), 1);
     }
 
     SUBCASE("the walk finds the nearest marked ancestor and nothing else") {
-        root->set_meta(NetwMultiplayerCore::wrapper_meta(), minted);
+        root->set_meta(NetwMultiplayer::wrapper_meta(), minted);
         Node *plain = memnew(Node);
         root->add_child(plain);
         Node *deep = memnew(Node);
         plain->add_child(deep);
 
-        CHECK(NetwMultiplayerCore::wrapper_at(deep) == minted);
+        CHECK(NetwMultiplayer::wrapper_at(deep) == minted);
         Node *stranger = memnew(Node);
-        CHECK(NetwMultiplayerCore::wrapper_at(stranger).is_null());
+        CHECK(NetwMultiplayer::wrapper_at(stranger).is_null());
         memdelete(stranger);
     }
 
@@ -2695,14 +3213,16 @@ TEST_CASE(
 ) {
     netw_test::EntityFactories factories;
     netw_test::CallLog log;
-    NetwMultiplayerCore::set_wrapper_factory(log.minting("wrapper"));
+    NetwMultiplayer::set_wrapper_factory(
+        log.minting<netw::NetwEntity>("wrapper")
+    );
     Node *top = memnew(Node);
     Node *middle = memnew(Node);
     top->add_child(middle);
     Node *leaf = memnew(Node);
     middle->add_child(leaf);
 
-    const Ref<RefCounted> minted = NetwMultiplayerCore::wrapper_resolve(leaf);
+    const Ref<RefCounted> minted = NetwMultiplayer::wrapper_resolve(leaf);
 
     CHECK(minted.is_valid());
     REQUIRE(log.args("wrapper").size() == 1);
@@ -2716,13 +3236,13 @@ TEST_CASE(
     "identity onto its wrapper"
 ) {
     netw_test::EntityFactories factories;
-    Ref<netw::NetwEntityRecord> wrapper;
+    Ref<netw::NetwEntity> wrapper;
     wrapper.instantiate();
     netw_test::CallLog log;
-    NetwMultiplayerCore::set_wrapper_factory(log.answering("wrapper", wrapper));
+    NetwMultiplayer::set_wrapper_factory(log.answering("wrapper", wrapper));
     Node *node = memnew(Node);
 
-    NetwMultiplayerCore::wrapper_bind(node, "valeria", 7);
+    NetwMultiplayer::wrapper_bind(node, "valeria", 7);
 
     CHECK(node->get_name() == StringName("valeria|7"));
     CHECK(wrapper->get_entity_id() == StringName("valeria"));
@@ -2734,16 +3254,16 @@ TEST_CASE(
         "disagreeing about who the entity is, which is worse than not "
         "binding"
     ) {
-        Ref<netw::NetwEntityRecord> untouched;
+        Ref<netw::NetwEntity> untouched;
         untouched.instantiate();
-        NetwMultiplayerCore::set_wrapper_factory(
+        NetwMultiplayer::set_wrapper_factory(
             log.answering("wrapper", untouched)
         );
         Node *refused = memnew(Node);
         refused->set_name("Standing");
 
         ERR_PRINT_OFF;
-        NetwMultiplayerCore::wrapper_bind(refused, "a|b", 3);
+        NetwMultiplayer::wrapper_bind(refused, "a|b", 3);
         ERR_PRINT_ON;
 
         CHECK(refused->get_name() == StringName("Standing"));
@@ -2756,10 +3276,11 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a linger deactivates at once and frees on "
+    "[Networked][Multiplayer][Hosted] a linger deactivates at once and frees "
+    "on "
     "the session's own count"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound bound = bind_under(core, root, true);
@@ -2789,51 +3310,12 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a move is reported at the session's "
-    "next settle, not while the reparent is still mid-propagation and the "
-    "subtree is still rebuilding, and only for an owner still there to "
-    "hear it"
-) {
-    Ref<NetwMultiplayerCore> core;
-    core.instantiate();
-    Node *root = memnew(Node);
-    const Bound bound = bind_under(core, root, true);
-    netw::gd::add_signal(bound.wrapper.ptr(), "reparented", 1);
-    netw_test::CallLog log;
-    bound.wrapper->connect("reparented", log.callable("moved"));
-    Ref<netw::NetwReparentOpts> opts;
-    opts.instantiate();
-
-    core->entity_settle_reparented(bound.wrapper.ptr(), bound.owner, opts);
-
-    NETW_CHECK_EQ(log.count("moved"), 0);
-    NETW_CHECK_EQ(core->settle_pending(), 1);
-
-    SUBCASE("two moves in one cascade are two reports") {
-        core->entity_settle_reparented(bound.wrapper.ptr(), bound.owner, opts);
-        NETW_CHECK_EQ(core->settle_pending(), 2);
-    }
-
-    SUBCASE(
-        "a move whose owner is gone by the time the settle runs after the "
-        "propagation is not reported at all, because a report naming it "
-        "would hand a listener a node it cannot read"
-    ) {
-        core->entity_announce_reparented(bound.wrapper.ptr(), nullptr, opts);
-        NETW_CHECK_EQ(log.count("moved"), 0);
-    }
-
-    core->settle_clear();
-    memdelete(root);
-}
-
-TEST_CASE(
     "[Networked][Multiplayer][Hosted] a property another stream already "
     "drives is governed, unless that stream is the one asking, because a "
     "stream is not competition with itself, and a property nothing drives "
     "is free to persist"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     MultiplayerSynchronizer *sync = memnew(MultiplayerSynchronizer);
@@ -2870,12 +3352,20 @@ TEST_CASE(
     "carry it carries nothing, the ordinary case rather than an error, "
     "since every offline rig takes it on every transfer"
 ) {
-    Ref<RefCounted> wrapper;
+    Ref<netw::NetwEntity> wrapper;
     wrapper.instantiate();
 
-    NetwMultiplayerCore::entity_broadcast_control(wrapper.ptr(), nullptr, 4);
-    NetwMultiplayerCore::entity_broadcast_control(nullptr, wrapper.ptr(), 4);
-    NetwMultiplayerCore::entity_request_control(nullptr, nullptr, nullptr);
+    NetwMultiplayer::entity_broadcast_control(wrapper, nullptr, 4);
+    NetwMultiplayer::entity_broadcast_control(
+        Ref<netw::NetwEntity>(),
+        nullptr,
+        4
+    );
+    NetwMultiplayer::entity_wrapper_request_control(
+        Ref<netw::NetwEntity>(),
+        nullptr,
+        nullptr
+    );
     CHECK(true);
 }
 
@@ -2889,13 +3379,12 @@ TEST_CASE(
     netw::gd::add_signal(wrapper.ptr(), "spawning");
     netw_test::CallLog log;
     wrapper->connect("spawning", log.callable("live"));
-    Ref<netw::NetwEntityRecord> record;
-    record.instantiate();
+    netw_test::RecordBox record;
     record->set_entity_id("crate");
-    REQUIRE(record->advance(int(netw::EntityStage::ARMED)));
+    REQUIRE(record->advance(int(netw::entity::Stage::ARMED)));
 
     ERR_PRINT_OFF;
-    NetwMultiplayerCore::entity_enter_tree(
+    NetwMultiplayer::entity_enter_tree(
         wrapper.ptr(),
         owner,
         record,
@@ -2904,12 +3393,12 @@ TEST_CASE(
     );
     ERR_PRINT_ON;
 
-    NETW_CHECK_EQ(record->get_stage(), int(netw::EntityStage::LIVE));
+    NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::LIVE));
     NETW_CHECK_EQ(log.count("live"), 1);
 
     SUBCASE("a record already live is a reparent, and is born no second time") {
         ERR_PRINT_OFF;
-        NetwMultiplayerCore::entity_enter_tree(
+        NetwMultiplayer::entity_enter_tree(
             wrapper.ptr(),
             owner,
             record,
@@ -2917,7 +3406,7 @@ TEST_CASE(
             true
         );
         ERR_PRINT_ON;
-        NETW_CHECK_EQ(record->get_stage(), int(netw::EntityStage::LIVE));
+        NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::LIVE));
         NETW_CHECK_EQ(log.count("live"), 1);
     }
 
@@ -2939,11 +3428,10 @@ TEST_CASE(
     netw::gd::add_signal(wrapper.ptr(), "spawning");
     netw_test::CallLog log;
     wrapper->connect("spawning", log.callable("live"));
-    Ref<netw::NetwEntityRecord> record;
-    record.instantiate();
+    netw_test::RecordBox record;
 
     ERR_PRINT_OFF;
-    NetwMultiplayerCore::entity_enter_tree(
+    NetwMultiplayer::entity_enter_tree(
         wrapper.ptr(),
         owner,
         record,
@@ -2952,7 +3440,7 @@ TEST_CASE(
     );
     ERR_PRINT_ON;
 
-    NETW_CHECK_EQ(record->get_stage(), int(netw::EntityStage::TEMPLATE));
+    NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::TEMPLATE));
     NETW_CHECK_EQ(log.count("live"), 0);
 
     memdelete(scene);
@@ -2966,7 +3454,7 @@ TEST_CASE(
     "same one because the walk is to the nearest record above rather than "
     "to the node asked about"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
 
     Node *bare = memnew(Node);
@@ -2980,7 +3468,7 @@ TEST_CASE(
     entity.instantiate();
     entity->attach_to(root);
     const RID handle = core->get_liveness_core()->entity_create();
-    REQUIRE(entity->get_record().is_valid());
+    REQUIRE(entity->get_record() != nullptr);
     entity->get_record()->adopt_handle(handle);
 
     const RID answered = core->entity_of(root);
@@ -2988,7 +3476,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(core->entity_of(child) == handle, true);
 
-    NETW_CHECK_EQ(core->wrapper_of(answered).ptr() == entity.ptr(), true);
+    NETW_CHECK_EQ(core->entity_get_view(answered).ptr() == entity.ptr(), true);
 
     memdelete(root);
     memdelete(bare);
@@ -3003,7 +3491,7 @@ TEST_CASE(
     "freed owner is nothing to either and neither hands back a dangling "
     "node"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *owner = memnew(Node);
     Ref<netw::NetwEntity> entity;
@@ -3035,7 +3523,7 @@ TEST_CASE(
     "was written; and syncing again does not renumber what was already "
     "minted"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     Node *child = memnew(Node);
@@ -3057,7 +3545,7 @@ TEST_CASE(
 
     core->interest_sync_record(leaf.ptr());
 
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
     NETW_CHECK_EQ(engine.order_route_for(leaf_handle.get_id()), 2);
     NETW_CHECK_EQ(engine.order_route_for(parent_handle.get_id()), 1);
 
@@ -3065,7 +3553,7 @@ TEST_CASE(
     const StringName empty("empty");
     const int bit = engine.peer_bit_for(11);
     PackedInt64Array live;
-    live = netw::InterestBitSet::with_bit(live, bit, true);
+    live = netw::interest::BitSet::with_bit(live, bit, true);
     engine.set_live_peers(live);
     engine.layer_add_viewer(near, 11);
     engine.membership_add(leaf_handle.get_id(), near);
@@ -3094,7 +3582,7 @@ TEST_CASE(
     "it started, and without the guard this does not fail, it does not "
     "return"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     Node *child = memnew(Node);
@@ -3109,7 +3597,7 @@ TEST_CASE(
 
     core->interest_sync_record(entity.ptr());
 
-    netw::InterestEngine &engine = core->interest_plane();
+    netw::interest::Engine &engine = core->interest_plane();
     NETW_CHECK_EQ(engine.order_route_for(handle.get_id()), 1);
 
     memdelete(root);
@@ -3117,69 +3605,61 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] P14 a scene's admission layer is "
-    "named by its content root, and by its route once it has one; two "
+    "named by its own root node, and by its route once it has one; two "
     "live scenes built from the same content share a stem, so the stem "
     "alone is not a key, and a scene armed this frame has no route yet "
     "and is keyed by the stem until one lands, which is why both "
-    "spellings exist; a container with nothing in it is no admission "
-    "boundary, a different answer from one nobody has admitted anybody to"
+    "spellings exist; a scene handle bound to no node at all is no "
+    "admission boundary, a different answer from one nobody has admitted "
+    "anybody to"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    Node *container = memnew(Node);
-    Node *level = memnew(Node);
-    level->set_name("Arena");
-    container->add_child(level);
+    Node *arena = memnew(Node);
+    arena->set_name("Arena");
 
     Ref<netw::NetwEntity> scene;
     scene.instantiate();
-    scene->attach_to(container);
+    scene->attach_to(arena);
     const RID handle = core->get_liveness_core()->entity_create();
     scene->get_record()->adopt_handle(handle);
-    REQUIRE(core->entity_of(container) == handle);
+    REQUIRE(core->entity_of(arena) == handle);
 
     CHECK(core->scene_layer_id(handle) == StringName("scene:Arena"));
 
     REQUIRE(core->get_liveness_core()->bind_route(handle, 7));
     CHECK(core->scene_layer_id(handle) == StringName("scene:Arena#7"));
 
-    Node *hollow = memnew(Node);
     Ref<netw::NetwEntity> bare;
     bare.instantiate();
-    bare->attach_to(hollow);
     const RID hollow_handle = core->get_liveness_core()->entity_create();
     bare->get_record()->adopt_handle(hollow_handle);
-    REQUIRE(core->entity_of(hollow) == hollow_handle);
-    REQUIRE(core->wrapper_owner(hollow_handle) == hollow);
+    REQUIRE(core->wrapper_owner(hollow_handle) == nullptr);
 
     CHECK(core->scene_layer_id(hollow_handle) == StringName());
     CHECK(core->scene_layer_id(RID()) == StringName());
 
-    memdelete(hollow);
-    memdelete(container);
+    memdelete(arena);
 }
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] P11 a scene answers to its declared "
-    "label, and to its content root's name, the stem the live book is "
+    "label, and to its own root node's name, the stem the live book is "
     "entered under, when no script named one; a declared label outranks "
-    "the content root's name, because a script that named its scene named "
+    "the root's name, because a script that named its scene named "
     "what every verb should answer it under"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
-    Node *container = memnew(Node);
-    container->set_name("Scene");
-    Node *level = memnew(Node);
-    level->set_name("Arena");
-    container->add_child(level);
+    Node *arena = memnew(Node);
+    arena->set_name("Arena");
 
     Ref<netw::NetwEntity> entity;
     entity.instantiate();
-    entity->set_owner(container);
+    entity->set_owner(arena);
     const RID scene = core->get_liveness_core()->entity_create();
     entity->get_record()->adopt_handle(scene);
-    core->wrapper_adopt(scene, entity, container);
+    core->wrapper_adopt(scene, entity, arena);
 
     CHECK(core->scene_stem(scene) == StringName("Arena"));
 
@@ -3188,7 +3668,7 @@ TEST_CASE(
 
     CHECK(core->scene_stem(RID()) == StringName());
 
-    memdelete(container);
+    memdelete(arena);
 }
 
 TEST_CASE(
@@ -3203,14 +3683,13 @@ TEST_CASE(
     packed.instantiate();
     packed->pack(root);
 
-    CHECK(NetwMultiplayerCore::scene_packed_stem(packed) == StringName("Arena"));
+    CHECK(NetwMultiplayer::scene_packed_stem(packed) == StringName("Arena"));
 
     packed->set_path("res://scenes/arena_level.tscn");
-    CHECK(NetwMultiplayerCore::scene_packed_stem(packed) == StringName("Arena"));
+    CHECK(NetwMultiplayer::scene_packed_stem(packed) == StringName("Arena"));
 
     CHECK(
-        NetwMultiplayerCore::scene_packed_stem(Ref<PackedScene>())
-        == StringName()
+        NetwMultiplayer::scene_packed_stem(Ref<PackedScene>()) == StringName()
     );
 
     memdelete(root);

@@ -5,16 +5,13 @@
 
 #include "godot/node.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/codec.hpp"
+#include "netw/call_args.hpp"
 #include "netw/scene_core.hpp"
 
 namespace TestNetwSpawnArgSchemaLaws {
 
 using namespace godot;
-using netw::NetwBitBufferReader;
-using netw::NetwBitBufferWriter;
-using netw::NetwCodec;
-using netw::NetwQuantizeBits;
+using netw::NetwQuantizeScalar;
 using netw::NetwSceneCore;
 
 Array one_of(const Variant &value) {
@@ -36,10 +33,12 @@ PackedByteArray written(
     const Array &quantizers,
     const Array &types
 ) {
-    Ref<NetwBitBufferWriter> writer;
-    writer.instantiate();
-    NetwCodec::write_values(writer, values, quantizers, types);
-    return writer->to_bytes();
+    netw::wire::WriteStream stream;
+    if (!netw::call_args::values_write(stream, values, quantizers, types)
+        || !stream.align_verify()) {
+        return PackedByteArray();
+    }
+    return stream.to_bytes();
 }
 
 Array read_back(
@@ -47,12 +46,16 @@ Array read_back(
     const Array &quantizers,
     const Array &types
 ) {
-    Ref<NetwBitBufferReader> reader = NetwBitBufferReader::create(bytes);
-    return NetwCodec::read_values(reader, quantizers, types);
+    netw::wire::ReadStream stream(bytes);
+    Array out;
+    if (!netw::call_args::values_read(stream, quantizers, types, out)) {
+        return Array();
+    }
+    return out;
 }
 
-Ref<NetwQuantizeBits> an_axis_quantizer() {
-    Ref<NetwQuantizeBits> made;
+Ref<NetwQuantizeScalar> an_axis_quantizer() {
+    Ref<NetwQuantizeScalar> made;
     made.instantiate();
     made->set_bit_count(10);
     made->set_min_limit(-1.0);
@@ -70,8 +73,7 @@ TEST_CASE(
     values.append(int64_t(5));
     const Array no_quantizers;
 
-    const PackedByteArray undeclared
-        = written(values, no_quantizers, Array());
+    const PackedByteArray undeclared = written(values, no_quantizers, Array());
     const PackedByteArray declared = written(
         values,
         no_quantizers,
@@ -114,8 +116,8 @@ TEST_CASE(
     const Array round_trip = read_back(by_schema, quantized, declared);
     REQUIRE(round_trip.size() == 1);
     const Vector2 got = round_trip[0];
-    const bool within_a_step = std::abs(got.x - sent.x) < 0.01
-        && std::abs(got.y - sent.y) < 0.01;
+    const bool within_a_step
+        = std::abs(got.x - sent.x) < 0.01 && std::abs(got.y - sent.y) < 0.01;
     CHECK(within_a_step);
 
     const Array raw_trip = read_back(by_nothing, Array(), Array());
@@ -155,49 +157,15 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SA4 one member of the isolation enum means a "
-    "world of its own, so the container build and any policy that branches "
+    "world of its own, so the viewport wrap and any policy that branches "
     "on isolation cannot disagree about which one it is"
 ) {
-    CHECK(NetwSceneCore::isolation_owns_world(
-        NetwSceneCore::ISOLATION_OWN_WORLD
-    ));
+    CHECK(
+        NetwSceneCore::isolation_owns_world(NetwSceneCore::ISOLATION_OWN_WORLD)
+    );
     CHECK(!NetwSceneCore::isolation_owns_world(NetwSceneCore::ISOLATION_NONE));
     CHECK(!NetwSceneCore::isolation_owns_world(-1));
     CHECK(!NetwSceneCore::isolation_owns_world(7));
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] SA5 the container lifecycle pair outlives the "
-    "scenes it will see, because a re-host that cleared it would build "
-    "containers no peer ever hears enter or leave a tree"
-) {
-    Ref<NetwSceneCore> core;
-    core.instantiate();
-
-    CHECK(!core->get_container_entered().is_valid());
-    CHECK(!core->get_container_exited().is_valid());
-
-    Node *witness = memnew(Node);
-    const Callable entered(witness, "set_name");
-    const Callable exited(witness, "queue_free");
-    core->set_container_lifecycle(entered, exited);
-
-    const bool declared_pair_answers = core->get_container_entered() == entered
-        && core->get_container_exited() == exited;
-    CHECK(declared_pair_answers);
-
-    core->clear();
-
-    const bool pair_survives_a_rehost
-        = core->get_container_entered() == entered
-        && core->get_container_exited() == exited;
-    CHECK(pair_survives_a_rehost);
-
-    core->set_container_lifecycle(Callable(), Callable());
-    CHECK(!core->get_container_entered().is_valid());
-    CHECK(!core->get_container_exited().is_valid());
-
-    memdelete(witness);
 }
 
 } // namespace TestNetwSpawnArgSchemaLaws

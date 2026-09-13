@@ -51,12 +51,10 @@ inline NodeProperty node_property(
 #if defined(NETW_MODULE)
     godot::Ref<godot::Resource> resource;
     godot::Vector<godot::StringName> leftover;
-    out.object = p_root->get_node_and_resource(p_path, resource, leftover, false);
-    out.sub = godot::NodePath(
-        godot::Vector<godot::StringName>(),
-        leftover,
-        false
-    );
+    out.object
+        = p_root->get_node_and_resource(p_path, resource, leftover, false);
+    out.sub
+        = godot::NodePath(godot::Vector<godot::StringName>(), leftover, false);
 #else
     const godot::Array resolved = p_root->get_node_and_resource(p_path);
     godot::Object *found = resolved[0];

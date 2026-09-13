@@ -5,20 +5,20 @@
 
 #include "support/netw_test.h"
 
-#include "netw/interest_perception.hpp"
+#include "netw/interest/perception.hpp"
 
-namespace TestInterestPerception {
+namespace TestPerception {
 
 using namespace godot;
-using netw::NetwInterestDecl;
-using netw::InterestEngine;
-using netw::InterestPerception;
+using netw::interest::Decl;
+using netw::interest::Engine;
+using netw::interest::Perception;
 
 constexpr int64_t ROOT = 1;
 constexpr int64_t OTHER = 2;
-constexpr int HIDE = InterestPerception::HIDE;
-constexpr int SHOW = InterestPerception::SHOW;
-constexpr int CUSTOM = InterestPerception::CUSTOM;
+constexpr int HIDE = Perception::HIDE;
+constexpr int SHOW = Perception::SHOW;
+constexpr int CUSTOM = Perception::CUSTOM;
 
 StringName hide_key() {
     return StringName("hide");
@@ -28,21 +28,23 @@ StringName custom_key() {
     return StringName("custom");
 }
 
-InterestPerception fresh() {
-    return InterestPerception();
+Perception fresh() {
+    return Perception();
 }
 
-Ref<NetwInterestDecl> declaration() {
-    Ref<NetwInterestDecl> decl;
-    decl.instantiate();
-    return decl;
+const Decl *undeclared() {
+    static const Decl blank;
+    return &blank;
 }
 
-InterestEngine engine_with(
-    std::initializer_list<const char *> p_layers,
-    int p_policy
-) {
-    InterestEngine engine;
+Ref<RefCounted> callable_holder() {
+    Ref<RefCounted> holder;
+    holder.instantiate();
+    return holder;
+}
+
+Engine engine_with(std::initializer_list<const char *> p_layers, int p_policy) {
+    Engine engine;
     for (const char *id : p_layers) {
         engine.layer_set_perception_policy(StringName(id), p_policy);
     }
@@ -61,7 +63,7 @@ TEST_CASE(
     "[Networked][Interest][Hosted] an entity nothing has been decided about "
     "is a third answer"
 ) {
-    InterestPerception book = fresh();
+    Perception book = fresh();
 
     CHECK(!book.is_known(ROOT));
     CHECK(book.set_visible(ROOT, true));
@@ -80,10 +82,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] armed actions are taken back once and "
     "only once"
 ) {
-    InterestPerception book = fresh();
-    const Ref<NetwInterestDecl> holder = declaration();
+    Perception book = fresh();
+    const Ref<RefCounted> holder = callable_holder();
     Array action;
-    action.push_back(Callable(holder.ptr(), StringName("clear")));
+    action.push_back(Callable(holder.ptr(), StringName("get_class")));
     action.push_back(StringName("stealth"));
     Array actions;
     actions.push_back(action);
@@ -104,10 +106,10 @@ TEST_CASE(
     "[Networked][Interest][Hosted] forgetting a decision leaves the armed "
     "actions armed"
 ) {
-    InterestPerception book = fresh();
-    const Ref<NetwInterestDecl> holder = declaration();
+    Perception book = fresh();
+    const Ref<RefCounted> holder = callable_holder();
     Array action;
-    action.push_back(Callable(holder.ptr(), StringName("clear")));
+    action.push_back(Callable(holder.ptr(), StringName("get_class")));
     action.push_back(StringName("stealth"));
     Array actions;
     actions.push_back(action);
@@ -127,16 +129,15 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a hide and a callback are both honoured, "
     "and an override resolves before a layer default"
 ) {
-    InterestPerception book = fresh();
-    InterestEngine engine
-        = engine_with({"arena", "stealth"}, HIDE);
-    const Ref<NetwInterestDecl> decl = declaration();
-    const Ref<NetwInterestDecl> holder = declaration();
-    const Callable callback(holder.ptr(), StringName("clear"));
-    decl->set_perception_policy(StringName("stealth"), CUSTOM, callback);
+    Perception book = fresh();
+    Engine engine = engine_with({"arena", "stealth"}, HIDE);
+    Decl decl;
+    const Ref<RefCounted> holder = callable_holder();
+    const Callable callback(holder.ptr(), StringName("get_class"));
+    decl.set_perception_policy(StringName("stealth"), CUSTOM, callback);
 
     const Dictionary verdict
-        = book.resolve(layer_list({"arena", "stealth"}), decl, engine);
+        = book.resolve(layer_list({"arena", "stealth"}), &decl, engine);
 
     CHECK(bool(verdict[hide_key()]));
     const Array custom = verdict[custom_key()];
@@ -152,48 +153,48 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a layer declaring SHOW hides nothing on "
     "its own"
 ) {
-    InterestPerception book = fresh();
-    InterestEngine engine = engine_with({"arena"}, SHOW);
+    Perception book = fresh();
+    Engine engine = engine_with({"arena"}, SHOW);
 
     const Dictionary verdict
-        = book.resolve(layer_list({"arena"}), declaration(), engine);
+        = book.resolve(layer_list({"arena"}), undeclared(), engine);
 
     CHECK(!bool(verdict[hide_key()]));
     NETW_CHECK_EQ(Array(verdict[custom_key()]).size(), 0);
 
-    const Ref<NetwInterestDecl> decl = declaration();
-    decl->set_perception_policy(StringName("arena"), HIDE, Callable());
-    CHECK(bool(book.resolve(layer_list({"arena"}), decl, engine)[hide_key()]));
+    Decl decl;
+    decl.set_perception_policy(StringName("arena"), HIDE, Callable());
+    CHECK(bool(book.resolve(layer_list({"arena"}), &decl, engine)[hide_key()]));
 }
 
 TEST_CASE(
     "[Networked][Interest][Hosted] a layer nobody declared hides, and so "
     "does a CUSTOM whose callback is gone"
 ) {
-    InterestPerception book = fresh();
-    InterestEngine engine = engine_with({}, HIDE);
+    Perception book = fresh();
+    Engine engine = engine_with({}, HIDE);
 
     const Dictionary unknown
-        = book.resolve(layer_list({"nowhere"}), declaration(), engine);
+        = book.resolve(layer_list({"nowhere"}), undeclared(), engine);
     CHECK(bool(unknown[hide_key()]));
 
-    const Ref<NetwInterestDecl> decl = declaration();
-    Ref<NetwInterestDecl> holder = declaration();
-    decl->set_perception_policy(
+    Decl decl;
+    Ref<RefCounted> holder = callable_holder();
+    decl.set_perception_policy(
         StringName("stealth"),
         CUSTOM,
-        Callable(holder.ptr(), StringName("clear"))
+        Callable(holder.ptr(), StringName("get_class"))
     );
-    InterestEngine showing = engine_with({"stealth"}, SHOW);
+    Engine showing = engine_with({"stealth"}, SHOW);
     holder.unref();
 
     ERR_PRINT_OFF;
     const Dictionary verdict
-        = book.resolve(layer_list({"stealth"}), decl, showing);
+        = book.resolve(layer_list({"stealth"}), &decl, showing);
     ERR_PRINT_ON;
 
     CHECK(bool(verdict[hide_key()]));
     NETW_CHECK_EQ(Array(verdict[custom_key()]).size(), 0);
 }
 
-} // namespace TestInterestPerception
+} // namespace TestPerception

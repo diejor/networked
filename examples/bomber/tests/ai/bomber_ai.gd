@@ -126,7 +126,7 @@ func _scan_world() -> WorldSnapshot:
 	snap.my_cell = _to_cell(player.position)
 	snap.my_stunned = player.get("stunned") as bool
 
-	var level: Node = world.level
+	var level: Node = world.root
 
 	# Walls from TileMapLayer. Cached by tilemap instance: the wall set never
 	# changes during a match, so it is built once and shared (read-only) across
@@ -170,10 +170,9 @@ func _scan_world() -> WorldSnapshot:
 
 
 func _find_world() -> NetwSceneHandle:
-	if not _runner or not _runner.tree or not _runner.tree.api:
+	if not _runner or not _runner.tree:
 		return null
-	var api := _runner.tree.api
-	return api.scene_handle(api.scene_find(&"World"))
+	return Netw.scene(_runner.tree, &"World")
 
 
 func _to_cell(pos: Vector2) -> Vector2i:

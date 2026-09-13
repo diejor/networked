@@ -13,8 +13,8 @@
 
 		session.set_link_conditions(server, LocalLinkConditions.wifi())
 		[/codeblock]
-		Conditions are installed on the RECEIVING peer, optionally narrowed to one sender, and they apply at receive time:
-		[codeblock]
+		Conditions are installed on the receiving peer, optionally narrowed to one sender, and they apply when the packet arrives rather than when it was sent.
+		[codeblock lang=text]
 		put_packet
 		  ┖╴the receiving peer offers the packet to its session
 		     ┠╴no conditions      the packet queues immediately

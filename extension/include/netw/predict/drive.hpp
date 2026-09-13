@@ -4,6 +4,10 @@
 
 #include "godot/callable.hpp"
 #include "godot/local_vector.hpp"
+#include "netw/api/property_set_binding.hpp"
+#include "netw/api/timeline.hpp"
+#include "netw/object_port.hpp"
+#include "netw/predict/books.hpp"
 #include "netw/predict/carry.hpp"
 #include "netw/predict/command_queue.hpp"
 #include "netw/predict/compare.hpp"
@@ -13,14 +17,10 @@
 #include "netw/predict/quarantine.hpp"
 #include "netw/predict/recovery.hpp"
 #include "netw/predict/sensors.hpp"
-#include "netw/object_port.hpp"
 #include "netw/predict/wiring.hpp"
 #include "netw/prediction_core.hpp"
-#include "netw/api/timeline.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 constexpr int TAPE_HISTORY_LIMIT = 256;
 
@@ -117,6 +117,143 @@ struct DriveStats {
     int quantum_steps = 1;
     int quantum_declared = 1;
     int quantum_faults = 0;
+    int max_replay_depth = 0;
+};
+
+struct FieldReadings {
+    godot::LocalVector<double> value;
+    godot::LocalVector<uint8_t> present;
+
+    void resize(int p_count);
+    void clear();
+    void note(int p_field, double p_value);
+    bool has(int p_field) const;
+    double at(int p_field, double p_absent) const;
+    bool empty() const;
+};
+
+struct PassCursor {
+    double tick_delta = 1.0 / 60.0;
+    int64_t frame_index = 0;
+    int declared_quantum = 1;
+    int64_t latest_input_tick = -1;
+    int64_t last_driven_input_tick = -1;
+    int64_t last_frame_transition_tick = -1;
+    int64_t last_recorded_input_tick = -1;
+    bool raw_fingerprints = false;
+};
+
+struct LaneCursor {
+    int64_t tape_epoch = 0;
+    int64_t next_tape_entry_index = 0;
+    int64_t last_driven_entry_index = -1;
+    int64_t last_recorded_entry_index = -1;
+    int64_t replay_cursor = -1;
+    int64_t last_replayed_label = -1;
+    bool last_replayed_fresh = false;
+    int64_t next_input_tick = -1;
+    int64_t ack = -1;
+    bool ack_advanced = false;
+    int64_t ack_of_acks = -1;
+    bool ack_domain_confirmed = true;
+    int64_t owner_ack_floor = -1;
+    int64_t command_epoch = -1;
+    int64_t relayed_epoch = -1;
+    int64_t newest_matrix_transition = -1;
+    int arrivals_this_frame = 0;
+    int64_t cooldown_until_tick = -1;
+};
+
+struct PayloadRows {
+    godot::Dictionary frame_input;
+    godot::Dictionary stall_input;
+    godot::Dictionary last_input;
+    godot::Dictionary open_topology;
+    godot::Dictionary recovery_before;
+    godot::Dictionary recovery_write;
+    godot::Dictionary recovery_projection;
+    godot::Dictionary recovery_carried;
+    godot::Dictionary recovery_tier_errors;
+};
+
+struct EntityRoster {
+    godot::LocalVector<godot::ObjectID> members;
+
+    int index_of(const godot::ObjectID &p_id) const;
+    bool add(const godot::ObjectID &p_id);
+    bool erase(const godot::ObjectID &p_id);
+    void clear();
+
+    int count() const {
+        return int(members.size());
+    }
+};
+
+struct DeclaredAxes {
+    bool authority = false;
+    bool controlled_locally = false;
+    bool inputless = false;
+    int64_t epoch = -1;
+};
+
+struct EngineLatches {
+    bool registered = false;
+    bool last_correction_teleported = false;
+    int64_t validated_class_hash = 0;
+    bool stream_reconstructed = false;
+    bool fallback_latched = false;
+    bool previous_witness_sleeping = false;
+    bool has_previous_witness = false;
+    bool invalid_witness_reported = false;
+    bool invalid_command_predictor_reported = false;
+    bool joint_refusal_reported = false;
+    bool stepper_absence_reported = false;
+    bool island_gap_reported = false;
+    bool island_roster_seeded = false;
+    int64_t joint_basis = -1;
+    int64_t joint_relay_floor = -1;
+    int64_t joint_epoch_floor = -1;
+    int64_t tenure_begin = -1;
+    int64_t tenure_end = -1;
+};
+
+struct RecoveryLedger {
+    godot::LocalVector<int> triggered;
+    godot::LocalVector<int> repaired;
+    godot::LocalVector<int> contracted;
+    godot::LocalVector<uint8_t> seeded;
+
+    void resize(int p_count);
+    void seed(int p_field);
+    bool has(int p_field) const;
+    void bump_triggered(int p_field);
+    void bump_repaired(int p_field);
+    void bump_contracted(int p_field);
+};
+
+struct SubjectBook {
+    godot::LocalVector<int64_t> ids;
+    godot::LocalVector<godot::Callable> predictors;
+
+    int index_of(int64_t p_id) const;
+    bool note(int64_t p_id, const godot::Callable &p_predictor);
+    bool erase(int64_t p_id);
+    void clear();
+    godot::Callable first_valid() const;
+
+    int count() const {
+        return int(ids.size());
+    }
+};
+
+struct ComparisonReport {
+    int verdict_reason = 0;
+    int attribution = 0;
+    int64_t attributed_transition = -1;
+    int compare_staleness = -1;
+    bool reconciling = false;
+    FieldReadings divergence;
+    FieldReadings tier_error;
 };
 
 struct Slot {
@@ -136,9 +273,28 @@ struct Slot {
     Journal journal;
     Tape tape;
     CommandQueue commands;
+    ClaimBook owner_claims;
+    WitnessClassBook authority_witness_classes;
+    ContractionLedger contraction_ledger;
+    WitnessDetailBook witness_details;
+    DeferredOperator deferred_operator;
+    godot::PackedStringArray island_participants;
+    int64_t episode_revision = 0;
     godot::Ref<NetwTimeline> timeline;
     godot::Ref<NetwTimeline> entry_history;
     DriveStats stats;
+    ComparisonReport report;
+    SubjectBook simulated_by;
+    RecoveryLedger recovery_ledger;
+    PassCursor cursor;
+    LaneCursor lane_cursor;
+    EngineLatches latches;
+    DeclaredAxes axes;
+    EntityRoster rosters[4];
+    PayloadRows rows;
+    godot::Ref<NetwPropertySetBinding> state_binding;
+    godot::Ref<NetwPropertySetBinding> input_binding;
+    godot::StringName breach_source;
     CompareStats compare_stats;
     StateVerdict last_state_verdict;
     StateRow state;
@@ -149,6 +305,7 @@ struct Slot {
     Quarantine quarantine;
     CarryTrack carry;
     CarryDirty carry_dirty;
+    godot::LocalVector<CarryAttempt> carry_attempts;
     WitnessSummary last_witness;
     godot::Dictionary last_samples;
     godot::Dictionary pending_provenance;
@@ -165,6 +322,7 @@ struct Slot {
     int64_t last_frame_transition_tick = -1;
     int64_t latest_authority_ack = -1;
     int64_t out_of_domain_until = -1;
+    int64_t environment_epoch = -1;
 
     int64_t frame_index = 0;
     int64_t last_drive_frame = -1;
@@ -292,6 +450,4 @@ private:
     );
 };
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

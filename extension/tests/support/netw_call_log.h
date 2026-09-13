@@ -21,7 +21,7 @@ class CallLogSink final : public godot::CallableCustom {
     godot::StringName tag;
     godot::ObjectID anchor;
     godot::Variant answer;
-    bool mints = false;
+    godot::Variant (*mints)() = nullptr;
 
     static bool same(
         const godot::CallableCustom *a,
@@ -43,7 +43,7 @@ public:
         const godot::StringName &p_tag,
         const godot::Object *p_anchor,
         const godot::Variant &p_answer = godot::Variant(),
-        bool p_mints = false
+        godot::Variant (*p_mints)() = nullptr
     )
         : entries(p_entries), tag(p_tag),
           anchor(netw::gd::instance_id(p_anchor)), answer(p_answer),
@@ -82,10 +82,8 @@ public:
         }
         entries->tags.push_back(tag);
         entries->args.push_back(carried);
-        if (mints) {
-            godot::Ref<godot::RefCounted> fresh;
-            fresh.instantiate();
-            r_return_value = fresh;
+        if (mints != nullptr) {
+            r_return_value = mints();
         } else {
             r_return_value = answer;
         }
@@ -122,10 +120,21 @@ public:
         );
     }
 
+    template <typename T> static godot::Variant mint_one() {
+        godot::Ref<T> fresh;
+        fresh.instantiate();
+        return fresh;
+    }
+
+    template <typename T = godot::RefCounted>
     godot::Callable minting(const godot::StringName &p_tag) const {
-        return godot::Callable(memnew(
-            CallLogSink(entries, p_tag, anchor.ptr(), godot::Variant(), true)
-        ));
+        return godot::Callable(memnew(CallLogSink(
+            entries,
+            p_tag,
+            anchor.ptr(),
+            godot::Variant(),
+            &CallLog::mint_one<T>
+        )));
     }
 
     godot::Array args(const godot::StringName &p_tag, int p_index = 0) const {

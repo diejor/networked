@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwRecord" inherits="Serde" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The named-value row a persisted or sampled value travels as, and the base a script subclasses to supply its own storage.
+	</brief_description>
+	<description>
+		[NetwRecord] is the shared value object behind [NetwPersistenceEngine] persistence, [NetwDatabase] rows, and detached state samples. It stores named values without owning the scene object those values came from.
+		[codeblock]
+		var row: NetwRecord = await db.table(&amp;"players").fetch(username)
+		var health: int = row.get_value(&amp;"health", 100)
+
+		row.set_value(&amp;"health", 75)
+		var hp: int = row.get_value(&amp;"health", 100)
+
+		for key in row:
+		    print(key, " = ", row.get_value(key))
+		[/codeblock]
+		A stored name is also readable and writable as a property, so [code]row.health[/code] answers [method get_value] and assigning to it calls [method set_value]. The class's own properties are never captured that way: [code]resource_name[/code], [code]resource_path[/code], [code]resource_local_to_scene[/code], [code]resource_scene_unique_id[/code], [code]script[/code] and a subclass's declared properties keep their normal meaning, so a record may hold a value under any of those names without shadowing the resource itself.
+		A script subclass supplies the storage by overriding [method _set_value], [method _get_value], [method _has_value] and [method _get_property_names], and may remap stored names by overriding [method _to_dict] and [method _from_dict]. Callers always use the plain verbs, which answer an override when a script supplies one. [DictionaryRecord] is the storage this addon ships.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_from_dict" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="data" type="Dictionary" />
+			<description>
+				Populates this record from [param data]. Override it to coerce types or migrate stored names.
+				[codeblock]
+				func _from_dict(data: Dictionary) -&gt; void:
+				    set_value(&amp;"health", data.get(&amp;"hp", 100))
+				[/codeblock]
+			</description>
+		</method>
+		<method name="_get_property_names" qualifiers="virtual const">
+			<return type="StringName[]" />
+			<description>
+				Returns the property names stored in this record. Override it together with [method _set_value], [method _get_value] and [method _has_value] to supply the storage; [method get_property_names] is what callers use.
+			</description>
+		</method>
+		<method name="_get_value" qualifiers="virtual const">
+			<return type="Variant" />
+			<param index="0" name="property" type="StringName" />
+			<param index="1" name="default" type="Variant" />
+			<description>
+				Returns the value stored under [param property], or [param default] if absent. Override it to supply the storage; [method get_value] is what callers use.
+			</description>
+		</method>
+		<method name="_has_value" qualifiers="virtual const">
+			<return type="bool" />
+			<param index="0" name="property" type="StringName" />
+			<description>
+				Returns [code]true[/code] if [param property] is present. Override it to supply the storage; [method has_value] is what callers use.
+			</description>
+		</method>
+		<method name="_set_value" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="property" type="StringName" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				Stores [param value] under [param property]. Override it to supply the storage; [method set_value] is what callers use.
+			</description>
+		</method>
+		<method name="_to_dict" qualifiers="virtual const">
+			<return type="Dictionary" />
+			<description>
+				Returns this record's data as a plain [Dictionary]. Override it to remap stored names.
+				[codeblock]
+				func _to_dict() -&gt; Dictionary:
+				    return {&amp;"hp": get_value(&amp;"health")}
+				[/codeblock]
+			</description>
+		</method>
+		<method name="from_dict">
+			<return type="void" />
+			<param index="0" name="data" type="Dictionary" />
+			<description>
+				Populates this record from [param data]. Without a [method _from_dict] override this calls [method set_value] for every key in [param data].
+			</description>
+		</method>
+		<method name="get_property_names" qualifiers="const">
+			<return type="StringName[]" />
+			<description>
+				Returns the property names stored in this record, in the order the storage holds them. This is the sequence [code]for key in record[/code] walks and the one [method to_dict] reads.
+			</description>
+		</method>
+		<method name="get_value" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="property" type="StringName" />
+			<param index="1" name="default" type="Variant" default="null" />
+			<description>
+				Returns the value stored under [param property], or [param default] if absent.
+			</description>
+		</method>
+		<method name="has_value" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="property" type="StringName" />
+			<description>
+				Returns [code]true[/code] if [param property] is present.
+			</description>
+		</method>
+		<method name="is_empty" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] when no values are stored, which is [method get_property_names] answering nothing.
+			</description>
+		</method>
+		<method name="set_value">
+			<return type="void" />
+			<param index="0" name="property" type="StringName" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				Stores [param value] under [param property].
+			</description>
+		</method>
+		<method name="to_dict" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns this record's data as a plain [Dictionary]. Without a [method _to_dict] override this iterates [method get_property_names] and calls [method get_value] for each key.
+			</description>
+		</method>
+	</methods>
+</class>

@@ -1,15 +1,10 @@
-// Prediction's declared lanes against their permanent wire laws. COMMAND
-// binds fresh transitions to schema-planned rows, ACK fits the unreliable
-// budget, RELAY preserves the admitted command bytes, and every decoder fails
-// closed on truncation or residue.
-
 #include "support/netw_test.h"
 
+#include "netw/api/schema_core.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/frames.hpp"
 #include "netw/predict/journal.hpp"
 #include "netw/predict/relay_book.hpp"
-#include "netw/api/schema_core.hpp"
 
 using namespace godot;
 
@@ -18,7 +13,6 @@ namespace TestNetwPredictFrames {
 using godot::PackedByteArray;
 using godot::Ref;
 using netw::SchemaCore;
-using netw::SchemaRecord;
 using netw::predict::ACK_FRAME_BYTES_MAX;
 using netw::predict::ACK_RECORD_MAX;
 using netw::predict::AckEvidenceWire;
@@ -26,6 +20,7 @@ using netw::predict::AckFrame;
 using netw::predict::CommandEvidenceWire;
 using netw::predict::CommandFrame;
 using netw::predict::TransitionWire;
+using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 using netw::wire::WirePlan;
 using netw::wire::WireRegistry;
@@ -33,11 +28,10 @@ using netw::wire::WireRegistry;
 constexpr int64_t OWNER_PEER = 7;
 
 WirePlan input_plan() {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = "PredictInput";
-    SchemaCore::append_column(record, "button", SchemaCore::U8, 1);
-    SchemaCore::fix(record);
+    SchemaRecord record;
+    record.name = "PredictInput";
+    SchemaCore::append_column(&record, "button", SchemaCore::U8, 1);
+    SchemaCore::fix(&record);
     return WirePlan::compile(record);
 }
 
@@ -160,11 +154,10 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][PredictWire][Hosted] command carries a wide planned row"
 ) {
-    Ref<SchemaRecord> schema;
-    schema.instantiate();
-    schema->name = "WidePredictInput";
-    SchemaCore::append_column(schema, "axes", SchemaCore::VECTOR4, 1);
-    REQUIRE(SchemaCore::fix(schema) == godot::Error::OK);
+    SchemaRecord schema;
+    schema.name = "WidePredictInput";
+    SchemaCore::append_column(&schema, "axes", SchemaCore::VECTOR4, 1);
+    REQUIRE(SchemaCore::fix(&schema) == godot::Error::OK);
     const WirePlan plan = WirePlan::compile(schema);
     REQUIRE(plan.valid());
 
@@ -269,9 +262,9 @@ TEST_CASE(
     "[Networked][PredictWire][Hosted] pool builds the authority ACK prefix "
     "from its journal"
 ) {
-    Ref<netw::NetwPredictionEngine> pool;
-    pool.instantiate();
-    const int64_t slot = pool->open(Ref<netw::NetwPredictDeclaration>());
+    netw::NetwPredictionEngine held_pool;
+    netw::NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = pool->open();
     REQUIRE(pool->configure(
         slot,
         int(netw::Schedule::TICK),
@@ -282,7 +275,7 @@ TEST_CASE(
 
     for (int64_t transition = 0; transition < 3; ++transition) {
         pool->record_input(slot, transition, 100 + transition);
-        const Ref<netw::NetwPredictDrive> drive = pool->replay_drive(
+        const netw::predict::DriveRecord drive = pool->replay_drive(
             slot,
             godot::Dictionary(),
             transition,
@@ -297,7 +290,7 @@ TEST_CASE(
             220 + transition,
             230 + transition
         );
-        REQUIRE(drive->ran());
+        REQUIRE(drive.ran);
         pool->close_drive(
             slot,
             transition,
@@ -321,17 +314,17 @@ TEST_CASE(
     NETW_CHECK_EQ(received.records[1].post_controller_fp, 332);
 
     pool->mark_attribution(slot, 1, int(netw::predict::Attribution::PRE_STATE));
-    const Ref<netw::NetwPredictJournalRow> row = pool->journal_row(slot, 1);
-    REQUIRE(row.is_valid());
-    NETW_CHECK_EQ(row->transition(), 1);
-    NETW_CHECK_EQ(row->label(), 21);
-    NETW_CHECK_EQ(row->c_hash(), 101);
-    NETW_CHECK_EQ(row->pre_fp(), 201);
-    NETW_CHECK_EQ(row->pre_families()[2], 231);
-    NETW_CHECK_EQ(row->post_fp(), 301);
-    NETW_CHECK_EQ(row->post_families()[2], 331);
+    const netw::predict::JournalRow row = pool->journal_row(slot, 1);
+    REQUIRE(row.present);
+    NETW_CHECK_EQ(row.transition, 1);
+    NETW_CHECK_EQ(row.label, 21);
+    NETW_CHECK_EQ(row.c_hash, 101);
+    NETW_CHECK_EQ(row.pre_fp, 201);
+    NETW_CHECK_EQ(row.pre_families.controller, 231);
+    NETW_CHECK_EQ(row.post_fp, 301);
+    NETW_CHECK_EQ(row.post_families.controller, 331);
     NETW_CHECK_EQ(
-        row->attribution(),
+        int(row.attribution),
         int(netw::predict::Attribution::PRE_STATE)
     );
 
@@ -346,9 +339,9 @@ TEST_CASE(
     "[Networked][PredictWire][Hosted] transition lookup keeps the shared "
     "oldest-first index after wrap"
 ) {
-    Ref<netw::NetwPredictionEngine> pool;
-    pool.instantiate();
-    const int64_t slot = pool->open(Ref<netw::NetwPredictDeclaration>());
+    netw::NetwPredictionEngine held_pool;
+    netw::NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = pool->open();
     REQUIRE(pool->configure(
         slot,
         int(netw::Schedule::TICK),
@@ -375,7 +368,7 @@ TEST_CASE(
                         0,
                         0
         )
-                    ->ran());
+                    .ran);
         pool->close_drive(slot, transition, transition, 0, 0, 0);
     }
 
@@ -384,7 +377,7 @@ TEST_CASE(
     NETW_CHECK_EQ(pool->journal_slot_of(slot, count - 1), count - 3);
     NETW_CHECK_EQ(pool->journal_transition_at(slot, 0), 2);
     NETW_CHECK_EQ(
-        pool->journal_row(slot, 2)->transition(),
+        pool->journal_row(slot, 2).transition,
         pool->journal_transition_at(slot, 0)
     );
 }
@@ -392,9 +385,9 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][PredictWire][Hosted] tape reset restarts FRAME numbering"
 ) {
-    Ref<netw::NetwPredictionEngine> pool;
-    pool.instantiate();
-    const int64_t slot = pool->open(Ref<netw::NetwPredictDeclaration>());
+    netw::NetwPredictionEngine held_pool;
+    netw::NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = pool->open();
     REQUIRE(pool->configure(
         slot,
         int(netw::Schedule::FRAME),
@@ -417,11 +410,11 @@ TEST_CASE(
                     0,
                     0
     )
-                ->ran());
+                .ran);
     pool->tape_reset(slot, 7);
 
     pool->record_input(slot, 1, 12);
-    const Ref<netw::NetwPredictDrive> restarted = pool->open_drive(
+    const netw::predict::DriveRecord restarted = pool->open_drive(
         slot,
         godot::Dictionary(),
         1,
@@ -434,8 +427,8 @@ TEST_CASE(
         0,
         0
     );
-    REQUIRE(restarted->ran());
-    NETW_CHECK_EQ(restarted->transition(), 0);
+    REQUIRE(restarted.ran);
+    NETW_CHECK_EQ(restarted.transition, 0);
     NETW_CHECK_EQ(pool->journal_epoch(slot), 7);
     NETW_CHECK_EQ(pool->journal_size(slot), 1);
 }
@@ -500,34 +493,30 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][PredictWire][Hosted] the relay book admits, drops and "
-    "keeps admission order"
+    "[Networked][PredictWire][Hosted] the relay book admits and drops in "
+    "admission order, and a slot nobody subscribes to holds no row at all"
 ) {
-    Ref<netw::NetwPredictRelayBook> book;
-    book.instantiate();
+    netw::predict::RelayBook book;
 
-    book->set_subscribed(4, 30, true);
-    book->set_subscribed(4, 10, true);
-    book->set_subscribed(4, 30, true);
-    book->set_subscribed(5, 10, true);
+    book.set_subscribed(4, 30, true);
+    book.set_subscribed(4, 10, true);
+    book.set_subscribed(4, 30, true);
+    book.set_subscribed(5, 10, true);
 
-    CHECK(book->subscribed(4, 10));
-    CHECK_FALSE(book->subscribed(5, 30));
-    NETW_CHECK_EQ(book->peer_count(4), 2);
-    // Admission order rather than hash order, so one server's relay order is a
-    // function of its own admissions.
-    NETW_CHECK_EQ(book->peers(4)[0], 30);
-    NETW_CHECK_EQ(book->peers(4)[1], 10);
+    CHECK(book.subscribed(4, 10));
+    CHECK_FALSE(book.subscribed(5, 30));
+    NETW_CHECK_EQ(book.peer_count(4), 2);
+    NETW_CHECK_EQ(book.peers(4)[0], 30);
+    NETW_CHECK_EQ(book.peers(4)[1], 10);
 
-    book->set_subscribed(4, 30, false);
-    NETW_CHECK_EQ(book->peer_count(4), 1);
-    book->set_subscribed(4, 10, false);
-    // A slot nobody subscribes to holds no row at all.
-    NETW_CHECK_EQ(book->slot_count(), 1);
+    book.set_subscribed(4, 30, false);
+    NETW_CHECK_EQ(book.peer_count(4), 1);
+    book.set_subscribed(4, 10, false);
+    NETW_CHECK_EQ(book.slot_count(), 1);
 
-    book->release(5);
-    NETW_CHECK_EQ(book->slot_count(), 0);
-    NETW_CHECK_EQ(book->peers(5).size(), 0);
+    book.release(5);
+    NETW_CHECK_EQ(book.slot_count(), 0);
+    NETW_CHECK_EQ(book.peers(5).size(), 0);
 }
 
 constexpr godot::Error LIVE = godot::Error::OK;
@@ -753,22 +742,20 @@ TEST_CASE("[Networked][PredictWire][Hosted] the evidence section is optional") {
 TEST_CASE(
     "[Networked][PredictWire][Hosted] a frame needs a planned input schema"
 ) {
-    Ref<SchemaRecord> unsealed;
-    unsealed.instantiate();
-    unsealed->name = "Unsealed";
-    SchemaCore::append_column(unsealed, "motion", SchemaCore::VECTOR2, 1);
+    SchemaRecord unsealed;
+    unsealed.name = "Unsealed";
+    SchemaCore::append_column(&unsealed, "motion", SchemaCore::VECTOR2, 1);
     CHECK_FALSE(WirePlan::compile(unsealed).valid());
 
-    Ref<SchemaRecord> self_describing;
-    self_describing.instantiate();
-    self_describing->name = "SelfDescribing";
+    SchemaRecord self_describing;
+    self_describing.name = "SelfDescribing";
     SchemaCore::append_column(
-        self_describing,
+        &self_describing,
         "anything",
         SchemaCore::VARIANT,
         1
     );
-    SchemaCore::fix(self_describing);
+    SchemaCore::fix(&self_describing);
     CHECK_FALSE(WirePlan::compile(self_describing).valid());
 
     CommandFrame frame;

@@ -1,26 +1,17 @@
 name: Docs linkcheck
 
-# Catches dead external links — particularly important because make_rst.py
-# generates docs.godotengine.org links heuristically (via the :godot: role
-# defined in docs/_extensions/godot_xref.py) and Godot occasionally renames or
-# moves class pages.
-#
-# Shares its Godot/doctool/make_rst prelude with docs.yml via the local
-# composite action .github/actions/build-docs-classes.
-
 on:
   schedule:
-    # Mondays 06:00 UTC
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   linkcheck:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 

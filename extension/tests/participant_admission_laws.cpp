@@ -2,22 +2,23 @@
 
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
 #include "support/netw_recorder.h"
 
 namespace TestParticipantAdmissionLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
-Ref<RefCounted> a_row() {
-    Ref<RefCounted> row;
+Ref<netw::NetwParticipant> a_row() {
+    Ref<netw::NetwParticipant> row;
     row.instantiate();
     return row;
 }
 
-Ref<NetwMultiplayerCore> peered_core() {
-    Ref<NetwMultiplayerCore> core;
+Ref<NetwMultiplayer> peered_core() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Ref<netw::LocalMultiplayerPeer> peer;
     peer.instantiate();
@@ -31,7 +32,7 @@ TEST_CASE(
     "peer the roster never opened cannot be admitted and a peer already "
     "admitted is not admitted a second time"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
 
     NETW_CHECK_EQ(core->participant_admit(7), false);
     NETW_CHECK_EQ(core->participant_admitted_of(7).is_valid(), false);
@@ -48,8 +49,8 @@ TEST_CASE(
     "a participant, so adopting one admits nothing and the two reads answer "
     "different rosters"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
-    const Ref<RefCounted> row = a_row();
+    Ref<NetwMultiplayer> core = peered_core();
+    const Ref<netw::NetwParticipant> row = a_row();
 
     core->participant_adopt(7, row);
 
@@ -69,9 +70,9 @@ TEST_CASE(
     "and no other, so a session reads its own participant without being told "
     "which peer it is"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const int64_t mine = core->get_unique_id();
-    const Ref<RefCounted> ours = a_row();
+    const Ref<netw::NetwParticipant> ours = a_row();
     core->participant_adopt(mine, ours);
     core->participant_adopt(mine + 1, a_row());
 
@@ -91,14 +92,14 @@ TEST_CASE(
     "announcement, so the join handler running between them reads an "
     "admitted participant while no join edge has fired yet"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const int64_t mine = core->get_unique_id();
-    const Ref<RefCounted> ours = a_row();
+    const Ref<netw::NetwParticipant> ours = a_row();
     core->participant_adopt(mine, ours);
     Recorder session(
         core.ptr(),
         Vector<StringName>({
-            "local_participant_joined",
+            "participant_local_joined",
             "participant_joined",
         })
     );
@@ -106,12 +107,12 @@ TEST_CASE(
     core->participant_admit(mine);
 
     NETW_CHECK_EQ(core->participant_admitted_local().ptr(), ours.ptr());
-    NETW_CHECK_EQ(session.count("local_participant_joined"), 0);
+    NETW_CHECK_EQ(session.count("participant_local_joined"), 0);
     NETW_CHECK_EQ(session.count("participant_joined"), 0);
 
     core->participant_publish_joined(mine);
 
-    NETW_CHECK_EQ(session.count("local_participant_joined"), 1);
+    NETW_CHECK_EQ(session.count("participant_local_joined"), 1);
     NETW_CHECK_EQ(core->participant_admitted_local().ptr(), ours.ptr());
 }
 
@@ -120,10 +121,10 @@ TEST_CASE(
     "hold only the admitted, so two reads in one frame agree and an "
     "un-joined observer never appears among the participants"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
-    const Ref<RefCounted> low = a_row();
-    const Ref<RefCounted> high = a_row();
-    const Ref<RefCounted> watching = a_row();
+    Ref<NetwMultiplayer> core = peered_core();
+    const Ref<netw::NetwParticipant> low = a_row();
+    const Ref<netw::NetwParticipant> high = a_row();
+    const Ref<netw::NetwParticipant> watching = a_row();
     core->participant_adopt(9, high);
     core->participant_adopt(5, watching);
     core->participant_adopt(2, low);
@@ -143,7 +144,7 @@ TEST_CASE(
     "describes, so a peer that reconnects into a fresh row is a connected "
     "observer again rather than an admitted participant"
 ) {
-    Ref<NetwMultiplayerCore> core = peered_core();
+    Ref<NetwMultiplayer> core = peered_core();
     const int64_t mine = core->get_unique_id();
     core->participant_adopt(mine, a_row());
     core->participant_adopt(7, a_row());

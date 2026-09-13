@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwMemberConfig" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The travel declaration every script member shares, and the whole of what an RPC, a signal or a spawn function declares.
+	</brief_description>
+	<description>
+		A member is an RPC, a property, or a signal, and the same fluent builder declares all three because the axes are the same ones: who may author the stream ([method authority], [method controller], [method any_peer]), how it travels ([method reliable], [method unreliable], [method quantize]), and what the receiver does with it ([method defer_until], [method interpolate]). [method Netw.configure_rpc], [method Netw.configure_signal] and [method Netw.configure_spawn] each answer one of these, and [method Netw.configure_property] answers the [NetwPropertyConfig] that extends it.
+		[member context_type] is which of the three this is: [code]0[/code] an RPC or spawn function, [code]1[/code] a property, [code]2[/code] a signal. Everything that has to tell them apart reads that ordinal, which is also why one class serves three doors.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_rpc(self.fire).unreliable().controller_only()
+		    Netw.configure_signal(self.exploded).any_peer()
+		    Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
+		[/codeblock]
+		A configuration is keyed per script while [method Object._init] runs per instance, so every spawn of a script re-declares onto the config the first instance minted. Re-declaring an axis with the value it already carries is therefore SILENT, and only a genuine disagreement between two call sites warns. That rule is what makes authoring in [method Object._init] quiet rather than one warning per spawn.
+		[b]The chain downgrades to this type.[/b]
+		A bound method records one return type, so every verb here answers a [NetwMemberConfig] even when it was called on a [NetwPropertyConfig]. A chain that passes through a base verb loses the property-only verbs from that point on, and a property declaration therefore orders its property-only verbs LAST:
+		[codeblock]
+		Netw.configure_property(self, &amp;"position").state().quantize(pos_q)   # fine
+		Netw.configure_property(self, &amp;"position").quantize(pos_q).state()   # state() is gone
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="any_peer">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member write_policy] [constant POLICY_ANY_PEER]: any peer may write or emit. Trusts every client, so it belongs only where a forged write cannot matter.
+			</description>
+		</method>
+		<method name="authority">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member write_policy] [constant POLICY_AUTHORITY]: only the node's multiplayer authority may write or emit. The default, and the safe choice.
+			</description>
+		</method>
+		<method name="call_local">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member is_call_local]: the signal or RPC also runs on the sender. [method Netw.configure_signal] starts here, and [method Netw.configure_rpc] starts at [method call_remote].
+				A property ([member context_type] [code]1[/code]) has no local-call axis, because a property assignment is local first by construction, so declaring one on a [NetwPropertyConfig] warns and records the axis anyway.
+			</description>
+		</method>
+		<method name="call_remote">
+			<return type="NetwMemberConfig" />
+			<description>
+				Clears [member is_call_local]: the signal or RPC reaches remote peers only. The default for an RPC, and warns on a property for the reason [method call_local] gives.
+			</description>
+		</method>
+		<method name="controller">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member write_policy] [constant POLICY_CONTROLLER]: only the peer holding [member NetwEntity.controller] may write or emit, which is how a player drives their own entity.
+			</description>
+		</method>
+		<method name="controller_only">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member is_controller_only]: only the entity's controller, or the server, may call this RPC.
+			</description>
+		</method>
+		<method name="defer_until">
+			<return type="NetwMemberConfig" />
+			<param index="0" name="sig" type="Signal" />
+			<description>
+				Holds a received call until [param sig] has fired on the target node, instead of running it the moment the node is live. [code]self.ready[/code] is the common choice. Only the signal's NAME is kept, in [member defer_signal_name], because the gate is declared once per script and awaited on whichever instance receives the call. A second gate on one member warns, since that is two call sites disagreeing about when the call is safe.
+			</description>
+		</method>
+		<method name="interpolate" qualifiers="vararg">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member interpolators], one [NetwInterpolate] per value the member carries, in the order the member declares them. A property or a one-argument member therefore takes exactly one, and [code]null[/code] leaves a value unsmoothed. The rules are [method quantize]'s, read against [method NetwInterpolate.is_same_spec] rather than a bit layout: a re-declaration of equal specs answers immediately and changes nothing, so an authoring shell can push freshly built but identical specs after a reparent, and one that genuinely differs replaces the standing list and warns.
+				[codeblock]
+				Netw.configure_property(self, &amp;"position").interpolate(pos_lerp)
+				Netw.configure_signal(self.aimed).interpolate(null, dir_slerp)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="is_interpolation_only" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether this config only smooths a value and never claims a write: it carries [member interpolators] and no [member write_policy], [member transfer_mode] or [member quantizers] was DECLARED. It reads whether each axis was written at all rather than what it holds, so declaring an axis its own default value still ends the interpolation-only reading. Smoothing a property some other set already replicates is expected, and this is how that case is told apart from a second claim of authority over the field.
+			</description>
+		</method>
+		<method name="is_policy_declared" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether [member write_policy] was WRITTEN, rather than what it holds. A set derived from several members of one script asks this so that a member which declared its policy out loud owns the set's policy and a member that declared none does not, and declaring the default value is still declaring it.
+			</description>
+		</method>
+		<method name="is_transfer_declared" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether [member transfer_mode] was WRITTEN, rather than what it holds. Same reading as [method is_policy_declared].
+			</description>
+		</method>
+		<method name="quantize" qualifiers="vararg">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member quantizers], one [NetwQuantize] per argument the member takes, in the order the member declares them. A property or a one-argument member therefore takes exactly one, and [code]null[/code] sends an argument unpacked.
+				[codeblock]
+				Netw.configure_property(self, &amp;"position").quantize(pos_q)
+				Netw.configure_rpc(self.fire).quantize(dir_q, null, power_q)
+				[/codeblock]
+				The count is checked against the arity of [member context_name], which [member context_type] decides how to read, so a member taking three arguments and given one quantizer is refused rather than packed halfway. A member whose declaration cannot be read at all is taken on trust. Passing nothing, or an argument that is not a [NetwQuantize], is refused with an error and leaves the previous declaration standing.
+				Re-declaring a layout-equal list ([method NetwQuantize.is_same_layout]) is silent. Only a re-declaration that changes the bit layout warns, since that is two call sites genuinely disagreeing about one member's schema. Whether a declared quantizer can pack the type it sits over is checked against that same declared type.
+			</description>
+		</method>
+		<method name="reliable">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member transfer_mode] [constant TRANSFER_RELIABLE]. The default.
+			</description>
+		</method>
+		<method name="unreliable">
+			<return type="NetwMemberConfig" />
+			<description>
+				Declares [member transfer_mode] [constant TRANSFER_UNRELIABLE].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="context_name" type="StringName" setter="set_context_name" getter="get_context_name" default="&amp;&quot;&quot;">
+			The member this config declares: a method name, a property name, or a signal name, decided by [member context_type]. Written by the [code]Netw.configure_*[/code] door that minted the config.
+		</member>
+		<member name="context_node_ref" type="Variant" setter="set_context_node_ref" getter="get_context_node_ref" default="null">
+			An opaque weak reference to the body a property config was authored on, or [code]null[/code]. It is dereferenced only while resolving a property's declared type, which is read off the live body rather than off [member context_script], because a node the framework tracks without a script has no declaration to read it from. A body that has been freed answers [constant @GlobalScope.TYPE_NIL], which is why the reference is weak.
+		</member>
+		<member name="context_script" type="Script" setter="set_context_script" getter="get_context_script">
+			The [Script] declaring the member, which is what the declaration is keyed by and what [member write_policy] compiles into. [code]null[/code] for a property declared on a node that carries no script, which is answered by its own body instead.
+			Named WITHOUT being owned: the script is held by instance id and resolved on every read, so a script that has been freed answers [code]null[/code] here rather than a stale object. A declaration is stored in the declaring script's own metadata book, so an owning back-reference would close a cycle out of which neither the script nor any config declared on it could ever be freed.
+		</member>
+		<member name="context_type" type="int" setter="set_context_type" getter="get_context_type" default="0">
+			Which kind of member this is: [code]0[/code] an RPC or a spawn function, [code]1[/code] a property, [code]2[/code] a signal. It decides which book [member write_policy] is published into, and which reflection resolves the member's declared types: a method's argument types, a live node's property type, or a signal's argument types.
+		</member>
+		<member name="defer_signal_name" type="StringName" setter="set_defer_signal_name" getter="get_defer_signal_name" default="&amp;&quot;&quot;">
+			The signal a received call waits on before it runs, or empty to run it as soon as the node is live. Declared through [method defer_until].
+		</member>
+		<member name="interpolators" type="Array" setter="set_interpolators" getter="get_interpolators" default="[]">
+			Per-position [NetwInterpolate] list smoothing received values. Empty applies each received value directly. Declared through [method interpolate].
+		</member>
+		<member name="is_call_local" type="bool" setter="set_is_call_local" getter="get_is_call_local" default="false">
+			Whether the signal or RPC also runs on the sender. Declared through [method call_local] and [method call_remote], and re-declaring the value it already carries is silent.
+		</member>
+		<member name="is_controller_only" type="bool" setter="set_is_controller_only" getter="get_is_controller_only" default="false">
+			Whether only the entity's controller, or the server, may call this RPC. Declared through [method controller_only].
+		</member>
+		<member name="quantizers" type="Array" setter="set_quantizers" getter="get_quantizers" default="[]">
+			Per-position [NetwQuantize] list packing the member's values. Empty sends every value self-describing, and a null slot does the same for one position. Declared through [method quantize].
+		</member>
+		<member name="transfer_mode" type="int" setter="set_transfer_mode" getter="get_transfer_mode" enum="NetwMemberConfig.TransferMode" default="0">
+			How the member travels. Declared through [method reliable] and [method unreliable], and re-declaring the value it already carries is silent.
+		</member>
+		<member name="write_policy" type="int" setter="set_write_policy" getter="get_write_policy" enum="NetwMemberConfig.Policy" default="0">
+			Who may write or emit this member. Declared through [method authority], [method controller] and [method any_peer], and re-declaring the value it already carries is silent.
+			Writing it also COMPILES the rule into the declaring script's own metadata book, so the receive gate answers off the script rather than walking this registry for every arriving frame. Nothing is published for an RPC ([member context_type] [code]0[/code]), which is policed by its caller gate instead, or for a config naming no [member context_script], which has no book to write into.
+		</member>
+	</members>
+	<constants>
+		<constant name="POLICY_AUTHORITY" value="0" enum="Policy">
+			Only the node's multiplayer authority may write or emit.
+		</constant>
+		<constant name="POLICY_CONTROLLER" value="1" enum="Policy">
+			Only the peer holding [member NetwEntity.controller] may write or emit.
+		</constant>
+		<constant name="POLICY_ANY_PEER" value="2" enum="Policy">
+			Any peer may write or emit.
+		</constant>
+		<constant name="TRANSFER_RELIABLE" value="0" enum="TransferMode">
+			Transmit reliably.
+		</constant>
+		<constant name="TRANSFER_UNRELIABLE" value="1" enum="TransferMode">
+			Transmit unreliably.
+		</constant>
+	</constants>
+</class>

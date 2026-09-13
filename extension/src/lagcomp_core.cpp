@@ -1,6 +1,5 @@
 #include "netw/lagcomp_core.hpp"
 
-#include "godot/class_db.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -11,7 +10,7 @@ namespace netw {
 
 namespace {
 
-constexpr const char *MODULE = "lagcomp";
+constexpr SubsystemName MODULE = sys::LAGCOMP;
 
 } // namespace
 
@@ -77,10 +76,11 @@ int64_t NetwLagCompCore::timeline_register(
     return slot;
 }
 
-int64_t NetwLagCompCore::timeline_slot_of(const Ref<RefCounted> &p_entity
+int64_t NetwLagCompCore::timeline_slot_of(
+    const Ref<RefCounted> &p_entity
 ) const {
-    HashMap<uint64_t, int64_t>::ConstIterator seated =
-        slot_by_entity.find(entity_key(p_entity));
+    HashMap<uint64_t, int64_t>::ConstIterator seated
+        = slot_by_entity.find(entity_key(p_entity));
     return seated != slot_by_entity.end() ? seated->value : -1;
 }
 
@@ -172,7 +172,10 @@ Array NetwLagCompCore::timeline_declared(int64_t p_slot) const {
     return out;
 }
 
-Array NetwLagCompCore::touched_keys(const Row &p_row, const Dictionary &p_past) {
+Array NetwLagCompCore::touched_keys(
+    const Row &p_row,
+    const Dictionary &p_past
+) {
     if (p_row.declared.is_empty()) {
         return p_past.keys();
     }
@@ -213,15 +216,19 @@ void NetwLagCompCore::timeline_record(
     }
 }
 
-int64_t NetwLagCompCore::timeline_sample_tick(int64_t p_slot, int64_t p_tick)
-    const {
+int64_t NetwLagCompCore::timeline_sample_tick(
+    int64_t p_slot,
+    int64_t p_tick
+) const {
     const Row *row = row_of(p_slot);
     return row != nullptr ? row->history->latest_state_tick_at_or_before(p_tick)
                           : -1;
 }
 
-Dictionary NetwLagCompCore::timeline_sample(int64_t p_slot, int64_t p_tick)
-    const {
+Dictionary NetwLagCompCore::timeline_sample(
+    int64_t p_slot,
+    int64_t p_tick
+) const {
     const Row *row = row_of(p_slot);
     return row != nullptr ? row->history->latest_state_at_or_before(p_tick)
                           : Dictionary();
@@ -279,89 +286,6 @@ int NetwLagCompCore::rewind(
         port_sync_transform(row->port.resolve(MODULE));
     }
     return int(moved.size());
-}
-
-void NetwLagCompCore::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("timeline_register", "entity", "history_limit"),
-        &NetwLagCompCore::timeline_register
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_slot_of", "entity"),
-        &NetwLagCompCore::timeline_slot_of
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_unregister", "entity"),
-        &NetwLagCompCore::timeline_unregister
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_registered"),
-        &NetwLagCompCore::timeline_registered
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_entities"),
-        &NetwLagCompCore::timeline_entities
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_sample_entity", "entity", "tick"),
-        &NetwLagCompCore::timeline_sample_entity
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_open", "history_limit"),
-        &NetwLagCompCore::timeline_open
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_close", "slot"),
-        &NetwLagCompCore::timeline_close
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_is_open", "slot"),
-        &NetwLagCompCore::timeline_is_open
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_bind_owner", "slot", "owner"),
-        &NetwLagCompCore::timeline_bind_owner
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_unbind_owner", "slot"),
-        &NetwLagCompCore::timeline_unbind_owner
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_owner_bound", "slot"),
-        &NetwLagCompCore::timeline_owner_bound
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_declare", "slot", "keys"),
-        &NetwLagCompCore::timeline_declare
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_declared", "slot"),
-        &NetwLagCompCore::timeline_declared
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_history", "slot"),
-        &NetwLagCompCore::timeline_history
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_record", "slot", "tick", "payload"),
-        &NetwLagCompCore::timeline_record
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_sample", "slot", "tick"),
-        &NetwLagCompCore::timeline_sample
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_sample_tick", "slot", "tick"),
-        &NetwLagCompCore::timeline_sample_tick
-    );
-    ClassDB::bind_method(
-        D_METHOD("timeline_trim_before", "slot", "tick"),
-        &NetwLagCompCore::timeline_trim_before
-    );
-    ClassDB::bind_method(
-        D_METHOD("rewind", "slots", "tick", "body"),
-        &NetwLagCompCore::rewind
-    );
 }
 
 } // namespace netw

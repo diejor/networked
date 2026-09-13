@@ -1,19 +1,19 @@
 #include "support/netw_test.h"
 
-#include "netw/display_offset.hpp"
 #include "netw/api/interpolate.hpp"
+#include "netw/display/offset.hpp"
 
-namespace TestNetwDisplayOffset {
+namespace TestNetwOffset {
 
 using namespace godot;
-using netw::DisplayOffset;
 using netw::NetwInterpolate;
+using netw::display::Offset;
 
 TEST_CASE(
     "[Networked][Display][Hosted] O1 an armed offset seeds itself against the "
     "first target the new source produces"
 ) {
-    DisplayOffset offset;
+    Offset offset;
     CHECK(!offset.is_held());
 
     offset.armed = true;
@@ -36,7 +36,7 @@ TEST_CASE(
     "[Networked][Display][Hosted] O2 a held offset decays by the glide and is "
     "dropped once it is spent"
 ) {
-    DisplayOffset offset;
+    Offset offset;
     offset.absorb(Vector2(10.0, 0.0), INFINITY);
     CHECK(Vector2(offset.residual).is_equal_approx(Vector2(-10.0, 0.0)));
 
@@ -65,7 +65,7 @@ TEST_CASE(
     "[Networked][Display][Hosted] O3 an absorption composes onto what has not "
     "decayed yet rather than replacing it"
 ) {
-    DisplayOffset offset;
+    Offset offset;
     offset.absorb(Vector2(10.0, 0.0), INFINITY);
     offset.apply(
         Vector2(),
@@ -85,7 +85,7 @@ TEST_CASE(
     "[Networked][Display][Hosted] O4 the clamp is what stops an offset showing "
     "a pose a teleport was entitled to snap through"
 ) {
-    DisplayOffset offset;
+    Offset offset;
 
     offset.absorb(Vector2(100.0, 0.0), 4.0);
 
@@ -96,7 +96,7 @@ TEST_CASE(
     "[Networked][Display][Hosted] O5 a cleared offset writes the raw value, "
     "because a genuine desync should be seen to snap"
 ) {
-    DisplayOffset offset;
+    Offset offset;
     offset.absorb(Vector2(10.0, 0.0), INFINITY);
     offset.armed = true;
 
@@ -118,7 +118,7 @@ TEST_CASE(
     "[Networked][Display][Hosted] O6 a circular channel takes its residual the "
     "short way around, whatever shape carries the angle"
 ) {
-    DisplayOffset angle;
+    Offset angle;
     angle.armed = true;
     angle.apply(
         double(0.1),
@@ -130,7 +130,7 @@ TEST_CASE(
     NETW_CHECK_LT(double(angle.residual), 0.0);
     NETW_CHECK_GT(double(angle.residual), -0.2);
 
-    DisplayOffset linear;
+    Offset linear;
     linear.armed = true;
     linear.apply(
         double(0.1),
@@ -141,7 +141,7 @@ TEST_CASE(
     );
     NETW_CHECK_GT(double(linear.residual), 6.0);
 
-    DisplayOffset spun;
+    Offset spun;
     spun.armed = true;
     const Quaternion displayed(Vector3(0.0, 1.0, 0.0), Math::deg_to_rad(170.0));
     const Quaternion target(Vector3(0.0, 1.0, 0.0), Math::deg_to_rad(-170.0));
@@ -159,7 +159,7 @@ TEST_CASE(
     "[Networked][Display][Hosted] O7 a value shape with no offset arithmetic "
     "holds none, so its writes pass through"
 ) {
-    DisplayOffset offset;
+    Offset offset;
 
     offset.absorb(String("nudged"), INFINITY);
 
@@ -178,7 +178,7 @@ TEST_CASE(
     "[Networked][Display][Hosted] O8 the clamp keeps its direction in every "
     "shape a channel carries, so a bound correction still points home"
 ) {
-    DisplayOffset spatial;
+    Offset spatial;
 
     spatial.absorb(Vector3(-10.0, 0.0, 0.0), 2.0);
 
@@ -186,11 +186,11 @@ TEST_CASE(
     NETW_CHECK_LT(Math::abs(clamped.length() - 2.0), 0.0001);
     NETW_CHECK_GT(clamped.x, 0.0);
 
-    DisplayOffset scalar;
+    Offset scalar;
 
     scalar.absorb(9.0, 2.0);
 
     NETW_CHECK_LT(Math::abs(double(scalar.residual) + 2.0), 0.0001);
 }
 
-} // namespace TestNetwDisplayOffset
+} // namespace TestNetwOffset

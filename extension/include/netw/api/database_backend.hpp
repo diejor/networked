@@ -53,9 +53,7 @@ public:
 
     virtual godot::Ref<NetwPromise> list_namespaces();
 
-    virtual godot::Ref<NetwPromise> delete_namespace(
-        const godot::String &slot
-    );
+    virtual godot::Ref<NetwPromise> delete_namespace(const godot::String &slot);
 
     GDVIRTUAL2R(
         godot::Ref<NetwPromise>,

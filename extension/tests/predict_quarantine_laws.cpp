@@ -242,8 +242,8 @@ TEST_CASE(
         0.000001
     );
 
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     CHECK(pool->supports(
         int(netw::Schedule::TICK),
         int(netw::Role::PREDICT),

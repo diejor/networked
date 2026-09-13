@@ -23,10 +23,11 @@ using namespace netw_test;
  */
 
 godot::RID minted_by_row(LoopbackRig &p_rig, int64_t &r_route) {
-    const godot::PackedInt64Array routes = p_rig.server()->call("claim_routes", 1);
+    const godot::PackedInt64Array routes
+        = p_rig.server()->liveness_claim_routes(1);
     REQUIRE(routes.size() == 1);
     r_route = routes[0];
-    return p_rig.server()->call("entity_from_route", r_route);
+    return p_rig.server()->entity_from_route(int(r_route));
 }
 
 TEST_CASE("[Networked][Liveness] a row then a spawn converge on one record") {
@@ -38,10 +39,10 @@ TEST_CASE("[Networked][Liveness] a row then a spawn converge on one record") {
     const godot::RID entity
         = rig.declare_entity(EntityDecl().named("Late").on_route(int(route)));
 
-    NETW_CHECK_EQ(int(rig.server()->call("entity_get_route", entity)), route);
-    const godot::RID resolved = rig.server()->call("entity_from_route", route);
+    NETW_CHECK_EQ(rig.server()->entity_get_route(entity), route);
+    const godot::RID resolved = rig.server()->entity_from_route(int(route));
     CHECK(resolved == entity);
-    const godot::PackedInt64Array live = rig.server()->call("live_routes");
+    const godot::PackedInt32Array live = rig.server()->liveness_get_routes();
     NETW_CHECK_EQ(live.size(), 1);
     NETW_CHECK_EQ(live[0], route);
 }
@@ -49,16 +50,15 @@ TEST_CASE("[Networked][Liveness] a row then a spawn converge on one record") {
 TEST_CASE("[Networked][Liveness] a spawn then a row reuses the same record") {
     LoopbackRig rig(0);
     const godot::RID entity = rig.declare_entity(EntityDecl().named("Early"));
-    const int64_t route
-        = int64_t(rig.server()->call("entity_get_route", entity));
+    const int64_t route = rig.server()->entity_get_route(entity);
     CHECK(route > 0);
 
     godot::PackedInt64Array rows;
     rows.push_back(route);
-    rig.server()->call("bind_routes_data", rows);
+    rig.server()->liveness_bind_routes_data(rows);
 
-    CHECK(godot::RID(rig.server()->call("entity_from_route", route)) == entity);
-    const godot::PackedInt64Array live = rig.server()->call("live_routes");
+    CHECK(rig.server()->entity_from_route(int(route)) == entity);
+    const godot::PackedInt32Array live = rig.server()->liveness_get_routes();
     NETW_CHECK_EQ(live.size(), 1);
     NETW_CHECK_EQ(live[0], route);
 }
@@ -66,14 +66,15 @@ TEST_CASE("[Networked][Liveness] a spawn then a row reuses the same record") {
 TEST_CASE("[Networked][Liveness] a parked callback flushes exactly once") {
     LoopbackRig rig(0);
     const godot::PackedInt64Array seeded
-        = rig.server()->call("claim_routes", 1);
+        = rig.server()->liveness_claim_routes(1);
     REQUIRE(seeded.size() == 1);
     const int64_t route = seeded[0] + 1;
     const CallLog log;
-    rig.server()->call("when_live", route, log.callable("live"));
+    rig.server()
+        ->liveness_when_live(route, log.callable("live"), 0, godot::Callable());
 
     const godot::PackedInt64Array claimed
-        = rig.server()->call("claim_routes", 1);
+        = rig.server()->liveness_claim_routes(1);
     NETW_CHECK_EQ(claimed[0], route);
     NETW_CHECK_EQ(log.count("live"), 1);
 
@@ -84,56 +85,46 @@ TEST_CASE("[Networked][Liveness] a parked callback flushes exactly once") {
 TEST_CASE("[Networked][Liveness] a second handle is refused a standing route") {
     LoopbackRig rig(0);
     const godot::RID first = rig.declare_entity(EntityDecl().named("First"));
-    const int64_t route
-        = int64_t(rig.server()->call("entity_get_route", first));
+    const int64_t route = rig.server()->entity_get_route(first);
 
-    const godot::RID second = rig.server()->call("entity_create");
-    const int bound = int(
-        rig.server()->call("entity_bind_route", second, int(route))
-    );
+    const godot::RID second = rig.server()->entity_create();
+    const int bound = int(rig.server()->entity_bind_route(second, route));
 
     NETW_CHECK_EQ(bound, int(godot::ERR_ALREADY_IN_USE));
-    CHECK(godot::RID(rig.server()->call("entity_from_route", route)) == first);
-    NETW_CHECK_EQ(int(rig.server()->call("entity_get_route", second)), 0);
-    NETW_CHECK_EQ(int(rig.server()->call("entity_get_epoch", first)), 0);
+    CHECK(rig.server()->entity_from_route(int(route)) == first);
+    NETW_CHECK_EQ(rig.server()->entity_get_route(second), 0);
+    NETW_CHECK_EQ(rig.server()->entity_get_epoch(first), 0);
 }
 
 TEST_CASE("[Networked][Liveness] a route stands for one entity across lives") {
     LoopbackRig rig(0);
     const godot::RID entity = rig.declare_entity(EntityDecl().named("Once"));
-    const int64_t route
-        = int64_t(rig.server()->call("entity_get_route", entity));
-    NETW_CHECK_EQ(int(rig.server()->call("entity_get_epoch", entity)), 0);
+    const int64_t route = rig.server()->entity_get_route(entity);
+    NETW_CHECK_EQ(rig.server()->entity_get_epoch(entity), 0);
 
     godot::PackedInt64Array one;
     one.push_back(route);
-    rig.server()->call("release_routes", one);
+    rig.server()->liveness_release_routes(one);
 
     NETW_CHECK_EQ(
-        int(rig.server()->call("entity_bind_route", entity, int(route))),
+        int(rig.server()->entity_bind_route(entity, route)),
         int(godot::OK)
     );
-    NETW_CHECK_EQ(int(rig.server()->call("entity_get_epoch", entity)), 1);
-    CHECK(godot::RID(rig.server()->call("entity_from_route", route)) == entity);
+    NETW_CHECK_EQ(rig.server()->entity_get_epoch(entity), 1);
+    CHECK(rig.server()->entity_from_route(int(route)) == entity);
 }
 
 TEST_CASE("[Networked][Liveness] an adopted record answers with its node") {
     LoopbackRig rig(0);
     int64_t route = 0;
     const godot::RID minted = minted_by_row(rig, route);
-    CHECK(godot::Object::cast_to<godot::Node>(
-              rig.server()->call("entity_get_node", minted)
-          )
-          == nullptr);
+    CHECK(rig.server()->entity_get_node(minted) == nullptr);
 
     const godot::RID entity
         = rig.declare_entity(EntityDecl().named("Late").on_route(int(route)));
     godot::Node *owner = rig.node_of(entity);
     CHECK(owner != nullptr);
-    CHECK(godot::Object::cast_to<godot::Node>(
-              rig.server()->call("entity_get_node", entity)
-          )
-          == owner);
+    CHECK(rig.server()->entity_get_node(entity) == owner);
 }
 
 } // namespace TestNetwLivenessAdoptionLaws

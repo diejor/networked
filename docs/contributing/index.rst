@@ -18,5 +18,6 @@ expected peer, scene, and authority state are visible.
    :name: toc-contributing
 
    development_setup
+   pipeline
    documentation
    code_style

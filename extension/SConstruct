@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,28 @@ import sources
 
 ROOT = Path(Dir("#").abspath)
 DEPS_FILE = ROOT / "deps.env"
+SUBSYSTEMS_FILE = ROOT / "include" / "netw" / "subsystems.hpp"
+
+LEAF_ZONE_SUBSYSTEMS = ("WIRE", "INTERPOLATION")
+
+
+def leaf_masked_subsystems():
+    """The NETW_SUBSYSTEMS value with every LEAF_ZONE_SUBSYSTEMS bit cleared."""
+    text = SUBSYSTEMS_FILE.read_text(encoding="utf-8")
+    indices = dict(
+        (name, int(index))
+        for name, index in re.findall(
+            r'X\((\w+),\s*"[^"]*",\s*(\d+)\)',
+            text,
+        )
+    )
+    missing = [n for n in LEAF_ZONE_SUBSYSTEMS if n not in indices]
+    if missing:
+        Exit("networked: subsystems.hpp has no bit for {}".format(", ".join(missing)))
+    mask = 0xFFFFFFFF
+    for name in LEAF_ZONE_SUBSYSTEMS:
+        mask &= ~(1 << indices[name])
+    return "{:#010x}U".format(mask)
 
 
 def read_pins():
@@ -112,10 +135,6 @@ checkout_dependency(
 
 target_name = ARGUMENTS.get("target", "template_debug")
 requested_platform = ARGUMENTS.get("platform", "")
-# Instrumentation is opt-in on every target: a library carrying Tracy's client
-# does not survive an editor hot reload, and reload is the daily loop. Asking
-# for it deploys a manifest that turns reloading off, so the two can never be
-# on at once.
 default_profiling = False
 variables = Variables(["custom.py"], ARGUMENTS)
 variables.AddVariables(
@@ -124,12 +143,18 @@ variables.AddVariables(
         "Compile Tracy instrumentation",
         default_profiling,
     ),
+    BoolVariable(
+        "netw_zone_leaves",
+        "Compile the per-call leaf zones a normal profiling build masks out",
+        False,
+    ),
     BoolVariable("netw_tests", "Compile the Tier 2a doctest runner", False),
     BoolVariable("use_ccache", "Use ccache if available", True),
     BoolVariable("use_mold", "Use mold linker if available", True),
 )
 local_env = Environment(tools=["default"], PLATFORM="", variables=variables)
 netw_profiling = bool(local_env["netw_profiling"])
+netw_zone_leaves = bool(local_env["netw_zone_leaves"])
 netw_tests = bool(local_env["netw_tests"])
 use_ccache = bool(local_env["use_ccache"])
 use_mold = bool(local_env["use_mold"])
@@ -139,8 +164,6 @@ for option in variables.options:
     ARGUMENTS.pop(option.key, None)
 
 if requested_platform == "linux" or (not requested_platform and sys.platform.startswith("linux")):
-    # A shared object with a private libstdc++ breaks doctest's locale facets
-    # when loaded into Godot. Keep the process on one C++ runtime.
     ARGUMENTS.setdefault("use_static_cpp", "no")
 
 ARGUMENTS.setdefault("api_version", pins["GODOT_CPP_API_VERSION"])
@@ -167,14 +190,13 @@ env.Append(
 )
 env["netw_tests"] = netw_tests
 
+sources.write_hosted_manifest()
+
 build_sources = sources.get_sources(
     env,
     env["target"] in ["editor", "template_debug"],
 )
 
-# Class reference XML compiles into the editor and debug targets only, so a
-# release export carries no documentation payload. Every registered class the
-# addon publishes is documented here.
 if env["target"] in ["editor", "template_debug"]:
     doc_xml = Glob("doc_classes/*.xml")
     if doc_xml:
@@ -192,6 +214,10 @@ if netw_profiling:
             "TRACY_MANUAL_LIFETIME",
         ],
     )
+    if not netw_zone_leaves:
+        env.Append(
+            CPPDEFINES=[("NETW_SUBSYSTEMS", leaf_masked_subsystems())],
+        )
     tracy_env = env.Clone()
     build_sources.append(
         tracy_env.SharedObject(str(tracy / "public" / "TracyClient.cpp")),
@@ -210,13 +236,9 @@ else:
         env["SHLIBSUFFIX"],
     )
 
-def deploy_manifest(target, source, env):
-    """Copy the manifest, turning reloading off for an instrumented build.
 
-    A library carrying Tracy's client comes back from a hot reload with its
-    classes registered but empty, and the editor reports no error, so the two
-    settings are resolved here rather than left to agree by convention.
-    """
+def deploy_manifest(target, source, env):
+    """Copy the manifest, turning reloading off for an instrumented build."""
     text = Path(str(source[0])).read_text(encoding="utf-8")
     if netw_profiling:
         text = text.replace("reloadable = true", "reloadable = false")

@@ -14,7 +14,7 @@ int slot_of(uint16_t seq) {
 
 } // namespace
 
-bool AckBook::record_send(uint16_t seq, uint8_t channel_id, int64_t send_id) {
+bool AckBook::record_send(uint16_t seq, uint16_t frames, int64_t bits) {
     const int slot = slot_of(seq);
     if (active[slot] && ring[slot].seq != seq) {
         NETW_WARN_ONCE(
@@ -27,14 +27,25 @@ bool AckBook::record_send(uint16_t seq, uint8_t channel_id, int64_t send_id) {
         return false;
     }
     ring[slot].seq = seq;
-    ring[slot].channel_id = channel_id;
-    ring[slot].send_id = send_id;
+    ring[slot].frames = frames;
+    ring[slot].bits = bits;
     active[slot] = true;
+    return true;
+}
+
+bool AckBook::take(uint16_t seq, AckEntry &r_entry) {
+    const int slot = slot_of(seq);
+    if (!active[slot] || ring[slot].seq != seq) {
+        return false;
+    }
+    r_entry = ring[slot];
+    active[slot] = false;
     return true;
 }
 
 void AckBook::process_ack(
     uint16_t ack_seq,
+    uint32_t history,
     godot::LocalVector<AckEntry> &out_delivered,
     godot::LocalVector<AckEntry> &out_lost
 ) {
@@ -42,10 +53,17 @@ void AckBook::process_ack(
     out_delivered.clear();
     out_lost.clear();
 
-    const int ack_slot = slot_of(ack_seq);
-    if (active[ack_slot] && ring[ack_slot].seq == ack_seq) {
-        out_delivered.push_back(ring[ack_slot]);
-        active[ack_slot] = false;
+    AckEntry taken;
+    if (take(ack_seq, taken)) {
+        out_delivered.push_back(taken);
+    }
+    for (int back = 0; back < HISTORY_DEPTH; ++back) {
+        if ((history & (uint32_t(1) << back)) == 0) {
+            continue;
+        }
+        if (take(uint16_t(ack_seq - 1 - back), taken)) {
+            out_delivered.push_back(taken);
+        }
     }
 
     if (!has_acked || static_cast<int16_t>(ack_seq - highest_acked_seq) > 0) {
@@ -57,8 +75,9 @@ void AckBook::process_ack(
         if (!active[i]) {
             continue;
         }
-        const int16_t diff = static_cast<int16_t>(highest_acked_seq - ring[i].seq);
-        if (diff > 32) {
+        const int16_t diff
+            = static_cast<int16_t>(highest_acked_seq - ring[i].seq);
+        if (diff > HISTORY_DEPTH) {
             out_lost.push_back(ring[i]);
             active[i] = false;
         }

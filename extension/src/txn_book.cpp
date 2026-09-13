@@ -1,7 +1,5 @@
 #include "netw/txn_book.hpp"
 
-#include "godot/class_db.hpp"
-
 using namespace godot;
 
 namespace netw {
@@ -88,37 +86,6 @@ PackedInt64Array NetwTxnBook::drain() {
 
 int NetwTxnBook::size() const {
     return int(open_txns.size());
-}
-
-void NetwTxnBook::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("mint"), &NetwTxnBook::mint);
-    ClassDB::bind_method(
-        D_METHOD("open", "txn_id", "addressed", "deadline"),
-        &NetwTxnBook::open
-    );
-    ClassDB::bind_method(
-        D_METHOD("is_open", "txn_id"),
-        &NetwTxnBook::is_open
-    );
-    ClassDB::bind_method(
-        D_METHOD("admits", "txn_id", "sender"),
-        &NetwTxnBook::admits
-    );
-    ClassDB::bind_method(
-        D_METHOD("addressed", "txn_id"),
-        &NetwTxnBook::addressed
-    );
-    ClassDB::bind_method(D_METHOD("close", "txn_id"), &NetwTxnBook::close);
-    ClassDB::bind_method(
-        D_METHOD("expire", "current"),
-        &NetwTxnBook::expire
-    );
-    ClassDB::bind_method(
-        D_METHOD("waiting_on", "peer_id"),
-        &NetwTxnBook::waiting_on
-    );
-    ClassDB::bind_method(D_METHOD("drain"), &NetwTxnBook::drain);
-    ClassDB::bind_method(D_METHOD("size"), &NetwTxnBook::size);
 }
 
 } // namespace netw

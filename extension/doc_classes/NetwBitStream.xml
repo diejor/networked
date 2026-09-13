@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwBitStream" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One bit vocabulary in three modes, so a payload is described once and written, read and measured by the same code.
+	</brief_description>
+	<description>
+		Every verb takes the value and answers the value, so a description written once runs in all three [enum Mode] values: [method writer] spends bits, [method reader] takes them back, and [method measurer] counts what they would cost without storing anything. Write the description as one function over a [NetwBitStream] and call it three times rather than writing an encoder and a decoder that must be kept in step.
+		[codeblock]
+		func describe(s: NetwBitStream, row: Dictionary) -&gt; Dictionary:
+		    row.hp = s.bits(row.get("hp", 0), 12)
+		    row.name = s.string(row.get("name", ""))
+		    s.align_verify()
+		    return row
+
+		var out := NetwBitStream.writer()
+		describe(out, {"hp": 87, "name": "hero"})
+		var bytes := out.to_bytes()
+
+		var back := NetwBitStream.reader(bytes)
+		var row := describe(back, {})
+		if not back.ok() or back.bits_remaining() != 0:
+		    push_error("refused")
+		[/codeblock]
+		[b]A failed read poisons the stream.[/b] Every verb after the failure is a no-op answering the value it was given, so a decoder checks [method ok] once at the end rather than after each call. This is what makes a hand-written decoder safe against a remote sender: the values a poisoned read answers are the caller's own defaults and never bytes that were not there.
+		[b]A decoder that stops before its input is exhausted has not decoded.[/b] [method bits_remaining] reading anything but [code]0[/code] after a whole payload means the sender framed it under a description this one does not share, so refuse it rather than keep the part that parsed.
+		[method align_verify] pads to the next byte on a write and, on a read, refuses padding that is not zero. A payload ends with it so its length is a whole number of bytes and its tail cannot carry anything undeclared.
+		[method varuint] and [method svarint] are canonical and bounded by the [code]max_bytes[/code] the field declares: a value too large to spell in that many groups is refused rather than truncated, and a redundant final group is refused rather than accepted as a second spelling of one number.
+		This is the same vocabulary the framework's own frames are written in, and [code]extension/WIRE.md[/code] states them field for field in it.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="align_verify">
+			<return type="bool" />
+			<description>
+				Pads to the next byte boundary when writing, and when reading refuses padding whose bits are not zero. Returns [code]false[/code] on refusal, which poisons the stream.
+			</description>
+		</method>
+		<method name="bit_length">
+			<return type="int" />
+			<description>
+				Bits spent so far: written, read, or described, according to [method get_mode].
+			</description>
+		</method>
+		<method name="bits">
+			<return type="int" />
+			<param index="0" name="value" type="int" />
+			<param index="1" name="count" type="int" />
+			<description>
+				Spends [param count] raw bits of [param value], at most 64, and answers what was spent. Reading answers the decoded bits; a [param count] outside [code]1[/code] to [code]64[/code] is refused.
+			</description>
+		</method>
+		<method name="bits_remaining">
+			<return type="int" />
+			<description>
+				Bits the reader has not consumed, and [code]0[/code] in any other [enum Mode]. A whole payload ends at [code]0[/code].
+			</description>
+		</method>
+		<method name="bool1">
+			<return type="bool" />
+			<param index="0" name="value" type="bool" />
+			<description>
+				Spends one bit.
+			</description>
+		</method>
+		<method name="bytes_capped">
+			<return type="PackedByteArray" />
+			<param index="0" name="value" type="PackedByteArray" />
+			<param index="1" name="cap" type="int" />
+			<description>
+				Spends a length wide enough for [param cap], then the bytes. A run longer than [param cap] is refused by the writer, and a declared length above [param cap] is refused by the reader, so the bound is checked on both sides rather than trusted from the wire.
+			</description>
+		</method>
+		<method name="get_mode" qualifiers="const">
+			<return type="int" enum="NetwBitStream.Mode" />
+			<description>
+				Which of the three modes this stream was made in. It never changes.
+			</description>
+		</method>
+		<method name="int_range">
+			<return type="int" />
+			<param index="0" name="value" type="int" />
+			<param index="1" name="low" type="int" />
+			<param index="2" name="high" type="int" />
+			<description>
+				Spends exactly the bits the span [param low] to [param high] needs. A [param value] outside the span is refused by the writer and a decoded value outside it is refused by the reader, so an enum on the wire cannot arrive as a case the game has no branch for.
+			</description>
+		</method>
+		<method name="measurer" qualifiers="static">
+			<return type="NetwBitStream" />
+			<description>
+				A stream in [constant MEASURE] that stores nothing and counts what a description would cost. This is how a payload is priced before it is built.
+			</description>
+		</method>
+		<method name="ok">
+			<return type="bool" />
+			<description>
+				Whether the stream is still healthy. A read that ran past the end, a refused bound, or padding that was not zero clears this and it never comes back.
+			</description>
+		</method>
+		<method name="reader" qualifiers="static">
+			<return type="NetwBitStream" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				A stream in [constant READ] over [param bytes].
+			</description>
+		</method>
+		<method name="string">
+			<return type="String" />
+			<param index="0" name="value" type="String" />
+			<description>
+				Spends the utf8 of [param value] as a [method bytes_capped] run of at most 1023 bytes.
+			</description>
+		</method>
+		<method name="svarint">
+			<return type="int" />
+			<param index="0" name="value" type="int" />
+			<param index="1" name="max_bytes" type="int" default="10" />
+			<description>
+				Spends a signed value as a zigzagged [method varuint], so a small negative number costs one group rather than ten.
+			</description>
+		</method>
+		<method name="to_bytes" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				What the writer has spent, padded to a whole byte. Empty in any other [enum Mode].
+			</description>
+		</method>
+		<method name="varuint">
+			<return type="int" />
+			<param index="0" name="value" type="int" />
+			<param index="1" name="max_bytes" type="int" default="10" />
+			<description>
+				Spends an unsigned value as seven bit groups with a continuation bit, at most [param max_bytes] of them. Canonical and bounded: see the class description for what each end refuses.
+			</description>
+		</method>
+		<method name="writer" qualifiers="static">
+			<return type="NetwBitStream" />
+			<description>
+				A stream in [constant WRITE], empty, ready to spend bits.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="WRITE" value="0" enum="Mode">
+			The stream spends the value it is given and [method to_bytes] answers the result.
+		</constant>
+		<constant name="READ" value="1" enum="Mode">
+			The stream takes values back out of the bytes [method reader] was given, ignoring the value it is passed and answering it unchanged once the stream is poisoned.
+		</constant>
+		<constant name="MEASURE" value="2" enum="Mode">
+			The stream stores nothing and only counts, so [method bit_length] answers what the same description would cost to write.
+		</constant>
+	</constants>
+</class>

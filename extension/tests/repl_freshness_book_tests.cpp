@@ -1,10 +1,3 @@
-// What a receiver has already seen, and the three ways a book can lie about it.
-//
-// Every case here is a frame that must be accepted exactly once. The failures
-// this exists to prevent are quiet in both directions: a book that accepts a
-// stale frame lets an older row overwrite a newer one, and a book that refuses
-// a fresh one stalls a stream forever with no error anywhere.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -33,8 +26,6 @@ TEST_CASE(
     FreshnessBook book;
     CHECK(book.accept(SENDER, ROUTE, SYNC, 65535));
 
-    // One step forward, not 65535 back. Judging by magnitude here would stall
-    // every stream at the moment its sequence wrapped.
     CHECK(book.accept(SENDER, ROUTE, SYNC, 0));
     CHECK_FALSE(book.accept(SENDER, ROUTE, SYNC, 65535));
     CHECK(book.accept(SENDER, ROUTE, DELTA, 1));
@@ -44,8 +35,6 @@ TEST_CASE("[Networked][Repl][Hosted] an equal sequence is stale") {
     FreshnessBook book;
     CHECK(book.accept(SENDER, ROUTE, SYNC, 10));
 
-    // A datagram is one sequence and its frames are accepted once. Accepting
-    // the equal case would apply a duplicate as though it were an update.
     CHECK_FALSE(book.accept(SENDER, ROUTE, SYNC, 10));
     CHECK(book.accept(SENDER, ROUTE, DELTA, 10));
 }
@@ -57,9 +46,6 @@ TEST_CASE(
     FreshnessBook book;
     REQUIRE(book.accept(SENDER, ROUTE, SYNC, 0));
 
-    // 32767 ahead is forward, 32768 is the far side of the ring and reads as
-    // behind. The boundary is the whole definition, so it is pinned rather
-    // than sampled.
     CHECK(book.accept(SENDER, ROUTE, SYNC, 32767));
     CHECK_FALSE(book.accept(SENDER, ROUTE, SYNC, 32767 + 32768));
     CHECK(book.accept(SENDER, ROUTE, SYNC, 32767 + 32767));
@@ -89,8 +75,6 @@ TEST_CASE(
     book.clear_route(ROUTE);
     NETW_CHECK_EQ(book.stream_count(), 1);
 
-    // A sequence the dead route had already passed. Inheriting it would make
-    // the new entity's first datagrams read as stale.
     CHECK(book.accept(SENDER, ROUTE, SYNC, 1));
     CHECK_FALSE(book.accept(SENDER, ROUTE + 1, SYNC, 1));
 }
@@ -109,7 +93,6 @@ TEST_CASE(
 
     CHECK(book.accept(SENDER, ROUTE, SYNC, 1));
     CHECK(book.accept(SENDER, ROUTE + 1, DELTA, 1));
-    // The peer that stayed keeps what it knew.
     CHECK_FALSE(book.accept(SENDER + 1, ROUTE, SYNC, 1));
 }
 
@@ -123,12 +106,8 @@ TEST_CASE("[Networked][Repl][Hosted] clearing forgets every stream") {
     CHECK(book.accept(SENDER, ROUTE, SYNC, 1));
 }
 
-TEST_CASE(
-    "[Networked][Repl][Hosted] a negative peer id keeps its own stream"
-) {
+TEST_CASE("[Networked][Repl][Hosted] a negative peer id keeps its own stream") {
     FreshnessBook book;
-    // Godot hands out 32-bit peer ids and the shell passes them through. A
-    // packing that dropped the sign would alias two live peers onto one book.
     REQUIRE(book.accept(-2, ROUTE, SYNC, 500));
     CHECK(book.accept(2, ROUTE, SYNC, 1));
     NETW_CHECK_EQ(book.stream_count(), 2);
@@ -136,6 +115,83 @@ TEST_CASE(
     book.clear_peer(-2);
     NETW_CHECK_EQ(book.stream_count(), 1);
     CHECK_FALSE(book.accept(2, ROUTE, SYNC, 1));
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] one datagram judges a stream once, and every "
+    "later frame of it repeats that verdict"
+) {
+    FreshnessBook book;
+    book.open_datagram();
+    REQUIRE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 10));
+
+    CHECK(book.accept_in_datagram(SENDER, ROUTE, SYNC, 10));
+    CHECK(book.accept_in_datagram(SENDER, ROUTE, SYNC, 10));
+    NETW_CHECK_EQ(book.stale_count(), 0);
+
+    CHECK(book.accept_in_datagram(SENDER, ROUTE, DELTA, 10));
+    CHECK(book.accept_in_datagram(SENDER, ROUTE + 1, SYNC, 10));
+    CHECK(book.accept_in_datagram(SENDER + 1, ROUTE, SYNC, 10));
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] a refused stream stays refused for the rest "
+    "of its datagram, and is counted once"
+) {
+    FreshnessBook book;
+    book.open_datagram();
+    REQUIRE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 500));
+
+    book.open_datagram();
+    CHECK_FALSE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 400));
+    CHECK_FALSE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 400));
+    CHECK_FALSE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 400));
+    NETW_CHECK_EQ(book.stale_count(), 1);
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] a duplicated datagram re-evaluates against "
+    "the book and drops whole"
+) {
+    FreshnessBook book;
+    book.open_datagram();
+    REQUIRE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 10));
+    REQUIRE(book.accept_in_datagram(SENDER, ROUTE, DELTA, 10));
+
+    book.open_datagram();
+    CHECK_FALSE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 10));
+    CHECK_FALSE(book.accept_in_datagram(SENDER, ROUTE, DELTA, 10));
+    NETW_CHECK_EQ(book.stale_count(), 2);
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] opening a datagram forgets the memo but "
+    "keeps the book"
+) {
+    FreshnessBook book;
+    book.open_datagram();
+    REQUIRE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 10));
+
+    book.open_datagram();
+    CHECK(book.accept_in_datagram(SENDER, ROUTE, SYNC, 11));
+    NETW_CHECK_EQ(book.stream_count(), 1);
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] clearing forgets the stale count and the "
+    "open datagram's memo"
+) {
+    FreshnessBook book;
+    book.open_datagram();
+    REQUIRE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 500));
+
+    book.open_datagram();
+    REQUIRE_FALSE(book.accept_in_datagram(SENDER, ROUTE, SYNC, 400));
+    NETW_CHECK_EQ(book.stale_count(), 1);
+
+    book.clear();
+    NETW_CHECK_EQ(book.stale_count(), 0);
+    CHECK(book.accept_in_datagram(SENDER, ROUTE, SYNC, 400));
 }
 
 } // namespace TestNetwReplFreshnessBook

@@ -1,0 +1,35 @@
+[gd_resource type="StandardMaterial3D" load_steps=6 format=3 uid="uid://bnqudedf7vlb0"]
+
+[ext_resource type="Texture2D" uid="uid://cicithvrtycgj" path="res://examples/rocket_league/materials/grass_albedo.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://dys4dhkhk3pw4" path="res://examples/rocket_league/materials/grass_orm.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://mr7pu5igx84m" path="res://examples/rocket_league/materials/grass_normal.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://cx8yeg0tx1e4h" path="res://examples/rocket_league/materials/grass_heightmap.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://c5xh5cxrpjwps" path="res://examples/rocket_league/materials/grass_emission.png" id="5"]
+
+[resource]
+albedo_color = Color(0.27340657, 0.5222743, 0.27338237, 1)
+albedo_texture = ExtResource("1")
+metallic = 0.62
+metallic_specular = 0.24
+metallic_texture = ExtResource("2")
+metallic_texture_channel = 2
+roughness = 0.9
+roughness_texture = ExtResource("2")
+roughness_texture_channel = 1
+emission_enabled = true
+emission_texture = ExtResource("5")
+normal_enabled = true
+normal_texture = ExtResource("3")
+ao_enabled = true
+ao_light_affect = 0.62
+ao_texture = ExtResource("2")
+heightmap_scale = 4.402
+heightmap_texture = ExtResource("4")
+subsurf_scatter_enabled = true
+subsurf_scatter_strength = 0.26
+backlight = Color(0.368117, 0.41861, 0.25716, 1)
+uv1_triplanar = true
+uv1_triplanar_sharpness = 1.4142138
+texture_filter = 5
+proximity_fade_enabled = true
+distance_fade_mode = 1

@@ -1,8 +1,6 @@
 #include "netw/predict/journal.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 namespace {
 
@@ -197,8 +195,7 @@ void Journal::mark_witness_match(int64_t p_transition, bool p_matched) {
 
 bool Journal::witness_judged(int64_t p_transition) const {
     const int slot = slot_of(p_transition);
-    return slot >= 0
-        && (witness_states[uint32_t(slot)] & WITNESS_JUDGED) != 0;
+    return slot >= 0 && (witness_states[uint32_t(slot)] & WITNESS_JUDGED) != 0;
 }
 
 void Journal::mark_substituted(int64_t p_transition) {
@@ -338,12 +335,7 @@ NETW_JOURNAL_READ_AT(post_fp_at, post_fps, int32_t, 0)
 NETW_JOURNAL_READ_AT(topo_fp_at, topo_fps, int32_t, 0)
 NETW_JOURNAL_READ_AT(raw_fp_at, raw_fps, int32_t, 0)
 NETW_JOURNAL_READ_AT(witness_fp_at, witness_fps, int32_t, 0)
-NETW_JOURNAL_READ_AT(
-    witness_class_bits_at,
-    witness_class_bits,
-    uint8_t,
-    0
-)
+NETW_JOURNAL_READ_AT(witness_class_bits_at, witness_class_bits, uint8_t, 0)
 NETW_JOURNAL_READ_AT(
     witness_realization_bits_at,
     witness_realization_bits,
@@ -434,6 +426,4 @@ JournalEvidence Journal::evidence_of(int64_t p_transition) const {
     return out;
 }
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

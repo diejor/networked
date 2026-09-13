@@ -7,14 +7,9 @@ namespace TestNetwHandleLedger {
 using namespace godot;
 using netw::NetwHandleLedger;
 
-Ref<NetwHandleLedger> make_ledger() {
-    Ref<NetwHandleLedger> ledger;
-    ledger.instantiate();
-    return ledger;
-}
-
 TEST_CASE("[Networked][Handle][Hosted] Handle ledger ids are monotonic") {
-    Ref<NetwHandleLedger> ledger = make_ledger();
+    NetwHandleLedger held;
+    NetwHandleLedger *const ledger = &held;
     RID previous;
     for (int64_t id = 1; id <= 256; id++) {
         const RID rid = ledger->rid_create();
@@ -29,7 +24,8 @@ TEST_CASE("[Networked][Handle][Hosted] Handle ledger ids are monotonic") {
 TEST_CASE(
     "[Networked][Handle][Hosted] Handle ledger frees exactly one handle"
 ) {
-    Ref<NetwHandleLedger> ledger = make_ledger();
+    NetwHandleLedger held;
+    NetwHandleLedger *const ledger = &held;
     const RID first = ledger->rid_create();
     const RID second = ledger->rid_create();
 
@@ -43,17 +39,18 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Handle][Hosted] Handle ledgers reject foreign handles") {
-    Ref<NetwHandleLedger> first = make_ledger();
-    Ref<NetwHandleLedger> second = make_ledger();
-    const RID foreign = first->rid_create();
+    NetwHandleLedger first;
+    NetwHandleLedger second;
+    const RID foreign = first.rid_create();
 
-    CHECK_FALSE(second->rid_is_valid(foreign));
-    CHECK_FALSE(second->rid_free(foreign));
-    CHECK(second->id_count() == 0);
+    CHECK_FALSE(second.rid_is_valid(foreign));
+    CHECK_FALSE(second.rid_free(foreign));
+    CHECK(second.id_count() == 0);
 }
 
 TEST_CASE("[Networked][Handle][Hosted] Handle ledger clear restarts the kind") {
-    Ref<NetwHandleLedger> ledger = make_ledger();
+    NetwHandleLedger held;
+    NetwHandleLedger *const ledger = &held;
     const RID first = ledger->rid_create();
     ledger->rid_create();
 

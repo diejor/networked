@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="DictionaryRecord" inherits="NetwRecord" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The record this addon ships, and the one a table mints when it declares none of its own.
+	</brief_description>
+	<description>
+		[DictionaryRecord] is the default mutable record implementation. It stores arbitrary [Variant] values keyed by [StringName] and serializes them with [method @GlobalScope.var_to_bytes].
+		[codeblock]
+		var record := DictionaryRecord.new()
+		record.set_value(&amp;"health", 100)
+		record.position = Vector2(10, 20)
+
+		var bytes := record.serialize()
+		var copy := DictionaryRecord.new()
+		copy.deserialize(bytes)
+		[/codeblock]
+		It is the concrete end of the chain, so it implements the [NetwRecord] and [Serde] verbs natively rather than through their virtuals. A script that needs different storage extends [NetwRecord] and overrides the virtuals there.
+		[member data] is a declared property, so it is the one name [method NetwRecord.set_value] cannot be reached through by assignment. Store a value under [code]&amp;"data"[/code] with [method NetwRecord.set_value] itself.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="data" type="Dictionary" setter="set_data" getter="get_data" default="{}">
+			The backing dictionary serialized to disk and transmitted over the network. [method Serde.serialize] writes it and [method Serde.deserialize] replaces it.
+		</member>
+	</members>
+</class>

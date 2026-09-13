@@ -4,7 +4,9 @@
 
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_engine.hpp"
+#include "netw/api/schema_core.hpp"
 
 namespace TestPersistenceEngineLaws {
 
@@ -12,7 +14,7 @@ using namespace godot;
 using netw::NetwEntity;
 using netw::NetwPersistenceEngine;
 using netw::NetwPromise;
-using netw_test::NetwTestPersistenceDatabase;
+using netw_test::DatabaseStand;
 
 Array &declarations() {
     static Array held;
@@ -60,7 +62,7 @@ Array one_column(const char *p_property, double p_interval) {
 struct Persisted {
     Node2D *owner = nullptr;
     Ref<NetwEntity> entity;
-    Ref<NetwTestPersistenceDatabase> database;
+    DatabaseStand database;
     Dictionary declaration;
     Ref<NetwPersistenceEngine> engine;
 
@@ -76,9 +78,14 @@ struct Persisted {
         entity = NetwEntity::of(owner);
         REQUIRE(entity.is_valid());
 
-        database.instantiate();
+        Array declared_columns;
+        for (int at = 0; at < p_columns.size(); ++at) {
+            const Dictionary column = p_columns[at];
+            declared_columns.push_back(column.get("property", StringName()));
+        }
+        database.declare(StringName("players"), declared_columns);
         if (p_with_database) {
-            declaration["database"] = database;
+            declaration["database"] = database.db;
         }
         declaration["table"] = StringName("players");
 
@@ -102,7 +109,7 @@ struct Persisted {
     }
 
     Dictionary last_upsert() const {
-        const Array rows = database->upserts();
+        const Array rows = database.upserts();
         REQUIRE(rows.size() > 0);
         return rows[rows.size() - 1];
     }
@@ -110,12 +117,15 @@ struct Persisted {
     ~Persisted() {
         NetwPersistenceEngine::set_schema_declarer(Callable());
         NetwPersistenceEngine::forget_claims();
+        declarations().clear();
         memdelete(owner);
     }
 };
 
-TEST_CASE("[Networked][Database][Hosted] PE1 the column set freezes from the "
-          "declaration and gather reads the live scene through it") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE1 the column set freezes from the "
+    "declaration and gather reads the live scene through it"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(10, 20));
 
@@ -126,8 +136,10 @@ TEST_CASE("[Networked][Database][Hosted] PE1 the column set freezes from the "
     CHECK(Vector2(row[StringName("position")]) == Vector2(10, 20));
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE2 apply writes only the declared "
-          "columns onto the live scene") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE2 apply writes only the declared "
+    "columns onto the live scene"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(0, 0));
     saved.owner->set_rotation(0.0);
@@ -141,15 +153,17 @@ TEST_CASE("[Networked][Database][Hosted] PE2 apply writes only the declared "
     NETW_CHECK_CLOSE(saved.owner->get_rotation(), 0.0, 1e-9);
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE3 a flush upserts the gathered row "
-          "under the record id and resolves OK") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE3 a flush upserts the gathered row "
+    "under the record id and resolves OK"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(7, 8));
 
     const Ref<NetwPromise> written = saved.engine->flush(Array());
 
     NETW_CHECK_EQ(saved.settled_code(written), int(OK));
-    NETW_CHECK_EQ(saved.database->transaction_count(), 1);
+    NETW_CHECK_EQ(saved.database.transaction_count(), 1);
     const Dictionary upsert = saved.last_upsert();
     check_named(upsert["table"], "players");
     check_named(upsert["id"], "valeria");
@@ -157,33 +171,39 @@ TEST_CASE("[Networked][Database][Hosted] PE3 a flush upserts the gathered row "
     CHECK(Vector2(values[StringName("position")]) == Vector2(7, 8));
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE4 a flush of an archetype naming no "
-          "database resolves ERR_UNCONFIGURED and writes nothing") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE4 a flush of an archetype naming no "
+    "database resolves ERR_UNCONFIGURED and writes nothing"
+) {
     Persisted saved("valeria", one_column("position", 0.0), false);
 
     const Ref<NetwPromise> written = saved.engine->flush(Array());
 
     NETW_CHECK_EQ(saved.settled_code(written), int(ERR_UNCONFIGURED));
-    NETW_CHECK_EQ(saved.database->transaction_count(), 0);
+    NETW_CHECK_EQ(saved.database.transaction_count(), 0);
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE5 a flush that gathers nothing "
-          "resolves OK without opening a transaction") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE5 a flush that gathers nothing "
+    "resolves OK without opening a transaction"
+) {
     Persisted saved("valeria", Array());
 
     const Ref<NetwPromise> written = saved.engine->flush(Array());
 
     CHECK(saved.engine->columns_empty());
     NETW_CHECK_EQ(saved.settled_code(written), int(OK));
-    NETW_CHECK_EQ(saved.database->transaction_count(), 0);
+    NETW_CHECK_EQ(saved.database.transaction_count(), 0);
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE6 hydrate applies the stored row "
-          "and leaves the engine clean against it") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE6 hydrate applies the stored row "
+    "and leaves the engine clean against it"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     Dictionary stored;
     stored[StringName("position")] = Vector2(11, 12);
-    saved.database->set_stored(stored);
+    saved.database.set_stored(stored);
     saved.owner->set_position(Vector2(0, 0));
 
     const Ref<NetwPromise> read = saved.engine->hydrate();
@@ -193,8 +213,10 @@ TEST_CASE("[Networked][Database][Hosted] PE6 hydrate applies the stored row "
     CHECK_FALSE(saved.engine->is_dirty());
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE7 hydrating a missing row keeps the "
-          "scene defaults and still answers OK") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE7 hydrating a missing row keeps the "
+    "scene defaults and still answers OK"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(5, 5));
 
@@ -202,33 +224,31 @@ TEST_CASE("[Networked][Database][Hosted] PE7 hydrating a missing row keeps the "
 
     NETW_CHECK_EQ(saved.settled_code(read), int(OK));
     CHECK(saved.owner->get_position() == Vector2(5, 5));
-    NETW_CHECK_EQ(saved.database->read_count(), 1);
+    NETW_CHECK_EQ(saved.database.read_count(), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE8 a read the database refused "
-          "answers its code rather than a clean hydrate") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE8 a read the database refused "
+    "answers its code rather than a clean hydrate"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
-    saved.database->refuse_reads(int(ERR_UNCONFIGURED));
+    Dictionary stored;
+    stored[StringName("position")] = Vector2(11, 12);
+    stored[StringName("gold")] = 5;
+    saved.database.set_stored(stored);
+    saved.database.db->set_mismatch_policy(netw::NetwDatabase::FAIL);
+    saved.owner->set_position(Vector2(5, 5));
 
     const Ref<NetwPromise> read = saved.engine->hydrate();
 
     NETW_CHECK_EQ(saved.settled_code(read), int(ERR_UNCONFIGURED));
+    CHECK(saved.owner->get_position() == Vector2(5, 5));
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE9 a database answering no promise "
-          "is refused rather than left pending") {
-    Persisted saved("valeria", one_column("position", 0.0));
-    saved.database->answer_no_read_promise(true);
-
-    const Ref<NetwPromise> read = saved.engine->hydrate();
-
-    REQUIRE(read.is_valid());
-    CHECK(read->get_is_failed());
-    NETW_CHECK_EQ(read->get_code(), int(ERR_INVALID_DATA));
-}
-
-TEST_CASE("[Networked][Database][Hosted] PE10 is_dirty tracks the live scene "
-          "against the last flush") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE10 is_dirty tracks the live scene "
+    "against the last flush"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(1, 1));
 
@@ -239,8 +259,10 @@ TEST_CASE("[Networked][Database][Hosted] PE10 is_dirty tracks the live scene "
     CHECK(saved.engine->is_dirty());
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE11 the record id is the entity id, "
-          "and the node name only where there is none") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE11 the record id is the entity id, "
+    "and the node name only where there is none"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     check_named(saved.engine->record_id(), "valeria");
 
@@ -249,8 +271,10 @@ TEST_CASE("[Networked][Database][Hosted] PE11 the record id is the entity id, "
     check_named(saved.engine->record_id(), "Nameless");
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE12 a snapshot tick answers the due "
-          "write, and answers nothing a second time unchanged") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE12 a snapshot tick answers the due "
+    "write, and answers nothing a second time unchanged"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(4, 4));
 
@@ -264,8 +288,10 @@ TEST_CASE("[Networked][Database][Hosted] PE12 a snapshot tick answers the due "
     CHECK(saved.engine->snapshot_tick(1.0).is_empty());
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE13 the table is declared once, "
-          "before the first read or write reaches the database") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE13 the table is declared once, "
+    "before the first read or write reaches the database"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(1, 2));
 
@@ -283,8 +309,10 @@ TEST_CASE("[Networked][Database][Hosted] PE13 the table is declared once, "
     check_named(column["property"], "position");
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE14 an engine built without an "
-          "entity or without a declaration is refused rather than minted") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE14 an engine built without an "
+    "entity or without a declaration is refused rather than minted"
+) {
     Dictionary declaration;
     declaration["table"] = StringName("players");
 
@@ -293,8 +321,10 @@ TEST_CASE("[Networked][Database][Hosted] PE14 an engine built without an "
     ERR_PRINT_ON;
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE15 a hydrate emits hydrated even "
-          "where no row existed, so a first play still places its player") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE15 a hydrate emits hydrated even "
+    "where no row existed, so a first play still places its player"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     signal_count() = 0;
     saved.engine->connect("hydrated", callable_mp_static(&note_signal));
@@ -304,8 +334,10 @@ TEST_CASE("[Networked][Database][Hosted] PE15 a hydrate emits hydrated even "
     NETW_CHECK_EQ(signal_count(), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] PE16 a flush emits flushed only where "
-          "the write landed") {
+TEST_CASE(
+    "[Networked][Database][Hosted] PE16 a flush emits flushed only where "
+    "the write landed"
+) {
     Persisted saved("valeria", one_column("position", 0.0));
     saved.owner->set_position(Vector2(6, 6));
     signal_count() = 0;
@@ -314,12 +346,91 @@ TEST_CASE("[Networked][Database][Hosted] PE16 a flush emits flushed only where "
     saved.engine->flush(Array());
     NETW_CHECK_EQ(signal_count(), 1);
 
-    saved.database->set_outcome(int(ERR_UNAVAILABLE));
+    saved.database.set_outcome(int(ERR_UNAVAILABLE));
     saved.owner->set_position(Vector2(7, 7));
     const Ref<NetwPromise> refused = saved.engine->flush(Array());
 
     NETW_CHECK_EQ(saved.settled_code(refused), int(ERR_UNAVAILABLE));
     NETW_CHECK_EQ(signal_count(), 1);
+}
+
+TEST_CASE(
+    "[Networked][Persistence][Hosted] PTC1 committing a loaded table claims "
+    "one fresh route per saved row and writes every declared column beneath "
+    "them, defaulting a column the save cannot supply rather than refusing "
+    "the table"
+) {
+    Ref<netw::NetwMultiplayer> core;
+    core.instantiate();
+    const RID schema = core->schema_create(StringName("SavedRow"));
+    core->schema_add_column(
+        schema,
+        StringName("hp"),
+        netw::NetwMultiplayer::COLUMN_I32,
+        1
+    );
+    core->schema_add_column(
+        schema,
+        StringName("owner"),
+        netw::NetwMultiplayer::COLUMN_ENTITY,
+        1
+    );
+    REQUIRE(core->schema_seal(schema) == OK);
+    const RID table = core->table_create(schema);
+
+    const Dictionary nothing
+        = core->persist_table_commit(table, schema, Dictionary());
+    CHECK(PackedInt64Array(nothing[StringName("routes")]).is_empty());
+    CHECK(PackedStringArray(nothing[StringName("ids")]).is_empty());
+
+    PackedStringArray ids;
+    ids.push_back("save-a");
+    ids.push_back("save-b");
+    PackedInt32Array hp;
+    hp.push_back(11);
+    hp.push_back(22);
+    PackedInt64Array stale_owner;
+    stale_owner.push_back(9999);
+    stale_owner.push_back(8888);
+    Dictionary data;
+    data[StringName("ids")] = ids;
+    data[StringName("hp")] = hp;
+    data[StringName("owner")] = stale_owner;
+
+    const Dictionary out = core->persist_table_commit(table, schema, data);
+
+    const PackedInt64Array routes = out[StringName("routes")];
+    NETW_CHECK_EQ(routes.size(), 2);
+    NETW_CHECK_EQ(PackedStringArray(out[StringName("ids")]).size(), 2);
+    const PackedInt32Array written = core->table_read_column(table, 0);
+    NETW_CHECK_EQ(written.size(), 2);
+    const PackedInt64Array owners = core->table_read_column(table, 1);
+    NETW_CHECK_EQ(owners.size(), 2);
+    if (routes.size() == 2 && written.size() == 2 && owners.size() == 2) {
+        CHECK(routes[0] != routes[1]);
+        CHECK(core->table_read_routes(table) == routes);
+        NETW_CHECK_EQ(written[0], 11);
+        NETW_CHECK_EQ(written[1], 22);
+        NETW_CHECK_EQ(owners[0], 0);
+        NETW_CHECK_EQ(owners[1], 0);
+    }
+
+    SUBCASE("a column the save carries at the wrong length is defaulted") {
+        PackedInt32Array short_hp;
+        short_hp.push_back(5);
+        Dictionary ragged;
+        ragged[StringName("ids")] = ids;
+        ragged[StringName("hp")] = short_hp;
+
+        core->persist_table_commit(table, schema, ragged);
+
+        const PackedInt32Array defaulted = core->table_read_column(table, 0);
+        NETW_CHECK_EQ(defaulted.size(), 2);
+        if (defaulted.size() == 2) {
+            NETW_CHECK_EQ(defaulted[0], 0);
+            NETW_CHECK_EQ(defaulted[1], 0);
+        }
+    }
 }
 
 } // namespace TestPersistenceEngineLaws

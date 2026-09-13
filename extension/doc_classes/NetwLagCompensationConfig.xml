@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwLagCompensationConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		How long the server waits for a late player action, and how far ahead of itself it will take one.
+	</brief_description>
+	<description>
+		Two numbers, both optional. [method Netw.configure_lagcomp] answers one of these to fill in.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_lagcomp(self) \
+		            .input_gate_deadline_ticks(16) \
+		            .max_future_action_ticks(4)
+		[/codeblock]
+		Declaring this does not turn lag compensation on. The recording starts itself as soon as a predicted node or a [NetwAction] needs it, so a game that predicts declares nothing here and a game that predicts nothing pays for nothing. Declare one to move a number off its default.
+		Once the session has read these values they are its own, so freeing the node that declared them stops nothing, and there is no way to take them back. A value written afterwards is reported and changes nothing.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="input_gate_deadline_ticks">
+			<return type="NetwLagCompensationConfig" />
+			<param index="0" name="ticks" type="int" />
+			<description>
+				Sets [member input_gate_deadline_ticks] and answers this same config, so a declaration reads as one chained expression.
+			</description>
+		</method>
+		<method name="max_future_action_ticks">
+			<return type="NetwLagCompensationConfig" />
+			<param index="0" name="ticks" type="int" />
+			<description>
+				Sets [member max_future_action_ticks] and answers this same config, so a declaration reads as one chained expression.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="input_gate_deadline_ticks" type="int" setter="set_input_gate_deadline_ticks" getter="get_input_gate_deadline_ticks" default="12">
+			How many ticks a [constant NetwAction.TIMING_TICK_ALIGNED_STATE_READY] action waits for the state its tick needs before it gives up and resolves on what it has. Raise it for a link that loses input often, and lower it to answer a player sooner at the cost of judging on less. A negative count is refused and the previous value stands.
+		</member>
+		<member name="max_future_action_ticks" type="int" setter="set_max_future_action_ticks" getter="get_max_future_action_ticks" default="8">
+			How far ahead of the server's own tick an action may ask to happen before it is denied. This is what stops a client claiming it acted in the future. A negative count is refused and the previous value stands.
+		</member>
+	</members>
+</class>

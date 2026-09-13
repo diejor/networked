@@ -14,6 +14,7 @@ namespace {
 const char *SIG_COMPLETED = "completed";
 const char *SIG_FAILED = "failed";
 const char *SIG_SETTLED = "settled";
+const char *SIG_READY = "ready";
 
 } // namespace
 
@@ -25,7 +26,7 @@ Ref<NetwPromise> NetwPromise::resolved(const Variant &p_value) {
     return out;
 }
 
-Ref<NetwPromise> NetwPromise::rejected(int p_code, const String &p_detail) {
+Ref<NetwPromise> NetwPromise::rejected(Error p_code, const String &p_detail) {
     Ref<NetwPromise> out;
     out.instantiate();
     out->failed = true;
@@ -69,6 +70,19 @@ Ref<NetwPromise> NetwPromise::when_settled(const Callable &callback) {
     return Ref<NetwPromise>(this);
 }
 
+Variant NetwPromise::answer() const {
+    return completed ? result : Variant(code);
+}
+
+Signal NetwPromise::wait() {
+    if (completed || failed) {
+        Callable(this, StringName("emit_signal"))
+            .bind(StringName(SIG_READY), answer())
+            .call_deferred();
+    }
+    return Signal(this, StringName(SIG_READY));
+}
+
 void NetwPromise::resolve(const Variant &value) {
     if (completed || failed) {
         return;
@@ -77,6 +91,7 @@ void NetwPromise::resolve(const Variant &value) {
     result = value;
     emit_signal(StringName(SIG_COMPLETED), value);
     emit_signal(StringName(SIG_SETTLED));
+    emit_signal(StringName(SIG_READY), value);
     const LocalVector<Callable> chained(then_callbacks);
     Array args;
     args.push_back(value);
@@ -85,7 +100,7 @@ void NetwPromise::resolve(const Variant &value) {
     }
 }
 
-void NetwPromise::reject(int error_code, const String &error_detail) {
+void NetwPromise::reject(Error error_code, const String &error_detail) {
     if (completed || failed) {
         return;
     }
@@ -103,6 +118,7 @@ void NetwPromise::reject(int error_code, const String &error_detail) {
     }
     emit_signal(StringName(SIG_FAILED), error_code, error_detail);
     emit_signal(StringName(SIG_SETTLED));
+    emit_signal(StringName(SIG_READY), error_code);
     const LocalVector<Callable> chained(catch_callbacks);
     Array args;
     args.push_back(error_code);
@@ -133,6 +149,8 @@ void NetwPromise::_bind_methods() {
         D_METHOD("when_settled", "cb"),
         &NetwPromise::when_settled
     );
+    ClassDB::bind_method(D_METHOD("wait"), &NetwPromise::wait);
+    ClassDB::bind_method(D_METHOD("answer"), &NetwPromise::answer);
     ClassDB::bind_method(D_METHOD("resolve", "val"), &NetwPromise::resolve);
     ClassDB::bind_method(
         D_METHOD("reject", "err_code", "err_detail"),
@@ -153,11 +171,7 @@ void NetwPromise::_bind_methods() {
         D_METHOD("get_is_failed"),
         &NetwPromise::get_is_failed
     );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_failed"),
-        "",
-        "get_is_failed"
-    );
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_failed"), "", "get_is_failed");
     ClassDB::bind_method(
         D_METHOD("get_is_settled"),
         &NetwPromise::get_is_settled
@@ -168,22 +182,30 @@ void NetwPromise::_bind_methods() {
         "get_is_settled"
     );
     ClassDB::bind_method(D_METHOD("get_result"), &NetwPromise::get_result);
-    ADD_PROPERTY(PropertyInfo(Variant::NIL, "result"), "", "get_result");
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::NIL,
+            "result",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_NIL_IS_VARIANT
+        ),
+        "",
+        "get_result"
+    );
     ClassDB::bind_method(D_METHOD("get_code"), &NetwPromise::get_code);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "code"), "", "get_code");
     ClassDB::bind_method(D_METHOD("get_detail"), &NetwPromise::get_detail);
     ADD_PROPERTY(PropertyInfo(Variant::STRING, "detail"), "", "get_detail");
 
-    ADD_SIGNAL(MethodInfo(
-        SIG_COMPLETED,
-        PropertyInfo(Variant::NIL, "value")
-    ));
+    ADD_SIGNAL(MethodInfo(SIG_COMPLETED, PropertyInfo(Variant::NIL, "value")));
     ADD_SIGNAL(MethodInfo(
         SIG_FAILED,
         PropertyInfo(Variant::INT, "code"),
         PropertyInfo(Variant::STRING, "detail")
     ));
     ADD_SIGNAL(MethodInfo(SIG_SETTLED));
+    ADD_SIGNAL(MethodInfo(SIG_READY, PropertyInfo(Variant::NIL, "answer")));
 }
 
 } // namespace netw

@@ -1,6 +1,7 @@
 #include "support/netw_test.h"
 
 #include "netw/join_roster.hpp"
+#include "netw/session/frames.hpp"
 
 namespace TestNetwJoinRoster {
 
@@ -92,10 +93,14 @@ TEST_CASE(
         );
     }
 
-    SUBCASE("a debug rename outranks an authenticated refusal") {
+    SUBCASE(
+        "an authenticated refusal outranks the rename, because a peer "
+        "that proved who it is may not take a seated player's name even "
+        "on a build that renames everyone else"
+    ) {
         NETW_CHECK_EQ(
             roster.name_verdict("ana", taken, true, true),
-            int(JoinRoster::RENAME)
+            int(JoinRoster::REFUSE)
         );
     }
 
@@ -143,7 +148,12 @@ TEST_CASE(
     NETW_CHECK_EQ(int(Ref<ResolvedJoin>(joins[0])->get_peer_id()), 4);
     NETW_CHECK_EQ(int(Ref<ResolvedJoin>(joins[1])->get_peer_id()), 7);
     NETW_CHECK_EQ(int(Ref<ResolvedJoin>(joins[2])->get_peer_id()), 9);
-    NETW_CHECK_EQ(roster.serialize_accepted().size(), 3);
+    LocalVector<netw::AcceptFrame> rows;
+    const bool framed = netw::session::roster_read(roster.roster_frame(), rows);
+    CHECK(framed);
+    NETW_CHECK_EQ(int(rows.size()), 3);
+    NETW_CHECK_EQ(int(rows[0].peer_id), 4);
+    NETW_CHECK_EQ(int(rows[2].peer_id), 9);
 }
 
 } // namespace TestNetwJoinRoster

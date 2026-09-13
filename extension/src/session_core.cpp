@@ -24,7 +24,7 @@ bool SessionCore::edge_is_legal(State from, State to) {
     return false;
 }
 
-void SessionCore::announce_to(NetwMultiplayerCore *p_host) {
+void SessionCore::announce_to(NetwMultiplayer *p_host) {
     host = p_host;
 }
 
@@ -57,14 +57,6 @@ void SessionCore::set_desired_role(Role value) {
 
 SessionCore::Role SessionCore::get_desired_role() const {
     return desired_role;
-}
-
-void SessionCore::set_advertised_max_players(int value) {
-    advertised_max_players = value;
-}
-
-int SessionCore::get_advertised_max_players() const {
-    return advertised_max_players;
 }
 
 void SessionCore::transition(State next) {
@@ -139,26 +131,35 @@ bool SessionCore::is_server_role() const {
     return role == ROLE_DEDICATED_SERVER || role == ROLE_LISTEN_SERVER;
 }
 
+bool SessionCore::is_sessionless() const {
+    return state == STATE_OFFLINE && role == ROLE_NONE;
+}
+
+bool SessionCore::holds_server_authority() const {
+    return is_server_role() || is_sessionless();
+}
+
 bool SessionCore::join_flooded(int sender, int64_t now_msec) {
     return join_window.exceeded(sender, now_msec);
 }
 
+int64_t SessionCore::compute_wire_identity() {
+    return int64_t(wire::WireRegistry::create_default().identity_hash());
+}
+
 int64_t SessionCore::compute_app_tag(const StringName &value) {
-    const String text = String(value);
-    if (text.is_empty()) {
-        return 0;
+    const CharString text = String(value).utf8();
+    uint64_t name_fold = 14695981039346656037ULL;
+    for (int at = 0; at < int(text.length()); ++at) {
+        name_fold ^= uint64_t(uint8_t(text[at]));
+        name_fold *= 1099511628211ULL;
     }
-    const uint64_t wire_identity
-        = wire::WireRegistry::create_default().identity_hash();
-    return int64_t(
-        (uint64_t(uint32_t(text.hash())) ^ wire_identity) & 0xFFFFFFFFULL
-    );
+    return int64_t(name_fold ^ uint64_t(compute_wire_identity()));
 }
 
 void SessionCore::clear() {
     state = STATE_OFFLINE;
     role = ROLE_NONE;
-    advertised_max_players = 0;
     join_window.clear();
 }
 

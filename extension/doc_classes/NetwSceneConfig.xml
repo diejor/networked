@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSceneConfig" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The declaration that makes a node a multiplayer scene.
+	</brief_description>
+	<description>
+		Answered by [method Netw.configure_multiplayer_scene] and configured in place. A scene declares itself once from its own root, and that declaration is the only one: there is no second marking step and nothing else has to know the scene exists.
+		The facts land on the root's [b]script[/b], not on this object, so nothing holds the config afterwards and a second instance of the same scene is declared the same way without re-running anything. The verbs may be called in any order.
+		[codeblock]
+		extends Node2D
+
+		func _init() -&gt; void:
+		    Netw.configure_multiplayer_scene(self).labeled(&amp;"Level1").isolated()
+		[/codeblock]
+		Declare from [method Object._init], because the declaration is consumed once at [method NetwEntity.arm] and has to ride the SPAWN packet. Declaring writes [member NetwEntity.declares_scene], so the root owns an admission boundary every descendant entity inherits; nothing else about the entity changes.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="isolated">
+			<return type="NetwSceneConfig" />
+			<description>
+				Gives the scene its own physics and render world, so geometry overlapping another scene's cannot interact with it. Without this the scene shares the world it is parented into.
+				Only a [Viewport] owns a world in Godot, so an isolated scene needs one and the framework builds it: [method Netw.spawn] answers a [SubViewport] with the authored root inside, and the caller parents that. [b]So the node [method Netw.spawn] returns is not the node the callable built.[/b]
+				The scene is still the authored root. [method Netw.scene], the roster, the admissions and the signals are unchanged, and the viewport carries no identity of its own. The one thing that differs is that the root's [method Node.get_parent] is the viewport rather than the node it was added to.
+				[codeblock]
+				var mount := Netw.spawn(spawn_level1)   # a SubViewport
+				worlds.add_child(mount)
+				[/codeblock]
+				[codeblock lang=text]
+				Worlds
+				 ┖╴ Level1World (SubViewport)   # what spawn answered
+				      ┖╴ Level1 (Node2D)        # the scene, what the callable built
+				[/codeblock]
+				A [SubViewport] renders to a texture, so whether an isolated scene reaches the screen is the game's decision. See [signal NetwMultiplayer.scene_local_changed] for the scene this peer is currently in.
+			</description>
+		</method>
+		<method name="labeled">
+			<return type="NetwSceneConfig" />
+			<param index="0" name="stem" type="StringName" />
+			<description>
+				Names the scene for [method Netw.scene]. Defaults to the root node's own name.
+				A label names a kind of scene and never one instance, so two live scenes carrying it make [method Netw.scene] refuse the lookup rather than pick a winner. A game that spawned two arenas holds the handle [method Netw.spawn] gave it instead.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="isolation" type="int" setter="" getter="get_isolation" default="0">
+			[constant Netw.SCENE_ISOLATION_OWN_WORLD] once [method isolated] is declared, and [constant Netw.SCENE_ISOLATION_NONE] otherwise.
+		</member>
+		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
+			The stem [method labeled] declared, or the root node's name.
+		</member>
+	</members>
+</class>

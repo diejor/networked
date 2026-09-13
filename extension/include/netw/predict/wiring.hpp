@@ -8,9 +8,7 @@
 #include "godot/variant.hpp"
 #include "netw/api/quantize.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 enum class StateFamily : int {
     POSE = 0,
@@ -99,6 +97,8 @@ struct Wiring {
     godot::LocalVector<uint8_t> vote_exclude;
     godot::LocalVector<uint8_t> angle;
     godot::LocalVector<uint8_t> causal;
+    godot::LocalVector<int> property_class;
+    godot::LocalVector<godot::StringName> carry_channel;
 
     void resize(int p_count);
 
@@ -118,10 +118,10 @@ struct Config {
     int island = 0;
     bool island_declared = false;
     bool island_approximate = false;
-    bool carry = false;
     bool witness = false;
+    double epsilon = 0.01;
+    double teleport_threshold = 2.0;
+    int collision_cooldown_ticks = 6;
 };
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

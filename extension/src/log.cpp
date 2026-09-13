@@ -34,8 +34,6 @@ Level parse_level(const String &text) {
     return Level::INFO;
 }
 
-// The prefix's first bracket. Lowercase so it matches the NETW_LOG vocabulary
-// a reader already types.
 const char *name_for(Level level) {
     switch (level) {
         case Level::TRACE:
@@ -89,66 +87,100 @@ void profile_line(Level level, const String &line) {
 
 } // namespace
 
+static String requested_setting() {
+    OS *os = OS::get_singleton();
+    for (const char *name : {"NETW_LOG", "NETW_TEST_LOG"}) {
+        const String held = os->get_environment(name);
+        if (!held.is_empty()) {
+            return held;
+        }
+    }
+    const String flag = "--netw-log=";
+    const PackedStringArray args = gd::cmdline_args();
+    for (int at = 0; at < args.size(); ++at) {
+        const String arg = args[at];
+        if (arg.begins_with(flag)) {
+            return arg.substr(flag.length());
+        }
+    }
+    return String();
+}
+
 void configure() {
-    const String setting = OS::get_singleton()->get_environment("NETW_LOG");
+    const String setting = requested_setting();
     const Level configured = setting.is_empty()
         ? (OS::get_singleton()->is_stdout_verbose() ? Level::INFO : Level::WARN)
         : parse_level(setting);
     threshold.store(configured, std::memory_order_relaxed);
 }
 
-namespace {
-
-void note_unlisted(const char *system) {
-    if (subsystem_of(system) != SUBSYSTEM_NONE) {
-        return;
-    }
-    static std::atomic_bool told = false;
-    if (told.exchange(true, std::memory_order_relaxed)) {
-        return;
-    }
-    gd::push_warning(
-        String("[warn][log] subsystem \"") + String(system)
-        + String("\" is not in netw/subsystems.hpp, so nothing can select ")
-        + String("it: add a row there or use one that exists")
-    );
-}
-
-} // namespace
-
-bool enabled(Level level) {
+bool enabled(Level p_level) {
     const Level configured = threshold.load(std::memory_order_relaxed);
-    return int(level) >= int(configured) && configured != Level::NONE;
+    return int(p_level) >= int(configured) && configured != Level::NONE;
 }
 
-void write(Level level, const char *system, const String &message) {
-    note_unlisted(system);
-    const String line = line_for(level, system, message);
-    profile_line(level, line);
-    if (level == Level::ERROR) {
-        gd::push_error(line);
-    } else if (level == Level::WARN) {
-        gd::push_warning(line);
-    } else if (enabled(level)) {
+bool is_fault(Level p_level) {
+    return p_level == Level::WARN || p_level == Level::ERROR;
+}
+
+void set_level(Level p_level) {
+    threshold.store(p_level, std::memory_order_relaxed);
+}
+
+Level level() {
+    return threshold.load(std::memory_order_relaxed);
+}
+
+Level level_named(const String &p_name) {
+    return parse_level(p_name);
+}
+
+String format_args(const String &p_message, const Array &p_args) {
+    if (p_args.is_empty()) {
+        return p_message;
+    }
+    Variant formatted;
+    bool valid = false;
+    Variant::evaluate(
+        Variant::OP_MODULE,
+        Variant(p_message),
+        Variant(p_args),
+        formatted,
+        valid
+    );
+    return valid ? String(formatted) : p_message;
+}
+
+void write(Level p_level, SubsystemName p_system, const String &p_message) {
+    const String line = line_for(p_level, p_system.text, p_message);
+    profile_line(p_level, line);
+    if (is_fault(p_level)) {
+        if (p_level == Level::ERROR) {
+            gd::push_error(line);
+        } else {
+            gd::push_warning(line);
+        }
+    } else if (enabled(p_level)) {
         gd::print(line);
     }
 }
 
 void write_at(
     Level level,
-    const char *system,
+    SubsystemName system,
     const String &message,
     const char *function,
     const char *file,
     int line
 ) {
-    note_unlisted(system);
-    const String text = line_for(level, system, message);
+    const String text = line_for(level, system.text, message);
     profile_line(level, text);
-    if (level == Level::ERROR) {
-        gd::push_error_at(function, file, line, text);
-    } else if (level == Level::WARN) {
-        gd::push_warning_at(function, file, line, text);
+    if (is_fault(level)) {
+        if (level == Level::ERROR) {
+            gd::push_error_at(function, file, line, text);
+        } else {
+            gd::push_warning_at(function, file, line, text);
+        }
     } else if (enabled(level)) {
         gd::print(text);
     }

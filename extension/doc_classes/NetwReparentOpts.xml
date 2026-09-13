@@ -1,27 +1,22 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwReparentOpts" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Options for one [method NetwEntity.reparent_to].
+		Reason metadata for one [method NetwEntity.reparent_to] call.
 	</brief_description>
 	<description>
-		Carries what a move needs beyond its destination. [member target_global_position] is a [Variant] rather than a vector because unset and origin are different requests: leaving it unset moves the entity without touching its pose, while setting it to a zero vector asks for the world origin.
+		The destination is passed to [method NetwEntity.reparent_to].
+		This object carries the reason reported with the move.
 		[codeblock]
 		var opts := NetwReparentOpts.new()
-		opts.target_global_position = door.global_position
+		opts.reason = &amp;"boarded"
 		NetwEntity.of(self).reparent_to(next_room, opts)
 		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
 	<members>
-		<member name="preserve_history" type="bool" setter="set_preserve_history" getter="get_preserve_history" default="false">
-			Keeps [NetwTimeline] history across the reparent.
-		</member>
 		<member name="reason" type="StringName" setter="set_reason" getter="get_reason" default="&amp;&quot;&quot;">
-			Optional gameplay label for the reparent.
-		</member>
-		<member name="target_global_position" type="Variant" setter="set_target_global_position" getter="get_target_global_position" default="null">
-			Destination world pose applied to [member Node.owner] before the parent swap, so re-init driven by [signal NetwEntity.reparented] (interpolator reset, camera smoothing) baselines on the final position instead of the pre-move one. Unset ([code]null[/code]) leaves the owner where it is.
+			Optional gameplay label for the reparent. It does not reach [signal NetwEntity.reparented], which reports a completed move and carries no arguments. It reaches an observer in the detail of [constant NetwMultiplayer.EVENT_REPARENTED] instead.
 		</member>
 	</members>
 </class>

@@ -138,8 +138,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] every role is driven and only an "
     "unperformable configuration is refused"
 ) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
     for (const AxisRow &row : AXIS) {
         CAPTURE(row.label);
         NETW_CHECK_EQ(
@@ -161,9 +161,9 @@ TEST_CASE(
 ) {
     for (const AxisRow &row : AXIS) {
         CAPTURE(row.label);
-        Ref<NetwPredictionEngine> pool;
-        pool.instantiate();
-        const int64_t slot = pool->open(Ref<NetwPredictDeclaration>());
+        NetwPredictionEngine held_pool;
+        NetwPredictionEngine *const pool = &held_pool;
+        const int64_t slot = pool->open();
         NETW_CHECK_EQ(
             pool->configure(
                 slot,
@@ -227,14 +227,14 @@ const RoleRow ROLES[] = {
      int(InputSource::PREDICTED),
      int(SimMode::DISPLAY),
      int(Role::REMOTE)},
-    {"no command and authority anyway",
+    {"no command, on the authority that owns the body",
      int(InputSource::NONE),
      int(SimMode::AUTHORITATIVE),
-     int(Role::REMOTE)},
-    {"no command and speculation anyway",
+     int(Role::HOST_LOCAL)},
+    {"no command, on a peer reproducing a body something drags",
      int(InputSource::NONE),
      int(SimMode::SPECULATIVE),
-     int(Role::REMOTE)},
+     int(Role::SIMULATE)},
     {"no command and no simulation",
      int(InputSource::NONE),
      int(SimMode::DISPLAY),
@@ -249,10 +249,7 @@ TEST_CASE(
         NETW_FORMAT_TEXT(label_text, row.label);
         CAPTURE(label_text);
         NETW_CHECK_EQ(
-            NetwPredictionEngine::role_for_axes(
-                row.input_source,
-                row.sim_mode
-            ),
+            NetwPredictionEngine::role_for_axes(row.input_source, row.sim_mode),
             row.role
         );
     }
@@ -292,8 +289,7 @@ TEST_CASE(
         = NetwPredictionEngine::archetype_axes(int(Archetype::SOLVER_BODY));
     const bool published_declared = published[StringName("declared")];
     const int64_t published_schedule = published[StringName("schedule")];
-    const int64_t published_policy
-        = published[StringName("recovery_policy")];
+    const int64_t published_policy = published[StringName("recovery_policy")];
     const bool published_teleports
         = published[StringName("declares_teleport_threshold")];
     CHECK(published_declared);

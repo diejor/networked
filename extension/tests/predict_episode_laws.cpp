@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "netw/api/predict.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/episode.hpp"
 
@@ -216,7 +217,8 @@ TEST_CASE(
     REQUIRE(int(episode.decisions.size()) == 1);
     CHECK(!episode.decisions[0].eligible);
     NETW_CHECK_EQ(episode.decisions[0].basis, 4);
-    CHECK(!bool(episode.decisions[0].eligibility[StringName("below_teleport")])
+    CHECK(
+        !bool(episode.decisions[0].eligibility[StringName("below_teleport")])
     );
 
     EpisodeDecision allowed;
@@ -406,26 +408,25 @@ TEST_CASE(
     NETW_CHECK_EQ(int(latched.attribution), int(Attribution::PRE_STATE));
 }
 
-Ref<NetwPredictionEngine> opened_pool(int64_t &r_slot) {
-    Ref<NetwPredictionEngine> pool;
-    pool.instantiate();
-    r_slot = pool->open(Ref<netw::NetwPredictDeclaration>());
-    pool->configure(
-        r_slot,
+int64_t opened_pool(NetwPredictionEngine &r_pool) {
+    const int64_t slot = r_pool.open();
+    r_pool.configure(
+        slot,
         int(netw::Schedule::TICK),
         int(netw::Role::PREDICT),
         int(netw::CorrectionMode::SNAP),
         int(netw::RestoreMode::EXACT)
     );
-    return pool;
+    return slot;
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Episode] the ladder's own writes are minted "
     "by the same series the pool plans into"
 ) {
-    int64_t slot = -1;
-    Ref<NetwPredictionEngine> pool = opened_pool(slot);
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = opened_pool(held_pool);
     pool->enter_quarantine(slot, 4, false, int(Attribution::CONTACT), false);
 
     const int first = pool->record_episode_write(
@@ -459,20 +460,20 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(stats[NetwPredictionEngine::STAT_EPISODE_WRITE_COUNT], 2);
 
-    const Ref<netw::NetwPredictEpisodeReport> report = pool->episode(slot);
-    REQUIRE(report.is_valid());
-    NETW_CHECK_EQ(report->write_count(), 2);
-    NETW_CHECK_EQ(report->write_operator(1), int(Operator::DEMOTE));
-    NETW_CHECK_EQ(report->write_delta_fp(1), 11);
-    CHECK(report->write_evidence_free(1));
+    const netw::EpisodeReport report = pool->episode(slot);
+    NETW_CHECK_EQ(report.write_count(), 2);
+    NETW_CHECK_EQ(report.write_operator(1), int(Operator::DEMOTE));
+    NETW_CHECK_EQ(report.write_delta_fp(1), 11);
+    CHECK(report.write_evidence_free(1));
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Episode] an unsettled divergence opens the "
     "episode the settled one would have, and never a second time"
 ) {
-    int64_t slot = -1;
-    Ref<NetwPredictionEngine> pool = opened_pool(slot);
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = opened_pool(held_pool);
     CHECK(pool->open_episode(slot, 3, int(Attribution::PRE_STATE)));
 
     PackedInt64Array stats = pool->episode_stats(slot);
@@ -489,8 +490,9 @@ TEST_CASE(
 
     pool->record_episode_escalation(slot, int(TriggerShape::MIXED));
     NETW_CHECK_EQ(
-        pool->episode_stats(slot)
-            [NetwPredictionEngine::STAT_EPISODE_NON_CONTRACTION],
+        pool->episode_stats(
+            slot
+        )[NetwPredictionEngine::STAT_EPISODE_NON_CONTRACTION],
         1
     );
 
@@ -506,8 +508,9 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Episode] a demotion latches an episode that "
     "names the breach as its cause and itself as demoted"
 ) {
-    int64_t slot = -1;
-    Ref<NetwPredictionEngine> pool = opened_pool(slot);
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = opened_pool(held_pool);
     pool->record_breach(slot, 6);
 
     PackedInt64Array stats = pool->episode_stats(slot);
@@ -518,14 +521,14 @@ TEST_CASE(
     );
 
     pool->enter_quarantine(slot, 6, false, int(Attribution::CONTACT), true);
-    const Ref<netw::NetwPredictEpisodeReport> report = pool->episode(slot);
-    REQUIRE(report.is_valid());
-    NETW_CHECK_EQ(report->breach_transition(), 6);
-    NETW_CHECK_EQ(report->fallback_transition(), 6);
-    CHECK(report->demoted());
+    const netw::EpisodeReport report = pool->episode(slot);
+    NETW_CHECK_EQ(report.breach_transition(), 6);
+    NETW_CHECK_EQ(report.fallback_transition(), 6);
+    CHECK(report.demoted());
 
-    int64_t undemoted_slot = -1;
-    Ref<NetwPredictionEngine> undemoted = opened_pool(undemoted_slot);
+    NetwPredictionEngine held_undemoted;
+    NetwPredictionEngine *const undemoted = &held_undemoted;
+    const int64_t undemoted_slot = opened_pool(held_undemoted);
     undemoted->enter_quarantine(
         undemoted_slot,
         6,
@@ -533,19 +536,22 @@ TEST_CASE(
         int(Attribution::CONTACT),
         false
     );
-    CHECK(!undemoted->episode(undemoted_slot)->demoted());
+    CHECK(!undemoted->episode(undemoted_slot).demoted());
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Episode] a slot with no episode reports the "
     "absence rather than a zeroth episode"
 ) {
-    int64_t slot = -1;
-    Ref<NetwPredictionEngine> pool = opened_pool(slot);
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = opened_pool(held_pool);
 
     PackedInt64Array live = pool->episode_stats(slot);
     PackedInt64Array missing = pool->episode_stats(slot + 1000);
-    NETW_CHECK_EQ(int(live.size()), int(NetwPredictionEngine::STAT_EPISODE_COUNT)
+    NETW_CHECK_EQ(
+        int(live.size()),
+        int(NetwPredictionEngine::STAT_EPISODE_COUNT)
     );
     NETW_CHECK_EQ(int(missing.size()), int(live.size()));
     for (int at = 0; at < int(live.size()); ++at) {
@@ -555,18 +561,53 @@ TEST_CASE(
     NETW_CHECK_EQ(live[NetwPredictionEngine::STAT_EPISODE_STATE], -1);
     NETW_CHECK_EQ(live[NetwPredictionEngine::STAT_EPISODE_OPENED], -1);
     NETW_CHECK_EQ(live[NetwPredictionEngine::STAT_EPISODE_LAST_COMPARISON], -1);
-    NETW_CHECK_EQ(pool->record_episode_write(
-                      slot + 1000,
-                      int(Operator::DISSIPATE),
-                      4,
-                      0,
-                      StringName("body"),
-                      3,
-                      int(TriggerShape::MIXED),
-                      false,
-                      false
-                  ),
-                  0);
+    NETW_CHECK_EQ(
+        pool->record_episode_write(
+            slot + 1000,
+            int(Operator::DISSIPATE),
+            4,
+            0,
+            StringName("body"),
+            3,
+            int(TriggerShape::MIXED),
+            false,
+            false
+        ),
+        0
+    );
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Episode] the revision stamp follows an "
+    "episode there is, so a slot holding none stamps nothing and a reader "
+    "keyed on the stamp is never told a change it cannot read"
+) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = opened_pool(held_pool);
+
+    const int64_t quiet = pool->episode_revision(slot);
+    pool->sync_episode(slot);
+    NETW_CHECK_EQ(pool->episode_revision(slot), quiet);
+
+    REQUIRE(pool->open_episode(slot, 3, int(Attribution::PRE_STATE)));
+    const int64_t opened = pool->episode_revision(slot);
+    pool->sync_episode(slot);
+    NETW_CHECK_EQ(pool->episode_revision(slot), opened + 1);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Episode] a close stamps whether or not the "
+    "slot still holds an episode, because the retirement IS the change a "
+    "reader keyed on the stamp is waiting for"
+) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = opened_pool(held_pool);
+
+    const int64_t quiet = pool->episode_revision(slot);
+    pool->close_episode(slot);
+    NETW_CHECK_EQ(pool->episode_revision(slot), quiet + 1);
 }
 
 } // namespace TestNetwPredictEpisodeLaws

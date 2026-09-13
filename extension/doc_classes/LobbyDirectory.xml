@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="LobbyDirectory" inherits="NetwService" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The peer source for one peer class, backed by a platform's lobbies.
+	</brief_description>
+	<description>
+		A directory is what the connect plane asks when a game names a [member MultiplayerTree.peer_class] the plane has no built-in transport for. Register one under a session and it becomes the provider for the peer class [method _peer_class] names, so hosting, joining and browsing that class all reach this node.
+		Every request seam answers [code]void[/code] and reports later through [method deliver], [method fail] or [method publish_lobbies]. A request is answered exactly once, and a directory that abandons an attempt reports the failure rather than staying silent, because the plane holds the caller's request open until it hears.
+		[codeblock]
+		extends LobbyDirectory
+
+		func _peer_class() -&gt; StringName:
+		    return &amp;"RoomMultiplayerPeer"
+
+		func _host_lobby(settings: Dictionary) -&gt; void:
+		    var room := await Rooms.open(settings.get("name", "room"))
+		    if room == null:
+		        fail(ERR_CANT_CREATE, "the room service refused the lobby")
+		        return
+		    deliver(room.peer())
+
+		func _join_lobby(address: String) -&gt; void:
+		    var room := await Rooms.join(address)
+		    deliver(room.peer()) if room else fail(ERR_CANT_CONNECT, "no such room")
+
+		func _list_lobbies() -&gt; void:
+		    var addresses := PackedStringArray()
+		    var names := PackedStringArray()
+		    var infos: Array[NetwServerInfo] = []
+		    for room in await Rooms.list():
+		        addresses.append(room.id)
+		        names.append(room.title)
+		        infos.append(room.info())
+		    publish_lobbies(addresses, names, infos)
+
+		func _leave_lobby() -&gt; void:
+		    Rooms.leave()
+		[/codeblock]
+		Each seam has a stock answer, so a provider overrides only what it differs on. The reading verbs are C++ and the plane calls them directly; a script reads its own override.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_accepts_empty_address" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Whether an empty address means something to this provider, so a form accepts a blank field. Defaults to [code]false[/code].
+			</description>
+		</method>
+		<method name="_address_help" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				The sentence a form shows under the address field, telling a player where an address comes from. Defaults to empty.
+			</description>
+		</method>
+		<method name="_address_label" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				What a form calls the address field, such as [code]"Lobby ID"[/code]. Defaults to [code]"Lobby"[/code].
+			</description>
+		</method>
+		<method name="_address_placeholder" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				The greyed sample text a form shows in an empty address field. Defaults to empty.
+			</description>
+		</method>
+		<method name="_can_host_here" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Whether this build may open a lobby, as opposed to only joining one. Defaults to [code]true[/code].
+			</description>
+		</method>
+		<method name="_can_probe" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Whether an address can be asked what it is without joining it. Lobby providers usually answer that through [method _list_lobbies] instead, so this defaults to [code]false[/code].
+			</description>
+		</method>
+		<method name="_capabilities" qualifiers="virtual">
+			<return type="int" />
+			<description>
+				The [enum Capability] flags this directory can honor, which is what [method supports] reads. Defaults to none.
+			</description>
+		</method>
+		<method name="_client_settings" qualifiers="virtual">
+			<return type="Dictionary" />
+			<description>
+				The settings a join form starts from, which [method _join_lobby] is later handed with the player's edits applied. Defaults to empty.
+				Answer a key here when joining reads it, the way [method _host_settings] answers for hosting. The two overlap by however much the two paths share.
+			</description>
+		</method>
+		<method name="_display_name" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				The provider name a browser shows. Defaults to [method _peer_class].
+			</description>
+		</method>
+		<method name="_host_lobby" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="settings" type="Dictionary" />
+			<description>
+				Creates a lobby, answered through [method deliver] or [method fail] with a connected host [MultiplayerPeer].
+				[param settings] is [method _host_settings] with the caller's edits applied, so a directory reads only the keys its provider can honor. The advert keys are [code]name[/code], [code]max_players[/code] and [code]visibility[/code], the last a [enum NetwServerInfo.Visibility].
+			</description>
+		</method>
+		<method name="_host_settings" qualifiers="virtual">
+			<return type="Dictionary" />
+			<description>
+				The settings a host form starts from, which [method _host_lobby] is later handed with the player's edits applied. Defaults to empty.
+			</description>
+		</method>
+		<method name="_is_available" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Whether the provider can be used on this build and platform, so a browser greys out what will never work here. Defaults to [code]true[/code].
+			</description>
+		</method>
+		<method name="_join_address" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				The address others join the lobby this directory currently holds by, so a host can show what to share. Empty while it holds no lobby, which is the default.
+			</description>
+		</method>
+		<method name="_join_lobby" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="address" type="String" />
+			<description>
+				Joins the lobby named by [param address], answered through [method deliver] or [method fail] with a connected [MultiplayerPeer].
+				[param address] is one of the strings [method publish_lobbies] published, or whatever a player typed into the field [method _address_label] names.
+			</description>
+		</method>
+		<method name="_leave_lobby" qualifiers="virtual">
+			<return type="void" />
+			<description>
+				Leaves the lobby this directory holds, if any. Idempotent, and reached when a match is torn down rather than when a browse is closed.
+			</description>
+		</method>
+		<method name="_list_lobbies" qualifiers="virtual">
+			<return type="void" />
+			<description>
+				Requests the browse rows, answered through [method publish_lobbies] or [method fail].
+			</description>
+		</method>
+		<method name="_local_member_name" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				The local member's display name. Providers may override this before a Godot peer id exists. Defaults to [method local_member_name_default].
+			</description>
+		</method>
+		<method name="_member_name" qualifiers="virtual">
+			<return type="String" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Resolves [param peer_id] to a display name. Providers with an identity graph override this. Defaults to [method member_name_default].
+			</description>
+		</method>
+		<method name="_peer_class" qualifiers="virtual">
+			<return type="StringName" />
+			<description>
+				The [MultiplayerPeer] class this directory's lobbies join through, such as [code]&amp;"SteamMultiplayerPeer"[/code]. This is the key a session registers the directory under, so two directories in one session name two classes. Empty by default, which no session adapts.
+			</description>
+		</method>
+		<method name="_timeout_hint" qualifiers="virtual">
+			<return type="float" />
+			<description>
+			</description>
+		</method>
+		<method name="deliver">
+			<return type="void" />
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+				Reports [param peer] as the answer to the request in flight.
+				The plane hands the peer to whoever asked for it, so a directory neither assigns it nor keeps it alive on the caller's behalf.
+			</description>
+		</method>
+		<method name="fail">
+			<return type="void" />
+			<param index="0" name="error" type="int" />
+			<param index="1" name="message" type="String" />
+			<description>
+				Reports that the request in flight cannot be answered.
+				[param message] is shown to a player, so it names what the provider refused rather than restating [param error].
+			</description>
+		</method>
+		<method name="local_member_name_default" qualifiers="static">
+			<return type="String" />
+			<description>
+				The stock answer for [method _local_member_name].
+				An override calls this for the case it does not resolve itself, because a script cannot [code]super()[/code] into a virtual the extension declares.
+			</description>
+		</method>
+		<method name="member_name_default" qualifiers="static">
+			<return type="String" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				The stock answer for [method _member_name], [code]"Player &lt;peer_id&gt;"[/code].
+				An override calls this for the peers it cannot name itself, because a script cannot [code]super()[/code] into a virtual the extension declares.
+			</description>
+		</method>
+		<method name="publish_lobbies">
+			<return type="void" />
+			<param index="0" name="addresses" type="PackedStringArray" />
+			<param index="1" name="names" type="PackedStringArray" />
+			<param index="2" name="infos" type="NetwServerInfo[]" />
+			<description>
+				Publishes the browse rows [method _list_lobbies] found.
+				The three arrays are read in step: [param addresses] carries what [method _join_lobby] is later handed, [param names] what a row is labelled with, and [param infos] the [NetwServerInfo] a row is drawn and classified from. A row whose [member NetwServerInfo.app_id] does not match the local build is listed as incompatible rather than dropped, so publish the tag the host advertised rather than the local one.
+			</description>
+		</method>
+		<method name="supports">
+			<return type="bool" />
+			<param index="0" name="capability" type="int" />
+			<description>
+				Returns whether [method _capabilities] includes [param capability], which is how a browser hides controls the provider cannot honor.
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="invite_received">
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="sender_id" type="int" />
+			<description>
+				A platform invite arrived. Only a directory advertising [constant CAPABILITY_INVITES] emits this.
+			</description>
+		</signal>
+		<signal name="lobby_failed">
+			<param index="0" name="error" type="int" />
+			<param index="1" name="message" type="String" />
+			<description>
+				Emitted by [method fail] with the reason the request in flight was refused.
+			</description>
+		</signal>
+		<signal name="lobby_list_published">
+			<param index="0" name="addresses" type="PackedStringArray" />
+			<param index="1" name="names" type="PackedStringArray" />
+			<param index="2" name="infos" type="Array" />
+			<description>
+				Emitted by [method publish_lobbies] with the browse rows a listing found.
+			</description>
+		</signal>
+		<signal name="lobby_peer_ready">
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+				Emitted by [method deliver] with the peer a host or join request produced.
+			</description>
+		</signal>
+		<signal name="provider_unavailable">
+			<param index="0" name="reason" type="String" />
+			<description>
+				The provider cannot be used at all, so a browser drops it rather than showing a failing row.
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="CAPABILITY_BROWSE" value="1" enum="Capability">
+			[method _list_lobbies] returns provider results.
+		</constant>
+		<constant name="CAPABILITY_FRIENDS_ONLY_SUPPORT" value="2" enum="Capability">
+			[constant NetwServerInfo.VISIBILITY_FRIENDS_ONLY] is honored.
+		</constant>
+		<constant name="CAPABILITY_INVITES" value="4" enum="Capability">
+			[signal invite_received] can fire.
+		</constant>
+		<constant name="CAPABILITY_FRIEND_NAMES" value="8" enum="Capability">
+			[method _member_name] resolves personas.
+		</constant>
+	</constants>
+</class>

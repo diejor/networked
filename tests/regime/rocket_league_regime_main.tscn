@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://djksevb3ww7sj"]
+
+[ext_resource type="Script" path="res://tests/regime/rocket_league_regime_main.gd" id="1_regime"]
+
+[node name="RegimeMain" type="Node"]
+script = ExtResource("1_regime")

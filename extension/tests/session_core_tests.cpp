@@ -4,12 +4,13 @@
 
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/session_core.hpp"
+#include "netw/wire/registry.hpp"
 #include "support/netw_recorder.h"
 
 namespace TestNetwSessionCore {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw::SessionCore;
 using netw_test::Recorder;
 
@@ -20,6 +21,16 @@ constexpr int TRACKED_PEERS = 64;
 
 SessionCore fresh() {
     return SessionCore();
+}
+
+int64_t name_fold_of(const StringName &p_name) {
+    const CharString text = String(p_name).utf8();
+    uint64_t fold = 14695981039346656037ULL;
+    for (int at = 0; at < int(text.length()); ++at) {
+        fold ^= uint64_t(uint8_t(text[at]));
+        fold *= 1099511628211ULL;
+    }
+    return int64_t(fold);
 }
 
 bool spend_budget(SessionCore &p_core, int p_peer, int64_t p_now) {
@@ -92,12 +103,12 @@ TEST_CASE(
     "[Networked][Session][Hosted] S2 a refused edge leaves the machine where "
     "it was and announces nothing"
 ) {
-    Ref<NetwMultiplayerCore> host;
+    Ref<NetwMultiplayer> host;
     host.instantiate();
     SessionCore &core = host->session_plane();
     Recorder recorder(
         host.ptr(),
-        {"state_changed", "session_entered", "session_ended"}
+        {"session_state_changed", "session_entered", "session_ended"}
     );
     core.transition(SessionCore::STATE_CONNECTING);
     core.transition(SessionCore::STATE_ONLINE);
@@ -160,10 +171,7 @@ TEST_CASE(
 
     SessionCore client = fresh();
     client.on_peer_assigned(true, false, 7);
-    NETW_CHECK_EQ(
-        int(client.get_state()),
-        int(SessionCore::STATE_CONNECTING)
-    );
+    NETW_CHECK_EQ(int(client.get_state()), int(SessionCore::STATE_CONNECTING));
     client.on_peer_assigned(true, true, 7);
     NETW_CHECK_EQ(int(client.get_state()), int(SessionCore::STATE_ONLINE));
     NETW_CHECK_EQ(int(client.get_role()), int(SessionCore::ROLE_CLIENT));
@@ -171,10 +179,7 @@ TEST_CASE(
     SessionCore cancelled = fresh();
     cancelled.on_peer_assigned(true, false, 7);
     cancelled.on_peer_assigned(false, false, 0);
-    NETW_CHECK_EQ(
-        int(cancelled.get_state()),
-        int(SessionCore::STATE_OFFLINE)
-    );
+    NETW_CHECK_EQ(int(cancelled.get_state()), int(SessionCore::STATE_OFFLINE));
     client.on_peer_assigned(false, false, 0);
     NETW_CHECK_EQ(int(client.get_state()), int(SessionCore::STATE_ONLINE));
 }
@@ -186,10 +191,7 @@ TEST_CASE(
     SessionCore listen = fresh();
     listen.set_desired_role(SessionCore::ROLE_LISTEN_SERVER);
     listen.resolve_online(1);
-    NETW_CHECK_EQ(
-        int(listen.get_role()),
-        int(SessionCore::ROLE_LISTEN_SERVER)
-    );
+    NETW_CHECK_EQ(int(listen.get_role()), int(SessionCore::ROLE_LISTEN_SERVER));
     CHECK(listen.is_server_role());
 
     for (const SessionCore::Role hint : {
@@ -209,10 +211,7 @@ TEST_CASE(
         SessionCore remote = fresh();
         remote.set_desired_role(hint);
         remote.resolve_online(7);
-        NETW_CHECK_EQ(
-            int(remote.get_role()),
-            int(SessionCore::ROLE_CLIENT)
-        );
+        NETW_CHECK_EQ(int(remote.get_role()), int(SessionCore::ROLE_CLIENT));
         CHECK_FALSE(remote.is_server_role());
     }
 }
@@ -221,31 +220,29 @@ TEST_CASE(
     "[Networked][Session][Hosted] S8 clear returns the machine to a fresh one "
     "without announcing an edge"
 ) {
-    Ref<NetwMultiplayerCore> host;
+    Ref<NetwMultiplayer> host;
     host.instantiate();
     SessionCore &core = host->session_plane();
     core.on_peer_assigned(true, false, 1);
-    core.set_advertised_max_players(16);
     CHECK(spend_budget(core, 7, NOW));
 
     Recorder recorder(
         host.ptr(),
-        {"state_changed", "session_entered", "session_ended"}
+        {"session_state_changed", "session_entered", "session_ended"}
     );
     core.clear();
 
     NETW_CHECK_EQ(int(core.get_state()), int(SessionCore::STATE_OFFLINE));
     NETW_CHECK_EQ(int(core.get_role()), int(SessionCore::ROLE_NONE));
-    NETW_CHECK_EQ(core.get_advertised_max_players(), 0);
     NETW_CHECK_EQ(recorder.order().size(), 0);
     CHECK_FALSE(core.join_flooded(7, NOW));
 }
 
 TEST_CASE(
     "[Networked][Session][Hosted] S9 the app tag is a fold of the whole string "
-    "and zero means no gate"
+    "and no name leaves the gate off"
 ) {
-    NETW_CHECK_EQ(int(SessionCore::compute_app_tag(StringName(""))), 0);
+    CHECK(bool(SessionCore::compute_app_tag(StringName("")) != 0));
     CHECK(
         bool(
             SessionCore::compute_app_tag(StringName("networked"))
@@ -257,11 +254,32 @@ TEST_CASE(
         char name[32];
         snprintf(name, sizeof(name), "%d-networked", index);
         const int64_t tag = SessionCore::compute_app_tag(StringName(name));
-        CHECK(bool(tag >= 0));
-        CHECK(bool(tag <= int64_t(0xFFFFFFFF)));
+        CHECK(bool(tag != 0));
         reached |= tag;
     }
-    CHECK(bool(reached > int64_t(1) << 31));
+    CHECK(bool(uint64_t(reached) > (uint64_t(1) << 32)));
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] S10 the tag folds the wire identity in, so "
+    "one name over two wires is two gates"
+) {
+    const StringName name("networked");
+    const int64_t identity = SessionCore::compute_wire_identity();
+
+    CHECK(bool(SessionCore::compute_app_tag(name) != identity));
+    NETW_CHECK_EQ(
+        SessionCore::compute_app_tag(name) ^ identity,
+        name_fold_of(name)
+    );
+    NETW_CHECK_EQ(
+        SessionCore::compute_app_tag(StringName("")) ^ identity,
+        name_fold_of(StringName(""))
+    );
+    NETW_CHECK_EQ(
+        identity,
+        int64_t(netw::wire::WireRegistry::create_default().identity_hash())
+    );
 }
 
 } // namespace TestNetwSessionCore

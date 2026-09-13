@@ -1,0 +1,133 @@
+[gd_scene load_steps=14 format=3 uid="uid://c7rlarenamain"]
+
+[ext_resource type="PackedScene" path="res://examples/rocket_league/models/field.glb" id="1_field"]
+[ext_resource type="Material" uid="uid://uo7itoedkenq" path="res://examples/rocket_league/materials/wall.tres" id="2_wall"]
+[ext_resource type="Material" uid="uid://bnqudedf7vlb0" path="res://examples/rocket_league/materials/grass.tres" id="3_grass"]
+[ext_resource type="PackedScene" uid="uid://c7rlgoalarea1" path="res://examples/rocket_league/scenes/goal.tscn" id="4_goal"]
+[ext_resource type="PackedScene" uid="uid://c7rlballrktlg" path="res://examples/rocket_league/scenes/ball.tscn" id="5_ball"]
+[ext_resource type="Script" path="res://examples/rocket_league/scripts/game.gd" id="6_game"]
+[ext_resource type="Script" path="res://examples/rocket_league/scripts/player_spawner.gd" id="7_spawner"]
+[ext_resource type="Script" path="res://examples/rocket_league/scripts/arena_root.gd" id="8_root"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_arena"]
+sky_top_color = Color(0.509202, 0.628864, 1, 1)
+sky_horizon_color = Color(0.882353, 0.545098, 0.52549, 1)
+
+[sub_resource type="Sky" id="Sky_arena"]
+sky_material = SubResource("ProceduralSkyMaterial_arena")
+
+[sub_resource type="Environment" id="Environment_arena"]
+background_mode = 2
+sky = SubResource("Sky_arena")
+tonemap_mode = 1
+ssr_enabled = true
+glow_enabled = true
+
+[sub_resource type="BoxMesh" id="BoxMesh_goalbox"]
+size = Vector3(15.365, 6, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_blue"]
+transparency = 1
+albedo_color = Color(0.15686275, 0.3764706, 0.9411765, 0.18431373)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_red"]
+transparency = 1
+albedo_color = Color(0.98039216, 0, 0.15294118, 0.18431373)
+
+[node name="Arena" type="Node3D"]
+script = ExtResource("8_root")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_arena")
+
+[node name="Lights" type="Node3D" parent="."]
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.479, 18.3966, 40.9936)
+light_energy = 100.0
+omni_range = 33.2662
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0646, 18.3966, 40.9936)
+light_energy = 100.0
+omni_range = 33.2662
+
+[node name="OmniLight3D3" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.479, 18.3966, -5.37348)
+light_energy = 100.0
+omni_range = 33.2662
+
+[node name="OmniLight3D4" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0646, 18.3966, -5.37348)
+light_energy = 100.0
+omni_range = 33.2662
+
+[node name="OmniLight3D5" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.479, 18.3966, -42.5342)
+light_energy = 100.0
+omni_range = 33.2662
+
+[node name="OmniLight3D6" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0646, 18.3966, -42.5342)
+light_energy = 100.0
+omni_range = 33.2662
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 49.8719, 0)
+
+[node name="field" parent="." instance=ExtResource("1_field")]
+
+[node name="arena" parent="field" index="0"]
+surface_material_override/0 = ExtResource("2_wall")
+surface_material_override/1 = ExtResource("3_grass")
+
+[node name="Goal0" parent="field" instance=ExtResource("4_goal")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.007, 3.217, -63.748993)
+
+[node name="BlueBox" type="MeshInstance3D" parent="field/Goal0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 1.637)
+mesh = SubResource("BoxMesh_goalbox")
+surface_material_override/0 = SubResource("StandardMaterial3D_blue")
+
+[node name="Goal1" parent="field" instance=ExtResource("4_goal")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.007, 3.217, 60.5)
+
+[node name="RedBox" type="MeshInstance3D" parent="field/Goal1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 1.637)
+mesh = SubResource("BoxMesh_goalbox")
+surface_material_override/0 = SubResource("StandardMaterial3D_red")
+
+[node name="Markers" type="Node3D" parent="."]
+
+[node name="r1" type="Marker3D" parent="Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 0.5, 20)
+
+[node name="r2" type="Marker3D" parent="Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.5, 20)
+
+[node name="r3" type="Marker3D" parent="Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 50)
+
+[node name="b1" type="Marker3D" parent="Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 0.5, -20)
+
+[node name="b2" type="Marker3D" parent="Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.5, -20)
+
+[node name="b3" type="Marker3D" parent="Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -50)
+
+[node name="ball|0" parent="." instance=ExtResource("5_ball")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.381, 0)
+
+[node name="game|0" type="Node" parent="."]
+script = ExtResource("6_game")
+
+[node name="Players" type="Node" parent="."]
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("uid://c7rlplayerrb1")
+spawn_path = NodePath("../Players")
+script = ExtResource("7_spawner")
+
+[editable path="field"]

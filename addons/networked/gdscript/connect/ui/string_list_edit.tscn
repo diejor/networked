@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/networked/gdscript/connect/ui/string_list_edit.gd" id="1_edit"]
+
+[node name="StringListEdit" type="VBoxContainer"]
+theme_override_constants/separation = 4
+script = ExtResource("1_edit")
+
+[node name="AddEntryButton" type="Button" parent="."]
+layout_mode = 2
+text = "Add"

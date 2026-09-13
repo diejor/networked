@@ -3,9 +3,7 @@
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 constexpr int CARRY_INFIDELITY_LIMIT = 8;
 
@@ -28,11 +26,13 @@ struct CarryProbe {
 };
 
 struct CarryAttempt {
+    godot::StringName field;
     godot::Variant value;
     CarryProbe probe;
     bool evidence = false;
     double residual = -1.0;
     double tolerance = -1.0;
+    int verdict = 0;
 };
 
 struct CarryFieldStats {
@@ -63,6 +63,4 @@ public:
     const CarryFieldStats *field(int p_field) const;
 };
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

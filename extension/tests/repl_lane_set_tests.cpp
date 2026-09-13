@@ -10,8 +10,8 @@
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
-#include "netw/repl/lane_set.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/repl/lane_set.hpp"
 
 using namespace godot;
 
@@ -21,20 +21,24 @@ using godot::Array;
 using godot::LocalVector;
 using godot::Ref;
 using netw::SchemaCore;
-using netw::SchemaRecord;
 using netw::repl::LaneSet;
 using netw::repl::RowLane;
+using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 
 const int PEER = 7;
 const int64_t ROUTE = 3;
 
-Ref<SchemaRecord> body() {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = godot::StringName("Body");
-    SchemaCore::append_column(record, godot::StringName("x"), SchemaCore::I16, 1);
-    SchemaCore::fix(record);
+SchemaRecord body() {
+    SchemaRecord record;
+    record.name = godot::StringName("Body");
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("x"),
+        SchemaCore::I16,
+        1
+    );
+    SchemaCore::fix(&record);
     return record;
 }
 
@@ -51,7 +55,7 @@ void catch_up(RowLane *p_lane, int p_peer, int64_t p_value, uint16_t p_seq) {
     REQUIRE(p_lane->gather(one(p_value), row));
     p_lane->mask_for(p_peer, row);
     p_lane->stage(p_peer, p_seq, row);
-    p_lane->acknowledge(p_peer, p_seq);
+    p_lane->acknowledge(p_peer, p_seq, 0);
     REQUIRE(p_lane->knows(p_peer));
 }
 

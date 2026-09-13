@@ -2,20 +2,22 @@
 
 #include "support/persistence_stand.h"
 
+#include <memory>
+
 #include "godot/rid.hpp"
-#include "netw/api/liveness_core.hpp"
-#include "netw/persistence_book.hpp"
-#include "netw/persistence_loop.hpp"
+#include "netw/liveness_core.hpp"
+#include "netw/persist/book.hpp"
+#include "netw/persist/loop.hpp"
 
 namespace TestNetwPersistenceCore {
 
 using namespace godot;
-using netw::PersistenceBook;
-using netw_test::NetwTestPersistenceDatabase;
+using netw::persist::Book;
+using netw_test::DatabaseStand;
 using netw_test::NetwTestPersistenceEngine;
 
-PersistenceBook fresh_book() {
-    return PersistenceBook();
+Book fresh_book() {
+    return Book();
 }
 
 Ref<netw::NetwLivenessCore> minter() {
@@ -30,21 +32,19 @@ Ref<RefCounted> ground() {
     return node;
 }
 
-Ref<NetwTestPersistenceDatabase> fresh_database() {
-    Ref<NetwTestPersistenceDatabase> database;
-    database.instantiate();
-    return database;
+std::shared_ptr<DatabaseStand> fresh_database() {
+    return std::make_shared<DatabaseStand>();
 }
 
 Dictionary due_row(
-    const Ref<NetwTestPersistenceDatabase> &p_database,
+    const std::shared_ptr<DatabaseStand> &p_database,
     const String &p_id,
     int p_score
 ) {
     Dictionary values;
     values["score"] = p_score;
     Dictionary due;
-    due["db"] = p_database.ptr();
+    due["db"] = p_database->db;
     due["table"] = StringName("players");
     due["id"] = StringName(p_id);
     due["values"] = values;
@@ -68,18 +68,17 @@ int score_of(const Array &p_committed, int p_at) {
     return score;
 }
 
-TEST_CASE("[Networked][Database][Hosted] the due rows of one database batch "
-          "into a single transaction, and a second database gets its own") {
+TEST_CASE(
+    "[Networked][Database][Hosted] the due rows of one database batch "
+    "into a single transaction, and a second database gets its own"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[3] = {
-        core->entity_create(),
-        core->entity_create(),
-        core->entity_create()
-    };
+    const RID ids[3]
+        = {core->entity_create(), core->entity_create(), core->entity_create()};
     const Ref<RefCounted> owner = ground();
-    const Ref<NetwTestPersistenceDatabase> shared = fresh_database();
-    const Ref<NetwTestPersistenceDatabase> lone = fresh_database();
-    PersistenceBook book = fresh_book();
+    const std::shared_ptr<DatabaseStand> shared = fresh_database();
+    const std::shared_ptr<DatabaseStand> lone = fresh_database();
+    Book book = fresh_book();
     book.enroll(ids[0], engine_on(owner.ptr(), due_row(shared, "a", 1)));
     book.enroll(ids[1], engine_on(owner.ptr(), due_row(lone, "b", 2)));
     book.enroll(ids[2], engine_on(owner.ptr(), due_row(shared, "c", 3)));
@@ -92,17 +91,19 @@ TEST_CASE("[Networked][Database][Hosted] the due rows of one database batch "
     NETW_CHECK_EQ(int(lone->upserts().size()), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] an engine whose owner left the tree "
-          "is dropped from the book rather than advanced") {
+TEST_CASE(
+    "[Networked][Database][Hosted] an engine whose owner left the tree "
+    "is dropped from the book rather than advanced"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[2] = { core->entity_create(), core->entity_create() };
+    const RID ids[2] = {core->entity_create(), core->entity_create()};
     const Ref<RefCounted> owner = ground();
-    const Ref<NetwTestPersistenceDatabase> database = fresh_database();
+    const std::shared_ptr<DatabaseStand> database = fresh_database();
     const Ref<NetwTestPersistenceEngine> dead
         = engine_on(nullptr, due_row(database, "a", 1));
     const Ref<NetwTestPersistenceEngine> live
         = engine_on(owner.ptr(), due_row(database, "b", 2));
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(ids[0], dead);
     book.enroll(ids[1], live);
 
@@ -115,17 +116,19 @@ TEST_CASE("[Networked][Database][Hosted] an engine whose owner left the tree "
     NETW_CHECK_EQ(int(database->upserts().size()), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] an engine with nothing due writes "
-          "nothing and keeps its enrolment") {
+TEST_CASE(
+    "[Networked][Database][Hosted] an engine with nothing due writes "
+    "nothing and keeps its enrolment"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[2] = { core->entity_create(), core->entity_create() };
+    const RID ids[2] = {core->entity_create(), core->entity_create()};
     const Ref<RefCounted> owner = ground();
-    const Ref<NetwTestPersistenceDatabase> database = fresh_database();
+    const std::shared_ptr<DatabaseStand> database = fresh_database();
     const Ref<NetwTestPersistenceEngine> quiet
         = engine_on(owner.ptr(), Dictionary());
     const Ref<NetwTestPersistenceEngine> due
         = engine_on(owner.ptr(), due_row(database, "b", 7));
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(ids[0], quiet);
     book.enroll(ids[1], due);
 
@@ -141,15 +144,17 @@ TEST_CASE("[Networked][Database][Hosted] an engine with nothing due writes "
     NETW_CHECK_EQ(score_of(due->committed(), 0), 7);
 }
 
-TEST_CASE("[Networked][Database][Hosted] a client advances no accumulator and "
-          "opens no transaction") {
+TEST_CASE(
+    "[Networked][Database][Hosted] a client advances no accumulator and "
+    "opens no transaction"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
     const RID entity = core->entity_create();
     const Ref<RefCounted> owner = ground();
-    const Ref<NetwTestPersistenceDatabase> database = fresh_database();
+    const std::shared_ptr<DatabaseStand> database = fresh_database();
     const Ref<NetwTestPersistenceEngine> engine
         = engine_on(owner.ptr(), due_row(database, "a", 1));
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(entity, engine);
 
     netw::persist::snapshot_tick(book, 1.0, false);
@@ -159,17 +164,19 @@ TEST_CASE("[Networked][Database][Hosted] a client advances no accumulator and "
     NETW_CHECK_EQ(book.size(), 1);
 }
 
-TEST_CASE("[Networked][Database][Hosted] a committed transaction hands every "
-          "row of its batch back to the engine that raised it") {
+TEST_CASE(
+    "[Networked][Database][Hosted] a committed transaction hands every "
+    "row of its batch back to the engine that raised it"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[2] = { core->entity_create(), core->entity_create() };
+    const RID ids[2] = {core->entity_create(), core->entity_create()};
     const Ref<RefCounted> owner = ground();
-    const Ref<NetwTestPersistenceDatabase> database = fresh_database();
+    const std::shared_ptr<DatabaseStand> database = fresh_database();
     const Ref<NetwTestPersistenceEngine> first
         = engine_on(owner.ptr(), due_row(database, "a", 11));
     const Ref<NetwTestPersistenceEngine> second
         = engine_on(owner.ptr(), due_row(database, "b", 22));
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(ids[0], first);
     book.enroll(ids[1], second);
 
@@ -181,16 +188,18 @@ TEST_CASE("[Networked][Database][Hosted] a committed transaction hands every "
     NETW_CHECK_EQ(score_of(second->committed(), 0), 22);
 }
 
-TEST_CASE("[Networked][Database][Hosted] a transaction that did not commit "
-          "adopts nothing as the last flushed state") {
+TEST_CASE(
+    "[Networked][Database][Hosted] a transaction that did not commit "
+    "adopts nothing as the last flushed state"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
     const RID entity = core->entity_create();
     const Ref<RefCounted> owner = ground();
-    const Ref<NetwTestPersistenceDatabase> database = fresh_database();
+    const std::shared_ptr<DatabaseStand> database = fresh_database();
     database->set_outcome(int(FAILED));
     const Ref<NetwTestPersistenceEngine> engine
         = engine_on(owner.ptr(), due_row(database, "a", 5));
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(entity, engine);
 
     netw::persist::snapshot_tick(book, 0.1, true);
@@ -199,16 +208,18 @@ TEST_CASE("[Networked][Database][Hosted] a transaction that did not commit "
     NETW_CHECK_EQ(int(engine->committed().size()), 0);
 }
 
-TEST_CASE("[Networked][Database][Hosted] flush_all skips an engine with no "
-          "owner node and flushes the rest") {
+TEST_CASE(
+    "[Networked][Database][Hosted] flush_all skips an engine with no "
+    "owner node and flushes the rest"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
-    const RID ids[2] = { core->entity_create(), core->entity_create() };
+    const RID ids[2] = {core->entity_create(), core->entity_create()};
     const Ref<RefCounted> owner = ground();
     const Ref<NetwTestPersistenceEngine> dead
         = engine_on(nullptr, Dictionary());
     const Ref<NetwTestPersistenceEngine> live
         = engine_on(owner.ptr(), Dictionary());
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(ids[0], dead);
     book.enroll(ids[1], live);
 
@@ -219,14 +230,16 @@ TEST_CASE("[Networked][Database][Hosted] flush_all skips an engine with no "
     NETW_CHECK_EQ(book.size(), 2);
 }
 
-TEST_CASE("[Networked][Database][Hosted] flush_all on a client flushes "
-          "nothing") {
+TEST_CASE(
+    "[Networked][Database][Hosted] flush_all on a client flushes "
+    "nothing"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
     const RID entity = core->entity_create();
     const Ref<RefCounted> owner = ground();
     const Ref<NetwTestPersistenceEngine> engine
         = engine_on(owner.ptr(), Dictionary());
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(entity, engine);
 
     netw::persist::flush_all(book, false);
@@ -234,8 +247,10 @@ TEST_CASE("[Networked][Database][Hosted] flush_all on a client flushes "
     NETW_CHECK_EQ(engine->flush_count(), 0);
 }
 
-TEST_CASE("[Networked][Database][Hosted] a leaving owner takes its last "
-          "snapshot on the server and its enrolment either way") {
+TEST_CASE(
+    "[Networked][Database][Hosted] a leaving owner takes its last "
+    "snapshot on the server and its enrolment either way"
+) {
     const Ref<netw::NetwLivenessCore> core = minter();
     const RID served = core->entity_create();
     const RID observed = core->entity_create();
@@ -244,7 +259,7 @@ TEST_CASE("[Networked][Database][Hosted] a leaving owner takes its last "
         = engine_on(owner.ptr(), Dictionary());
     const Ref<NetwTestPersistenceEngine> on_client
         = engine_on(owner.ptr(), Dictionary());
-    PersistenceBook book = fresh_book();
+    Book book = fresh_book();
     book.enroll(served, on_server);
     book.enroll(observed, on_client);
 

@@ -11,8 +11,8 @@
 
 #include <cstdint>
 
-#include "netw/repl/window_ring.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/repl/window_ring.hpp"
 
 using namespace godot;
 
@@ -21,18 +21,22 @@ namespace TestNetwReplWindowRing {
 using godot::LocalVector;
 using godot::Ref;
 using netw::SchemaCore;
-using netw::SchemaRecord;
 using netw::repl::WindowRing;
 using netw::repl::WindowSample;
+using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 using netw::wire::WirePlan;
 
 WirePlan axis() {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = godot::StringName("Input");
-    SchemaCore::append_column(record, godot::StringName("a"), SchemaCore::I16, 1);
-    SchemaCore::fix(record);
+    SchemaRecord record;
+    record.name = godot::StringName("Input");
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("a"),
+        SchemaCore::I16,
+        1
+    );
+    SchemaCore::fix(&record);
     return WirePlan::compile(record);
 }
 
@@ -62,9 +66,7 @@ TEST_CASE(
     NETW_CHECK_EQ(pending[2].tick, 42);
 }
 
-TEST_CASE(
-    "[Networked][Repl][Hosted] a confirmed tick stops being repeated"
-) {
+TEST_CASE("[Networked][Repl][Hosted] a confirmed tick stops being repeated") {
     const WirePlan plan = axis();
     WindowRing ring = WindowRing::open(4);
     for (int64_t tick = 40; tick <= 42; ++tick) {

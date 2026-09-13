@@ -2,9 +2,7 @@
 
 #include "netw/prediction_core.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 enum class InputSource : int {
     LOCAL = 0,
@@ -42,6 +40,4 @@ int role_for_axes(int p_input_source, int p_sim_mode);
 
 int correction_for_recovery_policy(int p_policy);
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

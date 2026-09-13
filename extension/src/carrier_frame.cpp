@@ -1,7 +1,7 @@
 #include "netw/carrier_frame.hpp"
 
-#include "godot/class_db.hpp"
 #include "netw/log.hpp"
+#include "netw/wire/stream.hpp"
 
 namespace netw {
 
@@ -9,138 +9,152 @@ using namespace godot;
 
 namespace {
 
-void write_u16(PackedByteArray &p_out, int64_t p_at, int64_t p_value) {
-    const uint16_t value = uint16_t(p_value & 0xFFFF);
-    p_out.set(p_at, uint8_t(value & 0xFF));
-    p_out.set(p_at + 1, uint8_t((value >> 8) & 0xFF));
+constexpr uint8_t RETIRED_MAGICS[] = {0x4E, 0x6E, 0x8E, 0x56, 0x76, 0x96};
+
+bool run_head(
+    wire::WriteStream &p_stream,
+    int64_t p_kind,
+    DatagramHead &r_head
+) {
+    switch (p_kind) {
+        case NetwCarrierFrame::RELIABLE:
+            return DatagramHead::reliable_wire.run(p_stream, r_head);
+        case NetwCarrierFrame::UNRELIABLE:
+            return DatagramHead::unreliable_wire.run(p_stream, r_head);
+        default:
+            return DatagramHead::acked_wire.run(p_stream, r_head);
+    }
 }
 
-int64_t read_u16(const PackedByteArray &p_bytes, int64_t p_at) {
-    return int64_t(uint16_t(p_bytes[p_at]))
-        | (int64_t(uint16_t(p_bytes[p_at + 1])) << 8);
+bool run_head(
+    wire::ReadStream &p_stream,
+    int64_t p_kind,
+    DatagramHead &r_head
+) {
+    switch (p_kind) {
+        case NetwCarrierFrame::RELIABLE:
+            return DatagramHead::reliable_wire.run(p_stream, r_head);
+        case NetwCarrierFrame::UNRELIABLE:
+            return DatagramHead::unreliable_wire.run(p_stream, r_head);
+        default:
+            return DatagramHead::acked_wire.run(p_stream, r_head);
+    }
 }
 
 } // namespace
+
+bool NetwCarrierFrame::magic_is_retired(uint8_t p_magic) {
+    for (const uint8_t retired : RETIRED_MAGICS) {
+        if (p_magic == retired) {
+            return true;
+        }
+    }
+    return false;
+}
 
 PackedByteArray NetwCarrierFrame::build(
     const PackedByteArray &p_payload,
     bool p_reliable,
     int64_t p_seq,
-    int64_t p_ack
+    int64_t p_ack,
+    uint32_t p_history,
+    int64_t p_tick
 ) {
-    PackedByteArray out;
-    if (p_reliable) {
-        out.resize(1);
-        out.set(0, uint8_t(MAGIC_RELIABLE));
-    } else if (p_ack < 0) {
-        out.resize(3);
-        out.set(0, uint8_t(MAGIC_UNRELIABLE));
-        write_u16(out, 1, p_seq);
-    } else {
-        out.resize(5);
-        out.set(0, uint8_t(MAGIC_UNRELIABLE_ACKED));
-        write_u16(out, 1, p_seq);
-        write_u16(out, 3, p_ack);
+    DatagramHead head;
+    head.base_tick = p_tick < 0 ? uint64_t(0) : uint64_t(p_tick) + 1;
+
+    int64_t kind = RELIABLE;
+    head.magic = uint64_t(MAGIC_RELIABLE);
+    if (!p_reliable) {
+        head.seq = uint64_t(uint16_t(p_seq));
+        if (p_ack < 0) {
+            kind = UNRELIABLE;
+            head.magic = uint64_t(MAGIC_UNRELIABLE);
+        } else {
+            kind = UNRELIABLE_ACKED;
+            head.magic = uint64_t(MAGIC_UNRELIABLE_ACKED);
+            head.ack = uint64_t(uint16_t(p_ack));
+            head.history = uint64_t(p_history);
+        }
     }
+
+    wire::WriteStream stream;
+    if (!run_head(stream, kind, head) || !stream.align_verify()
+        || !stream.ok()) {
+        NETW_WARN_ONCE(
+            sys::TRANSPORT,
+            "a carrier datagram at tick %d could not write its own header",
+            int(p_tick)
+        );
+        return PackedByteArray();
+    }
+    PackedByteArray out = stream.to_bytes();
     out.append_array(p_payload);
     return out;
 }
 
-Ref<NetwCarrierFrame> NetwCarrierFrame::read(const PackedByteArray &p_packet) {
-    Ref<NetwCarrierFrame> out;
-    out.instantiate();
+NetwCarrierFrame NetwCarrierFrame::read(const PackedByteArray &p_packet) {
+    NetwCarrierFrame out;
     if (p_packet.is_empty()) {
-        out->kind = MALFORMED;
+        out.kind = MALFORMED;
         return out;
     }
 
     const uint8_t magic = p_packet[0];
-    int64_t header = 0;
     if (magic == MAGIC_RELIABLE) {
-        out->kind = RELIABLE;
-        header = 1;
+        out.kind = RELIABLE;
     } else if (magic == MAGIC_UNRELIABLE) {
-        out->kind = UNRELIABLE;
-        header = 3;
+        out.kind = UNRELIABLE;
     } else if (magic == MAGIC_UNRELIABLE_ACKED) {
-        out->kind = UNRELIABLE_ACKED;
-        header = 5;
-    } else {
-        out->kind = FOREIGN;
-        return out;
-    }
-
-    // A packet that claims our framing and cannot carry its own header is
-    // ours and broken, never the application's. Handing it back as foreign
-    // would put a truncated datagram into a game's peer_packet handler.
-    if (int64_t(p_packet.size()) < header) {
+        out.kind = UNRELIABLE_ACKED;
+    } else if (magic_is_retired(magic)) {
         NETW_WARN_ONCE(
             sys::TRANSPORT,
-            "carrier packet of %d bytes cannot carry its %d byte header",
-            p_packet.size(),
-            header
+            "a carrier packet opens with the retired magic 0x%x, so it speaks "
+            "a format this build cannot read",
+            int(magic)
         );
-        out->kind = MALFORMED;
+        out.kind = MALFORMED;
+        return out;
+    } else {
+        out.kind = FOREIGN;
         return out;
     }
 
-    if (out->kind != RELIABLE) {
-        out->seq = read_u16(p_packet, 1);
+    wire::ReadStream stream(p_packet);
+    DatagramHead head;
+    if (!run_head(stream, out.kind, head) || !stream.align_verify()
+        || !stream.ok()) {
+        NETW_WARN_ONCE(
+            sys::TRANSPORT,
+            "a carrier packet of %d bytes cannot carry the header its magic "
+            "0x%x claims",
+            p_packet.size(),
+            int(magic)
+        );
+        NetwCarrierFrame refused;
+        refused.kind = MALFORMED;
+        return refused;
     }
-    if (out->kind == UNRELIABLE_ACKED) {
-        out->ack = read_u16(p_packet, 3);
+
+    if (out.kind != RELIABLE) {
+        out.seq = int64_t(head.seq);
     }
-    out->payload_offset = header;
+    if (out.kind == UNRELIABLE_ACKED) {
+        out.ack = int64_t(head.ack);
+        out.history = uint32_t(head.history);
+    }
+    out.tick = head.base_tick == 0 ? int64_t(-1) : int64_t(head.base_tick) - 1;
+    out.payload_offset = stream.bit_length() / 8;
     return out;
 }
 
-void NetwCarrierFrame::_bind_methods() {
-    ClassDB::bind_static_method(
-        "NetwCarrierFrame",
-        D_METHOD("build", "payload", "reliable", "seq", "ack"),
-        &NetwCarrierFrame::build
-    );
-    ClassDB::bind_static_method(
-        "NetwCarrierFrame",
-        D_METHOD("read", "packet"),
-        &NetwCarrierFrame::read
-    );
-    ClassDB::bind_method(D_METHOD("get_kind"), &NetwCarrierFrame::get_kind);
-    ClassDB::bind_method(D_METHOD("get_seq"), &NetwCarrierFrame::get_seq);
-    ClassDB::bind_method(D_METHOD("get_ack"), &NetwCarrierFrame::get_ack);
-    ClassDB::bind_method(
-        D_METHOD("get_payload_offset"),
-        &NetwCarrierFrame::get_payload_offset
-    );
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "kind"), "", "get_kind");
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "seq"), "", "get_seq");
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "ack"), "", "get_ack");
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "payload_offset"),
-        "",
-        "get_payload_offset"
-    );
-
-    BIND_ENUM_CONSTANT(MAGIC_RELIABLE);
-    BIND_ENUM_CONSTANT(MAGIC_UNRELIABLE);
-    BIND_ENUM_CONSTANT(MAGIC_UNRELIABLE_ACKED);
-
-    BIND_ENUM_CONSTANT(FOREIGN);
-    BIND_ENUM_CONSTANT(MALFORMED);
-    BIND_ENUM_CONSTANT(RELIABLE);
-    BIND_ENUM_CONSTANT(UNRELIABLE);
-    BIND_ENUM_CONSTANT(UNRELIABLE_ACKED);
-}
-
-void NetwCarrierDatagram::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("get_bytes"), &NetwCarrierDatagram::get_bytes);
-    ClassDB::bind_method(D_METHOD("get_seq"), &NetwCarrierDatagram::get_seq);
-    ADD_PROPERTY(
-        PropertyInfo(Variant::PACKED_BYTE_ARRAY, "bytes"),
-        "",
-        "get_bytes"
-    );
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "seq"), "", "get_seq");
+Dictionary NetwCarrierFrame::spec_records() {
+    Dictionary out;
+    out["DatagramReliable"] = DatagramHead::reliable_wire.spec_dump();
+    out["DatagramUnreliable"] = DatagramHead::unreliable_wire.spec_dump();
+    out["DatagramAcked"] = DatagramHead::acked_wire.spec_dump();
+    return out;
 }
 
 } // namespace netw

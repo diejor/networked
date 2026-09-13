@@ -5,20 +5,23 @@
 	</brief_description>
 	<description>
 		Production ownership stays in the native engine. A caller never builds
-		one up: [method NetwPredictionEngine.journal_snapshot] and [method
-		NetwPredictionHandle.journal] each materialize this tooling-cadence
-		view without changing the retained native rows, and [method
-		NetwPredictJournal.new] itself yields an empty snapshot with [method
-		size] zero. A closed row names one drive completely.
-		Two peers that ran the same transition closure agree on [method
-		post_fps] at every acked transition, and the first transition where
+		one up: [method NetwPredictionHandle.journal] materializes this
+		tooling-cadence view without changing the retained native rows, and
+		[code skip-lint]NetwPredictJournal.new()[/code] itself yields an empty
+		snapshot with [method size] zero. A closed row names one drive completely.
+		A row is a complete account of the transition it names, so a
+		transition is reproducible from its row alone. Nothing the engine
+		decided is held outside the row and read back later, which is what
+		lets two peers compare transitions instead of comparing engines.
+		Two peers that ran the same transition closure agree on
+		[method post_fps] at every acked transition, and the first transition where
 		they disagree is the one that broke, not the one where the error grew
 		visible.
 		A native enum is not a [Dictionary] at runtime the way a GDScript enum
-		is, so [method attribution_names], [method operator_names], [method
-		domain_names], and [method state_family_names] exist for a caller that
-		wants a name for a stored value rather than the bare [enum
-		Attribution], [enum Operator], [enum Domain], or [enum StateFamily].
+		is, so [method attribution_names], [method operator_names],
+		[method domain_names], and [method state_family_names] exist for a caller
+		that wants a name for a stored value rather than the bare
+		[enum Attribution], [enum Operator], [enum Domain], or [enum StateFamily].
 		[codeblock]
 		var journal := entity.prediction.journal()
 		var transitions := journal.transitions()
@@ -33,7 +36,7 @@
 	</tutorials>
 	<methods>
 		<method name="attribution_at" qualifiers="const">
-			<return type="int" enum="Attribution" />
+			<return type="int" />
 			<param index="0" name="transition" type="int" />
 			<description>
 				Returns the [enum Attribution] charged to [param transition], or
@@ -51,15 +54,15 @@
 		<method name="attributions" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
-				Returns the retained divergence charges, ordered by [method
-				transitions].
+				Returns the retained divergence charges, ordered by
+				[method transitions].
 			</description>
 		</method>
 		<method name="c_hashes" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
-				Returns the retained command fingerprints, ordered by [method
-				transitions].
+				Returns the retained command fingerprints, ordered by
+				[method transitions].
 			</description>
 		</method>
 		<method name="capacity" qualifiers="const">
@@ -81,7 +84,7 @@
 			</description>
 		</method>
 		<method name="domain_at" qualifiers="const">
-			<return type="int" enum="Domain" />
+			<return type="int" />
 			<param index="0" name="transition" type="int" />
 			<description>
 				Returns the [enum Domain] recorded for [param transition], or
@@ -103,15 +106,15 @@
 		<method name="domains" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
-				Returns the retained [enum Domain] values, ordered by [method
-				transitions].
+				Returns the retained [enum Domain] values, ordered by
+				[method transitions].
 			</description>
 		</method>
 		<method name="e_digests" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
-				Returns the retained environment digests, ordered by [method
-				transitions]. A row whose engine declares no environment facts
+				Returns the retained environment digests, ordered by
+				[method transitions]. A row whose engine declares no environment facts
 				carries [code]0[/code].
 			</description>
 		</method>
@@ -132,16 +135,16 @@
 		<method name="first_chain_break" qualifiers="const">
 			<return type="int" />
 			<description>
-				Returns the first retained transition marked [constant
-				ROW_CHAIN_BROKEN], or [code]-1[/code] when the retained chain is
+				Returns the first retained transition marked
+				[constant ROW_CHAIN_BROKEN], or [code]-1[/code] when the retained chain is
 				intact.
 			</description>
 		</method>
 		<method name="first_unmatched" qualifiers="const">
 			<return type="int" />
 			<description>
-				Returns the oldest transition whose row is not [constant
-				ROW_MATCHED], or [code]-1[/code] when every retained row matched.
+				Returns the oldest transition whose row is not
+				[constant ROW_MATCHED], or [code]-1[/code] when every retained row matched.
 				This is the transition a recovery rebases at.
 			</description>
 		</method>
@@ -156,13 +159,13 @@
 			<return type="int" />
 			<param index="0" name="transition" type="int" />
 			<description>
-				Returns the [code]ROW_*[/code] bitfield recorded for [param
-				transition], or [code]0[/code] when the row has fallen out of the
+				Returns the [code]ROW_*[/code] bitfield recorded for
+				[param transition], or [code]0[/code] when the row has fallen out of the
 				ring.
 				This and [method domain_at] are the per-transition reads the
 				compare path makes on every authoritative frame, which is why
-				they answer with a scalar instead of going through [method
-				row_at]. Materializing a row dictionary to read one byte out of
+				they answer with a scalar instead of going through
+				[method row_at]. Materializing a row dictionary to read one byte out of
 				it allocates once per frame per predicted entity.
 			</description>
 		</method>
@@ -188,8 +191,8 @@
 		<method name="labels" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<description>
-				Returns the retained clock labels, ordered by [method
-				transitions].
+				Returns the retained clock labels, ordered by
+				[method transitions].
 			</description>
 		</method>
 		<method name="last_closed" qualifiers="const">
@@ -213,26 +216,11 @@
 		</method>
 		<method name="post_family_fps" qualifiers="const">
 			<return type="PackedInt32Array" />
-			<param index="0" name="family" type="int" enum="StateFamily" />
+			<param index="0" name="family" type="int" />
 			<description>
 				Returns [param family]'s retained post-state fingerprint
 				column, ordered by [method transitions]. An open row carries
 				[code]0[/code] until the drive closes.
-			</description>
-		</method>
-		<method name="pre_family_fps" qualifiers="const">
-			<return type="PackedInt32Array" />
-			<param index="0" name="family" type="int" enum="StateFamily" />
-			<description>
-				Returns [param family]'s retained pre-state fingerprint
-				column, ordered by [method transitions].
-			</description>
-		</method>
-		<method name="pre_fps" qualifiers="const">
-			<return type="PackedInt32Array" />
-			<description>
-				Returns the retained pre-state fingerprints, ordered by [method
-				transitions].
 			</description>
 		</method>
 		<method name="post_fps" qualifiers="const">
@@ -241,6 +229,21 @@
 				Returns the retained post-solve state fingerprints, ordered by
 				[method transitions]. An open row carries [code]0[/code] until
 				the drive closes.
+			</description>
+		</method>
+		<method name="pre_family_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<param index="0" name="family" type="int" />
+			<description>
+				Returns [param family]'s retained pre-state fingerprint
+				column, ordered by [method transitions].
+			</description>
+		</method>
+		<method name="pre_fps" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the retained pre-state fingerprints, ordered by
+				[method transitions].
 			</description>
 		</method>
 		<method name="raw_fps" qualifiers="const">
@@ -260,18 +263,17 @@
 				This is the tooling-cadence read. Bulk readers take the
 				columns through [method transitions] and its siblings instead
 				of materializing a row per transition.
-				[codeblock]
-				{
-				 ┠╴transition (int)     the recurrence index, injective within an epoch
-				 ┠╴label (int)          the clock label the drive carried
-				 ┠╴kind (int)           a DriveKind value naming the command selection
-				 ┠╴c_hash (int)         fingerprint of the canonical command bytes
-				 ┠╴e_digest (int)       fingerprint of the declared environment facts
-				 ┠╴post_fp (int)        fingerprint of the state the drive produced
-				 ┠╴domain (int)         a Domain value
-				 ┠╴attribution (int)    an Attribution value
-				 ┖╴flags (int)          the ROW_ bitfield
-				}
+				[codeblock lang=text]
+				Dictionary
+				┠╴transition   int   the recurrence index, injective within an epoch
+				┠╴label        int   the clock label the drive carried
+				┠╴kind         int   a DriveKind value naming the command selection
+				┠╴c_hash       int   fingerprint of the canonical command bytes
+				┠╴e_digest     int   fingerprint of the declared environment facts
+				┠╴post_fp      int   fingerprint of the state the drive produced
+				┠╴domain       int   a Domain value
+				┠╴attribution  int   an Attribution value
+				┖╴flags        int   the ROW_ bitfield
 				[/codeblock]
 				The row also exposes [code]pre_fp[/code], the pre and post
 				[code]pose_fp[/code], [code]momentum_fp[/code], and
@@ -279,7 +281,7 @@
 				operator's [code]episode_id[/code], [code]write_id[/code],
 				[code]operator[/code], and [code]basis[/code]. Settled rows
 				expose [code]aligned_error[/code], and witnessed rows expose
-				[code]witness_class_bits[/code].
+				[code skip-lint]witness_class_bits[/code].
 			</description>
 		</method>
 		<method name="size" qualifiers="const">
@@ -302,6 +304,17 @@
 			<description>
 				Returns the retained execution-topology fingerprints, ordered by
 				[method transitions].
+				The declared quantum is folded into this hash, and nothing
+				else is. The quantum is how many physics steps a drive
+				actually bought, and it belongs here because the physics
+				server integrates on its own cadence: a drive and a solve are
+				two events, and only their ratio makes a compared transition
+				mean the same thing on both peers. Without it the boundary
+				ladder walks all the way to closure and reports that every
+				antecedent agreed. A different quantum is therefore a
+				different topology, deliberately, and two peers running the
+				same commands at different cadences disagree here rather
+				than nowhere.
 			</description>
 		</method>
 		<method name="transitions" qualifiers="const">
@@ -315,8 +328,8 @@
 		<method name="witness_class_bits" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
-				Returns authority witness-class summaries ordered by [method
-				transitions].
+				Returns authority witness-class summaries ordered by
+				[method transitions].
 			</description>
 		</method>
 		<method name="witness_fps" qualifiers="const">
@@ -338,8 +351,8 @@
 			[code]mark_ack[/code] on the native engine.
 		</constant>
 		<constant name="ROW_MATCHED" value="2">
-			The acknowledged authority state fingerprinted equal to [method
-			post_fps].
+			The acknowledged authority state fingerprinted equal to
+			[method post_fps].
 		</constant>
 		<constant name="ROW_SUBSTITUTED" value="4">
 			Authority ran a command the owner never authored for this
@@ -350,8 +363,8 @@
 			one.
 		</constant>
 		<constant name="ROW_DIVERGENT" value="16">
-			The acknowledged authority state fingerprinted unequal to [method
-			post_fps].
+			The acknowledged authority state fingerprinted unequal to
+			[method post_fps].
 		</constant>
 		<constant name="ROW_CLOSED" value="32">
 			The row's drive has produced its state, so [method post_fps]
@@ -435,9 +448,9 @@
 		</constant>
 		<constant name="FAMILY_NONE" value="0" enum="StateFamily">
 			No family differed or the peer evidence was unavailable. Named
-			[code]FAMILY_NONE[/code] rather than [code]NONE[/code] because a
-			bound enum's members flatten into the class namespace alongside
-			[enum Operator], which already claims [code]NONE[/code].
+			[code skip-lint]FAMILY_NONE[/code] rather than [code skip-lint]NONE[/code]
+			because a bound enum's members flatten into the class namespace alongside
+			[enum Operator], which already claims [code skip-lint]NONE[/code].
 		</constant>
 		<constant name="POSE" value="1" enum="StateFamily">
 			Position and orientation fields.

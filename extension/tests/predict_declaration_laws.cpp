@@ -1,8 +1,8 @@
 #include "support/netw_test.h"
 
+#include "netw/api/quantize.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/journal.hpp"
-#include "netw/api/quantize.hpp"
 
 namespace TestNetwPredictDeclarationLaws {
 
@@ -10,26 +10,11 @@ using namespace godot;
 using namespace netw;
 using namespace netw::predict;
 
-Ref<NetwPredictionEngine> pool() {
-    Ref<NetwPredictionEngine> out;
-    out.instantiate();
-    return out;
-}
-
-Ref<NetwPredictDeclaration> declaration(const PackedStringArray &p_keys) {
-    Ref<NetwPredictDeclaration> out;
-    out.instantiate();
+LocalVector<FieldDecl> declaration(const PackedStringArray &p_keys) {
+    LocalVector<FieldDecl> out;
     for (int at = 0; at < p_keys.size(); ++at) {
-        out->append_field(
-            StringName(p_keys[at]),
-            int(PropertyClass::CAUSAL),
-            StringName(),
-            0.0,
-            false,
-            false,
-            -1.0,
-            -1.0,
-            false
+        out.push_back(
+            field_decl(StringName(p_keys[at]), int(PropertyClass::CAUSAL))
         );
     }
     return out;
@@ -52,8 +37,9 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] a slot is minted once and "
     "never handed out again"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
-    const Ref<NetwPredictDeclaration> declared = declaration(keys());
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const LocalVector<FieldDecl> declared = declaration(keys());
     const int64_t first = engine->open(declared);
     const int64_t second = engine->open(declared);
 
@@ -72,7 +58,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] the field table is the "
     "declaration order and answers both ways"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const PackedStringArray declared = keys();
     const int64_t slot = engine->open(declaration(declared));
 
@@ -89,13 +76,12 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] a rewire onto nothing leaves "
     "no table standing"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(declaration(keys()));
     NETW_CHECK_EQ(engine->field_count(slot), 3);
 
-    Ref<NetwPredictDeclaration> empty;
-    empty.instantiate();
-    engine->rewire(slot, empty);
+    engine->rewire(slot, LocalVector<FieldDecl>());
 
     NETW_CHECK_EQ(engine->field_count(slot), 0);
     NETW_CHECK_EQ(engine->field_slot(slot, StringName("velocity")), -1);
@@ -105,7 +91,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] a table is per slot rather "
     "than per pool"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     PackedStringArray other;
     other.push_back("depth");
     const int64_t wide = engine->open(declaration(keys()));
@@ -121,12 +108,13 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] the fingerprint is stable, "
     "sensitive and inside a signed 32 bit column"
 ) {
-    NETW_CHECK_EQ(fingerprint("a declared payload"), fingerprint(
-        "a declared payload"
-    ));
-    CHECK(fingerprint("a declared payload") != fingerprint(
-        "a declared payloae"
-    ));
+    NETW_CHECK_EQ(
+        fingerprint("a declared payload"),
+        fingerprint("a declared payload")
+    );
+    CHECK(
+        fingerprint("a declared payload") != fingerprint("a declared payloae")
+    );
     NETW_CHECK_EQ(fnv1a(nullptr, 0), fnv1a(nullptr, 0));
 
     const PackedByteArray wide = String("0123456789abcdef").to_utf8_buffer();
@@ -134,19 +122,18 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(folded), int64_t(int32_t(folded)));
 }
 
-Ref<NetwQuantizeFixed> coarse() {
-    Ref<NetwQuantizeFixed> out;
+Ref<NetwQuantizeScalar> coarse() {
+    Ref<NetwQuantizeScalar> out;
     out.instantiate();
-    out->set_resolution_step(0.5);
     out->set_min_limit(-16.0);
     out->set_max_limit(16.0);
+    out->set_resolution_step(0.5);
     return out;
 }
 
-Ref<NetwPredictDeclaration> quantized_declaration() {
-    Ref<NetwPredictDeclaration> out;
-    out.instantiate();
-    out->append_field(
+LocalVector<FieldDecl> quantized_declaration() {
+    LocalVector<FieldDecl> out;
+    out.push_back(field_decl(
         StringName("speed"),
         int(PropertyClass::CAUSAL),
         StringName(),
@@ -158,7 +145,7 @@ Ref<NetwPredictDeclaration> quantized_declaration() {
         false,
         coarse(),
         int(Variant::FLOAT)
-    );
+    ));
     return out;
 }
 
@@ -166,7 +153,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] a declared value is recorded "
     "as what survived its own codec"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(quantized_declaration());
     engine->rewire(slot, quantized_declaration());
     Dictionary live;
@@ -176,15 +164,18 @@ TEST_CASE(
 
     CHECK(canonical.has(StringName("speed")));
     NETW_CHECK_ORDER(double(canonical[StringName("speed")]), 1.3, !=);
-    NETW_CHECK_CLOSE(double(canonical[StringName("speed")]), 1.5, 0.001);
+    NETW_CHECK_CLOSE(
+        double(canonical[StringName("speed")]),
+        1.3,
+        coarse()->max_error(Variant::FLOAT)
+    );
     NETW_CHECK_EQ(
         int64_t(engine->canonicalize_state(slot, canonical).size()),
         int64_t(1)
     );
     CHECK(
-        double(engine->canonicalize_state(slot, canonical)[
-            StringName("speed")
-        ]) == double(canonical[StringName("speed")])
+        double(engine->canonicalize_state(slot, canonical)[StringName("speed")])
+        == double(canonical[StringName("speed")])
     );
 }
 
@@ -192,7 +183,8 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] an undeclared field crosses "
     "the canonical form untouched"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(quantized_declaration());
     engine->rewire(slot, quantized_declaration());
     Dictionary live;
@@ -208,13 +200,13 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] the bytes are the fields the "
     "payload names, in declaration order"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(quantized_declaration());
     engine->rewire(slot, quantized_declaration());
     Dictionary live;
     live[StringName("speed")] = 1.3;
-    Dictionary same;
-    same[StringName("speed")] = 1.5;
+    const Dictionary same = engine->canonicalize_state(slot, live);
 
     const PackedByteArray bytes = engine->canonical_state_bytes(slot, live);
 
@@ -229,11 +221,11 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] the input codec is the input "
     "declaration's, not the state's"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(declaration(keys()));
-    Ref<NetwPredictDeclaration> input;
-    input.instantiate();
-    input->append_field(
+    LocalVector<FieldDecl> input;
+    input.push_back(field_decl(
         StringName("throttle"),
         int(PropertyClass::CAUSAL),
         StringName(),
@@ -245,22 +237,20 @@ TEST_CASE(
         false,
         coarse(),
         int(Variant::FLOAT)
-    );
+    ));
     engine->rewire(slot, declaration(keys()), input);
     Dictionary command;
     command[StringName("throttle")] = 1.3;
 
-    NETW_CHECK_CLOSE(
-        double(engine->canonicalize_input(slot, command)[
-            StringName("throttle")
-        ]),
-        1.5,
-        0.001
+    const double coded = double(
+        engine->canonicalize_input(slot, command)[StringName("throttle")]
     );
+    NETW_CHECK_ORDER(coded, 1.3, !=);
+    NETW_CHECK_CLOSE(coded, 1.3, coarse()->max_error(Variant::FLOAT));
     NETW_CHECK_CLOSE(
-        double(engine->canonicalize_state(slot, command)[
-            StringName("throttle")
-        ]),
+        double(
+            engine->canonicalize_state(slot, command)[StringName("throttle")]
+        ),
         1.3,
         0.0
     );
@@ -272,11 +262,11 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] a rewire onto no input "
     "declaration forgets the previous one"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(declaration(keys()));
-    Ref<NetwPredictDeclaration> input;
-    input.instantiate();
-    input->append_field(
+    LocalVector<FieldDecl> input;
+    input.push_back(field_decl(
         StringName("throttle"),
         int(PropertyClass::CAUSAL),
         StringName(),
@@ -288,7 +278,7 @@ TEST_CASE(
         false,
         coarse(),
         int(Variant::FLOAT)
-    );
+    ));
     engine->rewire(slot, declaration(keys()), input);
     Dictionary command;
     command[StringName("throttle")] = 1.3;
@@ -299,9 +289,8 @@ TEST_CASE(
     CHECK(engine->canonical_input_bytes(slot, command) == PackedByteArray());
 }
 
-Ref<NetwPredictDeclaration> typed_input() {
-    Ref<NetwPredictDeclaration> out;
-    out.instantiate();
+LocalVector<FieldDecl> typed_input() {
+    LocalVector<FieldDecl> out;
     const int TYPES[] = {
         int(Variant::VECTOR2),
         int(Variant::BOOL),
@@ -309,9 +298,9 @@ Ref<NetwPredictDeclaration> typed_input() {
         int(Variant::NIL),
         int(Variant::OBJECT),
     };
-    const char *KEYS[] = { "motion", "bombing", "tint", "untyped", "target" };
+    const char *KEYS[] = {"motion", "bombing", "tint", "untyped", "target"};
     for (int at = 0; at < 5; ++at) {
-        out->append_field(
+        out.push_back(field_decl(
             StringName(KEYS[at]),
             int(PropertyClass::CAUSAL),
             StringName(),
@@ -323,7 +312,7 @@ Ref<NetwPredictDeclaration> typed_input() {
             false,
             Ref<NetwQuantize>(),
             TYPES[at]
-        );
+        ));
     }
     return out;
 }
@@ -332,8 +321,9 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Declaration] a coast command zeroes every "
     "field its declaration typed, and names no field it did not"
 ) {
-    const Ref<NetwPredictionEngine> engine = pool();
-    const int64_t slot = engine->open(Ref<NetwPredictDeclaration>());
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const int64_t slot = engine->open();
     engine->rewire(slot, declaration(keys()), typed_input());
 
     const Dictionary coast = engine->coast_command(slot);
@@ -358,9 +348,12 @@ TEST_CASE(
     CHECK(engine->coast_command(slot + 9000).is_empty());
 }
 
-TEST_CASE("[Networked][Predict][Hosted][Declaration] the pass order is the "
-          "declared order key, ascending") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Hosted][Declaration] the pass order is the "
+    "declared order key, ascending"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t first = engine->open(declaration(keys()));
     const int64_t second = engine->open(declaration(keys()));
     const int64_t third = engine->open(declaration(keys()));
@@ -376,9 +369,12 @@ TEST_CASE("[Networked][Predict][Hosted][Declaration] the pass order is the "
     NETW_CHECK_EQ(order[2], first);
 }
 
-TEST_CASE("[Networked][Predict][Hosted][Declaration] an unkeyed slot steps "
-          "after every keyed one") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Hosted][Declaration] an unkeyed slot steps "
+    "after every keyed one"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t unkeyed = engine->open(declaration(keys()));
     const int64_t keyed = engine->open(declaration(keys()));
     engine->set_order_key(keyed, 99);
@@ -390,9 +386,12 @@ TEST_CASE("[Networked][Predict][Hosted][Declaration] an unkeyed slot steps "
     NETW_CHECK_EQ(engine->order_key_of(unkeyed), -1);
 }
 
-TEST_CASE("[Networked][Predict][Hosted][Declaration] a closed slot leaves the "
-          "order") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Hosted][Declaration] a closed slot leaves the "
+    "order"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     const int64_t first = engine->open(declaration(keys()));
     const int64_t second = engine->open(declaration(keys()));
     engine->set_order_key(first, 1);
@@ -407,7 +406,7 @@ TEST_CASE("[Networked][Predict][Hosted][Declaration] a closed slot leaves the "
 }
 
 int64_t seated(
-    const Ref<NetwPredictionEngine> &p_pool,
+    NetwPredictionEngine *p_pool,
     int p_schedule,
     int p_role,
     int64_t p_order_key,
@@ -429,9 +428,12 @@ int64_t seated(
     return slot;
 }
 
-TEST_CASE("[Networked][Predict][Hosted][Declaration] a phase names the slots "
-          "it steps, in the declared order, and never one it must not reach") {
-    const Ref<NetwPredictionEngine> engine = pool();
+TEST_CASE(
+    "[Networked][Predict][Hosted][Declaration] a phase names the slots "
+    "it steps, in the declared order, and never one it must not reach"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
     // A joint group shares one floor, so it can only be seated on a schedule
     // whose replay is the same run twice.
     const int64_t joint = seated(

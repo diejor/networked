@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDatabaseBackend" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The storage contract every [NetwDatabase] backend implements: nine verbs, each answering a [NetwPromise].
+		Where a [NetwDatabase] actually stores what it saves, as nine methods each answering a [NetwPromise].
 	</brief_description>
 	<description>
-		Coroutines are allowed ABOVE this boundary and never THROUGH it. Every verb here answers a [NetwPromise] straight away, and the script-facing layer above ([NetwDatabase.TableRepository]) is the coroutine that waits on it.
-		That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot answer a record on the calling frame, and a verb that promised the record directly would hand its caller whatever a suspended GDScript call coerces to, which is an empty one: a miss no error anywhere reports.
+		A game subclasses this to save into something of its own, and [FileSystemDatabase] is the backend this addon ships.
+		Every method here answers a [NetwPromise] straight away and none of them may suspend. [NetwDatabase.TableRepository] is the layer above that waits on the promise, and that is where a coroutine belongs.
+		That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot answer a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
 		[codeblock]
 		# A backend that answers on the spot.
 		func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
@@ -23,9 +24,8 @@
 		[/codeblock]
 		A verb whose value is an [enum @GlobalScope.Error] resolves WITH that code: [constant @GlobalScope.OK] and a storage failure are both answers the operation reached. A rejection means the operation could not run at all.
 		Two refusals ship from the dispatcher rather than from any backend, and both are observable:
-		[br][br]
-		[br]- An override that answers no promise is rejected with [constant @GlobalScope.ERR_INVALID_DATA], because a null would be waited on forever.
-		[br]- The default [method commit], the one a backend gets when it overrides no [method _commit], refuses with [constant @GlobalScope.ERR_UNAVAILABLE] when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
+		- An override that answers no promise is rejected with [constant @GlobalScope.ERR_INVALID_DATA], because a null would be waited on forever.
+		- The default [method commit], the one a backend gets when it overrides no [method _commit], refuses with [constant @GlobalScope.ERR_UNAVAILABLE] when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -34,7 +34,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="operations" type="Array" />
 			<description>
-				Override to sequence a batch of writes as one unit. Each entry of [param operations] is a [Dictionary] with [code]table[/code], [code]id[/code], and [code]data[/code] keys. The default [method commit] calls this if overridden, otherwise it plays the batch through [method upsert] one entry at a time.
+				Override to sequence a batch of writes as one unit, each entry shaped as [method commit] takes it. The default [method commit] calls this if overridden, otherwise it plays the batch through [method upsert] one entry at a time.
 			</description>
 		</method>
 		<method name="_delete" qualifiers="virtual">
@@ -102,7 +102,15 @@
 			<return type="NetwPromise" />
 			<param index="0" name="operations" type="Array" default="[]" />
 			<description>
-				Writes a batch of [param operations] as one unit. Calls [method _commit] when a backend overrides it. Otherwise plays the batch through [method upsert] in order and refuses with [constant @GlobalScope.ERR_UNAVAILABLE] the instant a write has not settled by the time its [NetwPromise] is checked, since a backend whose writes settle later owns its own [method _commit] to sequence them.
+				Writes a batch of [param operations] as one unit.
+				[codeblock lang=text]
+				Array[Dictionary]
+				┖╴entry
+				  ┠╴table  StringName  the table the write targets
+				  ┠╴id     StringName  the record written
+				  ┖╴data   Dictionary  the fields to merge in
+				[/codeblock]
+				Calls [method _commit] when a backend overrides it. Otherwise plays the batch through [method upsert] in order and refuses with [constant @GlobalScope.ERR_UNAVAILABLE] the instant a write has not settled by the time its [NetwPromise] is checked, since a backend whose writes settle later owns its own [method _commit] to sequence them.
 			</description>
 		</method>
 		<method name="delete_namespace">
@@ -170,7 +178,14 @@
 			<return type="NetwPromise" />
 			<param index="0" name="directives" type="Array" default="[]" />
 			<description>
-				Preloads records the backend expects to need soon, as a caching hint rather than a correctness requirement. Calls [method _warm].
+				Preloads records the backend expects to need soon, as a caching hint rather than a correctness requirement.
+				[codeblock lang=text]
+				Array[Dictionary]
+				┖╴entry
+				  ┠╴table    StringName   the table to warm
+				  ┖╴request  WarmRequest  what to preload for it
+				[/codeblock]
+				Calls [method _warm].
 			</description>
 		</method>
 	</methods>

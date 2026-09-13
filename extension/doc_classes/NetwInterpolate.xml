@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwInterpolate" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Per value interpolation spec used by [DisplayCore].
+		How one replicated value is smoothed on its way to the property that shows it.
 	</brief_description>
 	<description>
-		[NetwInterpolate] names how one decoded value enters the interpolation history. [member target] names the property that receives the smoothed output. [member mode], [member smoothing], and [member snap_distance] are read by [method DisplayCore.record].
+		[NetwInterpolate] names how one decoded value enters the interpolation history. [member target] names the property that receives the smoothed output. [member mode], [member smoothing], and [member snap_distance] are read by the session's display pump as each sample is recorded.
 		[codeblock]
 		Netw.configure_property(self, &amp;"position").interpolate(
 		    NetwInterpolate.new().lerp().smooth(0.05).to(&amp;"position")
@@ -127,7 +127,7 @@
 			Spherical interpolation for [Quaternion] rotations.
 		</constant>
 		<constant name="TAIL_AUTO" value="0" enum="Tail">
-			Extrapolates past the newest sample by its derivative, capped by [member NetwDisplayHandle.max_forecast_ticks]. The derivative is [member project_channel] when set, otherwise the finite difference of the last two samples.
+			Extrapolates past the newest sample by its derivative, capped by [constant NetwMultiplayer.DISPLAY_PARAM_MAX_FORECAST_TICKS]. The derivative is [member project_channel] when set, otherwise the finite difference of the last two samples.
 		</constant>
 		<constant name="TAIL_HOLD" value="1" enum="Tail">
 			Holds the newest sample and never projects, for discrete or flag values.

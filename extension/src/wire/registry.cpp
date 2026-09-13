@@ -75,8 +75,14 @@ uint32_t WireRegistry::active_count() const {
     return count;
 }
 
+bool WireRegistry::id_is_builtin(uint8_t id) {
+    static const WireRegistry table = create_default();
+    return table.registered[id];
+}
+
 uint64_t WireRegistry::identity_hash() const {
     uint64_t hash = 14695981039346656037ULL;
+    hash = hash_combine(hash, FORMAT_VERSION);
     for (int i = 0; i < MAX_CHANNELS; ++i) {
         if (!registered[i] || channels[i].is_reserved) {
             continue;
@@ -89,6 +95,9 @@ uint64_t WireRegistry::identity_hash() const {
         hash = hash_combine(hash, static_cast<uint64_t>(d.delivery));
         hash = hash_combine(hash, static_cast<uint64_t>(d.direction));
         hash = hash_combine(hash, static_cast<uint64_t>(d.payload));
+        if (d.payload_revision != 0) {
+            hash = hash_combine(hash, d.payload_revision);
+        }
         hash = hash_combine(hash, d.name.hash());
     }
     return hash;
@@ -128,7 +137,6 @@ WireRegistry WireRegistry::create_default() {
     res(0);
     res(1);
     res(7);
-    res(18);
 
     reg_c(
         2,
@@ -281,6 +289,17 @@ WireRegistry WireRegistry::create_default() {
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
         PayloadContract::DELTA
+    );
+
+    reg_c(
+        18,
+        "HIDE",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::SERVER_TO_CLIENT,
+        PayloadContract::PLANNED
     );
 
     reg_c(
@@ -465,8 +484,6 @@ WireRegistry WireRegistry::create_default() {
         Direction::SERVER_TO_OWNER,
         PayloadContract::PLANNED
     );
-    // The relayed frame is the authored one re-emitted, so it carries the
-    // author's contract unchanged and only its direction differs.
     reg_c(
         37,
         "PREDICT_RELAY",
@@ -477,9 +494,6 @@ WireRegistry WireRegistry::create_default() {
         Direction::SERVER_TO_CLIENT,
         PayloadContract::PLANNED
     );
-    // A lost subscribe would present as an entity that simply never relays,
-    // which is indistinguishable from one nobody authored for, so the request
-    // is reliable even though the lane it opens is not.
     reg_c(
         38,
         "PREDICT_RELAY_REQUEST",
@@ -500,9 +514,6 @@ WireRegistry WireRegistry::create_default() {
         Direction::EITHER,
         PayloadContract::DELTA
     );
-    // The retained half of the same row frame. Ordered and guaranteed, so its
-    // lane advances on send and no ack settles it, which is why the freshness
-    // book has nothing to judge here.
     reg_c(
         40,
         "SYNC_ROW_DELTA",
@@ -514,10 +525,6 @@ WireRegistry WireRegistry::create_default() {
         PayloadContract::DELTA
     );
 
-    // The windowed input lane. Unreliable like the volatile one, and it heals
-    // the same way a reliable lane would without a round trip: the frame
-    // repeats every tick still in flight, so a receiver that missed one gets
-    // it inside the next frame.
     reg_c(
         41,
         "SYNC_ROW_WINDOW",
@@ -529,9 +536,17 @@ WireRegistry WireRegistry::create_default() {
         PayloadContract::PLANNED
     );
 
-    // The lanes the tick pump flushes. A frame on one of these waits for that
-    // flush without its sender asking, which is what makes a datagram per peer
-    // per tick instead of a datagram per frame.
+    reg_c(
+        42,
+        "SESSION_SCENE_SEAT",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::SERVER_TO_CLIENT,
+        PayloadContract::PLANNED
+    );
+
     auto batches = [&](const char *name) {
         const ChannelDecl *decl
             = reg.find_channel_by_name(godot::StringName(name));
@@ -555,6 +570,20 @@ WireRegistry WireRegistry::create_default() {
     batches("SYNC_ROW_WINDOW");
 
     return reg;
+}
+
+int64_t builtin_channel(const godot::StringName &name) {
+    static const WireRegistry table = WireRegistry::create_default();
+    const ChannelDecl *decl = table.find_channel_by_name(name);
+    if (decl == nullptr) {
+        NETW_ERR_V(
+            -1,
+            sys::WIRE,
+            "The built-in channel table declares no channel named '%s'.",
+            godot::String(name).utf8().get_data()
+        );
+    }
+    return int64_t(decl->id);
 }
 
 } // namespace netw::wire

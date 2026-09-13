@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwClockConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Draft the session clock is initialized from, declared on a scope node.
+	</brief_description>
+	<description>
+		[method Netw.configure_clock] answers a draft the scope node owns. Edit it in place or through the fluent methods, and the session copies its values ONCE, at a deferred boundary after the declaring call stack has finished. From then on the clock holds owned values and this Resource is a spent authoring snapshot: a later setter reports the late write and moves nothing.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_clock(self).tickrate(60).display_offset(2)
+		[/codeblock]
+		Consuming one also arms the session's AUTOMATIC pump: the clock advances on the [SceneTree]'s own physics frame, reading that frame's actual delta, and the session's poll advances nothing. The pump runs only while the session is mounted on a branch, its peer is connected, [constant NetwMultiplayer.CLOCK_PARAM_MANUAL_TICK] is off, the editor is not authoring and the tree is not paused, so a paused game's clock stands still and resumes without catching up. A manual driver still advances it deliberately with [method NetwMultiplayer.clock_physics_step].
+		[method NetwMultiplayer.clock_get_config] answers a DETACHED snapshot of the running values. Live tuning goes through [method NetwMultiplayer.clock_set_param], which updates the engine and shows up in that snapshot without ever reopening this draft. Tickrate is not tunable that way: it is initialization.
+		A preset handed to the verb is copied rather than kept, so one [code].tres[/code] may seed several scenes. [signal NetwMultiplayer.clock_configured] fires once, after consumption and runtime setup.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="display_offset">
+			<return type="NetwClockConfig" />
+			<param index="0" name="display_offset" type="int" />
+			<description>
+				Sets [member display_offset] and answers this same draft, so a declaration reads as one chained expression.
+			</description>
+		</method>
+		<method name="physics_interpolation">
+			<return type="NetwClockConfig" />
+			<param index="0" name="use_physics_interpolation" type="bool" />
+			<description>
+				Sets [member use_physics_interpolation] and answers this same draft, so a declaration reads as one chained expression.
+			</description>
+		</method>
+		<method name="sync_mode">
+			<return type="NetwClockConfig" />
+			<param index="0" name="sync_mode" type="int" />
+			<description>
+				Sets [member sync_mode] and answers this same draft, so a declaration reads as one chained expression.
+			</description>
+		</method>
+		<method name="tickrate">
+			<return type="NetwClockConfig" />
+			<param index="0" name="tickrate" type="int" />
+			<description>
+				Sets [member tickrate] and answers this same draft, so a declaration reads as one chained expression.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="2">
+			The number of ticks the visual display lags behind the simulation.
+		</member>
+		<member name="enable_drift_logging" type="bool" setter="set_enable_drift_logging" getter="get_enable_drift_logging" default="false">
+			Logs average clock drift over 60-second windows to the console.
+		</member>
+		<member name="jitter_multiplier" type="float" setter="set_jitter_multiplier" getter="get_jitter_multiplier" default="2.0">
+			Scales jitter impact on the recommended display offset.
+		</member>
+		<member name="jitter_stability_threshold" type="float" setter="set_jitter_stability_threshold" getter="get_jitter_stability_threshold" default="0.05">
+			The threshold below which the connection is considered stable.
+		</member>
+		<member name="jitter_window" type="int" setter="set_jitter_window" getter="get_jitter_window" default="16">
+			Number of recent RTT samples averaged for jitter and the recommendation.
+		</member>
+		<member name="max_ticks_per_frame" type="int" setter="set_max_ticks_per_frame" getter="get_max_ticks_per_frame" default="8">
+			Maximum simulation ticks allowed to run in a single physics frame.
+		</member>
+		<member name="panic_snap_threshold" type="int" setter="set_panic_snap_threshold" getter="get_panic_snap_threshold" default="20">
+			The maximum allowed divergence before a hard [constant NetwMultiplayer.SyncMode.SYNC_MODE_SNAP] is forced.
+		</member>
+		<member name="ping_interval" type="float" setter="set_ping_interval" getter="get_ping_interval" default="0.1">
+			How often the client pings the server to refresh RTT and recalibrate.
+		</member>
+		<member name="stall_threshold" type="float" setter="set_stall_threshold" getter="get_stall_threshold" default="1.0">
+			Frame delta threshold before resetting the accumulator.
+		</member>
+		<member name="stretch_nudge_factor" type="float" setter="set_stretch_nudge_factor" getter="get_stretch_nudge_factor" default="0.05">
+			Fraction of the remaining divergence the [constant NetwMultiplayer.SyncMode.SYNC_MODE_STRETCH] clock closes each frame.
+		</member>
+		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" default="1">
+			Strategy used to align the local clock with the server, one of [enum NetwMultiplayer.SyncMode].
+		</member>
+		<member name="tickrate" type="int" setter="set_tickrate" getter="get_tickrate" default="30">
+			How many simulation ticks to run per second.
+		</member>
+		<member name="tickrate_mismatch_action" type="int" setter="set_tickrate_mismatch_action" getter="get_tickrate_mismatch_action" default="0">
+			What this session does when a peer reports a different tickrate: warn, disconnect it, or raise [signal NetwMultiplayer.clock_tickrate_mismatch] and leave the choice to the game.
+		</member>
+		<member name="use_physics_interpolation" type="bool" setter="set_use_physics_interpolation" getter="get_use_physics_interpolation" default="true">
+			Reads the engine's physics interpolation fraction when available instead of a wall-clock estimate.
+		</member>
+	</members>
+</class>

@@ -7,6 +7,7 @@
 #include "godot/object.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/session_core.hpp"
 #include "support/netw_recorder.h"
@@ -14,7 +15,7 @@
 namespace TestNetwSessionTeardownPhaseLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw::SessionCore;
 using netw_test::Recorder;
 
@@ -96,8 +97,8 @@ public:
     }
 };
 
-Ref<NetwMultiplayerCore> online() {
-    Ref<NetwMultiplayerCore> core;
+Ref<NetwMultiplayer> online() {
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     core->session_plane().transition(SessionCore::STATE_CONNECTING);
     core->session_plane().transition(SessionCore::STATE_ONLINE);
@@ -123,11 +124,35 @@ Vector<StringName> both_phases_reversed() {
 }
 
 TEST_CASE(
+    "[Networked][Session][Hosted] TD9 observing an entity does not pin its "
+    "wrapper, so a node that is freed takes its record with it rather than "
+    "leaving one behind for the life of the session"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+
+    Node *body = memnew(Node);
+    body->set_name("Observed");
+    uint64_t wrapper_id = 0;
+    {
+        const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(body);
+        REQUIRE(entity.is_valid());
+        wrapper_id = uint64_t(entity->get_instance_id());
+        core->observe_node_entity(body);
+    }
+    REQUIRE(netw::gd::object_of(godot::ObjectID(wrapper_id)) != nullptr);
+
+    memdelete(body);
+
+    CHECK(netw::gd::object_of(godot::ObjectID(wrapper_id)) == nullptr);
+}
+
+TEST_CASE(
     "[Networked][Session][Hosted] TP1 the emitter decides which teardown "
     "phase runs first, so a listener connected to the reclaim ahead of every "
     "announcement listener still runs after all of them"
 ) {
-    Ref<NetwMultiplayerCore> core = online();
+    Ref<NetwMultiplayer> core = online();
     const Recorder heard(core.ptr(), both_phases_reversed());
 
     core->session_plane().transition(SessionCore::STATE_DISCONNECTING);
@@ -143,7 +168,7 @@ TEST_CASE(
     "still live for every announcement listener, which is the whole reason "
     "the phases are two"
 ) {
-    Ref<NetwMultiplayerCore> core = online();
+    Ref<NetwMultiplayer> core = online();
     Node *stage = memnew(Node);
     const std::shared_ptr<PhaseLog> log = std::make_shared<PhaseLog>();
     log->watched = netw::gd::instance_id(stage);
@@ -165,7 +190,7 @@ TEST_CASE(
     "next announcement listener a node that no longer exists, and connecting "
     "first is what buys that, so connect order is no defense"
 ) {
-    Ref<NetwMultiplayerCore> core = online();
+    Ref<NetwMultiplayer> core = online();
     Node *stage = memnew(Node);
     const std::shared_ptr<PhaseLog> log = std::make_shared<PhaseLog>();
     log->watched = netw::gd::instance_id(stage);
@@ -185,7 +210,7 @@ TEST_CASE(
     "own edge, so it fires once per ending and never for a bring-up that was "
     "not live"
 ) {
-    Ref<NetwMultiplayerCore> failed;
+    Ref<NetwMultiplayer> failed;
     failed.instantiate();
     const Recorder unlived(failed.ptr(), both_phases_reversed());
     failed->session_plane().transition(SessionCore::STATE_CONNECTING);
@@ -194,7 +219,7 @@ TEST_CASE(
     NETW_CHECK_EQ(unlived.count(StringName(ENDED)), 0);
     NETW_CHECK_EQ(unlived.count(StringName(RECLAIMED)), 0);
 
-    Ref<NetwMultiplayerCore> core = online();
+    Ref<NetwMultiplayer> core = online();
     const Recorder heard(core.ptr(), both_phases_reversed());
     core->session_plane().transition(SessionCore::STATE_ONLINE);
 
@@ -212,7 +237,7 @@ TEST_CASE(
     "session shell preserves them, so a listener on the shell's announcement "
     "reads a node the machine's reclaim listener has not freed yet"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     SessionCore &machine = core->session_plane();
     machine.transition(SessionCore::STATE_CONNECTING);

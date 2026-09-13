@@ -16,7 +16,7 @@ namespace TestNetwWireSendReplay {
 using godot::LocalVector;
 using godot::Ref;
 using netw::SchemaCore;
-using netw::SchemaRecord;
+using netw::table::SchemaRecord;
 using netw::wire::AckBook;
 using netw::wire::AckEntry;
 using netw::wire::BaselineBook;
@@ -24,15 +24,23 @@ using netw::wire::CodeRow;
 using netw::wire::WirePlan;
 
 const int PEER = 7;
-const uint8_t CHANNEL = 19;
 
 WirePlan body_plan() {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = godot::StringName("Body");
-    SchemaCore::append_column(record, godot::StringName("x"), SchemaCore::I16, 1);
-    SchemaCore::append_column(record, godot::StringName("y"), SchemaCore::I16, 1);
-    SchemaCore::fix(record);
+    SchemaRecord record;
+    record.name = godot::StringName("Body");
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("x"),
+        SchemaCore::I16,
+        1
+    );
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("y"),
+        SchemaCore::I16,
+        1
+    );
+    SchemaCore::fix(&record);
     return WirePlan::compile(record);
 }
 
@@ -42,6 +50,7 @@ struct Pass {
     uint16_t seq = 0;
     int32_t ack = -1;
     uint64_t expect_mask = 0;
+    uint32_t history = 0;
 };
 
 struct Lane {
@@ -50,13 +59,12 @@ struct Lane {
     AckBook acks;
     LocalVector<AckEntry> delivered;
     LocalVector<AckEntry> lost;
-    int64_t next_send_id = 1000;
 
     uint64_t run(const Pass &pass) {
         if (pass.ack >= 0) {
             const uint16_t acked = uint16_t(pass.ack);
-            acks.process_ack(acked, delivered, lost);
-            baselines.acknowledge(PEER, acked);
+            acks.process_ack(acked, pass.history, delivered, lost);
+            baselines.acknowledge(PEER, acked, pass.history);
         }
         CodeRow row = CodeRow::for_plan(plan);
         row.write(plan.column(0), 0, pass.x);
@@ -65,17 +73,17 @@ struct Lane {
         const uint64_t mask = baselines.mask_to_send(PEER, plan, row);
         if (mask != 0) {
             baselines.stage(PEER, pass.seq, row);
-            acks.record_send(pass.seq, CHANNEL, next_send_id++);
+            acks.record_send(pass.seq, 1, plan.row_bits());
         }
         return mask;
     }
 };
 
 const Pass SCHEDULE[] = {
-    { 10, 20, 1, -1, 0b11 },
-    { 11, 20, 2, -1, 0b11 },
-    { 11, 20, 3, -1, 0b11 },
-    { 11, 20, 4, 3, 0b00 },
+    {10, 20, 1, -1, 0b11},
+    {11, 20, 2, -1, 0b11},
+    {11, 20, 3, -1, 0b11},
+    {11, 20, 4, 3, 0b00},
 };
 
 const int SCHEDULE_LENGTH = int(sizeof(SCHEDULE) / sizeof(SCHEDULE[0]));
@@ -93,7 +101,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Wire][Hosted] one ack settles the baseline book cumulatively "
+    "[Networked][Wire][Hosted] one ack settles the baseline book by delivery "
     "and the ack book by name"
 ) {
     Lane lane;
@@ -111,13 +119,13 @@ TEST_CASE(
     "the next pass carries them"
 ) {
     Lane lane;
-    lane.run({ 10, 20, 1, -1, 0b11 });
+    lane.run({10, 20, 1, -1, 0b11});
 
-    const uint64_t after_loss = lane.run({ 12, 20, 3, -1, 0b11 });
+    const uint64_t after_loss = lane.run({12, 20, 3, -1, 0b11});
     NETW_CHECK_EQ(after_loss, 0b11);
     CHECK_FALSE(lane.baselines.has_baseline(PEER));
 
-    const uint64_t settled = lane.run({ 12, 20, 4, 3, 0b00 });
+    const uint64_t settled = lane.run({12, 20, 4, 3, 0b00});
     NETW_CHECK_EQ(settled, 0b00);
     CHECK(lane.baselines.has_baseline(PEER));
 }
@@ -127,15 +135,15 @@ TEST_CASE(
     "returns"
 ) {
     Lane lane;
-    lane.run({ 10, 20, 1, -1, 0b11 });
-    lane.run({ 10, 20, 2, 1, 0b00 });
+    lane.run({10, 20, 1, -1, 0b11});
+    lane.run({10, 20, 2, 1, 0b00});
     REQUIRE(lane.baselines.has_baseline(PEER));
 
     LocalVector<int> nobody;
     lane.baselines.retain(nobody);
     CHECK_FALSE(lane.baselines.has_baseline(PEER));
 
-    const uint64_t healed = lane.run({ 10, 20, 3, -1, 0b11 });
+    const uint64_t healed = lane.run({10, 20, 3, -1, 0b11});
     NETW_CHECK_EQ(healed, 0b11);
 }
 

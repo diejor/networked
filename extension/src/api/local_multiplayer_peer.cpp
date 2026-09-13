@@ -55,6 +55,10 @@ bool LocalMultiplayerPeer::is_linked_to(int p_peer_id) const {
     return links.has(p_peer_id);
 }
 
+bool LocalMultiplayerPeer::has_link_listener() const {
+    return has_connections(StringName("peer_connected"));
+}
+
 PackedInt32Array LocalMultiplayerPeer::linked_peer_ids() const {
     PackedInt32Array ids;
     for (const KeyValue<int, ObjectID> &link : links) {
@@ -120,15 +124,20 @@ Error LocalMultiplayerPeer::send_to_peer(
     const PackedByteArray &p_buffer
 ) {
     if (closed || closing) {
+        ++refused_send_count;
         return Error::ERR_UNAVAILABLE;
     }
 
     LocalMultiplayerPeer *target = peer_at(p_peer_id);
-    if (target == nullptr || target->closed || target->closing) {
+    if (target == nullptr || target->closed || target->closing
+        || !links.has(p_peer_id)) {
         links.erase(p_peer_id);
+        ++refused_send_count;
         NETW_TRACE(sys::TRANSPORT, "send refused, peer gone=%d", p_peer_id);
         return Error::ERR_UNAVAILABLE;
     }
+
+    ++delivered_send_count;
 
     Packet packet;
     packet.data = p_buffer;
@@ -240,7 +249,7 @@ void LocalMultiplayerPeer::NETW_PEER_VIRTUAL(poll)() {
         peers_to_emit_connected.push_back(1);
     }
 
-    while (!peers_to_emit_connected.is_empty()) {
+    while (has_link_listener() && !peers_to_emit_connected.is_empty()) {
         const int peer_id = peers_to_emit_connected[0];
         peers_to_emit_connected.remove_at(0);
         emit_signal("peer_connected", peer_id);
@@ -299,7 +308,9 @@ void LocalMultiplayerPeer::NETW_PEER_VIRTUAL(disconnect_peer)(
     if (owner != nullptr) {
         owner->purge_packets_from(p_peer);
     }
-    peers_to_emit_disconnected.push_back(p_peer);
+    if (!p_force) {
+        peers_to_emit_disconnected.push_back(p_peer);
+    }
 
     if (other != nullptr && !other->closed && !other->closing) {
         other->remote_closed(unique_id, server_side);

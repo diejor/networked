@@ -9,7 +9,9 @@ namespace TestNetwWireConformance {
 using netw::wire::ReadStream;
 using netw::wire::WriteStream;
 
-TEST_CASE("[Networked][Wire][Hosted] red-proof: truncated read poisons stream") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] red-proof: truncated read poisons stream"
+) {
     godot::PackedByteArray bytes;
     bytes.push_back(0xFF);
 
@@ -25,7 +27,10 @@ TEST_CASE("[Networked][Wire][Hosted] red-proof: truncated read poisons stream") 
     CHECK_FALSE(reader.ok());
 }
 
-TEST_CASE("[Networked][Wire][Hosted] red-proof: align_verify flushes and verifies byte boundary") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] red-proof: align_verify flushes and verifies "
+    "byte boundary"
+) {
     godot::PackedByteArray bytes;
     bytes.push_back(0x07);
     bytes.push_back(0xCD);
@@ -44,7 +49,10 @@ TEST_CASE("[Networked][Wire][Hosted] red-proof: align_verify flushes and verifie
     CHECK(reader.ok());
 }
 
-TEST_CASE("[Networked][Wire][Hosted] fuzz safety: pseudo-random payload streams never panic") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] fuzz safety: pseudo-random payload streams "
+    "never panic"
+) {
     uint32_t seed = 0x12345678;
     auto lcg = [&seed]() -> uint8_t {
         seed = seed * 1664525u + 1013904223u;

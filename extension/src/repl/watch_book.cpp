@@ -85,7 +85,8 @@ void WatchBook::mask_for(
     }
     HashMap<int64_t, int64_t>::ConstIterator found
         = stream->baselines.find(p_peer);
-    const int64_t baseline = found == stream->baselines.end() ? 0 : found->value;
+    const int64_t baseline
+        = found == stream->baselines.end() ? 0 : found->value;
     for (uint32_t i = 0; i < stream->stamps.size(); ++i) {
         if (stream->stamps[i] > baseline) {
             r_mask |= uint64_t(1) << i;

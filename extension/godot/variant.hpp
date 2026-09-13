@@ -11,66 +11,70 @@
 namespace godot {
 using ::Array;
 using ::Dictionary;
-using ::Error;
-using ::OK;
-using ::FAILED;
-using ::ERR_UNAVAILABLE;
-using ::ERR_UNCONFIGURED;
-using ::ERR_UNAUTHORIZED;
-using ::ERR_PARAMETER_RANGE_ERROR;
-using ::ERR_OUT_OF_MEMORY;
-using ::ERR_FILE_NOT_FOUND;
-using ::ERR_FILE_BAD_DRIVE;
-using ::ERR_FILE_BAD_PATH;
-using ::ERR_FILE_NO_PERMISSION;
-using ::ERR_FILE_ALREADY_IN_USE;
-using ::ERR_FILE_CANT_OPEN;
-using ::ERR_FILE_CANT_WRITE;
-using ::ERR_FILE_CANT_READ;
-using ::ERR_FILE_UNRECOGNIZED;
-using ::ERR_FILE_CORRUPT;
-using ::ERR_FILE_MISSING_DEPENDENCIES;
-using ::ERR_FILE_EOF;
-using ::ERR_CANT_OPEN;
-using ::ERR_CANT_CREATE;
-using ::ERR_QUERY_FAILED;
-using ::ERR_ALREADY_IN_USE;
-using ::ERR_LOCKED;
-using ::ERR_TIMEOUT;
-using ::ERR_CANT_CONNECT;
-using ::ERR_CANT_RESOLVE;
-using ::ERR_CONNECTION_ERROR;
-using ::ERR_CANT_ACQUIRE_RESOURCE;
-using ::ERR_CANT_FORK;
-using ::ERR_INVALID_DATA;
-using ::ERR_INVALID_PARAMETER;
 using ::ERR_ALREADY_EXISTS;
-using ::ERR_DOES_NOT_EXIST;
+using ::ERR_ALREADY_IN_USE;
+using ::ERR_BUG;
+using ::ERR_BUSY;
+using ::ERR_CANT_ACQUIRE_RESOURCE;
+using ::ERR_CANT_CONNECT;
+using ::ERR_CANT_CREATE;
+using ::ERR_CANT_FORK;
+using ::ERR_CANT_OPEN;
+using ::ERR_CANT_RESOLVE;
+using ::ERR_COMPILATION_FAILED;
+using ::ERR_CONNECTION_ERROR;
+using ::ERR_CYCLIC_LINK;
 using ::ERR_DATABASE_CANT_READ;
 using ::ERR_DATABASE_CANT_WRITE;
-using ::ERR_COMPILATION_FAILED;
-using ::ERR_METHOD_NOT_FOUND;
-using ::ERR_LINK_FAILED;
-using ::ERR_SCRIPT_FAILED;
-using ::ERR_CYCLIC_LINK;
-using ::ERR_INVALID_DECLARATION;
+using ::ERR_DOES_NOT_EXIST;
 using ::ERR_DUPLICATE_SYMBOL;
-using ::ERR_PARSE_ERROR;
-using ::ERR_BUSY;
-using ::ERR_SKIP;
+using ::ERR_FILE_ALREADY_IN_USE;
+using ::ERR_FILE_BAD_DRIVE;
+using ::ERR_FILE_BAD_PATH;
+using ::ERR_FILE_CANT_OPEN;
+using ::ERR_FILE_CANT_READ;
+using ::ERR_FILE_CANT_WRITE;
+using ::ERR_FILE_CORRUPT;
+using ::ERR_FILE_EOF;
+using ::ERR_FILE_MISSING_DEPENDENCIES;
+using ::ERR_FILE_NO_PERMISSION;
+using ::ERR_FILE_NOT_FOUND;
+using ::ERR_FILE_UNRECOGNIZED;
 using ::ERR_HELP;
-using ::ERR_BUG;
+using ::ERR_INVALID_DATA;
+using ::ERR_INVALID_DECLARATION;
+using ::ERR_INVALID_PARAMETER;
+using ::ERR_LINK_FAILED;
+using ::ERR_LOCKED;
+using ::ERR_METHOD_NOT_FOUND;
+using ::ERR_OUT_OF_MEMORY;
+using ::ERR_PARAMETER_RANGE_ERROR;
+using ::ERR_PARSE_ERROR;
 using ::ERR_PRINTER_ON_FIRE;
+using ::ERR_QUERY_FAILED;
+using ::ERR_SCRIPT_FAILED;
+using ::ERR_SKIP;
+using ::ERR_TIMEOUT;
+using ::ERR_UNAUTHORIZED;
+using ::ERR_UNAVAILABLE;
+using ::ERR_UNCONFIGURED;
+using ::Error;
+using ::FAILED;
 using ::NodePath;
+using ::OK;
 using ::PackedByteArray;
 using ::PackedFloat32Array;
 using ::PackedFloat64Array;
 using ::PackedInt32Array;
 using ::PackedInt64Array;
 using ::PackedStringArray;
+using ::PROPERTY_HINT_RESOURCE_TYPE;
+using ::real_t;
+using ::Rect2;
+using ::Rect2i;
 using ::String;
 using ::StringName;
-using ::real_t;
+using ::Transform2D;
 using ::TypedArray;
 using ::Variant;
 using ::Vector2;
@@ -93,6 +97,8 @@ using ::vformat;
 #include <godot_cpp/variant/packed_int64_array.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/quaternion.hpp>
+#include <godot_cpp/variant/rect2.hpp>
+#include <godot_cpp/variant/rect2i.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/transform2d.hpp>
@@ -102,12 +108,17 @@ using ::vformat;
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
 #include <godot_cpp/variant/vector3.hpp>
-#include <godot_cpp/variant/node_path.hpp>
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
 
 namespace netw::gd {
+
+template <typename... A> godot::Array array_of(const A &...p_values) {
+    godot::Array list;
+    (list.push_back(p_values), ...);
+    return list;
+}
 
 template <class Packed> Packed zeroed(int64_t p_size) {
     Packed out;

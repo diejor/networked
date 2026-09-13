@@ -14,7 +14,7 @@ RetainedLane RetainedLane::open(const wire::WirePlan &p_plan) {
     return lane;
 }
 
-RetainedLane RetainedLane::declare(const Ref<SchemaRecord> &p_schema) {
+RetainedLane RetainedLane::declare(const SchemaRecord &p_schema) {
     RetainedLane lane;
     lane.declaration = p_schema;
     lane.compiled = wire::WirePlan::compile(p_schema);
@@ -31,10 +31,14 @@ bool RetainedLane::knows(int p_peer) const {
     return held != nullptr && held->has_held;
 }
 
-uint64_t RetainedLane::send(int p_peer, const wire::CodeRow &p_row) {
+RetainedLane::Delivery RetainedLane::send(
+    int p_peer,
+    const wire::CodeRow &p_row
+) {
     NETW_ZONE_NC("Retained lane send", colors::WIRE);
+    Delivery out;
     if (!compiled.valid() || !p_row.valid_for(compiled)) {
-        return 0;
+        return out;
     }
     Peer *peer = peers.getptr(p_peer);
     if (peer == nullptr) {
@@ -47,15 +51,16 @@ uint64_t RetainedLane::send(int p_peer, const wire::CodeRow &p_row) {
         mask = wire::CodeRow::changed_mask(compiled, peer->held, p_row);
     }
     if (mask == 0) {
-        return 0;
+        return out;
     }
-
-    // The send is the proof. Delivery here is ordered and guaranteed, so the
-    // row the peer will hold is this one and nothing has to wait for an ack to
-    // say so.
+    out.mask = mask;
+    if (peer->has_held) {
+        out.ordered_baseline.copy_from(peer->held);
+        out.steps_from_baseline = true;
+    }
     peer->held = p_row;
     peer->has_held = true;
-    return mask;
+    return out;
 }
 
 void RetainedLane::retain(const LocalVector<int> &p_recipients) {

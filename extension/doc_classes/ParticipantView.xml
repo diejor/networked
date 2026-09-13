@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="ParticipantView" inherits="Control" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Draws one [SubViewport] into a [Control] rect and pushes input back into it.
+	</brief_description>
+	<description>
+		A view BORROWS its target's render state rather than owning it. [method set_target] saves the four render fields the target arrived with, forces it to draw every frame, and puts all four back when the view lets go, so a viewport that passes through a view reads afterwards exactly as it read before. That borrow is what makes a target single-owner: two views saving the same viewport would each save what the other already overwrote, so a second view asking for a claimed target is refused and draws nothing. [method owner_of] answers which view holds one.
+		The rect the target's texture lands in is solved from the same [code]display/window/stretch/*[/code] pipeline Godot applies to the root window, so a scene hosted in a [SubViewport] letterboxes and scales the way the same scene would in the root. Every [code]stretch_[/code] knob defaults to inheriting the project's answer for that one field, so a view names only what it wants to differ. [member stretch_design_size] is the exception a game usually has to name, because a project that never set [code]display/window/size/viewport_width[/code] has no design resolution to inherit and the view falls back to drawing one to one.
+		[codeblock]
+		var view := ParticipantView.new()
+		view.stretch_mode = ParticipantView.STRETCH_MODE_CANVAS_ITEMS
+		view.stretch_design_size = Vector2i(640, 360)
+		add_child(view)
+		view.set_target(subviewport)
+		[/codeblock]
+		Mouse events arriving through [method Control._gui_input] are remapped out of the view's on-screen rect and into the target's own logical space before they are pushed, so a click lands where the player aimed whatever the letterbox is doing. Keyboard and joypad events are not routed by position and are forwarded only when [member forwards_unhandled_input] is set, which is what lets a container decide input routing for several views instead of every view grabbing what it sees.
+		[HostSceneView] is the subclass a listen-server host mounts automatically; add a bare [ParticipantView] when you are placing and targeting the display yourself.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear_target">
+			<return type="void" />
+			<description>
+				Detaches from the current target, restoring the render state it was holding. The same thing as [code]set_target(null)[/code], and what a view does for itself when it leaves the tree or its target does.
+			</description>
+		</method>
+		<method name="forward_input">
+			<return type="void" />
+			<param index="0" name="event" type="InputEvent" />
+			<description>
+				Pushes [param event] into the target viewport as a local event, with no remapping. The routed path a container uses when it decides which view an event belongs to. Does nothing when no target is held.
+			</description>
+		</method>
+		<method name="get_inner_rect" qualifiers="const">
+			<return type="Rect2" />
+			<description>
+				Where in this control's local space the target's texture is drawn. Every pixel of the control outside it is letterbox the view leaves undrawn, so an empty rect means the stretch pipeline has not solved yet.
+			</description>
+		</method>
+		<method name="get_target" qualifiers="const">
+			<return type="SubViewport" />
+			<description>
+				The viewport this view currently draws, or [code]null[/code] when it holds none. Answers [code]null[/code] rather than a dangling handle once the target leaves the tree.
+			</description>
+		</method>
+		<method name="owner_of" qualifiers="static">
+			<return type="ParticipantView" />
+			<param index="0" name="target" type="SubViewport" />
+			<description>
+				The view that has borrowed [param target]'s render state, or [code]null[/code] when no view holds it. Ask before targeting a viewport another view may already be drawing, because [method set_target] refuses rather than taking it over.
+			</description>
+		</method>
+		<method name="set_target">
+			<return type="void" />
+			<param index="0" name="target" type="SubViewport" />
+			<description>
+				Points this view at [param target], saving its render state and forcing it to draw every frame. Restores and releases whatever the view was holding first, so retargeting never strands a viewport in [constant SubViewport.UPDATE_ALWAYS].
+				Refused, with an error naming both views, when [method owner_of] already answers another live view for [param target]: the standing view keeps the target and the state it saved, and this one is left displaying nothing.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="forwards_unhandled_input" type="bool" setter="set_forwards_unhandled_input" getter="get_forwards_unhandled_input" default="false">
+			Whether non-mouse events reaching [method Node._unhandled_input] are pushed into the target. Mouse events are never forwarded this way, because [method Control._gui_input] already routes them by position. [HostSceneView] sets this, since a host's view is the whole window and nothing else is competing for the keyboard.
+		</member>
+		<member name="stretch_aspect" type="int" setter="set_stretch_aspect" getter="get_stretch_aspect" enum="ParticipantView.StretchAspect" default="0">
+			How the design resolution is fitted into the control rect. Either letterboxes the rect or grows the logical design, never both.
+		</member>
+		<member name="stretch_design_size" type="Vector2i" setter="set_stretch_design_size" getter="get_stretch_design_size" default="Vector2i(0, 0)">
+			The logical resolution the game draws at. [code]Vector2i(0, 0)[/code] inherits [code]display/window/size/viewport_width[/code] and [code]viewport_height[/code], and a design with no area makes the view draw one to one whatever [member stretch_mode] says.
+		</member>
+		<member name="stretch_mode" type="int" setter="set_stretch_mode" getter="get_stretch_mode" enum="ParticipantView.StretchMode" default="0">
+			Which end of the fit the target renders at. Mirrors the project's [code]display/window/stretch/mode[/code].
+		</member>
+		<member name="stretch_scale" type="float" setter="set_stretch_scale" getter="get_stretch_scale" default="0.0">
+			Divides the design resolution, so [code]2.0[/code] halves the logical viewport the game draws into and leaves the on-screen rect alone. Zero or less inherits [code]display/window/stretch/scale[/code].
+		</member>
+		<member name="stretch_scale_mode" type="int" setter="set_stretch_scale_mode" getter="get_stretch_scale_mode" enum="ParticipantView.StretchScaleMode" default="0">
+			Whether the fit may land on a fractional multiple of the design. Mirrors the project's [code]display/window/stretch/scale_mode[/code].
+		</member>
+	</members>
+	<constants>
+		<constant name="STRETCH_MODE_INHERIT" value="0" enum="StretchMode">
+			Take [code]display/window/stretch/mode[/code] from the project.
+		</constant>
+		<constant name="STRETCH_MODE_DISABLED" value="1" enum="StretchMode">
+			No stretch at all: the target renders at the control's pixel size, one to one, with no size override.
+		</constant>
+		<constant name="STRETCH_MODE_CANVAS_ITEMS" value="2" enum="StretchMode">
+			Render at the on-screen pixel size and publish [member stretch_design_size] as the target's 2D override, so text and canvas items stay crisp while cameras and UI still see the design resolution.
+		</constant>
+		<constant name="STRETCH_MODE_VIEWPORT" value="3" enum="StretchMode">
+			Render at the design resolution and stretch the texture into [method get_inner_rect], so upscaling gives whole chunky pixels. The only mode [constant STRETCH_SCALE_MODE_INTEGER] affects.
+		</constant>
+		<constant name="STRETCH_ASPECT_INHERIT" value="0" enum="StretchAspect">
+			Take [code]display/window/stretch/aspect[/code] from the project.
+		</constant>
+		<constant name="STRETCH_ASPECT_IGNORE" value="1" enum="StretchAspect">
+			Fill the control, distorting the design's aspect rather than letterboxing it.
+		</constant>
+		<constant name="STRETCH_ASPECT_KEEP" value="2" enum="StretchAspect">
+			Centre the design's aspect inside the control and letterbox the rest. The only aspect that shrinks [method get_inner_rect].
+		</constant>
+		<constant name="STRETCH_ASPECT_KEEP_WIDTH" value="3" enum="StretchAspect">
+			Hold the design's width and grow its logical height to the control's aspect, so a taller window shows more rather than smaller.
+		</constant>
+		<constant name="STRETCH_ASPECT_KEEP_HEIGHT" value="4" enum="StretchAspect">
+			Hold the design's height and grow its logical width to the control's aspect.
+		</constant>
+		<constant name="STRETCH_ASPECT_EXPAND" value="5" enum="StretchAspect">
+			Grow whichever axis the control is looser against, so nothing is ever cropped. Answers the same design as whichever of [constant STRETCH_ASPECT_KEEP_WIDTH] and [constant STRETCH_ASPECT_KEEP_HEIGHT] holds the tighter axis.
+		</constant>
+		<constant name="STRETCH_SCALE_MODE_INHERIT" value="0" enum="StretchScaleMode">
+			Take [code]display/window/stretch/scale_mode[/code] from the project.
+		</constant>
+		<constant name="STRETCH_SCALE_MODE_FRACTIONAL" value="1" enum="StretchScaleMode">
+			Fit exactly, at whatever fractional multiple of the design that takes.
+		</constant>
+		<constant name="STRETCH_SCALE_MODE_INTEGER" value="2" enum="StretchScaleMode">
+			Shrink the drawn rect to a whole multiple of the design, never below one to one. Applies only under [constant STRETCH_MODE_VIEWPORT] with a letterboxing aspect, since [constant STRETCH_ASPECT_IGNORE] and [constant STRETCH_ASPECT_EXPAND] leave no letterbox to snap inside.
+		</constant>
+	</constants>
+</class>

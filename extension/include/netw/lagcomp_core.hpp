@@ -4,17 +4,14 @@
 
 #include "godot/callable.hpp"
 #include "godot/local_vector.hpp"
-#include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
-#include "netw/object_port.hpp"
 #include "netw/api/timeline.hpp"
+#include "netw/object_port.hpp"
 
 namespace netw {
 
-class NetwLagCompCore : public godot::RefCounted {
-    GDCLASS(NetwLagCompCore, godot::RefCounted)
-
+class NetwLagCompCore {
     struct Row {
         ObjectPort port;
         godot::Ref<NetwTimeline> history;
@@ -39,9 +36,6 @@ class NetwLagCompCore : public godot::RefCounted {
         const Row &p_row,
         const godot::Dictionary &p_payload
     );
-
-protected:
-    static void _bind_methods();
 
 public:
     int64_t timeline_open(int64_t p_history_limit);

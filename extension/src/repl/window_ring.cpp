@@ -14,10 +14,7 @@ WindowRing WindowRing::open(uint32_t p_depth) {
     return ring;
 }
 
-WindowRing WindowRing::declare(
-    const Ref<SchemaRecord> &p_schema,
-    uint32_t p_depth
-) {
+WindowRing WindowRing::declare(const SchemaRecord &p_schema, uint32_t p_depth) {
     WindowRing ring = open(p_depth);
     ring.declaration = p_schema;
     ring.compiled = wire::WirePlan::compile(p_schema);

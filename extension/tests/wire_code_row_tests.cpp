@@ -12,18 +12,17 @@ namespace TestNetwWireCodeRow {
 
 using godot::Ref;
 using netw::SchemaCore;
-using netw::SchemaRecord;
+using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 using netw::wire::ColumnPlan;
 using netw::wire::WirePlan;
 
-Ref<SchemaRecord> sealed(const godot::StringName &name, int count, int type) {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = name;
+SchemaRecord sealed(const godot::StringName &name, int count, int type) {
+    SchemaRecord record;
+    record.name = name;
     for (int index = 0; index < count; ++index) {
         SchemaCore::append_column(
-            record,
+            &record,
             godot::StringName(
                 godot::String("c") + godot::String::num_int64(index)
             ),
@@ -31,11 +30,11 @@ Ref<SchemaRecord> sealed(const godot::StringName &name, int count, int type) {
             1
         );
     }
-    SchemaCore::fix(record);
+    SchemaCore::fix(&record);
     return record;
 }
 
-Ref<SchemaRecord> sealed_at(const godot::StringName &name, int count, int bits);
+SchemaRecord sealed_at(const godot::StringName &name, int count, int bits);
 
 TEST_CASE("[Networked][Wire][Hosted] a code round trips at its column width") {
     const WirePlan plan = WirePlan::compile(sealed("Row", 3, SchemaCore::I16));
@@ -56,7 +55,9 @@ TEST_CASE(
     const WirePlan plan
         = WirePlan::compile(sealed("WideRow", 1, SchemaCore::VECTOR4));
     REQUIRE(plan.valid());
-    NETW_CHECK_EQ(plan.column(0).width, 128);
+    NETW_CHECK_EQ(plan.column(0).width, 32);
+    NETW_CHECK_EQ(plan.column(0).stride, 4);
+    NETW_CHECK_EQ(plan.column(0).bits(), 128);
     CodeRow row = CodeRow::for_plan(plan);
     REQUIRE(row.write_bits(0, 64, 0xfedcba9876543210ULL));
     REQUIRE(row.write_bits(64, 64, 0x0123456789abcdefULL));
@@ -92,29 +93,24 @@ TEST_CASE(
     CHECK(CodeRow::from_bytes(plan, clean).valid_for(plan));
 }
 
-Ref<SchemaRecord> sealed_at(
-    const godot::StringName &name,
-    int count,
-    int bits
-) {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = name;
-    Ref<netw::NetwQuantizeBits> codec;
+SchemaRecord sealed_at(const godot::StringName &name, int count, int bits) {
+    SchemaRecord record;
+    record.name = name;
+    Ref<netw::NetwQuantizeScalar> codec;
     codec.instantiate();
     codec->set_bit_count(bits);
     for (int index = 0; index < count; ++index) {
         SchemaCore::append_column(
-            record,
+            &record,
             godot::StringName(
                 godot::String("q") + godot::String::num_int64(index)
             ),
             SchemaCore::F32,
             1
         );
-        SchemaCore::assign_quantizer(record, index, codec);
+        SchemaCore::assign_quantizer(&record, index, codec);
     }
-    SchemaCore::fix(record);
+    SchemaCore::fix(&record);
     return record;
 }
 
@@ -195,12 +191,11 @@ TEST_CASE("[Networked][Wire][Hosted] a mask does not blame a column's word") {
 }
 
 TEST_CASE("[Networked][Wire][Hosted] a strided column moves as one column") {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = "Strided";
-    SchemaCore::append_column(record, "solo", SchemaCore::I16, 1);
-    SchemaCore::append_column(record, "many", SchemaCore::I16, 4);
-    REQUIRE(SchemaCore::fix(record) == godot::Error::OK);
+    SchemaRecord record;
+    record.name = "Strided";
+    SchemaCore::append_column(&record, "solo", SchemaCore::I16, 1);
+    SchemaCore::append_column(&record, "many", SchemaCore::I16, 4);
+    REQUIRE(SchemaCore::fix(&record) == godot::Error::OK);
 
     const WirePlan plan = WirePlan::compile(record);
     REQUIRE(plan.valid());
@@ -214,11 +209,10 @@ TEST_CASE("[Networked][Wire][Hosted] a strided column moves as one column") {
 }
 
 TEST_CASE("[Networked][Wire][Hosted] an element past the stride is refused") {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = "Bounded";
-    SchemaCore::append_column(record, "pair", SchemaCore::I16, 2);
-    REQUIRE(SchemaCore::fix(record) == godot::Error::OK);
+    SchemaRecord record;
+    record.name = "Bounded";
+    SchemaCore::append_column(&record, "pair", SchemaCore::I16, 2);
+    REQUIRE(SchemaCore::fix(&record) == godot::Error::OK);
 
     const WirePlan plan = WirePlan::compile(record);
     REQUIRE(plan.valid());
@@ -230,11 +224,10 @@ TEST_CASE("[Networked][Wire][Hosted] an element past the stride is refused") {
 }
 
 TEST_CASE("[Networked][Wire][Hosted] an invalid plan yields an empty row") {
-    Ref<SchemaRecord> record;
-    record.instantiate();
-    record->name = "Loose";
-    SchemaCore::append_column(record, "anything", SchemaCore::VARIANT, 1);
-    REQUIRE(SchemaCore::fix(record) == godot::Error::OK);
+    SchemaRecord record;
+    record.name = "Loose";
+    SchemaCore::append_column(&record, "anything", SchemaCore::VARIANT, 1);
+    REQUIRE(SchemaCore::fix(&record) == godot::Error::OK);
 
     const WirePlan plan = WirePlan::compile(record);
     REQUIRE_FALSE(plan.valid());
@@ -262,14 +255,8 @@ TEST_CASE(
     REQUIRE(good.write(plan.column(0), 0, 11));
     CodeRow foreign;
 
-    NETW_CHECK_EQ(
-        CodeRow::changed_mask(plan, foreign, good),
-        plan.full_mask()
-    );
-    NETW_CHECK_EQ(
-        CodeRow::changed_mask(plan, good, foreign),
-        plan.full_mask()
-    );
+    NETW_CHECK_EQ(CodeRow::changed_mask(plan, foreign, good), plan.full_mask());
+    NETW_CHECK_EQ(CodeRow::changed_mask(plan, good, foreign), plan.full_mask());
 }
 
 } // namespace TestNetwWireCodeRow

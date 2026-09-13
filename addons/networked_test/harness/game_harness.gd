@@ -18,9 +18,6 @@ const DEFAULT_TICKRATE := 30
 ## limit. Override with the NETW_TEST_WALL_CLOCK_MS environment variable for
 ## slower CI.
 const DEFAULT_WALL_CLOCK_BUDGET_MS := 60_000
-const PARTICIPANT_WINDOW_SCENE := preload(
-	"res://addons/networked/session/view/ParticipantWindow.tscn"
-)
 
 var reporter: Callable = _default_reporter
 
@@ -56,9 +53,8 @@ func setup() -> void:
 
 ## Adds a listen server host participant.
 ##
-## [param spawn] may be a [SceneNodePath], [JoinPayload], [Array] of typed join
-## args, or [code]null[/code]. When [param spawn] is a [JoinPayload], only
-## [member JoinPayload.arg_values] is used. [param username] stays authoritative.
+## [param spawn] may be an [Array] of typed join args, or [code]null[/code]
+## for a join that asks for nothing.
 func add_host(
 		username: String = "host",
 		wait_for_player: bool = true,
@@ -67,14 +63,15 @@ func add_host(
 	assert(host == null, "NetwGameHarness.add_host: host already exists.")
 	var runner := _create_runner(
 		username,
-		NetwMultiplayer.Role.LISTEN_SERVER,
+		NetwMultiplayer.ROLE_LISTEN_SERVER,
 	)
 	host = runner
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
 		NetwHarnessSession.Entry.HOST,
-		_make_join_payload(username, spawn),
+		StringName(username),
+		_loopback.build_join_args(spawn),
 	)
 	assert(err == OK, "host() failed: %s" % error_string(err))
 
@@ -87,21 +84,21 @@ func add_host(
 
 ## Adds a client participant connected to [method add_host].
 ##
-## [param spawn] may be a [SceneNodePath], [JoinPayload], [Array] of typed join
-## args, or [code]null[/code]. When [param spawn] is a [JoinPayload], only
-## [member JoinPayload.arg_values] is used. [param username] stays authoritative.
+## [param spawn] may be an [Array] of typed join args, or [code]null[/code]
+## for a join that asks for nothing.
 func add_client(
 		username: String,
 		wait_for_player: bool = true,
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
 	assert(host != null, "NetwGameHarness.add_client: add host first.")
-	var runner := _create_runner(username, NetwMultiplayer.Role.CLIENT)
+	var runner := _create_runner(username, NetwMultiplayer.ROLE_CLIENT)
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
 		NetwHarnessSession.Entry.JOIN,
-		_make_join_payload(username, spawn),
+		StringName(username),
+		_loopback.build_join_args(spawn),
 	)
 	assert(err == OK, "join() failed: %s" % error_string(err))
 
@@ -140,30 +137,29 @@ func sync_ticks(n: int) -> void:
 		return
 	_guard_wall_clock()
 
-	var clocks: Array[NetwClockHandle] = []
+	var clocked: Array[NetwMultiplayer] = []
 	for runner in _runners:
 		if not runner or not runner.tree:
 			continue
 		var api := runner.tree.api
-		if api and api.clock.is_configured:
-			clocks.append(api._native_core.clock_handle)
+		if api and api.clock_is_configured():
+			clocked.append(api)
 
-	if clocks.is_empty():
+	if clocked.is_empty():
 		for i in n:
 			await get_tree().process_frame
 		return
 
-	var stepper := FrameLockstepStepper.new(get_tree(), clocks)
+	var stepper := FrameLockstepStepper.new(get_tree(), clocked)
 	await stepper.sync_ticks(n)
 
 
 ## Game ticks spanning [param game_seconds] of game time at the host clock's
-## [member NetwClockHandle.tickrate].
+## [constant NetwMultiplayer.CLOCK_PARAM_TICKRATE].
 ##
 ## Stepping is deterministic, so a budget can only be expressed in ticks, never
 ## in real seconds. Sizing the budget from game seconds keeps a test's intent
-## legible and portable across games whose [MultiplayerClock] runs a different
-## tickrate.
+## legible and portable across games whose clock runs a different tickrate.
 ## [codeblock]
 ## # Run roughly eight seconds of game time, tickrate-agnostic.
 ## await run_until(ais, game.seconds_to_ticks(8.0))
@@ -175,8 +171,10 @@ func seconds_to_ticks(game_seconds: float) -> int:
 func _tickrate() -> int:
 	if host and host.tree:
 		var api := host.tree.api
-		if api and api.clock.is_configured:
-			return api.clock.tickrate
+		if api and api.clock_is_configured():
+			return int(api.clock_get_param(
+				NetwMultiplayer.CLOCK_PARAM_TICKRATE
+			))
 	return DEFAULT_TICKRATE
 
 
@@ -207,32 +205,14 @@ func _wall_clock_budget_ms() -> int:
 	return int(raw) if raw.is_valid_int() else DEFAULT_WALL_CLOCK_BUDGET_MS
 
 
-## Waits for a transition animation ([TPLayerAPI]) to finish on a specific
-## [param runner].
-func wait_for_transition(runner: NetwSceneRunner) -> void:
-	var tp_layer := runner.tree.get_service(TPLayerAPI) as TPLayerAPI
-	while tp_layer and tp_layer.transition_anim.is_playing():
-		await sync_ticks(1)
-
-
-## Waits for transition animations ([TPLayerAPI]) to finish on a list of
-## [param runners].
-## [br]If the list is empty, it waits for transitions on all active runners
-## registered in this harness.
-func wait_for_transitions(runners: Array[NetwSceneRunner] = []) -> void:
-	var list := runners if not runners.is_empty() else _runners
-	var active_transitions := true
-	while active_transitions:
-		active_transitions = false
-		for runner in list:
-			var tp_layer := (
-					runner.tree.get_service(TPLayerAPI) as TPLayerAPI
-			)
-			if tp_layer and tp_layer.transition_anim.is_playing():
-				active_transitions = true
-				break
-		if active_transitions:
-			await sync_ticks(1)
+## Every runner this harness has admitted, in the order they joined.
+##
+## A game's own presentation is the game's to wait on: a suite that must let
+## an overlay or an animation settle iterates these and polls the node it
+## installed, because the kit cannot name a type that lives in a game.
+var runners: Array[NetwSceneRunner]:
+	get:
+		return _runners.duplicate()
 
 
 ## Advances ordinary frames without asserting network tick progress.
@@ -347,7 +327,7 @@ func _create_runner(
 		username: String,
 		role: NetwMultiplayer.Role,
 ) -> NetwSceneRunner:
-	var slot := PARTICIPANT_WINDOW_SCENE.instantiate() as ParticipantWindow
+	var slot := ParticipantWindow.new()
 	slot.name = "Window_%s" % username
 	slot.own_world_3d = true
 	slot.world_3d = World3D.new()
@@ -366,7 +346,7 @@ func _create_runner(
 
 	var runner := NetwSceneRunner.new(runner_root, slot, StringName(username))
 	runner.tree = tree
-	runner.slot.tree = tree
+	runner.slot.mounted_tree = tree
 	runner.slot.username = StringName(username)
 	runner.username = StringName(username)
 	runner.waiter = NetwWaiter.new(get_tree(), reporter)
@@ -379,7 +359,7 @@ func _adopt_tree(tree: MultiplayerTree, role: NetwMultiplayer.Role) -> void:
 
 
 func _finish_online_runner(runner: NetwSceneRunner) -> void:
-	runner.peer_id = runner.tree.multiplayer_peer.get_unique_id()
+	runner.peer_id = runner.tree.api.multiplayer_peer.get_unique_id()
 	runner.slot.peer_id = runner.peer_id
 	if is_instance_valid(_display_viewport):
 		_display_viewport.add_slot(runner.slot)
@@ -399,7 +379,7 @@ func _loopback_peer_for(
 		runner != null and runner.tree != null,
 		"NetwGameHarness.%s: runner is not connected." % method_name,
 	)
-	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
+	var peer := runner.tree.api.multiplayer_peer as LocalMultiplayerPeer
 	assert(
 		peer != null,
 		(
@@ -408,10 +388,6 @@ func _loopback_peer_for(
 		) % method_name,
 	)
 	return peer
-
-
-func _make_join_payload(username: String, spawn: Variant = null) -> JoinPayload:
-	return _loopback.build_join_payload(username, spawn)
 
 
 func _find_single_multiplayer_tree(scene: Node) -> MultiplayerTree:

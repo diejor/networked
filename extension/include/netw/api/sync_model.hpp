@@ -2,36 +2,21 @@
 
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/property_set_binding.hpp"
 #include "netw/repl/set_model.hpp"
 
 namespace netw {
 
-class NetwSyncSetRow : public godot::RefCounted {
-    GDCLASS(NetwSyncSetRow, godot::RefCounted)
-
-protected:
-    static void _bind_methods();
-
-public:
-    repl::SetRow row;
-
-    int64_t get_route() const { return row.route; }
-    int64_t get_ordinal() const { return row.ordinal; }
-    int64_t get_comp() const { return row.comp; }
-    int64_t get_kind() const { return row.kind; }
-    godot::StringName get_key() const { return row.key; }
-    godot::RID get_set() const { return row.set; }
-    int64_t get_record() const { return row.record; }
-    int64_t get_schema_hash() const { return row.schema_hash; }
-    int64_t get_policy() const { return row.policy; }
-    int64_t get_audience() const { return row.audience; }
-};
-
-class NetwSyncModel : public godot::RefCounted {
-    GDCLASS(NetwSyncModel, godot::RefCounted)
-
+class NetwSyncModel {
     repl::SetModel impl;
-    godot::HashMap<godot::StringName, godot::Ref<godot::RefCounted>> bindings;
+    godot::HashMap<godot::StringName, godot::Ref<NetwPropertySetBinding>>
+        bindings;
+    int64_t drops_no_set = 0;
+    int64_t skips_not_author = 0;
+    int64_t skips_no_recipients = 0;
+    int64_t drops_bad_sender = 0;
+    int64_t drops_schema = 0;
+    int64_t rows_in = 0;
 
     static godot::StringName slot_of(
         int64_t p_route,
@@ -39,9 +24,6 @@ class NetwSyncModel : public godot::RefCounted {
         const godot::StringName &p_key,
         int64_t p_record
     );
-
-protected:
-    static void _bind_methods();
 
 public:
     enum Kind { KIND_CONSUMED = 0, KIND_DERIVED = 1 };
@@ -65,16 +47,16 @@ public:
         int64_t p_record
     );
 
-    godot::Ref<NetwSyncSetRow> row(int64_t p_route, int64_t p_ordinal) const;
+    const repl::SetRow *row(int64_t p_route, int64_t p_ordinal) const;
 
-    godot::Ref<NetwSyncSetRow> row_for(
+    const repl::SetRow *row_for(
         int64_t p_route,
         int64_t p_kind,
         const godot::StringName &p_key,
         int64_t p_record
     ) const;
 
-    godot::TypedArray<NetwSyncSetRow> route_rows(int64_t p_route) const;
+    const godot::LocalVector<repl::SetRow> *route_rows(int64_t p_route) const;
 
     bool authors(
         int64_t p_route,
@@ -115,7 +97,7 @@ public:
         int64_t p_kind,
         const godot::StringName &p_key,
         int64_t p_record,
-        const godot::Ref<godot::RefCounted> &p_binding
+        const godot::Ref<NetwPropertySetBinding> &p_binding
     );
 
     void detach(
@@ -125,12 +107,32 @@ public:
         int64_t p_record
     );
 
-    godot::Ref<godot::RefCounted> binding_of(
+    godot::Ref<NetwPropertySetBinding> binding_of(
         int64_t p_route,
         int64_t p_ordinal
     ) const;
 
-    godot::TypedArray<godot::RefCounted> route_bindings(
+    godot::Ref<NetwPropertySetBinding> admit_row(
+        int64_t p_route,
+        int64_t p_ordinal,
+        int64_t p_sender,
+        int64_t p_controller
+    );
+
+    void note_row_applied();
+
+    godot::PackedInt32Array offer_row(
+        int64_t p_route,
+        int64_t p_ordinal,
+        int64_t p_local_id,
+        bool p_node_authority,
+        int64_t p_controller,
+        const godot::PackedInt32Array &p_live
+    );
+
+    godot::Dictionary stats() const;
+
+    godot::TypedArray<NetwPropertySetBinding> route_bindings(
         int64_t p_route,
         int64_t p_kind
     ) const;
@@ -140,5 +142,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::NetwSyncModel::Kind);

@@ -13,13 +13,12 @@ namespace TestNetwEventPlaneLaws {
 
 using namespace godot;
 using netw::EventPlane;
-using netw::NetwEvent;
 using netw_test::CallLog;
 using netw_test::EventRing;
-using netw_test::LawRowFor;
-using netw_test::LawVerdict;
 using netw_test::law_broken;
 using netw_test::law_held;
+using netw_test::LawRowFor;
+using netw_test::LawVerdict;
 
 constexpr int64_t WATCHED_ROUTE = 7;
 constexpr int64_t OTHER_ROUTE = 8;
@@ -138,16 +137,7 @@ class EventRun {
         row.wanted = p_wanted;
         raised.push_back(row);
 
-        Ref<NetwEvent> shadow;
-        shadow.instantiate();
-        shadow->event = p_fact.event;
-        shadow->phase = p_fact.phase;
-        shadow->tick = p_fact.tick;
-        shadow->route = p_fact.route;
-        shadow->verdict = p_fact.verdict;
-        shadow->detail = p_fact.detail;
-        shadow->model = p_fact.model;
-        shadow_ring.push_back(shadow);
+        shadow_ring.push_back(netw::event_record(p_fact));
     }
 
     EventPlane::Emission gate(int64_t p_route, int64_t p_tick) const {
@@ -343,12 +333,12 @@ public:
         return delivered_before_drain;
     }
 
-    Ref<NetwEvent> delivery(int p_index) const {
+    Dictionary delivery(int p_index) const {
         const Array carried = sink_log.args("row", p_index);
         if (carried.is_empty()) {
-            return Ref<NetwEvent>();
+            return Dictionary();
         }
-        return Ref<NetwEvent>(carried[0]);
+        return Dictionary(carried[0]);
     }
 
     EventRing ring() const {
@@ -390,15 +380,16 @@ LawVerdict law_delivered(const EventRun &p_run) {
         );
     }
     for (int index = 0; index < int(p_run.deliveries()); index++) {
-        const Ref<NetwEvent> record = p_run.delivery(index);
-        if (record.is_null()) {
+        const Dictionary record = p_run.delivery(index);
+        if (record.is_empty()) {
             return law_broken("delivery %d carried no record", index);
         }
-        if (!EventPlane::is_event(record->event)) {
+        const int64_t event = int64_t(record[netw::event_key::event()]);
+        if (!EventPlane::is_event(event)) {
             return law_broken(
                 "delivery %d carried event %d, outside the taxonomy",
                 index,
-                int(record->event)
+                int(event)
             );
         }
     }
@@ -414,12 +405,13 @@ LawVerdict law_untouched(const EventRun &p_run) {
             continue;
         }
         for (int index = 0; index < int(p_run.deliveries()); index++) {
-            const Ref<NetwEvent> record = p_run.delivery(index);
-            if (record.is_null()) {
+            const Dictionary record = p_run.delivery(index);
+            if (record.is_empty()) {
                 continue;
             }
-            if (record->route == row.fact.route
-                && record->tick == row.fact.tick) {
+            const int64_t route = int64_t(record[netw::event_key::route()]);
+            const int64_t tick = int64_t(record[netw::event_key::tick()]);
+            if (route == row.fact.route && tick == row.fact.tick) {
                 return law_broken(
                     "route %d tick %d was delivered and nobody asked",
                     int(row.fact.route),
@@ -517,23 +509,25 @@ LawVerdict law_drained(const EventRun &p_run) {
         );
     }
     for (int64_t index = 0; index < p_run.scenario().lane; index++) {
-        const Ref<NetwEvent> record
+        const Dictionary record
             = p_run.delivery(int(p_run.scenario().watched + index));
-        if (record.is_null()) {
+        if (record.is_empty()) {
             return law_broken("lane fact %d was never delivered", int(index));
         }
-        if (record->phase != EventPlane::AFTER) {
+        const int64_t phase = int64_t(record[netw::event_key::phase()]);
+        if (phase != EventPlane::AFTER) {
             return law_broken(
                 "lane fact %d arrived in phase %d",
                 int(index),
-                int(record->phase)
+                int(phase)
             );
         }
-        if (record->tick != 100 + index) {
+        const int64_t tick = int64_t(record[netw::event_key::tick()]);
+        if (tick != 100 + index) {
             return law_broken(
                 "lane fact %d arrived out of order, tick %d",
                 int(index),
-                int(record->tick)
+                int(tick)
             );
         }
     }
@@ -544,26 +538,30 @@ LawVerdict law_terminal(const EventRun &p_run) {
     if (!p_run.scenario().terminal) {
         return law_held();
     }
-    Ref<NetwEvent> closing;
+    Dictionary closing;
     for (int index = 0; index < int(p_run.deliveries()); index++) {
-        const Ref<NetwEvent> record = p_run.delivery(index);
-        if (record.is_valid() && record->event == EventPlane::DESPAWNED) {
+        const Dictionary record = p_run.delivery(index);
+        if (!record.is_empty()
+            && int64_t(record[netw::event_key::event()])
+                == EventPlane::DESPAWNED) {
             closing = record;
         }
     }
-    if (closing.is_null()) {
+    if (closing.is_empty()) {
         return law_broken("the terminal event was never delivered");
     }
-    if (closing->model.is_empty()) {
+    const Dictionary model = closing[netw::event_key::model()];
+    if (model.is_empty()) {
         return law_broken("the terminal event carried no model");
     }
-    if (String(closing->model.get("stage", String())) != String("live")) {
+    if (String(model.get("stage", String())) != String("live")) {
         return law_broken("the terminal model is not the one snapshotted");
     }
-    if (closing->entity_id != StringName("Platform")) {
+    const StringName entity_id = closing[netw::event_key::entity_id()];
+    if (entity_id != StringName("Platform")) {
         return law_broken(
             "the terminal event names %s, not the subject that died",
-            String(closing->entity_id).utf8().get_data()
+            String(entity_id).utf8().get_data()
         );
     }
     return law_held();
@@ -612,16 +610,27 @@ const EventLaw L_TERMINAL = {
 };
 
 const EventLaw LAWS[] = {
-    L_DELIVERED, L_UNTOUCHED, L_BOUNDED, L_DEDUPE,
-    L_CLOSED,    L_DRAINED,   L_TERMINAL,
+    L_DELIVERED,
+    L_UNTOUCHED,
+    L_BOUNDED,
+    L_DEDUPE,
+    L_CLOSED,
+    L_DRAINED,
+    L_TERMINAL,
 };
 
 constexpr int LAWS_SIZE = int(sizeof(LAWS) / sizeof(LAWS[0]));
 
 TEST_CASE("[Networked][Event][Hosted] the event plane's laws hold") {
     const EventScenario CORPUS[] = {
-        watched_gate(),  gate_flood(),      verdict_flood(), lane_raised(),
-        entity_death(),  unwatched_route(), refused_rows(),  unarmed_gate(),
+        watched_gate(),
+        gate_flood(),
+        verdict_flood(),
+        lane_raised(),
+        entity_death(),
+        unwatched_route(),
+        refused_rows(),
+        unarmed_gate(),
     };
     for (const EventScenario &scenario : CORPUS) {
         const EventRun run(scenario);
@@ -640,48 +649,60 @@ TEST_CASE("[Networked][Event][Hosted] a ring that never evicts reds bounded") {
     NETW_LAW_BREAKS(L_BOUNDED, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a lane fact delivered where it was "
-          "raised reds drained") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a lane fact delivered where it was "
+    "raised reds drained"
+) {
     const EventScenario scenario = lane_raised();
     const EventRun run(scenario, PLANT_SYNCHRONOUS_LANE);
     NETW_CELL(L_DRAINED, scenario);
     NETW_LAW_BREAKS(L_DRAINED, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a verdict row without dedupe reds "
-          "dedupe") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a verdict row without dedupe reds "
+    "dedupe"
+) {
     const EventScenario scenario = verdict_flood();
     const EventRun run(scenario, PLANT_NO_DEDUPE);
     NETW_CELL(L_DEDUPE, scenario);
     NETW_LAW_BREAKS(L_DEDUPE, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] an install inside the vocabulary reds "
-          "closed") {
+TEST_CASE(
+    "[Networked][Event][Hosted] an install inside the vocabulary reds "
+    "closed"
+) {
     const EventScenario scenario = refused_rows();
     const EventRun run(scenario, PLANT_KNOWN_KEYS_ONLY);
     NETW_CELL(L_CLOSED, scenario);
     NETW_LAW_BREAKS(L_CLOSED, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a death that snapshots nothing reds "
-          "terminal") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a death that snapshots nothing reds "
+    "terminal"
+) {
     const EventScenario scenario = entity_death();
     const EventRun run(scenario, PLANT_NO_SNAPSHOT);
     NETW_CELL(L_TERMINAL, scenario);
     NETW_LAW_BREAKS(L_TERMINAL, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a row targeting another route reds "
-          "delivered") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a row targeting another route reds "
+    "delivered"
+) {
     const EventScenario scenario = watched_gate();
     const EventRun run(scenario, PLANT_TARGET_ELSEWHERE);
     NETW_CELL(L_DELIVERED, scenario);
     NETW_LAW_BREAKS(L_DELIVERED, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a row targeting every route reds "
-          "untouched") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a row targeting every route reds "
+    "untouched"
+) {
     const EventScenario scenario = unwatched_route();
     const EventRun run(scenario, PLANT_TARGET_EVERYTHING);
     NETW_CELL(L_UNTOUCHED, scenario);

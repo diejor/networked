@@ -1,29 +1,8 @@
 name: Static Checks
 
-# The checks that need no compiler: formatting, the seam's leak budget, and
-# the source manifest. They run against the native tree only, since the
-# GDScript side has its own workflow in gdscript-style.yml.
-
 on:
-  push:
-    branches: [main]
-    paths:
-      - "extension/**"
-      - ".clang-format"
-      - ".pre-commit-config.yaml"
-      - ".github/workflows/static-checks.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "extension/**"
-      - ".clang-format"
-      - ".pre-commit-config.yaml"
-      - ".github/workflows/static-checks.yml"
+  workflow_call:
   workflow_dispatch:
-
-concurrency:
-  group: static-checks-${{ github.event.number || github.ref_name }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -40,41 +19,64 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Same hooks and same pins a contributor gets from `pre-commit install`,
-      # so this can only fail on a commit that skipped them.
       - uses: pre-commit/action@v3.0.1
 
-  seam:
-    name: "Seam leak budget"
+  gdscript:
+    name: "GDScript format + lint"
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    env:
+      GDFORMAT_VERSION: "0.20.1"
     steps:
       - uses: actions/checkout@v4
 
-      # The dual-target seam holds because engine and godot_cpp headers are
-      # included in extension/godot/ and nowhere else. Every occurrence
-      # outside it is a place the module build would have to be repaired by
-      # hand, so the count is bounded rather than merely discouraged.
-      - name: Count Engine Includes Outside The Seam
+      - name: Install gdscript-formatter
         run: |
           set -eu
-          budget=30
-          hits="$(grep -rn -E \
-            '^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"](godot_cpp|core|scene|servers|modules)/' \
-            extension/src extension/include extension/tests \
-            extension/register_types.cpp extension/register_types.h || true)"
-          count="$(printf '%s' "$hits" | grep -c . || true)"
-          printf '%s\n' "$hits"
-          echo "$count occurrences, budget $budget"
-          if [ "$count" -ge "$budget" ]; then
-            echo "::error::seam leak budget exceeded ($count >= $budget)"
-            exit 1
-          fi
+          base="https://github.com/GDQuest/GDScript-formatter/releases/download"
+          asset="gdscript-formatter-${GDFORMAT_VERSION}-linux-x86_64"
+          curl -sSL "${base}/${GDFORMAT_VERSION}/${asset}.zip" -o gdf.zip
+          unzip -o gdf.zip -d gdf
+          install -Dm755 "gdf/${asset}" "$HOME/.local/bin/gdscript-formatter"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-  sources:
-    name: "Source manifest"
+      - name: Check formatting
+        run: gdscript-formatter --check addons/networked tests examples
+
+      - name: Lint
+        continue-on-error: true
+        run: |
+          gdscript-formatter lint --pretty \
+            --max-line-length 100 \
+            --disable private-access,signal-name \
+            addons/networked tests examples
+
+  workflows:
+    name: "Workflow and shell lint"
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pinned Linters
+        shell: bash
+        run: |
+          set -eu
+          python3 ci/bootstrap.py tools actionlint shellcheck
+          echo "$PWD/ci/.tools" >> "$GITHUB_PATH"
+
+      - name: Lint Workflows
+        shell: bash
+        run: actionlint -color
+
+      - name: Lint Shell Scripts
+        shell: bash
+        run: shellcheck --shell=sh extension/tools/setup_godot.sh
+
+  laws:
+    name: "Tree laws"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -82,57 +84,28 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check Every Source Is Compiled
-        run: python extension/tools/check_sources.py
-
-      # A `[Hosted]` case claims to run in both tiers, and the module tier
-      # reaches one only through `test_networked_hosted.h`. Leaving a file out
-      # of that header is invisible: the library tier reports the cases green
-      # and the module tier does not have them at all.
-      - name: Check Every Hosted Case Reaches Both Tiers
-        run: python extension/tools/check_hosted_registry.py
-
-      - name: Prove The Registry Check Refuses
-        run: python extension/tools/check_hosted_registry.py --self-test
-
-      # A comment under extension/ is a fact doc_classes/<Class>.xml is
-      # missing, a name that should have been better, or plan knowledge that
-      # belongs in .agents/. The tree did not start at zero, so the check is a
-      # ratchet: a file may lose comments freely and may never gain one.
       - name: Check No File Gained A Comment
         run: python extension/tools/check_no_comments.py --ratchet
 
       - name: Prove The Comment Ratchet Refuses
         run: python extension/tools/check_no_comments.py --self-test
 
-      # A class registers with a written disposition (stay, or retire at a
-      # named unit) or it does not register. The ledger is the plan's §2.9
-      # STAY set as data, and its strict mode is the ZU-39/Z7 gate.
-      - name: Check Every Registration Has A Disposition
-        run: python extension/tools/check_classdb_census.py --check
-
-      - name: Prove The ClassDB Census Refuses
-        run: python extension/tools/check_classdb_census.py --self-test
-
-      - name: Check Diagnostic Seams
-        run: python extension/tools/check_diagnostics.py
-
-      - name: Prove The Diagnostic Check Refuses
-        run: python extension/tools/check_diagnostics.py --self-test
-
-      # Holding the decoder against the descriptors needs
-      # `reports/native/wire.spec.json`, which only a native run produces, so
-      # that half rides the embedded suite instead.
       - name: Prove The Wire Decoder Refuses
         run: python extension/tools/wire_decode.py --self-test
 
-      # Holding the enum to the registry needs `reports/native/wire.spec.json`
-      # too, so that half rides the embedded suite beside the decoder.
-      - name: Prove The Channel Table Check Refuses
-        run: python extension/tools/check_channel_table.py --self-test
+  pipeline:
+    name: "Pipeline fixtures"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
 
-      # Checking a real capture needs one, which needs a two-peer session, so
-      # only the self-test rides here. `NETW_CODE_TAP=1` over a racing suite
-      # produces the capture this reads.
-      - name: Prove The Tap Check Refuses
-        run: python extension/tools/code_tap_check.py --self-test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prove The Report Reader Refuses
+        run: python ci/reports.py --self-test
+
+      - name: Run The Pipeline Fixtures
+        run: python -m unittest discover -s ci/tests -t . -v

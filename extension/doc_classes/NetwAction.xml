@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwAction" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A predicted discrete action bound to one authority method.
+	</brief_description>
+	<description>
+		Pairs a local [member predict] effect with a reliable server request. The server receives a [NetwActionContext], validates at [member NetwActionContext.view_tick], and either binds an authoritative spawned [NetwEntity] result with [method NetwActionContext.bind] or denies it with [method NetwActionContext.deny].
+		Every authority method on an entity holds its own slot, so two actions armed at one view tick never share an effect key. Mint one with [method Netw.action], which reads the session off the authority's own host node; the authority method must be a plain [Callable], never an RPC.
+		[codeblock]
+		@onready var place_bomb := Netw.action(_place_bomb)
+
+		func _ready() -&gt; void:
+		    place_bomb.predict = _predict_bomb
+
+		func _network_tick(delta, tick, is_fresh) -&gt; void:
+		    if is_fresh and inputs.bombing:
+		        place_bomb.request(tick)
+
+		func _place_bomb(ctx: NetwActionContext) -&gt; void:
+		    var bomb := BOMB.instantiate()
+		    ctx.bind(bomb)
+		    $Bombs.add_child(bomb)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="request">
+			<return type="void" />
+			<param index="0" name="view_tick" type="int" />
+			<param index="1" name="data" type="Variant" default="null" />
+			<description>
+				Requests the server authority method for [param view_tick], carrying [param data] as its second argument.
+				The local controller gets an immediate [member predict] effect. Non-owning peers do nothing, so server consume and remote display passes cannot double fire a command.
+				[b]Player request.[/b]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="confirm" type="Callable" setter="set_confirm" getter="get_confirm" default="Callable()">
+			Confirms the optimistic effect, taking the ghost [Node] [member predict] returned. Unset, the ghost is freed with [method Node.queue_free].
+		</member>
+		<member name="predict" type="Callable" setter="set_predict" getter="get_predict" default="Callable()">
+			Creates the local optimistic effect and returns the ghost [Node] that [member confirm] and [member revert] later receive.
+		</member>
+		<member name="revert" type="Callable" setter="set_revert" getter="get_revert" default="Callable()">
+			Reverts the optimistic effect, taking the ghost [Node] [member predict] returned. Unset, the ghost is freed with [method Node.queue_free].
+		</member>
+		<member name="timeout_ticks" type="int" setter="set_timeout_ticks" getter="get_timeout_ticks" default="0">
+			Ticks before an unresolved request reverts. [code]0[/code] derives a conservative default from the lag-compensation engine.
+		</member>
+		<member name="timing_mode" type="int" setter="set_timing_mode" getter="get_timing_mode" enum="NetwAction.TimingMode" default="2">
+			The server execution policy. Defaults to [constant TIMING_IMMEDIATE], which is arrival-time execution with no readiness assumptions, so stricter modes are opted into per action.
+		</member>
+	</members>
+	<signals>
+		<signal name="confirmed">
+			<description>
+				Emitted when the authoritative result adopts the optimistic effect.
+			</description>
+		</signal>
+		<signal name="denied">
+			<description>
+				Emitted when the server denies the optimistic effect or it times out.
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="TIMING_TICK_ALIGNED" value="0" enum="TimingMode">
+			Execute on the server when [member NetwActionContext.view_tick] arrives.
+		</constant>
+		<constant name="TIMING_TICK_ALIGNED_STATE_READY" value="1" enum="TimingMode">
+			Execute after server history records [member NetwActionContext.view_tick].
+			This mode is owner-anchored. It guarantees only that the action owner's recorded state is ready at the view tick, and gates no other entity, so cross-entity validation must use [method NetwMultiplayer.lagcomp_sample] or [method NetwMultiplayer.lagcomp_rewind] for those targets.
+			Determinism is a precondition, not a toggle. The placement agrees with the client only when consuming the same input yields the same state, and resolution is deferred until that state exists, so remote peers see the result later. Use [constant TIMING_IMMEDIATE] when the action must not wait.
+			Under loss, the consume policy may fill a missing input slot: this mode guarantees a recorded state exists, not that it came from the real input.
+		</constant>
+		<constant name="TIMING_IMMEDIATE" value="2" enum="TimingMode">
+			Execute as soon as the request reaches the server.
+		</constant>
+	</constants>
+</class>

@@ -1,30 +1,30 @@
 #include "support/netw_test.h"
 
-#include "netw/entity_stage.hpp"
+#include "netw/entity/stage.hpp"
 
-namespace TestNetwEntityStage {
+namespace TestNetwStage {
 
-using netw::EntityStage;
-using netw::stage_can_begin_despawn;
-using netw::stage_edge_is_legal;
+using netw::entity::Stage;
+using netw::entity::stage_can_begin_despawn;
+using netw::entity::stage_edge_is_legal;
 
 constexpr int STAGES = 7;
 
 struct Edge {
-    EntityStage from;
-    EntityStage to;
+    Stage from;
+    Stage to;
 };
 
 constexpr Edge LEGAL_EDGES[] = {
-    {EntityStage::UNBOUND, EntityStage::TEMPLATE},
-    {EntityStage::UNBOUND, EntityStage::ARMED},
-    {EntityStage::UNBOUND, EntityStage::DESPAWNING},
-    {EntityStage::ARMED, EntityStage::LIVE},
-    {EntityStage::ARMED, EntityStage::DESPAWNING},
-    {EntityStage::LIVE, EntityStage::DESPAWNING},
-    {EntityStage::DESPAWNING, EntityStage::LINGERING},
-    {EntityStage::DESPAWNING, EntityStage::FREED},
-    {EntityStage::LINGERING, EntityStage::FREED},
+    {Stage::UNBOUND, Stage::TEMPLATE},
+    {Stage::UNBOUND, Stage::ARMED},
+    {Stage::UNBOUND, Stage::DESPAWNING},
+    {Stage::ARMED, Stage::LIVE},
+    {Stage::ARMED, Stage::DESPAWNING},
+    {Stage::LIVE, Stage::DESPAWNING},
+    {Stage::DESPAWNING, Stage::LINGERING},
+    {Stage::DESPAWNING, Stage::FREED},
+    {Stage::LINGERING, Stage::FREED},
 };
 
 bool listed_as_legal(int p_from, int p_to) {
@@ -64,13 +64,13 @@ TEST_CASE(
     "a stage off the table admits nothing either"
 ) {
     for (int to = 0; to < STAGES; ++to) {
-        CHECK_FALSE(stage_edge_is_legal(int(EntityStage::TEMPLATE), to));
-        CHECK_FALSE(stage_edge_is_legal(int(EntityStage::FREED), to));
+        CHECK_FALSE(stage_edge_is_legal(int(Stage::TEMPLATE), to));
+        CHECK_FALSE(stage_edge_is_legal(int(Stage::FREED), to));
     }
 
-    CHECK_FALSE(stage_edge_is_legal(99, int(EntityStage::LIVE)));
-    CHECK_FALSE(stage_edge_is_legal(-1, int(EntityStage::LIVE)));
-    CHECK_FALSE(stage_edge_is_legal(int(EntityStage::LIVE), 99));
+    CHECK_FALSE(stage_edge_is_legal(99, int(Stage::LIVE)));
+    CHECK_FALSE(stage_edge_is_legal(-1, int(Stage::LIVE)));
+    CHECK_FALSE(stage_edge_is_legal(int(Stage::LIVE), 99));
     CHECK_FALSE(stage_can_begin_despawn(99));
 }
 
@@ -78,14 +78,14 @@ TEST_CASE(
     "[Networked][Entity][Hosted] S4 teardown opens wider than LIVE, so a "
     "hand-bound route is never stranded"
 ) {
-    CHECK(stage_can_begin_despawn(int(EntityStage::UNBOUND)));
-    CHECK(stage_can_begin_despawn(int(EntityStage::ARMED)));
-    CHECK(stage_can_begin_despawn(int(EntityStage::LIVE)));
+    CHECK(stage_can_begin_despawn(int(Stage::UNBOUND)));
+    CHECK(stage_can_begin_despawn(int(Stage::ARMED)));
+    CHECK(stage_can_begin_despawn(int(Stage::LIVE)));
 
-    CHECK_FALSE(stage_can_begin_despawn(int(EntityStage::TEMPLATE)));
-    CHECK_FALSE(stage_can_begin_despawn(int(EntityStage::DESPAWNING)));
-    CHECK_FALSE(stage_can_begin_despawn(int(EntityStage::LINGERING)));
-    CHECK_FALSE(stage_can_begin_despawn(int(EntityStage::FREED)));
+    CHECK_FALSE(stage_can_begin_despawn(int(Stage::TEMPLATE)));
+    CHECK_FALSE(stage_can_begin_despawn(int(Stage::DESPAWNING)));
+    CHECK_FALSE(stage_can_begin_despawn(int(Stage::LINGERING)));
+    CHECK_FALSE(stage_can_begin_despawn(int(Stage::FREED)));
 
     for (int stage = 0; stage < STAGES; ++stage) {
         if (!stage_can_begin_despawn(stage)) {
@@ -93,8 +93,8 @@ TEST_CASE(
         }
         NETW_FORMAT_INT(stage_text, stage);
         CAPTURE(stage_text);
-        CHECK(stage_edge_is_legal(stage, int(EntityStage::DESPAWNING)));
+        CHECK(stage_edge_is_legal(stage, int(Stage::DESPAWNING)));
     }
 }
 
-} // namespace TestNetwEntityStage
+} // namespace TestNetwStage

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<testsuites id="2026-08-18" name="report_1" tests="1" failures="0" skipped="0" flaky="0" time="0.000">
-	<testsuite id="0" name="test_display_smoothness_probe" package="tests/integration/gameplay" timestamp="2026-08-18T22:19:11" hostname="localhost" tests="1" failures="0" errors="0" skipped="0" flaky="0" time="4.027">
-		<testcase name="test_bracketed_local_visuals_move_monotonically" classname="test_display_smoothness_probe" time="4.018">
-		</testcase>
-	</testsuite>
-</testsuites>

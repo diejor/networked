@@ -4,15 +4,11 @@
 
 #include "godot/callable.hpp"
 #include "godot/rid.hpp"
-#include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 
 namespace netw {
 
-class NetwChannelBook : public godot::RefCounted {
-    GDCLASS(NetwChannelBook, godot::RefCounted)
-
-private:
+class NetwChannelBook {
     struct Row {
         godot::Callable handler;
         bool defers = false;
@@ -22,9 +18,6 @@ private:
     godot::HashMap<int64_t, Row> rows;
 
     const Row *row_of(int64_t channel) const;
-
-protected:
-    static void _bind_methods();
 
 public:
     bool register_channel(

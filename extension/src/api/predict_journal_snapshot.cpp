@@ -146,16 +146,16 @@ int64_t NetwPredictJournal::epoch() const {
     return journal.epoch();
 }
 
-#define NETW_JOURNAL_COLUMN(m_name, m_array, m_reader)                        \
-    m_array NetwPredictJournal::m_name() const {                              \
-        m_array out;                                                          \
-        const int rows = journal.size();                                      \
-        out.resize(rows);                                                     \
-        auto *values = out.ptrw();                                            \
-        for (int at = 0; at < rows; ++at) {                                   \
-            values[at] = journal.m_reader(at);                                \
-        }                                                                     \
-        return out;                                                           \
+#define NETW_JOURNAL_COLUMN(m_name, m_array, m_reader) \
+    m_array NetwPredictJournal::m_name() const { \
+        m_array out; \
+        const int rows = journal.size(); \
+        out.resize(rows); \
+        auto *values = out.ptrw(); \
+        for (int at = 0; at < rows; ++at) { \
+            values[at] = journal.m_reader(at); \
+        } \
+        return out; \
     }
 
 NETW_JOURNAL_COLUMN(transitions, PackedInt64Array, transition_at)
@@ -184,8 +184,8 @@ PackedInt32Array NetwPredictJournal::pre_family_fps(int p_family) const {
     for (int at = 0; at < rows; ++at) {
         const predict::FamilyFingerprints row = journal.pre_families_at(at);
         values[at] = p_family == POSE ? row.pose
-            : p_family == MOMENTUM   ? row.momentum
-                                     : row.controller;
+            : p_family == MOMENTUM    ? row.momentum
+                                      : row.controller;
     }
     return out;
 }
@@ -198,8 +198,8 @@ PackedInt32Array NetwPredictJournal::post_family_fps(int p_family) const {
     for (int at = 0; at < rows; ++at) {
         const predict::FamilyFingerprints row = journal.post_families_at(at);
         values[at] = p_family == POSE ? row.pose
-            : p_family == MOMENTUM   ? row.momentum
-                                     : row.controller;
+            : p_family == MOMENTUM    ? row.momentum
+                                      : row.controller;
     }
     return out;
 }
@@ -258,7 +258,10 @@ void NetwPredictJournal::_bind_methods() {
         D_METHOD("first_chain_break"),
         &NetwPredictJournal::first_chain_break
     );
-    ClassDB::bind_method(D_METHOD("clear", "epoch"), &NetwPredictJournal::clear);
+    ClassDB::bind_method(
+        D_METHOD("clear", "epoch"),
+        &NetwPredictJournal::clear
+    );
     ClassDB::bind_method(D_METHOD("size"), &NetwPredictJournal::size);
     ClassDB::bind_method(D_METHOD("capacity"), &NetwPredictJournal::capacity);
     ClassDB::bind_method(D_METHOD("epoch"), &NetwPredictJournal::epoch);

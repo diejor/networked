@@ -14,7 +14,7 @@
 ##     └── connect_activity()   # session through DiscordRendezvous.
 ##
 ## DiscordRendezvous
-## └── connect_session(instance_id, tree, payload)
+## └── connect_session(instance_id, tree, username, join_args)
 ##     ├── DedicatedDiscordRendezvous -> join WSS room.
 ##     └── NakamaDiscordRendezvous    -> join or claim relay match.
 ## [/codeblock]
@@ -52,7 +52,7 @@ signal state_changed(from: State, to: State)
 ## activity.
 ##
 ## The state has already moved to [constant State.DISCONNECTED]. Call
-## [method reconnect] to reuse the last [JoinPayload].
+## [method reconnect] to reuse the last join request.
 signal session_lost(reason: String)
 
 ## Activity lifecycle owned by this service.
@@ -120,9 +120,11 @@ var _device_id: String = ""
 var _detected: bool = false
 var _started: bool = false
 
-# Payload from the last connect_activity, replayed by reconnect().
-var _last_payload: JoinPayload
-# Reason from the most recent server_disconnecting, carried into session_lost.
+# Join request from the last connect_activity, replayed by reconnect().
+var _last_username: StringName = &""
+var _last_join_args: Array = []
+# Reason from the most recent session_server_disconnecting, carried into
+# session_lost.
 var _disconnect_reason: String = ""
 
 # Last roster reported by Discord, newest wins. Backs participants().
@@ -135,7 +137,7 @@ var _participants: Array = []
 # the embed verdict and stay dormant in the iframe. A build that never references
 # this class never loads it, so a normal game pays nothing.
 static func _static_init() -> void:
-	NetwService.transport_restricted_probe = _detect_embedded
+	NetwService.set_transport_restricted_probe(_detect_embedded)
 
 
 ## Returns [code]true[/code] when a Discord [code]instance_id[/code] exists.
@@ -176,35 +178,37 @@ func _should_register() -> bool:
 	return in_discord()
 
 
-func _service_entered(api: NetwMultiplayer) -> void:
+func _service_entered(_api: NetwMultiplayer) -> void:
 	# This embed service is scoped to a tree (rendezvous transport, SDK parenting,
 	# tree-only drop signal). A root install resolves no tree, so it stays dormant.
-	var mt := api.root as MultiplayerTree
+	var session: NetwSessionHandle = Netw.session(self)
+	var mt := session.root as MultiplayerTree if session else null
 	if mt == null:
 		return
 	if rendezvous == null:
-		Netw.dbg.warn("DiscordActivityService: rendezvous unset.")
+		push_warning("DiscordActivityService: rendezvous unset.")
 	else:
 		# The rendezvous owns its transport, so it installs whatever core seams
 		# that backend needs. The service never reaches into a backend itself.
 		rendezvous.bind(mt)
-	var nakama_auth := mt.api.session_auth_flow as NakamaAuth
+	var nakama_auth := Netw.session(mt).auth_flow as NakamaAuth
 	if nakama_auth != null:
-		# get_nakama_session() add_childs the session node, which fails if the
+		# NakamaSessionService.of add_childs the session node, which fails if the
 		# tree is still setting up its children when this service registers.
 		# Defer past setup; the bind only stores references used later at connect.
 		_bind_nakama_auth.call_deferred(mt, nakama_auth)
 	_push_identity()
 	# Bridge a dropped connection into the activity lifecycle so a host that leaves
 	# (or any transport drop) surfaces as session_lost while connected, the
-	# transition a game hangs its rematch policy on. server_disconnected fires only
-	# on an involuntary drop, never on a graceful local leave, so it is
-	# the precise loss signal; server_disconnecting carries the announced reason.
-	mt.api.server_disconnecting.connect(
+	# transition a game hangs its rematch policy on. disconnected fires only on an
+	# involuntary drop, never on a graceful local leave, so it is the precise loss
+	# signal; disconnecting carries the announced reason.
+	var edges: NetwSessionHandle = Netw.session(mt)
+	edges.disconnecting.connect(
 		func(reason: String) -> void:
 			_disconnect_reason = reason
 	)
-	mt.api.server_disconnected.connect(_on_session_dropped)
+	edges.disconnected.connect(_on_session_dropped)
 	# The SDK is parented in start(), not here: add_child during service setup
 	# fails ("parent busy"), and the SDK's _ready() must run (it sets up the JS
 	# bridge) before start() calls init(), or init() no-ops and ready() hangs.
@@ -214,9 +218,9 @@ func _service_entered(api: NetwMultiplayer) -> void:
 
 
 # Binds the verified-identity provider to the shared session and tree once the
-# tree has finished setting up, so get_nakama_session() can add_child safely.
+# tree has finished setting up, so the session node can add_child safely.
 func _bind_nakama_auth(mt: MultiplayerTree, nakama_auth: NakamaAuth) -> void:
-	nakama_auth.bind_session(mt.get_nakama_session())
+	nakama_auth.bind_session(NakamaSessionService.of(mt))
 	nakama_auth.bind_tree(mt)
 
 
@@ -234,7 +238,6 @@ func start() -> bool:
 		# rendezvous only needs the instance id.
 		_started = true
 		_set_state(State.READY)
-		Netw.dbg.info("DiscordActivityService: ready, no SDK (instance %s).", [_instance_id])
 		activity_ready.emit()
 		return true
 	if client_id.is_empty():
@@ -254,7 +257,6 @@ func start() -> bool:
 	_connect_sdk_signals()
 	_started = true
 	_set_state(State.READY)
-	Netw.dbg.info("DiscordActivityService: ready (instance %s).", [_instance_id])
 	activity_ready.emit()
 	return true
 
@@ -295,7 +297,6 @@ func authenticate() -> bool:
 		_device_id = user.id
 		_push_identity()
 	_set_state(State.AUTHENTICATED)
-	Netw.dbg.info("DiscordActivityService: identity %s resolved.", [user.global_name])
 	identity_resolved.emit(user)
 	# Subscribe and fetch the roster now that the session is authenticated.
 	# Discord rejects both before authorize completes, so doing this in start()
@@ -311,28 +312,32 @@ func authenticate() -> bool:
 ##
 ## [br][br]
 ## This service owns the [enum State] transition and remembers
-## [param join_payload] for [method reconnect].
+## [param username] and [param join_args] for [method reconnect].
 ## [codeblock]
 ## instance_id()
-## └── rendezvous.connect_session(instance_id, tree, join_payload)
+## └── rendezvous.connect_session(instance_id, tree, username, join_args)
 ##     ├── OK    -> State.CONNECTED
 ##     └── Error -> State.DISCONNECTED
 ## [/codeblock]
-func connect_activity(join_payload: JoinPayload) -> Error:
+func connect_activity(username: StringName, join_args: Array = []) -> Error:
 	if not await start():
 		return ERR_UNAVAILABLE
-	var mt := MultiplayerTree.resolve(self)
+	var session: NetwSessionHandle = Netw.session(self)
+	var mt := session.root as MultiplayerTree if session else null
 	if mt == null:
 		return ERR_UNCONFIGURED
 	if rendezvous == null:
 		var reason := "DiscordActivityService: rendezvous unset."
-		Netw.dbg.warn(reason)
+		push_warning(reason)
 		activity_failed.emit(reason)
 		return ERR_UNCONFIGURED
 	_push_identity()
-	_last_payload = join_payload
+	_last_username = username
+	_last_join_args = join_args
 	_set_state(State.CONNECTING)
-	var err := await rendezvous.connect_session(_instance_id, mt, join_payload)
+	var err := await rendezvous.connect_session(
+		_instance_id, mt, username, join_args
+	)
 	if err != OK:
 		activity_failed.emit("Activity connect failed: %s" % error_string(err))
 		_set_state(State.DISCONNECTED)
@@ -343,15 +348,15 @@ func connect_activity(join_payload: JoinPayload) -> Error:
 
 ## Reconnects to [method instance_id] after [signal session_lost].
 ##
-## Reuses the last [JoinPayload].
+## Reuses the username and join args of the last [method connect_activity].
 ##
 ## [br][br]
 ## Returns [constant ERR_UNCONFIGURED] before the first
 ## [method connect_activity].
 func reconnect() -> Error:
-	if _last_payload == null:
+	if String(_last_username).is_empty():
 		return ERR_UNCONFIGURED
-	return await connect_activity(_last_payload)
+	return await connect_activity(_last_username, _last_join_args)
 
 
 ## Returns the latest Discord participant roster.
@@ -441,7 +446,8 @@ func _subscribe_activity_events() -> void:
 	_sdk.subscribe_event("ORIENTATION_UPDATE")
 
 
-# Static, lazy embed detection backing NetwService.transport_restricted_probe, so
+# Static, lazy embed detection installed through
+# NetwService.set_transport_restricted_probe, so
 # WebRTC/native directories (WebTorrent, Steam) stay dormant in the iframe. It
 # checks the browser instance_id query. Called when a directory checks
 # _should_register at enter-tree, by which time JavaScriptBridge is live, so it
@@ -479,7 +485,7 @@ func _on_sdk_error(data: DiscordSDK.ErrorEventData) -> void:
 func _exchange_code(code: String) -> String:
 	var url := _absolute_token_url()
 	if url.is_empty():
-		Netw.dbg.error("DiscordActivityService: oauth token endpoint unset.")
+		push_error("DiscordActivityService: oauth token endpoint unset.")
 		return ""
 	var request := HTTPRequest.new()
 	add_child(request)
@@ -488,7 +494,9 @@ func _exchange_code(code: String) -> String:
 	var err := request.request(url, headers, HTTPClient.METHOD_POST, body)
 	if err != OK:
 		request.queue_free()
-		Netw.dbg.error("DiscordActivityService: token request failed to start: %s", [err])
+		push_error(
+			"DiscordActivityService: token request failed to start: %s" % [err]
+		)
 		return ""
 	var result: Array = await request.request_completed
 	request.queue_free()

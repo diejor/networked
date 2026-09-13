@@ -119,5 +119,4 @@ Ref<NetwPromise> DatabaseBackendDict::delete_namespace(const String &slot) {
     return NetwPromise::resolved(OK);
 }
 
-
 } // namespace netw

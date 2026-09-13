@@ -4,9 +4,7 @@
 #include "godot/object.hpp"
 #include "godot/variant.hpp"
 
-namespace netw {
-
-namespace predict {
+namespace netw::predict {
 
 enum WitnessClass : uint8_t {
     SENSOR_WITNESS_NONE = 0,
@@ -50,16 +48,8 @@ bool static_geometry(godot::Object *p_collider);
 
 int witness_class(godot::Object *p_collider, bool p_declared_support);
 
-int32_t environment_digest(
-    int64_t p_epoch,
-    const godot::Dictionary &p_samples
-);
+int32_t environment_digest(int64_t p_epoch, const godot::Dictionary &p_samples);
 
-int32_t topology_fingerprint(
-    const godot::Dictionary &p_facts,
-    int p_quantum
-);
+int32_t topology_fingerprint(const godot::Dictionary &p_facts, int p_quantum);
 
-} // namespace predict
-
-} // namespace netw
+} // namespace netw::predict

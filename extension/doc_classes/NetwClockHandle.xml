@@ -1,296 +1,80 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwClockHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The session's clock, reached through [member NetwMultiplayer.clock]: it turns frame deltas into a fixed-rate tick schedule, keeps that schedule aligned with a server's, and decides which frames the simulated world may advance on.
+		The network clock of one session, gathered onto one object.
 	</brief_description>
 	<description>
-		A tick is a fixed amount of simulated time, and everything here follows from that one commitment. The schedule converts frame deltas into whole ticks and banks the remainder, so two half frames are worth exactly one tick and no time is invented or lost.
-		A handle always holds a running engine, so [member NetwMultiplayer.clock] is never [code]null[/code] and needs no validity check. What it can be is inert: every member reads a default until [member is_configured] answers [code]true[/code], so a reading that looks wrong is checked against that before anything else.
-		A tick is a session event, so the clock announces on the session that holds it: [signal NetwMultiplayer.on_tick] and its seven companions are where a game subscribes, and this class is what a game reads and drives. A clock built on its own has no session to announce on, so it advances in silence.
+		A client over the [code]clock_*[/code] family on [NetwMultiplayer], reached as [method Netw.clock] from any [Node]. Every member forwards to a flat verb, and the flat verb is the stable spelling: this repository's own suites, examples and test kit call [NetwMultiplayer] directly, and a game reaches for this when it would rather hold the clock as one object.
 		[codeblock]
-		var clock := NetwMultiplayer.of(self).clock
-		if clock.is_configured and clock.is_synchronized:
-		    var shown := clock.display_tick   # the tick the display is playing
-		    var behind := clock.tick - shown  # ticks of buffer between them
+		var c := Netw.clock(self)
+		c.before_tick.connect(sample_input)
+		c.on_tick.connect(step)
+		label.text = "tick %d" % c.tick
 		[/codeblock]
-		[MultiplayerClock] is the authoring surface a game places in its scene, and [NetwClockConfig] is what it registers. Writing a setting here instead is what a deterministic rig does, and what the session itself does when it applies a config.
-		[codeblock]
-		var clock := NetwMultiplayer.of(self).clock
-
-		clock.physics_step(delta)   # pumped once per physics frame
-		clock.force_step(1)         # or stepped, for a deterministic rig
-		# clock.tick advanced either way, and announced the same events
-		[/codeblock]
-		[method physics_step] and [method force_step] announce identically, so a stepped rig and a running session cannot mean different things by a tick. They differ in one respect and it is a law rather than an oversight: a step is not a frame, so [method force_step] brackets no [signal NetwMultiplayer.before_tick_loop].
-		The simulation gate is the part that is easy to mistake for a detail. The physics server runs exactly one step per frame and takes no argument about how long that step is, so the only way a clock can make a tick worth the same amount of time on two peers is to decide which frames the world may step at all. A gated clock pays each tick into a budget of whole steps and spends one per simulated frame, and a frame with nothing to spend holds.
-		[codeblock]
-		arm_gate()                         a body the physics server integrates
-		  tick announced -&gt; credit += physics_steps_per_tick
-		  frame spends   -&gt; credit -= 1, is_simulating true
-		  no credit      -&gt; is_simulating false, the world holds
-		release_gate()                     the last release restores every frame
-		[/codeblock]
-		A gated clock announces at most one tick per frame, because a second tick would have to share the single step the physics server runs. A peer that cannot sustain that rate therefore cannot catch up by doubling a frame: it falls behind and says so through [member simulation_behind_count], and sustained growth there means the peer is too slow to predict, which no netcode setting repairs.
-		Calibration keeps the schedule aligned with a server's without ever teleporting the playhead. [constant SYNC_SNAP] takes the whole correction at once. [constant SYNC_STRETCH] takes a fraction of it per frame, falling back to a snap once the divergence passes [member panic_snap_threshold], which is a real desync rather than drift.
-		The target is a continuous clock position rather than a whole tick, and that is deliberate. Rounding the tick phase [method handle_pong] takes away would make the target jump by a full tick as a ping's arrival phase slid across a server boundary, and [constant SYNC_STRETCH] would then chase that sawtooth for about a second at a time, dragging the local tick boundary back and forth through the server's. The margin that used to ride on that rounding is [member lead_ticks], which is explicit.
+		[b]What this object buys over the flat surface is its two signals.[/b] [Netw] is static and a static class publishes none, so a component that drives itself off the tick has to name the session to hear it. One handle exists per session for the life of that session, because a session has exactly one clock, so there is nothing to select and nothing to pass: the door is the clock.
+		[method Netw.configure_clock] is the other half of the pair. That verb DECLARES, before the session comes up, and answers a [NetwClockConfig] to author. This one REACHES, once it is running. A param this object refuses to set is a param the declaration owns: [constant NetwMultiplayer.CLOCK_PARAM_TICKRATE] answers [constant @GlobalScope.ERR_UNAUTHORIZED] here, because a session cannot change its tickrate underneath the peers already synchronized to it.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="arm_gate">
-			<return type="void" />
-			<description>
-				Arms one gate, held until [method release_gate]. Gates nest, because two predicted bodies in one session share one clock and either may leave first.
-				The clock decides whether a frame advances simulated time. It never touches a physics space itself, because it has no scene: the caller arms a gate when it registers a body the physics server integrates, reads [member is_simulating] after the tick loop, and holds that body's space.
-			</description>
-		</method>
-		<method name="begin_tick_loop">
-			<return type="void" />
-			<description>
-				Opens a frame's tick loop by announcing [signal NetwMultiplayer.before_tick_loop], and nothing else. [method physics_step] calls it, so a pumped frame and a hand-driven one open the same way rather than two ways that agree by accident.
-				A deterministic rig owes this bracket itself, because [method force_step] is a step rather than a frame and deliberately does not fire it. Pair it with [method end_tick_loop] around whatever stepping that frame does, including none.
-			</description>
-		</method>
-		<method name="cadence" qualifiers="const">
-			<return type="Dictionary" />
-			<description>
-				The measured wall-clock rate of the two pumps that drive this clock, as [code]physics_frames[/code], [code]polls[/code], [code]wall_seconds[/code], [code]physics_hz[/code] and [code]poll_hz[/code].
-				This is the peer's REAL rate rather than its configured one, which is the whole point: a peer whose physics cannot sustain its tickrate degrades here first, and that degradation used to be recoverable only by reading log timestamps offline. [method physics_step] counts the physics pump and [method count_poll] counts the idle pump.
-				[method force_step] counts nothing, because a manually stepped clock has no wall-clock meaning, so a deterministic rig reports an empty cadence. The span starts at the first counted call, so a clock that has never been pumped reports zeros rather than a stale window.
-			</description>
-		</method>
-		<method name="clear">
-			<return type="void" />
-			<description>
-				Restarts the session: the tick, the calibration, the sample window, the gates and the step budget all return to what a fresh clock holds.
-			</description>
-		</method>
-		<method name="consume_ping_due">
-			<return type="bool" />
-			<param index="0" name="delta" type="float" />
-			<description>
-				Accumulates the ping cadence, returning [code]true[/code] and rearming once [member ping_interval] has elapsed. The clock sends nothing, so the pump above it owns the send and this only says when one is due.
-			</description>
-		</method>
-		<method name="count_poll">
-			<return type="void" />
-			<description>
-				Counts one idle-frame poll toward [method cadence]. The session calls it once per [method MultiplayerAPI.poll], which is its main-loop pump, so the poll rate this produces is the peer's real main-loop rate rather than a configured one.
-			</description>
-		</method>
-		<method name="end_tick_loop">
-			<return type="void" />
-			<description>
-				Closes a frame's tick loop by announcing [signal NetwMultiplayer.after_tick_loop], and nothing else. The counterpart of [method begin_tick_loop].
-				Call it AFTER the frame's stepping, because [method force_step] resolves the simulation gate as it steps and a reader of [member is_simulating] on this edge is asking what the frame just decided.
-			</description>
-		</method>
-		<method name="force_step">
-			<return type="void" />
-			<param index="0" name="count" type="int" />
-			<description>
-				Synchronously announces [param count] whole ticks without consulting real time, so a deterministic rig owns the schedule instead of the frame pump.
-				It announces exactly what [method physics_step] announces per tick, so a stepped run and a pumped one agree. A step is not a frame, so no tick-loop bracket fires. Call it with zero to spend a frame that ran no tick, which is what a gated stepper owes the gate.
-			</description>
-		</method>
-		<method name="handle_pong">
-			<return type="Dictionary" />
-			<param index="0" name="sample" type="float" />
-			<param index="1" name="server_tick_at_pong" type="int" />
-			<param index="2" name="server_tick_phase" type="float" />
-			<param index="3" name="apply_lead" type="bool" />
-			<description>
-				Ingests one round-trip [param sample] and the server clock position it was measured against, recalibrates, and answers the metrics the surface above publishes.
-				[param server_tick_phase] is the server's position within [param server_tick_at_pong], at or above zero and below one, so the target is a continuous clock position rather than a whole tick.
-				[param apply_lead] is [code]false[/code] for a server echoing its own probe: it has no flight time to its own authority and so never leads itself. Every other peer adds half its averaged round trip plus [member lead_ticks].
-				[codeblock]
-				{
-				 ┠╴rtt_raw (float)                    the sample just ingested
-				 ┠╴rtt_avg (float)                    averaged over the window
-				 ┠╴rtt_jitter (float)                 mean absolute deviation
-				 ┠╴diff (int)                         ticks the target was off by
-				 ┠╴tick (int)                         where the clock now sits
-				 ┠╴display_offset (int)               what is configured
-				 ┠╴recommended_display_offset (int)   what conditions suggest
-				 ┠╴is_stable (bool)                   jitter under the threshold
-				 ┖╴is_synchronized (bool)             a calibration has landed
-				}
-				[/codeblock]
-			</description>
-		</method>
-		<method name="mark_step">
-			<return type="void" />
-			<param index="0" name="seconds_ago" type="float" default="0.0" />
-			<description>
-				Re-stamps the wall clock without stepping, so the next [method seconds_since_step] measures from now. A pump that skipped a frame because something else drove the schedule calls this, otherwise the span it later measures covers frames it did not own.
-				[param seconds_ago] places the stamp that far in the past, handing the clock elapsed time nothing spent. That is how a rig gives a poll a whole frame to pump without waiting one.
-			</description>
-		</method>
-		<method name="physics_step">
-			<return type="void" />
-			<param index="0" name="delta" type="float" />
-			<description>
-				Advances the schedule by one frame worth [param delta] seconds, announcing whole ticks and banking the remainder.
-				A [param delta] above [member stall_threshold] is a hitch rather than simulated time, so whatever was banked before it is discarded instead of being paid out as a burst. At most [member max_ticks_per_frame] ticks are announced, or exactly one while a gate is armed.
-			</description>
-		</method>
-		<method name="poll_step">
-			<return type="void" />
-			<description>
-				Advances the schedule by the wall-clock span since the last step, for a session whose main loop polls without running physics frames.
-				A clock that is [member node_pumped], [member manual_tick] or not yet [member is_configured] only re-stamps, because the span it would spend is one another driver already owns.
-			</description>
-		</method>
-		<method name="pumps_for" qualifiers="static">
-			<return type="int" />
-			<param index="0" name="seconds" type="float" />
-			<param index="1" name="rate" type="float" />
-			<description>
-				How many pumps a window of [param seconds] is worth at [param rate] pumps a second, which is the one conversion every deadline in the session goes through: a park waiting on a dependency, a scene lingering after its despawn, a settle scheduled a moment out.
-				It rounds UP, so a window is never shorter than the seconds it was asked for. A wait that expired early would give up on the thing it was waiting for just as it arrived, and the cost of rounding the other way is one pump.
-				A [param rate] below one pump a second counts as one, because a caller with no configured clock still passes whatever rate it has and a window that rounded to zero would expire immediately rather than wait.
-				The rate is passed in rather than read off this clock, so a caller pumping on polls alone can name the engine's frame rate instead.
-			</description>
-		</method>
-		<method name="release_gate">
-			<return type="void" />
-			<description>
-				Releases one gate armed by [method arm_gate]. The last release restores an ungated clock, which simulates every frame, rather than leaving the world held on whatever the final decision happened to be. Releasing past zero is not a negative gate.
-			</description>
-		</method>
-		<method name="seconds_since_step" qualifiers="const">
+		<method name="monitor" qualifiers="const">
 			<return type="float" />
+			<param index="0" name="monitor" type="int" />
 			<description>
-				Wall-clock seconds since the last [method physics_step] or [method mark_step], or a negative number while nothing has stamped yet.
-				A pump running outside the physics frame measures its own span with this instead of keeping a second stamp, which is what makes the two pumps agree about when the last frame was. [method force_step] does not stamp, because a stepped clock has no wall-clock meaning.
+				[method NetwMultiplayer.clock_get_monitor]: the live reading named by [param monitor], one of [enum NetwMultiplayer.ClockMonitor]. Answers [code]0.0[/code] for a clock that has measured nothing yet.
+			</description>
+		</method>
+		<method name="param" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="param" type="int" />
+			<description>
+				[method NetwMultiplayer.clock_get_param]: the setting named by [param param], one of [enum NetwMultiplayer.ClockParam].
+			</description>
+		</method>
+		<method name="set_param">
+			<return type="int" enum="Error" />
+			<param index="0" name="param" type="int" />
+			<param index="1" name="value" type="Variant" />
+			<description>
+				[method NetwMultiplayer.clock_set_param]. Writes the setting named by [param param] at runtime, answering [constant @GlobalScope.ERR_UNAUTHORIZED] for a param the declaration owns rather than silently keeping the old value.
+				[codeblock lang=text]
+				Error
+				┠╴OK                      written
+				┠╴ERR_UNAUTHORIZED        param is a param the declaration owns, such as the tickrate
+				┠╴ERR_INVALID_PARAMETER   param names no ClockParam value
+				┖╴ERR_UNCONFIGURED        this handle's session is gone
+				[/codeblock]
 			</description>
 		</method>
 	</methods>
 	<members>
-		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="2">
-			How many ticks the visual display lags behind the simulation. Compare against [member recommended_display_offset]. Authored through [member NetwClockConfig.display_offset].
+		<member name="behind_count" type="int" setter="" getter="get_behind_count" default="0">
+			How many times this peer's simulation has fallen behind the clock and had to catch up. [method NetwMultiplayer.clock_get_simulation_behind_count].
 		</member>
-		<member name="display_tick" type="int" setter="" getter="get_display_tick">
-			The tick a visual should render, [member tick] less [member display_offset], never below zero.
+		<member name="is_configured" type="bool" setter="" getter="get_is_configured" default="false">
+			Whether a [NetwClockConfig] has settled on this session, which is what [method Netw.configure_clock] declares. A component that steps on the tick reads this before it trusts [member tick].
 		</member>
-		<member name="enable_drift_logging" type="bool" setter="set_enable_drift_logging" getter="get_enable_drift_logging" default="false">
-			Whether the session logs average clock drift over its sixty-second windows. Off by default: the window is long, so the reading is a diagnostic for a peer already suspected of drifting rather than something worth paying for in every session. Authored through [member NetwClockConfig.enable_drift_logging].
+		<member name="is_synchronized" type="bool" setter="" getter="get_is_synchronized" default="false">
+			Whether this peer's clock has agreed a tick with server authority. A server reads [code]true[/code] because it is the authority; a client reads [code]false[/code] until the first sync lands. [method NetwMultiplayer.clock_is_synchronized].
 		</member>
-		<member name="is_configured" type="bool" setter="set_is_configured" getter="get_is_configured" default="false">
-			Whether a configurator has registered its [NetwClockConfig] with the session. An unconfigured clock is inert rather than absent: [member tick] stays where it was placed and [member tick_factor] reads zero, so the absence of a clock is a playhead that does not move.
-		</member>
-		<member name="is_gated" type="bool" setter="" getter="get_is_gated">
-			Whether any gate armed by [method arm_gate] is still held.
-		</member>
-		<member name="is_simulating" type="bool" setter="" getter="get_is_simulating">
-			Whether this frame's simulated world may advance. Stays [code]true[/code] for a whole session unless a gate is armed, so a game that predicts nothing never sees a held frame.
-		</member>
-		<member name="is_stable" type="bool" setter="" getter="get_is_stable">
-			Whether [member rtt_jitter] is below [member jitter_stability_threshold].
-		</member>
-		<member name="is_synchronized" type="bool" setter="set_is_synchronized" getter="get_is_synchronized" default="false">
-			Whether a calibration has landed. The first [method handle_pong] sets it and hard-aligns, so [constant SYNC_STRETCH] begins already converged.
-		</member>
-		<member name="jitter_multiplier" type="float" setter="set_jitter_multiplier" getter="get_jitter_multiplier" default="2.0">
-			How heavily jitter widens [member recommended_display_offset]. Authored through [member NetwClockConfig.jitter_multiplier].
-		</member>
-		<member name="jitter_stability_threshold" type="float" setter="set_jitter_stability_threshold" getter="get_jitter_stability_threshold" default="0.05">
-			The jitter below which the connection reads as stable. Authored through [member NetwClockConfig.jitter_stability_threshold].
-		</member>
-		<member name="jitter_window" type="int" setter="set_jitter_window" getter="get_jitter_window" default="16">
-			How many recent round-trip samples are averaged. The window is what lets an outlier age back out. Authored through [member NetwClockConfig.jitter_window].
-		</member>
-		<member name="lead_ticks" type="float" setter="set_lead_ticks" getter="get_lead_ticks" default="1.0">
-			Ticks a client's clock deliberately leads its half-round-trip estimate by, the margin that gets an input authored for server tick [code]T[/code] to the server before it consumes [code]T[/code].
-			Too small and the server's consume cursor runs dry; too large and every input waits that much longer to be simulated. Ignored when [method handle_pong] is called with [code]apply_lead[/code] false.
-		</member>
-		<member name="manual_tick" type="bool" setter="set_manual_tick" getter="get_manual_tick" default="false">
-			Test seam. While [code]true[/code], the frame pump stops advancing the tick loop so a deterministic stepper owns ticking through [method force_step].
-			Setting it marks the clock synchronized, because the ping calibration it bypasses is what would otherwise have done so, and a stepper that had to wait for a handshake would not be deterministic.
-		</member>
-		<member name="max_ticks_per_frame" type="int" setter="set_max_ticks_per_frame" getter="get_max_ticks_per_frame" default="8">
-			The most ticks one [method physics_step] may announce. A gate overrides it down to one. Authored through [member NetwClockConfig.max_ticks_per_frame].
-		</member>
-		<member name="node_pumped" type="bool" setter="set_node_pumped" getter="get_node_pumped" default="false">
-			Whether a [MultiplayerClock] in the scene is driving [method physics_step] every physics frame. A clock nothing pumps advances on the session's poll instead, which is what [method poll_step] is for.
-		</member>
-		<member name="one_way_latency" type="float" setter="" getter="get_one_way_latency">
-			Half the averaged round trip, in seconds: the estimate a display offset is sized against.
-		</member>
-		<member name="panic_snap_threshold" type="int" setter="set_panic_snap_threshold" getter="get_panic_snap_threshold" default="20">
-			The divergence in ticks past which [constant SYNC_STRETCH] stops crawling and snaps. A gap this size is a real desync rather than drift. Authored through [member NetwClockConfig.panic_snap_threshold].
-		</member>
-		<member name="physics_factor" type="float" setter="" getter="get_physics_factor">
-			The engine's physics rate over [member tickrate]. Scales velocities authored per tick into the per-step units the physics server integrates.
-		</member>
-		<member name="physics_steps_per_tick" type="int" setter="" getter="get_physics_steps_per_tick">
-			[member physics_factor] as a whole number, never below one.
-			The physics server runs exactly one step per frame, so a tick can be worth one step or two but never one and a fifth. A fractional factor is a declaration the engine cannot honour, and the step budget rounds it here rather than pretending otherwise.
-		</member>
-		<member name="ping_interval" type="float" setter="set_ping_interval" getter="get_ping_interval" default="0.1">
-			Seconds between latency probes, measured by [method consume_ping_due]. Authored through [member NetwClockConfig.ping_interval].
-		</member>
-		<member name="recommended_display_offset" type="int" setter="" getter="get_recommended_display_offset">
-			The [member display_offset] current conditions call for: one-way latency plus jitter scaled by [member jitter_multiplier], in ticks. Answers [member display_offset] unchanged until a calibration has landed, since there is nothing yet to base a recommendation on. [signal NetwMultiplayer.display_offset_insufficient] fires when the configured offset is below it.
-		</member>
-		<member name="rtt" type="float" setter="" getter="get_rtt">
-			The latest round-trip sample in seconds, unaveraged.
-		</member>
-		<member name="rtt_avg" type="float" setter="" getter="get_rtt_avg">
-			The round trip averaged over the last [member jitter_window] samples, in seconds.
-		</member>
-		<member name="rtt_jitter" type="float" setter="" getter="get_rtt_jitter">
-			Mean absolute deviation of the sample window, in seconds. This is what decides [member is_stable] and what widens [member recommended_display_offset].
-		</member>
-		<member name="simulation_behind_count" type="int" setter="" getter="get_simulation_behind_count">
-			How many frames wanted a tick the gate's ceiling refused.
-			A gated clock announces one tick per frame at most, so a peer whose physics cannot sustain [member tickrate] times [member physics_steps_per_tick] steps per wall second cannot catch up. Sustained growth here means this peer is too slow to predict.
-		</member>
-		<member name="stall_threshold" type="float" setter="set_stall_threshold" getter="get_stall_threshold" default="1.0">
-			The frame delta above which [method physics_step] discards what was banked, treating the frame as a hitch rather than as simulated time. Authored through [member NetwClockConfig.stall_threshold].
-		</member>
-		<member name="stretch_nudge_factor" type="float" setter="set_stretch_nudge_factor" getter="get_stretch_nudge_factor" default="0.05">
-			The fraction of the remaining divergence [constant SYNC_STRETCH] closes each frame. Authored through [member NetwClockConfig.stretch_nudge_factor].
-		</member>
-		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" enum="NetwClockHandle.SyncMode" default="1">
-			How the local clock aligns with the server, one of [enum SyncMode]. Authored through [member NetwClockConfig.sync_mode].
-		</member>
-		<member name="tick" type="int" setter="set_tick" getter="get_tick" default="0">
-			The current server-calibrated simulation tick. Settable because a peer that has not calibrated yet is placed rather than advanced.
-		</member>
-		<member name="tick_accumulator" type="float" setter="" getter="get_tick_accumulator">
-			The unspent remainder in seconds, unclamped.
-			A visual playhead reads this rather than [member tick_phase]. If a render frame lands just after a physics frame the remainder can exceed one whole tick, and clamping it there stalls the playhead for the rest of that frame, which shows up as a jitter the clamp itself caused.
-		</member>
-		<member name="tick_factor" type="float" setter="" getter="get_tick_factor">
-			Where a display sits inside the current tick: [member tick_accumulator] plus however much of this frame has already elapsed, over [member ticktime].
-			Unclamped above, for the reason [member tick_accumulator] is. A render frame that lands just past a physics frame reads above one, and clamping it there stalls the playhead for the rest of that frame, which shows up as a jitter the clamp itself caused. Consumers floor the whole part into their own delta.
-			An unconfigured clock reads zero however much it banked, so a session whose game authored no clock has a playhead that does not move rather than one that reads noise. So does the editor, which runs no session.
-			[member tick_factor_override] answers instead when it is not negative, which is how a deterministic rig places the playhead without a frame.
-		</member>
-		<member name="tick_factor_override" type="float" setter="set_tick_factor_override" getter="get_tick_factor_override" default="-1.0">
-			Placed position within the tick, answered by [member tick_factor] instead of any reading. Negative leaves the reading to the running clock, which is what a live session wants and what a deterministic rig replaces.
-		</member>
-		<member name="tick_phase" type="float" setter="" getter="get_tick_phase">
-			Where the clock sits inside its current tick, clamped to the range zero through one.
-			This is the phase a server echoes with its tick so a client can calibrate against a continuous position. Clamped because it rides the wire as a fraction of one tick, unlike [member tick_accumulator].
-		</member>
-		<member name="tickrate" type="int" setter="set_tickrate" getter="get_tickrate" default="30">
-			How many simulation ticks run per second. Every derived duration comes from this. Authored through [member NetwClockConfig.tickrate].
-		</member>
-		<member name="ticktime" type="float" setter="" getter="get_ticktime">
-			The duration of a single tick in seconds, the reciprocal of [member tickrate].
-		</member>
-		<member name="use_physics_interpolation" type="bool" setter="set_use_physics_interpolation" getter="get_use_physics_interpolation" default="true">
-			Which source [member tick_factor] measures the elapsed part of the frame with: the engine's physics interpolation fraction, or the wall-clock span since the last step. The engine's fraction is the one the renderer itself interpolates against, so it agrees with what is on screen; the wall clock is the fallback for a game that drives its frames some other way. Authored through [member NetwClockConfig.use_physics_interpolation].
+		<member name="tick" type="int" setter="" getter="get_tick" default="0">
+			The current network tick, the number every [NetwRecord] and every lag-compensation query is stamped against. [method NetwMultiplayer.clock_get_tick].
 		</member>
 	</members>
-	<constants>
-		<constant name="SYNC_SNAP" value="0" enum="SyncMode">
-			Hard-jump the local tick to the calibrated target on every sample.
-		</constant>
-		<constant name="SYNC_STRETCH" value="1" enum="SyncMode">
-			Nudge the accumulator toward the target a fraction at a time, so the playhead never teleports, falling back to a snap once the divergence exceeds [member panic_snap_threshold].
-		</constant>
-	</constants>
+	<signals>
+		<signal name="before_tick">
+			<param index="0" name="delta" type="float" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Emitted before the simulation steps [param tick], carrying that step's [param delta]. This is where input for the tick is sampled, because what is written here is what the tick then simulates. Relayed from [signal NetwMultiplayer.clock_before_tick].
+			</description>
+		</signal>
+		<signal name="on_tick">
+			<param index="0" name="delta" type="float" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Emitted as the simulation steps [param tick], carrying that step's [param delta]. Relayed from [signal NetwMultiplayer.clock_on_tick].
+			</description>
+		</signal>
+	</signals>
 </class>

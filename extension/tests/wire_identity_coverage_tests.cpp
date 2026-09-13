@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "netw/replication_send.hpp"
 #include "netw/wire/registry.hpp"
 
 namespace TestNetwWireIdentityCoverage {
@@ -93,8 +94,34 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Wire][Hosted] one declaration hashes the same twice"
+    "[Networked][Wire][Hosted] the format version and a payload revision are "
+    "inside protocol identity, and an unrevised table hashes as it always did"
 ) {
+    ChannelDecl revised = probe();
+    revised.payload_revision = 1;
+    CHECK(identity_of(revised) != identity_of(probe()));
+
+    ChannelDecl unrevised = probe();
+    unrevised.payload_revision = 0;
+    NETW_CHECK_EQ(identity_of(unrevised), identity_of(probe()));
+
+    CHECK(bool(netw::wire::FORMAT_VERSION == 10));
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] a built-in id is declared once, by the built-in "
+    "table, and a caller cannot redeclare it"
+) {
+    CHECK(WireRegistry::id_is_builtin(PROBE));
+    CHECK(WireRegistry::id_is_builtin(0));
+    CHECK_FALSE(WireRegistry::id_is_builtin(200));
+
+    netw::ReplicationSend send;
+    CHECK_FALSE(send.declare_channel(PROBE, godot::StringName("stolen"), true));
+    CHECK(send.declare_channel(200, godot::StringName("mine"), true));
+}
+
+TEST_CASE("[Networked][Wire][Hosted] one declaration hashes the same twice") {
     WireRegistry first;
     WireRegistry second;
     ChannelDecl a = probe();

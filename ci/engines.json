@@ -1,0 +1,62 @@
+{
+  "default": "normal",
+  "engines": {
+    "normal": {
+      "capabilities": {
+        "space_step": false
+      },
+      "description": "Upstream Godot. The engine the published addon targets.",
+      "release": {
+        "assets": {
+          "export_templates": "Godot_v4.7-stable_export_templates.tpz",
+          "linux.x86_64": "Godot_v4.7-stable_linux.x86_64.zip"
+        },
+        "entrypoints": {
+          "linux.x86_64": "Godot_v4.7-stable_linux.x86_64"
+        },
+        "owner": "godotengine",
+        "repo": "godot",
+        "sha256": {
+          "export_templates": "9714459dc071907c0f3d5f17d608faf69e7cda21331fc5d39c4503ffa4e99eec",
+          "linux.x86_64": "0b1a6c54c2c619c12e169fe9241edda4b81080b519451cec2984bf0d2c6cb73c"
+        },
+        "tag": "4.7-stable"
+      },
+      "source": {
+        "branch": "4.7-stable",
+        "ref": "",
+        "repo": "https://github.com/godotengine/godot"
+      },
+      "templates_dir": "4.7.stable",
+      "version": "4.7-stable"
+    },
+    "stepping": {
+      "capabilities": {
+        "space_step": true
+      },
+      "description": "albertok/godot, the stepping-physics fork the rocket-league lane verifies against.",
+      "release": {
+        "assets": {
+          "linux.x86_64": "Godot_v4.7-stable_linux.x86_64.zip"
+        },
+        "entrypoints": {
+          "linux.x86_64": "godot.linuxbsd.editor.x86_64"
+        },
+        "owner": "albertok",
+        "repo": "godot",
+        "sha256": {
+          "linux.x86_64": "30a36a682c7956deb8d05ed96c2d5536f765bfb7012d8425ceeb7ff9ead793b5"
+        },
+        "tag": "v4.7.2-stepping-physics"
+      },
+      "source": {
+        "branch": "4.7.2-stepphysics",
+        "ref": "bf04cdc95391fe84f3f5d9f098e1f3a294e9c0ca",
+        "repo": "https://github.com/albertok/godot"
+      },
+      "templates_dir": "4.7.2.stable",
+      "version": "4.7.2-stable"
+    }
+  },
+  "schema": 1
+}

@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDatabase" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The schema registry and read/write surface of the persistence layer.
+	</brief_description>
+	<description>
+		Save one as a [code].tres[/code] file, give it a [member backend], and name it from an archetype through [method Netw.configure_persistence] so a [NetwPersistenceEngine] persists into it.
+		Every verb that reaches the backend answers a [NetwPromise] rather than the value, because a backend may be a disk or a socket and native code cannot suspend on the caller's behalf. [method NetwPromise.wait] is how the value arrives.
+		[codeblock]
+		var record: NetwRecord = await db.table(&amp;"players").fetch(username).wait()
+		[/codeblock]
+		[b]Tables[/b]
+		A table is a named set of records reached through [method table], which answers a [NetwRecordTable]. A registered table name also resolves as a property, so [code]db.players[/code] is [code]db.table(&amp;"players")[/code] with autocompletion.
+		[codeblock]
+		var record := await db.table(&amp;"players").fetch(username).wait()
+		var same := await db.players.fetch(username).wait()
+		[/codeblock]
+		[b]Slots[/b]
+		A slot is one independent save namespace. Choose one with [method open_slot] before the first schema registration locks the backend, which is what makes the choice startup-only. Backends receive the selected slot when they initialize and scope every record under it.
+		[codeblock lang=text]
+		NetwDatabase
+		└── open_slot(&amp;"slot_2")
+
+		Backend namespace
+		└── slot_2
+		    ├── players
+		    │   └── valeria
+		    └── world
+		        └── chest_01
+		[/codeblock]
+		[method list_slots] and [method delete_slot] work before a slot is open, because they read and remove backend namespaces by name. That is what a save-select menu needs.
+		[b]Schema drift[/b]
+		When a loaded record carries columns the current schema does not declare, [member mismatch_policy] decides what happens to it. When a column's stored value disagrees with the type its [NetwSchema] declared, that one column is dropped with a warning and the live scene keeps its default, so a save written by an older build stays partly readable rather than wholly refused.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="current_slot" qualifiers="const">
+			<return type="StringName" />
+			<description>
+				The active slot, [code]&amp;"default"[/code] when [method open_slot] never ran.
+			</description>
+		</method>
+		<method name="declare_table">
+			<return type="void" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="schema" type="Variant" default="null" />
+			<param index="2" name="record_script" type="Script" default="null" />
+			<description>
+				Declares [param table] from [param schema], optionally binding [param record_script] as the [NetwRecord] subclass its reads hydrate into.
+				This is the build-time entry point for declaring a table before any runtime query, which is what keeps a first read from meeting an undeclared table and refusing it.
+				[param schema] is a [NetwSchema], the same declaration a replicated table and a property binding compile from, and it is what gives the database the column types it needs to reject a value of the wrong shape instead of assigning it. A bare [Array] of column names is accepted as the untyped form, and a table declared that way coerces nothing.
+				[codeblock]
+				db.declare_table(&amp;"rocks", Netw.configure_schema(&amp;"rocks")
+				        .replicated(false), RockRecord)
+
+				db.declare_table(&amp;"rocks", [&amp;"health", &amp;"position"])   # untyped
+				[/codeblock]
+				Declaring the same table again merges the new columns in. Declaring costs nothing on its own: the backend initializes on the first read or write instead, so every table declared before then is part of one initialization and one warm pass however many engines registered.
+			</description>
+		</method>
+		<method name="delete_slot">
+			<return type="NetwPromise" />
+			<param index="0" name="slot" type="StringName" />
+			<description>
+				Permanently removes [param slot] and every record under it, settling with an [enum @GlobalScope.Error]. Works before [method open_slot], because it names a backend namespace rather than the open one.
+			</description>
+		</method>
+		<method name="erase">
+			<return type="NetwPromise" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<description>
+				Permanently removes [param id] from [param table], settling with an [enum @GlobalScope.Error]. A database with no [member backend] refuses with [constant @GlobalScope.ERR_UNCONFIGURED].
+			</description>
+		</method>
+		<method name="find">
+			<return type="NetwPromise" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<description>
+				Reads the stored record for [param id] in [param table] and settles with it as a [Dictionary], which is the read [method NetwRecordTable.fetch] hydrates into a [NetwRecord].
+				The record is storage currency rather than domain currency, so a caller reads columns off it without knowing the table's record script. An absent record settles as an empty [Dictionary], because a first play has nothing saved and that is an answer rather than a failure.
+				Two states reject instead, since no read can run in them at all: a table with no declared schema, and a record [member mismatch_policy] refused outright.
+				[codeblock]
+				db.find(&amp;"players", username).then(
+				    func(record: Dictionary) -&gt; void:
+				        engine.apply(record),
+				)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="find_all">
+			<return type="NetwPromise" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="filter" type="Dictionary" default="{}" />
+			<description>
+				Reads every stored record in [param table] matching [param filter] and settles with them as an [Array] of [Dictionary]. An empty [param filter] answers the whole table.
+				Rejects with [constant @GlobalScope.ERR_UNCONFIGURED] when the table has no declared schema or the database has no [member backend], on the same reading as [method find].
+			</description>
+		</method>
+		<method name="get_column_type" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="column" type="StringName" />
+			<description>
+				The declared [enum NetwMultiplayer.ColumnType] of one column, or [code]-1[/code] when the table was declared without types. An untyped table coerces nothing, which is what keeps the bare-names form of [method declare_table] from silently changing a game's saves.
+			</description>
+		</method>
+		<method name="get_registered_columns" qualifiers="const">
+			<return type="StringName[]" />
+			<param index="0" name="table" type="StringName" />
+			<description>
+				The column names registered for [param table], or an empty array when nothing has declared it yet.
+			</description>
+		</method>
+		<method name="list_slots">
+			<return type="NetwPromise" />
+			<description>
+				Settles with every save-slot namespace the backend holds, as an [Array] of [StringName]. Works before [method open_slot], because it queries backend namespace metadata rather than the open slot.
+				[codeblock]
+				for slot in await db.list_slots().wait():
+				    print(slot)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="open_slot">
+			<return type="void" />
+			<param index="0" name="slot" type="StringName" />
+			<description>
+				Opens [param slot] as the active save namespace.
+				Startup-only: it must run before the first read or write initializes the backend, which locks the choice. A call after that point is refused with an error and the open slot stands, because re-pointing a live database at another save is a data loss with no way back. Declaring a table does not lock it, so a slot can still be chosen after the archetypes have registered.
+			</description>
+		</method>
+		<method name="table">
+			<return type="NetwRecordTable" />
+			<param index="0" name="table" type="StringName" />
+			<description>
+				A [NetwRecordTable] onto [param table]. The handle is minted per call and holds no cache, so asking twice costs one small object and answers the same table. The table does not need to be registered first: registration happens through [method declare_table] or through the archetype a [NetwPersistenceEngine] declares.
+			</description>
+		</method>
+		<method name="table_flush">
+			<return type="NetwPromise" />
+			<param index="0" name="session" type="MultiplayerAPI" />
+			<param index="1" name="table" type="RID" />
+			<param index="2" name="into" type="StringName" />
+			<param index="3" name="ids" type="PackedStringArray" />
+			<description>
+				Saves [param table]'s committed rows into [param into] as one record.
+				The unit of commit and of hydrate is the whole table, because routes must be re-minted as a set, so a table saves as one record rather than one record per row. Two thousand rows are one file on the file-system backend, not two thousand.
+				[codeblock lang=text]
+				db.&lt;into&gt;
+				 ┖╴&lt;schema name&gt;          the one record
+				      ┠╴ids               PackedStringArray, parallel to the row order
+				      ┖╴&lt;column key&gt;      the committed storage array, verbatim
+				[/codeblock]
+				[param ids] names the row whose route is [code]session.table_read_routes(table)[i][/code]. Stable identity is the caller's domain, since they minted the rows, and it is what lets a fresh session rebuild its own indexes from [method table_hydrate]. Save keys never ride the wire and routes never touch the disk.
+				Values are the committed storage arrays, which quantization never touches, so a quantized column saves at full precision. A [constant NetwMultiplayer.COLUMN_ENTITY] column is skipped with one warning, because a route is meaningless in the session that loads it.
+				The answer is a [NetwPromise] because the write is a database write, and it settles with the [enum @GlobalScope.Error] the write reached.
+				[codeblock lang=text]
+				Error
+				┠╴OK                  written
+				┠╴ERR_UNCONFIGURED    no table name, or session is not the server
+				┠╴ERR_DOES_NOT_EXIST  the handle names no table
+				┖╴ERR_INVALID_DATA    ids.size() disagrees with the committed row count
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="table_hydrate">
+			<return type="NetwPromise" />
+			<param index="0" name="session" type="MultiplayerAPI" />
+			<param index="1" name="table" type="RID" />
+			<param index="2" name="into" type="StringName" />
+			<description>
+				Loads [param table]'s saved record from [param into], mints fresh routes for its rows, and commits them into [param session].
+				Routes are session-scoped, so a hydrate claims new ones rather than restoring the ones that were saved. The returned pairing is how a caller rebuilds its own indexes against the save keys it wrote.
+				[codeblock lang=text]
+				Dictionary
+				┠╴routes  PackedInt64Array    freshly claimed, the committed row order
+				┖╴ids     PackedStringArray   parallel, the keys the flush wrote
+				[/codeblock]
+				Both arrays are empty when no record exists, which is the first-play case rather than an error. A [constant NetwMultiplayer.COLUMN_ENTITY] column zero-fills, matching the skip at [method table_flush].
+				The answer is a [NetwPromise] settling with that [Dictionary], because the read is a database read and the rows are committed on the edge it settles.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="transaction">
+			<return type="NetwPromise" />
+			<param index="0" name="body" type="Callable" />
+			<description>
+				Collects writes inside [param body] and commits them as one batch.
+				[param body] receives a [NetwTransaction] and calls [method NetwTransaction.queue_upsert] for each record to write. The commit runs once [param body] returns, which is what makes it happen exactly once however the body exits.
+				The promise settles with an [enum @GlobalScope.Error] rather than rejecting, which is what [method NetwDatabaseBackend.commit] itself does: in this layer a refused write is an ordinary answer, and a caller reads the code off [member NetwPromise.result]. [signal transaction_committed] announces only a commit that answered [constant @GlobalScope.OK], since a promise that settled is not the same thing as a write that landed.
+				[codeblock]
+				var err: Error = await db.transaction(
+				    func(tx: NetwTransaction) -&gt; void:
+				        tx.queue_upsert(&amp;"rocks", &amp;"rock_1", {&amp;"health": 50})
+				).wait()
+				[/codeblock]
+				A caller that must not suspend, such as a pump that would let its next round start inside this one, chains [method NetwPromise.then] on the same answer instead of awaiting it.
+			</description>
+		</method>
+		<method name="warm">
+			<return type="NetwPromise" />
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="request" type="WarmRequest" />
+			<description>
+				Warms [param table] into the backend cache per [param request] at runtime, settling with an [enum @GlobalScope.Error].
+				This is the escape hatch for driving warming from a game's own hooks, a scene load or a menu, rather than from [member warm_policy] at initialization. A synchronous backend has no cache to fill and answers [constant @GlobalScope.OK] without doing anything.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="backend" type="NetwDatabaseBackend" setter="set_backend" getter="get_backend">
+			The storage this database reads and writes through. Assign it before the first read or write, which is what initializes the backend and locks the slot. A database with no backend refuses every call rather than dropping writes quietly.
+		</member>
+		<member name="mismatch_policy" type="int" setter="set_mismatch_policy" getter="get_mismatch_policy" enum="NetwDatabase.SchemaMismatchPolicy" default="1">
+			What happens when a loaded record carries columns the current schema does not declare.
+			The default is the least destructive reading: a stray column is dropped and the rest of the row loads, because a save file is the player's and a schema that grew a column is the ordinary case rather than corruption.
+		</member>
+		<member name="warm_policy" type="WarmPolicy" setter="set_warm_policy" getter="get_warm_policy">
+			The per-table cache-warming strategy applied when the backend initializes, which is the first read or write. Assign [code]null[/code] to leave every table to lazy fetch-on-miss. Synchronous backends ignore it.
+			Never assigned, this reads [code]null[/code] and warming runs through a stock [WarmPolicy], which warms everything. Assigning [code]null[/code] is therefore not the same as leaving it alone, and the two read alike from the getter: one turns warming off and the other is the untouched default.
+		</member>
+	</members>
+	<signals>
+		<signal name="record_loaded">
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<param index="2" name="hit" type="bool" />
+			<description>
+				Emitted after a record is read from the backend. [param hit] is [code]false[/code] when no record was found, which is a miss rather than a failure.
+			</description>
+		</signal>
+		<signal name="schema_mismatch">
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="id" type="StringName" />
+			<param index="2" name="missing" type="Array" />
+			<param index="3" name="unknown" type="Array" />
+			<description>
+				Emitted when a loaded record disagrees with the current schema. [param missing] is the columns the schema declares that the record does not carry, which is safe and takes scene defaults. [param unknown] is the columns the record carries that the schema does not declare, which is what [member mismatch_policy] judges.
+			</description>
+		</signal>
+		<signal name="schema_registered">
+			<param index="0" name="table" type="StringName" />
+			<param index="1" name="columns" type="Array" />
+			<description>
+				Emitted whenever a table's declared columns change. [param columns] is the full merged column list, not only the columns this declaration added.
+			</description>
+		</signal>
+		<signal name="transaction_committed">
+			<param index="0" name="table_count" type="int" />
+			<param index="1" name="record_count" type="int" />
+			<description>
+				Emitted after a [method transaction] commits successfully, counting the tables and records the batch touched. A commit that answered an error announces nothing.
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="PURGE" value="0" enum="SchemaMismatchPolicy">
+			Delete the record and start fresh.
+		</constant>
+		<constant name="LOAD_PARTIAL" value="1" enum="SchemaMismatchPolicy">
+			Strip the undeclared columns from the loaded data and proceed with the known ones. Columns the schema declares that the record does not carry take their scene defaults.
+		</constant>
+		<constant name="FAIL" value="2" enum="SchemaMismatchPolicy">
+			Refuse the read with [constant @GlobalScope.ERR_UNCONFIGURED] and leave the record untouched. The caller decides what to do.
+		</constant>
+	</constants>
+</class>

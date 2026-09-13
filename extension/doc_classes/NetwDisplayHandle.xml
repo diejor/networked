@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDisplayHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Everything about one entity's display that is not about a single value stream, written and read through [member NetwEntity.interpolation].
+	</brief_description>
+	<description>
+		A [NetwInterpolate] spec configures one value stream. Everything that applies to the whole entity instead of one stream lives here, so there is one answer per entity to which node receives the smoothed write, which timeline it renders on, and how far behind the newest snapshot the playhead sits. The session pumps what this declares.
+		Every setting below is a view, not a store. A write goes out through the session's display book and a read comes back from the same declaration, so the two spellings can never disagree about one entity. A setting authored before the entity has a live [member NetwEntity.rid] waits until it does, and is re-applied to each of the entity's lives, because liveness hands a re-admitted entity a fresh [member NetwEntity.rid] and the settings have to outlive it.
+		[codeblock]
+		var handle := NetwEntity.of(self).interpolation
+		handle.visual_root = NodePath("Visual")
+		handle.display_role = NetwMultiplayer.DISPLAY_ROLE_REMOTE
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="displayed_authoring_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the displayed STATE authoring tick, or [code]-1[/code].
+			</description>
+		</method>
+		<method name="entity" qualifiers="const">
+			<return type="NetwEntity" />
+			<description>
+				The [NetwEntity] this handle was bound to, or [code]null[/code] once that entity is gone.
+			</description>
+		</method>
+		<method name="get_buffer" qualifiers="const">
+			<return type="NetwRingBuffer" />
+			<param index="0" name="property" type="StringName" />
+			<description>
+				Returns the [NetwRingBuffer] for [param property], or [code]null[/code].
+			</description>
+		</method>
+		<method name="reset">
+			<return type="void" />
+			<description>
+				Clears every interpolation history for this entity and writes its live source values to the visual.
+				Call it after applying a position discontinuity locally so later movement resumes from the new position.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="display_lag" type="float" setter="" getter="get_display_lag" default="0.0">
+			Read-only extra display delay in ticks measured by smart dilation.
+		</member>
+		<member name="display_role" type="int" setter="set_display_role" getter="get_display_role" default="0">
+			How this entity is drawn. [constant NetwMultiplayer.DISPLAY_ROLE_AUTO] works it out from who controls the entity, which is right for almost every one.
+		</member>
+		<member name="enable_smart_dilation" type="bool" setter="set_enable_smart_dilation" getter="get_enable_smart_dilation" default="false">
+			Enables display lag adaptation for remote interpolation.
+		</member>
+		<member name="floor_smoothing" type="float" setter="set_floor_smoothing" getter="get_floor_smoothing" default="0.0">
+			Per frame fraction used to low pass the lag floor.
+		</member>
+		<member name="lag_adapt_rate" type="float" setter="set_lag_adapt_rate" getter="get_lag_adapt_rate" default="0.0">
+			Per frame fraction used to track the measured lag floor.
+		</member>
+		<member name="max_extra_dilation" type="float" setter="set_max_extra_dilation" getter="get_max_extra_dilation" default="0.0">
+			Maximum extra ticks that display lag can grow while starving.
+		</member>
+		<member name="predicted_mode" type="int" setter="set_predicted_mode" getter="get_predicted_mode" default="0">
+			Predicted display filter used for local prediction.
+		</member>
+		<member name="predicted_smooth_time" type="float" setter="set_predicted_smooth_time" getter="get_predicted_smooth_time" default="0.0">
+			Exponential smoothing time for [constant NetwMultiplayer.PREDICTED_MODE_CHASE].
+		</member>
+		<member name="starvation_grace_frames" type="int" setter="set_starvation_grace_frames" getter="get_starvation_grace_frames" default="0">
+			Starving frames tolerated before lag starts growing.
+		</member>
+		<member name="starvation_growth" type="float" setter="set_starvation_growth" getter="get_starvation_growth" default="0.0">
+			Ticks per frame added after starvation is sustained.
+		</member>
+		<member name="trace_interval" type="int" setter="set_trace_interval" getter="get_trace_interval" default="0">
+			Frames between interpolation trace logs. [code]0[/code] disables logs.
+		</member>
+		<member name="visual_root" type="NodePath" setter="set_visual_root" getter="get_visual_root" default="NodePath(&quot;&quot;)">
+			Visual child that receives smoothed output. A parented visual takes global-space writes for the channels with a per-channel global setter, position and rotation, while every other channel inherits from the body. A visual with [member CanvasItem.top_level] set takes absolute writes on any channel.
+		</member>
+	</members>
+</class>

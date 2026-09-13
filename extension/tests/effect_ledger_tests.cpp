@@ -14,12 +14,6 @@ using netw_test::CallLog;
 
 constexpr int64_t DEADLINE = 9;
 
-Ref<NetwEffectLedger> fresh() {
-    Ref<NetwEffectLedger> ledger;
-    ledger.instantiate();
-    return ledger;
-}
-
 StringName act(int p_slot) {
     return StringName(vformat("act__p__1__%d", p_slot));
 }
@@ -28,7 +22,7 @@ StringName act(int p_slot) {
 // Nothing else distinguishes a sweep that collected its expired set up front
 // from one that discards as it iterates.
 class ArmingSink final : public CallableCustom {
-    Ref<NetwEffectLedger> ledger;
+    NetwEffectLedger *ledger = nullptr;
     StringName armed_key;
     ObjectID anchor;
 
@@ -42,11 +36,12 @@ class ArmingSink final : public CallableCustom {
 
 public:
     ArmingSink(
-        const Ref<NetwEffectLedger> &p_ledger,
-        const StringName &p_armed_key
+        NetwEffectLedger *p_ledger,
+        const StringName &p_armed_key,
+        Object *p_anchor
     )
         : ledger(p_ledger), armed_key(p_armed_key),
-          anchor(netw::gd::instance_id(p_ledger.ptr())) {
+          anchor(netw::gd::instance_id(p_anchor)) {
     }
 
     uint32_t hash() const override {
@@ -82,16 +77,15 @@ public:
 };
 
 TEST_CASE("[Networked][Effect][Hosted] Adopt drops the revert unrun") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     const StringName key = act(0);
     ledger->arm(key, log.callable("revert"), DEADLINE);
 
-    CHECK(ledger->watch(
-        key,
-        log.callable("confirmed"),
-        log.callable("denied")
-    ));
+    CHECK(
+        ledger->watch(key, log.callable("confirmed"), log.callable("denied"))
+    );
 
     ledger->adopt(key);
 
@@ -103,7 +97,8 @@ TEST_CASE("[Networked][Effect][Hosted] Adopt drops the revert unrun") {
 }
 
 TEST_CASE("[Networked][Effect][Hosted] Discard runs the revert exactly once") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     const StringName key = act(0);
     ledger->arm(key, log.callable("revert"), DEADLINE);
@@ -115,12 +110,15 @@ TEST_CASE("[Networked][Effect][Hosted] Discard runs the revert exactly once") {
     NETW_CHECK_EQ(log.count("revert"), 1);
     NETW_CHECK_EQ(log.count("denied"), 1);
     NETW_CHECK_EQ(log.count("confirmed"), 0);
-    CHECK(log.order() == Vector<StringName>({ "revert", "denied" }));
+    CHECK(log.order() == Vector<StringName>({"revert", "denied"}));
 }
 
-TEST_CASE("[Networked][Effect][Hosted] A resolved key is deaf to the other "
-          "outcome") {
-    Ref<NetwEffectLedger> ledger = fresh();
+TEST_CASE(
+    "[Networked][Effect][Hosted] A resolved key is deaf to the other "
+    "outcome"
+) {
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     const StringName key = act(0);
     ledger->arm(key, log.callable("revert"), DEADLINE);
@@ -135,7 +133,8 @@ TEST_CASE("[Networked][Effect][Hosted] A resolved key is deaf to the other "
 }
 
 TEST_CASE("[Networked][Effect][Hosted] A watcher never outlives its own act") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     const StringName key = act(0);
     ledger->arm(key, Callable(), DEADLINE);
@@ -150,7 +149,8 @@ TEST_CASE("[Networked][Effect][Hosted] A watcher never outlives its own act") {
 }
 
 TEST_CASE("[Networked][Effect][Hosted] A deadline expires at its own tick") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     const StringName key = act(0);
     ledger->arm(key, log.callable("revert"), DEADLINE);
@@ -169,15 +169,14 @@ TEST_CASE("[Networked][Effect][Hosted] A deadline expires at its own tick") {
 }
 
 TEST_CASE("[Networked][Effect][Hosted] A watch on an unarmed key is refused") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     const StringName key = act(0);
 
-    CHECK_FALSE(ledger->watch(
-        key,
-        log.callable("confirmed"),
-        log.callable("denied")
-    ));
+    CHECK_FALSE(
+        ledger->watch(key, log.callable("confirmed"), log.callable("denied"))
+    );
 
     ledger->arm(key, Callable(), DEADLINE);
     ledger->adopt(key);
@@ -187,7 +186,8 @@ TEST_CASE("[Networked][Effect][Hosted] A watch on an unarmed key is refused") {
 }
 
 TEST_CASE("[Networked][Effect][Hosted] Re-arming replaces the pending revert") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     const StringName key = act(0);
     ledger->arm(key, log.callable("first"), DEADLINE);
@@ -201,14 +201,18 @@ TEST_CASE("[Networked][Effect][Hosted] Re-arming replaces the pending revert") {
     NETW_CHECK_EQ(log.count("second"), 1);
 }
 
-TEST_CASE("[Networked][Effect][Hosted] A sweep never sweeps what its own "
-          "revert armed") {
-    Ref<NetwEffectLedger> ledger = fresh();
+TEST_CASE(
+    "[Networked][Effect][Hosted] A sweep never sweeps what its own "
+    "revert armed"
+) {
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     const StringName expiring = act(0);
     const StringName armed = act(1);
+    Object *anchor = memnew(Object);
     ledger->arm(
         expiring,
-        Callable(memnew(ArmingSink(ledger, armed))),
+        Callable(memnew(ArmingSink(ledger, armed, anchor))),
         DEADLINE
     );
 
@@ -217,10 +221,12 @@ TEST_CASE("[Networked][Effect][Hosted] A sweep never sweeps what its own "
     CHECK_FALSE(ledger->pending(expiring));
     CHECK(ledger->pending(armed));
     NETW_CHECK_EQ(ledger->count(), 1);
+    memdelete(anchor);
 }
 
 TEST_CASE("[Networked][Effect][Hosted] An empty key arms nothing") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
 
     ledger->arm(StringName(), log.callable("revert"), DEADLINE);
@@ -234,7 +240,8 @@ TEST_CASE("[Networked][Effect][Hosted] An empty key arms nothing") {
 }
 
 TEST_CASE("[Networked][Effect][Hosted] Clear forgets every armed act") {
-    Ref<NetwEffectLedger> ledger = fresh();
+    NetwEffectLedger held;
+    NetwEffectLedger *const ledger = &held;
     CallLog log;
     ledger->arm(act(0), log.callable("revert"), DEADLINE);
     ledger->arm(act(1), log.callable("revert"), DEADLINE);

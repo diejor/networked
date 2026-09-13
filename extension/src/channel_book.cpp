@@ -1,6 +1,5 @@
 #include "netw/channel_book.hpp"
 
-#include "godot/class_db.hpp"
 #include "godot/rid.hpp"
 #include "netw/log.hpp"
 #include "netw/wire/registry.hpp"
@@ -101,39 +100,6 @@ int NetwChannelBook::size() const {
 
 void NetwChannelBook::clear() {
     rows.clear();
-}
-
-void NetwChannelBook::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("register_channel", "channel", "handler", "defers"),
-        &NetwChannelBook::register_channel
-    );
-    ClassDB::bind_method(
-        D_METHOD("register_protocol", "channel", "handler"),
-        &NetwChannelBook::register_protocol
-    );
-    ClassDB::bind_method(
-        D_METHOD("unregister_channel", "channel"),
-        &NetwChannelBook::unregister_channel
-    );
-    ClassDB::bind_method(
-        D_METHOD("handler_of", "channel"),
-        &NetwChannelBook::handler_of
-    );
-    ClassDB::bind_method(
-        D_METHOD("protocol_handler_of", "channel"),
-        &NetwChannelBook::protocol_handler_of
-    );
-    ClassDB::bind_method(
-        D_METHOD("settle_protocol"),
-        &NetwChannelBook::settle_protocol
-    );
-    ClassDB::bind_method(
-        D_METHOD("defers", "channel"),
-        &NetwChannelBook::defers
-    );
-    ClassDB::bind_method(D_METHOD("size"), &NetwChannelBook::size);
-    ClassDB::bind_method(D_METHOD("clear"), &NetwChannelBook::clear);
 }
 
 } // namespace netw

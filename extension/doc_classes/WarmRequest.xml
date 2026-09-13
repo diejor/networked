@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="WarmRequest" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A single table's cache-warming intent, produced by a [WarmPolicy].
+	</brief_description>
+	<description>
+		A request is a value naming what a write-behind backend should pre-load for one table. Synchronous backends ignore it. [member kind] decides which of [member id_list] or [member filter_map] carries the scope, and the four static factories are the only way to get a request whose scope and kind agree.
+		[codeblock]
+		# Warm everything in the table:
+		WarmRequest.all()
+		# Warm a known set of records:
+		WarmRequest.ids([&amp;"valeria", &amp;"jose"])
+		# Warm by a column filter:
+		WarmRequest.filter({ &amp;"online": true })
+		# Warm nothing eagerly (lazy fetch-on-miss still applies):
+		WarmRequest.none()
+		[/codeblock]
+		Calling [code]new()[/code] instead gives the same request [method none] answers.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="all" qualifiers="static">
+			<return type="WarmRequest" />
+			<description>
+				Returns a request that warms every record in the table.
+			</description>
+		</method>
+		<method name="filter" qualifiers="static">
+			<return type="WarmRequest" />
+			<param index="0" name="map" type="Dictionary" />
+			<description>
+				Returns a request that warms every record matching [param map], copied into [member filter_map] so a later edit of [param map] cannot change what was planned.
+			</description>
+		</method>
+		<method name="ids" qualifiers="static">
+			<return type="WarmRequest" />
+			<param index="0" name="values" type="Array" />
+			<description>
+				Returns a request that warms the records named in [param values]. Each entry is read as a [StringName] into [member id_list].
+			</description>
+		</method>
+		<method name="none" qualifiers="static">
+			<return type="WarmRequest" />
+			<description>
+				Returns a request that warms nothing. Lazy fetch-on-miss still covers reads.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="filter_map" type="Dictionary" setter="set_filter_map" getter="get_filter_map" default="{}">
+			The column filter to warm when [member kind] is [constant KIND_FILTER].
+		</member>
+		<member name="id_list" type="StringName[]" setter="set_id_list" getter="get_id_list" default="[]">
+			The record ids to warm when [member kind] is [constant KIND_IDS].
+		</member>
+		<member name="kind" type="int" setter="set_kind" getter="get_kind" enum="WarmRequest.Kind" default="0">
+			Which scope this request carries.
+		</member>
+	</members>
+	<constants>
+		<constant name="KIND_NONE" value="0" enum="Kind">
+			Warm nothing. Records load lazily on first miss.
+		</constant>
+		<constant name="KIND_ALL" value="1" enum="Kind">
+			Warm every record in the table.
+		</constant>
+		<constant name="KIND_IDS" value="2" enum="Kind">
+			Warm the explicit [member id_list].
+		</constant>
+		<constant name="KIND_FILTER" value="3" enum="Kind">
+			Warm every record matching [member filter_map].
+		</constant>
+	</constants>
+</class>

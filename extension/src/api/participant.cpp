@@ -1,9 +1,9 @@
 #include "netw/api/participant.hpp"
 
+#include "godot/callable.hpp"
 #include "godot/class_db.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/colors.hpp"
-#include "godot/callable.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 
@@ -11,11 +11,11 @@ using namespace godot;
 
 namespace netw {
 
-NetwMultiplayerCore *NetwParticipant::core() const {
-    return Object::cast_to<NetwMultiplayerCore>(gd::instance_from_id(core_id));
+NetwMultiplayer *NetwParticipant::core() const {
+    return Object::cast_to<NetwMultiplayer>(gd::instance_from_id(core_id));
 }
 
-void NetwParticipant::seat_at(NetwMultiplayerCore *p_core, int64_t p_peer) {
+void NetwParticipant::seat_at(NetwMultiplayer *p_core, int64_t p_peer) {
     core_id = gd::instance_id(p_core);
     peer_id = p_peer;
 }
@@ -25,16 +25,16 @@ int64_t NetwParticipant::get_peer_id() const {
 }
 
 Ref<ResolvedJoin> NetwParticipant::get_join() const {
-    NetwMultiplayerCore *held = core();
+    NetwMultiplayer *held = core();
     if (held == nullptr) {
         return Ref<ResolvedJoin>();
     }
     return held->join_book().accepted_join(peer_id);
 }
 
-Ref<RefCounted> NetwParticipant::get_identity() const {
-    NetwMultiplayerCore *held = core();
-    return held == nullptr ? Ref<RefCounted>()
+Ref<NetwIdentity> NetwParticipant::get_identity() const {
+    NetwMultiplayer *held = core();
+    return held == nullptr ? Ref<NetwIdentity>()
                            : held->participant_identity(peer_id);
 }
 
@@ -48,73 +48,38 @@ Array NetwParticipant::get_arg_values() const {
     return joined.is_valid() ? joined->get_arg_values() : Array();
 }
 
-bool NetwParticipant::get_is_debug() const {
-    const Ref<ResolvedJoin> joined = get_join();
-    return joined.is_valid() && joined->get_is_debug();
-}
-
-RID NetwParticipant::scene_entity_of(const Variant &p_scene) {
-    const Ref<RefCounted> handle = p_scene;
-    if (handle.is_null()) {
-        return RID();
-    }
-    return handle->get(StringName("entity"));
-}
-
-Variant NetwParticipant::get_current_scene() const {
-    NetwMultiplayerCore *held = core();
+Ref<NetwSceneHandle> NetwParticipant::get_current_scene() const {
+    NetwMultiplayer *held = core();
     if (held == nullptr) {
-        return Variant();
+        return Ref<NetwSceneHandle>();
     }
     const RID seat = held->participant_seat(peer_id);
     if (!seat.is_valid()) {
-        return Variant();
+        return Ref<NetwSceneHandle>();
     }
     return held->scene_handle_of(seat);
 }
 
-void NetwParticipant::set_current_scene(const Variant &p_scene) {
-    NetwMultiplayerCore *held = core();
-    if (held == nullptr) {
-        return;
-    }
-    held->participant_seat_move(peer_id, scene_entity_of(p_scene));
-}
-
-void NetwParticipant::move_to(const Variant &p_dest) {
+Ref<NetwPromise> NetwParticipant::move_to(
+    const Ref<NetwSceneHandle> &p_destination
+) {
     NETW_ZONE_NC("NetwParticipant move_to", colors::SESSION);
-    NetwMultiplayerCore *held = core();
-    const RID destination = scene_entity_of(p_dest);
-    if (held == nullptr || !destination.is_valid()) {
-        return;
+    NetwMultiplayer *held = core();
+    if (held == nullptr) {
+        return NetwPromise::rejected(
+            ERR_UNAVAILABLE,
+            String("this participant belongs to no live session")
+        );
     }
-    NETW_ERR_COND(
-        !held->is_server(),
-        sys::SESSION,
-        "NetwParticipant.move_to is server-only, and peer %d asked",
-        int(peer_id)
-    );
-    if (!held->is_server()) {
-        return;
-    }
-    NETW_TRACE(
-        sys::SESSION,
-        "moving peer %d to scene %d",
-        int(peer_id),
-        int(destination.get_id())
-    );
-    if (held->participant_move_seat(peer_id, destination)) {
-        held->interest_request_flush();
-    }
+    return held->participant_travel(Ref<NetwParticipant>(this), p_destination);
 }
 
 void NetwParticipant::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("get_peer_id"), &NetwParticipant::get_peer_id);
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "peer_id"),
-        "",
-        "get_peer_id"
+    ClassDB::bind_method(
+        D_METHOD("get_peer_id"),
+        &NetwParticipant::get_peer_id
     );
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "peer_id"), "", "get_peer_id");
     ClassDB::bind_method(D_METHOD("get_join"), &NetwParticipant::get_join);
     ADD_PROPERTY(
         PropertyInfo(
@@ -159,21 +124,8 @@ void NetwParticipant::_bind_methods() {
         "get_arg_values"
     );
     ClassDB::bind_method(
-        D_METHOD("get_is_debug"),
-        &NetwParticipant::get_is_debug
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_debug"),
-        "",
-        "get_is_debug"
-    );
-    ClassDB::bind_method(
         D_METHOD("get_current_scene"),
         &NetwParticipant::get_current_scene
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_current_scene", "scene"),
-        &NetwParticipant::set_current_scene
     );
     ADD_PROPERTY(
         PropertyInfo(
@@ -182,10 +134,13 @@ void NetwParticipant::_bind_methods() {
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwSceneHandle"
         ),
-        "set_current_scene",
+        "",
         "get_current_scene"
     );
-    ClassDB::bind_method(D_METHOD("move_to", "dest"), &NetwParticipant::move_to);
+    ClassDB::bind_method(
+        D_METHOD("move_to", "destination"),
+        &NetwParticipant::move_to
+    );
 
     ADD_SIGNAL(MethodInfo(
         "scene_changed",

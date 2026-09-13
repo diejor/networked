@@ -1,14 +1,14 @@
 #include "support/netw_test.h"
 
+#include "godot/node.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "godot/node.hpp"
 
 namespace TestNetwSceneDespawn {
 
 using namespace godot;
 using netw::NetwEntityRecord;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 
 struct Mounted {
     RID scene;
@@ -17,7 +17,7 @@ struct Mounted {
 };
 
 Mounted mount(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     const StringName &p_stem
 ) {
@@ -28,10 +28,9 @@ Mounted mount(
     out.level->set_name(p_stem);
     out.container->add_child(out.level);
 
-    Ref<RefCounted> wrapper;
+    Ref<netw::NetwEntity> wrapper;
     wrapper.instantiate();
-    Ref<NetwEntityRecord> record;
-    record.instantiate();
+    NetwEntityRecord *const record = wrapper->get_record();
     out.scene = p_core->get_liveness_core()->entity_create();
     record->adopt_handle(out.scene);
     record->set_declares_scene(true);
@@ -42,15 +41,15 @@ Mounted mount(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SD1 a despawn with no linger takes the "
-    "container out of the tree at once"
+    "[Networked][Scene][Hosted] SD1 a destroy takes the container out of "
+    "the tree at once"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount(core, root, StringName("Arena"));
 
-    NETW_CHECK_EQ(core->scene_despawn(arena.scene, 0), OK);
+    CHECK(core->scene_destroy(arena.scene));
 
     NETW_CHECK_EQ(arena.container->get_parent(), nullptr);
     NETW_CHECK_EQ(root->get_child_count(), 0);
@@ -60,15 +59,16 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SD2 a lingering despawn leaves the container "
-    "mounted and opens its drain window instead"
+    "[Networked][Scene][Hosted] SD2 a retire opens the drain window and "
+    "leaves the container mounted instead"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount(core, root, StringName("Arena"));
 
-    NETW_CHECK_EQ(core->scene_despawn(arena.scene, 3), OK);
+    core->get_scene_core()->scene_retire(arena.scene, 3);
+    core->scene_settle_refresh();
 
     NETW_CHECK_EQ(arena.container->get_parent(), root);
     const Array retiring = core->get_scene_core()->retiring_scenes();
@@ -79,30 +79,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SD3 a scene with nothing to despawn is "
-    "refused by name and takes nothing down with it"
+    "[Networked][Scene][Hosted] SD3 a destroy of no scene is refused and "
+    "takes nothing down with it"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount(core, root, StringName("Arena"));
 
-    NETW_CHECK_EQ(core->scene_despawn(RID(), 0), ERR_DOES_NOT_EXIST);
+    CHECK_FALSE(core->scene_destroy(RID()));
 
-    Node *bare = memnew(Node);
-    root->add_child(bare);
-    Ref<RefCounted> wrapper;
-    wrapper.instantiate();
-    Ref<NetwEntityRecord> record;
-    record.instantiate();
-    const RID hollow = core->get_liveness_core()->entity_create();
-    record->adopt_handle(hollow);
-    const int64_t route = core->get_liveness_core()->reserve_route();
-    core->liveness_bind(hollow, route, wrapper, record, bare);
-
-    NETW_CHECK_EQ(core->scene_despawn(hollow, 0), ERR_DOES_NOT_EXIST);
     NETW_CHECK_EQ(arena.container->get_parent(), root);
-    NETW_CHECK_EQ(bare->get_parent(), root);
+    NETW_CHECK_EQ(root->get_child_count(), 1);
 
     memdelete(root);
 }

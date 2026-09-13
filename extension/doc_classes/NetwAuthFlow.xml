@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwAuthFlow" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The base a game subclasses to decide which peers a session admits, answering for both ends of the handshake.
+	</brief_description>
+	<description>
+		One object carries the joining side and the authority side, because a listen-server host is both at once and a single policy has to speak for it. The joining peer runs [method _prepare] and then [method _credentials] to produce the bytes it presents; the authority runs [method _verify] on those bytes and reaches an [AuthResult]. [method _host_identity] is what the host says about itself. [NetwAuthProtocol] carries those bytes over the wire and decides nothing; this class decides and never touches the wire.
+		Every seam has a stock answer, and the stock answers are deliberately asymmetric: [method prepare_default] resolves at once, [method credentials_default] presents no bytes, [method host_identity_default] answers [code]null[/code], and [method verify_default] REJECTS. So a flow that is installed but never implements [method _verify] admits nobody, rather than admitting everybody. A GDScript subclass cannot [code]super()[/code] into a virtual, so those four [code]_default[/code] methods are an override's only route back to stock behaviour.
+		[codeblock]
+		extends NetwAuthFlow
+
+		func _credentials(username: StringName) -&gt; PackedByteArray:
+		    return _token.to_utf8_buffer()
+
+		func _verify(peer_id: int, data: PackedByteArray) -&gt; AuthResult:
+		    var identity := _lookup(data.get_string_from_utf8())
+		    if identity == null:
+		        return AuthResult.reject("unknown token")
+		    return AuthResult.accept(identity)
+
+		[/codeblock]
+		A game declares one through [method Netw.configure_auth], from a factory that runs once per session on the first authentication that needs it. The session then keeps the flow it built, so the node that declared the factory can go without taking the policy with it. [member NetwMultiplayer.auth_flow] answers which flow this session actually runs, and a session that declared none admits every peer.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_auth(self, make_auth)
+
+		func make_auth() -&gt; NetwAuthFlow:
+		    return MyAuth.new()
+		[/codeblock]
+		[method _prepare] answers a [NetwPromise], and a configured flow that prepares nothing, or rejects, refuses the join rather than releasing it as prepared. A [method AuthResult.reject] is the answer the game was asked for and is reported at debug level only; only a flow that answers no [AuthResult] at all is a fault.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_credentials" qualifiers="virtual">
+			<return type="PackedByteArray" />
+			<param index="0" name="username" type="StringName" />
+			<description>
+				The bytes this peer presents to the authority for the join it is attempting as [param username]. They reach the authority's [method _verify] unchanged, so their shape is this flow's own business.
+			</description>
+		</method>
+		<method name="_host_identity" qualifiers="virtual">
+			<return type="NetwIdentity" />
+			<description>
+				The [NetwIdentity] a host claims for itself, which no peer verifies for it.
+			</description>
+		</method>
+		<method name="_prepare" qualifiers="virtual">
+			<return type="NetwPromise" />
+			<param index="0" name="username" type="StringName" />
+			<description>
+				Runs before [method _credentials] and gates it: bring-up waits on the returned [NetwPromise], which is where a flow fetches or refreshes whatever [method _credentials] is about to present for [param username]. Resolving with anything but [constant @GlobalScope.OK] abandons the join.
+			</description>
+		</method>
+		<method name="_verify" qualifiers="virtual">
+			<return type="AuthResult" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="data" type="PackedByteArray" />
+			<description>
+				The authority's verdict on the [param data] peer [param peer_id] presented. Answer [method AuthResult.accept] with the identity to seat it under, or [method AuthResult.reject] with the reason to hand back.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="credentials">
+			<return type="PackedByteArray" />
+			<param index="0" name="username" type="StringName" />
+			<description>
+				Answers [method _credentials], or [method credentials_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="credentials_default">
+			<return type="PackedByteArray" />
+			<param index="0" name="username" type="StringName" />
+			<description>
+				Presents no bytes at all, which is what a flow that authenticates the host rather than the peer wants.
+			</description>
+		</method>
+		<method name="host_identity">
+			<return type="NetwIdentity" />
+			<description>
+				Answers [method _host_identity], or [method host_identity_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="host_identity_default">
+			<return type="NetwIdentity" />
+			<description>
+				Answers [code]null[/code], leaving the host anonymous.
+			</description>
+		</method>
+		<method name="prepare">
+			<return type="NetwPromise" />
+			<param index="0" name="username" type="StringName" />
+			<description>
+				Answers [method _prepare], or [method prepare_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="prepare_default">
+			<return type="NetwPromise" />
+			<param index="0" name="username" type="StringName" />
+			<description>
+				Answers a [NetwPromise] already resolved with [constant @GlobalScope.OK], so bring-up never waits on a flow with nothing to fetch.
+			</description>
+		</method>
+		<method name="verify">
+			<return type="AuthResult" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="data" type="PackedByteArray" />
+			<description>
+				Answers [method _verify], or [method verify_default] when nothing overrode it.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="verify_default">
+			<return type="AuthResult" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="data" type="PackedByteArray" />
+			<description>
+				Rejects, naming the missing override as the reason. An installed flow that never implements [method _verify] is a policy nobody wrote, and admitting on it would be the one failure mode authentication exists to prevent.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+	</methods>
+</class>

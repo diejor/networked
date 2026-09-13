@@ -1,0 +1,506 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwTransport" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A transport a game subclasses so its own [MultiplayerPeer] works with the connect plane.
+	</brief_description>
+	<description>
+		A transport is everything the session knows about one [MultiplayerPeer] class. It builds a peer, lists what that class can reach, probes an address, and adopts a peer a game built itself. A session makes one instance the first time it needs one, and a class registered through [method NetwMultiplayer.transport_register] or [method NetwConnectHandle.register_transport] answers what it is called before any instance exists.
+		A transport is keyed by [method peer_class] and never by a URL scheme, and [method recognizes_peer] is what decides whether a peer a game built and assigned itself belongs to this transport. A transport that has to exchange its own connection details before a peer can be built, as WebRTC does, subclasses [NetwWebRTCSignaler] for that half.
+		[codeblock]
+		class_name RelayTransport
+		extends NetwTransport
+
+		func _peer_class() -&gt; StringName:
+		    return &amp;"RelayMultiplayerPeer"
+
+		func _host_settings() -&gt; Dictionary:
+		    return {region = "eu"}
+
+		func _make_peer(ticket: RID, mode: int, address: String,
+		        settings: Dictionary) -&gt; void:
+		    report(ticket, &amp;"handshake", "Reaching the relay...", 0.5)
+		    var peer := RelayMultiplayerPeer.new()
+		    var err: Error = await peer.connect_async(address, settings.region)
+		    if err != OK:
+		        fail(ticket, ERR_CANT_CONNECT, "relay refused")
+		        return
+		    _room = peer.room
+		    deliver(ticket, peer)
+
+		func _cancel_peer_creation(ticket: RID) -&gt; void:
+		    if ticket == _building:
+		        _building = RID()
+
+		func _join_address() -&gt; String:
+		    return _room
+
+		func _ready() -&gt; void:
+		    Netw.connection(self).register_transport(RelayTransport)
+		[/codeblock]
+		[method _make_peer] and [method _probe] answer [code]void[/code] and report through [method deliver], [method deliver_probe] and [method fail], called once from any frame. A [code]GDVIRTUAL[/code] with a typed return coerces a suspended coroutine to an empty value and reports success, so a seam that answered its result directly would answer nothing the instant it first awaited; a [code]void[/code] seam discards that empty return harmlessly and the coroutine keeps running on whatever signals it awaits. A seam that reports neither is caught by the deadline [method timeout_hint] declares, unless that hint is negative.
+		Every report carries the [RID] ticket the seam was handed, and an implementation that awaits captures that ticket in a local before the first [code]await[/code] rather than reading it from a field. A report under a retired ticket is discarded, which is what keeps a slow provider answering an abandoned request from publishing its peer under a newer one's identity.
+		A transport belongs to the session that registered it, and a peer class is unique within one: a second registration of the same script answers the standing one, and a different script for a class the session already registers is refused. [method NetwMultiplayer.transport_register] carries that law, and [method NetwMultiplayer.transport_unregister] is how a registration is replaced or withdrawn.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_accepts_empty_address" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Override to declare that an empty address means something to this transport, so a form accepts a blank field. [method accepts_empty_address] answers this, or [method accepts_empty_address_default] when nothing overrode it, which answers [code]false[/code].
+			</description>
+		</method>
+		<method name="_address_help" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				Override to answer the sentence a form shows under the address field. [method address_help] answers this, or [method address_help_default] when nothing overrode it, which answers an empty string.
+			</description>
+		</method>
+		<method name="_address_label" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				Override to title the address field a Host or Add form draws for this transport: a server IP, a URL, a room id. [method address_label] answers this, or [method address_label_default] when nothing overrode it, which answers [code]"Address"[/code].
+			</description>
+		</method>
+		<method name="_address_placeholder" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				Override to answer what a form shows in the empty address field. [method address_placeholder] answers this, or [method address_placeholder_default] when nothing overrode it, which answers an empty string.
+			</description>
+		</method>
+		<method name="_adopt" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+				Override to receive [param peer] once it has been built or elevated onto this transport, so the transport can hold what it needs to service it afterward. Has no default: the base implementation does nothing.
+			</description>
+		</method>
+		<method name="_browse" qualifiers="virtual">
+			<return type="void" />
+			<description>
+				Override to list what this peer class can reach and report it with [method publish_targets]. Called by [method NetwMultiplayer.endpoint_refresh] on a transport whose [method _can_browse] answers [code]true[/code], and answered as many times as the listing changes rather than once: a lobby service that pushes updates publishes again from [method _poll].
+				The listing this publishes REPLACES this peer class's rows, and a row's browse id is stable per address, so republishing does not renumber what a browser has drawn.
+			</description>
+		</method>
+		<method name="_can_browse" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Override to answer whether this transport lists at all. [method can_browse] answers this, or [method can_browse_default] when nothing overrode it, which answers [code]false[/code]: a transport that only builds and probes is asked for no listing.
+			</description>
+		</method>
+		<method name="_can_host_here" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Override to refuse hosting from this process, for a transport whose backend only ever joins. [method can_host_here] answers this, or [method can_host_here_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="_can_probe" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Override to declare that a row of this peer class can be asked what is there without joining it, which is what [method NetwMultiplayer.endpoint_probe] needs. [method can_probe] answers this, or [method can_probe_default] when nothing overrode it, which answers [code]false[/code].
+			</description>
+		</method>
+		<method name="_cancel_peer_creation" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<description>
+				Override to release whatever [method _make_peer] provisionally acquired for [param ticket] when the request is withdrawn before it delivered, either by [method NetwMultiplayer.transport_cancel_peer_creation] or by [method NetwMultiplayer.transport_unregister] withdrawing this transport. It is request-scoped cleanup and not [method _close], which tears down an adopted runtime instead. Has no default: the base implementation does nothing.
+				A request whose work cannot be recalled keeps only enough state to discard the eventual result. Reporting it under a different ticket is a defect, and reporting it under this one is discarded.
+			</description>
+		</method>
+		<method name="_client_settings" qualifiers="virtual">
+			<return type="Dictionary" />
+			<description>
+				Override to answer the fields a join form asks for, in the shape [method _host_settings] answers, and [method NetwMultiplayer.transport_create_peer] reads them back the same way. A transport that overrides nothing offers no fields.
+				Answer a key here when [method _make_peer] reads it under [constant NetwMultiplayer.TRANSPORT_MODE_CLIENT]. The two answers overlap by however much the two modes share, and neither is derived from the other.
+				[codeblock]
+				func _client_settings() -&gt; Dictionary:
+				    return {region = "eu"}
+
+				func _host_settings() -&gt; Dictionary:
+				    var settings := _client_settings()
+				    settings.max_players = 32
+				    return settings
+				[/codeblock]
+			</description>
+		</method>
+		<method name="_close" qualifiers="virtual">
+			<return type="void" />
+			<description>
+				Override to release whatever this transport is holding when the session it was made for ends. Has no default: the base implementation does nothing.
+			</description>
+		</method>
+		<method name="_diagnostics" qualifiers="virtual">
+			<return type="Dictionary" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Override to answer free-form transport state for [param peer_id], surfaced through [method NetwConnectHandle.diagnostics]. [method diagnostics] answers this, or [method diagnostics_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="_display_name" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				Override to name this transport for a Host or Add form's transport picker. [method display_name] answers this, or [method display_name_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="_host_settings" qualifiers="virtual">
+			<return type="Dictionary" />
+			<description>
+				Override to answer the fields a host form asks for, one entry per field, typed by its own value. It is what [constant NetwMultiplayer.TRANSPORT_PARAM_HOST_SETTINGS] answers and what [method NetwMultiplayer.transport_create_peer] reads back. A transport that overrides nothing offers no fields.
+				Answer a key here when [method _make_peer] reads it while hosting. [method _client_settings] is the same question asked of a join, and a key both modes read belongs in both answers.
+			</description>
+		</method>
+		<method name="_is_available" qualifiers="virtual">
+			<return type="bool" />
+			<description>
+				Override to gate this transport on the current platform. [method is_available] answers this, or [method is_available_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="_join_address" qualifiers="virtual">
+			<return type="String" />
+			<description>
+				Override to answer what another peer joins this host by, once hosting. [method join_address] answers this, or [method join_address_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="_make_peer" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<param index="1" name="mode" type="int" />
+			<param index="2" name="address" type="String" />
+			<param index="3" name="settings" type="Dictionary" />
+			<description>
+				Override to build one peer for [param ticket], reporting it with [method deliver] or reporting an [enum @GlobalScope.Error] with [method fail]. [param mode] says which peer: [constant NetwMultiplayer.TRANSPORT_MODE_HOST] builds a server from [param settings] alone, and [constant NetwMultiplayer.TRANSPORT_MODE_CLIENT] builds a client joining [param address]. [method NetwMultiplayer.transport_create_peer] is what runs this; nothing calls it as a plain method. Has no default: the base implementation fails with [constant @GlobalScope.ERR_UNCONFIGURED].
+				Report [constant @GlobalScope.ERR_ALREADY_IN_USE] through [method fail] when a host bind failed because the port is taken, which is what a caller reads to decide that someone is already hosting here.
+				Deliver a peer that is still connecting rather than waiting for it to connect: the assignment edge is what watches for the connection, and a peer that came alive before the session held it would have announced to nobody.
+				[param ticket] identifies this request and nothing else. Capture it in a local before the first [code]await[/code]: it is the only thing that tells [method deliver] which request a late answer belongs to.
+			</description>
+		</method>
+		<method name="_make_probe_peer" qualifiers="virtual">
+			<return type="MultiplayerPeer" />
+			<param index="0" name="address" type="String" />
+			<description>
+				Override to build the [MultiplayerPeer] [method probe_default] opens against [param address] to speak the stock probe protocol. [method make_probe_peer] answers this, or [method make_probe_peer_default] when nothing overrode it, which answers [code]null[/code].
+			</description>
+		</method>
+		<method name="_peer_class" qualifiers="virtual">
+			<return type="StringName" />
+			<description>
+				Override to name the [MultiplayerPeer] class this transport owns, [code]&amp;"ENetMultiplayerPeer"[/code] or a scripted peer's own [code]class_name[/code]. This is the key the transport book looks a transport up by. [method peer_class] answers this, or [method peer_class_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="_poll" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="delta" type="float" />
+			<description>
+				Override to service this transport's carrier once per frame, before the plane reads anything off it. Has no default: the base implementation does nothing.
+			</description>
+		</method>
+		<method name="_probe" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<param index="1" name="address" type="String" />
+			<description>
+				Override to answer what a host at [param address] is without joining it, reporting the [NetwServerInfo] with [method deliver_probe] or an [enum @GlobalScope.Error] with [method fail]. [method probe_default] is the stock answer, opening [method make_probe_peer] and speaking the built-in probe protocol over it, and it is this seam's only route back to that stock behaviour, because a GDScript subclass cannot [code]super()[/code] into a [code]GDVIRTUAL[/code]. The default fails with [constant @GlobalScope.ERR_UNAVAILABLE] when [method make_probe_peer] answers [code]null[/code].
+			</description>
+		</method>
+		<method name="_recognizes_peer" qualifiers="virtual">
+			<return type="bool" />
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+				Override to decide whether [param peer], built and assigned by hand rather than through this transport, still elevates onto it. Claiming a peer subclass this transport did not build, or refusing a peer of the exact class it configures under some other condition, both go here. [method recognizes_peer] answers this, or [method recognizes_peer_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="_timeout_hint" qualifiers="virtual">
+			<return type="float" />
+			<description>
+				Override to bound how long [method _make_peer] or [method _probe] may run before the plane fails the attempt with [constant @GlobalScope.ERR_TIMEOUT]. A negative answer declares this transport self-managed, and it is never counted down. [method timeout_hint] answers this, or [method timeout_hint_default] when nothing overrode it, which answers [code]5.0[/code].
+			</description>
+		</method>
+		<method name="accepts_empty_address">
+			<return type="bool" />
+			<description>
+				Answers [method _accepts_empty_address], or [method accepts_empty_address_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="accepts_empty_address_default">
+			<return type="bool" />
+			<description>
+				[code]false[/code]: an address is required.
+			</description>
+		</method>
+		<method name="address_help">
+			<return type="String" />
+			<description>
+				Answers [method _address_help], or [method address_help_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="address_help_default">
+			<return type="String" />
+			<description>
+				An empty string.
+			</description>
+		</method>
+		<method name="address_label">
+			<return type="String" />
+			<description>
+				Answers [method _address_label], or [method address_label_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="address_label_default">
+			<return type="String" />
+			<description>
+				[code]"Address"[/code].
+			</description>
+		</method>
+		<method name="address_placeholder">
+			<return type="String" />
+			<description>
+				Answers [method _address_placeholder], or [method address_placeholder_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="address_placeholder_default">
+			<return type="String" />
+			<description>
+				An empty string.
+			</description>
+		</method>
+		<method name="can_browse">
+			<return type="bool" />
+			<description>
+				Answers [method _can_browse], or [method can_browse_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="can_browse_default">
+			<return type="bool" />
+			<description>
+				[code]false[/code]: a transport lists nothing unless it says otherwise.
+			</description>
+		</method>
+		<method name="can_host_here">
+			<return type="bool" />
+			<description>
+				Answers [method _can_host_here], or [method can_host_here_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="can_host_here_default">
+			<return type="bool" />
+			<description>
+				[code]true[/code].
+			</description>
+		</method>
+		<method name="can_probe">
+			<return type="bool" />
+			<description>
+				Answers [method _can_probe], or [method can_probe_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="can_probe_default">
+			<return type="bool" />
+			<description>
+				[code]false[/code]: a transport probes nothing unless it says otherwise.
+			</description>
+		</method>
+		<method name="client_settings">
+			<return type="Dictionary" />
+			<description>
+				Answers [method _client_settings], or [method client_settings_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="client_settings_default">
+			<return type="Dictionary" />
+			<description>
+				An empty [Dictionary]: a join form offers no fields until a transport names some.
+			</description>
+		</method>
+		<method name="deliver">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<param index="1" name="peer" type="MultiplayerPeer" />
+			<description>
+				Reports [param peer] as what [method _make_peer] built for [param ticket]. Call it once, from any frame. A second call, or a call under a ticket this instance is no longer building, does nothing.
+			</description>
+		</method>
+		<method name="deliver_probe">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<param index="1" name="info" type="NetwServerInfo" />
+			<description>
+				Reports [param info] as what [method _probe] found at the address [param ticket] named. Call it once, from any frame.
+			</description>
+		</method>
+		<method name="diagnostics">
+			<return type="Dictionary" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Answers [method _diagnostics] for [param peer_id], or [method diagnostics_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="diagnostics_default">
+			<return type="Dictionary" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				An empty [Dictionary], ignoring [param peer_id].
+			</description>
+		</method>
+		<method name="display_name">
+			<return type="String" />
+			<description>
+				Answers [method _display_name], or [method display_name_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="display_name_default">
+			<return type="String" />
+			<description>
+				[code]"Generic"[/code].
+			</description>
+		</method>
+		<method name="fail">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<param index="1" name="error" type="int" enum="Error" />
+			<param index="2" name="message" type="String" default="&quot;&quot;" />
+			<description>
+				Reports that [param ticket] cannot finish, with [param error] as the reason and [param message] as the sentence behind it. Call it once, from any frame, in place of [method deliver] or [method deliver_probe].
+			</description>
+		</method>
+		<method name="host_settings">
+			<return type="Dictionary" />
+			<description>
+				Answers [method _host_settings], or [method host_settings_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="host_settings_default">
+			<return type="Dictionary" />
+			<description>
+				An empty [Dictionary]: a host form offers no fields until a transport names some.
+			</description>
+		</method>
+		<method name="is_available">
+			<return type="bool" />
+			<description>
+				Answers [method _is_available], or [method is_available_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="is_available_default">
+			<return type="bool" />
+			<description>
+				[code]true[/code].
+			</description>
+		</method>
+		<method name="join_address">
+			<return type="String" />
+			<description>
+				Answers [method _join_address], or [method join_address_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="join_address_default">
+			<return type="String" />
+			<description>
+				An empty [String].
+			</description>
+		</method>
+		<method name="make_probe_peer">
+			<return type="MultiplayerPeer" />
+			<param index="0" name="address" type="String" />
+			<description>
+				Answers [method _make_probe_peer] for [param address], or [method make_probe_peer_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="make_probe_peer_default">
+			<return type="MultiplayerPeer" />
+			<param index="0" name="address" type="String" />
+			<description>
+				[code]null[/code], ignoring [param address]. [method probe_default] reads this as a transport that does not probe at all.
+			</description>
+		</method>
+		<method name="peer_class">
+			<return type="StringName" />
+			<description>
+				Answers [method _peer_class], or [method peer_class_default] when nothing overrode it. [method NetwConnectHandle.transports] lists every class currently answered this way, in registration order.
+			</description>
+		</method>
+		<method name="peer_class_default">
+			<return type="StringName" />
+			<description>
+				An empty [StringName], which the transport book never matches to a live peer.
+			</description>
+		</method>
+		<method name="peer_class_of" qualifiers="static">
+			<return type="StringName" />
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+				The class [param peer] would elevate under: its native class name, or a scripted peer's own [code]class_name[/code]. [method recognizes_peer_default] compares this against [method peer_class].
+			</description>
+		</method>
+		<method name="probe_default">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<param index="1" name="address" type="String" />
+			<description>
+				The stock probe: opens [method make_probe_peer] against [param address], speaks the built-in probe protocol over it, and reports the [NetwServerInfo] it answers with. Fails with [constant @GlobalScope.ERR_UNAVAILABLE] when [method make_probe_peer] answers [code]null[/code]. This is [method _probe]'s only route back to stock behaviour, since a GDScript subclass cannot [code]super()[/code] into a [code]GDVIRTUAL[/code].
+			</description>
+		</method>
+		<method name="publish_targets">
+			<return type="void" />
+			<param index="0" name="addresses" type="PackedStringArray" />
+			<param index="1" name="names" type="PackedStringArray" default="PackedStringArray()" />
+			<param index="2" name="infos" type="Array" default="[]" />
+			<description>
+				Publishes what [method _browse] found: one row per entry of [param addresses], titled by the matching entry of [param names] and described by the matching [NetwServerInfo] of [param infos] where one is known. The three arrays are read in step, and a short [param names] or [param infos] simply leaves those rows untitled or unobserved.
+				[codeblock]
+				func _browse() -&gt; void:
+				    var lobbies := await _sdk.search()
+				    var addresses := PackedStringArray()
+				    var names := PackedStringArray()
+				    var infos: Array[NetwServerInfo] = []
+				    for lobby in lobbies:
+				        addresses.append(lobby.id)
+				        names.append(lobby.name)
+				        infos.append(_info_of(lobby))
+				    publish_targets(_peer_class(), addresses, names, infos)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="recognizes_peer">
+			<return type="bool" />
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+				Answers [method _recognizes_peer] for [param peer], or [method recognizes_peer_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="recognizes_peer_default">
+			<return type="bool" />
+			<param index="0" name="peer" type="MultiplayerPeer" />
+			<description>
+				[code]true[/code] when [method peer_class_of] applied to [param peer] answers the same [StringName] as [method peer_class].
+			</description>
+		</method>
+		<method name="report">
+			<return type="void" />
+			<param index="0" name="ticket" type="RID" />
+			<param index="1" name="step" type="StringName" />
+			<param index="2" name="message" type="String" />
+			<param index="3" name="ratio" type="float" />
+			<description>
+				Forwards [param step], [param message] and [param ratio] to the progress [Callable] [param ticket] was created with. Does nothing once [param ticket] has settled, so a slow provider cannot report progress behind a result the caller already has.
+			</description>
+		</method>
+		<method name="timeout_hint">
+			<return type="float" />
+			<description>
+				Answers [method _timeout_hint], or [method timeout_hint_default] when nothing overrode it.
+			</description>
+		</method>
+		<method name="timeout_hint_default">
+			<return type="float" />
+			<description>
+				[code]5.0[/code] seconds.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="session" type="NetwMultiplayer" setter="" getter="get_session">
+			The session this instance was made for. Read-only, and [code]null[/code] on a prototype.
+		</member>
+	</members>
+</class>

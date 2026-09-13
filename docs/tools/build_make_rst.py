@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild ``tools/make_rst.py`` from the pristine vendor copy and the patches.
-
-Usage::
-
-    python tools/build_make_rst.py            # rebuild
-    python tools/build_make_rst.py --check    # verify the working copy is up-to-date
-
-The vendor file (``tools/vendor/make_rst.py``) is a pristine copy of
-https://raw.githubusercontent.com/godotengine/godot/refs/heads/4.6/doc/tools/make_rst.py.
-All Networked-specific modifications live in ``tools/patches/*.patch`` and are
-applied in lexical order. See ``tools/patches/README.md`` for what each does.
-"""
+"""Rebuild ``tools/make_rst.py`` from the pristine vendor copy and the patches."""
 
 from __future__ import annotations
 

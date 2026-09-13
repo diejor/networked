@@ -1,11 +1,3 @@
-// What the interest matrix owes each peer, and in what order.
-//
-// The planner decides and materializes nothing, so every law here is about a
-// sequence of operations rather than about a node. The ones that matter are
-// the two orderings and the parent clamp: a peer that receives a child before
-// its parent has nowhere to put it, and a peer that keeps a child whose parent
-// it dropped is holding an orphan neither side can address.
-
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -60,11 +52,10 @@ SpawnRow row(
 
 void keeps(SpawnRow &r_row, int64_t p_peer) {
     LeaveDecision decision;
-    decision.despawn = false;
+    decision.hide = false;
     r_row.leave.insert(p_peer, decision);
 }
 
-// Parent at route 1, child at route 2 under it.
 LocalVector<SpawnRow> nested(
     const PackedInt32Array &p_parent_held,
     const PackedInt32Array &p_child_held,
@@ -125,7 +116,6 @@ TEST_CASE(
     NETW_CHECK_EQ(flat[1], 2);
     NETW_CHECK_EQ(flat[2], 3);
 
-    // Route 3 was armed last, and route 2 moved under it.
     const LocalVector<int64_t> moved = netw::repl::ancestry_order(
         arm_order({1, 2, 3}),
         anchored({{1, 0}, {2, 3}, {3, 0}})
@@ -156,9 +146,6 @@ TEST_CASE(
     "[Networked][Repl][Hosted] an anchor that is mid-move keeps its route in "
     "the order rather than dropping it"
 ) {
-    // Two routes naming each other is a shape the tree cannot hold, so it can
-    // only be read mid-move. Neither may be lost: a route missing from the
-    // order is never sent to anyone.
     const LocalVector<int64_t> order = netw::repl::ancestry_order(
         arm_order({1, 2}),
         anchored({{1, 2}, {2, 1}})
@@ -171,19 +158,18 @@ TEST_CASE(
     "[Networked][Repl][Hosted] a route whose parent is not in the book is "
     "placed with the roots"
 ) {
-    const LocalVector<int64_t> order = netw::repl::ancestry_order(
-        arm_order({5}),
-        anchored({{5, 99}})
-    );
+    const LocalVector<int64_t> order
+        = netw::repl::ancestry_order(arm_order({5}), anchored({{5, 99}}));
 
     REQUIRE(order.size() == 1);
     NETW_CHECK_EQ(order[0], 5);
 }
 
 TEST_CASE("[Networked][Repl][Hosted] a gain is planned parent before child") {
-    const LocalVector<int64_t> gained
-        = routes(reconcile(nested(nobody(), nobody(), true, true), only(PEER)),
-                 SpawnAction::SPAWN);
+    const LocalVector<int64_t> gained = routes(
+        reconcile(nested(nobody(), nobody(), true, true), only(PEER)),
+        SpawnAction::SPAWN
+    );
 
     REQUIRE(gained.size() == 2);
     NETW_CHECK_EQ(gained[0], 1);
@@ -191,10 +177,10 @@ TEST_CASE("[Networked][Repl][Hosted] a gain is planned parent before child") {
 }
 
 TEST_CASE("[Networked][Repl][Hosted] a loss is planned child before parent") {
-    const LocalVector<int64_t> lost
-        = routes(reconcile(nested(held(PEER), held(PEER), false, false),
-                           only(PEER)),
-                 SpawnAction::DESPAWN);
+    const LocalVector<int64_t> lost = routes(
+        reconcile(nested(held(PEER), held(PEER), false, false), only(PEER)),
+        SpawnAction::HIDE
+    );
 
     REQUIRE(lost.size() == 2);
     NETW_CHECK_EQ(lost[0], 2);
@@ -224,10 +210,10 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Repl][Hosted] a child may leave while its parent stays"
 ) {
-    const LocalVector<int64_t> lost
-        = routes(reconcile(nested(held(PEER), held(PEER), true, false),
-                           only(PEER)),
-                 SpawnAction::DESPAWN);
+    const LocalVector<int64_t> lost = routes(
+        reconcile(nested(held(PEER), held(PEER), true, false), only(PEER)),
+        SpawnAction::HIDE
+    );
 
     REQUIRE(lost.size() == 1);
     NETW_CHECK_EQ(lost[0], 2);
@@ -256,12 +242,11 @@ TEST_CASE(
     keeps(rows[1], PEER);
 
     const LocalVector<SpawnOp> plan = reconcile(rows, only(PEER));
-    const LocalVector<int64_t> lost = routes(plan, SpawnAction::DESPAWN);
+    const LocalVector<int64_t> lost = routes(plan, SpawnAction::HIDE);
 
     REQUIRE(lost.size() == 2);
     NETW_CHECK_EQ(lost[0], 2);
     NETW_CHECK_EQ(lost[1], 1);
-    // The child's own decision said keep, so only the force explains this.
     CHECK(plan[0].forced);
 }
 
@@ -276,7 +261,7 @@ TEST_CASE(
     const LocalVector<SpawnOp> plan = reconcile(rows, only(PEER));
 
     NETW_CHECK_EQ(count(plan, SpawnAction::RETAIN), 2);
-    NETW_CHECK_EQ(count(plan, SpawnAction::DESPAWN), 0);
+    NETW_CHECK_EQ(count(plan, SpawnAction::HIDE), 0);
 }
 
 TEST_CASE(
@@ -291,9 +276,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(reconcile(rows, nobody()).size()), 0);
 }
 
-TEST_CASE(
-    "[Networked][Repl][Hosted] the same rows plan the same way twice"
-) {
+TEST_CASE("[Networked][Repl][Hosted] the same rows plan the same way twice") {
     LocalVector<SpawnRow> rows = nested(held(PEER), nobody(), true, true);
     rows[0].local_desired[PEER] = true;
 
@@ -305,6 +288,27 @@ TEST_CASE(
         CHECK(left[i].action == right[i].action);
         NETW_CHECK_EQ(left[i].route, right[i].route);
         NETW_CHECK_EQ(left[i].peer, right[i].peer);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] P13 the same intake replays to the same plan, "
+    "operation for operation, because the planner reads nothing but its rows"
+) {
+    LocalVector<SpawnRow> rows;
+    rows.push_back(row(1, 0, nobody(), true));
+    rows.push_back(row(2, 1, nobody(), true));
+    rows.push_back(row(3, 0, held(PEER), false));
+
+    const LocalVector<SpawnOp> left = reconcile(rows, only(PEER));
+    const LocalVector<SpawnOp> right = reconcile(rows, only(PEER));
+
+    REQUIRE(left.size() == right.size());
+    for (uint32_t at = 0; at < left.size(); at++) {
+        NETW_CHECK_EQ(int64_t(left[at].action), int64_t(right[at].action));
+        NETW_CHECK_EQ(left[at].route, right[at].route);
+        NETW_CHECK_EQ(left[at].peer, right[at].peer);
+        NETW_CHECK_EQ(int64_t(left[at].forced), int64_t(right[at].forced));
     }
 }
 

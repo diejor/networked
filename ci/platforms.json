@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "basename": "libnetworked",
+  "addon_bin": "addons/networked/bin",
+  "precision": "single",
+  "platforms": {
+    "linux": {
+      "package": "shared_object",
+      "strip": "elf",
+      "targets": ["template_debug", "template_release"],
+      "slices": [
+        {"slice": "x86_64", "arch": "x86_64", "runner": "ubuntu-22.04"},
+        {"slice": "arm64", "arch": "arm64", "runner": "ubuntu-22.04-arm"}
+      ]
+    },
+    "windows": {
+      "package": "shared_object",
+      "strip": "none",
+      "targets": ["template_debug", "template_release"],
+      "slices": [
+        {"slice": "x86_64", "arch": "x86_64", "runner": "windows-2022"}
+      ]
+    },
+    "macos": {
+      "package": "framework",
+      "strip": "none",
+      "targets": ["template_debug", "template_release"],
+      "slices": [
+        {"slice": "x86_64", "arch": "x86_64", "runner": "macos-14"},
+        {"slice": "arm64", "arch": "arm64", "runner": "macos-14"}
+      ]
+    },
+    "android": {
+      "package": "shared_object",
+      "strip": "ndk",
+      "targets": ["template_debug", "template_release"],
+      "slices": [
+        {"slice": "arm64", "arch": "arm64", "runner": "ubuntu-22.04"},
+        {"slice": "x86_64", "arch": "x86_64", "runner": "ubuntu-22.04"}
+      ]
+    },
+    "ios": {
+      "package": "xcframework",
+      "strip": "none",
+      "targets": ["template_debug", "template_release"],
+      "slices": [
+        {"slice": "arm64", "arch": "arm64", "runner": "macos-14"},
+        {
+          "slice": "arm64-simulator",
+          "arch": "arm64",
+          "runner": "macos-14",
+          "simulator": true,
+          "tag": "simulator",
+          "flags": ["ios_simulator=yes"]
+        },
+        {
+          "slice": "x86_64-simulator",
+          "arch": "x86_64",
+          "runner": "macos-14",
+          "simulator": true,
+          "tag": "simulator",
+          "flags": ["ios_simulator=yes"]
+        }
+      ]
+    },
+    "web": {
+      "package": "wasm",
+      "strip": "none",
+      "targets": ["template_debug", "template_release"],
+      "slices": [
+        {
+          "slice": "wasm32",
+          "arch": "wasm32",
+          "runner": "ubuntu-22.04",
+          "threads": false,
+          "tag": "nothreads",
+          "flags": ["threads=no"]
+        }
+      ]
+    }
+  },
+  "profiles": {
+    "pr": {
+      "cells": [
+        "linux:x86_64:template_debug",
+        "linux:x86_64:template_release",
+        "windows:x86_64:template_debug",
+        "windows:x86_64:template_release",
+        "macos:arm64:template_debug",
+        "macos:arm64:template_release",
+        "web:wasm32:template_release"
+      ]
+    },
+    "release": {"platforms": ["linux", "windows", "macos", "android", "ios", "web"]},
+    "desktop": {"platforms": ["linux", "windows", "macos"]},
+    "mobileweb": {"platforms": ["android", "ios", "web"]},
+    "local": {
+      "cells": [
+        "linux:x86_64:template_debug",
+        "linux:x86_64:template_release"
+      ]
+    }
+  }
+}

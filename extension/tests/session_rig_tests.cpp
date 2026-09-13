@@ -17,10 +17,7 @@ TEST_CASE(
     Object *server = rig.server();
     REQUIRE(server != nullptr);
 
-    NETW_CHECK_EQ(
-        int(server->get("state")),
-        int(SessionCore::STATE_ONLINE)
-    );
+    NETW_CHECK_EQ(int(server->get("state")), int(SessionCore::STATE_ONLINE));
     NETW_CHECK_EQ(
         int(server->get("role")),
         int(SessionCore::ROLE_LISTEN_SERVER)
@@ -36,10 +33,7 @@ TEST_CASE(
     REQUIRE(client != nullptr);
     rig.pump(4);
 
-    NETW_CHECK_EQ(
-        int(client->get("state")),
-        int(SessionCore::STATE_ONLINE)
-    );
+    NETW_CHECK_EQ(int(client->get("state")), int(SessionCore::STATE_ONLINE));
     NETW_CHECK_EQ(int(client->get("role")), int(SessionCore::ROLE_CLIENT));
 }
 

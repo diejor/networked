@@ -9,25 +9,30 @@ namespace TestNetwClockEngine {
 
 using namespace godot;
 using netw::ClockEngine;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw_test::Recorder;
 
 constexpr int EXACT_RATE = 8;
 constexpr double TICK = 0.125;
 constexpr double HALF_TICK = 0.0625;
+constexpr double AN_HOUR = 3600.0;
 
 struct Clocked {
-    Ref<NetwMultiplayerCore> session;
+    Ref<NetwMultiplayer> session;
     ClockEngine *clock = nullptr;
 
-    ClockEngine *operator->() const { return clock; }
-    Object *sink() const { return session.ptr(); }
+    ClockEngine *operator->() const {
+        return clock;
+    }
+    Object *sink() const {
+        return session.ptr();
+    }
 };
 
 Clocked make_clock(int rate = EXACT_RATE) {
     Clocked out;
     out.session.instantiate();
-    out.clock = &out.session->get_clock_handle()->engine;
+    out.clock = &out.session->clock_engine();
     out.clock->set_tickrate(rate);
     return out;
 }
@@ -71,20 +76,32 @@ TEST_CASE(
     SUBCASE("the loop brackets every frame, tick or not") {
         Recorder recorder(
             clock.sink(),
-            {"before_tick_loop", "before_tick", "on_tick", "after_tick",
-             "after_tick_loop"}
+            {"clock_before_tick_loop",
+             "clock_before_tick",
+             "clock_on_tick",
+             "clock_after_tick",
+             "clock_after_tick_loop"}
         );
         clock->physics_step(TICK);
-        CHECK(recorder.order()
-              == Vector<StringName>(
-                  {"before_tick_loop", "before_tick", "on_tick", "after_tick",
-                   "after_tick_loop"}
-              ));
+        CHECK(
+            recorder.order()
+            == Vector<StringName>(
+                {"clock_before_tick_loop",
+                 "clock_before_tick",
+                 "clock_on_tick",
+                 "clock_after_tick",
+                 "clock_after_tick_loop"}
+            )
+        );
 
         recorder.clear();
         clock->physics_step(0.0);
-        CHECK(recorder.order()
-              == Vector<StringName>({"before_tick_loop", "after_tick_loop"}));
+        CHECK(
+            recorder.order()
+            == Vector<StringName>(
+                {"clock_before_tick_loop", "clock_after_tick_loop"}
+            )
+        );
     }
 }
 
@@ -98,7 +115,9 @@ TEST_CASE(
     clock->physics_step(TICK * 5.0);
     NETW_CHECK_EQ(clock->get_tick(), 2);
 
-    SUBCASE("the residue is still owed, so an empty frame keeps drawing on it") {
+    SUBCASE(
+        "the residue is still owed, so an empty frame keeps drawing on it"
+    ) {
         clock->physics_step(0.0);
         NETW_CHECK_EQ(clock->get_tick(), 4);
     }
@@ -137,24 +156,27 @@ TEST_CASE(
     const Clocked stepped = make_clock();
     const Clocked pumped = make_clock();
 
-    Recorder on_stepped(stepped.sink(), {"on_tick"});
-    Recorder on_pumped(pumped.sink(), {"on_tick"});
+    Recorder on_stepped(stepped.sink(), {"clock_on_tick"});
+    Recorder on_pumped(pumped.sink(), {"clock_on_tick"});
 
     stepped->force_step(3);
     pumped->physics_step(TICK * 3.0);
 
     NETW_CHECK_EQ(stepped->get_tick(), pumped->get_tick());
-    NETW_CHECK_EQ(on_stepped.count("on_tick"), on_pumped.count("on_tick"));
-    NETW_CHECK_EQ(on_stepped.count("on_tick"), 3);
+    NETW_CHECK_EQ(
+        on_stepped.count("clock_on_tick"),
+        on_pumped.count("clock_on_tick")
+    );
+    NETW_CHECK_EQ(on_stepped.count("clock_on_tick"), 3);
 
     SUBCASE("a step is not a frame, so it brackets no tick loop") {
         Recorder brackets(
             stepped.sink(),
-            {"before_tick_loop", "after_tick_loop"}
+            {"clock_before_tick_loop", "clock_after_tick_loop"}
         );
         stepped->force_step(1);
-        NETW_CHECK_EQ(brackets.count("before_tick_loop"), 0);
-        NETW_CHECK_EQ(brackets.count("after_tick_loop"), 0);
+        NETW_CHECK_EQ(brackets.count("clock_before_tick_loop"), 0);
+        NETW_CHECK_EQ(brackets.count("clock_after_tick_loop"), 0);
     }
 
     SUBCASE("stepping zero advances nothing") {
@@ -169,8 +191,10 @@ TEST_CASE(
 ) {
     const Clocked clock = make_clock(60);
 
-    CHECK(admitted(clock, Vector<int>({1, 0, 1, 0, 0, 1}))
-          == Vector<bool>({true, true, true, true, true, true}));
+    CHECK(
+        admitted(clock, Vector<int>({1, 0, 1, 0, 0, 1}))
+        == Vector<bool>({true, true, true, true, true, true})
+    );
 
     SUBCASE("and it never reports falling behind") {
         clock->physics_step(clock->ticktime() * 3.0);
@@ -185,8 +209,10 @@ TEST_CASE(
     const Clocked clock = make_clock(60);
     clock->arm_gate();
 
-    CHECK(admitted(clock, Vector<int>({1, 0, 1, 1, 0, 1}))
-          == Vector<bool>({true, false, true, true, false, true}));
+    CHECK(
+        admitted(clock, Vector<int>({1, 0, 1, 1, 0, 1}))
+        == Vector<bool>({true, false, true, true, false, true})
+    );
 
     SUBCASE("releasing the last gate gives the world its frames back") {
         clock->force_step(0);
@@ -201,7 +227,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Clock][Hosted] L7 a tick worth two steps admits two frames"
 ) {
-    const Engine *engine = Engine::get_singleton();
+    const godot::Engine *engine = godot::Engine::get_singleton();
     REQUIRE(engine != nullptr);
     if (engine == nullptr) {
         return;
@@ -211,8 +237,10 @@ TEST_CASE(
     NETW_CHECK_EQ(clock->physics_steps_per_tick(), 2);
     clock->arm_gate();
 
-    CHECK(admitted(clock, Vector<int>({1, 0, 1, 0, 0, 1}))
-          == Vector<bool>({true, true, true, true, false, true}));
+    CHECK(
+        admitted(clock, Vector<int>({1, 0, 1, 0, 0, 1}))
+        == Vector<bool>({true, true, true, true, false, true})
+    );
 }
 
 TEST_CASE(
@@ -253,7 +281,9 @@ TEST_CASE(
     CHECK(clock->is_simulating());
 }
 
-TEST_CASE("[Networked][Clock][Hosted] L10 the derived readings follow the rate") {
+TEST_CASE(
+    "[Networked][Clock][Hosted] L10 the derived readings follow the rate"
+) {
     for (const int rate : {20, 60}) {
         const Clocked clock = make_clock(rate);
         CHECK(std::fabs(clock->ticktime() - 1.0 / double(rate)) < 0.0001);
@@ -362,20 +392,17 @@ TEST_CASE(
     clock->set_jitter_stability_threshold(0.01);
     clock->set_jitter_multiplier(2.0);
     clock->set_display_offset(1);
-    Recorder recorder(
-        clock.sink(), {"stability_changed", "display_offset_insufficient"}
-    );
+    Recorder recorder(clock.sink(), {"clock_stability_changed"});
 
     clock->handle_pong(0.02, 100, 0.0, true);
     clock->handle_pong(0.02, 100, 0.0, true);
     CHECK(clock->is_stable());
-    NETW_CHECK_EQ(recorder.count("stability_changed"), 0);
+    NETW_CHECK_EQ(recorder.count("clock_stability_changed"), 0);
 
     clock->handle_pong(0.2, 100, 0.0, true);
     CHECK_FALSE(clock->is_stable());
-    NETW_CHECK_EQ(recorder.count("stability_changed"), 1);
+    NETW_CHECK_EQ(recorder.count("clock_stability_changed"), 1);
     CHECK(clock->recommended_display_offset() > 1);
-    NETW_CHECK_EQ(recorder.count("display_offset_insufficient"), 1);
 
     SUBCASE("the window forgets, so the outlier ages out of the average") {
         const double spiked = clock->rtt_avg();
@@ -423,6 +450,11 @@ TEST_CASE(
     SUBCASE("the frame that has already elapsed counts toward the reading") {
         clock->mark_step(HALF_TICK);
         NETW_CHECK_CLOSE(clock->tick_factor(), 1.0, 0.001);
+    }
+
+    SUBCASE("a span longer than the process has been alive still measures") {
+        clock->mark_step(AN_HOUR);
+        NETW_CHECK_CLOSE(clock->seconds_since_step(), AN_HOUR, 0.001);
     }
 }
 
@@ -487,16 +519,20 @@ TEST_CASE("[Networked][Clock][Hosted] clear restarts the session") {
     CHECK(std::fabs(clock->tick_phase()) < 0.0000001);
 }
 
-TEST_CASE("[Networked][Clock][Hosted] a window in pumps rounds up, so a wait "
-          "is never shorter than the seconds it was asked for") {
+TEST_CASE(
+    "[Networked][Clock][Hosted] a window in pumps rounds up, so a wait "
+    "is never shorter than the seconds it was asked for"
+) {
     NETW_CHECK_EQ(ClockEngine::pumps_for(2.0, 30.0), int64_t(60));
     NETW_CHECK_EQ(ClockEngine::pumps_for(0.05, 30.0), int64_t(2));
     NETW_CHECK_EQ(ClockEngine::pumps_for(0.5, 60.0), int64_t(30));
     NETW_CHECK_EQ(ClockEngine::pumps_for(0.0, 30.0), int64_t(0));
 }
 
-TEST_CASE("[Networked][Clock][Hosted] a rate below one pump a second counts "
-          "as one, so an unconfigured clock still expires a wait") {
+TEST_CASE(
+    "[Networked][Clock][Hosted] a rate below one pump a second counts "
+    "as one, so an unconfigured clock still expires a wait"
+) {
     NETW_CHECK_EQ(ClockEngine::pumps_for(3.0, 0.0), int64_t(3));
     NETW_CHECK_EQ(ClockEngine::pumps_for(3.0, 0.25), int64_t(3));
     NETW_CHECK_EQ(ClockEngine::pumps_for(3.0, -30.0), int64_t(3));
@@ -509,19 +545,27 @@ TEST_CASE(
     const Clocked clock = pinned_clock();
     Recorder recorder(
         clock.sink(),
-        {"before_tick_loop", "before_tick", "on_tick", "after_tick",
-         "after_tick_loop"}
+        {"clock_before_tick_loop",
+         "clock_before_tick",
+         "clock_on_tick",
+         "clock_after_tick",
+         "clock_after_tick_loop"}
     );
 
     clock->begin_tick_loop();
     clock->force_step(1);
     clock->end_tick_loop();
 
-    CHECK(recorder.order()
-          == Vector<StringName>(
-              {"before_tick_loop", "before_tick", "on_tick", "after_tick",
-               "after_tick_loop"}
-          ));
+    CHECK(
+        recorder.order()
+        == Vector<StringName>(
+            {"clock_before_tick_loop",
+             "clock_before_tick",
+             "clock_on_tick",
+             "clock_after_tick",
+             "clock_after_tick_loop"}
+        )
+    );
 }
 
 TEST_CASE(
@@ -531,16 +575,16 @@ TEST_CASE(
     const Clocked clock = pinned_clock();
     Recorder recorder(
         clock.sink(),
-        {"before_tick_loop", "after_tick_loop", "on_tick"}
+        {"clock_before_tick_loop", "clock_after_tick_loop", "clock_on_tick"}
     );
     const int before = clock->get_tick();
 
     clock->begin_tick_loop();
     clock->end_tick_loop();
 
-    NETW_CHECK_EQ(recorder.count("before_tick_loop"), 1);
-    NETW_CHECK_EQ(recorder.count("after_tick_loop"), 1);
-    NETW_CHECK_EQ(recorder.count("on_tick"), 0);
+    NETW_CHECK_EQ(recorder.count("clock_before_tick_loop"), 1);
+    NETW_CHECK_EQ(recorder.count("clock_after_tick_loop"), 1);
+    NETW_CHECK_EQ(recorder.count("clock_on_tick"), 0);
     NETW_CHECK_EQ(clock->get_tick(), before);
 }
 
@@ -551,14 +595,14 @@ TEST_CASE(
     const Clocked clock = pinned_clock();
     Recorder recorder(
         clock.sink(),
-        {"before_tick_loop", "after_tick_loop", "on_tick"}
+        {"clock_before_tick_loop", "clock_after_tick_loop", "clock_on_tick"}
     );
 
     clock->force_step(2);
 
-    NETW_CHECK_EQ(recorder.count("on_tick"), 2);
-    NETW_CHECK_EQ(recorder.count("before_tick_loop"), 0);
-    NETW_CHECK_EQ(recorder.count("after_tick_loop"), 0);
+    NETW_CHECK_EQ(recorder.count("clock_on_tick"), 2);
+    NETW_CHECK_EQ(recorder.count("clock_before_tick_loop"), 0);
+    NETW_CHECK_EQ(recorder.count("clock_after_tick_loop"), 0);
 }
 
 TEST_CASE(

@@ -21,10 +21,7 @@ double SnapshotBook::get_default_interval() const {
     return default_interval;
 }
 
-void SnapshotBook::declare(
-    const StringName &property,
-    double interval
-) {
+void SnapshotBook::declare(const StringName &property, double interval) {
     const int found = index_of(property);
     if (found >= 0) {
         columns[uint32_t(found)].interval = interval;

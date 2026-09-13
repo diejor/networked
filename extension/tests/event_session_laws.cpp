@@ -5,24 +5,23 @@
 
 #include "godot/callable.hpp"
 #include "godot/variant.hpp"
-#include "netw/carrier_frame.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/carrier_frame.hpp"
 
 namespace TestNetwEventSessionLaws {
 
 using namespace godot;
 using netw::EventPlane;
 using netw::NetwCarrierFrame;
-using netw::NetwEvent;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 using netw::SchemaCore;
 using netw_test::EventRing;
-using netw_test::LawRowFor;
-using netw_test::LawVerdict;
 using netw_test::law_broken;
 using netw_test::law_held;
+using netw_test::LawRowFor;
+using netw_test::LawVerdict;
 
 constexpr int64_t GATE_ROUTE = 5;
 constexpr int64_t ACK_PEER = 4;
@@ -159,10 +158,12 @@ public:
         netw::gd::CallError &r_call_error
     ) const override {
         if (p_count > 0) {
-            const Ref<NetwEvent> record = Ref<NetwEvent>(*p_arguments[0]);
-            if (record.is_valid()) {
-                record->detail.clear();
-                record->model.clear();
+            const Dictionary record = *p_arguments[0];
+            if (!record.is_empty()) {
+                Dictionary detail = record[netw::event_key::detail()];
+                detail.clear();
+                Dictionary model = record[netw::event_key::model()];
+                model.clear();
             }
         }
         r_return_value = Variant("garbage");
@@ -181,9 +182,9 @@ class SessionRun {
     }
 
     void drive(bool p_armed, Evidence &r_evidence) {
-        Ref<NetwMultiplayerCore> core;
+        Ref<NetwMultiplayer> core;
         core.instantiate();
-        core->get_clock_handle()->engine.set_tick(COMMIT_TICK);
+        core->clock_engine().set_tick(COMMIT_TICK);
         Variant answer;
         if (p_armed) {
             core->event_arm(true);
@@ -203,30 +204,31 @@ class SessionRun {
         for (int index = 0; index < declared.verdicts; index++) {
             core->count_verdict(ERR_INVALID_DATA, GATE_ROUTE);
         }
-        r_evidence.verdict_total = core->verdict_total(ERR_INVALID_DATA);
+        r_evidence.verdict_total
+            = core->stats_get_verdict_count(ERR_INVALID_DATA);
 
         for (int index = 0; index < declared.admissions; index++) {
-            core->stage_verdict(EventPlane::GATE_SYNC, OK, GATE_ROUTE);
+            core->finish_stage_verdict(EventPlane::GATE_SYNC, OK, GATE_ROUTE);
         }
         for (int index = 0; index < declared.refusals; index++) {
             if (plant_is(PLANT_GATE_BEHIND_THE_SESSION)) {
                 core->sink_verdict(ERR_SKIP, GATE_ROUTE);
             } else {
-                core->stage_verdict(
+                core->finish_stage_verdict(
                     EventPlane::GATE_SYNC,
                     ERR_SKIP,
                     GATE_ROUTE
                 );
             }
         }
-        r_evidence.refused_total = core->verdict_total(ERR_SKIP);
+        r_evidence.refused_total = core->stats_get_verdict_count(ERR_SKIP);
 
         PackedByteArray payload;
         payload.push_back(9);
         for (int index = 0; index < declared.intakes; index++) {
             core->receive_header(
                 INTAKE_PEER,
-                NetwCarrierFrame::build(payload, false, index + 1, -1)
+                NetwCarrierFrame::build(payload, false, index + 1, -1, 0, -1)
             );
         }
         for (int index = 0; index < declared.truncations; index++) {
@@ -242,12 +244,17 @@ class SessionRun {
 
         for (int index = 0; index < declared.acks; index++) {
             r_evidence.acks_advanced
-                += core->note_peer_ack(ACK_PEER, index + 1) ? 1 : 0;
+                += core->note_peer_ack(ACK_PEER, index + 1, 0) ? 1 : 0;
         }
 
         if (declared.commits > 0) {
             const RID schema = core->schema_create("pose");
-            core->schema_add_column(schema, "hp", SchemaCore::F32, 1);
+            core->schema_add_column(
+                schema,
+                "hp",
+                NetwMultiplayer::COLUMN_F32,
+                1
+            );
             core->schema_seal(schema);
             const RID table = core->table_create(schema);
             PackedInt64Array routes;
@@ -417,20 +424,22 @@ LawVerdict law_complete(const SessionRun &p_run) {
         );
     }
     for (int index = 0; index < ring.size(); index++) {
-        const Ref<NetwEvent> row = ring.at(index);
-        if (row.is_null()) {
+        const Dictionary row = ring.at(index);
+        if (row.is_empty()) {
             return law_broken("row %d is not a record", index);
         }
-        if (row->tick != COMMIT_TICK) {
+        const int64_t tick = int64_t(row[netw::event_key::tick()]);
+        if (tick != COMMIT_TICK) {
             return law_broken(
                 "row %d is stamped %d, not the session's %d",
                 index,
-                int(row->tick),
+                int(tick),
                 int(COMMIT_TICK)
             );
         }
-        if (row->event == EventPlane::VERDICT
-            && !row->detail.has(StringName("stage"))) {
+        const int64_t event = int64_t(row[netw::event_key::event()]);
+        const Dictionary detail = row[netw::event_key::detail()];
+        if (event == EventPlane::VERDICT && !detail.has(StringName("stage"))) {
             return law_broken("a verdict row carries no stage");
         }
     }
@@ -449,7 +458,7 @@ const SessionLaw L_COMPLETE = {
     &law_complete,
 };
 
-const SessionLaw LAWS[] = { L_NEUTRAL, L_COMPLETE };
+const SessionLaw LAWS[] = {L_NEUTRAL, L_COMPLETE};
 
 TEST_CASE("[Networked][Event][Hosted] the session's event laws hold") {
     const SessionScenario CORPUS[] = {
@@ -470,32 +479,40 @@ TEST_CASE("[Networked][Event][Hosted] the session's event laws hold") {
     }
 }
 
-TEST_CASE("[Networked][Event][Hosted] a commit behind the session's back reds "
-          "complete") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a commit behind the session's back reds "
+    "complete"
+) {
     const SessionScenario scenario = table_commits();
     const SessionRun run(scenario, PLANT_COMMIT_BEHIND_THE_SESSION);
     NETW_CELL(L_COMPLETE, scenario);
     NETW_LAW_BREAKS(L_COMPLETE, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a gate that sinks its verdict without "
-          "naming itself reds complete") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a gate that sinks its verdict without "
+    "naming itself reds complete"
+) {
     const SessionScenario scenario = gate_refusals();
     const SessionRun run(scenario, PLANT_GATE_BEHIND_THE_SESSION);
     NETW_CELL(L_COMPLETE, scenario);
     NETW_LAW_BREAKS(L_COMPLETE, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a truncated datagram handed to the "
-          "application reds complete") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a truncated datagram handed to the "
+    "application reds complete"
+) {
     const SessionScenario scenario = datagram_intake();
     const SessionRun run(scenario, PLANT_MALFORMED_READS_AS_FOREIGN);
     NETW_CELL(L_COMPLETE, scenario);
     NETW_LAW_BREAKS(L_COMPLETE, run);
 }
 
-TEST_CASE("[Networked][Event][Hosted] a plane that reads its sink reds "
-          "neutral") {
+TEST_CASE(
+    "[Networked][Event][Hosted] a plane that reads its sink reds "
+    "neutral"
+) {
     const SessionScenario scenario = mixed_session();
     const SessionRun run(scenario, PLANT_SINK_REACHES_BEHAVIOR);
     NETW_CELL(L_NEUTRAL, scenario);

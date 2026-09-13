@@ -4,39 +4,30 @@
 #include "godot/object.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/interest_engine.hpp"
+#include "netw/api/participant.hpp"
+#include "netw/interest/engine.hpp"
 #include "netw/scene_core.hpp"
 
 namespace TestNetwSceneSeatAwarenessLaws {
 
 using namespace godot;
-using netw::NetwMultiplayerCore;
+using netw::NetwMultiplayer;
 
 struct Mounted {
-    Ref<RefCounted> wrapper;
-    Ref<netw::NetwEntityRecord> record;
+    Ref<netw::NetwEntity> wrapper;
+    netw::NetwEntityRecord *record = nullptr;
     RID handle;
     Node *container = nullptr;
 };
 
-Ref<RefCounted> a_seat_announcing_row() {
-    Ref<RefCounted> row;
+Ref<netw::NetwParticipant> a_seat_announcing_row() {
+    Ref<netw::NetwParticipant> row;
     row.instantiate();
-    Array args;
-    Dictionary from;
-    from["name"] = "from";
-    from["type"] = int(Variant::OBJECT);
-    Dictionary to;
-    to["name"] = "to";
-    to["type"] = int(Variant::OBJECT);
-    args.push_back(from);
-    args.push_back(to);
-    netw::gd::add_user_signal(row.ptr(), "scene_changed", args);
     return row;
 }
 
 Mounted mount_scene(
-    const Ref<NetwMultiplayerCore> &p_core,
+    const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     const char *p_stem
 ) {
@@ -48,7 +39,7 @@ Mounted mount_scene(
     made.container->add_child(level);
     made.wrapper.instantiate();
     made.handle = p_core->get_liveness_core()->entity_create();
-    made.record.instantiate();
+    made.record = made.wrapper->get_record();
     made.record->adopt_handle(made.handle);
     made.record->set_declares_scene(true);
     const int64_t route = p_core->get_liveness_core()->reserve_route();
@@ -64,30 +55,25 @@ Mounted mount_scene(
     return made;
 }
 
-void open_participant(
-    const Ref<NetwMultiplayerCore> &p_core,
-    int64_t p_peer
-) {
+void open_participant(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
     p_core->participant_adopt(p_peer, a_seat_announcing_row());
     REQUIRE(p_core->participant_has(p_peer));
 }
 
-void make_aware(const Ref<NetwMultiplayerCore> &p_core, const RID &p_scene) {
+void make_aware(const Ref<NetwMultiplayer> &p_core, const RID &p_scene) {
     const StringName layer = p_core->scene_layer_id(p_scene);
     REQUIRE_FALSE(layer.is_empty());
-    REQUIRE(p_core->interest_plane().roster_add(
-        layer,
-        int64_t(p_scene.get_id())
-    ));
+    REQUIRE(
+        p_core->interest_plane().roster_add(layer, int64_t(p_scene.get_id()))
+    );
 }
 
-void make_unaware(const Ref<NetwMultiplayerCore> &p_core, const RID &p_scene) {
+void make_unaware(const Ref<NetwMultiplayer> &p_core, const RID &p_scene) {
     const StringName layer = p_core->scene_layer_id(p_scene);
     REQUIRE_FALSE(layer.is_empty());
-    REQUIRE(p_core->interest_plane().roster_remove(
-        layer,
-        int64_t(p_scene.get_id())
-    ));
+    REQUIRE(
+        p_core->interest_plane().roster_remove(layer, int64_t(p_scene.get_id()))
+    );
 }
 
 TEST_CASE(
@@ -97,7 +83,7 @@ TEST_CASE(
     "seated nowhere, which is what lets a client hold a seat it computes no "
     "admission for"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount_scene(core, root, "Arena");
@@ -125,7 +111,7 @@ TEST_CASE(
     "live and still mounted infers nothing rather than falling back to "
     "whatever is on screen, and keeps the seat it already holds"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount_scene(core, root, "Arena");
@@ -153,7 +139,7 @@ TEST_CASE(
     "ones rather than the first, so a peer aware only of the second of two "
     "live scenes is seated there"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount_scene(core, root, "Arena");
@@ -181,7 +167,7 @@ TEST_CASE(
     "seats nobody and a session that rebuilt one level does not seat its "
     "peers in the container it replaced"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted first = mount_scene(core, root, "Arena");
@@ -213,7 +199,7 @@ TEST_CASE(
     "peer the roster never opened is seated nowhere however aware the "
     "session is, and the scene it would have been seated in is not read"
 ) {
-    Ref<NetwMultiplayerCore> core;
+    Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount_scene(core, root, "Arena");
