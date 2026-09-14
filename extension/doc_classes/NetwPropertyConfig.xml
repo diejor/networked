@@ -16,10 +16,10 @@
 		    aim_dir = (get_global_mouse_position() - position).normalized()
 		    # no send call: the next pump tick ships every marked change
 		[/codeblock]
-		Pick the kind by answering who owns the value, who sees it, and whether the server polices it. [enum NetwPropertySet.Record] holds the comparison table. A field with no kind mark rides no per-tick set and syncs only when [method Netw.sync_property] pushes it explicitly.
+		Pick the kind by returning who owns the value, who sees it, and whether the server polices it. [enum NetwPropertySet.Record] holds the comparison table. A field with no kind mark rides no per-tick set and syncs only when [method Netw.sync_property] pushes it explicitly.
 		[method volatile], [method retained], [method epsilon], and [method persisted] refine one property. [method every_tick], [method on_change], [method heartbeat], [method windowed], [method audience], and [method masked] write through to the script's whole [NetwPropertySet] from any member, so the last member to name a knob owns it.
 		[b]The chain downgrades to the base type.[/b]
-		[method NetwMemberConfig.call_local] and [method NetwMemberConfig.call_remote] are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb answers a [NetwMemberConfig] from that point on even though the object is still this [NetwPropertyConfig]. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
+		[method NetwMemberConfig.call_local] and [method NetwMemberConfig.call_remote] are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb returns a [NetwMemberConfig] from that point on even though the object is still this [NetwPropertyConfig]. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -68,8 +68,8 @@
 			<description>
 				Advances this value by running [param step] once over each transition the owner recorded since the acknowledgement.
 				Where [method carry_along] extrapolates one rate, this re-runs the part of the simulation that moves this one field, so a rate that turns, decays or jumps inside the window is followed rather than averaged. Nothing else is re-simulated and the physics server is never stepped.
-				[b]The rule must reproduce the whole change the transition made to this field[/b], and that is what the engine checks it against. So the verb is for a field whose change the game authors ENTIRELY. A field the solver also moves cannot be advanced this way, however correct the rule is about the game's own share: the recovery needs the value the body actually reached, and the solver's contribution is neither authored here nor re-runnable, and a physics server that could be re-stepped would not need this verb at all. Such a rule is refused and retired, and the retirement says so.
-				A rule's answer is admitted only when it did not write the body itself, reproduces the transitions the owner already recorded, and comes back the same type, finite, and nearer than a teleport would be. Failing any one of those refuses the carry for that recovery, which then writes the acknowledged value exactly as an undeclared field does.
+				[b]The rule must reproduce the whole change the transition made to this field[/b], and that is what the engine checks it against. So the verb is for a field whose change the game authors ENTIRELY. A field the solver also moves cannot be advanced this way, however correct the rule is about the game's own share: the recovery needs the value the body actually reached, and the solver's contribution is neither authored here nor re-runnable, and a physics server that could be re-stepped would not need this verb at all. Such a rule is rejected and retired, and the retirement says so.
+				A carry result is accepted only when the rule did not write the body, reproduced the recorded transitions, returned the same finite type, and stayed below the teleport threshold. Otherwise recovery writes the acknowledged value.
 				Declaring both this and [method carry_along] on one column is an error and keeps NEITHER. One field, one forward model: the step is for a rate that varies across the acknowledgement window and the channel for one that holds still, and no field is both.
 				[codeblock]
 				# yes -- a scripted value the solver never touches
@@ -90,8 +90,8 @@
 				func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
 				    return value + _drive_axis(ctx.state) * ctx.state[&amp;"speed"] * ctx.delta
 				[/codeblock]
-				[param step] may read only its [NetwPredictCarryContext] and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a refused carry writes the acknowledged value exactly as an undeclared field does. [member NetwPredictionHandle.field_recovery] counts both.
-				The rule is stored per node rather than per script, because a [Callable] is bound to one body while a property declaration is shared by every instance of the script that declares it. [param step] therefore has to be a method or lambda of a [Node], which is the body it will advance. A [param step] that is invalid, or valid but bound to something that is not a [Node], is reported through the error channel and binds NOTHING, leaving this config exactly as it was. The rule lands in a per-node overlay, which is keyed by node instance rather than by [member NetwMemberConfig.context_script].
+				[param step] may read only its [NetwPredictCarryContext] and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a rejected carry writes the acknowledged value exactly as an undeclared field does. [member NetwPredictionHandle.field_recovery] counts both.
+				The rule is stored per node rather than per script, because a [Callable] is bound to one body while a property declaration is shared by every instance of the script that declares it. [param step] therefore has to be a method or lambda of a [Node], which is the body it will advance. A [param step] that is invalid, or valid but bound to something that is not a [Node], is reported through the error channel and binds nothing, leaving this config exactly as it was. The rule lands in a per-node overlay, which is keyed by node instance rather than by [member NetwMemberConfig.context_script].
 			</description>
 		</method>
 		<method name="causal">
@@ -189,7 +189,7 @@
 				    velocity = move_dir * SPEED
 				[/codeblock]
 				Writes [member in_input_set], the [constant NetwPropertySet.VOLATILE] [member lane], a [member set_trigger] of [constant NetwPropertySet.TRIGGER_ON_CHANGE], and the [constant NetwPropertySet.AUDIENCE_SERVER_ONLY] [member set_audience]. That last axis is what makes it a command stream rather than a public one, and it is the only kind mark that writes it. An input set is windowed by default so a lost tick heals from a redundant sample instead of a retransmit. [method windowed] resizes that window.
-				An input column is canonicalized and SHIPPED, never recovered, so only its key, its quantizer and its type reach the engine. A recovery mark written onto an input column, a carry rule or a teleport distance among them, is read and discarded rather than refused, because the input lane has no ladder that could read it.
+				An input column is canonicalized and shipped, never recovered, so only its key, its quantizer and its type reach the engine. A recovery mark written onto an input column, a carry rule or a teleport distance among them, is read and discarded rather than rejected, because the input lane has no ladder that could read it.
 			</description>
 		</method>
 		<method name="masked">
@@ -258,7 +258,7 @@
 				# a dropped "stunned = true" would desync forever, so it rides reliably
 				Netw.configure_property(self, &amp;"stunned").state().retained()
 				[/codeblock]
-				Refused on a PREDICTED entity's state, whatever the value is worth: predicted state has to be volatile for a timeline snapshot to arrive atomically, and a retained field would land on its own schedule and be compared against a row no single tick answers for.
+				Rejected on a PREDICTED entity's state, whatever the value is worth: predicted state has to be volatile for a timeline snapshot to arrive atomically, and a retained field would land on its own schedule and be compared against a row no single tick returns for.
 			</description>
 		</method>
 		<method name="state">
@@ -296,7 +296,7 @@
 			<return type="NetwPropertyConfig" />
 			<description>
 				Restricts the field to teleport-tier recoveries, so an ordinary one leaves it alone, by writing [member explicit_teleport_only]. Right for a value whose mid-flight rewrite is more disruptive than the drift it would correct.
-				A field marked this way and left free to trigger demands recoveries that are forbidden to write it, so the only one that repairs it is the promoted full closure. Pair it with [method carry_along] or [method carry_step] so that promoted restore lands at the present, or with [method reconcile_only] so its drift stops demanding recoveries that answer by writing other fields.
+				Recovery cannot write a field marked this way until it promotes to a full restore. Pair it with [method carry_along] or [method carry_step] to restore it at the current state, or with [method reconcile_only] to prevent its drift from triggering recovery of other fields.
 				[codeblock]
 				Netw.configure_property(self, &amp;"angular_velocity").state().teleport_only()
 				[/codeblock]

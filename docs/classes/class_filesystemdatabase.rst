@@ -41,7 +41,7 @@ A record lives at ``<root>/<table>/<id>.<ext>``. The root folds :ref:`app_id<cla
 
 \ A subdirectory under the slot root that no registered table claims is a ghost table. Initialization reports each one as a warning and never deletes data on its own, because a directory the schema stopped naming is more often a migration than garbage.
 
-Two live backends pointing at one slot root is refused with an error rather than tolerated: both would write the same files and each would report the other's tables as ghosts. Share one :ref:`NetwDatabase<class_NetwDatabase>` instead, or give them different :ref:`base_dir<class_FileSystemDatabase_property_base_dir>`.
+Two live backends pointing at one slot root is rejected with an error rather than tolerated: both would write the same files and each would report the other's tables as ghosts. Share one :ref:`NetwDatabase<class_NetwDatabase>` instead, or give them different :ref:`base_dir<class_FileSystemDatabase_property_base_dir>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -113,7 +113,7 @@ Root directory for every table subdirectory. Point it at ``user://saves`` for a 
 - |void| **set_use_text_format**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_use_text_format**\ (\ )
 
-Picks the record file extension. ``true`` writes the readable ``.tres`` text form, and ``false`` the compact binary ``.res``. :godot:`ResourceSaver` dispatches on the extension and refuses one it does not recognize, so these are the engine's own two and not a format this class invents.
+Picks the record file extension. ``true`` writes the readable ``.tres`` text form, and ``false`` the compact binary ``.res``. :godot:`ResourceSaver` dispatches on the extension and rejects one it does not recognize, so these are the engine's own two and not a format this class invents.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

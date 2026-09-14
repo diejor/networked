@@ -23,11 +23,11 @@ This is the roster entry that crosses the wire. The server builds one from the :
 
 A game rarely handles one. :ref:`Netw.configure_join()<class_Netw_method_configure_join>` hands the server a :ref:`NetwParticipant<class_NetwParticipant>` instead, and :ref:`NetwParticipant.join<class_NetwParticipant_property_join>` is this frame behind it for the rare caller that wants the values exactly as they arrived.
 
-\ :ref:`deserialize()<class_ResolvedJoin_method_deserialize>` reads bytes a remote peer wrote, and it refuses anything that does not spell a join rather than admitting a half-read one.
+\ :ref:`deserialize()<class_ResolvedJoin_method_deserialize>` reads bytes a remote peer wrote, and it rejects anything that does not spell a join rather than admitting a half-read one.
 
 ::
 
-    # The session answers the join it accepted for a peer.
+    # The session returns the join it accepted for a peer.
     var join := api.peer_get_accepted_join(peer_id)
     print(join.username, " joined as ", join.peer_id)
 
@@ -134,7 +134,7 @@ Method Descriptions
 
 Reads a join from ``bytes``, or ``null`` when they do not spell one.
 
-\ ``bytes`` arrive from a remote peer, so this refuses rather than trusting: bytes that are not a record, a record naming no :ref:`peer_id<class_ResolvedJoin_property_peer_id>` or :ref:`username<class_ResolvedJoin_property_username>`, and a :ref:`peer_id<class_ResolvedJoin_property_peer_id>` that is not a number all answer ``null``. :ref:`arg_values<class_ResolvedJoin_property_arg_values>` is optional and takes its default, so a peer running an older build still sends a readable join.
+\ ``bytes`` arrive from a remote peer, so this rejects rather than trusting: bytes that are not a record, a record naming no :ref:`peer_id<class_ResolvedJoin_property_peer_id>` or :ref:`username<class_ResolvedJoin_property_username>`, and a :ref:`peer_id<class_ResolvedJoin_property_peer_id>` that is not a number all return ``null``. :ref:`arg_values<class_ResolvedJoin_property_arg_values>` is optional and takes its default, so a peer running an older build still sends a readable join.
 
 .. rst-class:: classref-item-separator
 

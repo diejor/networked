@@ -192,10 +192,8 @@ uint64_t CodeRow::changed_mask(
     const CodeRow &before,
     const CodeRow &after
 ) {
-    // Every column rather than none. Zero reads as a caught-up peer and costs
-    // the pass nothing, so a row this plan cannot interpret would strand the
-    // receiver silently; the whole mask is what the baseline book already
-    // answers for a peer whose baseline it does not hold.
+    // Invalid rows require a full update. A zero mask means the peer is
+    // current.
     if (!before.valid_for(plan) || !after.valid_for(plan)) {
         return plan.full_mask();
     }

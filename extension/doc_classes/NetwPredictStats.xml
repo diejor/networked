@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictStats" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Everything a prediction engine counted, on one object with one name per fact.
+		Diagnostic counters for one prediction engine.
 	</brief_description>
 	<description>
-		This is the demoted half of the evidence surface. What a game is meant to react to -- the six signals, the verdict reason, the per-field divergence and recovery rows, [code]reachability()[/code] -- stays on the handle and is contract. What is here is diagnostic: counters, histograms, tape bookkeeping, fingerprint tallies. Read it, print it, chart it; do not build a rule on it, because the freeze table does not protect it.
-		[member authoring_clamped], [member speculation_held], [member drive_seq], [member last_drive_label], [member last_drive_kind], [member chain_breaks], [member joint_passes], [member joint_floor], [member joint_present], [member joint_members], [member cells_relayed], [member cells_substituted], and [member floor_moves_by_source] read the live drive and joint columns the engine keeps for the entity's slot. Assigning any of them is a no-op, because the engine is the only writer and this object only relays its columns. Before the entity is registered for prediction, or once the engine no longer holds the slot, each answers its fallback instead. Every other member holds its value on this object and is ordinary read-write state a caller or the engine sets directly.
+		Contains counters, histograms, fingerprint totals, and prediction history diagnostics. Use [NetwPredictionHandle] signals and reports for gameplay decisions.
+		Engine-backed members are read-only and return their defaults when the entity has no active prediction slot. Other members are writable diagnostic state.
 		[codeblock]
 		var stats := NetwEntity.of(self).prediction.stats
 		print("%d corrections, %d skipped" % [stats.corrections, stats.skipped])
@@ -159,7 +159,7 @@
 		</member>
 		<member name="fp_mismatches" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
 			Acknowledged transitions whose prediction fingerprinted unequal to the authority state, counted out of [member fp_verified]. On a run where every antecedent of the recurrence matched this stays zero, so a nonzero count names a broken antecedent rather than a tolerance that wants widening.
-			The verdict is the correction trigger for a transition labeled [constant NetwPredictJournal.Domain.IN_DOMAIN], and a report for one that is not. Which label a transition earns is decided by the entity's island membership, so an entity that declares no island keeps the tolerance compare it always had.
+			The verdict is the correction trigger for a transition labeled [constant NetwPredictJournal.Domain.IN_DOMAIN], and a report for one that is not. Which label a transition receives is decided by the entity's island membership, so an entity that declares no island keeps the tolerance compare it always had.
 			It is the trigger only where it arrives in time to be one. The verdict rides the acknowledgement lane while the comparison runs when the authoritative state arrives, so a transition compared before its acknowledgement is judged by tolerance and this counter reports a divergence nothing acted on. A set that ships whole rows can be judged on arrival. A [method NetwPropertyConfig.masked] set cannot, because a masked frame carries only the fields that changed and the authority row it belongs to cannot be fingerprinted from it. Read this counter as what the peers disagreed about, never as what was corrected.
 		</member>
 		<member name="fp_verified" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
@@ -238,7 +238,7 @@
 		</member>
 		<member name="replay_depth" type="PackedInt32Array" setter="set_buckets_fact" getter="get_buckets_fact" default="PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)">
 			Standing queued-transition depth at each authority frame's consume boundary, bucketed by depth. [constant NetwPredict.Schedule.FRAME] consume only.
-			Depth is the owner's lead over authority measured in transitions, so this reads the clock relationship rather than a queue: a distribution parked near zero says the two peers run at the same rate, and one that ratchets upward says the owner is authoring faster than authority is solving. Neither is answered by a replay buffer depth setting, which shifts this whole distribution and changes its shape not at all.
+			Depth is the owner's lead over authority measured in transitions, so this reads the clock relationship rather than a queue: a distribution parked near zero says the two peers run at the same rate, and one that ratchets upward says the owner is authoring faster than authority is solving. Neither is returned by a replay buffer depth setting, which shifts this whole distribution and changes its shape not at all.
 			Indexed by depth, saturating at [constant REPLAY_DEPTH_BUCKETS] minus one.
 		</member>
 		<member name="resync" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
@@ -261,7 +261,7 @@
 		</member>
 		<member name="tape_epoch" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
 			Epoch of the active prediction tape, or [code]-1[/code] before one is authored or received. Rewiring starts a new client-authored epoch.
-			A bump re-keys every cursor over the tape along with it, because a position retained across the bump would name a transition the new epoch is about to reuse, and the reader would then be answered a row from a run it was never following.
+			An epoch change re-keys every tape cursor. Retaining a cursor could resolve it to a transition reused by the new epoch.
 		</member>
 		<member name="tape_index" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
 			Index of the newest prediction tape transition authored or received. A [constant NetwPredict.Schedule.TICK] entity's transitions are its ticks, so this tracks the newest driven tick there.

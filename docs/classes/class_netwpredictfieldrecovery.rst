@@ -19,7 +19,7 @@ One state field's recovery history, accumulated since the entity spawned.
 Description
 -----------
 
-A field may be admitted to the trigger set without being reachable by any operator in the ladder. :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` withholds a field from every sub-teleport restore while leaving it free to trigger, so it can raise corrections that are forbidden to write it and are answered by repairing some other field instead.
+A field may trigger recovery without being writable by any recovery operator. :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` allows the field to trigger recovery but reserves its write for a teleport. Smaller recoveries may update other fields instead.
 
 Each comparison looks ordinary on its own and no single-tick reading can show it, because the evidence is the whole run rather than any one tick. These six counts are that run.
 
@@ -36,7 +36,7 @@ The counts are kept apart because a field can score any combination of them inde
 
     triggered  ──> repaired ──> contracted    the field is served
     triggered  ──> repaired ──> .             written, and the write is no help
-    triggered  ──> .        ──> .             asking, and answered elsewhere
+    triggered  ──> .        ──> .             triggers; another field is restored
     .          ──> repaired ──> .             written on someone else's behalf
 
 \ Reached through :ref:`NetwPredictionHandle.field_recovery<class_NetwPredictionHandle_property_field_recovery>`, which holds a row for every field something has charged and none for a field nothing has.
@@ -102,7 +102,7 @@ Recoveries whose write this field's declared :ref:`NetwPropertyConfig.carry_step
 
 Writes to this field that a later comparison found smaller.
 
-A recovery lands on the body now while the comparisons just behind it were driven at the acknowledgement, so a write is only judged once a comparison reaches a transition driven past it. Scoring the very next comparison would read back the error the write was answering, which is the same lag that makes a correction train look like a divergence refusing to close.
+A recovery lands on the body now while the comparisons just behind it were driven at the acknowledgement, so a write is only judged once a comparison reaches a transition driven past it. Scoring the very next comparison would read back the error the write was returning, which is the same lag that makes a correction train look like a divergence rejecting to close.
 
 .. rst-class:: classref-item-separator
 
@@ -118,9 +118,9 @@ A recovery lands on the body now while the comparisons just behind it were drive
 
 - :godot:`int` **get_declined**\ (\ )
 
-Carries the engine refused, each of which wrote the acknowledged value instead, which is what an undeclared field always writes.
+Carries the engine rejected, each of which wrote the acknowledged value instead, which is what an undeclared field always writes.
 
-A rule is refused when the recorded transitions it would fold over are missing or incomplete, when it returns the wrong type or a non-finite value, when it moves the value further than a teleport would, or once it has been retired.
+A rule is rejected when the recorded transitions it would fold over are missing or incomplete, when it returns the wrong type or a non-finite value, when it moves the value further than a teleport would, or once it has been retired.
 
 .. rst-class:: classref-item-separator
 
@@ -186,7 +186,7 @@ Recoveries that wrote this field, whether or not it asked for one.
 
 - :godot:`int` **get_triggered**\ (\ )
 
-Comparisons that corrected while this field was past its own :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>`, so a recovery was materially answering it.
+Comparisons that corrected while this field was past its own :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>`, so a recovery was materially returning it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

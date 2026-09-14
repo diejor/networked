@@ -21,7 +21,7 @@ Description
 
 Only a scene declaring :ref:`NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD<class_NetwMultiplayer_constant_SCENE_ISOLATION_OWN_WORLD>` is hosted in an offscreen :godot:`SubViewport`, so this view exists only for one. A dedicated server renders no scene and a host whose scene shares the session's world already renders in the root viewport, so neither builds this view.
 
-\ **You normally do not add this node yourself.** The session mounts one when :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>` is :ref:`NetwMultiplayer.ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>`, a live scene owns its own world, and no :ref:`ParticipantView<class_ParticipantView>` already stands under the session root. Drop one into your scene only to place or configure that window yourself, and the session will find it and leave the display alone. :ref:`NetwMultiplayer.scene_set_host_view_factory()<class_NetwMultiplayer_method_scene_set_host_view_factory>` replaces the mint outright when a project wants a different node.
+The session creates this node for a listen server when a live scene owns its own world and no :ref:`ParticipantView<class_ParticipantView>` exists under the session root. Add one manually only to configure or position the window. Use :ref:`NetwMultiplayer.scene_set_host_view_factory()<class_NetwMultiplayer_method_scene_set_host_view_factory>` to create a different node type.
 
 It follows :ref:`NetwMultiplayer.participant_viewport_changed<class_NetwMultiplayer_signal_participant_viewport_changed>` to retarget, and re-announces on :ref:`NetwMultiplayer.scene_local_player_changed<class_NetwMultiplayer_signal_scene_local_player_changed>` because the display can resolve before the local player has spawned into it. On every announce it emits :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>` on the local player's entity, and when nothing is listening to that signal it makes the first conventional camera in the player branch current, falling back to the scene's level. Connect the signal to take that decision with a custom camera rig.
 
@@ -34,7 +34,7 @@ It follows :ref:`NetwMultiplayer.participant_viewport_changed<class_NetwMultipla
     func _on_view_activated() -> void:
         $Rig/SpringArm3D/Camera3D.make_current()
 
-\ Stretch behaviour is :ref:`ParticipantView<class_ParticipantView>`'s, defaulting to the project's own ``display/window/stretch/*`` answers, and the view fills its parent rect. The mouse passes through to whatever is under it while the keyboard and joypad events nothing else handled are forwarded into the target, so ordinary UI over the top of the game still works.
+\ Stretch behaviour is :ref:`ParticipantView<class_ParticipantView>`'s, defaulting to the project's own ``display/window/stretch/*`` returns, and the view fills its parent rect. The mouse passes through to whatever is under it while the keyboard and joypad events nothing else handled are forwarded into the target, so ordinary UI over the top of the game still works.
 
 .. rst-class:: classref-reftable-group
 
@@ -68,7 +68,7 @@ Property Descriptions
 - |void| **set_suppressed**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_suppressed**\ (\ )
 
-Whether this view stands down. A suppressed view hides itself, drops its target and stops forwarding input, which is how a game shows something else over the whole window without losing the view or the display it was tracking. Clearing it re-adopts whatever :ref:`NetwMultiplayer.scene_participant_viewport()<class_NetwMultiplayer_method_scene_participant_viewport>` now answers.
+Whether this view stands down. A suppressed view hides itself, drops its target and stops forwarding input, which is how a game shows something else over the whole window without losing the view or the display it was tracking. Clearing it re-adopts whatever :ref:`NetwMultiplayer.scene_participant_viewport()<class_NetwMultiplayer_method_scene_participant_viewport>` now returns.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

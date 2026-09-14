@@ -12,14 +12,14 @@ NetwMultiplayer
 
 **Inherits:** :godot:`MultiplayerAPIExtension`
 
-One session, and the flat call behind every door on :ref:`Netw<class_Netw>`.
+The :godot:`MultiplayerAPI` implementation for a Networked session.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The session object itself. A game reaches it with :ref:`Netw.of()<class_Netw_method_of>`, it is a :godot:`MultiplayerAPI` so it can be installed as the engine's own, and one session holds one of these for its whole life, so a node may keep it.
+Use :ref:`Netw.of()<class_Netw_method_of>` to get the session for a node. Most game code should use :ref:`Netw<class_Netw>` and the handle classes instead of calling this class directly.
 
 ::
 
@@ -27,69 +27,47 @@ The session object itself. A game reaches it with :ref:`Netw.of()<class_Netw_met
     api.entity_despawn(route)
     api.scene_admit(scene, participant)
 
-\ **This class is an index**\ 
+\ Method prefixes identify their subsystem and related API class:
 
-A reader looking for a concept starts at :ref:`Netw<class_Netw>`, which is the guide and names the class that documents each part of the addon. This class is where a caller who already knows what they want finds the exact call.
+- ``scene_*``: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\
 
-Methods are named for what they act on. Each row below is a method-name prefix, then the class where that family is explained.
+- ``interest_*``: :ref:`NetwInterestHandle<class_NetwInterestHandle>`\
 
-- :ref:`NetwSceneHandle<class_NetwSceneHandle>` ``scene_*`` a world and who is in it
+- ``session_*``: :ref:`NetwSessionHandle<class_NetwSessionHandle>`\
 
-- :ref:`NetwInterestHandle<class_NetwInterestHandle>` ``interest_*`` who is told about what
+- ``clock_*``: :ref:`NetwClockHandle<class_NetwClockHandle>`\
 
-- :ref:`NetwSessionHandle<class_NetwSessionHandle>` ``session_*`` players, state, leaving
+- ``predict_*``: :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`\
 
-- :ref:`NetwClockHandle<class_NetwClockHandle>` ``clock_*`` the tick every peer counts
+- ``entity_*``, ``liveness_*``, and ``spawn_*``: :ref:`NetwEntity<class_NetwEntity>`\
 
-- :ref:`NetwPredictionHandle<class_NetwPredictionHandle>` ``predict_*`` simulating ahead locally
+- ``table_*``: :ref:`NetwRecordTable<class_NetwRecordTable>`\
 
-- :ref:`NetwEntity<class_NetwEntity>` ``entity_*`` one networked node
+- ``schema_*``: :ref:`NetwSchema<class_NetwSchema>`\
 
-- :ref:`NetwEntity<class_NetwEntity>` ``liveness_*`` a route before its node
+- ``lagcomp_*``: :ref:`NetwAction<class_NetwAction>`\
 
-- :ref:`NetwRecordTable<class_NetwRecordTable>` ``table_*`` rows of one shape
+- ``peer_*``: :ref:`NetwParticipant<class_NetwParticipant>`\
 
-- :ref:`NetwSchema<class_NetwSchema>` ``schema_*`` the columns those rows have
+- ``display_*``: :ref:`NetwDisplayHandle<class_NetwDisplayHandle>`\
 
-- :ref:`NetwAction<class_NetwAction>` ``lagcomp_*`` judging a shot in the past
+- ``endpoint_*`` and ``embed_*``: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\
 
-- :ref:`NetwParticipant<class_NetwParticipant>` ``peer_*`` one connected player
+- ``transport_*``: :ref:`NetwTransport<class_NetwTransport>`\
 
-- :ref:`NetwDisplayHandle<class_NetwDisplayHandle>` ``display_*`` what a viewer is shown
+- ``rpc_*`` and ``sync_*``: :ref:`NetwMemberConfig<class_NetwMemberConfig>`\
 
-- :ref:`NetwConnectHandle<class_NetwConnectHandle>` ``endpoint_*`` servers this peer can reach
+- ``property_set_*``: :ref:`NetwPropertySet<class_NetwPropertySet>`\
 
-- :ref:`NetwConnectHandle<class_NetwConnectHandle>` ``embed_*`` a session inside another app
+- ``service_*``: :ref:`NetwService<class_NetwService>`\
 
-- :ref:`NetwTransport<class_NetwTransport>` ``transport_*`` how a peer is built
+- ``persist_*``: :ref:`NetwDatabase<class_NetwDatabase>`\
 
-- :ref:`NetwMemberConfig<class_NetwMemberConfig>` ``rpc_*`` ``sync_*`` calls and replicated values
+- ``auth_*``: :ref:`NetwAuthFlow<class_NetwAuthFlow>`\
 
-- :ref:`NetwPropertySet<class_NetwPropertySet>` ``property_set_*`` the columns a script sends
+- ``stats_*`` and ``attribution_*``: :ref:`NetwPredictStats<class_NetwPredictStats>`\
 
-- :ref:`NetwEntity<class_NetwEntity>` ``spawn_*`` making a node everywhere
-
-- :ref:`NetwService<class_NetwService>` ``service_*`` reaching a game's own object
-
-- :ref:`NetwDatabase<class_NetwDatabase>` ``persist_*`` saving and loading
-
-- **NetwMultiplayer** ``event_*`` watching the session itself
-
-- :ref:`NetwAuthFlow<class_NetwAuthFlow>` ``auth_*`` deciding who is let in
-
-- :ref:`NetwPredictStats<class_NetwPredictStats>` ``stats_*`` what prediction counted
-
-- :ref:`NetwPredictStats<class_NetwPredictStats>` ``attribution_*`` which code caused a write
-
-The methods carrying no prefix belong to no family. :ref:`of()<class_NetwMultiplayer_method_of>` and :ref:`make()<class_NetwMultiplayer_method_make>` answer a session, :ref:`send_to()<class_NetwMultiplayer_method_send_to>` and :ref:`send_bytes()<class_NetwMultiplayer_method_send_bytes>` put bytes on the link, :ref:`disconnect_peer()<class_NetwMultiplayer_method_disconnect_peer>` and :ref:`clear_roster()<class_NetwMultiplayer_method_clear_roster>` end things, and :ref:`property_path()<class_NetwMultiplayer_method_property_path>` and :ref:`core_of()<class_NetwMultiplayer_method_core_of>` answer questions about one entity.
-
-\ **The enum constants are the vocabulary, not the surface**\ 
-
-Most members here are enum constants, and they are the values the methods above are called with rather than things to read in order. A constant is explained by the class that uses it, so :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` reads on :ref:`NetwInterestHandle<class_NetwInterestHandle>`, :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>` on :ref:`NetwClockHandle<class_NetwClockHandle>` and :ref:`Stat<enum_NetwMultiplayer_Stat>` on :ref:`NetwPredictStats<class_NetwPredictStats>`.
-
-\ **Replacing what the session does**\ 
-
-The methods beginning with an underscore are override points. A :godot:`Script` on this class may implement one, and what the session would otherwise have done is the method of the same name ending in ``_default``.
+Methods beginning with an underscore are virtual extension points. Override one in a :godot:`Script` and call its corresponding ``_default`` method to use the default implementation.
 
 ::
 
@@ -100,7 +78,7 @@ The methods beginning with an underscore are override points. A :godot:`Script` 
             return NetwPredict.CONSUME_ACTION_REPLAY
         return predict_consume_default(depth, buffer)
 
-\ The default is called directly and never with ``super``, because a bound method is not a virtual a script can call up into. Install the subclass with :ref:`MultiplayerTree.api_script<class_MultiplayerTree_property_api_script>`.
+\ Install the subclass with :ref:`MultiplayerTree.api_script<class_MultiplayerTree_property_api_script>`. Call ``_default`` directly instead of using ``super``.
 
 .. rst-class:: classref-reftable-group
 
@@ -1026,7 +1004,7 @@ A row left :ref:`endpoint_list()<class_NetwMultiplayer_method_endpoint_list>`.
 
 **endpoint_updated**\ (\ endpoint\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_signal_endpoint_updated>`
 
-A probe or a listing answered for this row. What changed is read back through :ref:`endpoint_get_param()<class_NetwMultiplayer_method_endpoint_get_param>` and :ref:`endpoint_get_state()<class_NetwMultiplayer_method_endpoint_get_state>`, so a browser redraws one row rather than the list.
+A probe or a listing returned for this row. What changed is read back through :ref:`endpoint_get_param()<class_NetwMultiplayer_method_endpoint_get_param>` and :ref:`endpoint_get_state()<class_NetwMultiplayer_method_endpoint_get_state>`, so a browser redraws one row rather than the list.
 
 .. rst-class:: classref-item-separator
 
@@ -1038,7 +1016,7 @@ A probe or a listing answered for this row. What changed is read back through :r
 
 **entity_dead**\ (\ route\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_signal_entity_dead>`
 
-Emitted once when this session learns that ``route`` has ended. The route reads :ref:`ENTITY_STATE_DEAD<class_NetwMultiplayer_constant_ENTITY_STATE_DEAD>`, its body services are released, and the wrapper has already left the live index, so :ref:`entity_get_view()<class_NetwMultiplayer_method_entity_get_view>` answers ``null`` for ``route`` here and for the rest of the cycle.
+Emitted once when this session learns that ``route`` has ended. The route reads :ref:`ENTITY_STATE_DEAD<class_NetwMultiplayer_constant_ENTITY_STATE_DEAD>`, its body services are released, and the wrapper has already left the live index, so :ref:`entity_get_view()<class_NetwMultiplayer_method_entity_get_view>` returns ``null`` for ``route`` here and for the rest of the cycle.
 
 A materialized entity emits :ref:`NetwEntity.despawned<class_NetwEntity_signal_despawned>` before this, and that per-entity completion is what a tracked entity with no route gets instead. A move emits neither, and a receiving peer that lost only its copy emits :ref:`entity_hidden<class_NetwMultiplayer_signal_entity_hidden>`.
 
@@ -1080,7 +1058,7 @@ Emitted when an entity enters :ref:`ENTITY_STATE_LINGERING<class_NetwMultiplayer
 
 **entity_live**\ (\ route\: :godot:`int`, entity\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_signal_entity_live>`
 
-Emitted when a route becomes live. It carries the :ref:`NetwEntity<class_NetwEntity>` the session itself holds, so a listener resolves the same object the session will answer with for the rest of that route's life.
+Emitted when a route becomes live. It carries the :ref:`NetwEntity<class_NetwEntity>` the session itself holds, so a listener resolves the same object the session will return with for the rest of that route's life.
 
 .. rst-class:: classref-item-separator
 
@@ -1154,7 +1132,7 @@ Republishes :godot:`SceneMultiplayer.peer_authenticating <SceneMultiplayer#class
 
 **peer_authentication_failed**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_signal_peer_authentication_failed>`
 
-Republishes :godot:`SceneMultiplayer.peer_authentication_failed <SceneMultiplayer#class_SceneMultiplayer_signal_peer_authentication_failed>` from the transport this session holds, after recording the refusal as a ``PEER_AUTH_FAILED`` event, so a sink reads it in the order the session decided it.
+Republishes :godot:`SceneMultiplayer.peer_authentication_failed <SceneMultiplayer#class_SceneMultiplayer_signal_peer_authentication_failed>` from the transport this session holds, after recording the rejection as a ``PEER_AUTH_FAILED`` event, so a sink reads it in the order the session decided it.
 
 .. rst-class:: classref-item-separator
 
@@ -1216,7 +1194,7 @@ A claim that matched is counted and not announced, and so is one the comparison 
 
 **scene_activated**\ (\ scene\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_signal_scene_activated>`
 
-Emitted by :ref:`scene_activate()<class_NetwMultiplayer_method_scene_activate>` for the container a caller made current, once per activation and never for a refusal. Reusing a container that was already live still announces, because the signal reports what the session now presents and not whether a spawn happened.
+Emitted by :ref:`scene_activate()<class_NetwMultiplayer_method_scene_activate>` for the container a caller made current, once per activation and never for a rejection. Reusing a container that was already live still announces, because the signal reports what the session now presents and not whether a spawn happened.
 
 .. rst-class:: classref-item-separator
 
@@ -1228,7 +1206,7 @@ Emitted by :ref:`scene_activate()<class_NetwMultiplayer_method_scene_activate>` 
 
 **scene_despawned**\ (\ scene\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_signal_scene_despawned>`
 
-Emitted for a scene the session has dropped, after its rows are gone and everything waiting on the change has run, so a listener reading membership sees the session without it. Dropping a node the session never held still announces, because the scene leaving is the fact being reported and having nothing to drop is not a refusal.
+Emitted for a scene the session has dropped, after its rows are gone and everything waiting on the change has run, so a listener reading membership sees the session without it. Dropping a node the session never held still announces, because the scene leaving is the fact being reported and having nothing to drop is not a rejection.
 
 .. rst-class:: classref-item-separator
 
@@ -1240,7 +1218,7 @@ Emitted for a scene the session has dropped, after its rows are gone and everyth
 
 **scene_entity_moved**\ (\ entity\: :godot:`Object`, from\: :godot:`Object`, to\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_signal_scene_entity_moved>`
 
-Emitted for a move that completed, after the mover's membership and saved rows have settled and before the move's :ref:`NetwPromise<class_NetwPromise>` resolves, so a listener and an awaiting caller read the same session. A refused move never arrives and is never announced.
+Emitted for a move that completed, after the mover's membership and saved rows have settled and before the move's :ref:`NetwPromise<class_NetwPromise>` resolves, so a listener and an awaiting caller read the same session. A rejected move never arrives and is never announced.
 
 .. rst-class:: classref-item-separator
 
@@ -1278,7 +1256,7 @@ A participant raises its own ``scene_changed`` when the session takes or empties
 
 **scene_local_player_changed**\ (\ player\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_signal_scene_local_player_changed>`
 
-Emitted when the entity representing this peer changes, including to ``null`` when the route carrying it retires. Decided where a route goes live, because that is the only moment the answer can change, and read off the entity's own record rather than through the wrapper. A session with no transport represents nobody, which an offline session answering unique id 1 would otherwise look like.
+Emitted when the entity representing this peer changes, including to ``null`` when the route carrying it retires. Decided where a route goes live, because that is the only moment the result can change, and read off the entity's own record rather than through the wrapper. A session with no transport represents nobody, which an offline session returning unique id 1 would otherwise look like.
 
 .. rst-class:: classref-item-separator
 
@@ -1290,7 +1268,7 @@ Emitted when the entity representing this peer changes, including to ``null`` wh
 
 **scene_spawned**\ (\ scene\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_signal_scene_spawned>`
 
-Emitted once for each scene the session takes in. It fires before any player has been admitted, so a listener reads the scene and not yet who is in it. A scene the session refused to take in announces nothing.
+Emitted once for each scene the session takes in. It fires before any player has been admitted, so a listener reads the scene and not yet who is in it. A scene the session rejected to take in announces nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -1374,7 +1352,7 @@ Announced by the session machine on reaching :ref:`SESSION_STATE_ONLINE<class_Ne
 
 **session_join_failed**\ (\ error\: :godot:`int`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwMultiplayer_signal_session_join_failed>`
 
-This peer's own join was refused and no player was seated for it. A game connects through :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>` on :ref:`Netw.connection()<class_Netw_method_connection>` rather than here.
+This peer's own join was rejected and no player was seated for it. A game connects through :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>` on :ref:`Netw.connection()<class_Netw_method_connection>` rather than here.
 
 .. rst-class:: classref-item-separator
 
@@ -1388,7 +1366,7 @@ This peer's own join was refused and no player was seated for it. A game connect
 
 Emitted immediately before ``username`` and ``args`` go out, whether they travel to a server or are delivered to this session itself.
 
-This announces that the join was sent and never that it was accepted. A server that refuses it announced this first.
+This announces that the join was sent and never that it was accepted. A server that rejects it announced this first.
 
 .. rst-class:: classref-item-separator
 
@@ -1438,7 +1416,7 @@ Emitted when the server announces it is going away. A notice from anyone but the
 
 **session_state_changed**\ (\ old_state\: :godot:`int`, new_state\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_signal_session_state_changed>`
 
-Announced by the session machine on every legal edge. An edge it refuses is not a transition, so it is not published.
+Announced by the session machine on every legal edge. An edge it rejects is not a transition, so it is not published.
 
 .. rst-class:: classref-item-separator
 
@@ -1553,7 +1531,7 @@ An entity's controlling peer changed. Belongs to the lifecycle group. detail car
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_CONTROL_REQUESTED** = ``7``
 
-A peer asked to take control of an entity. Belongs to the lifecycle group. detail carries {requester}, peer is the requester, and verdict is OK when authority granted control or an unauthorized error when it refused.
+A peer asked to take control of an entity. Belongs to the lifecycle group. detail carries {requester}, peer is the requester, and verdict is OK when authority granted control or an unauthorized error when it rejected.
 
 .. _class_NetwMultiplayer_constant_EVENT_HIDDEN:
 
@@ -1681,7 +1659,7 @@ A slot corrected its predicted state after a divergence, and the handle's own re
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_GATE_SYNC** = ``48``
 
-An inbound sync frame, on the sync, row, row-delta, row-window or delta channel, passed or failed admission. Belongs to the gates group. detail is empty, and verdict is what the session answered.
+An inbound sync frame, on the sync, row, row-delta, row-window or delta channel, passed or failed admission. Belongs to the gates group. detail is empty, and verdict is what the session returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_GATE_SPAWN:
 
@@ -1689,7 +1667,7 @@ An inbound sync frame, on the sync, row, row-delta, row-window or delta channel,
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_GATE_SPAWN** = ``49``
 
-An inbound spawn frame passed or failed admission. Belongs to the gates group. detail is empty, route is 0 since spawn admission is not per-entity, and verdict is what the session answered.
+An inbound spawn frame passed or failed admission. Belongs to the gates group. detail is empty, route is 0 since spawn admission is not per-entity, and verdict is what the session returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_GATE_TABLE:
 
@@ -1697,7 +1675,7 @@ An inbound spawn frame passed or failed admission. Belongs to the gates group. d
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_GATE_TABLE** = ``50``
 
-An inbound table frame passed or failed admission. Belongs to the gates group. detail is empty, route is 0, and verdict is what the session answered.
+An inbound table frame passed or failed admission. Belongs to the gates group. detail is empty, route is 0, and verdict is what the session returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_GATE_PREDICT:
 
@@ -1705,7 +1683,7 @@ An inbound table frame passed or failed admission. Belongs to the gates group. d
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_GATE_PREDICT** = ``51``
 
-An inbound prediction frame, command, ack, relay or relay request, passed or failed admission. Belongs to the gates group. detail is empty, and verdict is what the session answered.
+An inbound prediction frame, command, ack, relay or relay request, passed or failed admission. Belongs to the gates group. detail is empty, and verdict is what the session returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_SYNC_ENCODE:
 
@@ -1721,7 +1699,7 @@ A sync frame finished encoding for a peer. Belongs to the stages group. detail c
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_SYNC_DECODE** = ``65``
 
-A sync frame finished decoding for an entity's component. Belongs to the stages group. detail carries {comp}, and verdict is what decoding answered.
+A sync frame finished decoding for an entity's component. Belongs to the stages group. detail carries {comp}, and verdict is what decoding returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_GATHER:
 
@@ -1745,7 +1723,7 @@ A batch of received frames finished applying. Belongs to the stages group. detai
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_SPAWN_DECLARE** = ``68``
 
-An entity was declared for spawning. Belongs to the stages group. detail is empty, route is the declared entity's route, and verdict is what the session answered.
+An entity was declared for spawning. Belongs to the stages group. detail is empty, route is the declared entity's route, and verdict is what the session returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_SPAWN_RECONCILE:
 
@@ -1785,7 +1763,7 @@ A display runtime pumped its interpolation. Belongs to the stages group. detail 
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_DISPLAY_WRITE** = ``73``
 
-A display track wrote a value onto an entity. Belongs to the stages group. detail carries {track}, and verdict is what :ref:`_display_write()<class_NetwMultiplayer_private_method__display_write>` answered.
+A display track wrote a value onto an entity. Belongs to the stages group. detail carries {track}, and verdict is what :ref:`_display_write()<class_NetwMultiplayer_private_method__display_write>` returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_TABLE_COMMIT:
 
@@ -1793,7 +1771,7 @@ A display track wrote a value onto an entity. Belongs to the stages group. detai
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_TABLE_COMMIT** = ``74``
 
-A table finished committing its dirty rows for a tick. Belongs to the stages group. detail carries {stage, rows}, where stage is always "table" and rows is the committed row count, and verdict is what the commit answered.
+A table finished committing its dirty rows for a tick. Belongs to the stages group. detail carries {stage, rows}, where stage is always "table" and rows is the committed row count, and verdict is what the commit returned.
 
 .. _class_NetwMultiplayer_constant_EVENT_VERDICT:
 
@@ -1801,7 +1779,7 @@ A table finished committing its dirty rows for a tick. Belongs to the stages gro
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_VERDICT** = ``96``
 
-A refusal was counted toward what :ref:`stats_get_verdict_count()<class_NetwMultiplayer_method_stats_get_verdict_count>` answers. Belongs to the verdicts group. detail carries {stage, counted}, where stage is always "gate" and counted says whether the session actually recorded it, and verdict is the error being counted.
+A rejection was counted toward what :ref:`stats_get_verdict_count()<class_NetwMultiplayer_method_stats_get_verdict_count>` returns. Belongs to the verdicts group. detail carries {stage, counted}, where stage is always "gate" and counted says whether the session actually recorded it, and verdict is the error being counted.
 
 .. _class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE:
 
@@ -1809,7 +1787,7 @@ A refusal was counted toward what :ref:`stats_get_verdict_count()<class_NetwMult
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_SEAM_MISUSE** = ``97``
 
-An override point a game replaced answered something the session cannot use, so the default answer stood. Belongs to the verdicts group. detail carries {seam, stage, reason}, and verdict is always an invalid-data error.
+An override point a game replaced returned something the session cannot use, so the default result stood. Belongs to the verdicts group. detail carries {seam, stage, reason}, and verdict is always an invalid-data error.
 
 .. _class_NetwMultiplayer_constant_EVENT_SESSION_STATE:
 
@@ -1841,7 +1819,7 @@ A peer disconnected from the session. Belongs to the session group. detail carri
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_PEER_AUTH_FAILED** = ``115``
 
-A peer failed authentication. Belongs to the session group. detail carries {peer}, and peer names the peer that was refused.
+A peer failed authentication. Belongs to the session group. detail carries {peer}, and peer names the peer that was rejected.
 
 .. _class_NetwMultiplayer_constant_EVENT_SCENE_LIVE:
 
@@ -1943,7 +1921,7 @@ enum **SceneMove**: :ref:`🔗<enum_NetwMultiplayer_SceneMove>`
 
 :ref:`SceneMove<enum_NetwMultiplayer_SceneMove>` **SCENE_MOVE_REFUSED** = ``0``
 
-The move is refused because its source or destination is not live.
+The move is rejected because its source or destination is not live.
 
 .. _class_NetwMultiplayer_constant_SCENE_MOVE_ALREADY_THERE:
 
@@ -2083,9 +2061,9 @@ enum **EmbedPhase**: :ref:`🔗<enum_NetwMultiplayer_EmbedPhase>`
 
 :ref:`EmbedPhase<enum_NetwMultiplayer_EmbedPhase>` **EMBED_PHASE_DECLARING** = ``0``
 
-Scripts declare through the ``Netw.configure_*`` family, and a stock :godot:`MultiplayerSpawner` or :godot:`MultiplayerSynchronizer` arrives through :godot:`MultiplayerAPI.object_configuration_add() <MultiplayerAPI#class_MultiplayerAPI_method_object_configuration_add>`. Nothing acts on either yet, and authoring is only in contract here. A :ref:`NetwSessionConfig<class_NetwSessionConfig>`, :ref:`NetwClockConfig<class_NetwClockConfig>` or :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` pushed through that door is refused in every phase, because those three are declared once and consumed once.
+Scripts declare through the ``Netw.configure_*`` family, and a stock :godot:`MultiplayerSpawner` or :godot:`MultiplayerSynchronizer` arrives through :godot:`MultiplayerAPI.object_configuration_add() <MultiplayerAPI#class_MultiplayerAPI_method_object_configuration_add>`. Nothing acts on either yet, and authoring is only in contract here. A :ref:`NetwSessionConfig<class_NetwSessionConfig>`, :ref:`NetwClockConfig<class_NetwClockConfig>` or :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` pushed through that door is rejected in every phase, because those three are declared once and consumed once.
 
-\ :ref:`EmbedPhase<enum_NetwMultiplayer_EmbedPhase>` says how far a session has come in starting up, and :ref:`state<class_NetwMultiplayer_property_state>` says whether it is connected. The two are separate questions and a session answers both at once.
+\ :ref:`EmbedPhase<enum_NetwMultiplayer_EmbedPhase>` says how far a session has come in starting up, and :ref:`state<class_NetwMultiplayer_property_state>` says whether it is connected. The two are separate questions and a session returns both at once.
 
 .. _class_NetwMultiplayer_constant_EMBED_PHASE_SETTLING:
 
@@ -2489,7 +2467,7 @@ enum **TransportParam**: :ref:`🔗<enum_NetwMultiplayer_TransportParam>`
 
 :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>` **TRANSPORT_PARAM_CLIENT_SETTINGS** = ``7``
 
-:godot:`Dictionary` describing the fields a join form asks for, in the shape :ref:`TRANSPORT_PARAM_HOST_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_HOST_SETTINGS>` answers. The two overlap by however much the two modes share, so ENet names ``port`` in both and ``max_players`` in the host answer alone.
+:godot:`Dictionary` describing the join form fields. It has the same shape as :ref:`TRANSPORT_PARAM_HOST_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_HOST_SETTINGS>`. Shared fields, such as an ENet ``port``, appear in both dictionaries.
 
 .. rst-class:: classref-item-separator
 
@@ -2599,7 +2577,7 @@ The row's flags, as a bitmask of :ref:`ENDPOINT_FLAG_CALLER<class_NetwMultiplaye
 
 :ref:`EndpointState<enum_NetwMultiplayer_EndpointState>` **ENDPOINT_STATE_STATUS** = ``1``
 
-What the last probe answered, as an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. It reads :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` before anything has probed the row, which is not the same as a probe that failed.
+What the last probe returned, as an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. It reads :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` before anything has probed the row, which is not the same as a probe that failed.
 
 .. _class_NetwMultiplayer_constant_ENDPOINT_STATE_INFO:
 
@@ -2607,7 +2585,7 @@ What the last probe answered, as an :godot:`@GlobalScope.Error <@GlobalScope#enu
 
 :ref:`EndpointState<enum_NetwMultiplayer_EndpointState>` **ENDPOINT_STATE_INFO** = ``2``
 
-The :ref:`NetwServerInfo<class_NetwServerInfo>` the last probe reply carried, or ``null`` when nothing has answered.
+The :ref:`NetwServerInfo<class_NetwServerInfo>` the last probe reply carried, or ``null`` when nothing has returned.
 
 .. rst-class:: classref-item-separator
 
@@ -2633,7 +2611,7 @@ The row was added by a caller through :ref:`endpoint_add()<class_NetwMultiplayer
 
 :ref:`EndpointFlags<enum_NetwMultiplayer_EndpointFlags>` **ENDPOINT_FLAG_AVAILABLE** = ``2``
 
-The last probe reached a server that answered.
+The last probe reached a server that returned.
 
 .. _class_NetwMultiplayer_constant_ENDPOINT_FLAG_OBSERVED:
 
@@ -2735,7 +2713,7 @@ Every participant converges on the destination and every other live scene retire
 
 :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` **SCENE_CHANGE_PARTICIPANT** = ``1``
 
-One participant travels with the player entities it is enrolled in, and every world keeps running. A change at this scope with no participant to resolve is refused rather than widened to the session.
+One participant travels with the player entities it is enrolled in, and every world keeps running. A change at this scope with no participant to resolve is rejected rather than widened to the session.
 
 .. _class_NetwMultiplayer_constant_SCENE_CHANGE_SCENE:
 
@@ -2743,7 +2721,7 @@ One participant travels with the player entities it is enrolled in, and every wo
 
 :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` **SCENE_CHANGE_SCENE** = ``2``
 
-The occupants of the caller's own world travel and that world retires, leaving other worlds untouched. A change at this scope with no source world to resolve is refused.
+The occupants of the caller's own world travel and that world retires, leaving other worlds untouched. A change at this scope with no source world to resolve is rejected.
 
 .. rst-class:: classref-item-separator
 
@@ -2789,7 +2767,7 @@ enum **ClockParam**: :ref:`🔗<enum_NetwMultiplayer_ClockParam>`
 
 :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>` **CLOCK_PARAM_TICKRATE** = ``0``
 
-How many simulation ticks run per second, as an :godot:`int`. The one clock value that must be identical on every peer, so :ref:`clock_set_param()<class_NetwMultiplayer_method_clock_set_param>` refuses it with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` and a declared :ref:`NetwClockConfig<class_NetwClockConfig>` is its only door.
+How many simulation ticks run per second, as an :godot:`int`. The one clock value that must be identical on every peer, so :ref:`clock_set_param()<class_NetwMultiplayer_method_clock_set_param>` rejects it with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` and a declared :ref:`NetwClockConfig<class_NetwClockConfig>` is its only door.
 
 .. _class_NetwMultiplayer_constant_CLOCK_PARAM_SYNC_MODE:
 
@@ -3535,7 +3513,7 @@ A route, the link one table draws to another. Resolve one back to a handle with 
 
 :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **COLUMN_VARIANT** = ``15``
 
-The self-describing tier, what a :godot:`String` or a :godot:`Dictionary` compiles to. Legal in a schema and in a property set, refused by :ref:`table_create()<class_NetwMultiplayer_method_table_create>`, because variable width has no memcpy and no rows-per-frame budget.
+The self-describing tier, what a :godot:`String` or a :godot:`Dictionary` compiles to. Legal in a schema and in a property set, rejected by :ref:`table_create()<class_NetwMultiplayer_method_table_create>`, because variable width has no memcpy and no rows-per-frame budget.
 
 .. rst-class:: classref-item-separator
 
@@ -3555,9 +3533,9 @@ enum **Stat**: :ref:`🔗<enum_NetwMultiplayer_Stat>`
 
 Counter. Frames addressed to a route this peer never saw issued.
 
-Two kinds of value share this enum. :ref:`stats_get()<class_NetwMultiplayer_method_stats_get>` takes any of them, and :ref:`stats_snapshot()<class_NetwMultiplayer_method_stats_snapshot>` answers the same values under their lowercase names.
+Two kinds of value share this enum. :ref:`stats_get()<class_NetwMultiplayer_method_stats_get>` takes any of them, and :ref:`stats_snapshot()<class_NetwMultiplayer_method_stats_snapshot>` returns the same values under their lowercase names.
 
-A counter only ever rises and says how often something happened, so what matters is how fast it climbs. A gauge says how many there are right now and moves both ways. Every name carrying ``drops`` or ``skips`` counts something the session refused on purpose, so a rising one points at a cause rather than being a fault itself.
+A counter only ever rises and says how often something happened, so what matters is how fast it climbs. A gauge says how many there are right now and moves both ways. Every name carrying ``drops`` or ``skips`` counts something the session rejected on purpose, so a rising one points at a cause rather than being a fault itself.
 
 .. _class_NetwMultiplayer_constant_STAT_DROPS_NOT_LIVE:
 
@@ -3581,7 +3559,7 @@ Counter. Frames for a live route whose node is gone.
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_DROPS_BACKLOG_LIMIT** = ``3``
 
-Counter. Frames refused because the receive backlog was already full.
+Counter. Frames rejected because the receive backlog was already full.
 
 .. _class_NetwMultiplayer_constant_STAT_DROPS_TRAVERSAL:
 
@@ -3685,7 +3663,7 @@ Counter. Row frames that carried every column rather than a diff, which is what 
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_ROW_FRAMES_STAGE_REFUSED** = ``16``
 
-Counter. Row frames the installed encode stage refused. A pass that sent nothing because its stage refused everything otherwise reads exactly like a caught-up one.
+Counter. Row frames the installed encode stage rejected. A pass that sent nothing because its stage rejected everything otherwise reads exactly like a caught-up one.
 
 .. _class_NetwMultiplayer_constant_STAT_ROW_FRAMES_UNGATHERED:
 
@@ -3693,7 +3671,7 @@ Counter. Row frames the installed encode stage refused. A pass that sent nothing
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_ROW_FRAMES_UNGATHERED** = ``17``
 
-Counter. Rows whose gather refused, so no recipient was offered one.
+Counter. Rows whose gather rejected, so no recipient was offered one.
 
 .. _class_NetwMultiplayer_constant_STAT_RETAINED_FRAMES_OUT:
 
@@ -3781,7 +3759,7 @@ Counter. Sync frames from a peer the set's :ref:`NetwPropertySet.policy<class_Ne
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_DROPS_SYNC_POISONED** = ``28``
 
-Counter. Sync frames refused because the stream's baseline is no longer trustworthy, so a delta cannot be applied against it.
+Counter. Sync frames rejected because the stream's baseline is no longer trustworthy, so a delta cannot be applied against it.
 
 .. _class_NetwMultiplayer_constant_STAT_DROPS_SYNC_UNKNOWN_FLAG:
 
@@ -3997,7 +3975,7 @@ Gauge. Predicted effects armed but not yet confirmed.
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_PREDICT_GATE_FALLBACKS** = ``55``
 
-Counter. Times a prediction gate fell back to its default because the declared path could not answer.
+Number of times a prediction gate used its default because the declared path returned no value.
 
 .. _class_NetwMultiplayer_constant_STAT_DISPLAY_RUNTIMES:
 
@@ -4085,7 +4063,7 @@ Counter. Gate verdicts of :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#cla
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_VERDICT_UNAUTHORIZED** = ``66``
 
-Counter. Refusals answered with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`. This is the one to watch, because it counts peers asking for what they are not entitled to.
+Counter. Refusals returned with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`. This is the one to watch, because it counts peers asking for what they are not entitled to.
 
 .. _class_NetwMultiplayer_constant_STAT_VERDICT_INVALID_DATA:
 
@@ -4488,7 +4466,7 @@ Constants
 
 The first byte of a reliable Networked datagram.
 
-A game that shares this session's transport by sending its own packets must not start one with this byte or with either magic below, because the receiver reads the first byte to decide whether a packet is Networked framing or the game's own data. A packet opening with one of the three and then failing to parse is answered as malformed rather than handed back to the game.
+Game packets sent through this session must not start with this byte or either magic value below. The receiver uses the first byte to detect Networked framing. Invalid Networked frames are rejected as malformed.
 
 .. _class_NetwMultiplayer_constant_CARRIER_MAGIC_UNRELIABLE:
 
@@ -4567,13 +4545,13 @@ Installing one makes the session authenticate the game's way instead of its own.
 
 The :ref:`NetwAuthFlow<class_NetwAuthFlow>` this session checks arriving peers with, resolved in this order.
 
-- a flow installed through :ref:`auth_set_flow()<class_NetwMultiplayer_method_auth_set_flow>`\ 
+- a flow installed through :ref:`auth_set_flow()<class_NetwMultiplayer_method_auth_set_flow>`\
 
 - the flow built by the factory :ref:`Netw.configure_auth()<class_Netw_method_configure_auth>` declared
 
 - ``null``, and every peer is let in
 
-A ``null`` here means open admission only when nothing was declared. A declared factory that failed to build refuses every peer instead.
+A ``null`` here means open admission only when nothing was declared. A declared factory that failed to build rejects every peer instead.
 
 .. rst-class:: classref-item-separator
 
@@ -4645,11 +4623,11 @@ Never ``null``. A session with none assigned makes its own at ``/root``, because
 
 - :godot:`bool` **is_host**\ (\ )
 
-Whether this peer holds server authority. A dedicated server, a listen server, and a session with no connection at all all answer ``true``.
+Whether this peer holds server authority. A dedicated server, a listen server, and a session with no connection at all all return ``true``.
 
 A session that has connected to nothing is its own authority, which is what lets a single-player game admit its own entities, claim its own routes and create its own scenes with no network, exactly as :godot:`MultiplayerSpawner` and :godot:`MultiplayerSynchronizer` do. An ended session returns to that state.
 
-Authority is withheld the moment a session declares itself something else. :ref:`session_set_role()<class_NetwMultiplayer_method_session_set_role>` with :ref:`ROLE_CLIENT<class_NetwMultiplayer_constant_ROLE_CLIENT>` answers ``false`` before any connection exists, so a client waiting to connect never acts as a server.
+Authority is withheld the moment a session declares itself something else. :ref:`session_set_role()<class_NetwMultiplayer_method_session_set_role>` with :ref:`ROLE_CLIENT<class_NetwMultiplayer_constant_ROLE_CLIENT>` returns ``false`` before any connection exists, so a client waiting to connect never acts as a server.
 
 An authority with no session has no peers, so every broadcast it authorizes reaches nobody. A caller that needs a live hosted session reads :ref:`is_online<class_NetwMultiplayer_property_is_online>` as well.
 
@@ -4669,7 +4647,7 @@ An authority with no session has no peers, so every broadcast it authorizes reac
 
 Whether this peer has a player of its own. True at :ref:`ROLE_CLIENT<class_NetwMultiplayer_constant_ROLE_CLIENT>` and :ref:`ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>`, and false at :ref:`ROLE_NONE<class_NetwMultiplayer_constant_ROLE_NONE>` and :ref:`ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>`.
 
-A listen server answers ``true`` here and ``true`` to :ref:`is_host<class_NetwMultiplayer_property_is_host>` at once, because it is both this session's authority and one of its own players. :ref:`is_host<class_NetwMultiplayer_property_is_host>` answers authority and this answers whether a local player exists, and the two questions are independent.
+A listen server returns ``true`` here and ``true`` to :ref:`is_host<class_NetwMultiplayer_property_is_host>` at once, because it is both this session's authority and one of its own players. :ref:`is_host<class_NetwMultiplayer_property_is_host>` returns authority and this returns whether a local player exists, and the two questions are independent.
 
 .. rst-class:: classref-item-separator
 
@@ -4721,7 +4699,7 @@ The accepted :ref:`NetwParticipant<class_NetwParticipant>` for this peer, or ``n
 
 The entity this peer is represented by, or ``null`` when none represents it.
 
-The session holds this entity directly rather than looking it up by route, because retiring an entity has to ask whether that entity is this peer's own, and asking by route answers yes for every entity that has one. A scene change spawns the replacement before retiring the original, so a route-keyed test would drop a local player that had already moved on.
+The session holds this entity directly rather than looking it up by route, because retiring an entity has to ask whether that entity is this peer's own, and asking by route returns yes for every entity that has one. A scene change spawns the replacement before retiring the original, so a route-keyed test would drop a local player that had already moved on.
 
 .. rst-class:: classref-item-separator
 
@@ -4812,7 +4790,7 @@ A player lives inside a scene, so the session reads its players by asking every 
 - |void| **set_refuse_new_connections**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **is_refusing_new_connections**\ (\ )
 
-Whether :ref:`inner<class_NetwMultiplayer_property_inner>` refuses arriving peer connections, carrying :godot:`SceneMultiplayer`'s spelling for the reason :ref:`allow_object_decoding<class_NetwMultiplayer_property_allow_object_decoding>` gives.
+Whether :ref:`inner<class_NetwMultiplayer_property_inner>` rejects arriving peer connections, carrying :godot:`SceneMultiplayer`'s spelling for the reason :ref:`allow_object_decoding<class_NetwMultiplayer_property_allow_object_decoding>` gives.
 
 The flag is only as real as the :godot:`MultiplayerPeer` underneath it, and :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>` does not implement it at all. A session on the in-process loopback reads ``false`` whatever a game writes here, which is why who gets in is decided by :ref:`auth_flow<class_NetwMultiplayer_property_auth_flow>` and the session's own roster rather than by this.
 
@@ -4878,7 +4856,7 @@ What this peer is to the session.
 
 The node this session roots relative addressing at, resolved from :ref:`inner<class_NetwMultiplayer_property_inner>`'s :godot:`SceneMultiplayer.root_path <SceneMultiplayer#class_SceneMultiplayer_property_root_path>` the way the native replicator resolves its own.
 
-In every shipped configuration this is the owning :ref:`MultiplayerTree<class_MultiplayerTree>`, and it stays valid when no tree owns the session. A reader installed through :ref:`session_set_root()<class_NetwMultiplayer_method_session_set_root>` answers instead, which is how an embedding that resolves its root differently keeps one answer for both.
+In every shipped configuration this is the owning :ref:`MultiplayerTree<class_MultiplayerTree>`, and it stays valid when no tree owns the session. A reader installed through :ref:`session_set_root()<class_NetwMultiplayer_method_session_set_root>` returns instead, which is how an embedding that resolves its root differently keeps one result for both.
 
 .. rst-class:: classref-item-separator
 
@@ -4897,7 +4875,7 @@ In every shipped configuration this is the owning :ref:`MultiplayerTree<class_Mu
 
 The path :ref:`inner<class_NetwMultiplayer_property_inner>` resolves a node reference against, carrying :godot:`SceneMultiplayer`'s spelling for the reason :ref:`allow_object_decoding<class_NetwMultiplayer_property_allow_object_decoding>` gives.
 
-\ :ref:`root<class_NetwMultiplayer_property_root>` is the node this path resolves to, and :ref:`session_is_active()<class_NetwMultiplayer_method_session_is_active>` answers by comparing the session the :godot:`SceneTree` holds at this path against this one, so moving the path moves which registration this session claims to be. A session that wraps nothing reads an empty :godot:`NodePath` and a write goes nowhere.
+\ :ref:`root<class_NetwMultiplayer_property_root>` is the node this path resolves to, and :ref:`session_is_active()<class_NetwMultiplayer_method_session_is_active>` returns by comparing the session the :godot:`SceneTree` holds at this path against this one, so moving the path moves which registration this session claims to be. A session that wraps nothing reads an empty :godot:`NodePath` and a write goes nowhere.
 
 .. rst-class:: classref-item-separator
 
@@ -4959,7 +4937,7 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_display_write**\ (\ entity\: :godot:`RID`, track\: :godot:`StringName`, value\: :godot:`Variant`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__display_write>`
 
-Writes one display ``track`` for ``entity``. With no override this answers :ref:`display_write_default()<class_NetwMultiplayer_method_display_write_default>`.
+Writes one display ``track`` for ``entity``. With no override this returns :ref:`display_write_default()<class_NetwMultiplayer_method_display_write_default>`.
 
 An override that wants the stock write calls the default method directly. A bound native method is not a virtual super call for a script subclass.
 
@@ -4973,7 +4951,7 @@ An override that wants the stock write calls the default method directly. A boun
 
 |void| **_persist_tick**\ (\ delta\: :godot:`float`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__persist_tick>`
 
-Advances the persistence snapshot loop by ``delta`` seconds. With no override this answers :ref:`persist_tick_default()<class_NetwMultiplayer_method_persist_tick_default>`.
+Advances the persistence snapshot loop by ``delta`` seconds. With no override this returns :ref:`persist_tick_default()<class_NetwMultiplayer_method_persist_tick_default>`.
 
 \ :godot:`MultiplayerAPI.poll() <MultiplayerAPI#class_MultiplayerAPI_method_poll>` reaches persistence through this stage with the wall-clock gap since the last poll, so a session saves on its own cadence with no frame behind it. Override it to observe or replace that cadence, and call :ref:`persist_tick_default()<class_NetwMultiplayer_method_persist_tick_default>` for the stock pass.
 
@@ -4987,7 +4965,7 @@ Advances the persistence snapshot loop by ``delta`` seconds. With no override th
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_predict_admit_frame**\ (\ sender\: :godot:`int`, route\: :godot:`int`, channel\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__predict_admit_frame>`
 
-The override point for the prediction admission gate. With no override this answers :ref:`predict_admit_frame_default()<class_NetwMultiplayer_method_predict_admit_frame_default>`.
+The override point for the prediction admission gate. With no override this returns :ref:`predict_admit_frame_default()<class_NetwMultiplayer_method_predict_admit_frame_default>`.
 
 .. rst-class:: classref-item-separator
 
@@ -4999,9 +4977,9 @@ The override point for the prediction admission gate. With no override this answ
 
 :godot:`int` **_predict_consume**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__predict_consume>`
 
-The override point for what authority does with a command queue that is ``depth`` transitions deep against a ``buffer`` it was asked to hold. With no override this answers :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`.
+The override point for what authority does with a command queue that is ``depth`` transitions deep against a ``buffer`` it was asked to hold. With no override this returns :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`.
 
-The answer is a :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>`, which replays a queued transition, holds the queue where it is, or runs dry on the last one. It is asked once per authority tick per predicted entity, so it decides pacing rather than content, and it may not read or write entity state.
+The result is a :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>`, which replays a queued transition, holds the queue where it is, or runs dry on the last one. It is asked once per authority tick per predicted entity, so it decides pacing rather than content, and it may not read or write entity state.
 
 .. rst-class:: classref-item-separator
 
@@ -5013,9 +4991,9 @@ The answer is a :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>`, which repl
 
 :ref:`NetwPredictFold<class_NetwPredictFold>` **_predict_drive**\ (\ latest_input_tick\: :godot:`int`, last_driven_input_tick\: :godot:`int`, frame_tick\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__predict_drive>`
 
-The override point for which input a predicted entity advances on this frame. With no override this answers :ref:`predict_drive_default()<class_NetwMultiplayer_method_predict_drive_default>`.
+The override point for which input a predicted entity advances on this frame. With no override this returns :ref:`predict_drive_default()<class_NetwMultiplayer_method_predict_drive_default>`.
 
-\ ``latest_input_tick`` is the newest input the entity holds and ``last_driven_input_tick`` is the one it last advanced on, so the two together say whether this frame has fresh input or repeats. ``frame_tick`` is the label to fall back to when the entity holds no input at all. Returning ``null`` is not a way to abstain. The answer is refused, a :ref:`EVENT_SEAM_MISUSE<class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE>` is emitted, and the default's fold stands.
+\ ``latest_input_tick`` is the newest input the entity holds and ``last_driven_input_tick`` is the one it last advanced on, so the two together say whether this frame has fresh input or repeats. ``frame_tick`` is the label to fall back to when the entity holds no input at all. Returning ``null`` is not a way to abstain. The result is rejected, a :ref:`EVENT_SEAM_MISUSE<class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE>` is emitted, and the default's fold stands.
 
 .. rst-class:: classref-item-separator
 
@@ -5027,9 +5005,9 @@ The override point for which input a predicted entity advances on this frame. Wi
 
 :ref:`NetwPredictJudgement<class_NetwPredictJudgement>` **_predict_evaluate**\ (\ domain\: :ref:`Domain<enum_NetwPredictJournal_Domain>`, verdict\: :ref:`ExactVerdict<enum_NetwPredict_ExactVerdict>`, predicted\: :godot:`Dictionary`, payload\: :godot:`Dictionary`, wiring\: :godot:`Dictionary`, field_sink\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__predict_evaluate>`
 
-The override point for the judgement that decides whether a predicted state matched the one authority reached. With no override this answers :ref:`predict_evaluate_default()<class_NetwMultiplayer_method_predict_evaluate_default>`.
+The override point for the judgement that decides whether a predicted state matched the one authority reached. With no override this returns :ref:`predict_evaluate_default()<class_NetwMultiplayer_method_predict_evaluate_default>`.
 
-\ ``domain`` says whether the transition was in the predicted domain at all, ``verdict`` carries any exact comparison already made, and ``field_sink`` is where the per-field differences land. Returning ``null`` is not a way to abstain. The answer is refused, a :ref:`EVENT_SEAM_MISUSE<class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE>` is emitted, and the default's judgement stands, so an override with nothing to say about a case returns the default's answer for it.
+\ ``domain`` says whether the transition was in the predicted domain at all, ``verdict`` carries any exact comparison already made, and ``field_sink`` is where the per-field differences land. Returning ``null`` is not a way to abstain. The result is rejected, a :ref:`EVENT_SEAM_MISUSE<class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE>` is emitted, and the default's judgement stands, so an override with nothing to say about a case returns the default's return a result for it.
 
 .. rst-class:: classref-item-separator
 
@@ -5041,9 +5019,9 @@ The override point for the judgement that decides whether a predicted state matc
 
 :ref:`NetwPredictRecovery<class_NetwPredictRecovery>` **_predict_recover**\ (\ payload\: :godot:`Dictionary`, policy\: :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>`, correction\: :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>`, snap_restore\: :ref:`RestoreMode<enum_NetwPredict_RestoreMode>`, projection\: :godot:`Dictionary`, current\: :godot:`Dictionary`, pose_errors\: :godot:`Dictionary`, wiring\: :godot:`Dictionary`, verdict\: :godot:`Dictionary`, tick_delta\: :godot:`float`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__predict_recover>`
 
-The override point for the plan that says how a diverged entity is brought back onto authority's state. With no override this answers :ref:`predict_recover_default()<class_NetwMultiplayer_method_predict_recover_default>`.
+The override point for the plan that says how a diverged entity is brought back onto authority's state. With no override this returns :ref:`predict_recover_default()<class_NetwMultiplayer_method_predict_recover_default>`.
 
-\ ``policy`` and ``correction`` are what the declaration asked for, ``projection`` and ``current`` are the two states being reconciled, and ``tick_delta`` is the step the plan is measured against. Returning ``null`` is not a way to abstain. The answer is refused, a :ref:`EVENT_SEAM_MISUSE<class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE>` is emitted, and the default's plan stands, so an override that handles one policy returns the default's answer for the others.
+\ ``policy`` and ``correction`` are what the declaration asked for, ``projection`` and ``current`` are the two states being reconciled, and ``tick_delta`` is the step the plan is measured against. Returning ``null`` is not a way to abstain. The result is rejected, a :ref:`EVENT_SEAM_MISUSE<class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE>` is emitted, and the default's plan stands, so an override that handles one policy returns the default's return a result for the others.
 
 Withholding fields is an in-domain refinement, and the default plan does not attempt it otherwise. A divergence outside the declared domain, or one nobody could charge while a contact was still disturbing the bodies, gives no ground for deciding which fields are safe to leave predicted, so the default re-bases the whole closure instead.
 
@@ -5057,7 +5035,7 @@ Withholding fields is an in-domain refinement, and the default plan does not att
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_spawn_admit_frame**\ (\ sender\: :godot:`int`, route\: :godot:`int`, channel\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__spawn_admit_frame>`
 
-The override point for the spawn admission gate. With no override this answers :ref:`spawn_admit_frame_default()<class_NetwMultiplayer_method_spawn_admit_frame_default>`.
+The override point for the spawn admission gate. With no override this returns :ref:`spawn_admit_frame_default()<class_NetwMultiplayer_method_spawn_admit_frame_default>`.
 
 .. rst-class:: classref-item-separator
 
@@ -5069,9 +5047,9 @@ The override point for the spawn admission gate. With no override this answers :
 
 :godot:`Node` **_spawn_construct**\ (\ entity\: :godot:`RID`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__spawn_construct>`
 
-Builds the local :godot:`Node` for one entity the server told this peer to spawn. With no override this answers :ref:`spawn_construct_default()<class_NetwMultiplayer_method_spawn_construct_default>`.
+Builds the local :godot:`Node` for one entity the server told this peer to spawn. With no override this returns :ref:`spawn_construct_default()<class_NetwMultiplayer_method_spawn_construct_default>`.
 
-This is where a spawn recipe becomes a node again on a receiving peer. It constructs and returns the node without adding it to the tree, because the session owns the parenting. Answering ``null`` is reported rather than treated as an empty entity.
+This is where a spawn recipe becomes a node again on a receiving peer. It constructs and returns the node without adding it to the tree, because the session owns the parenting. Returning ``null`` is reported rather than treated as an empty entity.
 
 Override to pool nodes, pick a variant scene, or substitute a proxy for an entity this peer does not need in full, and call the default method directly for the node the pump would have built.
 
@@ -5085,7 +5063,7 @@ Override to pool nodes, pick a variant scene, or substitute a proxy for an entit
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_spawn_declare**\ (\ entity\: :godot:`RID`, recipe\: :godot:`Variant`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__spawn_declare>`
 
-Declares that ``entity`` may be materialized on other peers. With no override this answers :ref:`spawn_declare_default()<class_NetwMultiplayer_method_spawn_declare_default>`.
+Declares that ``entity`` may be materialized on other peers. With no override this returns :ref:`spawn_declare_default()<class_NetwMultiplayer_method_spawn_declare_default>`.
 
 Declaring makes an entity eligible for spawning and does not spawn it. Which peers actually receive it is an interest decision, and the session acts on that decision itself. ``recipe`` is the value-only description a remote peer needs in order to construct the entity, and never carries a :godot:`Node` or an object reference, because a spawn plan has to survive serialization.
 
@@ -5101,7 +5079,7 @@ Override to validate or enrich the recipe, then call the default method directly
 
 |void| **_spawn_undeclare**\ (\ entity\: :godot:`RID`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__spawn_undeclare>`
 
-Makes ``entity`` ineligible for spawning again. The stock answer does nothing, because the session has already recorded the withdrawal and this exists to be watched.
+Makes ``entity`` ineligible for spawning again. The default result does nothing, because the session has already recorded the withdrawal and this exists to be watched.
 
 Withdrawing stops future spawns and does not despawn the copies peers already hold. Those leave through the :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` of the layer that showed them. This is the twin of :ref:`_spawn_declare()<class_NetwMultiplayer_private_method__spawn_declare>`.
 
@@ -5115,7 +5093,7 @@ Withdrawing stops future spawns and does not despawn the copies peers already ho
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_sync_admit_frame**\ (\ sender\: :godot:`int`, route\: :godot:`int`, comp\: :godot:`int`, channel\: :godot:`int`, flags\: :godot:`int`, tick\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) |virtual| |const| :ref:`🔗<class_NetwMultiplayer_private_method__sync_admit_frame>`
 
-The override point for the sync admission gate. With no override this answers :ref:`sync_admit_frame_default()<class_NetwMultiplayer_method_sync_admit_frame_default>`.
+The override point for the sync admission gate. With no override this returns :ref:`sync_admit_frame_default()<class_NetwMultiplayer_method_sync_admit_frame_default>`.
 
 .. rst-class:: classref-item-separator
 
@@ -5127,7 +5105,7 @@ The override point for the sync admission gate. With no override this answers :r
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_sync_apply_set**\ (\ entity\: :godot:`RID`, comp\: :godot:`int`, values\: :godot:`Array`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__sync_apply_set>`
 
-Writes one decoded property set into ``entity``'s component ``comp``. With no override this answers :ref:`sync_apply_set_default()<class_NetwMultiplayer_method_sync_apply_set_default>`.
+Writes one decoded property set into ``entity``'s component ``comp``. With no override this returns :ref:`sync_apply_set_default()<class_NetwMultiplayer_method_sync_apply_set_default>`.
 
 An override that wants the stock write calls the default method directly. A bound native method is not a virtual super call for a script subclass.
 
@@ -5143,7 +5121,7 @@ An override that wants the stock write calls the default method directly. A boun
 
 Applies one admitted sync body to ``entity``'s ``comp`` address.
 
-Decoding runs only after the sync gate admitted the frame, so the route is live and the payload is non-empty by the time this sees it. It may still refuse bytes that pass the gate but do not match the attached property set.
+Decoding runs after the sync gate validates the route and payload. It may still reject bytes that do not match the attached property set.
 
 .. code:: text
 
@@ -5153,7 +5131,7 @@ Decoding runs only after the sync gate admitted the frame, so the route is live 
 
 \ ``flags`` carries the frame's sync bits and ``tick`` the authoring tick, which is what lets a late frame be recognized as stale. ``payload`` is the body :ref:`_sync_encode()<class_NetwMultiplayer_private_method__sync_encode>` produced on the sender.
 
-With no override, this answers the decoder the running decode stage installed, and :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` outside a decode stage.
+With no override, this returns the decoder the running decode stage installed, and :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` outside a decode stage.
 
 The exact inverse of :ref:`_sync_encode()<class_NetwMultiplayer_private_method__sync_encode>`. Whatever that writes, this must read, so the two are replaced together in practice even though nothing requires it.
 
@@ -5173,7 +5151,7 @@ Encoding is per recipient because interest already decided that peers see differ
 
 An empty :godot:`PackedByteArray` means "nothing to send this peer this tick", which is the ordinary result for a peer whose visible entities are all unchanged. It is not an error.
 
-With no override, this answers the stock body the running encode stage armed, and an empty :godot:`PackedByteArray` outside an encode stage.
+With no override, this returns the stock body the running encode stage armed, and an empty :godot:`PackedByteArray` outside an encode stage.
 
 The exact inverse of :ref:`_sync_decode()<class_NetwMultiplayer_private_method__sync_decode>`.
 
@@ -5187,7 +5165,7 @@ The exact inverse of :ref:`_sync_decode()<class_NetwMultiplayer_private_method__
 
 :godot:`Array` **_sync_gather_set**\ (\ entity\: :godot:`RID`, comp\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__sync_gather_set>`
 
-Gathers one property set from ``entity``'s component ``comp``. With no override this answers :ref:`sync_gather_set_default()<class_NetwMultiplayer_method_sync_gather_set_default>`.
+Gathers one property set from ``entity``'s component ``comp``. With no override this returns :ref:`sync_gather_set_default()<class_NetwMultiplayer_method_sync_gather_set_default>`.
 
 An override that wants the stock gather calls the default method directly. A bound native method is not a virtual super call for a script subclass.
 
@@ -5201,7 +5179,7 @@ An override that wants the stock gather calls the default method directly. A bou
 
 |void| **_sync_note_ack**\ (\ peer\: :godot:`int`, sequence\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__sync_note_ack>`
 
-Records that ``peer`` acknowledged everything through ``sequence``. With no override this answers :ref:`sync_note_ack_default()<class_NetwMultiplayer_method_sync_note_ack_default>`.
+Records that ``peer`` acknowledged everything through ``sequence``. With no override this returns :ref:`sync_note_ack_default()<class_NetwMultiplayer_method_sync_note_ack_default>`.
 
 Delta encoding is only sound against a baseline the recipient is known to hold, and this is how that baseline advances. A peer whose acks stop moving keeps its old baseline, so its deltas grow rather than going wrong. ``sequence`` is monotonic per peer, and an out-of-order or repeated acknowledgement is ignored rather than rewinding the baseline.
 
@@ -5217,7 +5195,7 @@ An override that wants the baseline to keep advancing calls the default method d
 
 |void| **_sync_note_sent**\ (\ peer\: :godot:`int`, sequence\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__sync_note_sent>`
 
-Records that ``sequence`` was sent to ``peer``. With no override this answers :ref:`sync_note_sent_default()<class_NetwMultiplayer_method_sync_note_sent_default>`.
+Records that ``sequence`` was sent to ``peer``. With no override this returns :ref:`sync_note_sent_default()<class_NetwMultiplayer_method_sync_note_sent_default>`.
 
 The send side commits its pending masked state at the moment it goes out rather than when it is acknowledged, so the delta this frame produced is the delta the next one builds on. The send-side twin of :ref:`_sync_note_ack()<class_NetwMultiplayer_private_method__sync_note_ack>`.
 
@@ -5233,7 +5211,7 @@ An override that wants the stock commit calls the default method directly. A bou
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_table_admit_frame**\ (\ sender\: :godot:`int`, channel\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__table_admit_frame>`
 
-The override point for the table admission gate. With no override this answers :ref:`table_admit_frame_default()<class_NetwMultiplayer_method_table_admit_frame_default>`.
+The override point for the table admission gate. With no override this returns :ref:`table_admit_frame_default()<class_NetwMultiplayer_method_table_admit_frame_default>`.
 
 .. rst-class:: classref-item-separator
 
@@ -5287,8 +5265,8 @@ Where this session's bytes went, at tooling cadence.
     ┠╴frames_in             int         frames received
     ┠╴staged_dropped_out    int         frames encoded and never sent
     ┠╴frames_in_by_channel  Dictionary  peer -> channel -> frames received
-    ┠╴refused_in            int         frames refused on arrival
-    ┠╴refusals              Dictionary  peer -> channel -> refusal name -> count
+    ┠╴refused_in            int         frames rejected on arrival
+    ┠╴refusals              Dictionary  peer -> channel -> rejection name -> count
     ┠╴armed                 bool        whether column grain is being recorded
     ┠╴columns               Dictionary  a packed key -> schema, column, bits
     ┖╴residual              Dictionary  datagram and wire totals, see below
@@ -5337,7 +5315,7 @@ Sets the local game-build tag stamped on every hello this session sends and requ
 
 |void| **auth_set_flow**\ (\ flow\: :ref:`NetwAuthFlow<class_NetwAuthFlow>`\ ) :ref:`🔗<class_NetwMultiplayer_method_auth_set_flow>`
 
-Overrides the flow for this one session, outranking :ref:`Netw.configure_auth()<class_Netw_method_configure_auth>`. Passing ``null`` drops the override and the session falls back to the project's own answer. The new flow is seated immediately, so a session already online authenticates its next peer through it.
+Overrides :ref:`Netw.configure_auth()<class_Netw_method_configure_auth>` for this session. Pass ``null`` to restore the project auth flow. The next peer uses the new flow.
 
 .. rst-class:: classref-item-separator
 
@@ -5379,7 +5357,7 @@ Opens a five-second measurement of the display offset this link actually needs, 
 
 It moves the live :ref:`CLOCK_PARAM_DISPLAY_OFFSET<class_NetwMultiplayer_constant_CLOCK_PARAM_DISPLAY_OFFSET>` and never reopens the draft that configured the clock, so the value it finds is not saved anywhere. Restarting it before the window closes replaces the measurement in progress, and a disconnect cancels it.
 
-A host measures nothing and answers immediately, because it has no link to the server to measure. So does a session whose clock was never configured.
+A host measures nothing and returns immediately, because it has no link to the server to measure. So does a session whose clock was never configured.
 
 .. rst-class:: classref-item-separator
 
@@ -5393,7 +5371,7 @@ A host measures nothing and answers immediately, because it has no link to the s
 
 The clock this session is running right now, rebuilt on every call, so a value changed since through :ref:`clock_set_param()<class_NetwMultiplayer_method_clock_set_param>` reads back here as well as through :ref:`clock_get_param()<class_NetwMultiplayer_method_clock_get_param>`.
 
-It is never the Resource that registered it. The authored :ref:`NetwClockConfig<class_NetwClockConfig>` is read once and not retained, because a session that kept it would hold two answers to what the clock is doing and only one of them would be true. Two asks therefore answer equal values on distinct objects, and writing to one changes nothing.
+Returns a copy of the active clock configuration. The session does not retain the original :ref:`NetwClockConfig<class_NetwClockConfig>`, and modifying the returned copy has no effect.
 
 .. rst-class:: classref-item-separator
 
@@ -5431,7 +5409,7 @@ The five cadence monitors, :ref:`CLOCK_MONITOR_PHYSICS_FRAMES<class_NetwMultipla
 
 :godot:`Variant` **clock_get_param**\ (\ param\: :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_param>`
 
-The current value of one tunable clock knob. The vocabulary is :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`, and the return type follows the knob. A count answers an :godot:`int`, a duration or a factor answers a :godot:`float`, and a switch answers a :godot:`bool`.
+The current value of one tunable clock knob. The vocabulary is :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`, and the return type follows the knob. A count returns an :godot:`int`, a duration or a factor returns a :godot:`float`, and a switch returns a :godot:`bool`.
 
 .. rst-class:: classref-item-separator
 
@@ -5457,7 +5435,7 @@ The physics server runs exactly one step per frame, so a tick can be worth one s
 
 :godot:`int` **clock_get_simulation_behind_count**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_simulation_behind_count>`
 
-How many frames wanted a tick the gate's ceiling refused.
+How many frames wanted a tick the gate's ceiling rejected.
 
 A gated clock announces one tick per frame at most, so a peer whose physics cannot sustain :ref:`CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>` times :ref:`clock_get_physics_steps_per_tick()<class_NetwMultiplayer_method_clock_get_physics_steps_per_tick>` steps per wall second cannot catch up by doubling a frame. Sustained growth here means this peer is too slow to predict, which no netcode setting repairs.
 
@@ -5483,13 +5461,13 @@ The current server-calibrated simulation tick.
 
 :godot:`Dictionary` **clock_ingest_pong**\ (\ sample\: :godot:`float`, server_tick_at_pong\: :godot:`int`, server_tick_phase\: :godot:`float`, apply_lead\: :godot:`bool`\ ) :ref:`🔗<class_NetwMultiplayer_method_clock_ingest_pong>`
 
-Feeds one round-trip sample into the calibration and answers the drift metrics that sample produced.
+Feeds one round-trip sample into the calibration and returns the drift metrics that sample produced.
 
 Calibration keeps the schedule aligned with a server's without ever teleporting the playhead. :ref:`SYNC_MODE_SNAP<class_NetwMultiplayer_constant_SYNC_MODE_SNAP>` takes the whole correction at once. :ref:`SYNC_MODE_STRETCH<class_NetwMultiplayer_constant_SYNC_MODE_STRETCH>` takes a fraction of it per frame, falling back to a snap once the divergence passes :ref:`CLOCK_PARAM_PANIC_SNAP_THRESHOLD<class_NetwMultiplayer_constant_CLOCK_PARAM_PANIC_SNAP_THRESHOLD>`, which is a real desync rather than drift.
 
 The target is a continuous clock position rather than a whole tick, and that is deliberate. Rounding the ``server_tick_phase`` away would make the target jump by a full tick as a ping's arrival phase slid across a server boundary, and :ref:`SYNC_MODE_STRETCH<class_NetwMultiplayer_constant_SYNC_MODE_STRETCH>` would then chase that sawtooth for about a second at a time, dragging the local tick boundary back and forth through the server's. The margin that used to ride on that rounding is :ref:`CLOCK_PARAM_LEAD_TICKS<class_NetwMultiplayer_constant_CLOCK_PARAM_LEAD_TICKS>`, which is explicit.
 
-The answered :godot:`Dictionary` is the same shape :ref:`clock_pong_received<class_NetwMultiplayer_signal_clock_pong_received>` carries as ``data``.
+The returned :godot:`Dictionary` is the same shape :ref:`clock_pong_received<class_NetwMultiplayer_signal_clock_pong_received>` carries as ``data``.
 
 .. code:: text
 
@@ -5590,7 +5568,7 @@ A session that consumed a clock configuration calls this itself, once per :godot
 
 |void| **clock_request_handshake**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_clock_request_handshake>`
 
-Asks server authority for its tickrate over the clock's handshake channel, so the two rates can be compared before any tick is calibrated against them. The server answers with its own tickrate, and a reply that disagrees is what :ref:`clock_set_mismatch_action()<class_NetwMultiplayer_method_clock_set_mismatch_action>` decides the response to.
+Asks server authority for its tickrate over the clock's handshake channel, so the two rates can be compared before any tick is calibrated against them. The server returns its own tickrate, and a reply that disagrees is what :ref:`clock_set_mismatch_action()<class_NetwMultiplayer_method_clock_set_mismatch_action>` decides the response to.
 
 Only a peer that is not server authority calls this. The session runs it once per transport generation, as soon as a connection to the server exists, so a host never asks itself.
 
@@ -5654,9 +5632,9 @@ What a session does when a clock handshake reply carries a tickrate different fr
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **clock_set_param**\ (\ param\: :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_clock_set_param>`
 
-Turns one tunable clock knob, answering :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+Turns one tunable clock knob, returning :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
-Refuses :ref:`CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>` with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`, because a tickrate that differs between two peers means their ticks are worth different amounts of simulated time. It is settable through the :ref:`NetwClockConfig<class_NetwClockConfig>` a game declares with :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` alone, and a peer that connects carrying a different one is reported by :ref:`clock_tickrate_mismatch<class_NetwMultiplayer_signal_clock_tickrate_mismatch>`.
+Rejects :ref:`CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>` with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`, because a tickrate that differs between two peers means their ticks are worth different amounts of simulated time. It is settable through the :ref:`NetwClockConfig<class_NetwClockConfig>` a game declares with :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` alone, and a peer that connects carrying a different one is reported by :ref:`clock_tickrate_mismatch<class_NetwMultiplayer_signal_clock_tickrate_mismatch>`.
 
 .. code:: text
 
@@ -5715,7 +5693,7 @@ A frame-tier entity authors, sends and consumes in that pass, so a rig that step
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **complete_auth**\ (\ id\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_complete_auth>`
 
-Ends ``id``'s authentication handshake on :ref:`inner<class_NetwMultiplayer_property_inner>`, moving it out of :ref:`get_authenticating_peers()<class_NetwMultiplayer_method_get_authenticating_peers>` and into the connected roster. Answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when this session wraps no :ref:`inner<class_NetwMultiplayer_property_inner>`, and otherwise whatever the wrapped :godot:`SceneMultiplayer` answers.
+Ends ``id``'s authentication handshake on :ref:`inner<class_NetwMultiplayer_property_inner>`, moving it out of :ref:`get_authenticating_peers()<class_NetwMultiplayer_method_get_authenticating_peers>` and into the connected roster. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when this session wraps no :ref:`inner<class_NetwMultiplayer_property_inner>`, and otherwise whatever the wrapped :godot:`SceneMultiplayer` returns.
 
 \ :ref:`send_auth()<class_NetwMultiplayer_method_send_auth>` carries the handshake's own data, and this is the call that closes it. Both keep :godot:`SceneMultiplayer`'s own spelling, so a game swapping one session for the other finds the authentication handshake under the same names.
 
@@ -5743,7 +5721,7 @@ The same session :ref:`of()<class_NetwMultiplayer_method_of>` resolves, as the *
 
 Closes ``id``'s connection outright, with no authority check and no notice sent first. Keeps :godot:`SceneMultiplayer`'s own spelling, so a game swapping one session for the other closes a peer the same way.
 
-\ :ref:`peer_kick()<class_NetwMultiplayer_method_peer_kick>` is the server-authority call built on this. It refuses without :ref:`is_host<class_NetwMultiplayer_property_is_host>`, announces :ref:`peer_kicked<class_NetwMultiplayer_signal_peer_kicked>` to the peer, and only then closes it. This is the bare call underneath, for a caller that has already made those decisions itself.
+\ :ref:`peer_kick()<class_NetwMultiplayer_method_peer_kick>` is the server-authority call built on this. It rejects without :ref:`is_host<class_NetwMultiplayer_property_is_host>`, announces :ref:`peer_kicked<class_NetwMultiplayer_signal_peer_kicked>` to the peer, and only then closes it. This is the bare call underneath, for a caller that has already made those decisions itself.
 
 .. rst-class:: classref-item-separator
 
@@ -5755,7 +5733,7 @@ Closes ``id``'s connection outright, with no authority check and no notice sent 
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **display_declare**\ (\ entity\: :godot:`RID`, comp\: :godot:`int`, track\: :godot:`StringName`, spec\: :ref:`NetwInterpolate<class_NetwInterpolate>`\ ) :ref:`🔗<class_NetwMultiplayer_method_display_declare>`
 
-Declares ``track`` on ``entity``'s component ``comp``, wiring ``spec`` as the interpolation the display pump applies to that property and marking the entity's display state dirty so the wiring takes effect. Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` is not registered, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` when ``track`` is empty or ``spec`` is ``null``, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``comp`` names no live node on ``entity``.
+Declares ``track`` on ``entity``'s component ``comp``, wiring ``spec`` as the interpolation the display pump applies to that property and marking the entity's display state dirty so the wiring takes effect. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` is not registered, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` when ``track`` is empty or ``spec`` is ``null``, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``comp`` names no live node on ``entity``.
 
 .. code:: text
 
@@ -5775,7 +5753,7 @@ Declares ``track`` on ``entity``'s component ``comp``, wiring ``spec`` as the in
 
 :godot:`Variant` **display_get_param**\ (\ entity\: :godot:`RID`, param\: :ref:`DisplayParam<enum_NetwMultiplayer_DisplayParam>`\ ) :ref:`🔗<class_NetwMultiplayer_method_display_get_param>`
 
-Reads back the display setting named by ``param`` for ``entity``, the same :ref:`DisplayParam<enum_NetwMultiplayer_DisplayParam>` vocabulary :ref:`display_set_param()<class_NetwMultiplayer_method_display_set_param>` writes, from :ref:`DISPLAY_PARAM_ROLE<class_NetwMultiplayer_constant_DISPLAY_PARAM_ROLE>` through :ref:`DISPLAY_PARAM_VISUAL_ROOT<class_NetwMultiplayer_constant_DISPLAY_PARAM_VISUAL_ROOT>`. Answers ``null`` when ``entity`` has no committed display declaration.
+Reads back the display setting named by ``param`` for ``entity``, the same :ref:`DisplayParam<enum_NetwMultiplayer_DisplayParam>` vocabulary :ref:`display_set_param()<class_NetwMultiplayer_method_display_set_param>` writes, from :ref:`DISPLAY_PARAM_ROLE<class_NetwMultiplayer_constant_DISPLAY_PARAM_ROLE>` through :ref:`DISPLAY_PARAM_VISUAL_ROOT<class_NetwMultiplayer_constant_DISPLAY_PARAM_VISUAL_ROOT>`. Returns ``null`` when ``entity`` has no committed display declaration.
 
 .. rst-class:: classref-item-separator
 
@@ -5797,7 +5775,7 @@ Reads one live display measurement for ``entity``. A stat about the whole displa
     one track           sleeping  offset_armed  offset_held
                         buffer  buffer_size
 
-\ An unknown stat or an entity with no runtime answers ``null``.
+\ An unknown stat or an entity with no runtime returns ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -5809,7 +5787,7 @@ Reads one live display measurement for ``entity``. A stat about the whole displa
 
 :godot:`Variant` **display_get_value**\ (\ entity\: :godot:`RID`, track\: :godot:`StringName`\ ) :ref:`🔗<class_NetwMultiplayer_method_display_get_value>`
 
-The last value written to ``entity``'s display channel ``track``, as :ref:`display_write_default()<class_NetwMultiplayer_method_display_write_default>` or :ref:`display_snap()<class_NetwMultiplayer_method_display_snap>` left it. Answers ``null`` when ``entity`` has no live display runtime or ``track`` names no declared channel.
+The last value written to ``entity``'s display channel ``track``, as :ref:`display_write_default()<class_NetwMultiplayer_method_display_write_default>` or :ref:`display_snap()<class_NetwMultiplayer_method_display_snap>` left it. Returns ``null`` when ``entity`` has no live display runtime or ``track`` names no declared channel.
 
 .. rst-class:: classref-item-separator
 
@@ -5920,7 +5898,7 @@ An embedding calls this when the :godot:`SceneMultiplayer` under a live session 
 
 Releases the whole graph this session owns, and is the one teardown call an embedding makes.
 
-It runs once however many callers ask, answering immediately when the teardown has already begun. It first drains everything already scheduled, the way :ref:`session_flush_deferred()<class_NetwMultiplayer_method_session_flush_deferred>` does, because a session that ends has no next frame and the nodes that work was written against are still standing here. Only then does it release the scenes, the session state, the display runtimes, the replication of every property, the registered calls, the services and the roster.
+It runs once however many callers ask, returning immediately when the teardown has already begun. It first drains everything already scheduled, the way :ref:`session_flush_deferred()<class_NetwMultiplayer_method_session_flush_deferred>` does, because a session that ends has no next frame and the nodes that work was written against are still standing here. Only then does it release the scenes, the session state, the display runtimes, the replication of every property, the registered calls, the services and the roster.
 
 .. rst-class:: classref-item-separator
 
@@ -5932,7 +5910,7 @@ It runs once however many callers ask, answering immediately when the teardown h
 
 :godot:`bool` **embed_is_disposing**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_embed_is_disposing>`
 
-Whether a deliberate teardown of this session has begun. It is what tells a local teardown apart from a server crash. A session closing its own peer sees the same dropped connection a vanished server produces, and only this answer separates the two.
+Whether this session has started a deliberate shutdown. This distinguishes local shutdown from a lost server connection.
 
 False for the whole life of a session that is still in use, and true from the first moment of teardown onward. A session never comes back from it.
 
@@ -5962,7 +5940,7 @@ The embedding captures it synchronously, so a node dropped in afterwards never b
 
 The current bootstrap phase of this session's authoring, advanced once by the installing embedding through :ref:`embed_settle()<class_NetwMultiplayer_method_embed_settle>`. Pairs with :ref:`embed_phase_changed<class_NetwMultiplayer_signal_embed_phase_changed>`.
 
-This is a different question from :ref:`state<class_NetwMultiplayer_property_state>`. A session at :ref:`EMBED_PHASE_LIVE<class_NetwMultiplayer_constant_EMBED_PHASE_LIVE>` is still :ref:`SESSION_STATE_OFFLINE<class_NetwMultiplayer_constant_SESSION_STATE_OFFLINE>` until it hosts or joins, because this answers how far the embedding has come and :ref:`state<class_NetwMultiplayer_property_state>` answers whether the session is connected.
+This is a different question from :ref:`state<class_NetwMultiplayer_property_state>`. A session at :ref:`EMBED_PHASE_LIVE<class_NetwMultiplayer_constant_EMBED_PHASE_LIVE>` is still :ref:`SESSION_STATE_OFFLINE<class_NetwMultiplayer_constant_SESSION_STATE_OFFLINE>` until it hosts or joins, because this returns how far the embedding has come and :ref:`state<class_NetwMultiplayer_property_state>` returns whether the session is connected.
 
 .. rst-class:: classref-item-separator
 
@@ -5974,7 +5952,7 @@ This is a different question from :ref:`state<class_NetwMultiplayer_property_sta
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **embed_poll_transport**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_embed_poll_transport>`
 
-Sends and receives one batch of datagrams, then sweeps what arriving traffic retires. Answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when the session holds no :ref:`inner<class_NetwMultiplayer_property_inner>`.
+Sends and receives one batch of datagrams, then sweeps what arriving traffic retires. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when the session holds no :ref:`inner<class_NetwMultiplayer_property_inner>`.
 
 A datagram is only sent or received here, so whatever drives this call decides how often a peer's simulation can see the network. Engine polling alone drives it once per rendered frame, which makes a peer's framerate govern its neighbour's input arrival. Commands pile up and land in clumps, and a clumped arrival reaches a body as a transition that spent the wrong amount of physics rather than as latency.
 
@@ -6027,7 +6005,7 @@ A call past :ref:`EMBED_PHASE_DECLARING<class_NetwMultiplayer_constant_EMBED_PHA
 
 :godot:`RID` **endpoint_add**\ (\ transport\: :godot:`RID`, address\: :godot:`String`, display_name\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_add>`
 
-Adds a row for ``address`` on ``transport`` and answers its handle, announcing :ref:`endpoint_added<class_NetwMultiplayer_signal_endpoint_added>` when the row is new, invalid when ``transport`` names nothing this session holds.
+Adds a row for ``address`` on ``transport`` and returns its handle, announcing :ref:`endpoint_added<class_NetwMultiplayer_signal_endpoint_added>` when the row is new, invalid when ``transport`` names nothing this session holds.
 
 ::
 
@@ -6037,7 +6015,7 @@ Adds a row for ``address`` on ``transport`` and answers its handle, announcing :
     api.session_prepare_join(&"Dev", [])
     api.multiplayer_peer = peer
 
-\ A handle IS the pair it names, so adding the same pair again answers the same handle and announces nothing, and a listing that republishes lands on the handles a browser has already drawn.
+\ A handle identifies one address and transport pair. Adding the same pair returns the existing handle without emitting a signal.
 
 .. rst-class:: classref-item-separator
 
@@ -6073,7 +6051,7 @@ One field of the row ``endpoint`` names, named by ``param``. ``null`` when this 
 
 :godot:`Variant` **endpoint_get_state**\ (\ endpoint\: :godot:`RID`, state\: :ref:`EndpointState<enum_NetwMultiplayer_EndpointState>`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_get_state>`
 
-What the last probe or listing answered for the row ``endpoint`` names, named by ``state``. :ref:`ENDPOINT_STATE_STATUS<class_NetwMultiplayer_constant_ENDPOINT_STATE_STATUS>` answers :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` before anything has probed the row, which is not the same as a probe that failed.
+What the last probe or listing returned for the row ``endpoint`` names, named by ``state``. :ref:`ENDPOINT_STATE_STATUS<class_NetwMultiplayer_constant_ENDPOINT_STATE_STATUS>` returns :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` before anything has probed the row, which is not the same as a probe that failed.
 
 .. rst-class:: classref-item-separator
 
@@ -6097,7 +6075,7 @@ Every row this session knows how to reach as an :godot:`RID` handle, caller-adde
 
 |void| **endpoint_probe**\ (\ endpoint\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_probe>`
 
-Probes the row ``endpoint`` names without joining it, announcing :ref:`endpoint_updated<class_NetwMultiplayer_signal_endpoint_updated>` when it answers. What it found is read back through :ref:`endpoint_get_state()<class_NetwMultiplayer_method_endpoint_get_state>`.
+Probes the row ``endpoint`` names without joining it, announcing :ref:`endpoint_updated<class_NetwMultiplayer_signal_endpoint_updated>` when it returns. What it found is read back through :ref:`endpoint_get_state()<class_NetwMultiplayer_method_endpoint_get_state>`.
 
 .. rst-class:: classref-item-separator
 
@@ -6109,7 +6087,7 @@ Probes the row ``endpoint`` names without joining it, announcing :ref:`endpoint_
 
 |void| **endpoint_refresh**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_refresh>`
 
-Re-probes every row this session holds, announcing :ref:`endpoint_updated<class_NetwMultiplayer_signal_endpoint_updated>` per answer. Probes are serialised, so a long list costs time rather than sockets.
+Re-probes every endpoint and emits :ref:`endpoint_updated<class_NetwMultiplayer_signal_endpoint_updated>` for each result. Probes run serially.
 
 .. rst-class:: classref-item-separator
 
@@ -6156,9 +6134,9 @@ Attaches the sealed property ``set`` to ``entity``'s ``comp`` address and regist
 
 Only a sealed set may be attached, because sealing is what fixes membership order, and membership order is wire order. A set that could still gain a column could not be decoded by a peer that attached it earlier.
 
-\ ``set`` is minted by :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` and sealed by :ref:`property_set_seal()<class_NetwMultiplayer_method_property_set_seal>`. ``comp`` is the registration-time component id, ``0`` for the entity root, and one set may be attached at each ``comp``.
+\ ``set`` is created by :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` and sealed by :ref:`property_set_seal()<class_NetwMultiplayer_method_property_set_seal>`. ``comp`` is the registration-time component id, ``0`` for the entity root, and one set may be attached at each ``comp``.
 
-Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` or ``set`` names nothing valid, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` when the set exists but was never sealed, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``comp`` resolves to no live node on this entity.
+Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` or ``set`` names nothing valid, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` when the set exists but was never sealed, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``comp`` resolves to no live node on this entity.
 
 .. code:: text
 
@@ -6179,7 +6157,7 @@ Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope
 
 :godot:`int` **entity_admit**\ (\ entity\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_admit>`
 
-Reserves the next route and binds it to ``entity``, the server-side counterpart to a client learning a route off the wire. Answers the route on success, and ``0`` both off server authority and for an ``entity`` :ref:`entity_create()<class_NetwMultiplayer_method_entity_create>` never minted. An entity that already carries a route answers that route again rather than reserving a second one.
+Reserves the next route and binds it to ``entity``, the server-side counterpart to a client learning a route off the wire. Returns the route on success, and ``0`` both off server authority and for an ``entity`` :ref:`entity_create()<class_NetwMultiplayer_method_entity_create>` never created. An entity that already carries a route returns that route again rather than reserving a second one.
 
 .. rst-class:: classref-item-separator
 
@@ -6191,11 +6169,11 @@ Reserves the next route and binds it to ``entity``, the server-side counterpart 
 
 :godot:`RID` **entity_adopt**\ (\ root\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_adopt>`
 
-Takes one node that is already in the scene into replication, answering its entity handle.
+Takes one node that is already in the scene into replication, returning its entity handle.
 
 The entity is armed where it stands rather than reconstructed, so peers that already hold the node keep it. An invalid :godot:`RID` means the pipeline declined it.
 
-The twin of :ref:`entity_replicate()<class_NetwMultiplayer_method_entity_replicate>`, and the two are not interchangeable. This one takes a node the tree already holds and enrols it where it stands, while :ref:`entity_replicate()<class_NetwMultiplayer_method_entity_replicate>` refuses such a node and builds one from a scene recipe.
+The twin of :ref:`entity_replicate()<class_NetwMultiplayer_method_entity_replicate>`, and the two are not interchangeable. This one takes a node the tree already holds and enrols it where it stands, while :ref:`entity_replicate()<class_NetwMultiplayer_method_entity_replicate>` rejects such a node and builds one from a scene recipe.
 
 .. rst-class:: classref-item-separator
 
@@ -6207,13 +6185,13 @@ The twin of :ref:`entity_replicate()<class_NetwMultiplayer_method_entity_replica
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **entity_bind_node**\ (\ entity\: :godot:`RID`, node\: :godot:`Node`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_bind_node>`
 
-Attaches ``node`` as the scene representation of ``entity``, arming it as a :ref:`NetwEntity<class_NetwEntity>` and binding it to the route ``entity`` already holds. Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a handle :ref:`entity_create()<class_NetwMultiplayer_method_entity_create>` never minted, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` for a null ``node`` or for an entity with no route yet, :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` again for the same node re-bound to the same entity, and :godot:`@GlobalScope.ERR_ALREADY_EXISTS <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_EXISTS>` when a different node already holds the binding.
+Attaches ``node`` as the scene representation of ``entity``, arming it as a :ref:`NetwEntity<class_NetwEntity>` and binding it to the route ``entity`` already holds. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a handle :ref:`entity_create()<class_NetwMultiplayer_method_entity_create>` never created, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` for a null ``node`` or for an entity with no route yet, :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` again for the same node re-bound to the same entity, and :godot:`@GlobalScope.ERR_ALREADY_EXISTS <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_EXISTS>` when a different node already holds the binding.
 
 .. code:: text
 
     Error
     ┠╴OK                  the node was bound, or was already this entity's node
-    ┠╴ERR_DOES_NOT_EXIST  entity names a handle entity_create never minted
+    ┠╴ERR_DOES_NOT_EXIST  entity names a handle entity_create never created
     ┠╴ERR_INVALID_DATA    node is null, or entity has no route yet
     ┖╴ERR_ALREADY_EXISTS  a different node already holds the binding
 
@@ -6227,7 +6205,7 @@ Attaches ``node`` as the scene representation of ``entity``, arming it as a :ref
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **entity_bind_route**\ (\ entity\: :godot:`RID`, route\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_bind_route>`
 
-Assigns ``route`` to ``entity``, the route a peer already knows the entity by rather than one this session would reserve on its own. Refuses with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for an unminted ``entity``, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` for a ``route`` that is not positive, and :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` when the route is already bound to a different entity.
+Assigns ``route`` to ``entity``, the route a peer already knows the entity by rather than one this session would reserve on its own. Rejects with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for an unminted ``entity``, :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` for a ``route`` that is not positive, and :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` when the route is already bound to a different entity.
 
 .. code:: text
 
@@ -6249,7 +6227,7 @@ Assigns ``route`` to ``entity``, the route a peer already knows the entity by ra
 
 Calls ``method`` on ``entity``'s ``comp`` component over the wire, addressed the way :ref:`rpc_call()<class_NetwMultiplayer_method_rpc_call>` addresses anything. It goes by route to ``peer``, or to every peer that may see the entity when ``peer`` is zero.
 
-The refusals are told apart because a caller can act on each one differently, and each is answered before anything is sent, so a refused call is never counted as a drop.
+Each rejection has a distinct result and occurs before anything is sent. Rejected calls are not counted as dropped packets.
 
 .. code:: text
 
@@ -6271,7 +6249,7 @@ The refusals are told apart because a caller can act on each one differently, an
 
 :godot:`RID` **entity_create**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_create>`
 
-Mints a fresh entity handle and answers its :godot:`RID`. The handle carries no route, no node and no state beyond :ref:`ENTITY_STATE_UNKNOWN<class_NetwMultiplayer_constant_ENTITY_STATE_UNKNOWN>` until :ref:`entity_bind_route()<class_NetwMultiplayer_method_entity_bind_route>` or :ref:`entity_admit()<class_NetwMultiplayer_method_entity_admit>` gives it one.
+Creates a fresh entity handle and returns its :godot:`RID`. The handle carries no route, no node and no state beyond :ref:`ENTITY_STATE_UNKNOWN<class_NetwMultiplayer_constant_ENTITY_STATE_UNKNOWN>` until :ref:`entity_bind_route()<class_NetwMultiplayer_method_entity_bind_route>` or :ref:`entity_admit()<class_NetwMultiplayer_method_entity_admit>` gives it one.
 
 .. rst-class:: classref-item-separator
 
@@ -6296,7 +6274,7 @@ What this session holds about ``route``, as one read a watcher can put beside an
     ┠╴liveness     int              the entity's EntityState
     ┖╴layers       Array            the interest layers it belongs to, in join order
 
-\ Empty for a route this session holds no record for. A lifecycle event names its subject and not its state, because attaching a projection to every event costs every session that emits one. This is the read that answers the state, and :ref:`EVENT_DESPAWNED<class_NetwMultiplayer_constant_EVENT_DESPAWNED>` carries the last one instead, since a route outlives its entity by exactly one event.
+\ Empty for a route this session holds no record for. A lifecycle event names its subject and not its state, because attaching a projection to every event costs every session that emits one. This is the read that returns the state, and :ref:`EVENT_DESPAWNED<class_NetwMultiplayer_constant_EVENT_DESPAWNED>` carries the last one instead, since a route outlives its entity by exactly one event.
 
 .. rst-class:: classref-item-separator
 
@@ -6308,9 +6286,9 @@ What this session holds about ``route``, as one read a watcher can put beside an
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **entity_despawn**\ (\ entity\: :godot:`RID`, opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_despawn>`
 
-Ends ``entity`` on every peer that holds it, answering :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when the tear-down was accepted.
+Ends ``entity`` on every peer that holds it, returning :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when the tear-down was accepted.
 
-This ends the entity rather than hiding it. The route is retired and never reissued, so a receiver drops its row instead of expecting the entity back. To stop one peer seeing an entity that is still alive, use :ref:`interest_leave()<class_NetwMultiplayer_method_interest_leave>`, which can be undone. Refused with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` off server authority, because a client that could end another peer's entity could end any of them.
+This ends the entity rather than hiding it. The route is retired and never reissued, so a receiver drops its row instead of expecting the entity back. To stop one peer seeing an entity that is still alive, use :ref:`interest_leave()<class_NetwMultiplayer_method_interest_leave>`, which can be undone. Rejected with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` off server authority, because a client that could end another peer's entity could end any of them.
 
 \ ``opts`` carries the linger window, the save flush and the deferred-free choice for this one call. It is the options of a call rather than an authored policy, which is what :ref:`NetwDespawnConfig<class_NetwDespawnConfig>` is.
 
@@ -6345,7 +6323,7 @@ The entity handle bound to ``route``, or a null :godot:`RID` when no live entity
 
 :godot:`int` **entity_get_epoch**\ (\ entity\: :godot:`RID`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_entity_get_epoch>`
 
-The epoch ``entity``'s route is currently on, which advances each time the same route is reissued to a new identity after a tombstone. A route not yet issued answers its epoch as it stands before any admission.
+The epoch ``entity``'s route is currently on, which advances each time the same route is reissued to a new identity after a tombstone. A route not yet issued returns its epoch as it stands before any admission.
 
 .. rst-class:: classref-item-separator
 
@@ -6405,7 +6383,7 @@ The route ``entity`` is bound to, or ``0`` when it has none yet. This is the add
 
 :ref:`EntityState<enum_NetwMultiplayer_EntityState>` **entity_get_state**\ (\ entity\: :godot:`RID`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_entity_get_state>`
 
-Where ``entity``'s route sits on the :ref:`EntityState<enum_NetwMultiplayer_EntityState>` ladder, as this peer currently knows it. A handle with no route answers :ref:`ENTITY_STATE_UNKNOWN<class_NetwMultiplayer_constant_ENTITY_STATE_UNKNOWN>`.
+Where ``entity``'s route sits on the :ref:`EntityState<enum_NetwMultiplayer_EntityState>` ladder, as this peer currently knows it. A handle with no route returns :ref:`ENTITY_STATE_UNKNOWN<class_NetwMultiplayer_constant_ENTITY_STATE_UNKNOWN>`.
 
 .. rst-class:: classref-item-separator
 
@@ -6417,7 +6395,7 @@ Where ``entity``'s route sits on the :ref:`EntityState<enum_NetwMultiplayer_Enti
 
 :ref:`NetwEntity<class_NetwEntity>` **entity_get_view**\ (\ entity\: :godot:`RID`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_entity_get_view>`
 
-The live wrapper carrying ``entity``, or ``null``. A wrapper a death retired is not live and answers ``null`` here, for the rest of the cycle in which it was retired.
+The live wrapper carrying ``entity``, or ``null``. A wrapper a death retired is not live and returns ``null`` here, for the rest of the cycle in which it was retired.
 
 .. rst-class:: classref-item-separator
 
@@ -6455,9 +6433,9 @@ It is an adopt over the record at or above ``node``, which is one verb rather th
 
 :godot:`RID` **entity_replicate**\ (\ node\: :godot:`Object`, owner\: :godot:`Object` = null\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_replicate>`
 
-Arms ``node`` for replicated construction and answers its entity handle.
+Arms ``node`` for replicated construction and returns its entity handle.
 
-An invalid :godot:`RID` means the pipeline declined the node, which is the same answer a session with no pipeline installed gives.
+An invalid :godot:`RID` means the pipeline declined the node, which is the same result a session with no pipeline installed gives.
 
 \ ``node`` must not be inside the tree yet. Its identity is taken before it enters, so a receiver rebuilding it from the scene recipe agrees about which entity arrived. :ref:`entity_adopt()<class_NetwMultiplayer_method_entity_adopt>` is the call for a node already mounted.
 
@@ -6473,7 +6451,7 @@ An invalid :godot:`RID` means the pipeline declined the node, which is the same 
 
 Widens event capture to every value of :ref:`Event<enum_NetwMultiplayer_Event>` when ``enabled`` is ``true``, and narrows it back to only what an installed :ref:`event_watch()<class_NetwMultiplayer_method_event_watch>` names when ``false``.
 
-While disarmed, an event no watch names is neither recorded nor delivered, so a session nobody is observing pays nothing for this. Arming is what lets :ref:`event_ring()<class_NetwMultiplayer_method_event_ring>` answer for a route no watch was installed on.
+While disarmed, an event no watch names is neither recorded nor delivered, so a session nobody is observing pays nothing for this. Arming is what lets :ref:`event_ring()<class_NetwMultiplayer_method_event_ring>` return a result for a route no watch was installed on.
 
 .. rst-class:: classref-item-separator
 
@@ -6487,9 +6465,9 @@ While disarmed, an event no watch names is neither recorded nor delivered, so a 
 
 Drains and returns everything the session recorded on ``route``, oldest first, as event records shaped exactly as :ref:`event_watch()<class_NetwMultiplayer_method_event_watch>` documents. Route ``0`` is the session's own history, since a ring is kept per route.
 
-Reading drains. The ring is emptied by the call, so a second read answers nothing the first already took, and an observer that must not lose a row reads this on a schedule of its own.
+Reading drains. The ring is emptied by the call, so a second read returns nothing the first already took, and an observer that must not lose a row reads this on a schedule of its own.
 
-A record is minted only for a row that is drained, so a ring nobody reads costs nothing but the row. Each drained row is a copy, so writing one reaches neither the ring nor another reader.
+A record is created only for a row that is drained, so a ring nobody reads costs nothing but the row. Each drained row is a copy, so writing one reaches neither the ring nor another reader.
 
 .. rst-class:: classref-item-separator
 
@@ -6501,7 +6479,7 @@ A record is minted only for a row that is drained, so a ring nobody reads costs 
 
 :godot:`bool` **event_unwatch**\ (\ id\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_event_unwatch>`
 
-Removes the watch :ref:`event_watch()<class_NetwMultiplayer_method_event_watch>` answered ``id`` for, answering ``true`` when a watch was there to remove and ``false`` otherwise.
+Removes the watch :ref:`event_watch()<class_NetwMultiplayer_method_event_watch>` returned ``id`` for, returning ``true`` when a watch was there to remove and ``false`` otherwise.
 
 An event that watch alone kept armed stops being recorded once no other watch names it and :ref:`event_arm()<class_NetwMultiplayer_method_event_arm>` does not hold it open.
 
@@ -6515,7 +6493,7 @@ An event that watch alone kept armed stops being recorded once no other watch na
 
 :godot:`int` **event_watch**\ (\ events\: :godot:`PackedInt64Array`, target\: :godot:`Dictionary` = {}, predicate\: :godot:`Dictionary` = {}, sink\: :godot:`Callable` = Callable(), opts\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwMultiplayer_method_event_watch>`
 
-Installs a watch for every value of :ref:`Event<enum_NetwMultiplayer_Event>` in ``events`` and answers its id, which :ref:`event_unwatch()<class_NetwMultiplayer_method_event_unwatch>` takes back. ``sink`` is called once per matching act with one record.
+Installs a watch for every value of :ref:`Event<enum_NetwMultiplayer_Event>` in ``events`` and returns its id, which :ref:`event_unwatch()<class_NetwMultiplayer_method_event_unwatch>` takes back. ``sink`` is called once per matching act with one record.
 
 ::
 
@@ -6549,11 +6527,11 @@ Installs a watch for every value of :ref:`Event<enum_NetwMultiplayer_Event>` in 
     ┠╴route       int         the subject, 0 when no entity is one
     ┠╴entity_id   StringName  the subject's identity, empty if unknown
     ┠╴peer        int         the peer involved, 0 when none is
-    ┠╴verdict     int         the Error answered, OK when not a verdict
+    ┠╴verdict     int         the Error returned, OK when not a verdict
     ┠╴detail      Dictionary  what this decision read, keys per event
     ┖╴model       Dictionary  the subject's last state, see below
 
-\ A later version may add a key, so a sink that refuses an unknown one breaks on an addition that costs it nothing.
+\ A later version may add a key, so a sink that rejects an unknown one breaks on an addition that costs it nothing.
 
 \ ``detail`` holds what the decision read. A gate carries ``{sender, channel, comp, tick, size}`` and a verdict adds ``{stage, reason}``. It never carries payload bytes and never a :godot:`Node`, whose lifetime would outlive the record.
 
@@ -6585,7 +6563,7 @@ Every watch this session holds, one row each, carrying the watch's id, the event
 
 :godot:`PackedInt32Array` **get_authenticating_peers**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_get_authenticating_peers>`
 
-The ids of every peer whose connection has completed the transport handshake but not yet finished authentication. Answers an empty array before a :godot:`MultiplayerPeer` is installed.
+The ids of every peer whose connection has completed the transport handshake but not yet finished authentication. Returns an empty array before a :godot:`MultiplayerPeer` is installed.
 
 .. rst-class:: classref-item-separator
 
@@ -6597,7 +6575,7 @@ The ids of every peer whose connection has completed the transport handshake but
 
 :godot:`bool` **interest_admits**\ (\ entity\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_admits>`
 
-Whether ``entity`` is currently visible to ``peer``, read from the committed interest matrix :ref:`interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>` last folded. Answers ``false`` when ``peer`` is not a live registered peer or ``entity`` is not registered, rather than treating either as admitted by default.
+Whether ``entity`` is currently visible to ``peer``, read from the committed interest matrix :ref:`interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>` last folded. Returns ``false`` when ``peer`` is not a live registered peer or ``entity`` is not registered, rather than treating either as admitted by default.
 
 .. rst-class:: classref-item-separator
 
@@ -6609,7 +6587,7 @@ Whether ``entity`` is currently visible to ``peer``, read from the committed int
 
 :godot:`bool` **interest_entity_has_filter**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_entity_has_filter>`
 
-Whether ``entity`` is subject to interest filtering at all, rather than being open to every peer by default. On the server this reads whether ``entity`` belongs to any committed layer. Off the server it reads whether the local :ref:`NetwEntity.interest<class_NetwEntity_property_interest>` declaration names any label. An entity that answers ``false`` here needs no :ref:`interest_wire_admits()<class_NetwMultiplayer_method_interest_wire_admits>` check, because nothing has ever narrowed who receives it.
+Whether ``entity`` is subject to interest filtering at all, rather than being open to every peer by default. On the server this reads whether ``entity`` belongs to any committed layer. Off the server it reads whether the local :ref:`NetwEntity.interest<class_NetwEntity_property_interest>` declaration names any label. An entity that returns ``false`` here needs no :ref:`interest_wire_admits()<class_NetwMultiplayer_method_interest_wire_admits>` check, because nothing has ever narrowed who receives it.
 
 .. rst-class:: classref-item-separator
 
@@ -6621,7 +6599,7 @@ Whether ``entity`` is subject to interest filtering at all, rather than being op
 
 :godot:`String` **interest_explain**\ (\ entity\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_explain>`
 
-A short, stable string naming why ``entity`` is or is not visible to ``peer``, read by walking the same admission chain :ref:`interest_admits()<class_NetwMultiplayer_method_interest_admits>` tests. Answers ``"peer is not registered"`` or ``"entity is not registered"`` when either identity does not resolve, one of the intent- or layer-denial reasons naming the route that stopped it, or ``"admitted"`` when nothing denies it.
+A short, stable string naming why ``entity`` is or is not visible to ``peer``, read by walking the same admission chain :ref:`interest_admits()<class_NetwMultiplayer_method_interest_admits>` tests. Returns ``"peer is not registered"`` or ``"entity is not registered"`` when either identity does not resolve, one of the intent- or layer-denial reasons naming the route that stopped it, or ``"admitted"`` when nothing denies it.
 
 This is a diagnostic string for logging and tests, not a stable API contract to branch on.
 
@@ -6645,13 +6623,13 @@ The committed matrix is what :ref:`interest_admits()<class_NetwMultiplayer_metho
     api.interest_flush_now()
     assert(api.interest_admits(entity, peer))
 
-\ A layer driver installed through :ref:`interest_layer_set_driver_callback()<class_NetwMultiplayer_method_interest_layer_set_driver_callback>` can refuse the fold.
+\ A layer driver installed through :ref:`interest_layer_set_driver_callback()<class_NetwMultiplayer_method_interest_layer_set_driver_callback>` can reject the fold.
 
 .. code:: text
 
     Error
     ┠╴OK                  the matrix committed
-    ┠╴ERR_INVALID_DATA    a driver answered something other than an Array
+    ┠╴ERR_INVALID_DATA    a driver returned something other than an Array
     ┖╴ERR_DOES_NOT_EXIST  a driver named an entity this session does not hold
 
 .. rst-class:: classref-item-separator
@@ -6676,7 +6654,7 @@ The interest layers ``entity`` currently belongs to, as :godot:`RID` handles ope
 
 :godot:`PackedInt64Array` **interest_get_row**\ (\ entity\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_get_row>`
 
-The committed admission row for ``entity``, a bitset with one bit per live peer sized to the peer table :ref:`interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>` last committed. :ref:`interest_admits()<class_NetwMultiplayer_method_interest_admits>` tests one bit of exactly this row. Answers an empty array when ``entity`` is not registered.
+The committed admission row for ``entity``, a bitset with one bit per live peer sized to the peer table :ref:`interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>` last committed. :ref:`interest_admits()<class_NetwMultiplayer_method_interest_admits>` tests one bit of exactly this row. Returns an empty array when ``entity`` is not registered.
 
 .. rst-class:: classref-item-separator
 
@@ -6690,7 +6668,7 @@ The committed admission row for ``entity``, a bitset with one bit per live peer 
 
 Whether ``entity`` is subject to a visibility filter at all, which is what lets a send skip the per-peer verdict for an entity nothing narrows.
 
-On server authority the answer is the committed row, so an entity no layer names is unfiltered however it was declared. Off the server the committed row is empty until the server admits the entity, so the answer is the entity's own declared labels, read from the interest facet's declaration.
+On server authority the result is the committed row, so an entity no layer names is unfiltered however it was declared. Off the server the committed row is empty until the server admits the entity, so the result is the entity's own declared labels, read from the interest facet's declaration.
 
 .. rst-class:: classref-item-separator
 
@@ -6736,7 +6714,7 @@ The write is staged rather than applied. It lands at the next interest flush, wh
     ┠╴OK                  the entity was staged into the layer
     ┠╴ERR_DOES_NOT_EXIST  layer or entity names nothing valid
     ┠╴ERR_UNAUTHORIZED    called off server authority
-    ┖╴ERR_UNAVAILABLE     the layer refused the entity
+    ┖╴ERR_UNAVAILABLE     the layer rejected the entity
 
 .. rst-class:: classref-item-separator
 
@@ -6769,9 +6747,9 @@ Viewing and membership are the two halves of a layer and neither implies the oth
 
 :godot:`RID` **interest_layer_create**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_layer_create>`
 
-Opens the layer called ``name`` and answers its handle, creating it when no layer holds that name yet.
+Opens the layer called ``name`` and returns its handle, creating it when no layer holds that name yet.
 
-Create-on-demand is the difference between this and :ref:`interest_layer_find()<class_NetwMultiplayer_method_interest_layer_find>`, which only looks. Asking twice for one name answers the same handle, so a caller that cannot know whether it is first does not have to check.
+Create-on-demand is the difference between this and :ref:`interest_layer_find()<class_NetwMultiplayer_method_interest_layer_find>`, which only looks. Asking twice for one name returns the same handle, so a caller that cannot know whether it is first does not have to check.
 
 .. rst-class:: classref-item-separator
 
@@ -6851,7 +6829,7 @@ Whether the peer stops seeing an entity depends on the rest of its membership. A
 
 Installs ``callback`` as the driver that decides ``layer``'s membership, replacing whatever hand-written membership the layer held.
 
-A driver runs once per interest flush and answers the whole membership for that pass, which is what makes a rule-based layer (everything within a radius, everything in a room) one function rather than a stream of add and remove calls. Passing an invalid :godot:`Callable` removes the driver and returns the layer to hand-written membership.
+A driver runs once per interest flush and returns the whole membership for that pass, which is what makes a rule-based layer (everything within a radius, everything in a room) one function rather than a stream of add and remove calls. Passing an invalid :godot:`Callable` removes the driver and returns the layer to hand-written membership.
 
 .. rst-class:: classref-item-separator
 
@@ -7002,7 +6980,7 @@ Sets the local :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` fo
 
 :godot:`bool` **interest_participant_sees**\ (\ peer_id\: :godot:`int`, entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_participant_sees>`
 
-Whether ``peer_id`` can see ``entity`` as an ordinary participant, holding a listen-server host to the same rule as any client. On the server this reads ``peer_id``'s row through :ref:`interest_get_row()<class_NetwMultiplayer_method_interest_get_row>`. Off the server it can only answer for the local peer, from its own :ref:`NetwEntity.interest<class_NetwEntity_property_interest>` declaration. Game code asking whether a player can see an entity calls here. :ref:`interest_wire_admits()<class_NetwMultiplayer_method_interest_wire_admits>` is the one to call when the server must not be blinded to its own entities.
+Whether ``peer_id`` can see ``entity`` as an ordinary participant, holding a listen-server host to the same rule as any client. On the server this reads ``peer_id``'s row through :ref:`interest_get_row()<class_NetwMultiplayer_method_interest_get_row>`. Off the server it can only return a result for the local peer, from its own :ref:`NetwEntity.interest<class_NetwEntity_property_interest>` declaration. Game code asking whether a player can see an entity calls here. :ref:`interest_wire_admits()<class_NetwMultiplayer_method_interest_wire_admits>` is the one to call when the server must not be blinded to its own entities.
 
 .. rst-class:: classref-item-separator
 
@@ -7014,7 +6992,7 @@ Whether ``peer_id`` can see ``entity`` as an ordinary participant, holding a lis
 
 :godot:`Array` **interest_resolved_layer_ids**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_resolved_layer_ids>`
 
-The :godot:`StringName` ids of every layer ``entity`` currently belongs to, sorted for stable iteration. On the server this reads the committed membership. Off the server, when the entity carries no membership yet, it answers the labels declared on the local :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`.
+The :godot:`StringName` ids of every layer ``entity`` currently belongs to, sorted for stable iteration. On the server this reads the committed membership. Off the server, when the entity carries no membership yet, it returns the labels declared on the local :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`.
 
 .. rst-class:: classref-item-separator
 
@@ -7026,7 +7004,7 @@ The :godot:`StringName` ids of every layer ``entity`` currently belongs to, sort
 
 :godot:`Array`\[:godot:`Object`\] **interest_shared_entities**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, layer_id\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwMultiplayer_method_interest_shared_entities>`
 
-Every other live :ref:`NetwEntity<class_NetwEntity>` that shares a layer with ``entity``, excluding ``entity`` itself and ordered by :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>`. An empty ``layer_id`` searches every layer :ref:`interest_resolved_layer_ids()<class_NetwMultiplayer_method_interest_resolved_layer_ids>` answers for ``entity``. A named layer that ``entity`` does not itself belong to answers no entities. On the server this reads the committed membership. Off the server, when that is empty, it scans this peer's own live entities and keeps the ones whose declared labels overlap.
+Every other live :ref:`NetwEntity<class_NetwEntity>` that shares a layer with ``entity``, excluding ``entity`` itself and ordered by :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>`. An empty ``layer_id`` searches every layer :ref:`interest_resolved_layer_ids()<class_NetwMultiplayer_method_interest_resolved_layer_ids>` returns for ``entity``. A named layer that ``entity`` does not itself belong to returns no entities. On the server this reads the committed membership. Off the server, when that is empty, it scans this peer's own live entities and keeps the ones whose declared labels overlap.
 
 .. rst-class:: classref-item-separator
 
@@ -7050,9 +7028,9 @@ Whether traffic for ``entity`` may reach ``peer_id``, short-circuiting ``true`` 
 
 |void| **lagcomp_deny_action**\ (\ requester\: :godot:`int`, key\: :godot:`StringName`\ ) :ref:`🔗<class_NetwMultiplayer_method_lagcomp_deny_action>`
 
-Refuses the action ``key`` names and puts the requester back where it was.
+Rejects the action ``key`` names and puts the requester back where it was.
 
-A remote requester is told over the wire, so the peer that speculated on the action reverts its own effect. A local one, and one whose peer has already left, is settled here by discarding the effect ``key`` armed. Either way the refusal is the same event, which is why callers never branch on where the requester sits.
+A remote requester is told over the wire, so the peer that speculated on the action reverts its own effect. A local one, and one whose peer has already left, is settled here by discarding the effect ``key`` armed. Either way the rejection is the same event, which is why callers never branch on where the requester sits.
 
 .. rst-class:: classref-item-separator
 
@@ -7064,7 +7042,7 @@ A remote requester is told over the wire, so the peer that speculated on the act
 
 |void| **lagcomp_effect_adopt**\ (\ key\: :godot:`StringName`\ ) :ref:`🔗<class_NetwMultiplayer_method_lagcomp_effect_adopt>`
 
-Confirms the armed act ``key``, dropping its revert and answering every :ref:`lagcomp_effect_watch()<class_NetwMultiplayer_method_lagcomp_effect_watch>` on it. An act that is not armed is nothing to confirm.
+Confirms the armed act ``key``, dropping its revert and returning every :ref:`lagcomp_effect_watch()<class_NetwMultiplayer_method_lagcomp_effect_watch>` on it. An act that is not armed is nothing to confirm.
 
 .. rst-class:: classref-item-separator
 
@@ -7090,7 +7068,7 @@ The deadline is the session's own tick plus ``timeout_ticks``, so an act armed d
 
 |void| **lagcomp_effect_discard**\ (\ key\: :godot:`StringName`\ ) :ref:`🔗<class_NetwMultiplayer_method_lagcomp_effect_discard>`
 
-Denies the armed act ``key``, running the revert :ref:`lagcomp_effect_arm()<class_NetwMultiplayer_method_lagcomp_effect_arm>` parked and answering every :ref:`lagcomp_effect_watch()<class_NetwMultiplayer_method_lagcomp_effect_watch>` on it. An act that is not armed is nothing to deny.
+Denies the armed act ``key``, running the revert :ref:`lagcomp_effect_arm()<class_NetwMultiplayer_method_lagcomp_effect_arm>` parked and returning every :ref:`lagcomp_effect_watch()<class_NetwMultiplayer_method_lagcomp_effect_watch>` on it. An act that is not armed is nothing to deny.
 
 .. rst-class:: classref-item-separator
 
@@ -7128,7 +7106,7 @@ Whether the act ``key`` is armed and has neither been adopted nor discarded nor 
 
 :godot:`bool` **lagcomp_effect_watch**\ (\ key\: :godot:`StringName`, confirmed\: :godot:`Callable`, denied\: :godot:`Callable`\ ) :ref:`🔗<class_NetwMultiplayer_method_lagcomp_effect_watch>`
 
-Watches the armed act ``key``, answering ``false`` when it is not armed.
+Watches the armed act ``key``, returning ``false`` when it is not armed.
 
 A watcher can therefore never outlive the act it observes.
 
@@ -7209,9 +7187,9 @@ What ``entity``'s timeline held at ``tick``, as a detached record. Mutating it n
     if past.has_value(&"position"):
         print(past.position)
 
-\ A query with nothing to answer returns an empty record rather than ``null``, so a caller reads :ref:`NetwRecord.has_value()<class_NetwRecord_method_has_value>` instead of testing for a missing object.
+\ A query with nothing to return returns an empty record rather than ``null``, so a caller reads :ref:`NetwRecord.has_value()<class_NetwRecord_method_has_value>` instead of testing for a missing object.
 
-The :godot:`RID` is resolved to its wrapper here and both spellings answer through one body, so they cannot come to disagree about one tick.
+The :godot:`RID` resolves to its wrapper here, so both overloads use the same implementation.
 
 .. rst-class:: classref-item-separator
 
@@ -7223,7 +7201,7 @@ The :godot:`RID` is resolved to its wrapper here and both spellings answer throu
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **lagcomp_timeline_declare**\ (\ entity\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_lagcomp_timeline_declare>`
 
-Opens the lag-compensation history for ``entity``, so :ref:`lagcomp_timeline_of()<class_NetwMultiplayer_method_lagcomp_timeline_of>` starts recording its whole-entity state and input snapshots and :ref:`lagcomp_rewind()<class_NetwMultiplayer_method_lagcomp_rewind>` and :ref:`lagcomp_sample()<class_NetwMultiplayer_method_lagcomp_sample>` have a past to read. Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a handle with no bound node.
+Opens the lag-compensation history for ``entity``, so :ref:`lagcomp_timeline_of()<class_NetwMultiplayer_method_lagcomp_timeline_of>` starts recording its whole-entity state and input snapshots and :ref:`lagcomp_rewind()<class_NetwMultiplayer_method_lagcomp_rewind>` and :ref:`lagcomp_sample()<class_NetwMultiplayer_method_lagcomp_sample>` have a past to read. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a handle with no bound node.
 
 The server opens one for every entity carrying a :ref:`RECORD_KIND_STATE<class_NetwMultiplayer_constant_RECORD_KIND_STATE>` property set, so a game declares this itself only for an entity it wants rewindable without replicated state.
 
@@ -7245,7 +7223,7 @@ The server opens one for every entity carrying a :ref:`RECORD_KIND_STATE<class_N
 
 The :ref:`NetwTimeline<class_NetwTimeline>` recording ``entity``'s tick-keyed state and input snapshots for lag compensation, or ``null`` for a handle with no bound node or with no history declared through :ref:`lagcomp_timeline_declare()<class_NetwMultiplayer_method_lagcomp_timeline_declare>`.
 
-Not the same object as :ref:`NetwEntity.timeline<class_NetwEntity_property_timeline>`. This one is what the server rewinds through, and answers what authority held at a past tick. That one is what prediction replays through, and answers what this peer simulated.
+Not the same object as :ref:`NetwEntity.timeline<class_NetwEntity_property_timeline>`. This one is what the server rewinds through, and returns what authority held at a past tick. That one is what prediction replays through, and returns what this peer simulated.
 
 .. rst-class:: classref-item-separator
 
@@ -7269,7 +7247,7 @@ Closes the lag-compensation history :ref:`lagcomp_timeline_declare()<class_NetwM
 
 :godot:`int` **liveness_allocate_route**\ (\ wrapper\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_method_liveness_allocate_route>`
 
-The route ``wrapper`` stands on, reserving and binding one when it stands on none. Two asks about one entity answer the same route.
+Returns the route bound to ``wrapper``. Reserves and binds a route when needed. Repeated calls for one entity return the same route.
 
 .. rst-class:: classref-item-separator
 
@@ -7295,11 +7273,11 @@ The teardown signals are connected before :ref:`entity_live<class_NetwMultiplaye
 
 :godot:`PackedInt64Array` **liveness_claim_routes**\ (\ count\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_liveness_claim_routes>`
 
-Mints ``count`` fresh live routes and answers them, which is how a caller that owns its own records gets identity without a node or a wrapper for each one.
+Creates ``count`` fresh live routes and returns them, which is how a caller that owns its own records gets identity without a node or a wrapper for each one.
 
 The routes come back live, so a table row addressed to one of them is deliverable immediately. :ref:`liveness_release_routes()<class_NetwMultiplayer_method_liveness_release_routes>` is the death edge, and a route this hands out is never reissued after that.
 
-Only server authority mints routes. A client answers an empty array and mints nothing, because a route two peers could both mint is not an identity.
+Only server authority creates routes. A client returns an empty array because routes must have one authority.
 
 \ **Server Only.**
 
@@ -7381,7 +7359,7 @@ Retires ``routes`` for the rest of the session, so a row for one of them can nev
 
 A release is three acts and a caller sees none of them apart. The route is retired, its rows are dropped out of every table, and the removal is queued so the next frame tells every peer the row died. Retiring without telling anyone would leave the host alone in knowing, which is the one way a released route can outlive its release.
 
-Only server authority may release. A client answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` and queues nothing, while a session with no role at all releases its own routes. An empty ``routes`` succeeds, because a teardown with nothing to give back is ordinary.
+Only server authority may release. A client returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` and queues nothing, while a session with no role at all releases its own routes. An empty ``routes`` succeeds, because a teardown with nothing to give back is ordinary.
 
 .. code:: text
 
@@ -7399,7 +7377,7 @@ Only server authority may release. A client answers :godot:`@GlobalScope.ERR_UNC
 
 :godot:`int` **liveness_reserve_route**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_liveness_reserve_route>`
 
-Advances the route counter and answers what it handed out, binding nothing to it. Allocation is monotonic and a route is never reused, tombstone included, so a name this returns can only ever mean the entity that claims it.
+Advances the route counter and returns what it handed out, binding nothing to it. Allocation is monotonic and a route is never reused, tombstone included, so a name this returns can only ever mean the entity that claims it.
 
 .. rst-class:: classref-item-separator
 
@@ -7449,9 +7427,9 @@ A ``timeout_ticks`` of zero waits the usual amount rather than expiring immediat
 
 :ref:`NetwMultiplayer<class_NetwMultiplayer>` **make**\ (\ inner\: :godot:`SceneMultiplayer` = null, implementation\: :godot:`Script` = null\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_make>`
 
-Creates the stock session, or the one ``implementation`` names, wrapping ``inner`` when one is given and minting its own transport when none is.
+Creates the stock session, or the one ``implementation`` names, wrapping ``inner`` when one is given and creating its own transport when none is.
 
-An ``implementation`` that does not extend **NetwMultiplayer** is refused, so a script named through :ref:`MultiplayerTree.api_script<class_MultiplayerTree_property_api_script>` always inherits the stages it is replacing. Naming none keeps the stock path and pays no script dispatch for the overridable stages.
+An ``implementation`` that does not extend **NetwMultiplayer** is rejected, so a script named through :ref:`MultiplayerTree.api_script<class_MultiplayerTree_property_api_script>` always inherits the stages it is replacing. Naming none keeps the stock path and pays no script dispatch for the overridable stages.
 
 .. rst-class:: classref-item-separator
 
@@ -7463,7 +7441,7 @@ An ``implementation`` that does not extend **NetwMultiplayer** is refused, so a 
 
 :godot:`MultiplayerAPI` **of**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_of>`
 
-The session installed on ``node``'s branch, or ``null`` when ``node`` is outside the tree or on a branch no session answers for. It answers quietly either way, so a detached node becomes unreachable rather than raising.
+The session installed on ``node``'s branch, or ``null`` when ``node`` is outside the tree or on a branch no session returns for. It returns quietly either way, so a detached node becomes unreachable rather than raising.
 
 .. rst-class:: classref-item-separator
 
@@ -7517,7 +7495,7 @@ The transport connection is left alone, so this is bookkeeping for a peer alread
 
 The :ref:`ResolvedJoin<class_ResolvedJoin>` this session admitted ``peer`` on, or ``null`` before its join lands.
 
-This is what separates a connected peer from a joined one. :ref:`peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>` answers ``null`` for exactly the peers this answers ``null`` for, so a peer that has connected and not joined is watching rather than playing.
+This is what separates a connected peer from a joined one. :ref:`peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>` returns ``null`` for exactly the peers this returns ``null`` for, so a peer that has connected and not joined is watching rather than playing.
 
 .. rst-class:: classref-item-separator
 
@@ -7529,7 +7507,7 @@ This is what separates a connected peer from a joined one. :ref:`peer_get_partic
 
 :godot:`Variant` **peer_get_bucket**\ (\ peer\: :godot:`int`, bucket_type\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_peer_get_bucket>`
 
-``peer``'s instance of ``bucket_type``, minted on first ask. The bucket is a game authoring facility keyed by the game's own :godot:`Script` type, so two components can hold per-peer state without importing each other.
+``peer``'s instance of ``bucket_type``, created on first ask. The bucket is a game authoring facility keyed by the game's own :godot:`Script` type, so two components can hold per-peer state without importing each other.
 
 ::
 
@@ -7538,7 +7516,7 @@ This is what separates a connected peer from a joined one. :ref:`peer_get_partic
 
     var bucket := api.peer_get_bucket(peer, Bucket) as Bucket
 
-\ ``bucket_type`` must be a script object whose ``new()`` answers a :godot:`RefCounted`. Reading creates the bucket if the peer has none, so a peer the session does not hold answers ``null`` and reports rather than being invented to hang a bucket on. :ref:`peer_has_bucket()<class_NetwMultiplayer_method_peer_has_bucket>` is the call when the question is whether the bucket is there.
+\ ``bucket_type`` must be a script object whose ``new()`` returns a :godot:`RefCounted`. Reading creates the bucket if the peer has none, so a peer the session does not hold returns ``null`` and reports rather than being invented to hang a bucket on. :ref:`peer_has_bucket()<class_NetwMultiplayer_method_peer_has_bucket>` is the call when the question is whether the bucket is there.
 
 The session decides nothing here. A peer's checked credentials live on the session itself, at :ref:`peer_get_identity()<class_NetwMultiplayer_method_peer_get_identity>`.
 
@@ -7556,7 +7534,7 @@ A bucket lives exactly as long as the session holds the peer, so :ref:`peer_forg
 
 The validated :ref:`NetwIdentity<class_NetwIdentity>` this session holds for ``peer``, or ``null`` when authentication never completed for it. Backs :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>`.
 
-The session keeps these itself rather than reading them out of a :ref:`peer_get_bucket()<class_NetwMultiplayer_method_peer_get_bucket>` bucket, so there is exactly one answer to who authenticated. A bucket belongs to the game and is keyed by a :godot:`Script` type, so an identity a game writes into one of its own describes the game's state and not the session's.
+The session keeps these itself rather than reading them out of a :ref:`peer_get_bucket()<class_NetwMultiplayer_method_peer_get_bucket>` bucket, so there is exactly one result to who authenticated. A bucket belongs to the game and is keyed by a :godot:`Script` type, so an identity a game writes into one of its own describes the game's state and not the session's.
 
 .. rst-class:: classref-item-separator
 
@@ -7568,9 +7546,9 @@ The session keeps these itself rather than reading them out of a :ref:`peer_get_
 
 :ref:`NetwParticipant<class_NetwParticipant>` **peer_get_participant**\ (\ peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_peer_get_participant>`
 
-``peer``'s :ref:`NetwParticipant<class_NetwParticipant>`, minted on first ask and the same instance from then on, or ``null`` when :ref:`peer_get_accepted_join()<class_NetwMultiplayer_method_peer_get_accepted_join>` answers ``null`` for it.
+``peer``'s :ref:`NetwParticipant<class_NetwParticipant>`, created on first ask and the same instance from then on, or ``null`` when :ref:`peer_get_accepted_join()<class_NetwMultiplayer_method_peer_get_accepted_join>` returns ``null`` for it.
 
-Minting is gated on the accepted join rather than on the connection, so reading this never invents a participant for a peer the session has not admitted. :ref:`peer_forget()<class_NetwMultiplayer_method_peer_forget>` is what drops one.
+Creating is gated on the accepted join rather than on the connection, so reading this never invents a participant for a peer the session has not admitted. :ref:`peer_forget()<class_NetwMultiplayer_method_peer_forget>` is what drops one.
 
 .. rst-class:: classref-item-separator
 
@@ -7582,7 +7560,7 @@ Minting is gated on the accepted join rather than on the connection, so reading 
 
 :godot:`bool` **peer_has_bucket**\ (\ peer\: :godot:`int`, bucket_type\: :godot:`Variant`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_peer_has_bucket>`
 
-Whether ``peer`` already holds an instance of ``bucket_type``, without minting one. Ask this before :ref:`peer_get_bucket()<class_NetwMultiplayer_method_peer_get_bucket>` whenever the question is about the peer rather than about the bucket.
+Whether ``peer`` already holds an instance of ``bucket_type``, without creating one. Ask this before :ref:`peer_get_bucket()<class_NetwMultiplayer_method_peer_get_bucket>` whenever the question is about the peer rather than about the bucket.
 
 .. rst-class:: classref-item-separator
 
@@ -7606,7 +7584,7 @@ The address another player would use to reach this session, as the live transpor
 
 |void| **peer_kick**\ (\ peer_id\: :godot:`int`, reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwMultiplayer_method_peer_kick>`
 
-Removes ``peer_id`` from the session on server authority, announcing :ref:`peer_kicked<class_NetwMultiplayer_signal_peer_kicked>` to that peer first when ``reason`` is non-empty. A session without server authority refuses the call and removes nobody.
+Removes ``peer_id`` from the session on server authority, announcing :ref:`peer_kicked<class_NetwMultiplayer_signal_peer_kicked>` to that peer first when ``reason`` is non-empty. A session without server authority rejects the call and removes nobody.
 
 The notice is sent before the connection closes, because a closed connection carries nothing and the kicked client would never learn why.
 
@@ -7637,7 +7615,7 @@ What the link to ``peer`` is actually doing, measured rather than configured.
 
 \ ``mode`` turns ``bad`` when loss or round trip crosses the governor's thresholds, and ``budget_bits`` halves with it, so a link that is failing degrades instead of collapsing. It returns to ``good`` only after a clean interval, and that interval doubles each time the link relapses, so a flapping link is not chased.
 
-This is a tooling-cadence read. Read it beside :ref:`sync_explain()<class_NetwMultiplayer_method_sync_explain>`, which answers what one row did rather than what the link did.
+This is a tooling-cadence read. Read it beside :ref:`sync_explain()<class_NetwMultiplayer_method_sync_explain>`, which returns what one row did rather than what the link did.
 
 .. rst-class:: classref-item-separator
 
@@ -7663,7 +7641,7 @@ The request rides a session control channel rather than a node ``@rpc``, so a se
 
 |void| **peer_set_identity**\ (\ peer\: :godot:`int`, identity\: :ref:`NetwIdentity<class_NetwIdentity>`\ ) :ref:`🔗<class_NetwMultiplayer_method_peer_set_identity>`
 
-Records ``identity`` as what :ref:`peer_get_identity()<class_NetwMultiplayer_method_peer_get_identity>` answers for ``peer``. Passing ``null`` erases the row, and so does :ref:`peer_forget()<class_NetwMultiplayer_method_peer_forget>` or the session's own roster teardown, because an identity outliving the peer it names would let the next peer at that id read the previous one's.
+Records ``identity`` as what :ref:`peer_get_identity()<class_NetwMultiplayer_method_peer_get_identity>` returns for ``peer``. Passing ``null`` erases the row, and so does :ref:`peer_forget()<class_NetwMultiplayer_method_peer_forget>` or the session's own roster teardown, because an identity outliving the peer it names would let the next peer at that id read the previous one's.
 
 Written by whatever verified the credentials, which is the auth flow on the server. A peer that never authenticated has no row rather than an empty one.
 
@@ -7679,7 +7657,7 @@ Written by whatever verified the credentials, which is the auth flow on the serv
 
 Replaces the drain a session runs at shutdown, called with no arguments and owning the whole flush of every enrolled persistence engine.
 
-With none installed the session drains on its own timer, which is the right answer when nothing else knows when the write is finished. Install one when the game owns the shutdown story, for example to await a backend the session cannot see, and note that the installed :godot:`Callable` replaces the stock drain rather than running beside it.
+With none installed the session drains on its own timer, which is the default behavior when nothing else knows when the write is finished. Install one when the game owns the shutdown story, for example to await a backend the session cannot see, and note that the installed :godot:`Callable` replaces the stock drain rather than running beside it.
 
 .. rst-class:: classref-item-separator
 
@@ -7719,9 +7697,9 @@ Calling this more than once is safe, because the second call finds shutdown alre
 
 :godot:`Dictionary` **persist_table_commit**\ (\ table\: :godot:`RID`, schema\: :godot:`RID`, data\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwMultiplayer_method_persist_table_commit>`
 
-Claims fresh routes for the rows ``data`` was saved under, writes every column of ``schema`` back beneath them, and answers the route-to-save-key pairing a caller rebuilds its indexes from. An empty ``data`` claims nothing and answers both empty, which is what the first play looks like.
+Claims fresh routes for the rows ``data`` was saved under, writes every column of ``schema`` back beneath them, and returns the route-to-save-key pairing a caller rebuilds its indexes from. An empty ``data`` claims nothing and returns both empty, which is what the first play looks like.
 
-Routes are claimed fresh rather than restored, because a saved route names a row in the session that saved it and nothing in the one loading it. A column that ``data`` does not carry, carries at the wrong type, or carries at the wrong length is written as zeroed storage of the declared type instead, so a save written by an older schema loads as a row with defaults rather than refusing the whole table. A :ref:`COLUMN_ENTITY<class_NetwMultiplayer_constant_COLUMN_ENTITY>` column is always zeroed, because a stored entity reference names a route this load has just replaced.
+Routes are claimed fresh rather than restored, because a saved route names a row in the session that saved it and nothing in the one loading it. A column that ``data`` does not carry, carries at the wrong type, or carries at the wrong length is written as zeroed storage of the declared type instead, so a save written by an older schema loads as a row with defaults rather than rejecting the whole table. A :ref:`COLUMN_ENTITY<class_NetwMultiplayer_constant_COLUMN_ENTITY>` column is always zeroed, because a stored entity reference names a route this load has just replaced.
 
 The whole write is fixed by one :ref:`table_commit()<class_NetwMultiplayer_method_table_commit>`, so readers never observe a half-written load.
 
@@ -7733,7 +7711,7 @@ The whole write is fixed by one :ref:`table_commit()<class_NetwMultiplayer_metho
 
 .. code:: text
 
-    Dictionary (the answer)
+    Dictionary (the result)
     ┠╴routes  PackedInt64Array  the route claimed for each row, same order as ids
     ┖╴ids     PackedStringArray  the save keys just claimed
 
@@ -7761,9 +7739,9 @@ A GDScript subclass cannot ``super`` into a ``GDVIRTUAL``, so this is an overrid
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **predict_admit_frame_default**\ (\ sender\: :godot:`int`, route\: :godot:`int`, channel\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_admit_frame_default>`
 
-The stock verdict on one inbound prediction frame, which weighs :ref:`sync_admit_frame_default()<class_NetwMultiplayer_method_sync_admit_frame_default>`'s route judgement against the direction the frame travels. A route naming no entity contributes a controller of ``0``, which no peer holds, so a command frame for a route this peer cannot place is refused rather than credited to whoever sent it.
+The stock verdict on one inbound prediction frame, which weighs :ref:`sync_admit_frame_default()<class_NetwMultiplayer_method_sync_admit_frame_default>`'s route judgement against the direction the frame travels. A route naming no entity contributes a controller of ``0``, which no peer holds, so a command frame for a route this peer cannot place is rejected rather than credited to whoever sent it.
 
-Whether this peer answers as server decides which channels are admissible in which direction, so the same frame is admitted inbound on one side of a session and refused on the other. ``payload`` is judged only for emptiness here, because the decode that would read it runs after this returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+Whether this peer returns as server decides which channels are admissible in which direction, so the same frame is admitted inbound on one side of a session and rejected on the other. ``payload`` is judged only for emptiness here, because the decode that would read it runs after this returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
 .. code:: text
 
@@ -7773,7 +7751,7 @@ Whether this peer answers as server decides which channels are admissible in whi
     ┠╴ERR_SKIP            the entity is lingering or dead
     ┠╴ERR_UNAVAILABLE     the entity carries no live node
     ┠╴ERR_INVALID_DATA    payload is empty
-    ┖╴ERR_UNAUTHORIZED    the direction this channel carries refuses this sender
+    ┖╴ERR_UNAUTHORIZED    the direction this channel carries rejects this sender
 
 .. rst-class:: classref-item-separator
 
@@ -7785,9 +7763,9 @@ Whether this peer answers as server decides which channels are admissible in whi
 
 :godot:`int` **predict_consume**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_consume>`
 
-Whether authority replays a queued transition, holds, or runs dry. A session overriding :ref:`_predict_consume()<class_NetwMultiplayer_private_method__predict_consume>` answers from there, and every other session answers :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`.
+Whether authority replays a queued transition, waits, or has no transition. Uses :ref:`_predict_consume()<class_NetwMultiplayer_private_method__predict_consume>` when overridden; otherwise uses :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`.
 
-Authority replays whenever it holds a transition past ``buffer``, which is zero by default, so the ordinary answer is simply whether the queue has anything in it. Raising ``buffer`` moves that line and nothing else. The queue sits that much deeper and every arrival waits that much longer.
+Authority replays whenever it holds a transition past ``buffer``, which is zero by default, so the default result is simply whether the queue has anything in it. Raising ``buffer`` moves that line and nothing else. The queue sits that much deeper and every arrival waits that much longer.
 
 Declining a transition is not free. A frame that holds still solves, so the world advances by a step belonging to no transition and the next drive spans two, which is the quantum fault :ref:`NetwPredictStats.quantum_faults<class_NetwPredictStats_property_quantum_faults>` counts.
 
@@ -7801,9 +7779,9 @@ Declining a transition is not free. A frame that holds still solves, so the worl
 
 :godot:`int` **predict_consume_default**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_consume_default>`
 
-The consume verdict :ref:`predict_consume()<class_NetwMultiplayer_method_predict_consume>` answers when nothing overrides :ref:`_predict_consume()<class_NetwMultiplayer_private_method__predict_consume>`, reachable so an override can defer to it.
+The consume verdict :ref:`predict_consume()<class_NetwMultiplayer_method_predict_consume>` returns when nothing overrides :ref:`_predict_consume()<class_NetwMultiplayer_private_method__predict_consume>`, reachable so an override can defer to it.
 
-A GDScript subclass cannot ``super`` into a ``GDVIRTUAL``, so this is an override's only route back to stock behaviour. An override that handles some depths and wants the ordinary answer for the rest returns this rather than reimplementing it.
+A GDScript subclass cannot ``super`` into a ``GDVIRTUAL``, so this is an override's only route back to stock behaviour. An override that handles some depths and wants the default result for the rest returns this rather than reimplementing it.
 
 .. rst-class:: classref-item-separator
 
@@ -7844,7 +7822,7 @@ Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope
 
 The fold the session drives with when nothing overrides :ref:`_predict_drive()<class_NetwMultiplayer_private_method__predict_drive>`. It is published so an override can defer to it.
 
-An override reaches this the same way it reaches :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`. It calls the method directly, because ``super`` does not reach an override point, and returns the answer for the cases it does not mean to change.
+An override reaches this the same way it reaches :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`. It calls the method directly, because ``super`` does not reach an override point, and returns the result for the cases it does not mean to change.
 
 .. rst-class:: classref-item-separator
 
@@ -7858,7 +7836,7 @@ An override reaches this the same way it reaches :ref:`predict_consume_default()
 
 Whether this peer runs prediction for ``entity``, which is what :ref:`predict_declare()<class_NetwMultiplayer_method_predict_declare>` seats and :ref:`predict_undeclare()<class_NetwMultiplayer_method_predict_undeclare>` clears.
 
-Answering ``false`` is ordinary for a body driven by another peer. It says the entity is drawn here rather than simulated here.
+Returning ``false`` is ordinary for a body driven by another peer. It says the entity is drawn here rather than simulated here.
 
 .. rst-class:: classref-item-separator
 
@@ -7872,7 +7850,7 @@ Answering ``false`` is ordinary for a body driven by another peer. It says the e
 
 The judgement the session reaches when nothing overrides :ref:`_predict_evaluate()<class_NetwMultiplayer_private_method__predict_evaluate>`. It is published so an override can defer to it.
 
-A GDScript subclass cannot ``super`` into a ``GDVIRTUAL``, so this is an override's only route back to stock behaviour. An override that judges one domain itself and wants the ordinary answer for the rest returns this rather than reimplementing it.
+A GDScript subclass cannot ``super`` into a ``GDVIRTUAL``, so this is an override's only route back to stock behaviour. An override that judges one domain itself and wants the default result for the rest returns this rather than reimplementing it.
 
 .. rst-class:: classref-item-separator
 
@@ -7898,7 +7876,7 @@ The tap flushes once per second on its own and closes with the session, so most 
 
 :godot:`Variant` **predict_get_param**\ (\ entity\: :godot:`RID`, param\: :ref:`PredictParam<enum_NetwMultiplayer_PredictParam>`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_get_param>`
 
-Reads back the prediction knob named by ``param`` from ``entity``'s :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`, the same :ref:`PredictParam<enum_NetwMultiplayer_PredictParam>` vocabulary :ref:`predict_set_param()<class_NetwMultiplayer_method_predict_set_param>` writes, from :ref:`PREDICT_PARAM_ARCHETYPE<class_NetwMultiplayer_constant_PREDICT_PARAM_ARCHETYPE>` through :ref:`PREDICT_PARAM_REPLAY_BUFFER_DEPTH<class_NetwMultiplayer_constant_PREDICT_PARAM_REPLAY_BUFFER_DEPTH>`. Answers ``null`` when ``entity`` carries no prediction handle or when ``param`` names nothing this enum defines.
+Reads back the prediction knob named by ``param`` from ``entity``'s :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`, the same :ref:`PredictParam<enum_NetwMultiplayer_PredictParam>` vocabulary :ref:`predict_set_param()<class_NetwMultiplayer_method_predict_set_param>` writes, from :ref:`PREDICT_PARAM_ARCHETYPE<class_NetwMultiplayer_constant_PREDICT_PARAM_ARCHETYPE>` through :ref:`PREDICT_PARAM_REPLAY_BUFFER_DEPTH<class_NetwMultiplayer_constant_PREDICT_PARAM_REPLAY_BUFFER_DEPTH>`. Returns ``null`` when ``entity`` carries no prediction handle or when ``param`` names nothing this enum defines.
 
 .. rst-class:: classref-item-separator
 
@@ -7912,7 +7890,7 @@ Reads back the prediction knob named by ``param`` from ``entity``'s :ref:`NetwPr
 
 The re-stepping driver :ref:`predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` installed for a physics space, or ``null`` when the space has none.
 
-A prediction member declaring :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` needs its space's driver to admit replay, because replaying a stepped body means re-running the solve rather than sampling it. Without one the member runs as :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>`, so this answering ``null`` is a downgrade rather than a failure.
+A prediction member declaring :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` needs its space's driver to admit replay, because replaying a stepped body means re-running the solve rather than sampling it. Without one the member runs as :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>`, so this returning ``null`` is a downgrade rather than a failure.
 
 .. rst-class:: classref-item-separator
 
@@ -7946,7 +7924,7 @@ What recording cost, so a capture can be read beside its own price.
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **predict_island_add**\ (\ entity\: :godot:`RID`, other\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_island_add>`
 
-Adds ``other`` to ``entity``'s prediction island, the set of entities resimulated together because they interact. Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` carries no prediction handle or ``other`` is not a registered entity, otherwise adds the member and answers :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+Adds ``other`` to ``entity``'s prediction island, the set of entities resimulated together because they interact. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` carries no prediction handle or ``other`` is not a registered entity, otherwise adds the member and returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
 .. code:: text
 
@@ -7964,7 +7942,7 @@ Adds ``other`` to ``entity``'s prediction island, the set of entities resimulate
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **predict_island_set_member_param**\ (\ entity\: :godot:`RID`, member\: :godot:`RID`, param\: :ref:`MemberParam<enum_NetwMultiplayer_MemberParam>`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_island_set_member_param>`
 
-Writes ``value`` to the per-member setting named by ``param`` for ``member`` inside ``entity``'s prediction island, addressed as ``(entity, member, param)``. Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` carries no prediction handle or ``member`` is not a registered entity, and :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` when ``member`` has not been added to the island with :ref:`predict_island_add()<class_NetwMultiplayer_method_predict_island_add>` or ``param`` names nothing this enum defines.
+Writes ``value`` to the per-member setting named by ``param`` for ``member`` inside ``entity``'s prediction island, addressed as ``(entity, member, param)``. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` carries no prediction handle or ``member`` is not a registered entity, and :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` when ``member`` has not been added to the island with :ref:`predict_island_add()<class_NetwMultiplayer_method_predict_island_add>` or ``param`` names nothing this enum defines.
 
 .. code:: text
 
@@ -7983,7 +7961,7 @@ Writes ``value`` to the per-member setting named by ``param`` for ``member`` ins
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **predict_island_set_param**\ (\ entity\: :godot:`RID`, param\: :ref:`IslandParam<enum_NetwMultiplayer_IslandParam>`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_island_set_param>`
 
-Writes ``value`` to the island-wide setting named by ``param`` on ``entity``'s prediction island, covering :ref:`ISLAND_PARAM_APPROXIMATE<class_NetwMultiplayer_constant_ISLAND_PARAM_APPROXIMATE>` through :ref:`ISLAND_PARAM_INPUT_DELAY<class_NetwMultiplayer_constant_ISLAND_PARAM_INPUT_DELAY>`. Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` carries no prediction handle, and :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` when ``param`` names nothing this enum defines. A count or a ticks value below zero is clamped to zero rather than refused.
+Writes ``value`` to the island-wide setting named by ``param`` on ``entity``'s prediction island, covering :ref:`ISLAND_PARAM_APPROXIMATE<class_NetwMultiplayer_constant_ISLAND_PARAM_APPROXIMATE>` through :ref:`ISLAND_PARAM_INPUT_DELAY<class_NetwMultiplayer_constant_ISLAND_PARAM_INPUT_DELAY>`. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` carries no prediction handle, and :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` when ``param`` names nothing this enum defines. A count or a ticks value below zero is clamped to zero rather than rejected.
 
 .. code:: text
 
@@ -8004,7 +7982,7 @@ Writes ``value`` to the island-wide setting named by ``param`` on ``entity``'s p
 
 The recovery plan the session makes when nothing overrides :ref:`_predict_recover()<class_NetwMultiplayer_private_method__predict_recover>`. It is published so an override can defer to it.
 
-A GDScript subclass cannot ``super`` into a ``GDVIRTUAL``, so this is an override's only route back to stock behaviour. An override that plans one policy itself and wants the ordinary answer for the rest returns this rather than reimplementing it.
+A GDScript subclass cannot ``super`` into a ``GDVIRTUAL``, so this is an override's only route back to stock behaviour. An override that plans one policy itself and wants the default result for the rest returns this rather than reimplementing it.
 
 .. rst-class:: classref-item-separator
 
@@ -8070,7 +8048,7 @@ Replaces ``entity``'s :ref:`NetwPredictionHandle.simulate<class_NetwPredictionHa
 
 Installs ``callback`` as :ref:`NetwPredictionHandle.witness_contacts<class_NetwPredictionHandle_property_witness_contacts>` on ``entity``'s prediction handle, a no-op when ``entity`` has none.
 
-Called once per solved transition and expected to answer the colliders the body actually touched, which is what lets a divergence be charged to a contact rather than left unattributed. An invalid or unset :godot:`Callable` is valid and leaves the witness boundary unknown, which is the absence of an observation rather than an observation of nothing.
+Called once per solved transition and expected to return the colliders the body actually touched, which is what lets a divergence be charged to a contact rather than left unattributed. An invalid or unset :godot:`Callable` is valid and leaves the witness boundary unknown, which is the absence of an observation rather than an observation of nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -8082,7 +8060,7 @@ Called once per solved transition and expected to answer the colliders the body 
 
 |void| **predict_stepper_install**\ (\ space\: :godot:`RID`, stepper\: :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>` = null\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_stepper_install>`
 
-Installs ``stepper`` as the driver :ref:`predict_get_stepper()<class_NetwMultiplayer_method_predict_get_stepper>` answers for ``space``, which is what a rollback needs in order to advance the same physics space more than once inside one frame. ``stepper`` is asked :ref:`NetwPhysicsStepper._can_step()<class_NetwPhysicsStepper_private_method__can_step>` at install time, and a ``null`` stepper or one answering ``false`` is refused, leaving ``space`` with no driver rather than an unusable one.
+Installs ``stepper`` as the driver :ref:`predict_get_stepper()<class_NetwMultiplayer_method_predict_get_stepper>` returns for ``space``, which is what a rollback needs in order to advance the same physics space more than once inside one frame. ``stepper`` is asked :ref:`NetwPhysicsStepper._can_step()<class_NetwPhysicsStepper_private_method__can_step>` at install time, and a ``null`` stepper or one returning ``false`` is rejected, leaving ``space`` with no driver rather than an unusable one.
 
 A member whose space has no driver still predicts, but only at :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>` rather than :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>`, because replaying a stepped body means re-running the solve rather than sampling it.
 
@@ -8108,7 +8086,7 @@ Removes ``entity`` from prediction on this peer, dropping its engine and taking 
 
 :godot:`NodePath` **property_path**\ (\ source\: :godot:`Object`, property\: :godot:`StringName`, base\: :godot:`Object`\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_property_path>`
 
-``property`` on ``source``, relative to ``base``. Empty when either node is gone, because falling through would answer a bare property name that writes whichever node the reader happened to hold. A node addresses itself as ``"."``, so a property on the base is a valid self-address.
+``property`` on ``source``, relative to ``base``. Empty when either node is gone, because falling through would return a bare property name that writes whichever node the reader happened to hold. A node addresses itself as ``"."``, so a property on the base is a valid self-address.
 
 .. rst-class:: classref-item-separator
 
@@ -8120,7 +8098,7 @@ Removes ``entity`` from prediction on this peer, dropping its engine and taking 
 
 :godot:`int` **property_set_add_column**\ (\ set\: :godot:`RID`, column\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_property_set_add_column>`
 
-Adds ``column`` as the next member of ``set``, in wire order, and answers its position. The column is named on the :ref:`NetwSchema<class_NetwSchema>` :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` bound the set to, so a set never mixes schemas. Answers ``-1`` when ``set`` names no open property set, is already sealed, names no such column on its schema, or already carries that column.
+Adds ``column`` as the next member of ``set``, in wire order, and returns its position. The column is named on the :ref:`NetwSchema<class_NetwSchema>` :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` bound the set to, so a set never mixes schemas. Returns ``-1`` when ``set`` names no open property set, is already sealed, names no such column on its schema, or already carries that column.
 
 .. rst-class:: classref-item-separator
 
@@ -8132,7 +8110,7 @@ Adds ``column`` as the next member of ``set``, in wire order, and answers its po
 
 :godot:`RID` **property_set_create**\ (\ schema\: :godot:`RID`, record\: :ref:`RecordKind<enum_NetwMultiplayer_RecordKind>`\ ) :ref:`🔗<class_NetwMultiplayer_method_property_set_create>`
 
-Opens a new :ref:`NetwPropertySet<class_NetwPropertySet>` bound to ``schema`` under one :ref:`RecordKind<enum_NetwMultiplayer_RecordKind>`, with no columns yet. Answers a null :godot:`RID` for a ``record`` outside :ref:`RECORD_KIND_STATE<class_NetwMultiplayer_constant_RECORD_KIND_STATE>`, :ref:`RECORD_KIND_INPUT<class_NetwMultiplayer_constant_RECORD_KIND_INPUT>` and :ref:`RECORD_KIND_BROADCAST<class_NetwMultiplayer_constant_RECORD_KIND_BROADCAST>`, for a ``schema`` handle :ref:`NetwSchema<class_NetwSchema>` never declared, or for a schema carrying a strided column, which a property set cannot encode. The set stays open for :ref:`property_set_add_column()<class_NetwMultiplayer_method_property_set_add_column>` until :ref:`property_set_seal()<class_NetwMultiplayer_method_property_set_seal>` closes it.
+Opens a new :ref:`NetwPropertySet<class_NetwPropertySet>` bound to ``schema`` under one :ref:`RecordKind<enum_NetwMultiplayer_RecordKind>`, with no columns yet. Returns a null :godot:`RID` for a ``record`` outside :ref:`RECORD_KIND_STATE<class_NetwMultiplayer_constant_RECORD_KIND_STATE>`, :ref:`RECORD_KIND_INPUT<class_NetwMultiplayer_constant_RECORD_KIND_INPUT>` and :ref:`RECORD_KIND_BROADCAST<class_NetwMultiplayer_constant_RECORD_KIND_BROADCAST>`, for a ``schema`` handle :ref:`NetwSchema<class_NetwSchema>` never declared, or for a schema carrying a strided column, which a property set cannot encode. The set stays open for :ref:`property_set_add_column()<class_NetwMultiplayer_method_property_set_add_column>` until :ref:`property_set_seal()<class_NetwMultiplayer_method_property_set_seal>` closes it.
 
 .. rst-class:: classref-item-separator
 
@@ -8144,7 +8122,7 @@ Opens a new :ref:`NetwPropertySet<class_NetwPropertySet>` bound to ``schema`` un
 
 :godot:`int` **property_set_get_wire_hash**\ (\ set\: :godot:`RID`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_property_set_get_wire_hash>`
 
-A hash over ``set``'s sealed column order and shapes, which two peers compare to confirm they agree on layout before trusting a positional decode. Answers ``0`` for a ``set`` handle :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` never minted.
+A hash over ``set``'s sealed column order and shapes, which two peers compare to confirm they agree on layout before trusting a positional decode. Returns ``0`` for a ``set`` handle :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` never created.
 
 .. rst-class:: classref-item-separator
 
@@ -8158,7 +8136,7 @@ A hash over ``set``'s sealed column order and shapes, which two peers compare to
 
 The record one property set handle names, or ``null`` when the handle names none.
 
-\ :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` makes the handle and this reads it back. A caller changing the set writes through :ref:`property_set_add_column()<class_NetwMultiplayer_method_property_set_add_column>` and :ref:`property_set_seal()<class_NetwMultiplayer_method_property_set_seal>`, because a sealed set must refuse a write and the record it answers cannot.
+\ :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` creates the handle. Modify it through :ref:`property_set_add_column()<class_NetwMultiplayer_method_property_set_add_column>` and :ref:`property_set_seal()<class_NetwMultiplayer_method_property_set_seal>`. Sealed sets reject changes.
 
 .. rst-class:: classref-item-separator
 
@@ -8170,13 +8148,13 @@ The record one property set handle names, or ``null`` when the handle names none
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **property_set_seal**\ (\ set\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_property_set_seal>`
 
-Closes ``set`` against further column changes, fixing its wire order and hash. Answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a ``set`` handle :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` never minted.
+Closes ``set`` against further column changes, fixing its wire order and hash. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a ``set`` handle :ref:`property_set_create()<class_NetwMultiplayer_method_property_set_create>` never created.
 
 .. code:: text
 
     Error
     ┠╴OK                  the set was sealed
-    ┖╴ERR_DOES_NOT_EXIST  set names a handle property_set_create never minted
+    ┖╴ERR_DOES_NOT_EXIST  set names a handle property_set_create never created
 
 .. rst-class:: classref-item-separator
 
@@ -8192,7 +8170,7 @@ Calls ``callable`` with ``args`` on ``peer``, where zero is every peer that may 
 
 \ ``callable``'s object must be a node an entity governs, because a remote call is addressed by :ref:`NetwEntity.route<class_NetwEntity_property_route>` and a node no entity holds has none. A node with no entity at all and a node whose route is not live are counted apart and both drop the call. Neither is an error, because a call issued in the frame an entity is despawning is ordinary rather than a defect.
 
-A method the target's script neither annotates nor registers is refused with a warning and nothing is sent, so a typo does not become a silent no-op on every peer.
+A method the target's script neither annotates nor registers is rejected with a warning and nothing is sent, so a typo does not become a silent no-op on every peer.
 
 A local dispatch happens before anything is sent, when the method is ``call_local`` and ``peer`` is zero or this peer. :ref:`relay_sender<class_NetwMultiplayer_property_relay_sender>` reads this peer for the length of that call and is restored afterwards. A ``call_remote`` method addressed at this peer alone is an error rather than a send. An entity passed in ``args`` is encoded as its route rather than as an object, which is what lets the receiving peer resolve it to its own node.
 
@@ -8206,7 +8184,7 @@ A local dispatch happens before anything is sent, when the method is ``call_loca
 
 |void| **rpc_channel_register**\ (\ channel\: :godot:`int`, handler\: :godot:`Callable`, defer_when_unknown\: :godot:`bool` = false\ ) :ref:`🔗<class_NetwMultiplayer_method_rpc_channel_register>`
 
-Registers ``handler`` as the entity-lane handler for ``channel``, one of the game's own reserved channels, numbered 100 to 254. A ``channel`` outside that range and an invalid ``handler`` are both refused silently.
+Registers ``handler`` as the entity-lane handler for ``channel``, one of the game's own reserved channels, numbered 100 to 254. A ``channel`` outside that range and an invalid ``handler`` are both rejected silently.
 
 Every frame that arrives on ``channel`` calls ``handler`` as ``(entity, payload, sender)``, where ``entity`` is the :godot:`RID` the frame routed to, or an invalid one when the frame carried no wrapper. When ``defer_when_unknown`` is true, a frame for a route not yet live waits for it rather than being dropped.
 
@@ -8220,9 +8198,9 @@ Every frame that arrives on ``channel`` calls ``handler`` as ``(entity, payload,
 
 :godot:`PackedInt32Array` **rpc_get_recipients**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwMultiplayer_method_rpc_get_recipients>`
 
-The peers a send for ``entity`` can reach right now, which is every peer this session can see except itself. A server answers its clients, and a client answers the server together with whatever other peers its transport lets it see, so a broadcast a client authors reaches the other clients directly rather than only the server. An offline session self-dispatches through the loopback and answers the single local recipient ``1``.
+The peers a send for ``entity`` can reach right now, which is every peer this session can see except itself. A server returns its clients, and a client returns the server together with whatever other peers its transport lets it see, so a broadcast a client authors reaches the other clients directly rather than only the server. An offline session self-dispatches through the loopback and returns the single local recipient ``1``.
 
-This answers who a message would go to rather than who can see the entity. :ref:`interest_participant_sees()<class_NetwMultiplayer_method_interest_participant_sees>` is the visibility question.
+This returns who a message would go to rather than who can see the entity. :ref:`interest_participant_sees()<class_NetwMultiplayer_method_interest_participant_sees>` is the visibility question.
 
 .. rst-class:: classref-item-separator
 
@@ -8236,7 +8214,7 @@ This answers who a message would go to rather than who can see the entity. :ref:
 
 Calls ``callable`` on ``peer`` as a two-way request and returns the :ref:`NetwPromise<class_NetwPromise>` its reply settles. The request is recorded before the frame leaves, so a reply can never arrive for a request the session has not heard of.
 
-It refuses everything :ref:`rpc_call()<class_NetwMultiplayer_method_rpc_call>` refuses and counts each refusal the same way, and a method that is neither registered nor annotated warns. Every refusal answers ``null`` rather than a promise that never settles.
+It rejects everything :ref:`rpc_call()<class_NetwMultiplayer_method_rpc_call>` rejects and counts each rejection the same way, and a method that is neither registered nor annotated warns. Every rejection returns ``null`` rather than a promise that never settles.
 
 \ ``timeout_seconds`` converts to ticks against the session clock when one is configured, and against a rate of thirty otherwise, so a request still outstanding past its deadline is rejected instead of hanging.
 
@@ -8254,7 +8232,7 @@ Broadcasts ``callable`` as a two-way request to every peer that currently sees t
 
 When no peer sees the entity the promise resolves through :ref:`session_defer()<class_NetwMultiplayer_method_session_defer>` rather than immediately, so a caller that has not yet attached its callbacks still sees the result.
 
-It refuses what :ref:`rpc_request_call()<class_NetwMultiplayer_method_rpc_request_call>` refuses, and returns ``null`` on each.
+It rejects what :ref:`rpc_request_call()<class_NetwMultiplayer_method_rpc_request_call>` rejects, and returns ``null`` on each.
 
 .. rst-class:: classref-item-separator
 
@@ -8266,7 +8244,7 @@ It refuses what :ref:`rpc_request_call()<class_NetwMultiplayer_method_rpc_reques
 
 |void| **rpc_send_reply**\ (\ peer\: :godot:`int`, route\: :godot:`int`, txn\: :godot:`int`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_rpc_send_reply>`
 
-Answers transaction ``txn`` on ``peer`` with ``value``. A returned node or :ref:`NetwEntity<class_NetwEntity>` crosses as a route reference the same way a call argument does, so the requester resolves it to its own instance rather than to a pointer it cannot hold.
+Returns transaction ``txn`` on ``peer`` with ``value``. A returned node or :ref:`NetwEntity<class_NetwEntity>` crosses as a route reference the same way a call argument does, so the requester resolves it to its own instance rather than to a pointer it cannot hold.
 
 .. rst-class:: classref-item-separator
 
@@ -8278,17 +8256,17 @@ Answers transaction ``txn`` on ``peer`` with ``value``. A returned node or :ref:
 
 :godot:`Node` **scene_activate**\ (\ destination\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_activate>`
 
-Brings ``destination`` up if it is not already live and forces its content root to process, answering the container it settled on or ``null`` when nothing could be activated. Whatever it settles on is announced on :ref:`scene_activated<class_NetwMultiplayer_signal_scene_activated>`, so one activation is always one announcement.
+Brings ``destination`` up if it is not already live and forces its content root to process, returning the container it settled on or ``null`` when nothing could be activated. Whatever it settles on is announced on :ref:`scene_activated<class_NetwMultiplayer_signal_scene_activated>`, so one activation is always one announcement.
 
-Only a file-backed :godot:`PackedScene` can be activated. It reuses the live scene of the same name when there is one, and spawns from the packed scene's own path otherwise. A :godot:`StringName` or :godot:`String` is refused, because a label names a live scene rather than something to build, and :ref:`Netw.scene()<class_Netw_method_scene>` is how a live one is found by label. An in-memory :godot:`PackedScene` is refused because a peer receiving the spawn has no path to load it from, and a :godot:`Node` is refused because an already-mounted node is not something to activate.
+Only a file-backed :godot:`PackedScene` can be activated. It reuses the live scene of the same name when there is one, and spawns from the packed scene's own path otherwise. A :godot:`StringName` or :godot:`String` is rejected, because a label names a live scene rather than something to build, and :ref:`Netw.scene()<class_Netw_method_scene>` is how a live one is found by label. An in-memory :godot:`PackedScene` is rejected because a peer receiving the spawn has no path to load it from, and a :godot:`Node` is rejected because an already-mounted node is not something to activate.
 
 .. code:: text
 
     DESTINATION_PACKED           -> the live container, else a spawn
-    DESTINATION_PACKED_UNPATHED  -> refused
-    DESTINATION_NAME             -> refused
-    DESTINATION_NODE             -> refused
-    DESTINATION_NONE             -> refused
+    DESTINATION_PACKED_UNPATHED  -> rejected
+    DESTINATION_NAME             -> rejected
+    DESTINATION_NODE             -> rejected
+    DESTINATION_NONE             -> rejected
 
 \ **Server Only.**
 
@@ -8304,7 +8282,7 @@ Only a file-backed :godot:`PackedScene` can be activated. It reuses the live sce
 
 Seats ``player`` at ``scene``. The server admits the player and parents its node under the scene's content root, so the node is where a visitor would look for it. The server then watches that node so the seat survives a re-admit, and flushes interest in the same act.
 
-Refuses :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``player`` holds no node or ``scene`` holds no content root to seat it under.
+Rejects :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``player`` holds no node or ``scene`` holds no content root to seat it under.
 
 .. code:: text
 
@@ -8326,11 +8304,11 @@ Refuses :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_co
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **scene_admit**\ (\ scene\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_admit>`
 
-Admits ``peer`` to ``scene``, answering :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` only once the admission has taken.
+Admits ``peer`` to ``scene``, returning :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` only once the admission has taken.
 
-This is the guarded admission. It refuses peer zero, refuses a scene whose node is gone, and re-reads :ref:`scene_admits()<class_NetwMultiplayer_method_scene_admits>` afterwards rather than trusting the write, so a caller is told what actually happened instead of what was attempted.
+This is the guarded admission. It rejects peer zero, rejects a scene whose node is gone, and re-reads :ref:`scene_admits()<class_NetwMultiplayer_method_scene_admits>` afterwards rather than trusting the write, so a caller is told what actually happened instead of what was attempted.
 
-A successful admission calls :ref:`interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>` in the same act, so the peer just admitted can see the scene without waiting for anything else to drive a flush. A refused admission changes nothing.
+A successful admission calls :ref:`interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>` in the same act, so the peer just admitted can see the scene without waiting for anything else to drive a flush. A rejected admission changes nothing.
 
 .. code:: text
 
@@ -8367,7 +8345,7 @@ Whether ``scene`` currently admits ``peer``, read from the scene's :ref:`NetwInt
 
 Changes to the file-backed scene at ``path``, mirroring :godot:`SceneTree.change_scene_to_file() <SceneTree#class_SceneTree_method_change_scene_to_file>` while keeping the change under server authority.
 
-\ ``scope`` says who the change is for and nothing infers it, so the same call means the same thing on a listen host and on a dedicated server. ``requester`` names the node the change is asked from, which resolves the participant a :ref:`SCENE_CHANGE_PARTICIPANT<class_NetwMultiplayer_constant_SCENE_CHANGE_PARTICIPANT>` change moves and the source world a :ref:`SCENE_CHANGE_SCENE<class_NetwMultiplayer_constant_SCENE_CHANGE_SCENE>` change replaces. A scope that needs one and finds none is refused rather than widened.
+\ ``scope`` says who the change is for and nothing infers it, so the same call means the same thing on a listen host and on a dedicated server. ``requester`` names the node the change is asked from, which resolves the participant a :ref:`SCENE_CHANGE_PARTICIPANT<class_NetwMultiplayer_constant_SCENE_CHANGE_PARTICIPANT>` change moves and the source world a :ref:`SCENE_CHANGE_SCENE<class_NetwMultiplayer_constant_SCENE_CHANGE_SCENE>` change replaces. A scope that needs one and finds none is rejected rather than widened.
 
 On authority the change applies directly. On a client it becomes a :ref:`scene_request()<class_NetwMultiplayer_method_scene_request>` whose result settles the returned :ref:`NetwPromise<class_NetwPromise>`.
 
@@ -8386,7 +8364,7 @@ On authority the change applies directly. On a client it becomes a :ref:`scene_r
 
 :ref:`NetwPromise<class_NetwPromise>` **scene_change_to_packed**\ (\ requester\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_change_to_packed>`
 
-Changes to a file-backed ``packed`` scene, mirroring :godot:`SceneTree.change_scene_to_packed() <SceneTree#class_SceneTree_method_change_scene_to_packed>`. A scene with no resource path is refused with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`, because another peer has no path it can load. :ref:`scene_change_to_file()<class_NetwMultiplayer_method_scene_change_to_file>` says what ``scope`` means.
+Changes to a file-backed ``packed`` scene, mirroring :godot:`SceneTree.change_scene_to_packed() <SceneTree#class_SceneTree_method_change_scene_to_packed>`. A scene with no resource path is rejected with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`, because another peer has no path it can load. :ref:`scene_change_to_file()<class_NetwMultiplayer_method_scene_change_to_file>` says what ``scope`` means.
 
 .. rst-class:: classref-item-separator
 
@@ -8398,7 +8376,7 @@ Changes to a file-backed ``packed`` scene, mirroring :godot:`SceneTree.change_sc
 
 :godot:`RID` **scene_create**\ (\ recipe\: :godot:`Variant`, isolation\: :ref:`SceneIsolation<enum_NetwMultiplayer_SceneIsolation>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_create>`
 
-Spawns a scene from ``recipe`` and declares it, answering the scene entity's :godot:`RID` or an invalid one when the spawn produced nothing. A ``null`` ``recipe`` builds an empty scene, which is somewhere to admit players and nothing more.
+Spawns a scene from ``recipe`` and declares it, returning the scene entity's :godot:`RID` or an invalid one when the spawn produced nothing. A ``null`` ``recipe`` builds an empty scene, which is somewhere to admit players and nothing more.
 
 \ ``isolation`` declares whether this one scene hosts its own world, as a :ref:`SceneIsolation<enum_NetwMultiplayer_SceneIsolation>`. It rides the spawn, so two scenes in one session may differ.
 
@@ -8416,9 +8394,9 @@ Spawns a scene from ``recipe`` and declares it, answering the scene entity's :go
 
 Makes ``entity`` a scene, so it can admit players and hold the nodes that belong to it.
 
-Server authority may declare anything, and any peer may declare an entity whose route it already holds, because the server admitted that route. A client repeating a scene the server declared is following rather than inventing. A peer with neither authority nor a route answers :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`, because it would be inventing a scene the session never declared.
+Server authority may declare anything, and any peer may declare an entity whose route it already holds, because the server admitted that route. A client repeating a scene the server declared is following rather than inventing. A peer with neither authority nor a route returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`, because it would be inventing a scene the session never declared.
 
-\*\*When it may be declared.\*\* Only before the entity is armed, so a bound entity answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`. An entity that is valid but holds no record yet PARKS the answer instead of refusing, and the :ref:`entity_bind_node()<class_NetwMultiplayer_method_entity_bind_node>` that builds the record spends it, because binding a node is what arms the entity and a caller composing one by hand has no moment between the two to write the facet in.
+Declare this before the entity is armed. A bound entity returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`. If the entity has no record yet, the session stores the declaration until :ref:`entity_bind_node()<class_NetwMultiplayer_method_entity_bind_node>` creates the record.
 
 ::
 
@@ -8446,9 +8424,9 @@ Server authority may declare anything, and any peer may declare an entity whose 
 
 :godot:`bool` **scene_destroy**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_destroy>`
 
-Unparents and frees ``scene``'s live node on the spot, answering whether one was found. Nothing is drained and nothing waits, so anything still in flight for that scene is dropped.
+Unparents and frees ``scene``'s live node on the spot, returning whether one was found. Nothing is drained and nothing waits, so anything still in flight for that scene is dropped.
 
-A ``scene`` that answers no live container answers ``false`` silently, because destroying what is already gone is the caller's intended end state.
+A ``scene`` that returns no live container returns ``false`` silently, because destroying what is already gone is the caller's intended end state.
 
 .. rst-class:: classref-item-separator
 
@@ -8462,7 +8440,7 @@ A ``scene`` that answers no live container answers ``false`` silently, because d
 
 A live scene whose stem is ``stem``, or an invalid :godot:`RID`.
 
-Stems are not unique, so this answers "an instance of this stem" rather than "the one", resolving to the most recent live instance. Use :ref:`scene_find_all()<class_NetwMultiplayer_method_scene_find_all>` wherever the difference between an instance and every one of them can change the outcome.
+Stems are not unique, so this returns "an instance of this stem" rather than "the one", resolving to the most recent live instance. Use :ref:`scene_find_all()<class_NetwMultiplayer_method_scene_find_all>` wherever the difference between an instance and every one of them can change the outcome.
 
 .. rst-class:: classref-item-separator
 
@@ -8486,7 +8464,7 @@ Every live scene whose stem is ``stem``, which is every instance of one level. T
 
 :godot:`RID` **scene_get_current**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_current>`
 
-The scene this peer presents while it still resolves to a mounted container, or an invalid :godot:`RID` once it does not, which is the session's one answer to the question. A dedicated server presents nothing and always answers invalid.
+The scene this peer presents while it still resolves to a mounted container, or an invalid :godot:`RID` once it does not, which is the session's one result to the question. A dedicated server presents nothing and always returns invalid.
 
 The presentation is recomputed from what the session seats this peer in rather than written by whatever changed, so a scene arriving, leaving or re-seating this peer all settle here, and the mounted check means a caller is never handed a detached scene to pass onward.
 
@@ -8500,7 +8478,7 @@ The presentation is recomputed from what the session seats this peer in rather t
 
 :godot:`Array`\[:godot:`RID`\] **scene_get_entities**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_entities>`
 
-The RIDs of the entities seated under ``scene``'s container, in no guaranteed order. A scene that answers no live container answers an empty array rather than refusing, because asking about what is gone is an ordinary question.
+The RIDs of the entities seated under ``scene``'s container, in no guaranteed order. A scene that returns no live container returns an empty array rather than rejecting, because asking about what is gone is an ordinary question.
 
 .. rst-class:: classref-item-separator
 
@@ -8524,7 +8502,7 @@ The name ``scene`` goes by, which is its declared label when it carries one and 
 
 :godot:`RID` **scene_get_layer**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_layer>`
 
-The :ref:`NetwInterestLayer<class_NetwInterestLayer>` that decides who sees ``scene``. A layer the session has declared is created on the spot if it is not live yet, so a caller adding viewers to a scene's layer never needs a second call. A layer the session never declared answers an invalid :godot:`RID` rather than being invented.
+The :ref:`NetwInterestLayer<class_NetwInterestLayer>` that decides who sees ``scene``. A layer the session has declared is created on the spot if it is not live yet, so a caller adding viewers to a scene's layer never needs a second call. A layer the session never declared returns an invalid :godot:`RID` rather than being invented.
 
 .. rst-class:: classref-item-separator
 
@@ -8560,7 +8538,7 @@ The live container node ``scene`` stands for, or ``null`` when it holds no mount
 
 :godot:`Variant` **scene_get_param**\ (\ scene\: :godot:`RID`, param\: :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_param>`
 
-Reads one :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>` knob off ``scene``. A scene the session never bound answers ``null`` rather than refusing, and a knob that holds no value answers ``null`` too, because an absent knob and an unset one are the same question here.
+Reads one :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>` knob off ``scene``. A scene the session never bound returns ``null`` rather than rejecting, and a knob that holds no value returns ``null`` too, because an absent knob and an unset one are the same question here.
 
 .. rst-class:: classref-item-separator
 
@@ -8584,7 +8562,7 @@ The participants seated at ``scene``, read from the scene's interest layer. The 
 
 :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **scene_get_players**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_players>`
 
-The players seated in ``scene``, which are the entities :ref:`scene_get_entities()<class_NetwMultiplayer_method_scene_get_entities>` answers that carry a peer. :ref:`players<class_NetwMultiplayer_property_players>` is every live scene's answer to this put together.
+The player entities in ``scene``. :ref:`players<class_NetwMultiplayer_property_players>` contains the players from every live scene.
 
 .. rst-class:: classref-item-separator
 
@@ -8596,7 +8574,7 @@ The players seated in ``scene``, which are the entities :ref:`scene_get_entities
 
 :godot:`bool` **scene_is_declared**\ (\ entity\: :godot:`RID`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_scene_is_declared>`
 
-Whether ``entity`` declares itself a scene. An entity the session never bound answers ``false`` rather than refusing, because asking about a stranger is an ordinary question.
+Whether ``entity`` declares itself a scene. An entity the session never bound returns ``false`` rather than rejecting, because asking about a stranger is an ordinary question.
 
 .. rst-class:: classref-item-separator
 
@@ -8608,7 +8586,7 @@ Whether ``entity`` declares itself a scene. An entity the session never bound an
 
 :godot:`Array`\[:godot:`RID`\] **scene_list**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_list>`
 
-Every live scene the session holds, in no guaranteed order. A scene is live while its container is mounted, so a declared-but-unentered scene answers nothing here and a despawned one drops out without a caller refreshing anything.
+Every live scene the session holds, in no guaranteed order. A scene is live while its container is mounted, so a declared-but-unentered scene returns nothing here and a despawned one drops out without a caller refreshing anything.
 
 .. rst-class:: classref-item-separator
 
@@ -8620,11 +8598,11 @@ Every live scene the session holds, in no guaranteed order. A scene is live whil
 
 :ref:`NetwPromise<class_NetwPromise>` **scene_move**\ (\ entity\: :godot:`RID`, destination\: :godot:`RID`, opts\: :ref:`NetwReparentOpts<class_NetwReparentOpts>` = null\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_move>`
 
-Moves ``entity`` under ``destination``'s container, answering the :ref:`NetwPromise<class_NetwPromise>` the settle carries. The mover is reparented on every peer by the same carry rules, so the promise resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` only once the entity stands under its new scene everywhere it exists.
+Moves ``entity`` under ``destination``'s container, returning the :ref:`NetwPromise<class_NetwPromise>` the settle carries. The mover is reparented on every peer by the same carry rules, so the promise resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` only once the entity stands under its new scene everywhere it exists.
 
 A carry masks the mover off the physics server before the parent swap and restores it after, spending two :godot:`SceneTree.physics_frame <SceneTree#class_SceneTree_signal_physics_frame>`\ s on each side. The physics server drops a body from an :godot:`Area2D`'s or :godot:`Area3D`'s overlap tracking only on a step, and a body still tracked re-emits :godot:`Area2D.body_entered <Area2D#class_Area2D_signal_body_entered>` out of its own :godot:`Node.tree_entered <Node#class_Node_signal_tree_entered>` as the swap remounts it. That signal fires while the body is in the tree and its children are not, so a handler reading a child of the body sees an orphan. The window is what stops it, and a mover with no :godot:`CollisionObject2D.collision_layer <CollisionObject2D#class_CollisionObject2D_property_collision_layer>` or :godot:`CollisionObject2D.collision_mask <CollisionObject2D#class_CollisionObject2D_property_collision_mask>` skips the window because it has nothing to evict.
 
-A move asked off server authority answers :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` on a promise that has already settled.
+A move asked off server authority returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` on a promise that has already settled.
 
 \ **Server Only.**
 
@@ -8644,7 +8622,7 @@ Registers ``callback`` for one scene ``event`` on ``scene``. An invalid ``scene`
 
 Plural where a layer monitor is singular, because several unrelated observers legitimately watch one scene while a layer's monitor is the session's own. The registration names the scene :godot:`RID` rather than a node, so it survives whichever node currently stands in for that scene.
 
-A callback retires itself by answering ``true``, and one answering anything else, including nothing, is kept.
+A callback retires itself by returning ``true``, and one returning anything else, including nothing, is kept.
 
 That is the only way to drop one registration when several share a base :godot:`Callable`. :ref:`scene_unobserve()<class_NetwMultiplayer_method_scene_unobserve>` matches with ``==``, and a bound :godot:`Callable` compares equal on its base and the number of values bound rather than on the values themselves, so two callbacks that bind different subscribers cannot be told apart.
 
@@ -8660,7 +8638,7 @@ An observer whose object has been freed is dropped on the next dispatch without 
 
 :godot:`StringName` **scene_packed_stem**\ (\ packed\: :godot:`PackedScene`\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_scene_packed_stem>`
 
-The name ``packed`` would be declared under, which is its root node's name. Answers empty for a :godot:`PackedScene` with no state or no root node.
+The name ``packed`` would be declared under, which is its root node's name. Returns empty for a :godot:`PackedScene` with no state or no root node.
 
 .. rst-class:: classref-item-separator
 
@@ -8694,7 +8672,7 @@ A scene declaring :ref:`SCENE_ISOLATION_OWN_WORLD<class_NetwMultiplayer_constant
 
 :godot:`bool` **scene_release**\ (\ scene\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_release>`
 
-Removes ``peer`` from ``scene``, answering whether anything was done.
+Removes ``peer`` from ``scene``, returning whether anything was done.
 
 The peer is told before the seat is taken away, while it still holds the seat that names what it is losing. A client learns its membership from the scene entity, so a peer released the other way round would keep presenting a scene it no longer belongs to.
 
@@ -8726,7 +8704,7 @@ Re-enters the file-backed scene this peer currently presents, mirroring :godot:`
 
 Asks server authority to move the local player to the scene file at ``path``. A label cannot be requested, because :ref:`Netw.scene()<class_Netw_method_scene>` is what resolves a live scene by label and a change names a path.
 
-The promise rejects with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` when policy refuses, :godot:`@GlobalScope.ERR_SKIP <@GlobalScope#class_@GlobalScope_constant_ERR_SKIP>` when a newer request supersedes it, and :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` when authority never answers within ten seconds.
+The promise rejects with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` when policy rejects, :godot:`@GlobalScope.ERR_SKIP <@GlobalScope#class_@GlobalScope_constant_ERR_SKIP>` when a newer request supersedes it, and :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` when authority never returns within ten seconds.
 
 \ **Player request.**
 
@@ -8754,7 +8732,7 @@ With none installed the session carries the move itself. Install one to guard a 
 
 |void| **scene_set_host_view_factory**\ (\ factory\: :godot:`Callable`\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_scene_set_host_view_factory>`
 
-Replaces the node a listen-server host draws its own player's world into, as ``func(root: Node) -> Node``. The session calls it once when :ref:`role<class_NetwMultiplayer_property_role>` is :ref:`ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>` and the live scene owns its own world, names the answer ``HostSceneView`` and parents it under the root it was handed. Answering ``null`` leaves the display alone.
+Replaces the node a listen-server host draws its own player's world into, as ``func(root: Node) -> Node``. The session calls it once when :ref:`role<class_NetwMultiplayer_property_role>` is :ref:`ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>` and the live scene owns its own world, names the result ``HostSceneView`` and parents it under the root it was handed. Returning ``null`` leaves the display alone.
 
 With none installed the session makes a stock :ref:`HostSceneView<class_HostSceneView>`, and makes nothing when a :ref:`ParticipantView<class_ParticipantView>` already stands under the root, so a game that placed its own view keeps it. Install one only to build a different node entirely.
 
@@ -8768,7 +8746,7 @@ With none installed the session makes a stock :ref:`HostSceneView<class_HostScen
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **scene_set_param**\ (\ scene\: :godot:`RID`, param\: :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_set_param>`
 
-Writes one :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>` knob on ``scene``, answering :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when the session holds no record for it. These belong to the scene rather than to the session. What a scene is called and whether it carries its own world are per-scene facts and this is where they are written.
+Writes one :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>` knob on ``scene``, returning :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when the session holds no record for it. These belong to the scene rather than to the session. What a scene is called and whether it carries its own world are per-scene facts and this is where they are written.
 
 .. code:: text
 
@@ -8788,7 +8766,7 @@ Writes one :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>` knob on ``scene``,
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **scene_undeclare**\ (\ entity\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_undeclare>`
 
-Stops ``entity`` being a scene, dropping the label and isolation it declared. This is the reverse of :ref:`scene_declare()<class_NetwMultiplayer_method_scene_declare>` under the same rules. Server authority may undeclare anything, a peer holding the entity's route may undeclare its own copy, and a peer with neither answers :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`.
+Stops ``entity`` being a scene, dropping the label and isolation it declared. This is the reverse of :ref:`scene_declare()<class_NetwMultiplayer_method_scene_declare>` under the same rules. Server authority may undeclare anything, a peer holding the entity's route may undeclare its own copy, and a peer with neither returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`.
 
 .. code:: text
 
@@ -8820,7 +8798,7 @@ Reverses :ref:`scene_observe()<class_NetwMultiplayer_method_scene_observe>` for 
 
 :godot:`int` **schema_add_column**\ (\ schema\: :godot:`RID`, key\: :godot:`StringName`, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`, stride\: :godot:`int` = 1\ ) :ref:`🔗<class_NetwMultiplayer_method_schema_add_column>`
 
-Appends ``key`` to ``schema`` in address order. A column of one value per row leaves ``stride`` at its default. Duplicate keys, invalid types, invalid strides, and additions after sealing answer ``-1``.
+Appends ``key`` to ``schema`` in address order. A column of one value per row leaves ``stride`` at its default. Duplicate keys, invalid types, invalid strides, and additions after sealing return ``-1``.
 
 .. rst-class:: classref-item-separator
 
@@ -8832,9 +8810,9 @@ Appends ``key`` to ``schema`` in address order. A column of one value per row le
 
 :godot:`RID` **schema_create**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwMultiplayer_method_schema_create>`
 
-The handle for the schema named ``name``, minting one when this session holds none.
+The handle for the schema named ``name``, creating one when this session holds none.
 
-Declaring a name that already exists answers the handle it already has and restarts that schema's re-declaration cursor, so a script reload replays its own columns rather than minting a second schema.
+Declaring a name that already exists returns the handle it already has and restarts that schema's re-declaration cursor, so a script reload replays its own columns rather than creating a second schema.
 
 .. rst-class:: classref-item-separator
 
@@ -8848,7 +8826,7 @@ Declaring a name that already exists answers the handle it already has and resta
 
 The handle this session holds for ``name``, or an invalid :godot:`RID` when it holds none.
 
-This is the lookup alone and it compiles nothing, so a declaration this session has not taken in answers an invalid handle. :ref:`schema_find_or_adopt()<class_NetwMultiplayer_method_schema_find_or_adopt>` is the call that takes one in.
+This is the lookup alone and it compiles nothing, so a declaration this session has not taken in returns an invalid handle. :ref:`schema_find_or_adopt()<class_NetwMultiplayer_method_schema_find_or_adopt>` is the call that takes one in.
 
 .. rst-class:: classref-item-separator
 
@@ -8862,7 +8840,7 @@ This is the lookup alone and it compiles nothing, so a declaration this session 
 
 The handle this session holds for ``name``, compiling the declaration first when the process-wide schema registry has one this session never adopted. This is :ref:`schema_find()<class_NetwMultiplayer_method_schema_find>` with the lazy adopt attached, and it exists because a class's ``static var`` initializers run on first access rather than at load, so a schema can be declared after the session already swept the registry.
 
-A name the registry does not know is answered invalid without adopting anything, so an unknown name costs one lookup rather than a sweep.
+An unknown registry name returns an invalid result without adopting anything.
 
 .. rst-class:: classref-item-separator
 
@@ -8922,7 +8900,7 @@ The column type fixed at ``column``, or ``-1`` when either address is unknown.
 
 :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>` **schema_get_element_type**\ (\ type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_schema_get_element_type>`
 
-The :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>` one element of ``type`` reads as, or ``-1`` when ``type`` is outside the column vocabulary. :ref:`COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>` answers :godot:`@GlobalScope.TYPE_NIL <@GlobalScope#class_@GlobalScope_constant_TYPE_NIL>` because its elements are self-describing.
+The :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>` one element of ``type`` reads as, or ``-1`` when ``type`` is outside the column vocabulary. :ref:`COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>` returns :godot:`@GlobalScope.TYPE_NIL <@GlobalScope#class_@GlobalScope_constant_TYPE_NIL>` because its elements are self-describing.
 
 .. rst-class:: classref-item-separator
 
@@ -8958,7 +8936,7 @@ The caller-facing name held by ``schema``, or an empty :godot:`StringName` when 
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **schema_seal**\ (\ schema\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_schema_seal>`
 
-Fixes ``schema``'s declaration order and shape hash. A changed or truncated re-declaration answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
+Fixes ``schema``'s declaration order and shape hash. A changed or truncated re-declaration returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
 
 .. code:: text
 
@@ -8990,7 +8968,7 @@ Assigns ``quantizer`` to ``column`` before ``schema`` is sealed. A sealed declar
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **send_auth**\ (\ id\: :godot:`int`, data\: :godot:`PackedByteArray`\ ) :ref:`🔗<class_NetwMultiplayer_method_send_auth>`
 
-Sends ``data`` to ``id`` as one packet of :ref:`inner<class_NetwMultiplayer_property_inner>`'s own authentication protocol, while that peer is still authenticating. Answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when this session wraps no :ref:`inner<class_NetwMultiplayer_property_inner>`, and otherwise whatever the wrapped :godot:`SceneMultiplayer` answers.
+Sends ``data`` to ``id`` as one packet of :ref:`inner<class_NetwMultiplayer_property_inner>`'s own authentication protocol, while that peer is still authenticating. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when this session wraps no :ref:`inner<class_NetwMultiplayer_property_inner>`, and otherwise whatever the wrapped :godot:`SceneMultiplayer` returns.
 
 \ :ref:`complete_auth()<class_NetwMultiplayer_method_complete_auth>` ends the handshake this data rides. Both keep :godot:`SceneMultiplayer`'s own spelling, so a game swapping one session for the other finds the authentication handshake under the same names.
 
@@ -9004,7 +8982,7 @@ Sends ``data`` to ``id`` as one packet of :ref:`inner<class_NetwMultiplayer_prop
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **send_bytes**\ (\ bytes\: :godot:`PackedByteArray`, id\: :godot:`int` = 0, mode\: :godot:`MultiplayerPeer.TransferMode <MultiplayerPeer#enum_multiplayerpeer_TransferMode>` = 2, channel\: :godot:`int` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_send_bytes>`
 
-Sends ``bytes`` as a raw packet to ``id``, or to every connected peer when ``id`` is ``0``, over ``mode`` on ``channel``. Answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` before a :godot:`MultiplayerPeer` is installed, otherwise the underlying peer's own send result.
+Sends ``bytes`` as a raw packet to ``id``, or to every connected peer when ``id`` is ``0``, over ``mode`` on ``channel``. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` before a :godot:`MultiplayerPeer` is installed, otherwise the underlying peer's own send result.
 
 .. rst-class:: classref-item-separator
 
@@ -9029,7 +9007,7 @@ This is the only send the session publishes, because choosing among the three wa
 
 \ Grouping waits on the tick, so a session with no configured clock always sends now. A buffered payload in a session whose clock never runs would sit in the run forever.
 
-A negative ``route`` is refused with :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>`, because it addresses no entity and no peer either.
+A negative ``route`` is rejected with :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>`, because it addresses no entity and no peer either.
 
 .. code:: text
 
@@ -9126,11 +9104,11 @@ The twin of :ref:`service_register()<class_NetwMultiplayer_method_service_regist
 
 |void| **session_answer_probe**\ (\ peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_answer_probe>`
 
-Answers one ``NPRB`` server-browser probe from ``peer``, which rides the same authentication phase a join does and is consumed here rather than reaching the join path.
+Returns one ``NPRB`` server-browser probe from ``peer``, which rides the same authentication phase a join does and is consumed here rather than reaching the join path.
 
-The reply body comes from the provider declared through :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` for this session, or from the built-in :ref:`NetwServerInfo.from_session()<class_NetwServerInfo_method_from_session>` reading of live session state when no declaration governs it. A declaration this session can no longer reach refuses the probe with :ref:`NetwAuthProtocol.PROBE_ERROR<class_NetwAuthProtocol_constant_PROBE_ERROR>` rather than falling back to the built-in reply.
+The reply body comes from the provider declared through :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` for this session, or from the built-in :ref:`NetwServerInfo.from_session()<class_NetwServerInfo_method_from_session>` reading of live session state when no declaration governs it. A declaration this session can no longer reach rejects the probe with :ref:`NetwAuthProtocol.PROBE_ERROR<class_NetwAuthProtocol_constant_PROBE_ERROR>` rather than falling back to the built-in reply.
 
-A probe is refused with a busy status rather than a body when more than ten arrive within one second, or when more than thirty-two peers are still tracked as probing. Both limits are per session and a refused probe still counts against them, so a flood cannot buy itself a fresh budget by being refused.
+A probe is rejected with a busy status rather than a body when more than ten arrive within one second, or when more than thirty-two peers are still tracked as probing. Both limits are per session and a rejected probe still counts against them, so a flood cannot buy itself a fresh budget by being rejected.
 
 \ **Server Only.**
 
@@ -9174,7 +9152,7 @@ A flush may run game callbacks, so a caller holding a lock or iterating its own 
 
 Drains everything :ref:`session_defer()<class_NetwMultiplayer_method_session_defer>` queued, repeatedly, until a pass adds nothing new. Every tree change a game made is settled here, so this is where a move, a death and a lost copy are decided and reported. The session calls it on its own. Call it to read a settled result before the next frame, once the tree changes are done.
 
-Do not call it from inside a :godot:`Node.tree_entered <Node#class_Node_signal_tree_entered>` or :godot:`Node.tree_exiting <Node#class_Node_signal_tree_exiting>` handler, because an enclosing :godot:`Node.reparent() <Node#class_Node_method_reparent>` is still between its removal and its addition and the tree it would answer from is not the final one. An authoritative owner still detached when the queue drains has ended its life rather than moved.
+Do not call it from inside a :godot:`Node.tree_entered <Node#class_Node_signal_tree_entered>` or :godot:`Node.tree_exiting <Node#class_Node_signal_tree_exiting>` handler, because an enclosing :godot:`Node.reparent() <Node#class_Node_method_reparent>` is still between its removal and its addition and the tree it would return from is not the final one. An authoritative owner still detached when the queue drains has ended its life rather than moved.
 
 A queue that settles is silent. One still holding keys after the internal pass bound pushes an error naming them, because a row that reschedules itself every pass is a cycle in the caller's own scheduling rather than something the queue can resolve, and a defect that hangs is worse than one that reports.
 
@@ -9194,7 +9172,7 @@ Runs everything one tick sends. It flushes interest when a layer driver is insta
 
 That order matters. The flush stamps each datagram with its sequence, and servicing the transport first would acknowledge a sequence this tick had not written yet.
 
-The session connects this to :ref:`clock_after_tick<class_NetwMultiplayer_signal_clock_after_tick>` when it is built, ahead of any game listener, so a game reading :ref:`clock_after_tick<class_NetwMultiplayer_signal_clock_after_tick>` reads a tick whose frames have already gone out. An interest flush that refuses stops the rest of the tick and answers why.
+The session connects this to :ref:`clock_after_tick<class_NetwMultiplayer_signal_clock_after_tick>` when it is built, ahead of any game listener, so a game reading :ref:`clock_after_tick<class_NetwMultiplayer_signal_clock_after_tick>` reads a tick whose frames have already gone out. An interest flush that rejects stops the rest of the tick and returns why.
 
 A game never calls this. It is published for a custom driver that owns its own tick source and therefore has to run the pass the clock would have run.
 
@@ -9208,7 +9186,7 @@ A game never calls this. It is published for a custom driver that owns its own t
 
 :godot:`Array`\[:godot:`MultiplayerAPI`\] **session_get_all**\ (\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_session_get_all>`
 
-Every session that :ref:`session_is_active()<class_NetwMultiplayer_method_session_is_active>` answers true for, in the order they were created.
+Every session that :ref:`session_is_active()<class_NetwMultiplayer_method_session_is_active>` returns true for, in the order they were created.
 
 A session enters this list when it is constructed and leaves it when it is freed. The registry behind it holds ids rather than references, so it never keeps a session alive, and a read is the one place an id whose session is gone is dropped. A caller therefore reads a list of live sessions without a disposal hook existing anywhere.
 
@@ -9229,11 +9207,11 @@ A session enters this list when it is constructed and leaves it when it is freed
 
 :ref:`Role<enum_NetwMultiplayer_Role>` **session_get_authored_role**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_session_get_authored_role>`
 
-The role the game asked for, read live off :ref:`NetwSessionConfig.desired_role<class_NetwSessionConfig_property_desired_role>` on the config :ref:`session_get_config()<class_NetwMultiplayer_method_session_get_config>` answers.
+The role the game asked for, read live off :ref:`NetwSessionConfig.desired_role<class_NetwSessionConfig_property_desired_role>` on the config :ref:`session_get_config()<class_NetwMultiplayer_method_session_get_config>` returns.
 
 \ :ref:`role<class_NetwMultiplayer_property_role>` is what the session actually became, and this is what was asked of it. The two agree once a connection has resolved, and they part while a game has changed the config and nothing has connected since.
 
-A config carrying a value outside :ref:`Role<enum_NetwMultiplayer_Role>` answers :ref:`ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>`, which is what a session with no configuration already intends.
+A config carrying a value outside :ref:`Role<enum_NetwMultiplayer_Role>` returns :ref:`ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>`, which is what a session with no configuration already intends.
 
 .. rst-class:: classref-item-separator
 
@@ -9247,11 +9225,11 @@ A config carrying a value outside :ref:`Role<enum_NetwMultiplayer_Role>` answers
 
 The values this session consumed from the :ref:`NetwSessionConfig<class_NetwSessionConfig>` a game declared with :ref:`Netw.configure_session()<class_Netw_method_configure_session>`, or a default one until a declaration is consumed.
 
-Never ``null``, so a session that declared nothing still answers :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>` and :ref:`NetwSessionConfig.link_conditions<class_NetwSessionConfig_property_link_conditions>` with defaults. Reading the config is what applies it, taking the role it asked for and arming authentication, so a session whose config was never read runs no authentication at all.
+Never ``null``, so a session that declared nothing still returns :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>` and :ref:`NetwSessionConfig.link_conditions<class_NetwSessionConfig_property_link_conditions>` with defaults. Reading the config is what applies it, taking the role it asked for and arming authentication, so a session whose config was never read runs no authentication at all.
 
-The answer is freshly built on every call and is not connected to the session. The session copied the declared config once and owns the copy, so writing to what this returns changes nothing and is not reported either. :ref:`session_set_server_info()<class_NetwMultiplayer_method_session_set_server_info>` is the one value a running session takes back, because it is the only one collected after the configuration has settled.
+The result is freshly built on every call and is not connected to the session. The session copied the declared config once and owns the copy, so writing to what this returns changes nothing and is not reported either. :ref:`session_set_server_info()<class_NetwMultiplayer_method_session_set_server_info>` is the one value a running session takes back, because it is the only one collected after the configuration has settled.
 
-This is where a caller reads what the session was configured with, by reading a field off the answer.
+This is where a caller reads what the session was configured with, by reading a field off the result.
 
 .. rst-class:: classref-item-separator
 
@@ -9288,7 +9266,7 @@ It sits beside :ref:`session_prepare_join()<class_NetwMultiplayer_method_session
 
 Whether the :godot:`SceneTree` resolves this session for its own root path, which is what makes a session the one a node on that branch reaches through :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`.
 
-One question answers both install shapes. A branch-scoped session is installed at the path its :godot:`SceneMultiplayer` roots at, a tree-wide session roots at ``/root`` and is the tree's default, and :godot:`SceneTree.get_multiplayer() <SceneTree#class_SceneTree_method_get_multiplayer>` resolves either by walking up from the path, so neither shape needs a test of its own.
+One question returns both install shapes. A branch-scoped session is installed at the path its :godot:`SceneMultiplayer` roots at, a tree-wide session roots at ``/root`` and is the tree's default, and :godot:`SceneTree.get_multiplayer() <SceneTree#class_SceneTree_method_get_multiplayer>` resolves either by walking up from the path, so neither shape needs a test of its own.
 
 .. rst-class:: classref-item-separator
 
@@ -9302,7 +9280,7 @@ One question answers both install shapes. A branch-scoped session is installed a
 
 Flushes persistence, closes the active peer, and returns to :ref:`SESSION_STATE_OFFLINE<class_NetwMultiplayer_constant_SESSION_STATE_OFFLINE>`.
 
-It waits up to three seconds for the server to acknowledge the departure, so a caller that awaits the returned promise knows the peer is closed rather than closing. A session already at :ref:`SESSION_STATE_OFFLINE<class_NetwMultiplayer_constant_SESSION_STATE_OFFLINE>`, and one with no scene tree to time the window with, both answer a promise that is already settled.
+It waits up to three seconds for the server to acknowledge the departure, so a caller that awaits the returned promise knows the peer is closed rather than closing. A session already at :ref:`SESSION_STATE_OFFLINE<class_NetwMultiplayer_constant_SESSION_STATE_OFFLINE>`, and one with no scene tree to time the window with, both return a promise that is already settled.
 
 ::
 
@@ -9320,7 +9298,7 @@ It waits up to three seconds for the server to acknowledge the departure, so a c
 
 |void| **session_notify_shutdown**\ (\ reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwMultiplayer_method_session_notify_shutdown>`
 
-Warns every live peer that this server is going away, carrying ``reason``, and announces :ref:`session_server_disconnecting<class_NetwMultiplayer_signal_session_server_disconnecting>` locally as well. A session without server authority refuses the call and warns nobody.
+Warns every live peer that this server is going away, carrying ``reason``, and announces :ref:`session_server_disconnecting<class_NetwMultiplayer_signal_session_server_disconnecting>` locally as well. A session without server authority rejects the call and warns nobody.
 
 The notice rides a session control channel rather than a node ``@rpc``, so a session with no scene tree still warns its clients. Nothing here closes a peer, so the server still has to tear itself down afterwards.
 
@@ -9334,7 +9312,7 @@ The notice rides a session control channel rather than a node ``@rpc``, so a ses
 
 |void| **session_pause**\ (\ reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwMultiplayer_method_session_pause>`
 
-Suspends the game on every live peer, each receiving :ref:`session_tree_paused<class_NetwMultiplayer_signal_session_tree_paused>` carrying ``reason``, and on this session too. A session without server authority refuses the call and pauses nobody.
+Suspends the game on every live peer, each receiving :ref:`session_tree_paused<class_NetwMultiplayer_signal_session_tree_paused>` carrying ``reason``, and on this session too. A session without server authority rejects the call and pauses nobody.
 
 The local announcement is made through the same channel decode a remote peer takes, so the host cannot end up in a pause state its clients disagree with.
 
@@ -9352,7 +9330,7 @@ Prepares ``username`` and ``args`` as the local player's join, without assigning
 
 A client submits it on reaching :ref:`SESSION_STATE_ONLINE<class_NetwMultiplayer_constant_SESSION_STATE_ONLINE>`. A server holds it until :ref:`session_submit_join()<class_NetwMultiplayer_method_session_submit_join>` is called.
 
-The :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` travels as the promise's :ref:`NetwPromise.result<class_NetwPromise_property_result>`, so a caller reads ``int(prepared.result)``. A flow with no credential preparation to run answers a promise that is already settled, so it never suspends.
+The :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` travels as the promise's :ref:`NetwPromise.result<class_NetwPromise_property_result>`, so a caller reads ``int(prepared.result)``. A flow with no credential preparation to run returns a promise that is already settled, so it never suspends.
 
 ::
 
@@ -9362,7 +9340,7 @@ The :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` travels a
     if int(prepared.result) != OK:
         return
 
-\ An empty ``username`` answers :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` without running the flow.
+\ An empty ``username`` returns :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` without running the flow.
 
 \ **Player request.**
 
@@ -9390,7 +9368,7 @@ A session that already holds authority publishes the request to itself, so the s
 
 :godot:`String` **session_role_name**\ (\ role\: :ref:`Role<enum_NetwMultiplayer_Role>`\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_session_role_name>`
 
-The display name of ``role``, with the :ref:`Role<enum_NetwMultiplayer_Role>` constants' ``ROLE_`` prefix dropped, so :ref:`ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>` answers ``"LISTEN_SERVER"``. A role outside :ref:`Role<enum_NetwMultiplayer_Role>` answers the empty string rather than a made-up name, because a label is only ever shown and must not invent a role that does not exist.
+The display name of ``role``, with the :ref:`Role<enum_NetwMultiplayer_Role>` constants' ``ROLE_`` prefix dropped, so :ref:`ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>` returns ``"LISTEN_SERVER"``. A role outside :ref:`Role<enum_NetwMultiplayer_Role>` returns the empty string rather than a made-up name, because a label is only ever shown and must not invent a role that does not exist.
 
 This is the spelling every debug surface reports a role under, so a reader comparing a snapshot, a session event and the editor panel sees one vocabulary.
 
@@ -9404,7 +9382,7 @@ This is the spelling every debug surface reports a role under, so a reader compa
 
 |void| **session_set_join_resolver**\ (\ resolver\: :godot:`Callable`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_set_join_resolver>`
 
-Decides what an arriving join request is answered with. ``resolver`` is called as ``resolver(username, args, sender)`` and answers the :ref:`ResolvedJoin<class_ResolvedJoin>` to admit, or ``null`` to reject. A session with none installed admits on the username the peer claimed.
+Sets the join resolver. It is called as ``resolver(username, args, sender)`` and returns a :ref:`ResolvedJoin<class_ResolvedJoin>` to admit or ``null`` to reject. Without a resolver, the session accepts the claimed username.
 
 .. rst-class:: classref-item-separator
 
@@ -9416,9 +9394,9 @@ Decides what an arriving join request is answered with. ``resolver`` is called a
 
 |void| **session_set_role**\ (\ role\: :ref:`Role<enum_NetwMultiplayer_Role>`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_set_role>`
 
-Declares what this peer is, so :ref:`role<class_NetwMultiplayer_property_role>`, :ref:`is_host<class_NetwMultiplayer_property_is_host>` and :ref:`is_local_client<class_NetwMultiplayer_property_is_local_client>` all answer from ``role`` at once.
+Declares what this peer is, so :ref:`role<class_NetwMultiplayer_property_role>`, :ref:`is_host<class_NetwMultiplayer_property_is_host>` and :ref:`is_local_client<class_NetwMultiplayer_property_is_local_client>` all return from ``role`` at once.
 
-This records what the session became, where :ref:`session_get_authored_role()<class_NetwMultiplayer_method_session_get_authored_role>` records what was asked for. It is written once the transport has said which end this peer is on, which is why a client waiting to connect can answer :ref:`ROLE_CLIENT<class_NetwMultiplayer_constant_ROLE_CLIENT>` before any connection exists.
+This records what the session became, where :ref:`session_get_authored_role()<class_NetwMultiplayer_method_session_get_authored_role>` records what was asked for. It is written once the transport has said which end this peer is on, which is why a client waiting to connect can return :ref:`ROLE_CLIENT<class_NetwMultiplayer_constant_ROLE_CLIENT>` before any connection exists.
 
 .. rst-class:: classref-item-separator
 
@@ -9430,7 +9408,7 @@ This records what the session became, where :ref:`session_get_authored_role()<cl
 
 |void| **session_set_root**\ (\ reader\: :godot:`Callable`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_set_root>`
 
-Installs ``reader`` as the :godot:`Callable` :ref:`root<class_NetwMultiplayer_property_root>` answers from. It takes no arguments and answers the node, which is what lets the answer follow a re-mount without anything here being told about it.
+Installs ``reader`` as the :godot:`Callable` :ref:`root<class_NetwMultiplayer_property_root>` returns from. It takes no arguments and returns the node, which is what lets the result follow a re-mount without anything here being told about it.
 
 A :godot:`Callable` rather than a stored node, because the root is derived from the transport's own relative-addressing path and re-resolves when that path changes. A node pushed once would go stale silently, and a stale root parents a session's own views under a branch that is no longer in the tree.
 
@@ -9444,11 +9422,11 @@ A :godot:`Callable` rather than a stored node, because the root is derived from 
 
 |void| **session_set_server_info**\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_set_server_info>`
 
-Replaces the :ref:`NetwServerInfo<class_NetwServerInfo>` this host answers a probe from, which :ref:`Netw.configure_session()<class_Netw_method_configure_session>` declares before a session starts and a lobby screen only learns when a player names their server.
+Replaces the :ref:`NetwServerInfo<class_NetwServerInfo>` this host returns a probe from, which :ref:`Netw.configure_session()<class_Netw_method_configure_session>` declares before a session starts and a lobby screen only learns when a player names their server.
 
-It is copied on the way in, so the caller keeps no live handle and a later edit of what it passed changes nothing here. ``null`` clears it, and a probe then answers only what the session knows by itself, which is its app id and its live player count.
+It is copied on the way in, so the caller keeps no live handle and a later edit of what it passed changes nothing here. ``null`` clears it, and a probe then returns only what the session knows by itself, which is its app id and its live player count.
 
-This is a value rather than a provider, so it says what does not change while this host runs. :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` is the provider a game declares when the answer is computed per probe, and it wins where both exist, because a provider is handed the value set here as the record it edits.
+This is a value rather than a provider, so it says what does not change while this host runs. :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` is the provider a game declares when the result is computed per probe, and it wins where both exist, because a provider is handed the value set here as the record it edits.
 
 Only a host is ever asked for one, but this takes the value at any role and without a transport, because a lobby collects the name before it knows which end it will be.
 
@@ -9508,7 +9486,7 @@ This is what connecting and disconnecting use. :ref:`session_set_state()<class_N
 
 |void| **session_unpause**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_session_unpause>`
 
-Resumes the game on every live peer, each receiving :ref:`session_tree_unpaused<class_NetwMultiplayer_signal_session_tree_unpaused>`, and on this session too. A session without server authority refuses the call and resumes nobody.
+Resumes the game on every live peer, each receiving :ref:`session_tree_unpaused<class_NetwMultiplayer_signal_session_tree_unpaused>`, and on this session too. A session without server authority rejects the call and resumes nobody.
 
 The twin of :ref:`session_pause()<class_NetwMultiplayer_method_session_pause>`. It carries no reason and does not check that a pause came first, because a peer that missed the pause must still end up resumed.
 
@@ -9524,7 +9502,7 @@ The twin of :ref:`session_pause()<class_NetwMultiplayer_method_session_pause>`. 
 
 The stock verdict on one inbound spawn, despawn or reparent frame, and what an override of :ref:`_spawn_admit_frame()<class_NetwMultiplayer_private_method__spawn_admit_frame>` narrows rather than replaces.
 
-Only the server spawns, so ``sender`` is judged before anything else and any other peer answers :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` whatever channel it named. A channel this does not admit, or an empty ``payload``, answers :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`.
+Only the server spawns, so ``sender`` is judged before anything else and any other peer returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` whatever channel it named. A channel this does not admit, or an empty ``payload``, returns :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`.
 
 \ ``route`` is unresolved by construction, because the frame that creates a route arrives before that route exists. It travels so an override can read it.
 
@@ -9545,7 +9523,7 @@ Only the server spawns, so ``sender`` is judged before anything else and any oth
 
 :godot:`Node` **spawn_construct_default**\ (\ entity\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_spawn_construct_default>`
 
-The stock body of :ref:`_spawn_construct()<class_NetwMultiplayer_private_method__spawn_construct>`. It builds the node from the constructor the spawn pump armed for this materialization, and answers ``null`` when the pump armed none.
+The stock body of :ref:`_spawn_construct()<class_NetwMultiplayer_private_method__spawn_construct>`. It builds the node from the constructor the spawn pump armed for this materialization, and returns ``null`` when the pump armed none.
 
 .. rst-class:: classref-item-separator
 
@@ -9579,7 +9557,7 @@ The stock verdict on declaring ``entity`` eligible for materialization, and what
 
 Registers ``function`` under ``id``, so :ref:`spawn_registered()<class_NetwMultiplayer_method_spawn_registered>` can reconstruct it on a peer that has no host node to read it from.
 
-\ ``arg_types`` and ``quantizers`` declare positionally how ``function``'s arguments cross the wire. Declaring them keys the argument schema to ``id``, which is how the wire already addresses the recipe, so a ``function`` whose object carries no :godot:`Script` still encodes and decodes. Declaring neither reads the schema off the host script instead, which then has to answer identically on every peer.
+\ ``arg_types`` and ``quantizers`` declare positionally how ``function``'s arguments cross the wire. Declaring them keys the argument schema to ``id``, which is how the wire already addresses the recipe, so a ``function`` whose object carries no :godot:`Script` still encodes and decodes. Declaring neither reads the schema off the host script instead, which then has to return identically on every peer.
 
 A schema is never negotiated. Every peer registers ``id`` itself and decodes with what it registered, so two peers declaring different schemas for one id read different values out of the same bytes.
 
@@ -9593,7 +9571,7 @@ A schema is never negotiated. Every peer registers ``id`` itself and decodes wit
 
 :godot:`RID` **spawn_registered**\ (\ id\: :godot:`StringName`, args\: :godot:`Array` = [], owner\: :godot:`Object` = null\ ) :ref:`🔗<class_NetwMultiplayer_method_spawn_registered>`
 
-Runs the constructor registered under ``id`` on every peer and answers the local entity handle.
+Runs the constructor registered under ``id`` on every peer and returns the local entity handle.
 
 The same act for a session with no host node. The recipe is an id both sides already hold rather than a reference only the sender has.
 
@@ -9607,7 +9585,7 @@ The same act for a session with no host node. The recipe is an id both sides alr
 
 :godot:`int` **stats_get**\ (\ stat\: :ref:`Stat<enum_NetwMultiplayer_Stat>`\ ) :ref:`🔗<class_NetwMultiplayer_method_stats_get>`
 
-One counter of :ref:`stats_snapshot()<class_NetwMultiplayer_method_stats_snapshot>`, selected by ``stat``. A ``stat`` outside the enum answers ``0``.
+One counter of :ref:`stats_snapshot()<class_NetwMultiplayer_method_stats_snapshot>`, selected by ``stat``. A ``stat`` outside the enum returns ``0``.
 
 .. rst-class:: classref-item-separator
 
@@ -9619,7 +9597,7 @@ One counter of :ref:`stats_snapshot()<class_NetwMultiplayer_method_stats_snapsho
 
 :godot:`int` **stats_get_verdict_count**\ (\ verdict\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_stats_get_verdict_count>`
 
-How many times this session has answered ``verdict`` while replicating. The count runs for the life of the session and :ref:`clear()<class_NetwMultiplayer_method_clear>` is what resets it.
+How many times this session has returned ``verdict`` while replicating. The count runs for the life of the session and :ref:`clear()<class_NetwMultiplayer_method_clear>` is what resets it.
 
 .. rst-class:: classref-item-separator
 
@@ -9635,7 +9613,7 @@ Every :ref:`Stat<enum_NetwMultiplayer_Stat>` value, keyed by the lowercase name 
 
 Counters and current totals come back in one snapshot, so a reader wanting a rate takes two snapshots and subtracts, rather than asking for each number separately and getting readings from different moments.
 
-Every value in :ref:`Stat<enum_NetwMultiplayer_Stat>` is present in every answer and reads zero where there is nothing to report, so a reader never has to tell a zero apart from a value this build does not publish.
+Every value in :ref:`Stat<enum_NetwMultiplayer_Stat>` is present in every result and reads zero where there is nothing to report, so a reader never has to tell a zero apart from a value this build does not publish.
 
 \ :ref:`stats_get()<class_NetwMultiplayer_method_stats_get>` is the same snapshot read one value at a time.
 
@@ -9649,7 +9627,7 @@ Every value in :ref:`Stat<enum_NetwMultiplayer_Stat>` is present in every answer
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **sync_admit_frame_default**\ (\ sender\: :godot:`int`, route\: :godot:`int`, comp\: :godot:`int`, channel\: :godot:`int`, flags\: :godot:`int`, tick\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_sync_admit_frame_default>`
 
-The stock answer for one arriving replication frame, admitting it only when its route is alive, its ``channel`` is one that carries replication, and its ``payload`` holds something. This runs before anything is decoded, so a refused frame costs a route lookup and nothing more.
+The default result for one arriving replication frame, admitting it only when its route is alive, its ``channel`` is one that carries replication, and its ``payload`` holds something. This runs before anything is decoded, so a rejected frame costs a route lookup and nothing more.
 
 A route the session cannot place is :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>`, a route on its way out is :godot:`@GlobalScope.ERR_SKIP <@GlobalScope#class_@GlobalScope_constant_ERR_SKIP>`, a route whose entity no longer stands is :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`, and a wrong channel or an empty payload is :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`. The channels admitted are :godot:`NetwFrameEnvelope.SYNC <NetwFrameEnvelope#class_NetwFrameEnvelope_constant_SYNC>`, :godot:`NetwFrameEnvelope.SYNC_ROW <NetwFrameEnvelope#class_NetwFrameEnvelope_constant_SYNC_ROW>`, :godot:`NetwFrameEnvelope.SYNC_ROW_DELTA <NetwFrameEnvelope#class_NetwFrameEnvelope_constant_SYNC_ROW_DELTA>`, :godot:`NetwFrameEnvelope.SYNC_ROW_WINDOW <NetwFrameEnvelope#class_NetwFrameEnvelope_constant_SYNC_ROW_WINDOW>` and :godot:`NetwFrameEnvelope.SYNC_DELTA <NetwFrameEnvelope#class_NetwFrameEnvelope_constant_SYNC_DELTA>`.
 
@@ -9674,7 +9652,7 @@ A route the session cannot place is :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@Gl
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **sync_apply_set_default**\ (\ entity\: :godot:`RID`, comp\: :godot:`int`, values\: :godot:`Array`\ ) :ref:`🔗<class_NetwMultiplayer_method_sync_apply_set_default>`
 
-The stock body of :ref:`_sync_apply_set()<class_NetwMultiplayer_private_method__sync_apply_set>`. It writes ``values`` through the applier installed for the running stage, or answers :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` outside one.
+The stock body of :ref:`_sync_apply_set()<class_NetwMultiplayer_private_method__sync_apply_set>`. It writes ``values`` through the applier installed for the running stage, or returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` outside one.
 
 .. rst-class:: classref-item-separator
 
@@ -9688,20 +9666,20 @@ The stock body of :ref:`_sync_apply_set()<class_NetwMultiplayer_private_method__
 
 Why one row did or did not reach one peer on the last send, read from what the session already holds rather than from a log.
 
-This is for a debug overlay rather than for a tick. It walks no history and records nothing, but it is not cheap enough to call every frame. A route the session has never offered to ``peer`` answers a ``verdict`` of ``unoffered`` and leaves the rest empty.
+This is for a debug overlay rather than for a tick. It walks no history and records nothing, but it is not cheap enough to call every frame. A route the session has never offered to ``peer`` returns a ``verdict`` of ``unoffered`` and leaves the rest empty.
 
 .. code:: text
 
     Dictionary
-    ┠╴verdict       String  "sent", "deferred", "caught_up", "ungathered", "refused" or "unoffered"
+    ┠╴verdict       String  "sent", "deferred", "caught_up", "ungathered", "rejected" or "unoffered"
     ┠╴tick          int     the datagram base tick the verdict was taken at
     ┠╴sticky        int     the columns owed to this peer and not yet confirmed
     ┠╴in_flight     int     staged rows this peer has neither acked nor lost
     ┖╴has_baseline  bool    whether a delta may be sent at all
 
-\ ``deferred`` means the tick ran out of budget for the row, which keeps the priority it has built up so a later pass outranks whatever kept beating it. ``caught_up`` means the peer already holds every column. ``refused`` means the frame could not be written or the encode turned it down. ``ungathered`` means the values never became a row at all.
+\ ``deferred`` means the tick ran out of budget for the row, which keeps the priority it has built up so a later pass outranks whatever kept beating it. ``caught_up`` means the peer already holds every column. ``rejected`` means the frame could not be written or the encode turned it down. ``ungathered`` means the values never became a row at all.
 
-Read this beside :ref:`peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>`, which answers what the link did rather than what one row did.
+Read this beside :ref:`peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>`, which returns what the link did rather than what one row did.
 
 .. rst-class:: classref-item-separator
 
@@ -9713,7 +9691,7 @@ Read this beside :ref:`peer_link_stats()<class_NetwMultiplayer_method_peer_link_
 
 :godot:`Array` **sync_gather_set_default**\ (\ entity\: :godot:`RID`, comp\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_sync_gather_set_default>`
 
-The stock body of :ref:`_sync_gather_set()<class_NetwMultiplayer_private_method__sync_gather_set>`. It reads the gatherer installed for the running stage, or answers an empty array outside one.
+The stock body of :ref:`_sync_gather_set()<class_NetwMultiplayer_private_method__sync_gather_set>`. It reads the gatherer installed for the running stage, or returns an empty array outside one.
 
 .. rst-class:: classref-item-separator
 
@@ -9755,7 +9733,7 @@ A delta is only sound against a baseline the recipient is known to hold, and thi
 
 The stock verdict on one inbound table frame, and what an override of :ref:`_table_admit_frame()<class_NetwMultiplayer_private_method__table_admit_frame>` narrows rather than replaces.
 
-It takes no route because a table frame is route-0 addressed and the routes it carries are knowable only mid-decode, so everything it judges is in the header. That is who sent it, which table it names, and whether that table's sealed schema agrees. A frame from a peer other than the server is counted as well as refused, because the count is what separates a rejected sender from a table nobody is publishing.
+It takes no route because a table frame is route-0 addressed and the routes it carries are knowable only mid-decode, so everything it judges is in the header. That is who sent it, which table it names, and whether that table's sealed schema agrees. A frame from a peer other than the server is counted as well as rejected, because the count is what separates a rejected sender from a table nobody is publishing.
 
 .. code:: text
 
@@ -9800,7 +9778,7 @@ Stamped with the session's own tick, because a commit is what fixes the frame a 
 
 A table over ``schema``, keyed by the schema's name.
 
-Binding a schema whose name already carries a table answers that table, so a script reload finds its own handle rather than minting a second one. An unsealed schema has no address order yet and is refused.
+Binding a schema whose name already carries a table returns that table, so a script reload finds its own handle rather than creating a second one. An unsealed schema has no address order yet and is rejected.
 
 .. rst-class:: classref-item-separator
 
@@ -9812,7 +9790,7 @@ Binding a schema whose name already carries a table answers that table, so a scr
 
 :godot:`RID` **table_find**\ (\ name\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_table_find>`
 
-The handle :ref:`table_create()<class_NetwMultiplayer_method_table_create>` minted for ``name``'s sealed schema, or an invalid :godot:`RID` when it has minted none.
+The handle :ref:`table_create()<class_NetwMultiplayer_method_table_create>` created for ``name``'s sealed schema, or an invalid :godot:`RID` when it has created none.
 
 .. rst-class:: classref-item-separator
 
@@ -9824,7 +9802,7 @@ The handle :ref:`table_create()<class_NetwMultiplayer_method_table_create>` mint
 
 :godot:`RID` **table_find_or_adopt**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwMultiplayer_method_table_find_or_adopt>`
 
-The table this session bound for ``name``, compiling and minting first when the process-wide schema registry has a declaration this session never adopted. The schema sweep runs before the table sweep, because a table is minted from a sealed schema.
+The table this session bound for ``name``, compiling and creating first when the process-wide schema registry has a declaration this session never adopted. The schema sweep runs before the table sweep, because a table is created from a sealed schema.
 
 Declare every schema before the session goes online. A table's wire id is its position when the bound tables are sorted by name, so two peers that bound different sets number them differently, and :ref:`table_get_wire_hash()<class_NetwMultiplayer_method_table_get_wire_hash>` is what catches that. :ref:`schema_find_or_adopt()<class_NetwMultiplayer_method_schema_find_or_adopt>` is the lookup.
 
@@ -9850,7 +9828,7 @@ The row holding ``route`` in ``table``, or ``-1`` when it is absent.
 
 :godot:`PackedInt32Array` **table_get_rows**\ (\ table\: :godot:`RID`, routes\: :godot:`PackedInt64Array`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_table_get_rows>`
 
-The row for each entry in ``routes``, preserving input order and answering ``-1`` for each absent route.
+The row for each entry in ``routes``, preserving input order and returning ``-1`` for each absent route.
 
 .. rst-class:: classref-item-separator
 
@@ -9999,7 +9977,7 @@ Stages ``routes`` as ``table``'s row identity column.
 
 Withdraws the work :ref:`transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>` started for ``ticket``. The request settles with one ``(null, ERR_SKIP, "")`` callback and no peer is ever offered, and :ref:`NetwTransport._cancel_peer_creation()<class_NetwTransport_private_method__cancel_peer_creation>` runs on the provider so it can release whatever it provisionally acquired.
 
-Cancellation wins right up to the moment the result is committed. Once the completion :godot:`Callable` is being called, or has been called, this does nothing, so a ticket kept in a field after completion is harmless. A ticket this session did not mint does nothing either.
+Cancellation succeeds until the result is committed. It has no effect after the completion :godot:`Callable` starts or for a ticket created by another session.
 
 \ :ref:`transport_unregister()<class_NetwMultiplayer_method_transport_unregister>` performs the same withdrawal on every unfinished request of the transport it retires, settling those with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` instead.
 
@@ -10013,15 +9991,15 @@ Cancellation wins right up to the moment the result is committed. Once the compl
 
 :godot:`RID` **transport_create_peer**\ (\ transport\: :godot:`RID`, mode\: :godot:`int`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_create_peer>`
 
-Asks ``transport`` to build one :godot:`MultiplayerPeer` and answers a cancellation ticket. ``mode`` picks :ref:`TRANSPORT_MODE_HOST<class_NetwMultiplayer_constant_TRANSPORT_MODE_HOST>` or :ref:`TRANSPORT_MODE_CLIENT<class_NetwMultiplayer_constant_TRANSPORT_MODE_CLIENT>`, ``address`` is what a client joins, and ``settings`` is what a host is built from. ``settings`` is copied on the way in, nested containers and all, so a caller may reuse the dictionary immediately.
+Asks ``transport`` to build one :godot:`MultiplayerPeer` and returns a cancellation ticket. ``mode`` picks :ref:`TRANSPORT_MODE_HOST<class_NetwMultiplayer_constant_TRANSPORT_MODE_HOST>` or :ref:`TRANSPORT_MODE_CLIENT<class_NetwMultiplayer_constant_TRANSPORT_MODE_CLIENT>`, ``address`` is what a client joins, and ``settings`` is what a host is built from. ``settings`` is copied on the way in, nested containers and all, so a caller may reuse the dictionary immediately.
 
 \ ``completed`` is called exactly once, in a later frame, as ``completed(peer: MultiplayerPeer, error: Error, detail: String)``. Success is ``(peer, OK, "")``, failure is ``(null, error, detail)``, and a cancellation that won the race is ``(null, ERR_SKIP, "")``. ``progress`` is optional and is called as ``progress(step: StringName, message: String, ratio: float)`` while the build runs, never after ``completed``.
 
-\ **Assign the peer inside the callback, before it returns.** That is the whole window in which the offer can be claimed. The callback must not ``await`` before assigning, must not store the peer to assign later, and must not hand it to another session, which is refused. Returning without assigning **declines** the offer, and the session then closes the peer and releases the provider resources behind it, so an ignored success leaks nothing and owes the caller no release call. A caller that genuinely needs to hold an unassigned peer builds one through its own SDK and assigns it the ordinary way.
+\ **Assign the peer inside the callback, before it returns.** That is the whole window in which the offer can be claimed. The callback must not ``await`` before assigning, must not store the peer to assign later, and must not hand it to another session, which is rejected. Returning without assigning **declines** the offer, and the session then closes the peer and releases the provider resources behind it, so an ignored success leaks nothing and owes the caller no release call. A caller that genuinely needs to hold an unassigned peer builds one through its own SDK and assigns it the ordinary way.
 
 A successful callback means a peer that can be assigned and nothing more. It is not a connection and not an admitted player. Assigning it starts the connection, :godot:`MultiplayerAPI.connected_to_server <MultiplayerAPI#class_MultiplayerAPI_signal_connected_to_server>` and :godot:`MultiplayerAPI.connection_failed <MultiplayerAPI#class_MultiplayerAPI_signal_connection_failed>` report how that went, and :ref:`session_submit_join()<class_NetwMultiplayer_method_session_submit_join>` is what admits a player.
 
-The answer is an invalid :godot:`RID` only when ``completed`` is not callable or the session is disposed, and no callback happens in that case. Every other refusal, an unheld ``transport`` included, answers a valid ticket and one deferred callback carrying the error.
+The result is an invalid :godot:`RID` only when ``completed`` is not callable or the session is disposed, and no callback happens in that case. Every other rejection, an unheld ``transport`` included, returns a valid ticket and one deferred callback carrying the error.
 
 The ticket identifies work in flight and nothing else. It has no getters and it retires itself once ``completed`` has run, so cancelling a retired, invalid or unknown ticket does nothing.
 
@@ -10067,9 +10045,9 @@ A handle is stable for as long as the transport is installed, so a picker drawn 
 
 :godot:`Variant` **transport_get_param**\ (\ transport\: :godot:`RID`, param\: :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_get_param>`
 
-One field of what ``transport`` tells a form about itself, named by ``param``. ``null`` when this session holds no such transport, which is also what a handle another session minted answers.
+One field of what ``transport`` tells a form about itself, named by ``param``. ``null`` when this session holds no such transport, which is also what a handle another session created returns.
 
-A Host or Add form reads several of these in a row, which is why they are one reader rather than one verb per field. :ref:`TRANSPORT_PARAM_CAPABILITIES<class_NetwMultiplayer_constant_TRANSPORT_PARAM_CAPABILITIES>` answers a mask of :ref:`TransportCapability<enum_NetwMultiplayer_TransportCapability>`, and :ref:`TRANSPORT_PARAM_HOST_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_HOST_SETTINGS>` and :ref:`TRANSPORT_PARAM_CLIENT_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_CLIENT_SETTINGS>` answer the fields a Host and a Join form draw, one entry per field and typed by its own value, which is what :ref:`transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>` reads back.
+Returns transport metadata for a host or join form. :ref:`TRANSPORT_PARAM_CAPABILITIES<class_NetwMultiplayer_constant_TRANSPORT_PARAM_CAPABILITIES>` returns a :ref:`TransportCapability<enum_NetwMultiplayer_TransportCapability>` mask. :ref:`TRANSPORT_PARAM_HOST_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_HOST_SETTINGS>` and :ref:`TRANSPORT_PARAM_CLIENT_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_CLIENT_SETTINGS>` return typed form fields used by :ref:`transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>`.
 
 ::
 
@@ -10100,15 +10078,15 @@ Every transport this session can reach, as :godot:`RID` handles. The installed o
 
 :godot:`RID` **transport_register**\ (\ type\: :godot:`Script`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_register>`
 
-Registers a :ref:`NetwTransport<class_NetwTransport>` subclass with this session and answers its handle, keyed by the peer class :ref:`NetwTransport._peer_class()<class_NetwTransport_private_method__peer_class>` names. ``type`` is the :godot:`Script` itself rather than an instance, because the session builds one per operation. The handle is invalid when the script names no peer class, and the reason is logged.
+Registers a :ref:`NetwTransport<class_NetwTransport>` subclass with this session and returns its handle, keyed by the peer class :ref:`NetwTransport._peer_class()<class_NetwTransport_private_method__peer_class>` names. ``type`` is the :godot:`Script` itself rather than an instance, because the session builds one per operation. The handle is invalid when the script names no peer class, and the reason is logged.
 
 The registration belongs to the session, not to the process. It is released when the session is disposed, so a project-wide transport is registered in each session's setup path rather than once at load. The stock transports are not registered by anyone and are reachable from every session with no setup at all, which is what keeps the zero-configuration path free of this call.
 
-One peer class has one transport in one session. Registering the same ``type`` again answers the handle that already stands, and registering a different script for a peer class this session already holds is refused with an invalid handle and a logged reason. That is what makes :ref:`transport_find()<class_NetwMultiplayer_method_transport_find>` answer exactly one. Call :ref:`transport_unregister()<class_NetwMultiplayer_method_transport_unregister>` first to replace one.
+One peer class has one transport per session. Registering the same ``type`` returns its existing handle. Registering another script for that peer class fails and returns an invalid handle. Call :ref:`transport_unregister()<class_NetwMultiplayer_method_transport_unregister>` before replacing it.
 
 A registration does hide a stock transport of the same peer class, checked in this order, closest first.
 
-- **a transport registered on this session**\ 
+- **a transport registered on this session**\
 
 - the stock transport for that peer class
 
@@ -10132,7 +10110,7 @@ A registration does hide a stock transport of the same peer class, checked in th
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transport_unregister**\ (\ transport\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_unregister>`
 
-Withdraws the registration :ref:`transport_register()<class_NetwMultiplayer_method_transport_register>` minted, so ``transport`` stops being selectable and its handle stops resolving. :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when this session held it, :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a handle this session never minted, one already withdrawn, or a stock or directory transport, none of which are a caller's to withdraw.
+Withdraws the registration :ref:`transport_register()<class_NetwMultiplayer_method_transport_register>` created, so ``transport`` stops being selectable and its handle stops resolving. :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when this session held it, :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a handle this session never created, one already withdrawn, or a stock or directory transport, none of which are a caller's to withdraw.
 
 This is not a disconnect. A peer this transport already handed over stays assigned and stays serviced, because a game clears a peer by writing ``multiplayer_peer = null`` and nothing else does. What ends is work that has not delivered a peer yet. A build still in flight settles with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` rather than waiting for a transport that is gone, and its listings stop reaching :ref:`endpoint_list()<class_NetwMultiplayer_method_endpoint_list>`.
 
@@ -10146,7 +10124,7 @@ This is not a disconnect. A peer this transport already handed over stays assign
 
     Error
     ┠╴OK                  the registration was withdrawn
-    ┖╴ERR_DOES_NOT_EXIST  transport was never minted here, is already withdrawn,
+    ┖╴ERR_DOES_NOT_EXIST  transport was never created here, is already withdrawn,
                          or names a stock or directory transport
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`

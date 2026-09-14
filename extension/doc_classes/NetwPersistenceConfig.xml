@@ -6,7 +6,7 @@
 	<description>
 		The policy is authored on a [Script] and read back for every node that script drives, because [method Netw.configure_persistence] runs from [method Object._init] while the flushing and the hydrating happen later, on the server, through [NetwPersistenceEngine]. Routing is a fact about the archetype rather than about one field, so the database and the table live here and every field marked [method NetwPropertyConfig.persisted] shares them.
 		An author who declared nothing already carries a [member default_interval] of [code]5.0[/code] and a [member hydrate_on_spawn_enabled] of [code]true[/code]. Those are the policy a reader applies, not an absence it branches on: a script that names only a database and a table snapshots every five seconds and restores its saved row before the spawn frame is taken.
-		[method record_id] records the method NAME and nothing else, so a config authored from one node's [Callable] never retains that [Node] and stays reusable for every later instance of the same script. The server resolves the name against the entity root when it needs a record id, and falls back to [member NetwEntity.entity_id] and then the node name when [member record_id_provider] is empty.
+		[method record_id] stores only the method name, so the config does not retain a [Node] and can be reused for other instances. The server resolves the method on the entity root. Without a provider, it uses [member NetwEntity.entity_id] and then the node name.
 		[member db] is typed [Variant] because [NetwDatabase] is a GDScript class with no native counterpart, so the config carries whatever the author handed it without narrowing it, and GDScript resolves the real script type on the way back out.
 		[codeblock]
 		func _init() -&gt; void:
@@ -25,35 +25,35 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="database" type="NetwDatabase" />
 			<description>
-				Declares the [NetwDatabase] every flush and hydrate reads and writes, into [member db]. Answers the same config so the declaration chains.
+				Declares the [NetwDatabase] every flush and hydrate reads and writes, into [member db]. Returns the same config so the declaration chains.
 			</description>
 		</method>
 		<method name="hydrate_on_spawn">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="enabled" type="bool" default="true" />
 			<description>
-				Declares [member hydrate_on_spawn_enabled]. Answers the same config so the declaration chains.
+				Declares [member hydrate_on_spawn_enabled]. Returns the same config so the declaration chains.
 			</description>
 		</method>
 		<method name="interval">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="seconds" type="float" />
 			<description>
-				Declares [member default_interval]. Answers the same config so the declaration chains.
+				Declares [member default_interval]. Returns the same config so the declaration chains.
 			</description>
 		</method>
 		<method name="record_id">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Declares that [param callable]'s method on the entity root computes the record id rows are keyed by. Only [method Callable.get_method] is kept, into [member record_id_provider]. Answers the same config so the declaration chains.
+				Declares that [param callable]'s method on the entity root computes the record id rows are keyed by. Only [method Callable.get_method] is kept, into [member record_id_provider]. Returns the same config so the declaration chains.
 			</description>
 		</method>
 		<method name="table">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Declares [member table_name]. Answers the same config so the declaration chains.
+				Declares [member table_name]. Returns the same config so the declaration chains.
 			</description>
 		</method>
 	</methods>

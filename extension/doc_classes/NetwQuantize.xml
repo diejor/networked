@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		A quantizer turns a value into a fixed number of bits and back, trading precision for size. One is assigned per property through [method NetwMemberConfig.quantize], and the same resource may be shared by as many properties as want it. One quantizer handles [Vector2], [float] and [int] without nesting, because it is told the type.
-		A quantizer turns a value into codes and never touches a stream itself. [method _stride] says how many codes one value spends, [method _bit_width] says how wide each of them is, [method _encode] answers one code per element, and [method _decode] rebuilds the value from all of them. The session writes those codes into its own packed row through [NetwBitStream], so a quantizer allocates nothing and a script override runs once per element rather than once per write.
+		A quantizer turns a value into codes and never touches a stream itself. [method _stride] says how many codes one value spends, [method _bit_width] says how wide each of them is, [method _encode] returns one code per element, and [method _decode] rebuilds the value from all of them. The session writes those codes into its own packed row through [NetwBitStream], so a quantizer allocates nothing and a script override runs once per element rather than once per write.
 		Each behaviour has two spellings. A subclass overrides [method _encode], [method _decode], [method _stride], [method _supports_type], [method _bit_width] and [method _max_error]. Every caller uses [method encode], [method decode], [method stride], [method supports_type], [method bit_width] and [method max_error] instead, because an override point reaches a GDScript override only and would find nothing on a quantizer written in C++. One written in C++ overrides the plain method, so no script is entered for it at all.
 		[codeblock]
 		# Assigned on a synchronizer's codec/&lt;prop&gt; slot, or in code:
@@ -54,7 +54,7 @@
 			<param index="0" name="value" type="Variant" />
 			<param index="1" name="element" type="int" />
 			<description>
-				Returns the code for element [param element] of [param value], which must fit in [method _bit_width] bits. A row that meets a wider code refuses the whole row rather than truncating it. Reached through [method encode].
+				Returns the code for element [param element] of [param value], which must fit in [method _bit_width] bits. A row that meets a wider code rejects the whole row rather than truncating it. Reached through [method encode].
 			</description>
 		</method>
 		<method name="_max_error" qualifiers="virtual const">

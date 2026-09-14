@@ -34,7 +34,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="id" type="int" />
 			<description>
-				Opens channel [param id] over the session governing [param node], or answers [code]null[/code] and reports when no session governs it or [param id] is outside [code]100[/code] to [code]254[/code]. [method Netw.channel] is the front door and this is what it answers with.
+				Opens channel [param id] over the session governing [param node], or returns [code]null[/code] and reports when no session governs it or [param id] is outside [code]100[/code] to [code]254[/code]. [method Netw.channel] is the front door and this is what it returns.
 			</description>
 		</method>
 		<method name="register">

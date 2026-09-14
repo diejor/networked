@@ -21,22 +21,22 @@ Description
 
 Save one as a ``.tres`` file, give it a :ref:`backend<class_NetwDatabase_property_backend>`, and name it from an archetype through :ref:`Netw.configure_persistence()<class_Netw_method_configure_persistence>` so a :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` persists into it.
 
-Every verb that reaches the backend answers a :ref:`NetwPromise<class_NetwPromise>` rather than the value, because a backend may be a disk or a socket and native code cannot suspend on the caller's behalf. :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` is how the value arrives.
+Every verb that reaches the backend returns a :ref:`NetwPromise<class_NetwPromise>` rather than the value, because a backend may be a disk or a socket and native code cannot suspend on the caller's behalf. :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` is how the value arrives.
 
 ::
 
     var record: NetwRecord = await db.table(&"players").fetch(username).wait()
 
-\ **Tables**\ 
+\ **Tables**\
 
-A table is a named set of records reached through :ref:`table()<class_NetwDatabase_method_table>`, which answers a :ref:`NetwRecordTable<class_NetwRecordTable>`. A registered table name also resolves as a property, so ``db.players`` is ``db.table(&"players")`` with autocompletion.
+A table is a named set of records reached through :ref:`table()<class_NetwDatabase_method_table>`, which returns a :ref:`NetwRecordTable<class_NetwRecordTable>`. A registered table name also resolves as a property, so ``db.players`` is ``db.table(&"players")`` with autocompletion.
 
 ::
 
     var record := await db.table(&"players").fetch(username).wait()
     var same := await db.players.fetch(username).wait()
 
-\ **Slots**\ 
+\ **Slots**\
 
 A slot is one independent save namespace. Choose one with :ref:`open_slot()<class_NetwDatabase_method_open_slot>` before the first schema registration locks the backend, which is what makes the choice startup-only. Backends receive the selected slot when they initialize and scope every record under it.
 
@@ -54,9 +54,9 @@ A slot is one independent save namespace. Choose one with :ref:`open_slot()<clas
 
 \ :ref:`list_slots()<class_NetwDatabase_method_list_slots>` and :ref:`delete_slot()<class_NetwDatabase_method_delete_slot>` work before a slot is open, because they read and remove backend namespaces by name. That is what a save-select menu needs.
 
-\ **Schema drift**\ 
+\ **Schema drift**\
 
-When a loaded record carries columns the current schema does not declare, :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` decides what happens to it. When a column's stored value disagrees with the type its :ref:`NetwSchema<class_NetwSchema>` declared, that one column is dropped with a warning and the live scene keeps its default, so a save written by an older build stays partly readable rather than wholly refused.
+When a loaded record carries columns the current schema does not declare, :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` decides what happens to it. When a column's stored value disagrees with the type its :ref:`NetwSchema<class_NetwSchema>` declared, that one column is dropped with a warning and the live scene keeps its default, so a save written by an older build stays partly readable rather than wholly rejected.
 
 .. rst-class:: classref-reftable-group
 
@@ -165,7 +165,7 @@ Emitted whenever a table's declared columns change. ``columns`` is the full merg
 
 **transaction_committed**\ (\ table_count\: :godot:`int`, record_count\: :godot:`int`\ ) :ref:`🔗<class_NetwDatabase_signal_transaction_committed>`
 
-Emitted after a :ref:`transaction()<class_NetwDatabase_method_transaction>` commits successfully, counting the tables and records the batch touched. A commit that answered an error announces nothing.
+Emitted after a :ref:`transaction()<class_NetwDatabase_method_transaction>` commits successfully, counting the tables and records the batch touched. A commit that returned an error announces nothing.
 
 .. rst-class:: classref-section-separator
 
@@ -204,7 +204,7 @@ Strip the undeclared columns from the loaded data and proceed with the known one
 
 :ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>` **FAIL** = ``2``
 
-Refuse the read with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` and leave the record untouched. The caller decides what to do.
+Reject the read with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` and leave the record unchanged.
 
 .. rst-class:: classref-section-separator
 
@@ -226,7 +226,7 @@ Property Descriptions
 - |void| **set_backend**\ (\ value\: :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`\ )
 - :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **get_backend**\ (\ )
 
-The storage this database reads and writes through. Assign it before the first read or write, which is what initializes the backend and locks the slot. A database with no backend refuses every call rather than dropping writes quietly.
+The storage this database reads and writes through. Assign it before the first read or write, which is what initializes the backend and locks the slot. A database with no backend rejects every call rather than dropping writes quietly.
 
 .. rst-class:: classref-item-separator
 
@@ -295,7 +295,7 @@ The active slot, ``&"default"`` when :ref:`open_slot()<class_NetwDatabase_method
 
 Declares ``table`` from ``schema``, optionally binding ``record_script`` as the :ref:`NetwRecord<class_NetwRecord>` subclass its reads hydrate into.
 
-This is the build-time entry point for declaring a table before any runtime query, which is what keeps a first read from meeting an undeclared table and refusing it.
+This is the build-time entry point for declaring a table before any runtime query, which is what keeps a first read from meeting an undeclared table and rejecting it.
 
 \ ``schema`` is a :ref:`NetwSchema<class_NetwSchema>`, the same declaration a replicated table and a property binding compile from, and it is what gives the database the column types it needs to reject a value of the wrong shape instead of assigning it. A bare :godot:`Array` of column names is accepted as the untyped form, and a table declared that way coerces nothing.
 
@@ -330,7 +330,7 @@ Permanently removes ``slot`` and every record under it, settling with an :godot:
 
 :ref:`NetwPromise<class_NetwPromise>` **erase**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_erase>`
 
-Permanently removes ``id`` from ``table``, settling with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. A database with no :ref:`backend<class_NetwDatabase_property_backend>` refuses with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
+Permanently removes ``id`` from ``table``, settling with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. A database with no :ref:`backend<class_NetwDatabase_property_backend>` rejects with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
 
 .. rst-class:: classref-item-separator
 
@@ -344,9 +344,9 @@ Permanently removes ``id`` from ``table``, settling with an :godot:`@GlobalScope
 
 Reads the stored record for ``id`` in ``table`` and settles with it as a :godot:`Dictionary`, which is the read :ref:`NetwRecordTable.fetch()<class_NetwRecordTable_method_fetch>` hydrates into a :ref:`NetwRecord<class_NetwRecord>`.
 
-The record is storage currency rather than domain currency, so a caller reads columns off it without knowing the table's record script. An absent record settles as an empty :godot:`Dictionary`, because a first play has nothing saved and that is an answer rather than a failure.
+The record is storage currency rather than domain currency, so a caller reads columns off it without knowing the table's record script. An absent record settles as an empty :godot:`Dictionary`, because a first play has nothing saved and that is a result rather than a failure.
 
-Two states reject instead, since no read can run in them at all: a table with no declared schema, and a record :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` refused outright.
+Two states reject instead, since no read can run in them at all: a table with no declared schema, and a record :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` rejected outright.
 
 ::
 
@@ -365,7 +365,7 @@ Two states reject instead, since no read can run in them at all: a table with no
 
 :ref:`NetwPromise<class_NetwPromise>` **find_all**\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwDatabase_method_find_all>`
 
-Reads every stored record in ``table`` matching ``filter`` and settles with them as an :godot:`Array` of :godot:`Dictionary`. An empty ``filter`` answers the whole table.
+Reads every stored record in ``table`` matching ``filter`` and settles with them as an :godot:`Array` of :godot:`Dictionary`. An empty ``filter`` returns the whole table.
 
 Rejects with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when the table has no declared schema or the database has no :ref:`backend<class_NetwDatabase_property_backend>`, on the same reading as :ref:`find()<class_NetwDatabase_method_find>`.
 
@@ -422,7 +422,7 @@ Settles with every save-slot namespace the backend holds, as an :godot:`Array` o
 
 Opens ``slot`` as the active save namespace.
 
-Startup-only: it must run before the first read or write initializes the backend, which locks the choice. A call after that point is refused with an error and the open slot stands, because re-pointing a live database at another save is a data loss with no way back. Declaring a table does not lock it, so a slot can still be chosen after the archetypes have registered.
+Startup-only: it must run before the first read or write initializes the backend, which locks the choice. A call after that point is rejected with an error and the open slot stands, because re-pointing a live database at another save is a data loss with no way back. Declaring a table does not lock it, so a slot can still be chosen after the archetypes have registered.
 
 .. rst-class:: classref-item-separator
 
@@ -434,7 +434,7 @@ Startup-only: it must run before the first read or write initializes the backend
 
 :ref:`NetwRecordTable<class_NetwRecordTable>` **table**\ (\ table\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_table>`
 
-A :ref:`NetwRecordTable<class_NetwRecordTable>` onto ``table``. The handle is minted per call and holds no cache, so asking twice costs one small object and answers the same table. The table does not need to be registered first: registration happens through :ref:`declare_table()<class_NetwDatabase_method_declare_table>` or through the archetype a :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` declares.
+A :ref:`NetwRecordTable<class_NetwRecordTable>` onto ``table``. The handle is created per call and holds no cache, so asking twice costs one small object and returns the same table. The table does not need to be registered first: registration happens through :ref:`declare_table()<class_NetwDatabase_method_declare_table>` or through the archetype a :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` declares.
 
 .. rst-class:: classref-item-separator
 
@@ -448,7 +448,7 @@ A :ref:`NetwRecordTable<class_NetwRecordTable>` onto ``table``. The handle is mi
 
 Saves ``table``'s committed rows into ``into`` as one record.
 
-The unit of commit and of hydrate is the whole table, because routes must be re-minted as a set, so a table saves as one record rather than one record per row. Two thousand rows are one file on the file-system backend, not two thousand.
+The unit of commit and of hydrate is the whole table, because routes must be re-created as a set, so a table saves as one record rather than one record per row. Two thousand rows are one file on the file-system backend, not two thousand.
 
 .. code:: text
 
@@ -457,11 +457,11 @@ The unit of commit and of hydrate is the whole table, because routes must be re-
           ┠╴ids               PackedStringArray, parallel to the row order
           ┖╴<column key>      the committed storage array, verbatim
 
-\ ``ids`` names the row whose route is ``session.table_read_routes(table)[i]``. Stable identity is the caller's domain, since they minted the rows, and it is what lets a fresh session rebuild its own indexes from :ref:`table_hydrate()<class_NetwDatabase_method_table_hydrate>`. Save keys never ride the wire and routes never touch the disk.
+\ ``ids`` names the row whose route is ``session.table_read_routes(table)[i]``. Stable identity is the caller's domain, since they created the rows, and it is what lets a fresh session rebuild its own indexes from :ref:`table_hydrate()<class_NetwDatabase_method_table_hydrate>`. Save keys never ride the wire and routes never touch the disk.
 
 Values are the committed storage arrays, which quantization never touches, so a quantized column saves at full precision. A :ref:`NetwMultiplayer.COLUMN_ENTITY<class_NetwMultiplayer_constant_COLUMN_ENTITY>` column is skipped with one warning, because a route is meaningless in the session that loads it.
 
-The answer is a :ref:`NetwPromise<class_NetwPromise>` because the write is a database write, and it settles with the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` the write reached.
+The result is a :ref:`NetwPromise<class_NetwPromise>` because the write is a database write, and it settles with the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` the write reached.
 
 .. code:: text
 
@@ -483,7 +483,7 @@ The answer is a :ref:`NetwPromise<class_NetwPromise>` because the write is a dat
 
 :ref:`NetwPromise<class_NetwPromise>` **table_hydrate**\ (\ session\: :godot:`MultiplayerAPI`, table\: :godot:`RID`, into\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_table_hydrate>`
 
-Loads ``table``'s saved record from ``into``, mints fresh routes for its rows, and commits them into ``session``.
+Loads ``table``'s saved record from ``into``, creates fresh routes for its rows, and commits them into ``session``.
 
 Routes are session-scoped, so a hydrate claims new ones rather than restoring the ones that were saved. The returned pairing is how a caller rebuilds its own indexes against the save keys it wrote.
 
@@ -495,7 +495,7 @@ Routes are session-scoped, so a hydrate claims new ones rather than restoring th
 
 \ Both arrays are empty when no record exists, which is the first-play case rather than an error. A :ref:`NetwMultiplayer.COLUMN_ENTITY<class_NetwMultiplayer_constant_COLUMN_ENTITY>` column zero-fills, matching the skip at :ref:`table_flush()<class_NetwDatabase_method_table_flush>`.
 
-The answer is a :ref:`NetwPromise<class_NetwPromise>` settling with that :godot:`Dictionary`, because the read is a database read and the rows are committed on the edge it settles.
+The result is a :ref:`NetwPromise<class_NetwPromise>` settling with that :godot:`Dictionary`, because the read is a database read and the rows are committed on the edge it settles.
 
 \ **Server Only.**
 
@@ -513,7 +513,7 @@ Collects writes inside ``body`` and commits them as one batch.
 
 \ ``body`` receives a :ref:`NetwTransaction<class_NetwTransaction>` and calls :ref:`NetwTransaction.queue_upsert()<class_NetwTransaction_method_queue_upsert>` for each record to write. The commit runs once ``body`` returns, which is what makes it happen exactly once however the body exits.
 
-The promise settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` rather than rejecting, which is what :ref:`NetwDatabaseBackend.commit()<class_NetwDatabaseBackend_method_commit>` itself does: in this layer a refused write is an ordinary answer, and a caller reads the code off :ref:`NetwPromise.result<class_NetwPromise_property_result>`. :ref:`transaction_committed<class_NetwDatabase_signal_transaction_committed>` announces only a commit that answered :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`, since a promise that settled is not the same thing as a write that landed.
+The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Read the code from :ref:`NetwPromise.result<class_NetwPromise_property_result>`. :ref:`transaction_committed<class_NetwDatabase_signal_transaction_committed>` is emitted only after a commit returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
 ::
 
@@ -522,7 +522,7 @@ The promise settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globa
             tx.queue_upsert(&"rocks", &"rock_1", {&"health": 50})
     ).wait()
 
-\ A caller that must not suspend, such as a pump that would let its next round start inside this one, chains :ref:`NetwPromise.then()<class_NetwPromise_method_then>` on the same answer instead of awaiting it.
+\ A caller that must not suspend, such as a pump that would let its next round start inside this one, chains :ref:`NetwPromise.then()<class_NetwPromise_method_then>` on the same result instead of awaiting it.
 
 .. rst-class:: classref-item-separator
 
@@ -536,7 +536,7 @@ The promise settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globa
 
 Warms ``table`` into the backend cache per ``request`` at runtime, settling with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
-This is the escape hatch for driving warming from a game's own hooks, a scene load or a menu, rather than from :ref:`warm_policy<class_NetwDatabase_property_warm_policy>` at initialization. A synchronous backend has no cache to fill and answers :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` without doing anything.
+This is the escape hatch for driving warming from a game's own hooks, a scene load or a menu, rather than from :ref:`warm_policy<class_NetwDatabase_property_warm_policy>` at initialization. A synchronous backend has no cache to fill and returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` without doing anything.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

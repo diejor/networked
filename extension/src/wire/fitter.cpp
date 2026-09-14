@@ -16,10 +16,7 @@ FitResult WireFitter::fit(
     NETW_ZONE_VALUE(candidates.size());
     FitResult result;
 
-    // Stable, because equal accumulated priority leaves nothing else to decide
-    // the order and an unstable sort is free to answer differently for the
-    // same offer. Below its insertion-sort threshold it answers stably anyway,
-    // so the difference only appears once a lane is busy enough to matter.
+    // Preserve input order when candidates have equal priority.
     std::stable_sort(
         candidates.ptr(),
         candidates.ptr() + candidates.size(),

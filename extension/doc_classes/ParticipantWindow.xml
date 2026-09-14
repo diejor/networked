@@ -39,26 +39,26 @@
 	<members>
 		<member name="borderless" type="bool" setter="set_flag" getter="get_flag" overrides="Window" default="true" />
 		<member name="mounted_tree" type="Node" setter="set_mounted_tree" getter="get_mounted_tree">
-			The session tree mounted inside this window. Identity rather than machinery: nothing here reads it, and it is how a caller holding a window finds the participant's session. Answers [code]null[/code] once that tree is freed.
+			The session tree mounted inside this window. Identity rather than machinery: nothing here reads it, and it is how a caller holding a window finds the participant's session. Returns [code]null[/code] once that tree is freed.
 		</member>
 		<member name="oversampling_override" type="float" setter="set_oversampling_override" getter="get_oversampling_override" overrides="Viewport" default="1.0" />
 		<member name="peer_id" type="int" setter="set_peer_id" getter="get_peer_id" default="0">
 			The network peer id assigned to the participant in this window. Zero until the participant has joined.
 		</member>
 		<member name="stretch_aspect" type="int" setter="set_stretch_aspect" getter="get_stretch_aspect" enum="ParticipantView.StretchAspect" default="0">
-			How the design resolution is fitted into this window, resolved onto [member Window.content_scale_aspect]. Inherits the project's answer by default.
+			How the design resolution fits this window. Maps to [member Window.content_scale_aspect] and defaults to the project setting.
 		</member>
 		<member name="stretch_design_size" type="Vector2i" setter="set_stretch_design_size" getter="get_stretch_design_size" default="Vector2i(0, 0)">
 			The logical resolution this window's contents draw at, resolved onto [member Window.content_scale_size]. [code]Vector2i(0, 0)[/code] inherits the project's viewport size.
 		</member>
 		<member name="stretch_mode" type="int" setter="set_stretch_mode" getter="get_stretch_mode" enum="ParticipantView.StretchMode" default="0">
-			Which end of the fit this window renders at, resolved onto [member Window.content_scale_mode]. Inherits the project's answer by default.
+			Which end of the fit this window renders. Maps to [member Window.content_scale_mode] and defaults to the project setting.
 		</member>
 		<member name="stretch_scale" type="float" setter="set_stretch_scale" getter="get_stretch_scale" default="0.0">
-			Divides the design resolution, resolved onto [member Window.content_scale_factor]. Zero or less inherits the project's answer.
+			Divides the design resolution. Maps to [member Window.content_scale_factor]. A value of zero or less uses the project setting.
 		</member>
 		<member name="stretch_scale_mode" type="int" setter="set_stretch_scale_mode" getter="get_stretch_scale_mode" enum="ParticipantView.StretchScaleMode" default="0">
-			Whether the fit may land on a fractional multiple of the design, resolved onto [member Window.content_scale_stretch]. Inherits the project's answer by default.
+			Whether the fit may use a fractional scale. Maps to [member Window.content_scale_stretch] and defaults to the project setting.
 		</member>
 		<member name="username" type="StringName" setter="set_username" getter="get_username" default="&amp;&quot;&quot;">
 			The name the participant in this window joined under. Identity, like [member peer_id], and the readable half of it.

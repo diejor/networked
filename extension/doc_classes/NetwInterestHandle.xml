@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		Membership declarations survive tree exits and reapply when the entity enters a session, so a layer declared in [method Object._init] is the same layer the server admits later. The server owns the real [NetwInterestLayer] membership. Clients keep the same labels and callback surface for local visibility and observer-awareness events.
-		Declaring interest and reading it back are ONE type: [method Netw.configure_interest] answers this handle and so does [member NetwEntity.interest], so a helper takes either and a chain in [method Object._init] is the same object a later frame mutates. Every verb answers the handle, so one chained expression declares an entity's layers and the callbacks that ride them.
+		Declaring interest and reading it back are ONE type: [method Netw.configure_interest] returns this handle and so does [member NetwEntity.interest], so a helper takes either and a chain in [method Object._init] is the same object a later frame mutates. Every verb returns the handle, so one chained expression declares an entity's layers and the callbacks that ride them.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_interest(self) \
@@ -55,7 +55,7 @@
 			<return type="NetwInterestHandle" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Ensures the entity rooted at [param node] and answers its [member NetwEntity.interest]. [method Netw.configure_interest] is the front door and this is what it answers with. A [param node] that roots no entity is reported and answered [code]null[/code].
+				Ensures the entity rooted at [param node] and returns its [member NetwEntity.interest]. [method Netw.configure_interest] is the front door and this is what it returns. A [param node] that roots no entity is reported and returned [code]null[/code].
 			</description>
 		</method>
 		<method name="on_enter">
@@ -64,7 +64,7 @@
 			<param index="1" name="layer_id" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
 				Calls [param callback] with [code](layer_id, peer_id)[/code] whenever this entity becomes visible through [param layer_id], and returns this handle.
-				An empty [param layer_id] registers [param callback] against every layer [method layer_ids] currently answers, which is what lets one chain declare a set of layers and then give them all one callback. It reads what the entity has joined, not what this expression joined, so a callback declared after a later [method join] does not reach back to it.
+				An empty [param layer_id] registers [param callback] against every layer [method layer_ids] currently returns, which is what lets one chain declare a set of layers and then give them all one callback. It reads what the entity has joined, not what this expression joined, so a callback declared after a later [method join] does not reach back to it.
 			</description>
 		</method>
 		<method name="on_leave">
@@ -73,7 +73,7 @@
 			<param index="1" name="layer_id" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
 				Calls [param callback] with [code](layer_id, peer_id)[/code] whenever this entity stops being visible through [param layer_id], and returns this handle.
-				An empty [param layer_id] registers against every layer [method layer_ids] currently answers, as [method on_enter] does.
+				An empty [param layer_id] registers against every layer [method layer_ids] currently returns, as [method on_enter] does.
 			</description>
 		</method>
 		<method name="on_leave_policy">

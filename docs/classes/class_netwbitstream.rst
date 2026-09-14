@@ -19,7 +19,7 @@ One bit vocabulary in three modes, so a payload is described once and written, r
 Description
 -----------
 
-Every verb takes the value and answers the value, so a description written once runs in all three :ref:`Mode<enum_NetwBitStream_Mode>` values: :ref:`writer()<class_NetwBitStream_method_writer>` spends bits, :ref:`reader()<class_NetwBitStream_method_reader>` takes them back, and :ref:`measurer()<class_NetwBitStream_method_measurer>` counts what they would cost without storing anything. Write the description as one function over a **NetwBitStream** and call it three times rather than writing an encoder and a decoder that must be kept in step.
+Every verb takes the value and returns the value, so a description written once runs in all three :ref:`Mode<enum_NetwBitStream_Mode>` values: :ref:`writer()<class_NetwBitStream_method_writer>` spends bits, :ref:`reader()<class_NetwBitStream_method_reader>` takes them back, and :ref:`measurer()<class_NetwBitStream_method_measurer>` counts what they would cost without storing anything. Write the description as one function over a **NetwBitStream** and call it three times rather than writing an encoder and a decoder that must be kept in step.
 
 ::
 
@@ -36,15 +36,15 @@ Every verb takes the value and answers the value, so a description written once 
     var back := NetwBitStream.reader(bytes)
     var row := describe(back, {})
     if not back.ok() or back.bits_remaining() != 0:
-        push_error("refused")
+        push_error("rejected")
 
-\ **A failed read poisons the stream.** Every verb after the failure is a no-op answering the value it was given, so a decoder checks :ref:`ok()<class_NetwBitStream_method_ok>` once at the end rather than after each call. This is what makes a hand-written decoder safe against a remote sender: the values a poisoned read answers are the caller's own defaults and never bytes that were not there.
+\ **A failed read poisons the stream.** Every verb after the failure is a no-op returning the value it was given, so a decoder checks :ref:`ok()<class_NetwBitStream_method_ok>` once at the end rather than after each call. This is what makes a hand-written decoder safe against a remote sender: the values a poisoned read returns are the caller's own defaults and never bytes that were not there.
 
-\ **A decoder that stops before its input is exhausted has not decoded.** :ref:`bits_remaining()<class_NetwBitStream_method_bits_remaining>` reading anything but ``0`` after a whole payload means the sender framed it under a description this one does not share, so refuse it rather than keep the part that parsed.
+After decoding a complete payload, :ref:`bits_remaining()<class_NetwBitStream_method_bits_remaining>` must return ``0``. Reject payloads with unread bits.
 
-\ :ref:`align_verify()<class_NetwBitStream_method_align_verify>` pads to the next byte on a write and, on a read, refuses padding that is not zero. A payload ends with it so its length is a whole number of bytes and its tail cannot carry anything undeclared.
+\ :ref:`align_verify()<class_NetwBitStream_method_align_verify>` pads to the next byte on a write and, on a read, rejects padding that is not zero. A payload ends with it so its length is a whole number of bytes and its tail cannot carry anything undeclared.
 
-\ :ref:`varuint()<class_NetwBitStream_method_varuint>` and :ref:`svarint()<class_NetwBitStream_method_svarint>` are canonical and bounded by the ``max_bytes`` the field declares: a value too large to spell in that many groups is refused rather than truncated, and a redundant final group is refused rather than accepted as a second spelling of one number.
+\ :ref:`varuint()<class_NetwBitStream_method_varuint>` and :ref:`svarint()<class_NetwBitStream_method_svarint>` are canonical and bounded by the ``max_bytes`` the field declares: a value too large to spell in that many groups is rejected rather than truncated, and a redundant final group is rejected rather than accepted as a second spelling of one number.
 
 This is the same vocabulary the framework's own frames are written in, and ``extension/WIRE.md`` states them field for field in it.
 
@@ -111,7 +111,7 @@ enum **Mode**: :ref:`🔗<enum_NetwBitStream_Mode>`
 
 :ref:`Mode<enum_NetwBitStream_Mode>` **WRITE** = ``0``
 
-The stream spends the value it is given and :ref:`to_bytes()<class_NetwBitStream_method_to_bytes>` answers the result.
+The stream spends the value it is given and :ref:`to_bytes()<class_NetwBitStream_method_to_bytes>` returns the result.
 
 .. _class_NetwBitStream_constant_READ:
 
@@ -119,7 +119,7 @@ The stream spends the value it is given and :ref:`to_bytes()<class_NetwBitStream
 
 :ref:`Mode<enum_NetwBitStream_Mode>` **READ** = ``1``
 
-The stream takes values back out of the bytes :ref:`reader()<class_NetwBitStream_method_reader>` was given, ignoring the value it is passed and answering it unchanged once the stream is poisoned.
+The stream takes values back out of the bytes :ref:`reader()<class_NetwBitStream_method_reader>` was given, ignoring the value it is passed and returning it unchanged once the stream is poisoned.
 
 .. _class_NetwBitStream_constant_MEASURE:
 
@@ -127,7 +127,7 @@ The stream takes values back out of the bytes :ref:`reader()<class_NetwBitStream
 
 :ref:`Mode<enum_NetwBitStream_Mode>` **MEASURE** = ``2``
 
-The stream stores nothing and only counts, so :ref:`bit_length()<class_NetwBitStream_method_bit_length>` answers what the same description would cost to write.
+The stream stores nothing and only counts, so :ref:`bit_length()<class_NetwBitStream_method_bit_length>` returns what the same description would cost to write.
 
 .. rst-class:: classref-section-separator
 
@@ -144,7 +144,7 @@ Method Descriptions
 
 :godot:`bool` **align_verify**\ (\ ) :ref:`🔗<class_NetwBitStream_method_align_verify>`
 
-Pads to the next byte boundary when writing, and when reading refuses padding whose bits are not zero. Returns ``false`` on refusal, which poisons the stream.
+Pads to the next byte boundary when writing, and when reading rejects padding whose bits are not zero. Returns ``false`` on rejection, which poisons the stream.
 
 .. rst-class:: classref-item-separator
 
@@ -168,7 +168,7 @@ Bits spent so far: written, read, or described, according to :ref:`get_mode()<cl
 
 :godot:`int` **bits**\ (\ value\: :godot:`int`, count\: :godot:`int`\ ) :ref:`🔗<class_NetwBitStream_method_bits>`
 
-Spends ``count`` raw bits of ``value``, at most 64, and answers what was spent. Reading answers the decoded bits; a ``count`` outside ``1`` to ``64`` is refused.
+Spends ``count`` raw bits of ``value``, at most 64, and returns what was spent. Reading returns the decoded bits; a ``count`` outside ``1`` to ``64`` is rejected.
 
 .. rst-class:: classref-item-separator
 
@@ -204,7 +204,7 @@ Spends one bit.
 
 :godot:`PackedByteArray` **bytes_capped**\ (\ value\: :godot:`PackedByteArray`, cap\: :godot:`int`\ ) :ref:`🔗<class_NetwBitStream_method_bytes_capped>`
 
-Spends a length wide enough for ``cap``, then the bytes. A run longer than ``cap`` is refused by the writer, and a declared length above ``cap`` is refused by the reader, so the bound is checked on both sides rather than trusted from the wire.
+Spends a length wide enough for ``cap``, then the bytes. A run longer than ``cap`` is rejected by the writer, and a declared length above ``cap`` is rejected by the reader, so the bound is checked on both sides rather than trusted from the wire.
 
 .. rst-class:: classref-item-separator
 
@@ -228,7 +228,7 @@ Which of the three modes this stream was made in. It never changes.
 
 :godot:`int` **int_range**\ (\ value\: :godot:`int`, low\: :godot:`int`, high\: :godot:`int`\ ) :ref:`🔗<class_NetwBitStream_method_int_range>`
 
-Spends exactly the bits the span ``low`` to ``high`` needs. A ``value`` outside the span is refused by the writer and a decoded value outside it is refused by the reader, so an enum on the wire cannot arrive as a case the game has no branch for.
+Spends exactly the bits the span ``low`` to ``high`` needs. A ``value`` outside the span is rejected by the writer and a decoded value outside it is rejected by the reader, so an enum on the wire cannot arrive as a case the game has no branch for.
 
 .. rst-class:: classref-item-separator
 
@@ -252,7 +252,7 @@ A stream in :ref:`MEASURE<class_NetwBitStream_constant_MEASURE>` that stores not
 
 :godot:`bool` **ok**\ (\ ) :ref:`🔗<class_NetwBitStream_method_ok>`
 
-Whether the stream is still healthy. A read that ran past the end, a refused bound, or padding that was not zero clears this and it never comes back.
+Whether the stream is still healthy. A read that ran past the end, a rejected bound, or padding that was not zero clears this and it never comes back.
 
 .. rst-class:: classref-item-separator
 
@@ -312,7 +312,7 @@ What the writer has spent, padded to a whole byte. Empty in any other :ref:`Mode
 
 :godot:`int` **varuint**\ (\ value\: :godot:`int`, max_bytes\: :godot:`int` = 10\ ) :ref:`🔗<class_NetwBitStream_method_varuint>`
 
-Spends an unsigned value as seven bit groups with a continuation bit, at most ``max_bytes`` of them. Canonical and bounded: see the class description for what each end refuses.
+Spends an unsigned value as seven bit groups with a continuation bit, at most ``max_bytes`` of them. Canonical and bounded: see the class description for what each end rejects.
 
 .. rst-class:: classref-item-separator
 

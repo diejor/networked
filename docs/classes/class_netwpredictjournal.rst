@@ -338,7 +338,7 @@ enum **StateFamily**: :ref:`🔗<enum_NetwPredictJournal_StateFamily>`
 
 No family differed or the peer evidence was unavailable. Named
 
-\ ``FAMILY_NONE`` rather than ``NONE``\ 
+\ ``FAMILY_NONE`` rather than ``NONE``\
 
 because a bound enum's members flatten into the class namespace alongside
 
@@ -473,7 +473,7 @@ The acknowledged authority state fingerprinted unequal to
 
 **ROW_CLOSED** = ``32`` :ref:`🔗<class_NetwPredictJournal_constant_ROW_CLOSED>`
 
-The row's drive has produced its state, so :ref:`post_fps()<class_NetwPredictJournal_method_post_fps>`\ 
+The row's drive has produced its state, so :ref:`post_fps()<class_NetwPredictJournal_method_post_fps>`\
 
 carries a real fingerprint rather than the zero an open row
 
@@ -612,7 +612,7 @@ Transitions are injective only within one epoch, so a journal
 
 that outlives an epoch would hold two rows claiming the same
 
-transition. Clearing is how a rewire keeps :ref:`row_at()<class_NetwPredictJournal_method_row_at>`\ 
+transition. Clearing is how a rewire keeps :ref:`row_at()<class_NetwPredictJournal_method_row_at>`\
 
 unambiguous.
 
@@ -694,7 +694,7 @@ carries ``0``.
 
 :godot:`int` **epoch**\ (\ ) |const| :ref:`🔗<class_NetwPredictJournal_method_epoch>`
 
-Returns the epoch :ref:`clear()<class_NetwPredictJournal_method_clear>` last adopted, or ``-1``\ 
+Returns the epoch :ref:`clear()<class_NetwPredictJournal_method_clear>` last adopted, or ``-1``\
 
 before any.
 
@@ -778,7 +778,7 @@ This and :ref:`domain_at()<class_NetwPredictJournal_method_domain_at>` are the p
 
 compare path makes on every authoritative frame, which is why
 
-they answer with a scalar instead of going through
+they return a scalar instead of going through
 
 \ :ref:`row_at()<class_NetwPredictJournal_method_row_at>`. Materializing a row dictionary to read one byte out of
 
@@ -844,9 +844,9 @@ Returns the retained clock labels, ordered by
 
 :godot:`int` **last_closed**\ (\ ) |const| :ref:`🔗<class_NetwPredictJournal_method_last_closed>`
 
-Returns the newest transition whose row is :ref:`ROW_CLOSED<class_NetwPredictJournal_constant_ROW_CLOSED>`\ 
+Returns the newest transition whose row is :ref:`ROW_CLOSED<class_NetwPredictJournal_constant_ROW_CLOSED>`\
 
-with every older retained row closed too, or ``-1``\ 
+with every older retained row closed too, or ``-1``\
 
 when none is.
 
@@ -944,7 +944,7 @@ Returns the retained pre-state fingerprints, ordered by
 
 Returns the retained raw pre-state fingerprints, ordered by
 
-\ :ref:`transitions()<class_NetwPredictJournal_method_transitions>`. A row without :ref:`EVIDENCE_RAW<class_NetwPredictJournal_constant_EVIDENCE_RAW>`\ 
+\ :ref:`transitions()<class_NetwPredictJournal_method_transitions>`. A row without :ref:`EVIDENCE_RAW<class_NetwPredictJournal_constant_EVIDENCE_RAW>`\
 
 carries zero.
 
@@ -1103,7 +1103,7 @@ Returns authority witness-class summaries ordered by
 
 Returns the retained realized-witness fingerprints, ordered by
 
-\ :ref:`transitions()<class_NetwPredictJournal_method_transitions>`. A row without :ref:`EVIDENCE_WITNESS<class_NetwPredictJournal_constant_EVIDENCE_WITNESS>`\ 
+\ :ref:`transitions()<class_NetwPredictJournal_method_transitions>`. A row without :ref:`EVIDENCE_WITNESS<class_NetwPredictJournal_constant_EVIDENCE_WITNESS>`\
 
 carries zero.
 

@@ -21,7 +21,7 @@ Description
 
 A schema is both the chain a ``static var`` initializer runs and the data that chain leaves behind, because a game that had to terminate the chain to get the data was making a distinction it never wanted. :ref:`columns<class_NetwSchema_property_columns>` is the address order, and it is the address order every adopting session seals in, so two peers built from the same scripts agree on layout without negotiating it.
 
-Every column verb returns a plain :godot:`int` column index rather than a handle, because a static initializer has no session to mint a handle from and a column index is the address every binding takes anyway. The declaration holds no session state, so two embedded sessions adopt it and mint their own RIDs from it, and user code fetches the RID once through :ref:`NetwMultiplayer.table_find()<class_NetwMultiplayer_method_table_find>`.
+Column methods return an :godot:`int` index because schema declarations have no session state. Each session creates its own :godot:`RID` for the schema. Use :ref:`NetwMultiplayer.table_find()<class_NetwMultiplayer_method_table_find>` to retrieve it.
 
 ::
 
@@ -39,7 +39,7 @@ Every column verb returns a plain :godot:`int` column index rather than a handle
 
 \ A column with no quantizer crosses the wire as a raw little-endian copy of its buffer, which is the cheapest path in both directions. A quantizer buys bandwidth by paying per element, so reach for one on the columns a link actually cares about.
 
-One schema serves three consumers, so a declaration that only wants the database says so with :ref:`replicated()<class_NetwSchema_method_replicated>` and mints no table at all. :ref:`NetwDatabase.declare_table()<class_NetwDatabase_method_declare_table>` takes this object directly. :ref:`variant()<class_NetwSchema_method_variant>` is the tier a table refuses and the other two accept.
+One schema serves three consumers, so a declaration that only wants the database says so with :ref:`replicated()<class_NetwSchema_method_replicated>` and creates no table at all. :ref:`NetwDatabase.declare_table()<class_NetwDatabase_method_declare_table>` takes this object directly. :ref:`variant()<class_NetwSchema_method_variant>` is the tier a table rejects and the other two accept.
 
 These method names are convenience and never freeze. They compile into :ref:`NetwMultiplayer.schema_add_column()<class_NetwMultiplayer_method_schema_add_column>` and :ref:`NetwMultiplayer.schema_set_column_quantizer()<class_NetwMultiplayer_method_schema_set_column_quantizer>`, which do.
 
@@ -150,7 +150,7 @@ The declared columns in address order. A consumer that types its own storage fro
 
 - :godot:`StringName` **get_schema_name**\ (\ )
 
-The name this schema is declared under and the key :ref:`NetwMultiplayer.schema_find()<class_NetwMultiplayer_method_schema_find>` answers to.
+The registered schema name used by :ref:`NetwMultiplayer.schema_find()<class_NetwMultiplayer_method_schema_find>`.
 
 .. rst-class:: classref-section-separator
 
@@ -191,9 +191,9 @@ Declares a :ref:`NetwMultiplayer.COLUMN_COLOR<class_NetwMultiplayer_constant_COL
 
 :godot:`int` **column**\ (\ key\: :godot:`StringName`, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`, stride\: :godot:`int` = 1, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null\ ) :ref:`🔗<class_NetwSchema_method_column>`
 
-Appends one column of an :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` named at runtime and answers its index, which is the wire address readers and writers both name it by. The typed verbs beside it are this call with the type filled in.
+Appends one column of an :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` named at runtime and returns its index, which is the wire address readers and writers both name it by. The typed verbs beside it are this call with the type filled in.
 
-A ``key`` already declared with the SAME ``type`` and ``stride`` answers the index it already holds, which is what makes a script reload idempotent: every static initializer runs again and every column lands on the address it had. A ``key`` already declared with a DIFFERENT shape answers ``-1`` and appends nothing, because a column index is a stable wire address and silently shifting it would leave two peers reading each other's bytes at the wrong offsets.
+A ``key`` already declared with the SAME ``type`` and ``stride`` returns the index it already holds, which is what makes a script reload idempotent: every static initializer runs again and every column lands on the address it had. A ``key`` already declared with a DIFFERENT shape returns ``-1`` and appends nothing, because a column index is a stable wire address and silently shifting it would leave two peers reading each other's bytes at the wrong offsets.
 
 .. rst-class:: classref-item-separator
 
@@ -217,7 +217,7 @@ Builds a schema under ``name`` without listing it in the process-wide schema reg
 
 :ref:`NetwSchema<class_NetwSchema>` **declare**\ (\ name\: :godot:`StringName`\ ) |static| :ref:`🔗<class_NetwSchema_method_declare>`
 
-Declares the schema named ``name`` in the process-wide schema registry and answers it, or ``null`` when the name is empty. Calling it twice for one name extends one declaration rather than making two, which is what lets a schema be declared beside each of the classes that write it. :ref:`Netw.configure_schema()<class_Netw_method_configure_schema>` is the front door and this is what it answers with.
+Declares the schema named ``name`` in the process-wide schema registry and returns it, or ``null`` when the name is empty. Calling it twice for one name extends one declaration rather than making two, which is what lets a schema be declared beside each of the classes that write it. :ref:`Netw.configure_schema()<class_Netw_method_configure_schema>` is the front door and this is what it returns.
 
 .. rst-class:: classref-item-separator
 
@@ -313,7 +313,7 @@ Declares a :ref:`NetwMultiplayer.COLUMN_I64<class_NetwMultiplayer_constant_COLUM
 
 :godot:`bool` **is_reliable**\ (\ ) |const| :ref:`🔗<class_NetwSchema_method_is_reliable>`
 
-Whether this schema's table commits ride the reliable lane, as :ref:`reliable()<class_NetwSchema_method_reliable>` left it. Meaningless while :ref:`is_replicated()<class_NetwSchema_method_is_replicated>` answers ``false``.
+Whether this schema's table commits ride the reliable lane, as :ref:`reliable()<class_NetwSchema_method_reliable>` left it. Meaningless while :ref:`is_replicated()<class_NetwSchema_method_is_replicated>` returns ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -325,7 +325,7 @@ Whether this schema's table commits ride the reliable lane, as :ref:`reliable()<
 
 :godot:`bool` **is_replicated**\ (\ ) |const| :ref:`🔗<class_NetwSchema_method_is_replicated>`
 
-Whether an adopting session mints a replicated table from this schema, as :ref:`replicated()<class_NetwSchema_method_replicated>` left it.
+Whether an adopting session creates a replicated table from this schema, as :ref:`replicated()<class_NetwSchema_method_replicated>` left it.
 
 .. rst-class:: classref-item-separator
 
@@ -377,7 +377,7 @@ Reach for it when a table changes rarely, because a rare-change table has no nex
 
 :ref:`NetwSchema<class_NetwSchema>` **replicated**\ (\ value\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwSchema_method_replicated>`
 
-Sets whether an adopting session mints a replicated table from this schema, and returns this schema. Read back through :ref:`is_replicated()<class_NetwSchema_method_is_replicated>`.
+Sets whether an adopting session creates a replicated table from this schema, and returns this schema. Read back through :ref:`is_replicated()<class_NetwSchema_method_is_replicated>`.
 
 Declaring a schema costs no wire on its own. Passing ``false`` is how a schema that only types database columns says so, and the session skips the table, the wire id, and the frame budget entirely.
 

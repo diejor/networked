@@ -14,7 +14,7 @@ NetwAuthFlow
 
 **Inherited By:** :ref:`NakamaAuth<class_NakamaAuth>`
 
-The base a game subclasses to decide which peers a session admits, answering for both ends of the handshake.
+The base a game subclasses to decide which peers a session admits, returning for both ends of the handshake.
 
 .. rst-class:: classref-introduction-group
 
@@ -23,7 +23,7 @@ Description
 
 One object carries the joining side and the authority side, because a listen-server host is both at once and a single policy has to speak for it. The joining peer runs :ref:`_prepare()<class_NetwAuthFlow_private_method__prepare>` and then :ref:`_credentials()<class_NetwAuthFlow_private_method__credentials>` to produce the bytes it presents; the authority runs :ref:`_verify()<class_NetwAuthFlow_private_method__verify>` on those bytes and reaches an :ref:`AuthResult<class_AuthResult>`. :ref:`_host_identity()<class_NetwAuthFlow_private_method__host_identity>` is what the host says about itself. :ref:`NetwAuthProtocol<class_NetwAuthProtocol>` carries those bytes over the wire and decides nothing; this class decides and never touches the wire.
 
-Every seam has a stock answer, and the stock answers are deliberately asymmetric: :ref:`prepare_default()<class_NetwAuthFlow_method_prepare_default>` resolves at once, :ref:`credentials_default()<class_NetwAuthFlow_method_credentials_default>` presents no bytes, :ref:`host_identity_default()<class_NetwAuthFlow_method_host_identity_default>` answers ``null``, and :ref:`verify_default()<class_NetwAuthFlow_method_verify_default>` REJECTS. So a flow that is installed but never implements :ref:`_verify()<class_NetwAuthFlow_private_method__verify>` admits nobody, rather than admitting everybody. A GDScript subclass cannot ``super()`` into a virtual, so those four ``_default`` methods are an override's only route back to stock behaviour.
+Each override has a default method. :ref:`prepare_default()<class_NetwAuthFlow_method_prepare_default>` resolves immediately, :ref:`credentials_default()<class_NetwAuthFlow_method_credentials_default>` returns no bytes, :ref:`host_identity_default()<class_NetwAuthFlow_method_host_identity_default>` returns ``null``, and :ref:`verify_default()<class_NetwAuthFlow_method_verify_default>` rejects the peer. A flow without :ref:`_verify()<class_NetwAuthFlow_private_method__verify>` admits nobody. GDScript overrides call the corresponding default method instead of ``super()``.
 
 ::
 
@@ -38,7 +38,7 @@ Every seam has a stock answer, and the stock answers are deliberately asymmetric
             return AuthResult.reject("unknown token")
         return AuthResult.accept(identity)
 
-\ A game declares one through :ref:`Netw.configure_auth()<class_Netw_method_configure_auth>`, from a factory that runs once per session on the first authentication that needs it. The session then keeps the flow it built, so the node that declared the factory can go without taking the policy with it. :ref:`NetwMultiplayer.auth_flow<class_NetwMultiplayer_property_auth_flow>` answers which flow this session actually runs, and a session that declared none admits every peer.
+\ A game declares one through :ref:`Netw.configure_auth()<class_Netw_method_configure_auth>`, from a factory that runs once per session on the first authentication that needs it. The session then keeps the flow it built, so the node that declared the factory can go without taking the policy with it. :ref:`NetwMultiplayer.auth_flow<class_NetwMultiplayer_property_auth_flow>` returns which flow this session actually runs, and a session that declared none admits every peer.
 
 ::
 
@@ -48,7 +48,7 @@ Every seam has a stock answer, and the stock answers are deliberately asymmetric
     func make_auth() -> NetwAuthFlow:
         return MyAuth.new()
 
-\ :ref:`_prepare()<class_NetwAuthFlow_private_method__prepare>` answers a :ref:`NetwPromise<class_NetwPromise>`, and a configured flow that prepares nothing, or rejects, refuses the join rather than releasing it as prepared. A :ref:`AuthResult.reject()<class_AuthResult_method_reject>` is the answer the game was asked for and is reported at debug level only; only a flow that answers no :ref:`AuthResult<class_AuthResult>` at all is a fault.
+\ :ref:`_prepare()<class_NetwAuthFlow_private_method__prepare>` returns a :ref:`NetwPromise<class_NetwPromise>`, and a configured flow that prepares nothing, or rejects, rejects the join rather than releasing it as prepared. A :ref:`AuthResult.reject()<class_AuthResult_method_reject>` is the result the game was asked for and is reported at debug level only; only a flow that returns no :ref:`AuthResult<class_AuthResult>` at all is a fault.
 
 .. rst-class:: classref-reftable-group
 
@@ -135,7 +135,7 @@ Runs before :ref:`_credentials()<class_NetwAuthFlow_private_method__credentials>
 
 :ref:`AuthResult<class_AuthResult>` **_verify**\ (\ peer_id\: :godot:`int`, data\: :godot:`PackedByteArray`\ ) |virtual| :ref:`🔗<class_NetwAuthFlow_private_method__verify>`
 
-The authority's verdict on the ``data`` peer ``peer_id`` presented. Answer :ref:`AuthResult.accept()<class_AuthResult_method_accept>` with the identity to seat it under, or :ref:`AuthResult.reject()<class_AuthResult_method_reject>` with the reason to hand back.
+The authority's verdict on the ``data`` peer ``peer_id`` presented. Return :ref:`AuthResult.accept()<class_AuthResult_method_accept>` with the identity to seat it under, or :ref:`AuthResult.reject()<class_AuthResult_method_reject>` with the reason to hand back.
 
 \ **Server Only.**
 
@@ -149,7 +149,7 @@ The authority's verdict on the ``data`` peer ``peer_id`` presented. Answer :ref:
 
 :godot:`PackedByteArray` **credentials**\ (\ username\: :godot:`StringName`\ ) :ref:`🔗<class_NetwAuthFlow_method_credentials>`
 
-Answers :ref:`_credentials()<class_NetwAuthFlow_private_method__credentials>`, or :ref:`credentials_default()<class_NetwAuthFlow_method_credentials_default>` when nothing overrode it.
+Returns :ref:`_credentials()<class_NetwAuthFlow_private_method__credentials>`, or :ref:`credentials_default()<class_NetwAuthFlow_method_credentials_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -173,7 +173,7 @@ Presents no bytes at all, which is what a flow that authenticates the host rathe
 
 :ref:`NetwIdentity<class_NetwIdentity>` **host_identity**\ (\ ) :ref:`🔗<class_NetwAuthFlow_method_host_identity>`
 
-Answers :ref:`_host_identity()<class_NetwAuthFlow_private_method__host_identity>`, or :ref:`host_identity_default()<class_NetwAuthFlow_method_host_identity_default>` when nothing overrode it.
+Returns :ref:`_host_identity()<class_NetwAuthFlow_private_method__host_identity>`, or :ref:`host_identity_default()<class_NetwAuthFlow_method_host_identity_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -185,7 +185,7 @@ Answers :ref:`_host_identity()<class_NetwAuthFlow_private_method__host_identity>
 
 :ref:`NetwIdentity<class_NetwIdentity>` **host_identity_default**\ (\ ) :ref:`🔗<class_NetwAuthFlow_method_host_identity_default>`
 
-Answers ``null``, leaving the host anonymous.
+Returns ``null``, leaving the host anonymous.
 
 .. rst-class:: classref-item-separator
 
@@ -197,7 +197,7 @@ Answers ``null``, leaving the host anonymous.
 
 :ref:`NetwPromise<class_NetwPromise>` **prepare**\ (\ username\: :godot:`StringName`\ ) :ref:`🔗<class_NetwAuthFlow_method_prepare>`
 
-Answers :ref:`_prepare()<class_NetwAuthFlow_private_method__prepare>`, or :ref:`prepare_default()<class_NetwAuthFlow_method_prepare_default>` when nothing overrode it.
+Returns :ref:`_prepare()<class_NetwAuthFlow_private_method__prepare>`, or :ref:`prepare_default()<class_NetwAuthFlow_method_prepare_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -209,7 +209,7 @@ Answers :ref:`_prepare()<class_NetwAuthFlow_private_method__prepare>`, or :ref:`
 
 :ref:`NetwPromise<class_NetwPromise>` **prepare_default**\ (\ username\: :godot:`StringName`\ ) :ref:`🔗<class_NetwAuthFlow_method_prepare_default>`
 
-Answers a :ref:`NetwPromise<class_NetwPromise>` already resolved with :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`, so bring-up never waits on a flow with nothing to fetch.
+Returns a :ref:`NetwPromise<class_NetwPromise>` already resolved with :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`, so bring-up never waits on a flow with nothing to fetch.
 
 .. rst-class:: classref-item-separator
 
@@ -221,7 +221,7 @@ Answers a :ref:`NetwPromise<class_NetwPromise>` already resolved with :godot:`@G
 
 :ref:`AuthResult<class_AuthResult>` **verify**\ (\ peer_id\: :godot:`int`, data\: :godot:`PackedByteArray`\ ) :ref:`🔗<class_NetwAuthFlow_method_verify>`
 
-Answers :ref:`_verify()<class_NetwAuthFlow_private_method__verify>`, or :ref:`verify_default()<class_NetwAuthFlow_method_verify_default>` when nothing overrode it.
+Returns :ref:`_verify()<class_NetwAuthFlow_private_method__verify>`, or :ref:`verify_default()<class_NetwAuthFlow_method_verify_default>` when nothing overrode it.
 
 \ **Server Only.**
 

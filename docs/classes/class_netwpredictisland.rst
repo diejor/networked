@@ -21,7 +21,7 @@ Description
 
 An entity predicts its own body under its own commands. An island widens that to the bodies whose motion its own motion depends on, so a divergence caused by a neighbour is a divergence the owner can see coming rather than one authority reports afterwards.
 
-Naming a roster IS the declaration, and nothing else is: a tolerance, a pacing or a reconcile mode written onto an island says how to compare a group, not that there is one, so it leaves :ref:`declared<class_NetwPredictIsland_property_declared>` false. That is what keeps an entity out of the fingerprint compare until a game asks for it.
+An island is declared when it has members or a producer. Comparison and reconciliation settings alone do not set :ref:`declared<class_NetwPredictIsland_property_declared>`.
 
 ::
 
@@ -29,9 +29,9 @@ Naming a roster IS the declaration, and nothing else is: a tolerance, a pacing o
     island.from_interest()
     island.simulate_nearest(1)
 
-\ The roster is read-only from outside. :ref:`participants<class_NetwPredictIsland_property_participants>` answers a fresh copy and the verbs below are the only way in, because the engine resolves a slot's configuration from the roster and a member appended behind its back would leave that configuration describing a group the entity no longer has.
+\ The roster is read-only from outside. :ref:`participants<class_NetwPredictIsland_property_participants>` returns a fresh copy and the verbs below are the only way in, because the engine resolves a slot's configuration from the roster and a member appended behind its back would leave that configuration describing a group the entity no longer has.
 
-\ **Explicit membership is exact, production is approximate.** A roster the game wrote is a fact both peers hold, so it admits the fingerprint compare. A roster produced from interest is this peer's own resolution of its own scope, which the other peer never agreed to, so :ref:`from_interest()<class_NetwPredictIsland_method_from_interest>` declares :ref:`approximate<class_NetwPredictIsland_property_approximate>` itself and :ref:`exact_claim<class_NetwPredictIsland_property_exact_claim>` is refused on it.
+\ **Explicit membership is exact, production is approximate.** A roster the game wrote is a fact both peers hold, so it admits the fingerprint compare. A roster produced from interest is this peer's own resolution of its own scope, which the other peer never agreed to, so :ref:`from_interest()<class_NetwPredictIsland_method_from_interest>` declares :ref:`approximate<class_NetwPredictIsland_property_approximate>` itself and :ref:`exact_claim<class_NetwPredictIsland_property_exact_claim>` is rejected on it.
 
 Reached through :ref:`NetwPredictionHandle.island<class_NetwPredictionHandle_property_island>`, which is never ``null``.
 
@@ -151,7 +151,7 @@ Whether this island is compared by tolerance rather than by exact fingerprint. S
 
 Whether this island claims a roster at all, and therefore whether the entity is admitted to the fingerprint compare.
 
-Derived rather than flagged: naming members or naming a producer IS the declaration, and reading or writing any other field must not opt an entity in, which a stored flag set by a fluent verb's first call could not promise.
+Derived from whether the island has members or a producer. Other settings do not declare the island.
 
 .. rst-class:: classref-item-separator
 
@@ -170,7 +170,7 @@ Derived rather than flagged: naming members or naming a producer IS the declarat
 
 Whether this island claims its roster is a fact both peers hold, which is what admits exact comparison. Setting it clears :ref:`approximate<class_NetwPredictIsland_property_approximate>`.
 
-A produced island cannot claim it, and the write is refused rather than stored: the claim would not be a fact about this island, it would be a statement the roster itself contradicts.
+A produced island cannot claim it, and the write is rejected rather than stored: the claim would not be a fact about this island, it would be a statement the roster itself contradicts.
 
 .. rst-class:: classref-item-separator
 
@@ -189,7 +189,7 @@ A produced island cannot claim it, and the write is refused rather than stored: 
 
 Whether this rule came from the containing scene rather than from the entity's own declaration. An inherited rule is re-inherited on reparent.
 
-The entity's first own declaration replaces an inherited rule WHOLE rather than refining it, and naming a member or a producer is the only act that counts as one. A tolerance or a reconcile mode written onto an inherited rule refines the scene's rule, which is what a game that wrote only those asked for.
+The entity's first own declaration replaces an inherited rule whole rather than refining it, and naming a member or a producer is the only act that counts as one. A tolerance or a reconcile mode written onto an inherited rule refines the scene's rule, which is what a game that wrote only those asked for.
 
 .. rst-class:: classref-item-separator
 
@@ -329,7 +329,7 @@ The radius of :ref:`NetwPredict.PROMOTION_WITHIN<class_NetwPredict_constant_PROM
 
 How divergence is reconciled across the island, as a :ref:`Reconcile<enum_NetwPredict_Reconcile>`.
 
-Under :ref:`NetwPredict.RECONCILE_JOINT<class_NetwPredict_constant_RECONCILE_JOINT>` the group restores and replays its members together once a basis arrives. Admission is the engine's call at membership commit, where every member's schedule is known, so a JOINT declaration here is a request the engine may refuse by naming the member and the tier that cannot re-run.
+Under :ref:`NetwPredict.RECONCILE_JOINT<class_NetwPredict_constant_RECONCILE_JOINT>`, the group restores and replays its members together when a basis arrives. The engine may reject joint reconciliation when a member cannot replay at the required tier.
 
 A joint pass spans EVERY member in one act and opens no per-member correction episode of its own, so a member's episode books record what its own independent corrections did and never what the group did on its behalf. The group's own evidence is the joint counters on :ref:`NetwPredictStats<class_NetwPredictStats>` instead, and reading a member's episode as if it covered the group would report a group that never corrected.
 
@@ -350,7 +350,7 @@ Method Descriptions
 
 Adds ``entity`` as an explicit member, once. Every verb that names a member calls this first, so membership and what is declared about it can never disagree.
 
-Refused across a scene boundary: an island is a group one solve steps together, and two scenes are two worlds. An island bound to no owner has no scene to cross and admits anything.
+Rejected across a scene boundary: an island is a group one solve steps together, and two scenes are two worlds. An island bound to no owner has no scene to cross and admits anything.
 
 .. rst-class:: classref-item-separator
 
@@ -388,7 +388,7 @@ A detached copy carrying every declaration this rule holds. The two comparison c
 
 :ref:`Fidelity<enum_NetwPredict_Fidelity>` **fidelity_of**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) |const| :ref:`🔗<class_NetwPredictIsland_method_fidelity_of>`
 
-The :ref:`Fidelity<enum_NetwPredict_Fidelity>` declared for ``entity``, or ``-1`` when the island declared none and the member is decided by :ref:`promotion<class_NetwPredictIsland_property_promotion>`. A member the island does not have answers ``-1`` too, because it has declared nothing either way.
+The :ref:`Fidelity<enum_NetwPredict_Fidelity>` declared for ``entity``, or ``-1`` when the island declared none and the member is decided by :ref:`promotion<class_NetwPredictIsland_property_promotion>`. A member the island does not have returns ``-1`` too, because it has declared nothing either way.
 
 .. rst-class:: classref-item-separator
 
@@ -402,7 +402,7 @@ The :ref:`Fidelity<enum_NetwPredict_Fidelity>` declared for ``entity``, or ``-1`
 
 Produces members from the entity's resolved interest scope, or from ``layer`` when one is named. Naming the same layer twice declares it once.
 
-Production is what makes an island approximate, so this sets :ref:`approximate<class_NetwPredictIsland_property_approximate>` itself, and it is refused on an island that already claimed exact comparison.
+Production is what makes an island approximate, so this sets :ref:`approximate<class_NetwPredictIsland_property_approximate>` itself, and it is rejected on an island that already claimed exact comparison.
 
 .. rst-class:: classref-item-separator
 
@@ -414,7 +414,7 @@ Production is what makes an island approximate, so this sets :ref:`approximate<c
 
 :godot:`bool` **has_member**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) |const| :ref:`🔗<class_NetwPredictIsland_method_has_member>`
 
-Whether ``entity`` is on this island's explicit roster. Ask this rather than searching :ref:`participants<class_NetwPredictIsland_property_participants>`, which answers a copy.
+Whether ``entity`` is on this island's explicit roster. Ask this rather than searching :ref:`participants<class_NetwPredictIsland_property_participants>`, which returns a copy.
 
 .. rst-class:: classref-item-separator
 
@@ -524,7 +524,7 @@ Promotes every produced member for local simulation.
 
 |void| **simulate_nearest**\ (\ count\: :godot:`int`\ ) :ref:`🔗<class_NetwPredictIsland_method_simulate_nearest>`
 
-Promotes the nearest ``count`` produced members for local simulation. A negative budget promotes none rather than being refused, so a computed count can be handed in without a guard.
+Promotes the nearest ``count`` produced members for local simulation. A negative budget promotes none rather than being rejected, so a computed count can be handed in without a guard.
 
 .. rst-class:: classref-item-separator
 

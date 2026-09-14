@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwAuthFlow" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The base a game subclasses to decide which peers a session admits, answering for both ends of the handshake.
+		The base a game subclasses to decide which peers a session admits, returning for both ends of the handshake.
 	</brief_description>
 	<description>
 		One object carries the joining side and the authority side, because a listen-server host is both at once and a single policy has to speak for it. The joining peer runs [method _prepare] and then [method _credentials] to produce the bytes it presents; the authority runs [method _verify] on those bytes and reaches an [AuthResult]. [method _host_identity] is what the host says about itself. [NetwAuthProtocol] carries those bytes over the wire and decides nothing; this class decides and never touches the wire.
-		Every seam has a stock answer, and the stock answers are deliberately asymmetric: [method prepare_default] resolves at once, [method credentials_default] presents no bytes, [method host_identity_default] answers [code]null[/code], and [method verify_default] REJECTS. So a flow that is installed but never implements [method _verify] admits nobody, rather than admitting everybody. A GDScript subclass cannot [code]super()[/code] into a virtual, so those four [code]_default[/code] methods are an override's only route back to stock behaviour.
+		Each override has a default method. [method prepare_default] resolves immediately, [method credentials_default] returns no bytes, [method host_identity_default] returns [code]null[/code], and [method verify_default] rejects the peer. A flow without [method _verify] admits nobody. GDScript overrides call the corresponding default method instead of [code]super()[/code].
 		[codeblock]
 		extends NetwAuthFlow
 
@@ -19,7 +19,7 @@
 		    return AuthResult.accept(identity)
 
 		[/codeblock]
-		A game declares one through [method Netw.configure_auth], from a factory that runs once per session on the first authentication that needs it. The session then keeps the flow it built, so the node that declared the factory can go without taking the policy with it. [member NetwMultiplayer.auth_flow] answers which flow this session actually runs, and a session that declared none admits every peer.
+		A game declares one through [method Netw.configure_auth], from a factory that runs once per session on the first authentication that needs it. The session then keeps the flow it built, so the node that declared the factory can go without taking the policy with it. [member NetwMultiplayer.auth_flow] returns which flow this session actually runs, and a session that declared none admits every peer.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_auth(self, make_auth)
@@ -27,7 +27,7 @@
 		func make_auth() -&gt; NetwAuthFlow:
 		    return MyAuth.new()
 		[/codeblock]
-		[method _prepare] answers a [NetwPromise], and a configured flow that prepares nothing, or rejects, refuses the join rather than releasing it as prepared. A [method AuthResult.reject] is the answer the game was asked for and is reported at debug level only; only a flow that answers no [AuthResult] at all is a fault.
+		[method _prepare] returns a [NetwPromise], and a configured flow that prepares nothing, or rejects, rejects the join rather than releasing it as prepared. A [method AuthResult.reject] is the result the game was asked for and is reported at debug level only; only a flow that returns no [AuthResult] at all is a fault.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -57,7 +57,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="data" type="PackedByteArray" />
 			<description>
-				The authority's verdict on the [param data] peer [param peer_id] presented. Answer [method AuthResult.accept] with the identity to seat it under, or [method AuthResult.reject] with the reason to hand back.
+				The authority's verdict on the [param data] peer [param peer_id] presented. Return [method AuthResult.accept] with the identity to seat it under, or [method AuthResult.reject] with the reason to hand back.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -65,7 +65,7 @@
 			<return type="PackedByteArray" />
 			<param index="0" name="username" type="StringName" />
 			<description>
-				Answers [method _credentials], or [method credentials_default] when nothing overrode it.
+				Returns [method _credentials], or [method credentials_default] when nothing overrode it.
 			</description>
 		</method>
 		<method name="credentials_default">
@@ -78,27 +78,27 @@
 		<method name="host_identity">
 			<return type="NetwIdentity" />
 			<description>
-				Answers [method _host_identity], or [method host_identity_default] when nothing overrode it.
+				Returns [method _host_identity], or [method host_identity_default] when nothing overrode it.
 			</description>
 		</method>
 		<method name="host_identity_default">
 			<return type="NetwIdentity" />
 			<description>
-				Answers [code]null[/code], leaving the host anonymous.
+				Returns [code]null[/code], leaving the host anonymous.
 			</description>
 		</method>
 		<method name="prepare">
 			<return type="NetwPromise" />
 			<param index="0" name="username" type="StringName" />
 			<description>
-				Answers [method _prepare], or [method prepare_default] when nothing overrode it.
+				Returns [method _prepare], or [method prepare_default] when nothing overrode it.
 			</description>
 		</method>
 		<method name="prepare_default">
 			<return type="NetwPromise" />
 			<param index="0" name="username" type="StringName" />
 			<description>
-				Answers a [NetwPromise] already resolved with [constant @GlobalScope.OK], so bring-up never waits on a flow with nothing to fetch.
+				Returns a [NetwPromise] already resolved with [constant @GlobalScope.OK], so bring-up never waits on a flow with nothing to fetch.
 			</description>
 		</method>
 		<method name="verify">
@@ -106,7 +106,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="data" type="PackedByteArray" />
 			<description>
-				Answers [method _verify], or [method verify_default] when nothing overrode it.
+				Returns [method _verify], or [method verify_default] when nothing overrode it.
 				[b]Server Only.[/b]
 			</description>
 		</method>

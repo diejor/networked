@@ -6,7 +6,7 @@
 	<description>
 		A layer combines [member entities], [member viewers] and [member policy] into one per-peer verdict. It holds no state of its own: every read and every mutation lands in the session's interest engine, so two handles on the same [member layer_id] are the same layer, and a layer outlives nothing the session does not.
 		Membership never crosses the wire. The committed rows gate the spawn and synchronization pipelines directly, and a client learns only the attribution for its own row.
-		Pick the signal by the gameplay question. [signal interest_enter] and [signal interest_exit] answer server authority, [signal entity_visible] and [signal entity_hidden] answer what the local peer sees, and [signal NetwEntity.observer_entered] answers who can see one entity.
+		Use [signal interest_enter] and [signal interest_exit] for server authority. Use [signal entity_visible] and [signal entity_hidden] for local visibility. [signal NetwEntity.observer_entered] reports observers of one entity.
 		[codeblock]
 		# Server: decide who can see the target.
 		var sight := server_tree.interest.layer(&amp;"sight")
@@ -37,7 +37,7 @@
 			<return type="bool" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Adds [param peer_id] to [member viewers] and returns whether the set changed. Idempotent. [param peer_id] must be non-zero, and the visibility edges it earns arrive at the next interest flush rather than here.
+				Adds [param peer_id] to [member viewers] and returns whether the set changed. Idempotent. [param peer_id] must be non-zero, and the visibility edges it receives arrive at the next interest flush rather than here.
 			</description>
 		</method>
 		<method name="apply_server_transition">
@@ -83,8 +83,8 @@
 				┠╴viewers      Array    the peer ids watching
 				┠╴entities     int      roster size
 				┠╴peer_id      int      the peer asked about
-				┠╴verdict      bool     what verdict_for answers for that peer
-				┖╴explanation  String   why the engine answered that
+				┠╴verdict      bool     what verdict_for returns for that peer
+				┖╴explanation  String   why the engine returned that
 				[/codeblock]
 			</description>
 		</method>
@@ -107,7 +107,7 @@
 			<param index="0" name="entity" type="NetwEntity" />
 			<param index="1" name="peer_id" type="int" />
 			<description>
-				Whether the session's committed matrix admits [param entity] to [param peer_id], which composes every layer and the ancestry clamp rather than this layer alone. A client can answer only for its own projected row.
+				Whether the session's committed matrix admits [param entity] to [param peer_id], which composes every layer and the ancestry clamp rather than this layer alone. A client can return only for its own projected row.
 			</description>
 		</method>
 		<method name="monitor_snapshot" qualifiers="const">
@@ -143,7 +143,7 @@
 			<return type="bool" />
 			<param index="0" name="value" type="int" />
 			<description>
-				Replaces [member policy] and returns whether it changed. The spelling that answers whether anything moved.
+				Replaces [member policy] and returns whether it changed. The spelling that returns whether anything moved.
 			</description>
 		</method>
 		<method name="verdict_for" qualifiers="const">

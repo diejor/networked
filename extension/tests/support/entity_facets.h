@@ -1,16 +1,11 @@
 #pragma once
 
-/* A case's own entity factories, given back at the end of it.
+/* Saves and restores entity factories for one test case.
  *
- * The wrapper mint and `NetwEntityRecord`'s facet factories outlive every
- * record, and in the library tier the addon has ALREADY registered its own by
- * the time a case runs. So a guard that only cleared would strip the rig's
- * entities from every case after it, and one that only saved would let a case
- * decide what the next one mints.
+ * The wrapper and facet factories outlive their records. The addon registers
+ * defaults before tests run, so each case must restore the previous factories.
  *
- * A reset hook cannot carry this either: `reset_for_case` runs at SUBCASE start
- * as well as case start, so a factory registered at the top of a case body
- * would be gone inside that case's own subcases.
+ * `reset_for_case` also runs at SUBCASE start, so it cannot provide this scope.
  *
  * [codeblock]
  * EntityFactories factories;

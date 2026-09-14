@@ -233,7 +233,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-fresh",
         action="store_true",
-        help="Refuse an output this run did not write, which a release candidate must.",
+        help="Require output produced by the current run.",
     )
     parser.add_argument("--record", type=Path)
     parser.add_argument(

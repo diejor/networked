@@ -97,7 +97,7 @@ def _floor_offender(env, arguments):
 
 
 def hold_determinism_floor(env, refuse, arguments=None):
-    """Refuses a build whose flags would answer arithmetic differently."""
+    """Reject build flags that change arithmetic behavior."""
     offender = _floor_offender(env, arguments or {})
     if offender is not None:
         key, banned = offender

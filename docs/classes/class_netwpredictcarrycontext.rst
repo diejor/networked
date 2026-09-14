@@ -27,7 +27,7 @@ A rule advances an acknowledged value across the transitions the owner has drive
         var axis := _drive_axis(ctx.state[&"heading"])
         return value + axis * ctx.state[&"speed"] * ctx.delta
 
-\ Declared through :ref:`NetwPropertyConfig.carry_step()<class_NetwPropertyConfig_method_carry_step>`. The record is minted by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
+\ Declared through :ref:`NetwPropertyConfig.carry_step()<class_NetwPropertyConfig_method_carry_step>`. The record is created by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
 
 .. rst-class:: classref-reftable-group
 

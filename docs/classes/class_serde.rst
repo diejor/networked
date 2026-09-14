@@ -28,7 +28,7 @@ Description
     var bytes := payload.serialize()
     copy.deserialize(bytes)
 
-\ A subclass supplies the representation by overriding :ref:`_serialize()<class_Serde_private_method__serialize>` and :ref:`_deserialize()<class_Serde_private_method__deserialize>`, and callers always use the plain :ref:`serialize()<class_Serde_method_serialize>` and :ref:`deserialize()<class_Serde_method_deserialize>` pair. The two spellings are one contract: the plain verb answers the override when a script supplies one and falls back to the native implementation otherwise, so the caller never asks which kind of subclass it holds.
+\ A subclass supplies the representation by overriding :ref:`_serialize()<class_Serde_private_method__serialize>` and :ref:`_deserialize()<class_Serde_private_method__deserialize>`, and callers always use the plain :ref:`serialize()<class_Serde_method_serialize>` and :ref:`deserialize()<class_Serde_method_deserialize>` pair. The two spellings are one contract: the plain verb returns the override when a script supplies one and falls back to the native implementation otherwise, so the caller never asks which kind of subclass it holds.
 
 \ :ref:`DictionaryRecord<class_DictionaryRecord>` is the implementation this addon ships.
 
@@ -89,7 +89,7 @@ Converts this resource to a :godot:`PackedByteArray`. Override it in a script su
 
 |void| **deserialize**\ (\ bytes\: :godot:`PackedByteArray`\ ) :ref:`🔗<class_Serde_method_deserialize>`
 
-Repopulates this resource from ``bytes``. A subclass that overrides :ref:`_deserialize()<class_Serde_private_method__deserialize>` answers through it, and a **Serde** with neither an override nor a native implementation ignores the call.
+Repopulates this resource from ``bytes``. A subclass that overrides :ref:`_deserialize()<class_Serde_private_method__deserialize>` returns through it, and a **Serde** with neither an override nor a native implementation ignores the call.
 
 .. rst-class:: classref-item-separator
 
@@ -101,7 +101,7 @@ Repopulates this resource from ``bytes``. A subclass that overrides :ref:`_deser
 
 :godot:`PackedByteArray` **serialize**\ (\ ) :ref:`🔗<class_Serde_method_serialize>`
 
-Converts this resource to a :godot:`PackedByteArray`. A subclass that overrides :ref:`_serialize()<class_Serde_private_method__serialize>` answers through it, and a **Serde** with neither an override nor a native implementation answers an empty array.
+Converts this resource to a :godot:`PackedByteArray`. A subclass that overrides :ref:`_serialize()<class_Serde_private_method__serialize>` returns through it, and a **Serde** with neither an override nor a native implementation returns an empty array.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

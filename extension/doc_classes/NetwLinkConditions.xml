@@ -12,8 +12,8 @@
 		conditions.lag_packet_loss_percent = 2.0
 		config.link_conditions = conditions
 		[/codeblock]
-		[method wrap_peer] answers the peer it was given unchanged, with a warning, when [member simulate_lag] is on but the build carries no [code]LaggyMultiplayerPeer[/code] extension. A missing simulator is a reason to run without it, never a reason the session fails to come up.
-		This is a development instrument and [method wrap_peer] is the gate on it: a release export never wraps, whatever [member simulate_lag] says, so a spec that ships with a scene or a [code].tres[/code] costs a shipped player nothing. The gate sits inside [method wrap_peer] rather than at any one author's call site, which is what makes it hold for [member MultiplayerTree.link_conditions], [code skip-lint]ConnectBrowser.debug_link[/code], a hand-authored resource, and a game that assigns one from script alike. Nothing publishes the gate's answer on its own, so a caller that needs to know reads it by wrapping and comparing: [method wrap_peer] hands back the very peer it was given when this build does not shape its link.
+		[method wrap_peer] returns the peer it was given unchanged, with a warning, when [member simulate_lag] is on but the build carries no [code]LaggyMultiplayerPeer[/code] extension. A missing simulator is a reason to run without it, never a reason the session fails to come up.
+		This is a development tool. [method wrap_peer] returns the original peer in release exports, regardless of [member simulate_lag]. Compare the returned peer with the input to determine whether simulation is active.
 		A debug build and the editor shape their link, and a release export does not. [code]NETW_SHAPING[/code] in the environment, or [code]--netw-shaping=on|off[/code] on the command line, overrides that in both directions, for the playtest shipped on a debug template and for the release build a tester needs to impair. The environment wins over the flag, and a value that is neither an on word ([code]on[/code], [code]1[/code], [code]true[/code], [code]yes[/code]) nor an off word ([code]off[/code], [code]0[/code], [code]false[/code], [code]no[/code]) is no override at all, so a typo cannot quietly impair a shipped build.
 		The impairment applies to this session's own peer, so it shapes every link that peer carries at once. A server wrapped this way is slow to every client rather than to one, and per-remote-peer impairment exists only on the loopback, through [method LocalLoopbackSession.set_link_conditions].
 	</description>
@@ -25,7 +25,7 @@
 			<param index="0" name="base" type="MultiplayerPeer" />
 			<description>
 				Returns [param base] wrapped in a [code]LaggyMultiplayerPeer[/code] carrying this spec's delays and loss, converted to the wrapper's units. Returns [param base] itself when [member simulate_lag] is [code]false[/code], when [param base] is [code]null[/code], when this build does not shape its link, or when the wrapper class is unavailable or publishes no [code]create[/code].
-				[b]Note:[/b] Impairment also needs the optional [code]LaggyMultiplayerPeer[/code] extension present in the build. A build that shapes its link but carries no simulator still answers [param base].
+				[b]Note:[/b] Impairment also needs the optional [code]LaggyMultiplayerPeer[/code] extension present in the build. A build that shapes its link but carries no simulator still returns [param base].
 			</description>
 		</method>
 	</methods>
@@ -40,7 +40,7 @@
 			The lower bound of the simulated one-way delay, in milliseconds. [method wrap_peer] floors it at zero.
 		</member>
 		<member name="simulate_lag" type="bool" setter="set_simulate_lag" getter="get_simulate_lag" default="false">
-			Whether [method wrap_peer] wraps the peer at all. [code]false[/code] answers the base peer untouched, so a spec left on a config with this off costs nothing.
+			Whether [method wrap_peer] wraps the peer at all. [code]false[/code] returns the base peer untouched, so a spec left on a config with this off costs nothing.
 		</member>
 	</members>
 </class>

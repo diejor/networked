@@ -13,8 +13,8 @@
 		for participant: NetwParticipant in s.participants:
 		        seat(participant)
 		[/codeblock]
-		[b]What this object buys over the flat surface is its signals.[/b] [Netw] is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: [signal entered], [signal ended], [signal disconnected], [signal disconnecting], [signal participant_joined], [signal local_joined], [signal scene_live] and [signal local_scene_changed], all relayed from the session that minted it. One handle exists per session for the life of that session, so a game may hold it across an await.
-		[signal disconnected] is the one member that relays a signal this framework does not own. [signal MultiplayerAPI.server_disconnected] is Godot's and stays reachable on [code]multiplayer[/code]; it is re-emitted here so one object answers every cause a session has to end, which is what a game pairing it with [signal ended] under one handler actually wants.
+		[b]What this object buys over the flat surface is its signals.[/b] [Netw] is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: [signal entered], [signal ended], [signal disconnected], [signal disconnecting], [signal participant_joined], [signal local_joined], [signal scene_live] and [signal local_scene_changed], all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
+		[signal disconnected] is the one member that relays a signal this framework does not own. [signal MultiplayerAPI.server_disconnected] is Godot's and stays reachable on [code]multiplayer[/code]; it is re-emitted here so one object returns every cause a session has to end, which is what a game pairing it with [signal ended] under one handler actually wants.
 		Bringing a session UP is not on this object. A session comes online the ordinary Godot way, by assigning a [MultiplayerPeer] to [member MultiplayerAPI.multiplayer_peer], the connect plane is [NetwConnectHandle] reached as [method Netw.connection], and joining is [method Netw.join], which routes prepare against submit off session state. This object is what a session already up admits, reports, and tears down.
 	</description>
 	<tutorials>
@@ -24,8 +24,8 @@
 			<return type="NetwSceneHandle" />
 			<param index="0" name="destination" type="Variant" />
 			<description>
-				Brings [param destination] up if it is not already live and answers the [NetwSceneHandle] it settled on, [code]null[/code] when nothing could be activated. [method NetwMultiplayer.scene_activate] holds the law, including which kinds of [param destination] are refused and why; what differs here is the answer, which is the view a caller goes on to use rather than the container node it would have to resolve one from.
-				This verb is on the session rather than on a scene view because a recipe names no live scene yet, so there is no view to call it on. A scene ALREADY live is reached by [method Netw.scene].
+				Brings [param destination] up if it is not already live and returns the [NetwSceneHandle] it settled on, [code]null[/code] when nothing could be activated. [method NetwMultiplayer.scene_activate] holds the law, including which kinds of [param destination] are rejected and why; what differs here is the result, which is the view a caller goes on to use rather than the container node it would have to resolve one from.
+				This verb is on the session rather than on a scene view because a recipe names no live scene yet, so there is no view to call it on. A scene already live is reached by [method Netw.scene].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -40,14 +40,14 @@
 		<method name="leave">
 			<return type="NetwPromise" />
 			<description>
-				[method NetwMultiplayer.session_leave]: leaves the session this handle was minted by, answering the promise that resolves once the peer is down.
+				[method NetwMultiplayer.session_leave]: leaves the session this handle was created by, returning the promise that resolves once the peer is down.
 			</description>
 		</method>
 		<method name="participant_of" qualifiers="const">
 			<return type="NetwParticipant" />
 			<param index="0" name="peer" type="int" />
 			<description>
-				The [NetwParticipant] seated for [param peer], [code]null[/code] when no row is seated for it. Forwards to [method NetwMultiplayer.peer_get_participant], which is the same answer under the flat spelling.
+				The [NetwParticipant] seated for [param peer], [code]null[/code] when no row is seated for it. Forwards to [method NetwMultiplayer.peer_get_participant], which is the same result under the flat spelling.
 			</description>
 		</method>
 		<method name="request_scene">
@@ -55,8 +55,8 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="scope" type="int" default="0" />
 			<description>
-				[method NetwMultiplayer.scene_request]: asks server authority for the scene at [param path] over [param scope], one of [enum NetwMultiplayer.SceneChange], answering the promise that resolves when the scene is live or refuses when authority declines.
-				A scene ALREADY live is reached by [method Netw.scene] and read through its own [NetwSceneHandle]; this verb is the asking.
+				[method NetwMultiplayer.scene_request]: asks server authority for the scene at [param path] over [param scope], one of [enum NetwMultiplayer.SceneChange], returning the promise that resolves when the scene is live or rejects when authority declines.
+				A scene already live is reached by [method Netw.scene] and read through its own [NetwSceneHandle]; this verb is the asking.
 				[b]Player request.[/b]
 			</description>
 		</method>
@@ -74,7 +74,7 @@
 			The [NetwAuthFlow] this session authenticates with, [code]null[/code] when it authenticates with none. [member NetwMultiplayer.auth_flow] under the flat spelling.
 		</member>
 		<member name="config" type="NetwSessionConfig" setter="" getter="get_config">
-			A [NetwSessionConfig] SNAPSHOT of what this session was configured with. Each read mints a new one and writing to it changes nothing, which is [method NetwMultiplayer.session_get_config]'s own contract: the live edits are [method Netw.configure_session] before the session comes up and [method set_server_info] after.
+			A [NetwSessionConfig] SNAPSHOT of what this session was configured with. Each read creates a new one and writing to it changes nothing, which is [method NetwMultiplayer.session_get_config]'s own contract: the live edits are [method Netw.configure_session] before the session comes up and [method set_server_info] after.
 		</member>
 		<member name="is_local_client" type="bool" setter="" getter="get_is_local_client" default="false">
 			Whether this peer is a client of a session hosted elsewhere, so a listen-server host reads [code]false[/code] here. [member NetwMultiplayer.is_local_client].
@@ -89,7 +89,7 @@
 			The [NetwEntity] this peer plays, [code]null[/code] when it holds none. [member NetwMultiplayer.local_player].
 		</member>
 		<member name="participants" type="NetwParticipant[]" setter="" getter="get_participants" default="[]">
-			Every [NetwParticipant] that has joined, including rows whose peer has since gone, which is what [member NetwMultiplayer.participants] answers and is the roster a scoreboard wants. The rows still CONNECTED are [member NetwMultiplayer.connected_participants].
+			Every [NetwParticipant] that has joined, including rows whose peer has since gone, which is what [member NetwMultiplayer.participants] returns and is the roster a scoreboard wants. The rows still CONNECTED are [member NetwMultiplayer.connected_participants].
 		</member>
 		<member name="role" type="int" setter="" getter="get_role" default="0">
 			What this peer is in the session, one of [enum NetwMultiplayer.Role]. [member NetwMultiplayer.role].
@@ -108,7 +108,7 @@
 		<signal name="disconnected">
 			<description>
 				Relayed from [signal MultiplayerAPI.server_disconnected]: the server this peer was connected to is gone, without having said so first.
-				Godot's own signal, re-emitted here so one object answers every cause a session has to end. [signal ended] is the same event when this peer's own session tore down, and [signal disconnecting] is the host announcing it in advance.
+				Godot's own signal, re-emitted here so one object returns every cause a session has to end. [signal ended] is the same event when this peer's own session tore down, and [signal disconnecting] is the host announcing it in advance.
 			</description>
 		</signal>
 		<signal name="disconnecting">
@@ -130,7 +130,7 @@
 		<signal name="local_joined">
 			<param index="0" name="participant" type="NetwParticipant" />
 			<description>
-				The [NetwParticipant] seated for THIS peer has joined, which is also when [member local_participant] starts answering. Relayed from [signal NetwMultiplayer.participant_local_joined].
+				The [NetwParticipant] seated for THIS peer has joined, which is also when [member local_participant] starts returning. Relayed from [signal NetwMultiplayer.participant_local_joined].
 			</description>
 		</signal>
 		<signal name="local_scene_changed">

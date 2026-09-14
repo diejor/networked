@@ -30,7 +30,7 @@ A client over the ``clock_*`` family on :ref:`NetwMultiplayer<class_NetwMultipla
 
 \ **What this object buys over the flat surface is its two signals.** :ref:`Netw<class_Netw>` is static and a static class publishes none, so a component that drives itself off the tick has to name the session to hear it. One handle exists per session for the life of that session, because a session has exactly one clock, so there is nothing to select and nothing to pass: the door is the clock.
 
-\ :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` is the other half of the pair. That verb DECLARES, before the session comes up, and answers a :ref:`NetwClockConfig<class_NetwClockConfig>` to author. This one REACHES, once it is running. A param this object refuses to set is a param the declaration owns: :ref:`NetwMultiplayer.CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>` answers :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` here, because a session cannot change its tickrate underneath the peers already synchronized to it.
+\ :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` is the other half of the pair. That verb DECLARES, before the session comes up, and returns a :ref:`NetwClockConfig<class_NetwClockConfig>` to author. This one REACHES, once it is running. A param this object rejects to set is a param the declaration owns: :ref:`NetwMultiplayer.CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>` returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` here, because a session cannot change its tickrate underneath the peers already synchronized to it.
 
 .. rst-class:: classref-reftable-group
 
@@ -179,7 +179,7 @@ Method Descriptions
 
 :godot:`float` **monitor**\ (\ monitor\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwClockHandle_method_monitor>`
 
-:ref:`NetwMultiplayer.clock_get_monitor()<class_NetwMultiplayer_method_clock_get_monitor>`: the live reading named by ``monitor``, one of :ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>`. Answers ``0.0`` for a clock that has measured nothing yet.
+:ref:`NetwMultiplayer.clock_get_monitor()<class_NetwMultiplayer_method_clock_get_monitor>`: the live reading named by ``monitor``, one of :ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>`. Returns ``0.0`` for a clock that has measured nothing yet.
 
 .. rst-class:: classref-item-separator
 
@@ -203,7 +203,7 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **set_param**\ (\ param\: :godot:`int`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwClockHandle_method_set_param>`
 
-:ref:`NetwMultiplayer.clock_set_param()<class_NetwMultiplayer_method_clock_set_param>`. Writes the setting named by ``param`` at runtime, answering :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` for a param the declaration owns rather than silently keeping the old value.
+:ref:`NetwMultiplayer.clock_set_param()<class_NetwMultiplayer_method_clock_set_param>`. Writes the setting named by ``param`` at runtime, returning :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` for a param the declaration owns rather than silently keeping the old value.
 
 .. code:: text
 

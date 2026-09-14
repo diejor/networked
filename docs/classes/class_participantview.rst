@@ -21,9 +21,9 @@ Draws one :godot:`SubViewport` into a :godot:`Control` rect and pushes input bac
 Description
 -----------
 
-A view BORROWS its target's render state rather than owning it. :ref:`set_target()<class_ParticipantView_method_set_target>` saves the four render fields the target arrived with, forces it to draw every frame, and puts all four back when the view lets go, so a viewport that passes through a view reads afterwards exactly as it read before. That borrow is what makes a target single-owner: two views saving the same viewport would each save what the other already overwrote, so a second view asking for a claimed target is refused and draws nothing. :ref:`owner_of()<class_ParticipantView_method_owner_of>` answers which view holds one.
+A view BORROWS its target's render state rather than owning it. :ref:`set_target()<class_ParticipantView_method_set_target>` saves the four render fields the target arrived with, forces it to draw every frame, and puts all four back when the view lets go, so a viewport that passes through a view reads afterwards exactly as it read before. That borrow is what makes a target single-owner: two views saving the same viewport would each save what the other already overwrote, so a second view asking for a claimed target is rejected and draws nothing. :ref:`owner_of()<class_ParticipantView_method_owner_of>` returns which view holds one.
 
-The rect the target's texture lands in is solved from the same ``display/window/stretch/*`` pipeline Godot applies to the root window, so a scene hosted in a :godot:`SubViewport` letterboxes and scales the way the same scene would in the root. Every ``stretch_`` knob defaults to inheriting the project's answer for that one field, so a view names only what it wants to differ. :ref:`stretch_design_size<class_ParticipantView_property_stretch_design_size>` is the exception a game usually has to name, because a project that never set ``display/window/size/viewport_width`` has no design resolution to inherit and the view falls back to drawing one to one.
+The rect the target's texture lands in is solved from the same ``display/window/stretch/*`` pipeline Godot applies to the root window, so a scene hosted in a :godot:`SubViewport` letterboxes and scales the way the same scene would in the root. Every ``stretch_`` knob defaults to inheriting the project's return a result for that one field, so a view names only what it wants to differ. :ref:`stretch_design_size<class_ParticipantView_property_stretch_design_size>` is the exception a game usually has to name, because a project that never set ``display/window/size/viewport_width`` has no design resolution to inherit and the view falls back to drawing one to one.
 
 ::
 
@@ -184,7 +184,7 @@ Hold the design's height and grow its logical width to the control's aspect.
 
 :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **STRETCH_ASPECT_EXPAND** = ``5``
 
-Grow whichever axis the control is looser against, so nothing is ever cropped. Answers the same design as whichever of :ref:`STRETCH_ASPECT_KEEP_WIDTH<class_ParticipantView_constant_STRETCH_ASPECT_KEEP_WIDTH>` and :ref:`STRETCH_ASPECT_KEEP_HEIGHT<class_ParticipantView_constant_STRETCH_ASPECT_KEEP_HEIGHT>` holds the tighter axis.
+Grow whichever axis the control is looser against, so nothing is ever cropped. Returns the same design as whichever of :ref:`STRETCH_ASPECT_KEEP_WIDTH<class_ParticipantView_constant_STRETCH_ASPECT_KEEP_WIDTH>` and :ref:`STRETCH_ASPECT_KEEP_HEIGHT<class_ParticipantView_constant_STRETCH_ASPECT_KEEP_HEIGHT>` holds the tighter axis.
 
 .. rst-class:: classref-item-separator
 
@@ -378,7 +378,7 @@ Where in this control's local space the target's texture is drawn. Every pixel o
 
 :godot:`SubViewport` **get_target**\ (\ ) |const| :ref:`🔗<class_ParticipantView_method_get_target>`
 
-The viewport this view currently draws, or ``null`` when it holds none. Answers ``null`` rather than a dangling handle once the target leaves the tree.
+The viewport this view currently draws, or ``null`` when it holds none. Returns ``null`` rather than a dangling handle once the target leaves the tree.
 
 .. rst-class:: classref-item-separator
 
@@ -390,7 +390,7 @@ The viewport this view currently draws, or ``null`` when it holds none. Answers 
 
 :ref:`ParticipantView<class_ParticipantView>` **owner_of**\ (\ target\: :godot:`SubViewport`\ ) |static| :ref:`🔗<class_ParticipantView_method_owner_of>`
 
-The view that has borrowed ``target``'s render state, or ``null`` when no view holds it. Ask before targeting a viewport another view may already be drawing, because :ref:`set_target()<class_ParticipantView_method_set_target>` refuses rather than taking it over.
+The view that has borrowed ``target``'s render state, or ``null`` when no view holds it. Ask before targeting a viewport another view may already be drawing, because :ref:`set_target()<class_ParticipantView_method_set_target>` rejects rather than taking it over.
 
 .. rst-class:: classref-item-separator
 
@@ -404,7 +404,7 @@ The view that has borrowed ``target``'s render state, or ``null`` when no view h
 
 Points this view at ``target``, saving its render state and forcing it to draw every frame. Restores and releases whatever the view was holding first, so retargeting never strands a viewport in :godot:`SubViewport.UPDATE_ALWAYS <SubViewport#class_SubViewport_constant_UPDATE_ALWAYS>`.
 
-Refused, with an error naming both views, when :ref:`owner_of()<class_ParticipantView_method_owner_of>` already answers another live view for ``target``: the standing view keeps the target and the state it saved, and this one is left displaying nothing.
+Rejected, with an error naming both views, when :ref:`owner_of()<class_ParticipantView_method_owner_of>` already returns another live view for ``target``: the standing view keeps the target and the state it saved, and this one is left displaying nothing.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

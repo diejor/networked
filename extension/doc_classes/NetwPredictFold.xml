@@ -4,7 +4,7 @@
 		Which input one prediction frame drives, and under what label.
 	</brief_description>
 	<description>
-		[method NetwMultiplayer._predict_drive] answers with one of these, and a game overriding that seam mints its own through [method of].
+		[method NetwMultiplayer._predict_drive] returns one of these, and a game overriding that seam creates its own through [method of].
 		Every driven frame is labeled, including one that had no new input, so a frame with nothing newer than the last driven repeats the input it already had rather than inventing one. That is why [method label] is never absent and [method fresh] is what separates the two cases.
 		[codeblock]
 		var fold := NetwPredictFold.of(tick, true, NetwPredict.DriveKind.FRESH)
@@ -40,7 +40,7 @@
 			<param index="1" name="fresh" type="bool" />
 			<param index="2" name="kind" type="int" enum="NetwPredict.DriveKind" />
 			<description>
-				Mints one drive choice. [param kind] is a [enum NetwPredict.DriveKind] and naming no member of it is refused, because a fold the tape cannot classify would file an entry under a kind no reader can act on.
+				Creates one drive choice. [param kind] is a [enum NetwPredict.DriveKind] and naming no member of it is rejected, because a fold the tape cannot classify would file an entry under a kind no reader can act on.
 			</description>
 		</method>
 	</methods>

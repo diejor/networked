@@ -10,7 +10,7 @@
 		    var axis := _drive_axis(ctx.state[&amp;"heading"])
 		    return value + axis * ctx.state[&amp;"speed"] * ctx.delta
 		[/codeblock]
-		Declared through [method NetwPropertyConfig.carry_step]. The record is minted by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
+		Declared through [method NetwPropertyConfig.carry_step]. The record is created by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
 	</description>
 	<tutorials>
 	</tutorials>

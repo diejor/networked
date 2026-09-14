@@ -23,7 +23,7 @@
 			<return type="ParticipantWindow" />
 			<param index="0" name="slot" type="ParticipantWindow" />
 			<description>
-				Registers [param slot] for tiling, makes it visible and re-tiles every slot. Answers [param slot] so a caller can build and place in one expression, or [code]null[/code] when handed nothing. Registering a slot twice is inert.
+				Registers [param slot] for tiling, makes it visible and re-tiles every slot. Returns [param slot] so a caller can build and place in one expression, or [code]null[/code] when handed nothing. Registering a slot twice is inert.
 			</description>
 		</method>
 		<method name="assign_device">
@@ -31,7 +31,7 @@
 			<param index="0" name="device_id" type="int" />
 			<param index="1" name="slot" type="ParticipantWindow" />
 			<description>
-				Routes every joypad event carrying [param device_id] into [param slot]. Refused, with an error, when [param slot] is not registered here, because a binding this node cannot tile would drop that player's input where nobody can see it. One device binds to one slot; binding it again replaces the first.
+				Routes every joypad event carrying [param device_id] into [param slot]. Rejected, with an error, when [param slot] is not registered here, because a binding this node cannot tile would drop that player's input where nobody can see it. One device binds to one slot; binding it again replaces the first.
 			</description>
 		</method>
 		<method name="device_slot" qualifiers="const">

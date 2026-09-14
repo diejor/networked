@@ -188,7 +188,7 @@ jobs:
           comm -13 /tmp/netw-registered.txt /tmp/netw-emitted.txt \
             | while read -r name; do rm -f "extension/doc_classes/$name"; done
 
-      - name: Refuse A Stale Reference
+      - name: Check class reference drift
         shell: bash
         run: |
           set -eu
@@ -325,7 +325,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
-      - name: Refuse A Failed Or Cancelled Lane
+      - name: Check required jobs
         shell: bash
         env:
           RESULTS: ${{ toJSON(needs) }}
@@ -339,11 +339,11 @@ jobs:
           results = json.loads(os.environ["RESULTS"])
           for name, entry in sorted(results.items()):
               print("%-20s %s" % (name, entry["result"]))
-          refused = [
+          failed = [
               name
               for name, entry in results.items()
               if entry["result"] not in ("success", "skipped")
           ]
-          if refused:
-              sys.exit("refused by %s" % ", ".join(sorted(refused)))
+          if failed:
+              sys.exit("failed jobs: %s" % ", ".join(sorted(failed)))
           PY

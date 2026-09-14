@@ -30,9 +30,9 @@ A client over the ``endpoint_*``, ``transport_*``, ``discovery_*`` and ``peer_*`
             NetwMultiplayer.TRANSPORT_MODE_CLIENT,
             "203.0.113.42:21253", {}, take_the_peer)
 
-\ An endpoint is addressed by the pair it actually is, a transport and an address, never by a handle a caller must hold onto: every method on this axis takes a transport named any way :ref:`transport()<class_NetwConnectHandle_method_transport>` accepts (the peer class itself, a :godot:`Script`, a :godot:`StringName`, a live peer, or a handle already in hand) together with an address, and answers a snapshot :godot:`Dictionary` rather than a resource. The session still keys a row by :godot:`RID` internally, because it is the one thing here that outlives a file and a listing republish, but that :godot:`RID` never crosses onto this view. An endpoint snapshot carries ``peer_class``, ``address``, ``display_name``, ``status``, ``info``, ``is_caller_added``, ``is_available`` and ``is_observed``. A transport snapshot carries ``peer_class``, ``display_name``, ``address_label``, ``address_placeholder``, ``address_help``, ``capabilities``, ``host_settings`` and ``client_settings``. An empty :godot:`Dictionary` means absent, everywhere on this object.
+\ An endpoint is addressed by the pair it actually is, a transport and an address, never by a handle a caller must hold onto: every method on this axis takes a transport named any way :ref:`transport()<class_NetwConnectHandle_method_transport>` accepts (the peer class itself, a :godot:`Script`, a :godot:`StringName`, a live peer, or a handle already in hand) together with an address, and returns a snapshot :godot:`Dictionary` rather than a resource. The session still keys a row by :godot:`RID` internally, because it is the one thing here that outlives a file and a listing republish, but that :godot:`RID` never crosses onto this view. An endpoint snapshot carries ``peer_class``, ``address``, ``display_name``, ``status``, ``info``, ``is_caller_added``, ``is_available`` and ``is_observed``. A transport snapshot carries ``peer_class``, ``display_name``, ``address_label``, ``address_placeholder``, ``address_help``, ``capabilities``, ``host_settings`` and ``client_settings``. An empty :godot:`Dictionary` means absent, everywhere on this object.
 
-\ **This view holds no connection attempt state, and it never brings a session up.** A session comes online the ordinary Godot way, by assigning a :godot:`MultiplayerPeer` to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. :ref:`create_peer()<class_NetwConnectHandle_method_create_peer>` is here for the peer a provider rather than the game knows how to build, and it answers that one operation through the callables it was handed: the outcome reaches ``completed``, each named step reaches ``progress``, and :ref:`cancel_peer_creation()<class_NetwConnectHandle_method_cancel_peer_creation>` withdraws exactly that ticket. What the SESSION is doing is read from the session, through :ref:`NetwMultiplayer.session_state_changed<class_NetwMultiplayer_signal_session_state_changed>` and :ref:`NetwMultiplayer.session_entered<class_NetwMultiplayer_signal_session_entered>`.
+\ **This view holds no connection attempt state, and it never brings a session up.** A session comes online the ordinary Godot way, by assigning a :godot:`MultiplayerPeer` to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. :ref:`create_peer()<class_NetwConnectHandle_method_create_peer>` is here for the peer a provider rather than the game knows how to build, and it returns that one operation through the callables it was handed: the outcome reaches ``completed``, each named step reaches ``progress``, and :ref:`cancel_peer_creation()<class_NetwConnectHandle_method_cancel_peer_creation>` withdraws exactly that ticket. What the SESSION is doing is read from the session, through :ref:`NetwMultiplayer.session_state_changed<class_NetwMultiplayer_signal_session_state_changed>` and :ref:`NetwMultiplayer.session_entered<class_NetwMultiplayer_signal_session_entered>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -137,9 +137,9 @@ Signals
 
 **join_failed**\ (\ error\: :godot:`int`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwConnectHandle_signal_join_failed>`
 
-This peer's own join was refused, locally or by the server, and no player was seated for it. ``reason`` is the server's own words where the refusal came from one, and ``error`` is why.
+This peer's own join was rejected, locally or by the server, and no player was seated for it. ``reason`` is the server's own words where the rejection came from one, and ``error`` is why.
 
-A refusal is not a disconnect notice: it is the answer to the join this peer asked for, so a game shows it where it asked, beside its username field rather than in a lobby-lost banner. A server refuses when the handler declared through :ref:`Netw.configure_join()<class_Netw_method_configure_join>` is unavailable, when the join carried no arguments a declared handler needs, or when that handler answered something that is not a placement.
+A rejection is not a disconnect notice: it is the result to the join this peer asked for, so a game shows it where it asked, beside its username field rather than in a lobby-lost banner. A server rejects when the handler declared through :ref:`Netw.configure_join()<class_Netw_method_configure_join>` is unavailable, when the join carried no arguments a declared handler needs, or when that handler returned something that is not a placement.
 
 ::
 
@@ -201,7 +201,7 @@ Method Descriptions
 
 |void| **cancel_peer_creation**\ (\ ticket\: :godot:`RID`\ ) :ref:`🔗<class_NetwConnectHandle_method_cancel_peer_creation>`
 
-:ref:`NetwMultiplayer.transport_cancel_peer_creation()<class_NetwMultiplayer_method_transport_cancel_peer_creation>` for the ticket :ref:`create_peer()<class_NetwConnectHandle_method_create_peer>` answered. The request settles with one ``(null, ERR_SKIP, "")`` callback and no peer is offered. A ticket that already completed, or one this session never minted, is a no-op, so a view may cancel unconditionally before starting the next creation.
+:ref:`NetwMultiplayer.transport_cancel_peer_creation()<class_NetwMultiplayer_method_transport_cancel_peer_creation>` for the ticket :ref:`create_peer()<class_NetwConnectHandle_method_create_peer>` returned. The request settles with one ``(null, ERR_SKIP, "")`` callback and no peer is offered. A ticket that already completed, or one this session never created, is a no-op, so a view may cancel unconditionally before starting the next creation.
 
 The caller's own :godot:`Callable` is not what names the work: two creations sharing one bound :godot:`Callable` would be ambiguous, and the ticket never is.
 
@@ -217,7 +217,7 @@ The caller's own :godot:`Callable` is not what names the work: two creations sha
 
 :ref:`NetwMultiplayer.transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>` with ``transport`` named the way every verb on this view names one: the peer class itself, a game transport's :godot:`Script`, a :godot:`StringName`, or a live peer of that class. That document carries the law, and it is short: ``completed`` runs once in a later frame as ``completed(peer, error, detail)``, and **the peer is assigned inside it, before it returns**. Returning without assigning declines the offer, and the session closes the peer.
 
-The answer is a :godot:`RID` and it is the one on this view. It is the ticket :ref:`cancel_peer_creation()<class_NetwConnectHandle_method_cancel_peer_creation>` consumes, and it is a bridge rather than an identity: it is write-once, use-once, it has no name and no pair to be spelled by, and it retires itself the moment ``completed`` has run. Everything else this view answers is a :godot:`Dictionary` or a :godot:`bool`, and everything it takes is named on the :godot:`Variant` axis.
+The result is a :godot:`RID` and it is the one on this view. It is the ticket :ref:`cancel_peer_creation()<class_NetwConnectHandle_method_cancel_peer_creation>` consumes, and it is a bridge rather than an identity: it is write-once, use-once, it has no name and no pair to be spelled by, and it retires itself the moment ``completed`` has run. Everything else this view returns is a :godot:`Dictionary` or a :godot:`bool`, and everything it takes is named on the :godot:`Variant` axis.
 
 ::
 
@@ -289,7 +289,7 @@ The snapshot for the endpoint ``transport`` and ``address`` name, empty when thi
 
 :godot:`bool` **endpoint_add**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, display_name\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwConnectHandle_method_endpoint_add>`
 
-:ref:`NetwMultiplayer.endpoint_add()<class_NetwMultiplayer_method_endpoint_add>`. Answers ``true`` once the row exists, ``false`` when ``transport`` names nothing this build carries.
+:ref:`NetwMultiplayer.endpoint_add()<class_NetwMultiplayer_method_endpoint_add>`. Returns ``true`` once the row exists, ``false`` when ``transport`` names nothing this build carries.
 
 .. rst-class:: classref-item-separator
 
@@ -301,7 +301,7 @@ The snapshot for the endpoint ``transport`` and ``address`` name, empty when thi
 
 |void| **endpoint_probe**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnectHandle_method_endpoint_probe>`
 
-:ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultiplayer_method_endpoint_probe>` for the endpoint ``transport`` and ``address`` name, answering through :ref:`endpoint_updated<class_NetwConnectHandle_signal_endpoint_updated>`.
+:ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultiplayer_method_endpoint_probe>` for the endpoint ``transport`` and ``address`` name, returning through :ref:`endpoint_updated<class_NetwConnectHandle_signal_endpoint_updated>`.
 
 .. rst-class:: classref-item-separator
 
@@ -313,7 +313,7 @@ The snapshot for the endpoint ``transport`` and ``address`` name, empty when thi
 
 |void| **endpoint_refresh**\ (\ ) :ref:`🔗<class_NetwConnectHandle_method_endpoint_refresh>`
 
-:ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>`: re-probes every known row and reports each answer through :ref:`endpoint_updated<class_NetwConnectHandle_signal_endpoint_updated>`.
+:ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>`: re-probes every known endpoint and reports each result through :ref:`endpoint_updated<class_NetwConnectHandle_signal_endpoint_updated>`.
 
 Discovery has its own lifetime, separate from the connection. A query opened here is torn down when the session is disposed or the provider behind it is withdrawn, and that teardown releases the query alone: it never closes the assigned peer, and never abandons a lobby the session is already in. A browser may therefore refresh, close, or be freed at any moment, including after the match it found has started, and the match outlives it.
 
@@ -381,7 +381,7 @@ Renames the endpoint ``transport`` and ``address`` name.
 
 Registers a :ref:`NetwTransport<class_NetwTransport>` subclass with the session this view sees, so its peer class joins :ref:`transports()<class_NetwConnectHandle_method_transports>` and can be named anywhere a transport is. ``true`` when the session took it. :ref:`NetwMultiplayer.transport_register()<class_NetwMultiplayer_method_transport_register>` is the same operation and carries the ownership law: the registration belongs to the session and is released with it, a peer class is unique within a session, and the stock transports need no registration at all.
 
-Registering the same ``type`` twice is not an error and changes nothing, so a scene that re-enters the tree may call this again. A different script for a peer class this session already registers answers ``false`` with a logged reason: call :ref:`unregister_transport()<class_NetwConnectHandle_method_unregister_transport>` first.
+Registering the same ``type`` twice is not an error and changes nothing, so a scene that re-enters the tree may call this again. A different script for a peer class this session already registers returns ``false`` with a logged reason: call :ref:`unregister_transport()<class_NetwConnectHandle_method_unregister_transport>` first.
 
 ::
 
@@ -437,7 +437,7 @@ The snapshot for a transport named any way a caller has it: the peer class itsel
 
 :godot:`Array` **transports**\ (\ ) |const| :ref:`🔗<class_NetwConnectHandle_method_transports>`
 
-Every transport this session can reach, as transport snapshots shaped like :ref:`transport()<class_NetwConnectHandle_method_transport>` answers.
+Every transport this session can reach, as transport snapshots shaped like :ref:`transport()<class_NetwConnectHandle_method_transport>` returns.
 
 .. rst-class:: classref-item-separator
 

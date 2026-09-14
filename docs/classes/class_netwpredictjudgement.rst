@@ -19,7 +19,7 @@ What one acknowledged transition was judged to be worth.
 Description
 -----------
 
-:ref:`NetwMultiplayer._predict_evaluate()<class_NetwMultiplayer_private_method__predict_evaluate>` answers with one of these, and a game overriding that seam mints its own through :ref:`of()<class_NetwPredictJudgement_method_of>`.
+:ref:`NetwMultiplayer._predict_evaluate()<class_NetwMultiplayer_private_method__predict_evaluate>` returns one of these, and a game overriding that seam creates its own through :ref:`of()<class_NetwPredictJudgement_method_of>`.
 
 \ :ref:`corrected()<class_NetwPredictJudgement_method_corrected>` is not a threshold over :ref:`divergence()<class_NetwPredictJudgement_method_divergence>`. A transition whose antecedents were all declared equal claimed reproducibility, so an exact predicate decides it and the magnitude is only ever reported. One whose antecedents were not is decided by tolerance, since the peers never claimed the exactness a fingerprint would test for.
 
@@ -86,7 +86,7 @@ How far apart the two states were, as the worst per-property error. It is ``INF`
 
 :ref:`NetwPredictJudgement<class_NetwPredictJudgement>` **of**\ (\ divergence\: :godot:`float`, corrected\: :godot:`bool`\ ) |static| :ref:`🔗<class_NetwPredictJudgement_method_of>`
 
-Mints one judgement.
+Creates one judgement.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

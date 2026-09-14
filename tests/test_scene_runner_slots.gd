@@ -4,6 +4,15 @@ extends NetwTestSuite
 const ACTION := &"move_right"
 
 
+class InputProbe extends Node:
+	var pressed := false
+
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if event.is_action(ACTION):
+			pressed = event.is_action_pressed(ACTION, true)
+
+
 func before() -> void:
 	assert(
 		InputMap.has_action(ACTION),
@@ -27,8 +36,8 @@ func test_slot_send_input_is_isolated_from_global_input() -> void:
 
 	await get_tree().process_frame
 
-	assert_that(a.input.state[ACTION]).is_true()
-	assert_that(b.input.state[ACTION]).is_false()
+	assert_that(a.input.pressed).is_true()
+	assert_that(b.input.pressed).is_false()
 	assert_that(Input.is_action_pressed(ACTION)).is_false()
 
 
@@ -41,14 +50,14 @@ func test_scene_runner_routes_action_to_one_slot() -> void:
 	runner.simulate_action_press(String(ACTION))
 	await get_tree().process_frame
 
-	assert_that(a.input.state[ACTION]).is_true()
-	assert_that(b.input.state[ACTION]).is_false()
+	assert_that(a.input.pressed).is_true()
+	assert_that(b.input.pressed).is_false()
 	assert_that(Input.is_action_pressed(ACTION)).is_false()
 
 	runner.simulate_action_release(String(ACTION))
 	await get_tree().process_frame
 
-	assert_that(a.input.state[ACTION]).is_false()
+	assert_that(a.input.pressed).is_false()
 	assert_that(Input.is_action_pressed(ACTION)).is_false()
 
 
@@ -159,8 +168,7 @@ func _make_slot_scene(label: String, mounted: bool) -> Dictionary:
 
 	var scene := Node.new()
 	scene.name = "Scene%s" % label
-	var input := MoveInputComponent.new()
-	input.name = "InputComponent"
+	var input := InputProbe.new()
 	scene.add_child(input)
 	if mounted:
 		slot.add_child(scene)

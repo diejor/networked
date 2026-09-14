@@ -4,7 +4,7 @@
 		A typed read and write handle onto one table of a [NetwDatabase].
 	</brief_description>
 	<description>
-		Obtained from [method NetwDatabase.table]. Every verb answers a [NetwPromise], and the value arrives through [method NetwPromise.wait], because the database may be reading from a disk or a socket and native code cannot suspend on the caller's behalf.
+		Obtained from [method NetwDatabase.table]. Every verb returns a [NetwPromise], and the value arrives through [method NetwPromise.wait], because the database may be reading from a disk or a socket and native code cannot suspend on the caller's behalf.
 		[codeblock]
 		# Read a record and one of its columns:
 		var record: NetwRecord = await db.table(&amp;"players").fetch(username).wait()
@@ -19,7 +19,7 @@
 		for row in await db.table(&amp;"players").fetch_all().wait():
 		    print(row.get_value(&amp;"score"))
 		[/codeblock]
-		The handle is minted per call and holds no cache, so keeping one is the same as asking for it again. What it hands back is a [DictionaryRecord] unless [method NetwDatabase.declare_table] registered a [NetwRecord] subclass for the table, in which case every read answers that type.
+		The handle is created per call and holds no cache, so keeping one is the same as asking for it again. What it hands back is a [DictionaryRecord] unless [method NetwDatabase.declare_table] registered a [NetwRecord] subclass for the table, in which case every read returns that type.
 		[codeblock]
 		db.declare_table(&amp;"rocks", [&amp;"health", &amp;"position"], RockRecord)
 		var rock: RockRecord = await db.table(&amp;"rocks").fetch(&amp;"rock_1").wait()
@@ -40,7 +40,7 @@
 			<param index="0" name="id" type="StringName" />
 			<description>
 				Reads [param id] and settles with it as a hydrated [NetwRecord].
-				The answer is [code]null[/code] when the record does not exist, when the table has no declared schema, and when [member NetwDatabase.mismatch_policy] refused the stored row. Those are one answer here rather than three because each of them means the caller has no record to apply, and the database names the reason it refused in a warning of its own.
+				The result is [code]null[/code] when the record does not exist, when the table has no declared schema, and when [member NetwDatabase.mismatch_policy] rejected the stored row. Those are one result here rather than three because each of them means the caller has no record to apply, and the database names the reason it rejected in a warning of its own.
 				[codeblock]
 				save_comp.record = await db.table(&amp;"players").fetch(username).wait()
 				[/codeblock]
@@ -50,7 +50,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="filter" type="Dictionary" default="{}" />
 			<description>
-				Reads every record matching [param filter] and settles with them as an [Array] of [NetwRecord]. An empty [param filter] answers the whole table, and a table with nothing in it answers an empty array rather than failing.
+				Reads every record matching [param filter] and settles with them as an [Array] of [NetwRecord]. An empty [param filter] returns the whole table, and a table with nothing in it returns an empty array rather than failing.
 				[codeblock]
 				var online := await db.table(&amp;"players").fetch_all(
 				        {&amp;"online": true},
@@ -69,7 +69,7 @@
 			<param index="0" name="id" type="StringName" />
 			<param index="1" name="record" type="NetwRecord" />
 			<description>
-				Writes [param record] under [param id] through [method NetwRecord.to_dict], and settles with [constant @GlobalScope.OK] or the first error the backend answered.
+				Writes [param record] under [param id] through [method NetwRecord.to_dict], and settles with [constant @GlobalScope.OK] or the first error the backend returned.
 				The write is a one-row [method NetwDatabase.transaction], so [signal NetwDatabase.transaction_committed] announces it like any other commit.
 			</description>
 		</method>

@@ -4,7 +4,7 @@
 		Categorical outcome of a server probe.
 	</brief_description>
 	<description>
-		[method NetwConnector.probe] answers one, and [NetwServerBrowser] caches the latest one per target so a browser row can render before anyone commits to joining. A probe never throws and never half-answers: every route out of it, including a null target and a transport that cannot probe at all, ends at one [constant STATUS_OK] .. [constant STATUS_INCOMPATIBLE] value, so a caller branches on [member status] rather than on whether it got an answer.
+		[method NetwConnector.probe] returns one, and [NetwServerBrowser] caches the latest one per target so a browser row can render before anyone commits to joining. A probe never throws and never half-returns: every route out of it, including a null target and a transport that cannot probe at all, ends at one [constant STATUS_OK] .. [constant STATUS_INCOMPATIBLE] value, so a caller branches on [member status] rather than on whether it got a result.
 		[member status] decides which of the other members carries anything. Only [constant STATUS_OK] and [constant STATUS_INCOMPATIBLE] carry an [member info], only [constant STATUS_OK] carries a meaningful [member latency_ms], and [member message] is diagnostic detail rather than text to show a player.
 		[codeblock]
 		var result := await NetwConnector.of(api).probe(target)
@@ -16,7 +16,7 @@
 		    # info survives here, so the row can still show who is on the server.
 		    show_banner("That server runs a different build.")
 		[/codeblock]
-		The seven static factories are the only way to get a result whose status and payload agree, and a [NetwTransport] that answers a probe at all answers with one of them.
+		The seven static factories are the only way to get a result whose status and payload agree, and a [NetwTransport] that returns a probe at all returns one of them.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -25,14 +25,14 @@
 			<return type="NetwProbeResult" />
 			<param index="0" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_BUSY] result carrying [param message]. The server answered and refused: it is full, or the probe arrived outside its rate window.
+				Returns a [constant STATUS_BUSY] result carrying [param message]. The server returned and rejected: it is full, or the probe arrived outside its rate window.
 			</description>
 		</method>
 		<method name="error" qualifiers="static">
 			<return type="NetwProbeResult" />
 			<param index="0" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_ERROR] result carrying [param message]. The probe itself went wrong, rather than the server answering something.
+				Returns a [constant STATUS_ERROR] result carrying [param message]. The probe itself went wrong, rather than the server returning something.
 			</description>
 		</method>
 		<method name="incompatible" qualifiers="static">
@@ -40,13 +40,13 @@
 			<param index="0" name="info" type="NetwServerInfo" default="null" />
 			<param index="1" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_INCOMPATIBLE] result carrying [param message]. The server answered with a [member NetwServerInfo.app_id] or [member NetwServerInfo.version] this build cannot join, so [param info] is kept: a browser row still has something to show even though the join would be refused.
+				Returns a [constant STATUS_INCOMPATIBLE] result carrying [param message]. The server returned with a [member NetwServerInfo.app_id] or [member NetwServerInfo.version] this build cannot join, so [param info] is kept: a browser row still has something to show even though the join would be rejected.
 			</description>
 		</method>
 		<method name="is_ok" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when [member status] is [constant STATUS_OK], which is the one status that says the server answered and this build may join it.
+				Returns [code]true[/code] when [member status] is [constant STATUS_OK], which is the one status that says the server returned and this build may join it.
 			</description>
 		</method>
 		<method name="ok" qualifiers="static">
@@ -74,13 +74,13 @@
 		<method name="unsupported" qualifiers="static">
 			<return type="NetwProbeResult" />
 			<description>
-				Returns a [constant STATUS_UNSUPPORTED] result. This is what a [NetwTransport] answers when it has no cheap way to ask, so a caller reads it as "unknown", never as "down".
+				Returns a [constant STATUS_UNSUPPORTED] result. This is what a [NetwTransport] returns when it has no cheap way to ask, so a caller reads it as "unknown", never as "down".
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="info" type="NetwServerInfo" setter="set_info" getter="get_info">
-			What the server advertised about itself, or [code]null[/code] when it never answered. Carried by [constant STATUS_OK] and [constant STATUS_INCOMPATIBLE], and by nothing else.
+			What the server advertised about itself, or [code]null[/code] when it never returned. Carried by [constant STATUS_OK] and [constant STATUS_INCOMPATIBLE], and by nothing else.
 		</member>
 		<member name="latency_ms" type="int" setter="set_latency_ms" getter="get_latency_ms" default="0">
 			The probe round trip in milliseconds, or [code]-1[/code] when the result came from a directory listing instead of a round trip. Meaningful only under [constant STATUS_OK].
@@ -94,7 +94,7 @@
 	</members>
 	<constants>
 		<constant name="STATUS_OK" value="0" enum="Status">
-			The server answered and this build may join it. [method is_ok] tests for exactly this.
+			The server returned and this build may join it. [method is_ok] tests for exactly this.
 		</constant>
 		<constant name="STATUS_UNREACHABLE" value="1" enum="Status">
 			The connection or the peer authentication failed before the server replied.
@@ -106,13 +106,13 @@
 			The transport cannot probe, so the server's state is unknown rather than bad.
 		</constant>
 		<constant name="STATUS_BUSY" value="4" enum="Status">
-			The server answered and refused, being full or rate limiting probes.
+			The server returned and rejected, being full or rate limiting probes.
 		</constant>
 		<constant name="STATUS_ERROR" value="5" enum="Status">
 			The probe itself failed, with [member message] naming the step.
 		</constant>
 		<constant name="STATUS_INCOMPATIBLE" value="6" enum="Status">
-			The server answered with a build this client cannot join, and [member info] survives so a row can still be rendered.
+			The server returned with a build this client cannot join, and [member info] survives so a row can still be rendered.
 		</constant>
 	</constants>
 </class>

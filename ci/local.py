@@ -192,7 +192,7 @@ def run_cli(argv: list[str] | None = None) -> int:
 
     for step in steps:
         print("%-10s %-4s %6.1fs  %s" % (step["profile"], step["exit"], step["seconds"], " ".join(step["command"])))
-    print("EVIDENCE %s" % args.evidence)
+    print("RESULT %s" % args.evidence)
     return 1 if refused else 0
 
 

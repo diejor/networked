@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictionHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		One entity's prediction declaration, and everything its last comparison concluded.
+		Prediction settings and diagnostics for one [NetwEntity].
 	</brief_description>
 	<description>
-		Everything one [NetwEntity] declares about predicting itself, and everything its last comparison against the server concluded. Every entity has one, reached as [member NetwEntity.prediction], and a setting is written and read back under the same name.
+		Access this handle through [member NetwEntity.prediction]. It stores entity-level prediction settings and the latest comparison against authoritative state.
 		[codeblock]
 		var pred := NetwEntity.of(self).prediction
 		pred.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
@@ -12,15 +12,9 @@
 		pred.breach_response = NetwPredict.BREACH_RESPONSE_DEMOTE
 		pred.island.add(opponent)
 		[/codeblock]
-		[b]What lives here and what does not[/b]
-		A setting about the whole entity is a property on this object. A setting about one field is declared on that field through [NetwPropertyConfig] and is not here at all, which covers a tolerance, a restriction on restoring, and a forward model.
-		[NetwPredictIsland] is the one part with a class of its own, because who is simulated alongside this entity and how faithfully each of them is simulated are one fact.
-		[b]Where a value comes from[/b]
-		A scene may declare prediction on its [MultiplayerSynchronizer]. It applies its [member archetype] first and then writes only the values the scene moved off their defaults, so a scene value overrides the preset it refines and a value left alone keeps the preset's.
-		Between a scene and code the later write wins. A property reports the value written to it, because refusing an assignment would make it report a value nobody wrote.
-		[b]Reading what happened[/b]
-		The client compares what it simulated against the row the server acknowledged. [member input_source] and [member sim_mode] say whether this peer authors the entity, receives it, predicts it, or only draws it.
-		[member stats], [method journal] and [method episode] answer what that comparison found, and change nothing by being read. [method reachability] answers a different question, which is whether a declaration can reach the thing it names at all.
+		Declare field-level behavior, including tolerances and recovery rules, with [NetwPropertyConfig]. Configure related predicted entities with [NetwPredictIsland].
+		A [MultiplayerSynchronizer] may provide scene defaults. Later assignments in code override those values.
+		Use [member input_source] and [member sim_mode] to inspect the entity's role. Use [member stats], [method journal], and [method episode] for comparison diagnostics. Use [method reachability] to validate referenced objects.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -29,7 +23,7 @@
 			<return type="void" />
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
-				Binds the entity this handle belongs to and arms its island. Called by the entity record's factory, which is the only thing that mints a handle.
+				Binds the entity this handle belongs to and arms its island. Called by the entity record's factory, which is the only thing that creates a handle.
 			</description>
 		</method>
 		<method name="diverged" qualifiers="static">
@@ -62,7 +56,7 @@
 			<param index="2" name="out" type="Dictionary" />
 			<param index="3" name="angles" type="Dictionary" default="{}" />
 			<description>
-				Fills [param out] with each field's own divergence and answers the worst of them, which is the same value [method divergence] reports.
+				Fills [param out] with each field's own divergence and returns the worst of them, which is the same value [method divergence] reports.
 				That one number cannot say which field drifted, and a set of fields mixing meters, radians and meters per second drifts differently in each, so a caller working out why corrections do or do not fire reads the breakdown.
 				[param out] is cleared and refilled, so one dictionary can be reused across arrivals instead of allocating a new one per comparison.
 				A key in [param angles] wraps, so its error is the shorter way around.
@@ -77,7 +71,7 @@
 		<method name="episode" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
-				The episode this entity is in, or the last one it finished. An episode opens when prediction diverges far enough to act on, so an empty answer means none has opened. What comes back is a copy and writing to it changes nothing.
+				The current or most recent prediction episode. An empty result means no episode has started. Returns a copy.
 				[codeblock lang=text]
 				Dictionary
 				┠╴id            int
@@ -112,7 +106,7 @@
 				┃ ┖╴evidence_dropped      int
 				┖╴reopen_chain  Array[int]
 				[/codeblock]
-				[code]generator.row[/code] is the journal row that was kept, and its [code]witness_detail[/code] carries the contact behind the witness fingerprint. A run that began before the kept window starts reads [constant GENERATOR_UNKNOWN_BEYOND_RETENTION]. Later diverging rows appear under [code]taint[/code], and failures that began on their own appear under [code]secondary_generators[/code]. An operator that was refused has [code]outcome = -1[/code] and an empty [code]write[/code].
+				[code]generator.row[/code] is the journal row that was kept, and its [code]witness_detail[/code] carries the contact behind the witness fingerprint. A run that began before the kept window starts reads [constant GENERATOR_UNKNOWN_BEYOND_RETENTION]. Later diverging rows appear under [code]taint[/code], and failures that began on their own appear under [code]secondary_generators[/code]. An operator that was rejected has [code]outcome = -1[/code] and an empty [code]write[/code].
 				Each series is kept only to a bounded window, because an episode has no limit on how long it may stay open. A trim keeps the newest entries and counts what it dropped, so a truncated series can be told apart from a short one.
 				Reading this copies the whole record. A reader running every frame calls [method episode_digest] instead and comes here only when the digest says something changed.
 			</description>
@@ -145,7 +139,7 @@
 				                                    taint, secondary_generators,
 				                                    dropped}
 				[/codeblock]
-				[code]evidence.dropped[/code] counts the entries a trim removed once the episode outlived the kept window, so a short series can be told from a truncated one. [code]last_operator.outcome[/code] is [code]-1[/code] for an attempt refused before it wrote.
+				[code]evidence.dropped[/code] counts the entries a trim removed once the episode outlived the kept window, so a short series can be told from a truncated one. [code]last_operator.outcome[/code] is [code]-1[/code] for an attempt rejected before it wrote.
 			</description>
 		</method>
 		<method name="field_error" qualifiers="static">
@@ -161,14 +155,14 @@
 			<return type="bool" />
 			<param index="0" name="state_tick" type="int" />
 			<description>
-				Whether the engine has consumed everything up to [param state_tick]. A handle with no engine, or one that is not consuming, answers ready.
+				Whether the engine has consumed everything up to [param state_tick]. A handle with no engine, or one that is not consuming, returns ready.
 			</description>
 		</method>
 		<method name="history_record_tick" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="fallback" type="int" />
 			<description>
-				The [NetwTimeline] key to record the newest authoritative snapshot under. It answers [param fallback], or the tick an input backed on a consuming engine, or [code]-1[/code] when this tick consumed no input and so wrote no state worth keying. A caller recording history skips a negative key and leaves the slot as the last real consume wrote it.
+				The [NetwTimeline] key to record the newest authoritative snapshot under. It returns [param fallback], or the tick an input backed on a consuming engine, or [code]-1[/code] when this tick consumed no input and so wrote no state worth keying. A caller recording history skips a negative key and leaves the slot as the last real consume wrote it.
 			</description>
 		</method>
 		<method name="is_registered" qualifiers="const">
@@ -205,7 +199,7 @@
 			<return type="Dictionary" />
 			<description>
 				What this entity's declarations actually reach, field by field, or an empty [Dictionary] before the entity is attached to an engine.
-				A declaration can be legal, be accepted, and still do nothing. [method NetwPropertyConfig.carry_step] under [constant NetwPredict.SCHEDULE_TICK] is refused the first time it is used and never tried again, a [method NetwPropertyConfig.teleport_only] field that is free to trigger asks for corrections no smaller restore may write, and an [method NetwPropertyConfig.epsilon] on a field no comparison reads bounds nothing. This is where a game finds that out while wiring rather than in a capture.
+				A declaration can be legal, be accepted, and still do nothing. [method NetwPropertyConfig.carry_step] under [constant NetwPredict.SCHEDULE_TICK] is rejected the first time it is used and never tried again, a [method NetwPropertyConfig.teleport_only] field that is free to trigger asks for corrections no smaller restore may write, and an [method NetwPropertyConfig.epsilon] on a field no comparison reads bounds nothing. This is where a game finds that out while wiring rather than in a capture.
 				[codeblock]
 				var report := entity.prediction.reachability()
 				for key: StringName in report[&amp;"fields"]:
@@ -251,7 +245,7 @@
 		<method name="resolved_correction_mode" qualifiers="const">
 			<return type="int" enum="NetwPredict.CorrectionMode" />
 			<description>
-				The [enum NetwPredict.CorrectionMode] this entity actually corrects with. It never answers [constant NetwPredict.CORRECTION_MODE_AUTO], because that has already been resolved into one of the real modes.
+				The [enum NetwPredict.CorrectionMode] this entity actually corrects with. It never returns [constant NetwPredict.CORRECTION_MODE_AUTO], because that has already been resolved into one of the real modes.
 			</description>
 		</method>
 		<method name="resolved_recovery_policy" qualifiers="const">
@@ -336,7 +330,7 @@
 		<method name="tape_transitions" qualifiers="const">
 			<return type="Dictionary[]" />
 			<description>
-				Every recorded transition, oldest first. The client that owns the entity answers the transitions it wrote, and the consuming server answers the ones it decoded. For an entity at [constant NetwPredict.SCHEDULE_TICK] the index, the label and the tick are all the same number and every entry is fresh.
+				Every recorded transition, oldest first. The client that owns the entity returns the transitions it wrote, and the consuming server returns the ones it decoded. For an entity at [constant NetwPredict.SCHEDULE_TICK] the index, the label and the tick are all the same number and every entry is fresh.
 				[codeblock lang=text]
 				Array[Dictionary]
 				┖╴entry
@@ -350,8 +344,8 @@
 			<return type="Dictionary" />
 			<description>
 				The teleport distance in force for each field, as a copy.
-				[method reachability] answers this too and much more besides, which is why it is the wrong call for a recorder. It rebuilds its whole report every time, and a recorder runs once per arriving state. This is the cheap read of the one fact.
-				A field missing from the answer declared no distance of its own and uses [member teleport_threshold].
+				[method reachability] returns this too and much more besides, which is why it is the wrong call for a recorder. It rebuilds its whole report every time, and a recorder runs once per arriving state. This is the cheap read of the one fact.
+				A field missing from the result declared no distance of its own and uses [member teleport_threshold].
 			</description>
 		</method>
 		<method name="transition_state_at" qualifiers="const">
@@ -366,7 +360,7 @@
 			<param index="0" name="error" type="float" />
 			<param index="1" name="tolerance" type="float" />
 			<description>
-				Whether an error on one field needs a recovery at a given tolerance. Everything asking that question calls this, so the ranking that decides which divergence a recovery answers cannot read a tolerance differently from the test that raised the correction.
+				Whether an error on one field needs a recovery at a given tolerance. Everything asking that question calls this, so the ranking that decides which divergence a recovery returns cannot read a tolerance differently from the test that raised the correction.
 				The comparison is strictly greater, so a tolerance is the largest error a field may hold rather than the smallest it is corrected for. A tolerance of [code]0.0[/code] therefore means any error at all, which is what lets a field ask to be exact.
 			</description>
 		</method>
@@ -375,7 +369,7 @@
 			<param index="0" name="a" type="Variant" />
 			<param index="1" name="b" type="Variant" />
 			<description>
-				The error between two values of one property. A rotation answers radians, whether it is a [Quaternion] or a [Basis], so a rotation wants a threshold of its own.
+				The error between two values of one property. A rotation returns radians, whether it is a [Quaternion] or a [Basis], so a rotation wants a threshold of its own.
 			</description>
 		</method>
 	</methods>
@@ -420,7 +414,7 @@
 		</member>
 		<member name="field_recovery" type="Dictionary" setter="" getter="get_field_recovery" default="{}">
 			How often each field has asked for a recovery and how often one repaired it, counted since the entity spawned.
-			A field can be allowed to trigger a correction and still be one nothing is allowed to write. [method NetwPropertyConfig.teleport_only] withholds a field from every restore short of a teleport while leaving it free to trigger, so it raises corrections that are forbidden to fix it and are answered by repairing something else instead. Every comparison looks ordinary on its own and [member last_field_divergence] cannot show it, because the evidence is the whole run rather than any one tick.
+			A field may trigger correction without being writable by that correction. [method NetwPropertyConfig.teleport_only] reserves its write for a teleport, so smaller corrections may update other fields. This flag records that condition across the full run.
 			[codeblock]
 			var row := entity.prediction.field_recovery[&amp;"angular_velocity"]
 			print(row.triggered, row.repaired, row.contracted)   # 1393  50  0
@@ -430,7 +424,7 @@
 		</member>
 		<member name="input_source" type="int" setter="set_input_source" getter="get_input_source" default="3">
 			Where this peer's copy of the entity gets its input, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
-			This and [member sim_mode] are the two separate facts that [enum NetwPredict.Role] gives one name to. Reading them apart is what lets a question about one of them be answered without naming a whole role.
+			This and [member sim_mode] are the two values combined by [enum NetwPredict.Role]. Read them separately when only one axis matters.
 		</member>
 		<member name="is_reconciling" type="bool" setter="" getter="get_is_reconciling" default="false">
 			True while a correction is restoring and replaying, which is what code that plays an effect reads before playing one.
@@ -453,7 +447,7 @@
 		</member>
 		<member name="last_attribution" type="int" setter="" getter="get_last_attribution" default="0">
 			What the most recent divergence was blamed on, as a [enum NetwPredictJournal.Attribution] value. It means nothing until [member last_attributed_transition] is no longer [code]-1[/code].
-			[constant NetwPredictJournal.Attribution.UNKNOWN] means the evidence needed to answer was not there. Every other value names the first thing the two runs disagreed about.
+			[constant NetwPredictJournal.Attribution.UNKNOWN] means the evidence needed to return was not there. Every other value names the first thing the two runs disagreed about.
 		</member>
 		<member name="last_compare_staleness" type="int" setter="" getter="get_last_compare_staleness" default="-1">
 			How many ticks older than the arriving state the prediction compared against it was, or [code]-1[/code] when nothing was recorded to compare at all.
@@ -475,8 +469,8 @@
 			More than one reason can stand at once, and the ranking is fixed.
 			- [constant NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED] outranks a pending operator
 			- [constant NetwPredict.VERDICT_REASON_TRANSPORT_PENDING] outranks [constant NetwPredict.VERDICT_REASON_DISSIPATE_PENDING]
-			The difference is whose move it is next. A caller reading [constant NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED] owes the fallback itself, while the two pending reasons are answered by the pass already gathering what it needs.
-			A comparison that agreed is never refused and reads [constant NetwPredict.VERDICT_REASON_NONE], so this rather than the corrected flag is what tells a refusal from an agreement. Counting corrections off the verdict alone counts comparisons that wrote nothing and cannot tell them from repairs.
+			For [constant NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED], the caller must choose the fallback. The pending reasons indicate that the current pass is still gathering data.
+			A comparison that agreed is never rejected and reads [constant NetwPredict.VERDICT_REASON_NONE], so this rather than the corrected flag is what tells a rejection from an agreement. Counting corrections off the verdict alone counts comparisons that wrote nothing and cannot tell them from repairs.
 			[codeblock]
 			entity.prediction.state_evaluated.connect(
 			    func(_r, ack, error, corrected):
@@ -531,7 +525,7 @@
 		</member>
 		<member name="sensors" type="Dictionary" setter="set_sensors" getter="get_sensors" default="{}">
 			The world facts this entity's transition reads, by name.
-			Each sampler is called once before each drive and recorded with it, which is what lets a divergence be blamed on the world rather than left unexplained. [method sensor] reads the sample back. A sampler that cannot be called is skipped when it would have been sampled rather than refused here, so the record describes exactly the facts the drive ran against.
+			Each sampler is called once before each drive and recorded with it, which is what lets a divergence be blamed on the world rather than left unexplained. [method sensor] reads the sample back. A sampler that cannot be called is skipped when it would have been sampled rather than rejected here, so the record describes exactly the facts the drive ran against.
 			Declaring a sensor says where a divergence came from and claims nothing about exactness, so declaring them alone leaves every transition [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN].
 		</member>
 		<member name="sim_mode" type="int" setter="set_sim_mode" getter="get_sim_mode" default="2">
@@ -557,13 +551,13 @@
 			This is the default for such a field that named no distance of its own, and it only means anything for fields in the same units. A pose spanning metres, radians and radians per second cannot be served by one number, so a field in any other unit declares [method NetwPropertyConfig.teleport_at] rather than inheriting one that means nothing for it. Each field is compared against its own distance, and any one of them reaching it is enough.
 		</member>
 		<member name="transport_corridor" type="Callable" setter="set_transport_corridor" getter="get_transport_corridor" default="Callable()">
-			Answers whether the path to a proposed pose is clear.
+			Returns whether the path to a proposed pose is clear.
 			A correction that moves a body to where it should be now, across a path nobody checked, is how a body arrives inside a wall, so that correction is only available once this is declared. An unset or invalid [Callable] leaves it unavailable.
-			It is called as [code]corridor(current, proposed)[/code], and only after everything the engine can decide for itself has already passed, so it is the game's last word rather than its first. A game refusing a move the engine would have refused anyway is paying for a call that changes nothing.
+			It is called as [code]corridor(current, proposed)[/code], and only after everything the engine can decide for itself has already passed, so it is the game's last word rather than its first. A game rejecting a move the engine would have rejected anyway is paying for a call that changes nothing.
 		</member>
 		<member name="witness_contacts" type="Callable" setter="set_witness_contacts" getter="get_witness_contacts" default="Callable()">
 			Samples what this peer's body actually touched on the transition just solved.
-			It is called once per solved transition and answers the colliders the body touched, which is what lets a divergence be blamed on a contact. An unset or invalid [Callable] leaves that unknown, which is the absence of an observation rather than an observation that nothing was touched.
+			It is called once per solved transition and returns the colliders the body touched, which is what lets a divergence be blamed on a contact. An unset or invalid [Callable] leaves that unknown, which is the absence of an observation rather than an observation that nothing was touched.
 		</member>
 	</members>
 	<signals>

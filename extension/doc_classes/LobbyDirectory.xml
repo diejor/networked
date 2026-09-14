@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		A directory is what the connect plane asks when a game names a [member MultiplayerTree.peer_class] the plane has no built-in transport for. Register one under a session and it becomes the provider for the peer class [method _peer_class] names, so hosting, joining and browsing that class all reach this node.
-		Every request seam answers [code]void[/code] and reports later through [method deliver], [method fail] or [method publish_lobbies]. A request is answered exactly once, and a directory that abandons an attempt reports the failure rather than staying silent, because the plane holds the caller's request open until it hears.
+		Every request method returns [code]void[/code] and completes later through [method deliver], [method fail], or [method publish_lobbies]. Each request completes exactly once.
 		[codeblock]
 		extends LobbyDirectory
 
@@ -15,7 +15,7 @@
 		func _host_lobby(settings: Dictionary) -&gt; void:
 		    var room := await Rooms.open(settings.get("name", "room"))
 		    if room == null:
-		        fail(ERR_CANT_CREATE, "the room service refused the lobby")
+		        fail(ERR_CANT_CREATE, "the room service rejected the lobby")
 		        return
 		    deliver(room.peer())
 
@@ -36,7 +36,7 @@
 		func _leave_lobby() -&gt; void:
 		    Rooms.leave()
 		[/codeblock]
-		Each seam has a stock answer, so a provider overrides only what it differs on. The reading verbs are C++ and the plane calls them directly; a script reads its own override.
+		Each seam has a default result, so a provider overrides only what it differs on. The reading verbs are C++ and the plane calls them directly; a script reads its own override.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -74,7 +74,7 @@
 		<method name="_can_probe" qualifiers="virtual">
 			<return type="bool" />
 			<description>
-				Whether an address can be asked what it is without joining it. Lobby providers usually answer that through [method _list_lobbies] instead, so this defaults to [code]false[/code].
+				Whether an address supports probing without joining. Lobby providers usually expose this through [method _list_lobbies], so the default is [code]false[/code].
 			</description>
 		</method>
 		<method name="_capabilities" qualifiers="virtual">
@@ -87,7 +87,7 @@
 			<return type="Dictionary" />
 			<description>
 				The settings a join form starts from, which [method _join_lobby] is later handed with the player's edits applied. Defaults to empty.
-				Answer a key here when joining reads it, the way [method _host_settings] answers for hosting. The two overlap by however much the two paths share.
+				Return a setting key here when joining uses it. [method _host_settings] provides the host settings. Shared settings may appear in both.
 			</description>
 		</method>
 		<method name="_display_name" qualifiers="virtual">
@@ -100,7 +100,7 @@
 			<return type="void" />
 			<param index="0" name="settings" type="Dictionary" />
 			<description>
-				Creates a lobby, answered through [method deliver] or [method fail] with a connected host [MultiplayerPeer].
+				Creates a lobby. Completes through [method deliver] or [method fail] with a connected host [MultiplayerPeer].
 				[param settings] is [method _host_settings] with the caller's edits applied, so a directory reads only the keys its provider can honor. The advert keys are [code]name[/code], [code]max_players[/code] and [code]visibility[/code], the last a [enum NetwServerInfo.Visibility].
 			</description>
 		</method>
@@ -126,7 +126,7 @@
 			<return type="void" />
 			<param index="0" name="address" type="String" />
 			<description>
-				Joins the lobby named by [param address], answered through [method deliver] or [method fail] with a connected [MultiplayerPeer].
+				Joins the lobby named by [param address]. Completes through [method deliver] or [method fail] with a connected [MultiplayerPeer].
 				[param address] is one of the strings [method publish_lobbies] published, or whatever a player typed into the field [method _address_label] names.
 			</description>
 		</method>
@@ -139,7 +139,7 @@
 		<method name="_list_lobbies" qualifiers="virtual">
 			<return type="void" />
 			<description>
-				Requests the browse rows, answered through [method publish_lobbies] or [method fail].
+				Requests the browse rows. Completes through [method publish_lobbies] or [method fail].
 			</description>
 		</method>
 		<method name="_local_member_name" qualifiers="virtual">
@@ -170,7 +170,7 @@
 			<return type="void" />
 			<param index="0" name="peer" type="MultiplayerPeer" />
 			<description>
-				Reports [param peer] as the answer to the request in flight.
+				Reports [param peer] as the result to the request in flight.
 				The plane hands the peer to whoever asked for it, so a directory neither assigns it nor keeps it alive on the caller's behalf.
 			</description>
 		</method>
@@ -179,14 +179,14 @@
 			<param index="0" name="error" type="int" />
 			<param index="1" name="message" type="String" />
 			<description>
-				Reports that the request in flight cannot be answered.
-				[param message] is shown to a player, so it names what the provider refused rather than restating [param error].
+				Reports that the request in flight cannot be completed.
+				[param message] is shown to a player, so it names what the provider rejected rather than restating [param error].
 			</description>
 		</method>
 		<method name="local_member_name_default" qualifiers="static">
 			<return type="String" />
 			<description>
-				The stock answer for [method _local_member_name].
+				The default result for [method _local_member_name].
 				An override calls this for the case it does not resolve itself, because a script cannot [code]super()[/code] into a virtual the extension declares.
 			</description>
 		</method>
@@ -194,7 +194,7 @@
 			<return type="String" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				The stock answer for [method _member_name], [code]"Player &lt;peer_id&gt;"[/code].
+				The default result for [method _member_name], [code]"Player &lt;peer_id&gt;"[/code].
 				An override calls this for the peers it cannot name itself, because a script cannot [code]super()[/code] into a virtual the extension declares.
 			</description>
 		</method>
@@ -228,7 +228,7 @@
 			<param index="0" name="error" type="int" />
 			<param index="1" name="message" type="String" />
 			<description>
-				Emitted by [method fail] with the reason the request in flight was refused.
+				Emitted by [method fail] with the reason the request in flight was rejected.
 			</description>
 		</signal>
 		<signal name="lobby_list_published">

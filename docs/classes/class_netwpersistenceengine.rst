@@ -19,7 +19,7 @@ One entity's persistence: a frozen persisted-column set over the live scene, and
 Description
 -----------
 
-The scene IS the record. There is no shadow store to keep coherent: a
+The scene is the record. There is no separate state store:
 
 component assigns a property in plain GDScript and the engine reads
 
@@ -38,11 +38,10 @@ lands in the same row as the root's.
         func(_code: Error) -> void:
             scene.add_child(player)
 
-            player.gold += 100      # a plain assignment IS the record; the
-    )                               # snapshot loop's next due window
-                                    # upserts the changed column
+            player.gold += 100      # The next snapshot writes this change.
+    )
 
-\ **Every read and write answers a :ref:`NetwPromise<class_NetwPromise>`, and none of them is a coroutine.** A storage verb cannot answer on the calling frame, and a native caller cannot resume a script coroutine, so the wait lives above this class and never inside it. That is the same boundary :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` states for the backend it eventually reaches.
+\ **Every read and write returns a :ref:`NetwPromise<class_NetwPromise>`, and none of them is a coroutine.** A storage verb cannot return on the calling frame, and a native caller cannot resume a script coroutine, so the wait lives above this class and never inside it. That is the same boundary :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` states for the backend it eventually reaches.
 
 \ :ref:`NetwEntity<class_NetwEntity>` hands one engine out through :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
 
@@ -142,9 +141,9 @@ The effective :ref:`NetwDatabase<class_NetwDatabase>`: the instance override on 
 
 :ref:`NetwPromise<class_NetwPromise>` **flush**\ (\ keys\: :godot:`Array` = []\ ) :ref:`🔗<class_NetwPersistenceEngine_method_flush>`
 
-Gathers the persisted columns, or the subset named in ``keys``, writes them as one merged upsert, and answers a :ref:`NetwPromise<class_NetwPromise>` resolving with the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` the write reached. Emits :ref:`flushed<class_NetwPersistenceEngine_signal_flushed>` once a write lands.
+Gathers the persisted columns, or the subset named in ``keys``, writes them as one merged upsert, and returns a :ref:`NetwPromise<class_NetwPromise>` resolving with the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` the write reached. Emits :ref:`flushed<class_NetwPersistenceEngine_signal_flushed>` once a write lands.
 
-An entity with nothing to write resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` without touching the database, so a caller that chains on the answer runs either way. An archetype naming no database or no table resolves :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`, and a database that answers no promise is REJECTED with :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>` rather than left pending, because a caller waiting on a promise that never settles waits forever.
+An entity with no changes resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` without accessing the database. A missing database or table resolves :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`. An invalid database promise resolves :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`.
 
 \ **Server Only.**
 
@@ -158,9 +157,9 @@ An entity with nothing to write resolves :godot:`@GlobalScope.OK <@GlobalScope#c
 
 :ref:`NetwPromise<class_NetwPromise>` **hydrate**\ (\ ) :ref:`🔗<class_NetwPersistenceEngine_method_hydrate>`
 
-Fetches the saved row by :ref:`record_id()<class_NetwPersistenceEngine_method_record_id>`, applies it onto the live scene properties, emits :ref:`hydrated<class_NetwPersistenceEngine_signal_hydrated>`, and answers a :ref:`NetwPromise<class_NetwPromise>` resolving with the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` the read reached.
+Fetches the saved row by :ref:`record_id()<class_NetwPersistenceEngine_method_record_id>`, applies it onto the live scene properties, emits :ref:`hydrated<class_NetwPersistenceEngine_signal_hydrated>`, and returns a :ref:`NetwPromise<class_NetwPromise>` resolving with the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` the read reached.
 
-It always settles, including on the paths that apply nothing, so a caller that subscribes is never waiting on an edge that will not come. A missing row resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` with the scene defaults intact, because a first play has nothing saved and that is an answer rather than a failure.
+It always settles, including on the paths that apply nothing, so a caller that subscribes is never waiting on an edge that will not come. A missing row resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` with the scene defaults intact, because a first play has nothing saved and that is a result rather than a failure.
 
 \ **Server Only.**
 

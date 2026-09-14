@@ -63,7 +63,7 @@
 		<method name="_local_signaler_id" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Answers this peer's own address on the signaling transport. Answers an empty [String] when the signaler has no address of its own, which is the stock behaviour.
+				Returns this peer's own address on the signaling transport. Returns an empty [String] when the signaler has no address of its own, which is the stock behaviour.
 			</description>
 		</method>
 		<method name="_on_session_connected" qualifiers="virtual">
@@ -78,7 +78,7 @@
 			<param index="0" name="room_id" type="String" />
 			<param index="1" name="local_peer_id" type="int" />
 			<description>
-				Opens signaling for [param room_id] as [param local_peer_id]. A host is always id 1 and may be given an empty [param room_id], which means the signaler generates one and answers it from [method _room_id]. Answering anything but [constant @GlobalScope.OK] fails the bring-up with that code.
+				Opens signaling for [param room_id] as [param local_peer_id]. A host is always id 1 and may be given an empty [param room_id], which means the signaler generates one and returns it from [method _room_id]. Returning anything but [constant @GlobalScope.OK] fails the bring-up with that code.
 			</description>
 		</method>
 		<method name="_poll" qualifiers="virtual">
@@ -91,7 +91,7 @@
 		<method name="_room_id" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Answers the room this signaler opened, normalized or generated during [method _open]. This is the address a joiner is given, so it must be readable by a person if a person is expected to pass it along.
+				Returns the room this signaler opened, normalized or generated during [method _open]. This is the address a joiner is given, so it must be readable by a person if a person is expected to pass it along.
 			</description>
 		</method>
 		<method name="_send" qualifiers="virtual">
@@ -156,7 +156,7 @@
 		<method name="room_id">
 			<return type="String" />
 			<description>
-				Answers what [method _room_id] answers.
+				Returns what [method _room_id] returns.
 			</description>
 		</method>
 	</methods>

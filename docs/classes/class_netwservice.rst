@@ -39,7 +39,7 @@ Registration is bound to tree membership. The service enters the registry when t
 
 \ A node that already extends a non-:godot:`Node` base cannot adopt this one under GDScript single inheritance. It calls :ref:`register()<class_NetwService_method_register>` and :ref:`unregister()<class_NetwService_method_unregister>` directly instead.
 
-A subclass written in C++ rather than GDScript overrides the ``service_entered`` and ``service_exiting`` C++ virtuals instead, and skips :ref:`_service_type()<class_NetwService_private_method__service_type>` entirely: a class with no script attached has no :godot:`Script` to answer with, and :ref:`NetwMultiplayer.service_register()<class_NetwMultiplayer_method_service_register>` keys it by its own class name. :ref:`LobbyDirectory<class_LobbyDirectory>` is the shipped example.
+A subclass written in C++ rather than GDScript overrides the ``service_entered`` and ``service_exiting`` C++ virtuals instead, and skips :ref:`_service_type()<class_NetwService_private_method__service_type>` entirely: a class with no script attached has no :godot:`Script` to return with, and :ref:`NetwMultiplayer.service_register()<class_NetwMultiplayer_method_service_register>` keys it by its own class name. :ref:`LobbyDirectory<class_LobbyDirectory>` is the shipped example.
 
 .. rst-class:: classref-reftable-group
 
@@ -86,7 +86,7 @@ Method Descriptions
 
 Called after the service registers, with the ``api`` of its branch.
 
-Override for per-service setup such as signal wiring or clock binding. It does not run in the editor, when :ref:`_should_register()<class_NetwService_private_method__should_register>` answers ``false``, or when the node resolves no session at all.
+Override for per-service setup such as signal wiring or clock binding. It does not run in the editor, when :ref:`_should_register()<class_NetwService_private_method__should_register>` returns ``false``, or when the node resolves no session at all.
 
 .. rst-class:: classref-item-separator
 
@@ -114,7 +114,7 @@ Override to tear down whatever :ref:`_service_entered()<class_NetwService_privat
 
 Override to return the registration key for this service.
 
-Return a family base type so :ref:`NetwMultiplayer.service_get()<class_NetwMultiplayer_method_service_get>` and :ref:`NetwMultiplayer.service_get_all()<class_NetwMultiplayer_method_service_get_all>` resolve subclasses under it. Return ``null``, which is also what an unoverridden service answers, to register under the concrete script, so each instance keeps a unique key. Several instances sharing one key overwrite each other in the registry, so a family with many instances keeps the concrete answer and is collected through :ref:`NetwMultiplayer.service_get_all()<class_NetwMultiplayer_method_service_get_all>`.
+Return a family base type so :ref:`NetwMultiplayer.service_get()<class_NetwMultiplayer_method_service_get>` and :ref:`NetwMultiplayer.service_get_all()<class_NetwMultiplayer_method_service_get_all>` resolve its subclasses. Return ``null`` to register the concrete script. Instances that share a key replace each other, so multi-instance families should keep concrete keys and use :ref:`NetwMultiplayer.service_get_all()<class_NetwMultiplayer_method_service_get_all>`.
 
 .. rst-class:: classref-item-separator
 
@@ -126,7 +126,7 @@ Return a family base type so :ref:`NetwMultiplayer.service_get()<class_NetwMulti
 
 :godot:`bool` **_should_register**\ (\ ) |virtual| :ref:`🔗<class_NetwService_private_method__should_register>`
 
-Override to answer ``false`` when this service should not register on entering the tree, for example under a test runner or behind a feature flag. A service that does not override this always registers.
+Override to return ``false`` when this service should not register on entering the tree, for example under a test runner or behind a feature flag. A service that does not override this always registers.
 
 A transport service that needs peer-to-peer or a native client consults :ref:`is_transport_restricted()<class_NetwService_method_is_transport_restricted>` here to stay dormant in a restricted environment.
 
@@ -183,7 +183,7 @@ This is the entry point for a node that cannot extend **NetwService**, and it se
 
 |void| **set_transport_restricted_probe**\ (\ probe\: :godot:`Callable`\ ) |static| :ref:`🔗<class_NetwService_method_set_transport_restricted_probe>`
 
-Installs the ``probe`` an embedding addon calls when the runtime environment allows only a WebSocket or HTTP relay, such as a Discord iframe that forbids WebRTC and native SDKs. The probe answers a :godot:`bool` and :ref:`is_transport_restricted()<class_NetwService_method_is_transport_restricted>` is what reads it. Nothing installs one in a normal build, so nothing pays for it.
+Installs the ``probe`` an embedding addon calls when the runtime environment allows only a WebSocket or HTTP relay, such as a Discord iframe that forbids WebRTC and native SDKs. The probe returns a :godot:`bool` and :ref:`is_transport_restricted()<class_NetwService_method_is_transport_restricted>` is what reads it. Nothing installs one in a normal build, so nothing pays for it.
 
 .. rst-class:: classref-item-separator
 

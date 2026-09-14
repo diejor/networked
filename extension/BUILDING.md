@@ -1,190 +1,51 @@
-# Building the native library
+# Building the GDExtension
 
-From a fresh checkout:
+Networked includes a native library. Build it before opening the project in
+Godot.
 
-```sh
-cd extension
-scons
-```
+You need Git, Python 3, SCons, a C++17 compiler, and Godot 4.7 or newer.
 
-The first build fetches the exact godot-cpp and Tracy revisions in
-`deps.env`. Later builds are offline and incremental. The artifact and
-manifest are deployed to `addons/networked/bin/`.
-
-That directory is git-ignored, and the addon's classes now live in the
-library, so the project does not open without one. Building it is the first
-step after cloning, not an optional one. The binaries stay out of the
-repository because a committed manifest without a library for every platform
-breaks project load for anyone who has not built one; CI builds every
-platform it supports and publishes them as an addon zip instead.
-
-Linux links the system C++ runtime. A private static libstdc++ inside the
-shared extension invalidates doctest's locale facets when Godot loads it.
-
-Useful options:
+From the repository root, run the following command.
 
 ```sh
-scons compiledb=yes
-scons target=editor dev_build=yes
-scons netw_tests=yes
-scons netw_profiling=yes
+scons -C extension
 ```
 
-Instrumentation is opt-in. A library carrying Tracy's client does not come back
-from an editor hot reload: the classes reload with no methods and nothing
-reports an error. Asking for `netw_profiling=yes` therefore deploys a manifest
-with `reloadable = false`, so a build is either reloadable or instrumented and
-never both. Profiling the engine and the addon together is better served by the
-module build below, which is linked into the engine and never unloaded.
+The first build downloads the pinned godot-cpp and Tracy dependencies. The
+finished library and its manifest are written to `addons/networked/bin/`.
 
-Put personal SCons defaults in `custom.py`. The file is ignored. Build profiles
-use godot-cpp's `build_profile=path.json` option.
+Run the same command again after changing native code. SCons rebuilds only
+what changed.
 
-## The embedded test suite
-
-`netw_tests=yes` compiles the doctest cases under `tests/` into the library
-and adds the one class a driver needs to reach them. Run them through Godot,
-since the cases exercise registered classes:
+## Useful options
 
 ```sh
-scons netw_tests=yes
-cd .. && godot --headless --script tests/native/run_native_tests.gd
+scons -C extension target=editor dev_build=yes
+scons -C extension compiledb=yes
+scons -C extension netw_profiling=yes
 ```
 
-The run writes JUnit to `reports/native/results.xml` and exits non-zero on a
-failure. Pass `-- --native-filter=<pattern>` to scope it to one file.
+Put personal SCons defaults in `extension/custom.py`.
 
-## Building as an engine module
+## Tests
 
-The same sources also build as a built-in engine module, which is how they are
-checked against the engine's own headers rather than godot-cpp's.
-`setup_godot.sh` clones the engine pinned in `deps.env` and mounts the module:
+Build the native tests, then run them through Godot.
+
+```sh
+scons -C extension netw_tests=yes
+godot --headless --script tests/native/run_native_tests.gd
+```
+
+Test results are written to `reports/native/results.xml`.
+
+## Engine module
+
+Contributors can also compile the same sources into the pinned Godot engine.
 
 ```sh
 extension/tools/setup_godot.sh
 scons -C extension/thirdparty/godot -j"$(nproc)" target=editor tests=yes
 ```
 
-Set `GODOT_SRC=/path/to/godot` to mount into an existing engine checkout
-instead. The script warns when that checkout is not at the pinned ref, since
-the module is only certified against the pin. On Windows, run it from a shell
-with symlinks enabled (Git Bash with Developer Mode).
-
-### The engine pin is a fork
-
-`deps.env` pins `albertok/godot`, branch `4.7.2-stepphysics`, which adds
-`PhysicsServer3D.space_step(space, delta)`. The prediction tier's stepper
-drive calls it to integrate a held space once per network tick, a stock
-engine has no such method, and a module built against stock runs a stepped
-schedule as a ticked one instead. `setup_godot.sh` therefore greps the
-checkout for `space_step` and refuses outright when it is absent, while the
-version and SHA checks around it only warn.
-
-`GODOT_REF` is the SHA and `GODOT_VERSION` is the human-readable version the
-checkout's `version.py` is compared against. They are two fields because a
-SHA can never equal `4.7.2-stable`, and one field cannot answer both
-questions.
-
-While another campaign shares `extension/thirdparty/godot`, clone the fork
-somewhere of its own and point this band's builds at it, rather than
-replacing a checkout every other band's module tier reads:
-
-```sh
-git clone --depth 1 --branch 4.7.2-stepphysics \
-  https://github.com/albertok/godot ../godot-stepphysics
-GODOT_SRC=../godot-stepphysics extension/tools/setup_godot.sh
-scons -C ../godot-stepphysics -j"$(nproc)" target=editor tests=yes
-```
-
-### The `[Frame]` stepper laws want the fork's editor
-
-`physics_stepper_frame_laws.cpp` drives real bodies through `space_step`, so
-it needs an editor binary carrying the fork. Install the fork's release asset
-and run the hosted tier with it:
-
-```sh
-curl -fsSLO https://github.com/albertok/godot/releases/download/v4.7.2-stepping-physics/Godot_v4.7-stable_linux.x86_64.zip
-unzip -q Godot_v4.7-stable_linux.x86_64.zip
-./godot.linuxbsd.editor.x86_64 --headless --fixed-fps 60 \
-  --script tests/native/run_native_tests.gd
-```
-
-A stock editor runs everything else, and those laws pass without exercising
-anything: each reads `PhysicsServer3D.has_method("space_step")` and returns.
-Rocket league plays on a stock editor too, on `SOLVER_BODY`, because its
-bodies ask `RocketJoltStepper.schedule()` what to declare and get
-`SCHEDULE_FRAME` where the fork is absent. A member that declares
-`SCHEDULE_STEPPED` anyway still runs, resolved down to the frame tier with one
-error naming it, and that error is what the example exists to not raise.
-
-The cases under `tests/` are auto-discovered by the engine's test runner:
-
-```sh
-extension/thirdparty/godot/bin/godot.linuxbsd.editor.x86_64 \
-  --headless --test --test-case='*[Networked]*'
-```
-
-Engine builds are compile-bound, and a build option that reaches the global
-environment invalidates every source. Two flags are worth setting:
-
-```sh
-scons -C extension/thirdparty/godot -j"$(nproc)" target=editor tests=yes \
-  cpp_compiler_launcher=ccache c_compiler_launcher=ccache linker=mold
-```
-
-`ccache` is what makes a changed build option cheap, since a define or include
-path no source references still hits. Adding it rewrites `CXX`, so the build
-that introduces it recompiles everything once.
-
-Add `profiler=tracy profiler_path=$PWD/extension/thirdparty/tracy` to put
-engine, addon, and script zones on one Tracy timeline, and `debug_symbols=yes`
-for sampled callstacks. A module shares the engine's binary and therefore its
-single Tracy client, so instrumentation follows the engine's setting and there
-is no separate switch. Never point a Tracy profiler at a `profiler=tracy`
-engine that has also loaded the GDExtension build of this addon: that is two
-clients in one process.
-
-Build the Tracy server from the checkout in `extension/thirdparty/tracy`, since
-client and server must be the same version and `deps.env` may pin a different
-one than the engine's documentation uses. Engines before 4.7 have no
-`profiler_record_on_demand`, so their client records from launch into memory
-whether or not a server is attached. Connect before starting a long session.
-
-## The determinism floor
-
-Both build entries refuse `-ffast-math` and its family, and both compile with
-`-ffp-contract=off`. The refusal reads the SCons variables, the shell's own
-`CXXFLAGS`, and any flag list already appended, because a flag arrives by three
-doors and a guard watching one reads green against the other two.
-
-```sh
-scons CXXFLAGS=-ffast-math      # refused, naming the flag
-CXXFLAGS=-ffast-math scons      # refused, naming the flag
-```
-
-The reason is narrower than "floating point is delicate". Prediction certifies
-its port by byte-diffing a golden journal against the GDScript arm, and that
-arm contracts nothing. A fused multiply-add is a different answer from a
-multiply and an add, so contraction does not fail a case, it invalidates the
-instrument that licenses the crossing.
-
-**The floor these flags defend is measured on one platform, one engine build
-and one Jolt build.** Four OS processes produced byte-identical float32 traces
-there, and nothing claims that across platforms or engine versions. The flags
-are the static guard; the golden journal run against the native build is the
-evidence, and it is what a family re-measures when its engine crosses.
-
-## Formatting
-
-`.clang-format` and `.pre-commit-config.yaml` at the repository root define
-the formatting the `Static Checks` workflow enforces. Install the hooks once
-and a commit is already in the shape CI expects:
-
-```sh
-pipx install pre-commit   # or: pip install pre-commit
-pre-commit install
-```
-
-The same hooks run on demand with `pre-commit run --all-files`. Both are
-version-pinned so that a formatter upgrade is a deliberate edit rather than a
-diff that appears on somebody else's machine.
+Set `GODOT_SRC=/path/to/godot` before running the setup script to use an
+existing engine checkout.

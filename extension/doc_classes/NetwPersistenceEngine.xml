@@ -4,7 +4,7 @@
 		One entity's persistence: a frozen persisted-column set over the live scene, and the reads and writes it owes its archetype's database.
 	</brief_description>
 	<description>
-		The scene IS the record. There is no shadow store to keep coherent: a
+		The scene is the record. There is no separate state store:
 		component assigns a property in plain GDScript and the engine reads
 		it at flush time. A column reads and writes the live property on the
 		node that declared it, so a sibling component's persisted field
@@ -17,11 +17,10 @@
 		    func(_code: Error) -&gt; void:
 		        scene.add_child(player)
 
-		        player.gold += 100      # a plain assignment IS the record; the
-		)                               # snapshot loop's next due window
-		                                # upserts the changed column
+		        player.gold += 100      # The next snapshot writes this change.
+		)
 		[/codeblock]
-		[b]Every read and write answers a [NetwPromise], and none of them is a coroutine.[/b] A storage verb cannot answer on the calling frame, and a native caller cannot resume a script coroutine, so the wait lives above this class and never inside it. That is the same boundary [NetwDatabaseBackend] states for the backend it eventually reaches.
+		[b]Every read and write returns a [NetwPromise], and none of them is a coroutine.[/b] A storage verb cannot return on the calling frame, and a native caller cannot resume a script coroutine, so the wait lives above this class and never inside it. That is the same boundary [NetwDatabaseBackend] states for the backend it eventually reaches.
 		[NetwEntity] hands one engine out through [member NetwEntity.persistence].
 	</description>
 	<tutorials>
@@ -43,16 +42,16 @@
 			<return type="NetwPromise" />
 			<param index="0" name="keys" type="Array" default="[]" />
 			<description>
-				Gathers the persisted columns, or the subset named in [param keys], writes them as one merged upsert, and answers a [NetwPromise] resolving with the [enum @GlobalScope.Error] the write reached. Emits [signal flushed] once a write lands.
-				An entity with nothing to write resolves [constant @GlobalScope.OK] without touching the database, so a caller that chains on the answer runs either way. An archetype naming no database or no table resolves [constant @GlobalScope.ERR_UNCONFIGURED], and a database that answers no promise is REJECTED with [constant @GlobalScope.ERR_INVALID_DATA] rather than left pending, because a caller waiting on a promise that never settles waits forever.
+				Gathers the persisted columns, or the subset named in [param keys], writes them as one merged upsert, and returns a [NetwPromise] resolving with the [enum @GlobalScope.Error] the write reached. Emits [signal flushed] once a write lands.
+				An entity with no changes resolves [constant @GlobalScope.OK] without accessing the database. A missing database or table resolves [constant @GlobalScope.ERR_UNCONFIGURED]. An invalid database promise resolves [constant @GlobalScope.ERR_INVALID_DATA].
 				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="hydrate">
 			<return type="NetwPromise" />
 			<description>
-				Fetches the saved row by [method record_id], applies it onto the live scene properties, emits [signal hydrated], and answers a [NetwPromise] resolving with the [enum @GlobalScope.Error] the read reached.
-				It always settles, including on the paths that apply nothing, so a caller that subscribes is never waiting on an edge that will not come. A missing row resolves [constant @GlobalScope.OK] with the scene defaults intact, because a first play has nothing saved and that is an answer rather than a failure.
+				Fetches the saved row by [method record_id], applies it onto the live scene properties, emits [signal hydrated], and returns a [NetwPromise] resolving with the [enum @GlobalScope.Error] the read reached.
+				It always settles, including on the paths that apply nothing, so a caller that subscribes is never waiting on an edge that will not come. A missing row resolves [constant @GlobalScope.OK] with the scene defaults intact, because a first play has nothing saved and that is a result rather than a failure.
 				[b]Server Only.[/b]
 			</description>
 		</method>

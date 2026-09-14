@@ -19,7 +19,7 @@ Draft the session machine is initialized from, declared on a scope node.
 Description
 -----------
 
-:ref:`Netw.configure_session()<class_Netw_method_configure_session>` answers a draft the scope node owns. Edit it in place or through the fluent methods, and the session copies its values ONCE, at a deferred boundary after the declaring call stack has finished. From then on the session holds owned values and this Resource is a spent authoring snapshot: a later setter reports the late write and moves nothing.
+:ref:`Netw.configure_session()<class_Netw_method_configure_session>` returns a draft the scope node owns. Edit it in place or through the fluent methods, and the session copies its values once, at a deferred boundary after the declaring call stack has finished. From then on the session holds owned values and this Resource is a spent authoring snapshot: a later setter reports the late write and moves nothing.
 
 This resource carries only the facts the wire and the session machine own. What a session hosts or joins over is not among them: that is an argument of the verb that hosts, on :ref:`NetwConnectHandle<class_NetwConnectHandle>`.
 
@@ -32,9 +32,9 @@ This resource carries only the facts the wire and the session machine own. What 
 
 \ A preset handed to that verb is copied rather than kept, so one ``.tres`` may seed several scenes and editing it afterwards reaches none of them. Nested :ref:`NetwLinkConditions<class_NetwLinkConditions>` and :ref:`NetwServerInfo<class_NetwServerInfo>` values are copied too.
 
-\ :ref:`NetwMultiplayer.session_get_config()<class_NetwMultiplayer_method_session_get_config>` answers a DETACHED snapshot of the running values, freshly copied nested objects included. Editing what it returns is a way to read the session, never a way to configure it.
+\ :ref:`NetwMultiplayer.session_get_config()<class_NetwMultiplayer_method_session_get_config>` returns a detached snapshot of the running values, freshly copied nested objects included. Editing what it returns is a way to read the session, never a way to configure it.
 
-A :ref:`MultiplayerTree<class_MultiplayerTree>`'s session exports are the fallback when no node declares one. An explicit declaration replaces that export WHOLE, so a field left at its default here is the default rather than the tree's value, and the discarded non-default tree fields are named once in a warning.
+A :ref:`MultiplayerTree<class_MultiplayerTree>`'s session exports are the fallback when no node declares one. An explicit declaration replaces that export whole, so a field left at its default here is the default rather than the tree's value, and the discarded non-default tree fields are named once in a warning.
 
 .. rst-class:: classref-reftable-group
 
@@ -94,9 +94,9 @@ Property Descriptions
 
 Game-build tag that gates session admission.
 
-A joining peer whose tag differs is rejected during the auth handshake before it reaches :godot:`MultiplayerAPI.get_peers() <MultiplayerAPI#class_MultiplayerAPI_method_get_peers>`. Leave it empty to disable the gate. The session's auth tag is derived from this value once, at consumption, so both readers answer the same thing for the session's whole life.
+A joining peer whose tag differs is rejected during authentication before it reaches :godot:`MultiplayerAPI.get_peers() <MultiplayerAPI#class_MultiplayerAPI_method_get_peers>`. Leave this empty to disable the check. The session derives one auth tag from this value.
 
-It also names the space a signalled transport mints its room codes in, and is what makes a code short enough to read out. See :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>`.
+It also names the space a signalled transport creates its room codes in, and is what makes a code short enough to read out. See :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -115,7 +115,7 @@ It also names the space a signalled transport mints its room codes in, and is wh
 
 The :ref:`Role<enum_NetwMultiplayer_Role>` the local peer intends to play once a session starts.
 
-The live :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>` is only assigned when the session reaches :godot:`NetwMultiplayer.SessionState.ONLINE <NetwMultiplayer#class_NetwMultiplayer_constant_SessionState.ONLINE>`. This is the intent the assignment edge reads to pick the server role. A value outside the enum is refused and the previous role stands.
+The live :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>` is only assigned when the session reaches :godot:`NetwMultiplayer.SessionState.ONLINE <NetwMultiplayer#class_NetwMultiplayer_constant_SessionState.ONLINE>`. This is the intent the assignment edge reads to pick the server role. A value outside the enum is rejected and the previous role stands.
 
 An embedded server is constructed with a dedicated-server role that constrains the effective role after consumption, whichever declaration supplied the other values.
 
@@ -155,7 +155,7 @@ Optional latency and loss simulation applied to this session's peer.
 
 What this session tells a probing client about itself: its name, its player cap, its :ref:`Visibility<enum_NetwServerInfo_Visibility>`, and whatever else the game fills in.
 
-This is the whole advert and its only door, authored in the inspector or declared before the session is brought up. :ref:`NetwServerInfo.from_session()<class_NetwServerInfo_method_from_session>` copies it and overlays the fields only a live session knows, so a game that leaves it unset still answers a probe honestly and a game that sets it never says the same thing twice. Its values, nested containers included, are copied at consumption.
+This is the whole advert and its only door, authored in the inspector or declared before the session is brought up. :ref:`NetwServerInfo.from_session()<class_NetwServerInfo_method_from_session>` copies it and overlays the fields only a live session knows, so a game that leaves it unset still returns a probe honestly and a game that sets it never says the same thing twice. Its values, nested containers included, are copied at consumption.
 
 ::
 
@@ -181,7 +181,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **app_id**\ (\ app_id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSessionConfig_method_app_id>`
 
-Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and answers this same draft, so a declaration reads as one chained expression.
+Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and returns this same draft, so a declaration reads as one chained expression.
 
 .. rst-class:: classref-item-separator
 
@@ -193,7 +193,7 @@ Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and answers this sam
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **desired_role**\ (\ desired_role\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionConfig_method_desired_role>`
 
-Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and answers this same draft, so a declaration reads as one chained expression.
+Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and returns this same draft, so a declaration reads as one chained expression.
 
 .. rst-class:: classref-item-separator
 
@@ -205,7 +205,7 @@ Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and answ
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **link_conditions**\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) :ref:`🔗<class_NetwSessionConfig_method_link_conditions>`
 
-Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` and answers this same draft, so a declaration reads as one chained expression.
+Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` and returns this same draft, so a declaration reads as one chained expression.
 
 .. rst-class:: classref-item-separator
 
@@ -217,7 +217,7 @@ Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` an
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **server_info**\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) :ref:`🔗<class_NetwSessionConfig_method_server_info>`
 
-Sets :ref:`server_info<class_NetwSessionConfig_property_server_info>` and answers this same draft, so a declaration reads as one chained expression.
+Sets :ref:`server_info<class_NetwSessionConfig_property_server_info>` and returns this same draft, so a declaration reads as one chained expression.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

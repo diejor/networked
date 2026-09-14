@@ -4,8 +4,8 @@
 		Draws one [SubViewport] into a [Control] rect and pushes input back into it.
 	</brief_description>
 	<description>
-		A view BORROWS its target's render state rather than owning it. [method set_target] saves the four render fields the target arrived with, forces it to draw every frame, and puts all four back when the view lets go, so a viewport that passes through a view reads afterwards exactly as it read before. That borrow is what makes a target single-owner: two views saving the same viewport would each save what the other already overwrote, so a second view asking for a claimed target is refused and draws nothing. [method owner_of] answers which view holds one.
-		The rect the target's texture lands in is solved from the same [code]display/window/stretch/*[/code] pipeline Godot applies to the root window, so a scene hosted in a [SubViewport] letterboxes and scales the way the same scene would in the root. Every [code]stretch_[/code] knob defaults to inheriting the project's answer for that one field, so a view names only what it wants to differ. [member stretch_design_size] is the exception a game usually has to name, because a project that never set [code]display/window/size/viewport_width[/code] has no design resolution to inherit and the view falls back to drawing one to one.
+		A view BORROWS its target's render state rather than owning it. [method set_target] saves the four render fields the target arrived with, forces it to draw every frame, and puts all four back when the view lets go, so a viewport that passes through a view reads afterwards exactly as it read before. That borrow is what makes a target single-owner: two views saving the same viewport would each save what the other already overwrote, so a second view asking for a claimed target is rejected and draws nothing. [method owner_of] returns which view holds one.
+		The rect the target's texture lands in is solved from the same [code]display/window/stretch/*[/code] pipeline Godot applies to the root window, so a scene hosted in a [SubViewport] letterboxes and scales the way the same scene would in the root. Every [code]stretch_[/code] knob defaults to inheriting the project's return a result for that one field, so a view names only what it wants to differ. [member stretch_design_size] is the exception a game usually has to name, because a project that never set [code]display/window/size/viewport_width[/code] has no design resolution to inherit and the view falls back to drawing one to one.
 		[codeblock]
 		var view := ParticipantView.new()
 		view.stretch_mode = ParticipantView.STRETCH_MODE_CANVAS_ITEMS
@@ -41,14 +41,14 @@
 		<method name="get_target" qualifiers="const">
 			<return type="SubViewport" />
 			<description>
-				The viewport this view currently draws, or [code]null[/code] when it holds none. Answers [code]null[/code] rather than a dangling handle once the target leaves the tree.
+				The viewport this view currently draws, or [code]null[/code] when it holds none. Returns [code]null[/code] rather than a dangling handle once the target leaves the tree.
 			</description>
 		</method>
 		<method name="owner_of" qualifiers="static">
 			<return type="ParticipantView" />
 			<param index="0" name="target" type="SubViewport" />
 			<description>
-				The view that has borrowed [param target]'s render state, or [code]null[/code] when no view holds it. Ask before targeting a viewport another view may already be drawing, because [method set_target] refuses rather than taking it over.
+				The view that has borrowed [param target]'s render state, or [code]null[/code] when no view holds it. Ask before targeting a viewport another view may already be drawing, because [method set_target] rejects rather than taking it over.
 			</description>
 		</method>
 		<method name="set_target">
@@ -56,7 +56,7 @@
 			<param index="0" name="target" type="SubViewport" />
 			<description>
 				Points this view at [param target], saving its render state and forcing it to draw every frame. Restores and releases whatever the view was holding first, so retargeting never strands a viewport in [constant SubViewport.UPDATE_ALWAYS].
-				Refused, with an error naming both views, when [method owner_of] already answers another live view for [param target]: the standing view keeps the target and the state it saved, and this one is left displaying nothing.
+				Rejected, with an error naming both views, when [method owner_of] already returns another live view for [param target]: the standing view keeps the target and the state it saved, and this one is left displaying nothing.
 			</description>
 		</method>
 	</methods>
@@ -109,7 +109,7 @@
 			Hold the design's height and grow its logical width to the control's aspect.
 		</constant>
 		<constant name="STRETCH_ASPECT_EXPAND" value="5" enum="StretchAspect">
-			Grow whichever axis the control is looser against, so nothing is ever cropped. Answers the same design as whichever of [constant STRETCH_ASPECT_KEEP_WIDTH] and [constant STRETCH_ASPECT_KEEP_HEIGHT] holds the tighter axis.
+			Grow whichever axis the control is looser against, so nothing is ever cropped. Returns the same design as whichever of [constant STRETCH_ASPECT_KEEP_WIDTH] and [constant STRETCH_ASPECT_KEEP_HEIGHT] holds the tighter axis.
 		</constant>
 		<constant name="STRETCH_SCALE_MODE_INHERIT" value="0" enum="StretchScaleMode">
 			Take [code]display/window/stretch/scale_mode[/code] from the project.

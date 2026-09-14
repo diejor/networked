@@ -4,8 +4,8 @@
 		The node one session's branch is rooted at.
 	</brief_description>
 	<description>
-		A tree owns one [NetwMultiplayer] and installs it on its own branch of the [SceneTree], so every descendant answers [method Netw.of] with that session and two trees in one [SceneTree] are two independent sessions. It carries the exports that configure the session and nothing else: the state, the role, the roster and the service registry all belong to [member api].
-		A session comes online the ordinary Godot way, by assigning a [MultiplayerPeer]. The tree publishes no verb for that, because the assignment IS the bring-up. An assignment made while a declaration is still being authored is refused rather than silently deferred, so bring up through [method Netw.connection] or wait for the deferred settle.
+		A tree owns one [NetwMultiplayer] and installs it on its own branch of the [SceneTree], so every descendant returns [method Netw.of] with that session and two trees in one [SceneTree] are two independent sessions. It carries the exports that configure the session and nothing else: the state, the role, the roster and the service registry all belong to [member api].
+		Assign a [MultiplayerPeer] to start a session. Assigning one while configuration is still being declared fails. Use [method Netw.connection] or wait until configuration is complete.
 		[member app_id], [member desired_role] and [member link_conditions] are the session's whole FALLBACK, used when no node declared one through [method Netw.configure_session]. An explicit declaration replaces them whole: no field is merged, and any non-default export it discards is named once in a warning. Once the session has consumed its configuration these exports are immutable, and a setter reports the late write and keeps its old value.
 		[codeblock]
 		tree.peer_class = &amp;"ENetMultiplayerPeer"
@@ -30,7 +30,7 @@
 		            tree.api.multiplayer_peer = peer,
 		)
 		[/codeblock]
-		The tree brings itself up in exactly two cases, both of which have no caller to answer to: a headless build with [member auto_host_headless] set, and a debug build carrying a [member debug_join]. Everything else is the game's own composition.
+		The tree brings itself up in exactly two cases, both of which have no caller to return to: a headless build with [member auto_host_headless] set, and a debug build carrying a [member debug_join]. Everything else is the game's own composition.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -67,9 +67,9 @@
 		</member>
 		<member name="app_id" type="StringName" setter="set_app_id" getter="get_app_id" default="&amp;&quot;&quot;">
 			A game-build tag that gates admission, baked into every build.
-			A joining peer whose tag differs is rejected during the auth handshake before it reaches [method MultiplayerAPI.get_peers], so an incompatible build never corrupts a session. The tag folds this name together with the wire identity the build speaks, so no value turns the gate off: leaving this empty still refuses a peer whose format version or channel table differs, and naming it adds the game's own compatibility on top. Bump it when the game's own payloads break in a way the wire identity cannot see.
+			A joining peer whose tag differs is rejected during the auth handshake before it reaches [method MultiplayerAPI.get_peers], so an incompatible build never corrupts a session. The tag folds this name together with the wire identity the build speaks, so no value turns the gate off: leaving this empty still rejects a peer whose format version or channel table differs, and naming it adds the game's own compatibility on top. Bump it when the game's own payloads break in a way the wire identity cannot see.
 			This export is part of the tree's session FALLBACK, not a live setting. It is immutable once the session has consumed its configuration.
-			The tag also names the space a signalled transport mints its room codes in, so two builds carrying different tags never meet on the rendezvous at all, rather than meeting and being refused a handshake later. A tag is what makes a room code short: scoped by one, five characters are unique enough, and without one a room must be unique across every game sharing the trackers, which costs twenty hex characters instead. Bumping the tag therefore retires every room code minted under the old one, which is what those rooms deserved, since they would refuse the new build anyway.
+			The tag also scopes room codes for signaled transports. Builds with different tags do not share rendezvous rooms. Changing the tag invalidates room codes created with the previous value.
 		</member>
 		<member name="auto_host_headless" type="bool" setter="set_auto_host_headless" getter="get_auto_host_headless" default="true">
 			On a headless build, hosts from [member peer_class] and [member transport_settings] without waiting to be asked.
@@ -77,7 +77,7 @@
 		</member>
 		<member name="debug_join" type="DebugJoinConfig" setter="set_debug_join" getter="get_debug_join">
 			An auto-connect applied on play, in debug builds only.
-			When set, the tree hosts on ready under the username and join arguments it carries, skipping the server browser. A release build strips this path because [method OS.has_feature] answers [code]false[/code] for [code]"debug"[/code], which is also what keeps [member link_conditions] free of a release cost.
+			When set, the tree hosts on ready under the username and join arguments it carries, skipping the server browser. A release build strips this path because [method OS.has_feature] returns [code]false[/code] for [code]"debug"[/code], which is also what keeps [member link_conditions] free of a release cost.
 		</member>
 		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
 			The [enum NetwMultiplayer.Role] this tree intends to play, carried in the tree's session fallback as [member NetwSessionConfig.desired_role].

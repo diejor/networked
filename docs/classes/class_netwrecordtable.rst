@@ -19,7 +19,7 @@ A typed read and write handle onto one table of a :ref:`NetwDatabase<class_NetwD
 Description
 -----------
 
-Obtained from :ref:`NetwDatabase.table()<class_NetwDatabase_method_table>`. Every verb answers a :ref:`NetwPromise<class_NetwPromise>`, and the value arrives through :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>`, because the database may be reading from a disk or a socket and native code cannot suspend on the caller's behalf.
+Obtained from :ref:`NetwDatabase.table()<class_NetwDatabase_method_table>`. Every verb returns a :ref:`NetwPromise<class_NetwPromise>`, and the value arrives through :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>`, because the database may be reading from a disk or a socket and native code cannot suspend on the caller's behalf.
 
 ::
 
@@ -36,7 +36,7 @@ Obtained from :ref:`NetwDatabase.table()<class_NetwDatabase_method_table>`. Ever
     for row in await db.table(&"players").fetch_all().wait():
         print(row.get_value(&"score"))
 
-\ The handle is minted per call and holds no cache, so keeping one is the same as asking for it again. What it hands back is a :ref:`DictionaryRecord<class_DictionaryRecord>` unless :ref:`NetwDatabase.declare_table()<class_NetwDatabase_method_declare_table>` registered a :ref:`NetwRecord<class_NetwRecord>` subclass for the table, in which case every read answers that type.
+\ The handle is created per call and holds no cache, so keeping one is the same as asking for it again. What it hands back is a :ref:`DictionaryRecord<class_DictionaryRecord>` unless :ref:`NetwDatabase.declare_table()<class_NetwDatabase_method_declare_table>` registered a :ref:`NetwRecord<class_NetwRecord>` subclass for the table, in which case every read returns that type.
 
 ::
 
@@ -92,7 +92,7 @@ Permanently removes ``id`` from the table. Idempotent: the promise settles with 
 
 Reads ``id`` and settles with it as a hydrated :ref:`NetwRecord<class_NetwRecord>`.
 
-The answer is ``null`` when the record does not exist, when the table has no declared schema, and when :ref:`NetwDatabase.mismatch_policy<class_NetwDatabase_property_mismatch_policy>` refused the stored row. Those are one answer here rather than three because each of them means the caller has no record to apply, and the database names the reason it refused in a warning of its own.
+The result is ``null`` when the record does not exist, when the table has no declared schema, and when :ref:`NetwDatabase.mismatch_policy<class_NetwDatabase_property_mismatch_policy>` rejected the stored row. Those are one result here rather than three because each of them means the caller has no record to apply, and the database names the reason it rejected in a warning of its own.
 
 ::
 
@@ -108,7 +108,7 @@ The answer is ``null`` when the record does not exist, when the table has no dec
 
 :ref:`NetwPromise<class_NetwPromise>` **fetch_all**\ (\ filter\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwRecordTable_method_fetch_all>`
 
-Reads every record matching ``filter`` and settles with them as an :godot:`Array` of :ref:`NetwRecord<class_NetwRecord>`. An empty ``filter`` answers the whole table, and a table with nothing in it answers an empty array rather than failing.
+Reads every record matching ``filter`` and settles with them as an :godot:`Array` of :ref:`NetwRecord<class_NetwRecord>`. An empty ``filter`` returns the whole table, and a table with nothing in it returns an empty array rather than failing.
 
 ::
 
@@ -138,7 +138,7 @@ The column names registered for this table, or an empty array when nothing has d
 
 :ref:`NetwPromise<class_NetwPromise>` **put**\ (\ id\: :godot:`StringName`, record\: :ref:`NetwRecord<class_NetwRecord>`\ ) :ref:`🔗<class_NetwRecordTable_method_put>`
 
-Writes ``record`` under ``id`` through :ref:`NetwRecord.to_dict()<class_NetwRecord_method_to_dict>`, and settles with :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` or the first error the backend answered.
+Writes ``record`` under ``id`` through :ref:`NetwRecord.to_dict()<class_NetwRecord_method_to_dict>`, and settles with :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` or the first error the backend returned.
 
 The write is a one-row :ref:`NetwDatabase.transaction()<class_NetwDatabase_method_transaction>`, so :ref:`NetwDatabase.transaction_committed<class_NetwDatabase_signal_transaction_committed>` announces it like any other commit.
 

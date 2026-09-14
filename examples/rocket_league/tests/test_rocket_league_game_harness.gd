@@ -134,7 +134,7 @@ func test_a_car_drives_itself_toward_the_ball_with_no_local_input() -> void:
 	await begin_match(host)
 	await host.await_scene(&"Arena", 2.0)
 	var car := await host.await_player(&"mario", 2.0)
-	assert_bool(car.inputs.ai_enabled).override_failure_message(
+	assert_bool(car.ai_enabled).override_failure_message(
 		"a car drives itself until its controller takes the wheel",
 	).is_true()
 
@@ -213,7 +213,7 @@ func in_lobby(peer: NetwSceneRunner) -> InLobby:
 func quiet_ai(peer: NetwSceneRunner) -> void:
 	for child in arena_level(peer).get_node(^"Players").get_children():
 		if child is RocketCar:
-			(child as RocketCar).inputs.ai_enabled = false
+			(child as RocketCar).ai_enabled = false
 
 
 func await_kickoff(car: RocketCar) -> void:

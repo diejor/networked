@@ -137,7 +137,7 @@ Emitted when the group is rejected by a timeout or a failure.
 
 **ready**\ (\ answer\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_signal_ready>`
 
-The channel :ref:`wait()<class_NetwGroupPromise_method_wait>` answers on, carrying :ref:`answer()<class_NetwGroupPromise_method_answer>`. A pending batch emits it once on its settle edge, so every waiter is answered by that one emission. A batch that already settled emits it once per :ref:`wait()<class_NetwGroupPromise_method_wait>` call, deferred, so a late caller is answered rather than left waiting.
+Carries :ref:`answer()<class_NetwGroupPromise_method_answer>`. A pending batch emits this once when it settles. :ref:`wait()<class_NetwGroupPromise_method_wait>` emits it later for each call made after settlement.
 
 \ **Note:** connect to :ref:`settled<class_NetwGroupPromise_signal_settled>` instead. Because a settled batch emits this per call, a subscriber attached by hand can see it more than once. :ref:`wait()<class_NetwGroupPromise_method_wait>` is its only intended producer and consumer.
 
@@ -287,7 +287,7 @@ Method Descriptions
 
 :godot:`Variant` **answer**\ (\ ) |const| :ref:`🔗<class_NetwGroupPromise_method_answer>`
 
-What the batch settled with, as one value: :ref:`results<class_NetwGroupPromise_property_results>` when every peer arrived and :ref:`code<class_NetwGroupPromise_property_code>` when it failed. This is what :ref:`ready<class_NetwGroupPromise_signal_ready>` carries, so one channel answers both outcomes.
+Returns :ref:`results<class_NetwGroupPromise_property_results>` after success or :ref:`code<class_NetwGroupPromise_property_code>` after failure. :ref:`ready<class_NetwGroupPromise_signal_ready>` carries the same value.
 
 .. rst-class:: classref-item-separator
 
@@ -361,7 +361,7 @@ Settles the group as completed with whatever :ref:`results<class_NetwGroupPromis
 
 Records ``peer_id``'s answer and emits :ref:`completed_single<class_NetwGroupPromise_signal_completed_single>`. Settles the group when it was the last one awaited.
 
-A peer the group is not awaiting answers for nobody: it records nothing and settles nothing, because the awaited set is the snapshot the group promised over and a late arrival is not part of it.
+A result from a peer outside the awaited set is ignored.
 
 .. rst-class:: classref-item-separator
 
@@ -385,7 +385,7 @@ Chains ``cb`` to run when every awaited peer has answered, receiving the :ref:`r
 
 :godot:`Signal` **wait**\ (\ ) :ref:`🔗<class_NetwGroupPromise_method_wait>`
 
-Answers a :godot:`Signal` on the :ref:`ready<class_NetwGroupPromise_signal_ready>` channel that is safe to ``await`` whether or not the batch has already settled, carrying :ref:`answer()<class_NetwGroupPromise_method_answer>`.
+Returns a :godot:`Signal` on the :ref:`ready<class_NetwGroupPromise_signal_ready>` channel that is safe to ``await`` whether or not the batch has already settled, carrying :ref:`answer()<class_NetwGroupPromise_method_answer>`.
 
 This is the idiom. Awaiting :ref:`completed<class_NetwGroupPromise_signal_completed>` directly is a race the caller cannot win: a batch whose peers all resolved before the wait has already emitted it, and the caller waits forever. An already-settled batch defers its emission here, so the ``await`` subscribes before the answer is delivered.
 

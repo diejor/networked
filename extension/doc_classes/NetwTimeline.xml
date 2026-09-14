@@ -74,7 +74,7 @@
 			<param index="0" name="tick" type="int" />
 			<description>
 				Returns the tick [method latest_state_at_or_before] would read for [param tick], or [code]-1[/code] when it would read nothing.
-				Carry-forward means a read keyed at one tick can answer with a snapshot recorded at an older one, so a caller comparing two peers at "the same tick" is only truly matched when this returns the tick it asked for. Read it to tell a matched comparison from one carried forward across a gap.
+				Carry-forward means a read keyed at one tick can return with a snapshot recorded at an older one, so a caller comparing two peers at "the same tick" is only truly matched when this returns the tick it asked for. Read it to tell a matched comparison from one carried forward across a gap.
 				[codeblock]
 				var predicted := timeline.latest_state_at_or_before(ack + 1)
 				var staleness := ack + 1 - timeline.latest_state_tick_at_or_before(ack + 1)

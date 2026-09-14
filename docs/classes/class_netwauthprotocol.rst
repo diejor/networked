@@ -27,7 +27,7 @@ Every packet is framed with a four-byte magic prefix naming its purpose, so a se
      ┠╴ "NHEL"   a player opening a session
      ┃   ┠╴ version(1)    the framing this packet was written against
      ┃   ┠╴ app_tag(8)    the game build folded with the wire identity,
-     ┃   ┃                so a mismatched build is refused before the
+     ┃   ┃                so a mismatched build is rejected before the
      ┃   ┃                provider payload is read
      ┃   ┠╴ flags(1)      reserved
      ┃   ┖╴ provider payload, which is all a flow ever sees
@@ -35,7 +35,7 @@ Every packet is framed with a four-byte magic prefix naming its purpose, so a se
          ┠╴ version(1)
          ┖╴ status-or-flags(1), then the reply payload
 
-\ A probe peer is answered and disconnected without completing auth, so it never enters :godot:`MultiplayerPeer.get_unique_id() <MultiplayerPeer#class_MultiplayerPeer_method_get_unique_id>`'s peer list. This class is the only place that framing is written or read, so a change to it moves both sides at once.
+\ A probe peer receives a response and disconnects without completing authentication, so it never enters :godot:`MultiplayerPeer.get_unique_id() <MultiplayerPeer#class_MultiplayerPeer_method_get_unique_id>`'s peer list. This class reads and writes the framing for both sides.
 
 Every verb is static and the class is never instantiated.
 
@@ -106,7 +106,7 @@ A player opening a session.
 
 :ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_PROBE** = ``2``
 
-A browser asking what this server is. It is answered and dropped without ever joining.
+A browser probe. The server responds and disconnects the peer without joining it.
 
 .. rst-class:: classref-item-separator
 
@@ -132,7 +132,7 @@ The reply carries server metadata.
 
 :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>` **PROBE_BUSY** = ``1``
 
-The server is up but will not answer this probe now.
+The server is online but temporarily cannot respond to this probe.
 
 .. _class_NetwAuthProtocol_constant_PROBE_UNSUPPORTED:
 
@@ -140,7 +140,7 @@ The server is up but will not answer this probe now.
 
 :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>` **PROBE_UNSUPPORTED** = ``2``
 
-The server does not answer probes at all.
+The server does not return probes at all.
 
 .. _class_NetwAuthProtocol_constant_PROBE_ERROR:
 
@@ -148,7 +148,7 @@ The server does not answer probes at all.
 
 :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>` **PROBE_ERROR** = ``3``
 
-The server tried to answer and could not.
+The server tried to return and could not.
 
 .. rst-class:: classref-section-separator
 
@@ -177,19 +177,19 @@ Which :ref:`Kind<enum_NetwAuthProtocol_Kind>` ``data``'s magic prefix names. A p
 
 :godot:`Dictionary` **decode_client_hello**\ (\ data\: :godot:`PackedByteArray`, local_app_tag\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_decode_client_hello>`
 
-Reads a hello packet, refusing it when its build tag differs from ``local_app_tag``.
+Reads a hello packet, rejecting it when its build tag differs from ``local_app_tag``.
 
 .. code:: text
 
     Dictionary
-    ┠╴ok                bool             false on a refusal
+    ┠╴ok                bool             false on a rejection
     ┠╴reason            String           "framing", "version" or "app", empty when ok
     ┠╴version           int              the framing version the packet carried
     ┠╴app_tag           int              the 64-bit build tag the packet carried
     ┠╴flags             int              reserved
-    ┖╴provider_payload  PackedByteArray  empty on a refusal
+    ┖╴provider_payload  PackedByteArray  empty on a rejection
 
-\ A refusal still reports the ``version`` and ``app_tag`` it read, so the refusing side can say what the peer claimed rather than only that it said no.
+\ A rejection still reports the ``version`` and ``app_tag`` it read, so the rejecting side can say what the peer claimed rather than only that it said no.
 
 .. rst-class:: classref-item-separator
 
@@ -201,15 +201,15 @@ Reads a hello packet, refusing it when its build tag differs from ``local_app_ta
 
 :godot:`Dictionary` **decode_probe_reply**\ (\ data\: :godot:`PackedByteArray`\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_decode_probe_reply>`
 
-Reads a probe reply. A packet with the wrong magic, a short header, or a foreign version answers ``ok`` false and an empty payload. The status it carries is one value of :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>`.
+Reads a probe reply. A packet with the wrong magic, a short header, or a foreign version returns ``ok`` false and an empty payload. The status it carries is one value of :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>`.
 
 .. code:: text
 
     Dictionary
-    ┠╴ok       bool             false on a refusal
+    ┠╴ok       bool             false on a rejection
     ┠╴version  int              the framing version the packet carried
-    ┠╴status   int              what the server said about answering
-    ┖╴payload  PackedByteArray  the provider's own reply, empty on a refusal
+    ┠╴status   int              what the server said about returning
+    ┖╴payload  PackedByteArray  the provider's own reply, empty on a rejection
 
 .. rst-class:: classref-item-separator
 
@@ -221,12 +221,12 @@ Reads a probe reply. A packet with the wrong magic, a short header, or a foreign
 
 :godot:`Dictionary` **decode_probe_request**\ (\ data\: :godot:`PackedByteArray`\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_decode_probe_request>`
 
-Reads a probe request. A packet with the wrong magic, a short header, or a foreign version answers ``ok`` false.
+Reads a probe request. A packet with the wrong magic, a short header, or a foreign version returns ``ok`` false.
 
 .. code:: text
 
     Dictionary
-    ┠╴ok       bool  false on a refusal
+    ┠╴ok       bool  false on a rejection
     ┠╴version  int   the framing version the packet carried
     ┖╴flags    int   reserved
 
@@ -240,7 +240,7 @@ Reads a probe request. A packet with the wrong magic, a short header, or a forei
 
 :godot:`PackedByteArray` **encode_client_hello**\ (\ provider_payload\: :godot:`PackedByteArray`, app_tag\: :godot:`int` = 0, flags\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_encode_client_hello>`
 
-Wraps ``provider_payload`` in a hello header stamped with ``app_tag``, the 64-bit build tag folded from :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` and the wire identity by :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`. There is no ungated value. An empty :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` still carries the wire the build speaks, so two builds that disagree about the format or the channel table are refused whether or not the game named itself. ``flags`` is reserved.
+Wraps ``provider_payload`` in a hello header stamped with ``app_tag``, the 64-bit build tag folded from :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` and the wire identity by :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`. There is no ungated value. An empty :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` still carries the wire the build speaks, so two builds that disagree about the format or the channel table are rejected whether or not the game named itself. ``flags`` is reserved.
 
 .. rst-class:: classref-item-separator
 
@@ -300,7 +300,7 @@ The four bytes a probe packet opens with, ``"NPRB"``.
 
 :godot:`int` **protocol_version**\ (\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_protocol_version>`
 
-The framing version this build writes and is the only one it accepts. It is bumped when the framing changes in a way an older peer cannot read, which is what makes a version mismatch a clean refusal rather than a misparse.
+The framing version this build writes and is the only one it accepts. It is bumped when the framing changes in a way an older peer cannot read, which is what makes a version mismatch a clean rejection rather than a misparse.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

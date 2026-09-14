@@ -4,8 +4,8 @@
 		A player identity an auth flow has already validated.
 	</brief_description>
 	<description>
-		An auth provider produces one of these and hands it back inside an [AuthResult], so everything downstream treats [member username] as server-authoritative rather than as something the connecting peer claimed. It is stored per peer and answered by [member NetwParticipant.identity].
-		A session without an auth provider has no identities at all, and [member NetwParticipant.identity] answers [code]null[/code] there. It is not part of the replicated roster: [ResolvedJoin] is what the server sends to peers.
+		An auth provider returns this inside an [AuthResult]. The session treats [member username] as server-authoritative and stores the identity per peer. Access it through [member NetwParticipant.identity].
+		A session without an auth provider has no identities at all, and [member NetwParticipant.identity] returns [code]null[/code] there. It is not part of the replicated roster: [ResolvedJoin] is what the server sends to peers.
 		[codeblock]
 		func verify(data: PackedByteArray) -&gt; AuthResult:
 		    var identity := NetwIdentity.new()
@@ -24,7 +24,7 @@
 			<param index="0" name="node" type="Object" />
 			<description>
 				A key for [param node] that survives the node being rebuilt, for a debugger or a log that has to match rows across frames.
-				It answers the peer [param node]'s entity represents when there is one, then the peer its name spells, and only then the node path, because a path changes when the node moves and the first two do not. A node that is not valid answers an empty [String].
+				It returns the peer [param node]'s entity represents when there is one, then the peer its name spells, and only then the node path, because a path changes when the node moves and the first two do not. A node that is not valid returns an empty [String].
 			</description>
 		</method>
 		<method name="username_of" qualifiers="static">
@@ -32,7 +32,7 @@
 			<param index="0" name="node" type="Object" />
 			<description>
 				A display name for [param node], for UI and logs.
-				It answers the entity id [param node] was bound under when it has one, and otherwise the part of the node's name before the [code]|[/code] separator, which is where a bound name keeps it. A node that is not valid answers an empty [String].
+				It returns the entity id [param node] was bound under when it has one, and otherwise the part of the node's name before the [code]|[/code] separator, which is where a bound name keeps it. A node that is not valid returns an empty [String].
 			</description>
 		</method>
 	</methods>

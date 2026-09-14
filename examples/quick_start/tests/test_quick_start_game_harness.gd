@@ -51,21 +51,20 @@ func test_client_input_reaches_local_player() -> void:
 
 	var player := jose.local_player as Node2D
 	assert_that(player).is_not_null()
-	var input := _input_for(player)
 	var start := player.position.x
 
 	await game.sync_ticks(16)
 	jose.simulate_action_press("move_right")
 	await game.sync_ticks(8)
 
-	assert_that(input.state[&"move_right"]).is_true()
+	assert_that(player.pressed[&"move_right"]).is_true()
 	assert_that(player.position.x).is_greater(start)
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
 
 	jose.simulate_action_release("move_right")
 	await game.sync_ticks(2)
 
-	assert_that(input.state[&"move_right"]).is_false()
+	assert_that(player.pressed[&"move_right"]).is_false()
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
 
 
@@ -419,7 +418,3 @@ func _request_level_2(participant: NetwSceneRunner) -> NetwPromise:
 		await game.sync_ticks(1)
 	assert_that(promise.is_settled).is_true()
 	return promise
-
-
-func _input_for(player: Node) -> MoveInputComponent:
-	return player.get_node("%InputComponent") as MoveInputComponent

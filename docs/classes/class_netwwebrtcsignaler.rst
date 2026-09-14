@@ -61,7 +61,7 @@ Pass a subclass to the WebRTC transport as the ``signaler`` settings key. The de
 
 The distinction between :ref:`report_lost()<class_NetwWebRTCSignaler_method_report_lost>` and :ref:`report_unreachable()<class_NetwWebRTCSignaler_method_report_unreachable>` is which end of the attempt failed: unreachable means no signaling route ever opened, lost means one opened and then went away. A wind-down the signaler chose itself, after :ref:`_on_session_connected()<class_NetwWebRTCSignaler_private_method__on_session_connected>` told it the native link is up, is neither and reports nothing.
 
-\ **Tracker diagnostics**\ 
+\ **Tracker diagnostics**\
 
 The default tracker signaler warns once when every tracker it was given failed, naming each url and why. One tracker failing out of a redundant list is not a fault and is silent until ``networked/webrtc/warn_on_tracker_failure`` turns per-url warnings on.
 
@@ -139,7 +139,7 @@ Releases the signaling transport. Called when the session closes, and by a signa
 
 :godot:`String` **_local_signaler_id**\ (\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__local_signaler_id>`
 
-Answers this peer's own address on the signaling transport. Answers an empty :godot:`String` when the signaler has no address of its own, which is the stock behaviour.
+Returns this peer's own address on the signaling transport. Returns an empty :godot:`String` when the signaler has no address of its own, which is the stock behaviour.
 
 .. rst-class:: classref-item-separator
 
@@ -163,7 +163,7 @@ Reports that the native WebRTC link to ``peer_id`` is open, so a signaler that c
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_open**\ (\ room_id\: :godot:`String`, local_peer_id\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__open>`
 
-Opens signaling for ``room_id`` as ``local_peer_id``. A host is always id 1 and may be given an empty ``room_id``, which means the signaler generates one and answers it from :ref:`_room_id()<class_NetwWebRTCSignaler_private_method__room_id>`. Answering anything but :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` fails the bring-up with that code.
+Opens signaling for ``room_id`` as ``local_peer_id``. A host is always id 1 and may be given an empty ``room_id``, which means the signaler generates one and returns it from :ref:`_room_id()<class_NetwWebRTCSignaler_private_method__room_id>`. Returning anything but :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` fails the bring-up with that code.
 
 .. rst-class:: classref-item-separator
 
@@ -187,7 +187,7 @@ Drives the signaling transport for one frame. Everything a signaler reports upwa
 
 :godot:`String` **_room_id**\ (\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__room_id>`
 
-Answers the room this signaler opened, normalized or generated during :ref:`_open()<class_NetwWebRTCSignaler_private_method__open>`. This is the address a joiner is given, so it must be readable by a person if a person is expected to pass it along.
+Returns the room this signaler opened, normalized or generated during :ref:`_open()<class_NetwWebRTCSignaler_private_method__open>`. This is the address a joiner is given, so it must be readable by a person if a person is expected to pass it along.
 
 .. rst-class:: classref-item-separator
 
@@ -287,7 +287,7 @@ Reports that no signaling route could be opened at all.
 
 :godot:`String` **room_id**\ (\ ) :ref:`🔗<class_NetwWebRTCSignaler_method_room_id>`
 
-Answers what :ref:`_room_id()<class_NetwWebRTCSignaler_private_method__room_id>` answers.
+Returns what :ref:`_room_id()<class_NetwWebRTCSignaler_private_method__room_id>` returns.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

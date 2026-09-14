@@ -106,7 +106,7 @@ Method Descriptions
 
 :ref:`ParticipantWindow<class_ParticipantWindow>` **add_slot**\ (\ slot\: :ref:`ParticipantWindow<class_ParticipantWindow>`\ ) :ref:`🔗<class_ParticipantViewport_method_add_slot>`
 
-Registers ``slot`` for tiling, makes it visible and re-tiles every slot. Answers ``slot`` so a caller can build and place in one expression, or ``null`` when handed nothing. Registering a slot twice is inert.
+Registers ``slot`` for tiling, makes it visible and re-tiles every slot. Returns ``slot`` so a caller can build and place in one expression, or ``null`` when handed nothing. Registering a slot twice is inert.
 
 .. rst-class:: classref-item-separator
 
@@ -118,7 +118,7 @@ Registers ``slot`` for tiling, makes it visible and re-tiles every slot. Answers
 
 |void| **assign_device**\ (\ device_id\: :godot:`int`, slot\: :ref:`ParticipantWindow<class_ParticipantWindow>`\ ) :ref:`🔗<class_ParticipantViewport_method_assign_device>`
 
-Routes every joypad event carrying ``device_id`` into ``slot``. Refused, with an error, when ``slot`` is not registered here, because a binding this node cannot tile would drop that player's input where nobody can see it. One device binds to one slot; binding it again replaces the first.
+Routes every joypad event carrying ``device_id`` into ``slot``. Rejected, with an error, when ``slot`` is not registered here, because a binding this node cannot tile would drop that player's input where nobody can see it. One device binds to one slot; binding it again replaces the first.
 
 .. rst-class:: classref-item-separator
 

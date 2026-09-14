@@ -167,4 +167,3 @@ Other classes
     class_spawnslot
     class_warmpolicy
     class_warmrequest
-

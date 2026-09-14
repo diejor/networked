@@ -21,7 +21,18 @@ var accel_input := 0.0
 var steering_input := 0.0
 var spring_lengths: Array[float] = [0.0, 0.0, 0.0, 0.0]
 
-@onready var inputs: Node = $Input
+var motion := Vector2.ZERO
+var jumping := false
+var ai_enabled := false
+var ai_motion := Vector2.ZERO
+var ai_jumping := false
+var pressed := {
+	&"left": false,
+	&"right": false,
+	&"forward": false,
+	&"back": false,
+	&"bounce": false,
+}
 @onready var car_model: Node3D = $Car_model
 @onready var roof_bounce: RayCast3D = $RoofBounce
 @onready var speed_label: Label3D = $Label3D
@@ -122,6 +133,10 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 	e.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
+	Netw.configure_property(self, &"motion").input().quantize(
+		NetwQuantizeScalar.new().bits(8).limits(-1.0, 1.0),
+	)
+	Netw.configure_property(self, &"jumping").input()
 
 	Netw.configure_property(self, &"car_position").state().masked().causal() \
 			.on_spawn().teleport_at(1.5) \
@@ -164,13 +179,33 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	var clock: NetwClockHandle = Netw.clock(self)
+	clock.before_tick.connect(gather_input)
 	contact_monitor = true
 	max_contacts_reported = 8
 
 	set_color(TEAM_COLORS[team])
 
-	if inputs.is_multiplayer_authority():
+	if entity.is_controlled_locally:
 		get_viewport().get_camera_3d().target = car_model
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not entity.is_controlled_locally:
+		return
+	for action: StringName in pressed:
+		if event.is_action(action):
+			pressed[action] = event.is_action_pressed(action, true)
+
+
+func gather_input(_delta: float, _tick: int) -> void:
+	if not entity.is_controlled_locally:
+		return
+	motion = ai_motion if ai_enabled else Vector2(
+		float(pressed[&"right"]) - float(pressed[&"left"]),
+		float(pressed[&"forward"]) - float(pressed[&"back"]),
+	).normalized()
+	jumping = ai_jumping if ai_enabled else pressed[&"bounce"]
 
 
 func _process(_delta: float) -> void:
@@ -182,8 +217,8 @@ func _network_tick(delta: float, tick: int, _is_fresh: bool) -> void:
 		take_kickoff_position()
 		return
 
-	accel_input = -clampf(inputs.motion.y, -1.0, 1.0)
-	steering_input = -clampf(inputs.motion.x, -1.0, 1.0)
+	accel_input = -clampf(motion.y, -1.0, 1.0)
+	steering_input = -clampf(motion.x, -1.0, 1.0)
 
 	var steering_rotation := steering_input * steering_angle
 	if is_zero_approx(steering_rotation):
@@ -205,7 +240,7 @@ func _network_tick(delta: float, tick: int, _is_fresh: bool) -> void:
 		spring_lengths[i] = wheel.previous_spring_length
 
 	#Jump
-	if wheels_on_ground > 2 and inputs.jumping:
+	if wheels_on_ground > 2 and jumping:
 		apply_impulse(jump_force * basis.y, -basis.y)
 
 	#If fallen on roof, roll over

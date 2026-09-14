@@ -4,8 +4,8 @@
 		The resolved placement target for one player spawn.
 	</brief_description>
 	<description>
-		A slot answers one question, "where does this player node go", and it answers it the same way whether the destination is a declared network scene or a plain branch of the tree. That is what lets a spawner be written once: it asks [method for_scene] for a slot and hands the player to [method place_player], instead of branching on whether the scene was declared.
-		A slot resolves at the moment it is asked for, so it is a value to use now rather than a handle to keep. A session that declares no scene under the requested stem answers a slot that [method is_valid] rejects, and placing into it does nothing.
+		A slot returns one question, "where does this player node go", and it returns it the same way whether the destination is a declared network scene or a plain branch of the tree. That is what lets a spawner be written once: it asks [method for_scene] for a slot and hands the player to [method place_player], instead of branching on whether the scene was declared.
+		A slot resolves at the moment it is asked for, so it is a value to use now rather than a handle to keep. A session that declares no scene under the requested stem returns a slot that [method is_valid] rejects, and placing into it does nothing.
 		[codeblock]
 		var slot := SpawnSlot.for_scene(Netw.of(self), &amp;"Arena")
 		if slot.is_valid():
@@ -21,7 +21,7 @@
 			<param index="1" name="scene_stem" type="StringName" />
 			<description>
 				Resolves the slot for the scene [param session] declares under [param scene_stem].
-				This is the verb a spawner calls. A session declaring no such scene, and a null [param session], both answer a slot [method is_valid] rejects rather than an error, so a spawner asks once and tests the answer.
+				This is the verb a spawner calls. A session declaring no such scene, and a null [param session], both return a slot [method is_valid] rejects rather than an error, so a spawner asks once and tests the result.
 				[codeblock]
 				var slot := SpawnSlot.for_scene(Netw.of(self), &amp;"Arena")
 				if slot.is_valid():
@@ -38,7 +38,7 @@
 		<method name="has_scene" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when this slot carries a scene that is still declared. A handle to a scene the session has since dropped answers [code]false[/code], which is why this is asked rather than the handle being tested for null.
+				Returns [code]true[/code] when this slot carries a scene that is still declared. A handle to a scene the session has since dropped returns [code]false[/code], which is why this is asked rather than the handle being tested for null.
 			</description>
 		</method>
 		<method name="in_scene" qualifiers="static">

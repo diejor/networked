@@ -19,7 +19,7 @@ The single write that corrects one settled divergence, staged whole.
 Description
 -----------
 
-:ref:`NetwMultiplayer._predict_recover()<class_NetwMultiplayer_private_method__predict_recover>` answers with one of these, and a game overriding that seam mints its own through :ref:`of()<class_NetwPredictRecovery_method_of>`.
+:ref:`NetwMultiplayer._predict_recover()<class_NetwMultiplayer_private_method__predict_recover>` returns one of these, and a game overriding that seam creates its own through :ref:`of()<class_NetwPredictRecovery_method_of>`.
 
 The whole recovery is decided here and applied by the shell in one write, so a correction has no tail: nothing is left outstanding to ease in over later frames, and the state recorded after a recovery is exactly what was staged. Deciding it and performing it are separate for that reason, and a record is what carries the decision between them.
 
@@ -72,7 +72,7 @@ Method Descriptions
 
 :ref:`NetwPredictRecovery<class_NetwPredictRecovery>` **of**\ (\ restore\: :godot:`Dictionary`, write\: :godot:`Dictionary`, teleport\: :godot:`bool`, skip\: :godot:`bool`\ ) |static| :ref:`🔗<class_NetwPredictRecovery_method_of>`
 
-Mints one staged recovery.
+Creates one staged recovery.
 
 .. rst-class:: classref-item-separator
 

@@ -153,14 +153,14 @@ def _godot(
 
 
 def lane_import(godot: str, *, timeout: float) -> int:
-    """Import the project and prove the import, rather than tolerating it."""
+    """Import the project and validate that its scripts load."""
     log = TMP / "import.log"
     code = _godot(godot, ["--headless", "--path", str(ROOT), "--import"], log=log, timeout=timeout, check=False)
     text = log.read_text(encoding="utf-8", errors="replace")
-    refused = [line for line in text.splitlines() if any(marker in line for marker in LOAD_FAILURES)]
-    if refused:
-        for line in refused[:20]:
-            print("REFUSED %s" % line.strip())
+    failures = [line for line in text.splitlines() if any(marker in line for marker in LOAD_FAILURES)]
+    if failures:
+        for line in failures[:20]:
+            print("ERROR %s" % line.strip())
         raise fail("the import could not load the project's own code")
     if code != 0:
         if not any(signature in text for signature in TEARDOWN_SIGNATURES):
@@ -219,7 +219,7 @@ def lane_consumer(godot: str, *, archive: Path, workspace: Path, timeout: float)
 
 
 def lane_parse(godot: str, roots: list[str], *, timeout: float) -> int:
-    """Load every script under `roots` in one run and refuse what the parser did."""
+    """Load every script under `roots` and report parse failures."""
     quoted = ", ".join('"%s"' % (root if root.startswith("res://") else "res://" + root.lstrip("/")) for root in roots)
     script = _write_script("parse_check.gd", PARSE_SWEEP % quoted)
     log = TMP / "parse_check.log"
@@ -233,18 +233,18 @@ def lane_parse(godot: str, roots: list[str], *, timeout: float) -> int:
     text = log.read_text(encoding="utf-8", errors="replace")
     if "PARSE_SWEPT" not in text:
         raise fail("the parse sweep did not finish; read %s" % log)
-    refused = sorted(
+    failures = sorted(
         {
             line.split('"')[1]
             for line in text.splitlines()
             if "Failed to load script" in line and '"' in line and "thirdparty/godot/modules/gdscript/tests" not in line
         }
     )
-    for path in refused:
-        print("REFUSED %s" % path)
-    print("PARSE refused=%d" % len(refused))
-    if refused:
-        raise fail("%d script(s) did not parse" % len(refused))
+    for path in failures:
+        print("ERROR %s" % path)
+    print("PARSE errors=%d" % len(failures))
+    if failures:
+        raise fail("%d script(s) did not parse" % len(failures))
     return 0
 
 

@@ -33,13 +33,13 @@ Marking a field with :ref:`state()<class_NetwPropertyConfig_method_state>`, :ref
         aim_dir = (get_global_mouse_position() - position).normalized()
         # no send call: the next pump tick ships every marked change
 
-\ Pick the kind by answering who owns the value, who sees it, and whether the server polices it. :ref:`Record<enum_NetwPropertySet_Record>` holds the comparison table. A field with no kind mark rides no per-tick set and syncs only when :ref:`Netw.sync_property()<class_Netw_method_sync_property>` pushes it explicitly.
+\ Pick the kind by returning who owns the value, who sees it, and whether the server polices it. :ref:`Record<enum_NetwPropertySet_Record>` holds the comparison table. A field with no kind mark rides no per-tick set and syncs only when :ref:`Netw.sync_property()<class_Netw_method_sync_property>` pushes it explicitly.
 
 \ :ref:`volatile()<class_NetwPropertyConfig_method_volatile>`, :ref:`retained()<class_NetwPropertyConfig_method_retained>`, :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`, and :ref:`persisted()<class_NetwPropertyConfig_method_persisted>` refine one property. :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>`, :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, :ref:`audience()<class_NetwPropertyConfig_method_audience>`, and :ref:`masked()<class_NetwPropertyConfig_method_masked>` write through to the script's whole :ref:`NetwPropertySet<class_NetwPropertySet>` from any member, so the last member to name a knob owns it.
 
-\ **The chain downgrades to the base type.**\ 
+\ **The chain downgrades to the base type.**\
 
-\ :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`NetwMemberConfig.call_remote()<class_NetwMemberConfig_method_call_remote>` are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb answers a :ref:`NetwMemberConfig<class_NetwMemberConfig>` from that point on even though the object is still this **NetwPropertyConfig**. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
+\ :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`NetwMemberConfig.call_remote()<class_NetwMemberConfig_method_call_remote>` are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb returns a :ref:`NetwMemberConfig<class_NetwMemberConfig>` from that point on even though the object is still this **NetwPropertyConfig**. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
 
 .. rst-class:: classref-reftable-group
 
@@ -608,9 +608,9 @@ Advances this value by running ``step`` once over each transition the owner reco
 
 Where :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` extrapolates one rate, this re-runs the part of the simulation that moves this one field, so a rate that turns, decays or jumps inside the window is followed rather than averaged. Nothing else is re-simulated and the physics server is never stepped.
 
-\ **The rule must reproduce the whole change the transition made to this field**, and that is what the engine checks it against. So the verb is for a field whose change the game authors ENTIRELY. A field the solver also moves cannot be advanced this way, however correct the rule is about the game's own share: the recovery needs the value the body actually reached, and the solver's contribution is neither authored here nor re-runnable, and a physics server that could be re-stepped would not need this verb at all. Such a rule is refused and retired, and the retirement says so.
+\ **The rule must reproduce the whole change the transition made to this field**, and that is what the engine checks it against. So the verb is for a field whose change the game authors ENTIRELY. A field the solver also moves cannot be advanced this way, however correct the rule is about the game's own share: the recovery needs the value the body actually reached, and the solver's contribution is neither authored here nor re-runnable, and a physics server that could be re-stepped would not need this verb at all. Such a rule is rejected and retired, and the retirement says so.
 
-A rule's answer is admitted only when it did not write the body itself, reproduces the transitions the owner already recorded, and comes back the same type, finite, and nearer than a teleport would be. Failing any one of those refuses the carry for that recovery, which then writes the acknowledged value exactly as an undeclared field does.
+A carry result is accepted only when the rule did not write the body, reproduced the recorded transitions, returned the same finite type, and stayed below the teleport threshold. Otherwise recovery writes the acknowledged value.
 
 Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one column is an error and keeps NEITHER. One field, one forward model: the step is for a rate that varies across the acknowledgement window and the channel for one that holds still, and no field is both.
 
@@ -636,9 +636,9 @@ Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carr
     func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
         return value + _drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
 
-\ ``step`` may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>` and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a refused carry writes the acknowledged value exactly as an undeclared field does. :ref:`NetwPredictionHandle.field_recovery<class_NetwPredictionHandle_property_field_recovery>` counts both.
+\ ``step`` may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>` and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a rejected carry writes the acknowledged value exactly as an undeclared field does. :ref:`NetwPredictionHandle.field_recovery<class_NetwPredictionHandle_property_field_recovery>` counts both.
 
-The rule is stored per node rather than per script, because a :godot:`Callable` is bound to one body while a property declaration is shared by every instance of the script that declares it. ``step`` therefore has to be a method or lambda of a :godot:`Node`, which is the body it will advance. A ``step`` that is invalid, or valid but bound to something that is not a :godot:`Node`, is reported through the error channel and binds NOTHING, leaving this config exactly as it was. The rule lands in a per-node overlay, which is keyed by node instance rather than by :ref:`NetwMemberConfig.context_script<class_NetwMemberConfig_property_context_script>`.
+The rule is stored per node rather than per script, because a :godot:`Callable` is bound to one body while a property declaration is shared by every instance of the script that declares it. ``step`` therefore has to be a method or lambda of a :godot:`Node`, which is the body it will advance. A ``step`` that is invalid, or valid but bound to something that is not a :godot:`Node`, is reported through the error channel and binds nothing, leaving this config exactly as it was. The rule lands in a per-node overlay, which is keyed by node instance rather than by :ref:`NetwMemberConfig.context_script<class_NetwMemberConfig_property_context_script>`.
 
 .. rst-class:: classref-item-separator
 
@@ -798,7 +798,7 @@ The controller owns this value, only the server sees it, and the server re-runs 
 
 \ Writes :ref:`in_input_set<class_NetwPropertyConfig_property_in_input_set>`, the :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` :ref:`lane<class_NetwPropertyConfig_property_lane>`, a :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>` of :ref:`NetwPropertySet.TRIGGER_ON_CHANGE<class_NetwPropertySet_constant_TRIGGER_ON_CHANGE>`, and the :ref:`NetwPropertySet.AUDIENCE_SERVER_ONLY<class_NetwPropertySet_constant_AUDIENCE_SERVER_ONLY>` :ref:`set_audience<class_NetwPropertyConfig_property_set_audience>`. That last axis is what makes it a command stream rather than a public one, and it is the only kind mark that writes it. An input set is windowed by default so a lost tick heals from a redundant sample instead of a retransmit. :ref:`windowed()<class_NetwPropertyConfig_method_windowed>` resizes that window.
 
-An input column is canonicalized and SHIPPED, never recovered, so only its key, its quantizer and its type reach the engine. A recovery mark written onto an input column, a carry rule or a teleport distance among them, is read and discarded rather than refused, because the input lane has no ladder that could read it.
+An input column is canonicalized and shipped, never recovered, so only its key, its quantizer and its type reach the engine. A recovery mark written onto an input column, a carry rule or a teleport distance among them, is read and discarded rather than rejected, because the input lane has no ladder that could read it.
 
 .. rst-class:: classref-item-separator
 
@@ -912,7 +912,7 @@ Routes the field onto the :ref:`NetwPropertySet.RETAINED<class_NetwPropertySet_c
     # a dropped "stunned = true" would desync forever, so it rides reliably
     Netw.configure_property(self, &"stunned").state().retained()
 
-\ Refused on a PREDICTED entity's state, whatever the value is worth: predicted state has to be volatile for a timeline snapshot to arrive atomically, and a retained field would land on its own schedule and be compared against a row no single tick answers for.
+\ Rejected on a PREDICTED entity's state, whatever the value is worth: predicted state has to be volatile for a timeline snapshot to arrive atomically, and a retained field would land on its own schedule and be compared against a row no single tick returns for.
 
 .. rst-class:: classref-item-separator
 
@@ -973,7 +973,7 @@ Same argument as :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`, and 
 
 Restricts the field to teleport-tier recoveries, so an ordinary one leaves it alone, by writing :ref:`explicit_teleport_only<class_NetwPropertyConfig_property_explicit_teleport_only>`. Right for a value whose mid-flight rewrite is more disruptive than the drift it would correct.
 
-A field marked this way and left free to trigger demands recoveries that are forbidden to write it, so the only one that repairs it is the promoted full closure. Pair it with :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` or :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` so that promoted restore lands at the present, or with :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` so its drift stops demanding recoveries that answer by writing other fields.
+Recovery cannot write a field marked this way until it promotes to a full restore. Pair it with :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` or :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` to restore it at the current state, or with :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` to prevent its drift from triggering recovery of other fields.
 
 ::
 

@@ -19,7 +19,7 @@ The declaration that makes a node a multiplayer scene.
 Description
 -----------
 
-Answered by :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` and configured in place. A scene declares itself once from its own root, and that declaration is the only one: there is no second marking step and nothing else has to know the scene exists.
+Returned by :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` and configured in place. A scene declares itself once from its own root, and that declaration is the only one: there is no second marking step and nothing else has to know the scene exists.
 
 The facts land on the root's **script**, not on this object, so nothing holds the config afterwards and a second instance of the same scene is declared the same way without re-running anything. The verbs may be called in any order.
 
@@ -114,7 +114,7 @@ Method Descriptions
 
 Gives the scene its own physics and render world, so geometry overlapping another scene's cannot interact with it. Without this the scene shares the world it is parented into.
 
-Only a :godot:`Viewport` owns a world in Godot, so an isolated scene needs one and the framework builds it: :ref:`Netw.spawn()<class_Netw_method_spawn>` answers a :godot:`SubViewport` with the authored root inside, and the caller parents that. **So the node :ref:`Netw.spawn()<class_Netw_method_spawn>` returns is not the node the callable built.**\ 
+Only a :godot:`Viewport` owns a world in Godot, so an isolated scene needs one and the framework builds it: :ref:`Netw.spawn()<class_Netw_method_spawn>` returns a :godot:`SubViewport` with the authored root inside, and the caller parents that. **So the node :ref:`Netw.spawn()<class_Netw_method_spawn>` returns is not the node the callable built.**\
 
 The scene is still the authored root. :ref:`Netw.scene()<class_Netw_method_scene>`, the roster, the admissions and the signals are unchanged, and the viewport carries no identity of its own. The one thing that differs is that the root's :godot:`Node.get_parent() <Node#class_Node_method_get_parent>` is the viewport rather than the node it was added to.
 
@@ -126,7 +126,7 @@ The scene is still the authored root. :ref:`Netw.scene()<class_Netw_method_scene
 .. code:: text
 
     Worlds
-     ┖╴ Level1World (SubViewport)   # what spawn answered
+     ┖╴ Level1World (SubViewport)   # what spawn returned
           ┖╴ Level1 (Node2D)        # the scene, what the callable built
 
 \ A :godot:`SubViewport` renders to a texture, so whether an isolated scene reaches the screen is the game's decision. See :ref:`NetwMultiplayer.scene_local_changed<class_NetwMultiplayer_signal_scene_local_changed>` for the scene this peer is currently in.
@@ -143,7 +143,7 @@ The scene is still the authored root. :ref:`Netw.scene()<class_Netw_method_scene
 
 Names the scene for :ref:`Netw.scene()<class_Netw_method_scene>`. Defaults to the root node's own name.
 
-A label names a kind of scene and never one instance, so two live scenes carrying it make :ref:`Netw.scene()<class_Netw_method_scene>` refuse the lookup rather than pick a winner. A game that spawned two arenas holds the handle :ref:`Netw.spawn()<class_Netw_method_spawn>` gave it instead.
+A label names a scene type, not an instance. :ref:`Netw.scene()<class_Netw_method_scene>` fails when multiple live scenes share the label. Use the handle returned by :ref:`Netw.spawn()<class_Netw_method_spawn>` to select an instance.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

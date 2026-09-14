@@ -21,7 +21,7 @@
 		<method name="answer" qualifiers="const">
 			<return type="Variant" />
 			<description>
-				What the batch settled with, as one value: [member results] when every peer arrived and [member code] when it failed. This is what [signal ready] carries, so one channel answers both outcomes.
+				Returns [member results] after success or [member code] after failure. [signal ready] carries the same value.
 			</description>
 		</method>
 		<method name="catch_error">
@@ -65,7 +65,7 @@
 			<param index="1" name="val" type="Variant" />
 			<description>
 				Records [param peer_id]'s answer and emits [signal completed_single]. Settles the group when it was the last one awaited.
-				A peer the group is not awaiting answers for nobody: it records nothing and settles nothing, because the awaited set is the snapshot the group promised over and a late arrival is not part of it.
+				A result from a peer outside the awaited set is ignored.
 			</description>
 		</method>
 		<method name="then">
@@ -78,7 +78,7 @@
 		<method name="wait">
 			<return type="Signal" />
 			<description>
-				Answers a [Signal] on the [signal ready] channel that is safe to [code]await[/code] whether or not the batch has already settled, carrying [method answer].
+				Returns a [Signal] on the [signal ready] channel that is safe to [code]await[/code] whether or not the batch has already settled, carrying [method answer].
 				This is the idiom. Awaiting [signal completed] directly is a race the caller cannot win: a batch whose peers all resolved before the wait has already emitted it, and the caller waits forever. An already-settled batch defers its emission here, so the [code]await[/code] subscribes before the answer is delivered.
 				[codeblock]
 				await destination.move_participants(peers).wait()
@@ -134,7 +134,7 @@
 		<signal name="ready">
 			<param index="0" name="answer" type="Variant" />
 			<description>
-				The channel [method wait] answers on, carrying [method answer]. A pending batch emits it once on its settle edge, so every waiter is answered by that one emission. A batch that already settled emits it once per [method wait] call, deferred, so a late caller is answered rather than left waiting.
+				Carries [method answer]. A pending batch emits this once when it settles. [method wait] emits it later for each call made after settlement.
 				[b]Note:[/b] connect to [signal settled] instead. Because a settled batch emits this per call, a subscriber attached by hand can see it more than once. [method wait] is its only intended producer and consumer.
 			</description>
 		</signal>

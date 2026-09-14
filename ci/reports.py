@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read a JUnit report and refuse every shape of it that is not evidence."""
+"""Validate a JUnit report and reject incomplete or malformed results."""
 
 from __future__ import annotations
 

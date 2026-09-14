@@ -4,7 +4,7 @@
 		Live handle for one accepted session player.
 	</brief_description>
 	<description>
-		A view over one peer's row in the session, holding nothing but the peer id: every member is read back through the session when it is asked for, so a participant is correct after a rehost, a scene rebuild or a respawn without anything re-issuing it. One peer has one participant, so [code]==[/code] answers "the same player".
+		A view over one peer's row in the session, holding nothing but the peer id: every member is read back through the session when it is asked for, so a participant is correct after a rehost, a scene rebuild or a respawn without anything re-issuing it. One peer has one participant, so [code]==[/code] returns "the same player".
 		[member current_scene] tracks the peer's primary scene independently of any spawned player node, which is what lets a session seat a player before it has a body and keep the seat after the body is gone.
 		[codeblock]
 		var participant := api.peer_get_participant(peer_id)
@@ -12,7 +12,7 @@
 		    greet(participant.username)
 		await participant.move_to(arena).completed
 		[/codeblock]
-		Minted by the session and never by a caller: [method NetwMultiplayer.peer_get_participant] mints the row the first time a peer is asked about, so two reads of one peer answer the same object.
+		Created by the session. [method NetwMultiplayer.peer_get_participant] creates the participant on first access and returns the same object on later calls.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -22,7 +22,7 @@
 			<param index="0" name="destination" type="NetwSceneHandle" />
 			<description>
 				Travels this participant into [param destination]: the player entity roots it is enrolled in move first, then its admission and its [member current_scene] follow.
-				This is the whole of arriving rather than the membership half of it, which is why it answers a promise. Admissions this participant holds elsewhere are untouched, so a spectator seat survives travel. A move into the scene already held is a successful no-op raising no roster event.
+				This is the whole of arriving rather than the membership half of it, which is why it returns a promise. Admissions this participant holds elsewhere are untouched, so a spectator seat survives travel. A move into the scene already held is a successful no-op raising no roster event.
 				The returned [NetwPromise] resolves once the transfer has committed on authority. It rejects with [constant @GlobalScope.ERR_BUSY] while another transfer of the same participant is in flight, with [constant @GlobalScope.ERR_UNAVAILABLE] when [param destination] retired while the transfer was preparing, and with [constant @GlobalScope.ERR_UNAUTHORIZED] off authority.
 				A client never calls this. It asks through [method Netw.change_scene_to_file] at [constant Netw.SCENE_CHANGE_PARTICIPANT], and the server derives which participant is asking from the authenticated connection rather than from anything the client sent.
 				To change which scene a participant belongs to without moving their node, use [method NetwMultiplayer.scene_admit] and [method NetwMultiplayer.scene_release].
@@ -38,15 +38,15 @@
 			The scene this peer counts as being in, or [code]null[/code] outside every scene.
 			Primary, not exclusive: a participant may be admitted to several scenes at once, and this names the one that places it and drives its default presentation. Admitting a participant somewhere else does not move this, and travel does.
 			Read-only, because writing it would record arrival without performing it. [method move_to] is the verb that actually moves a participant, and the deliberate low-level seat verbs on [NetwMultiplayer] are there for a caller managing membership without moving anything.
-			The seat is held as the scene entity's identity rather than as a handle, so membership survives the scene being rebuilt and never pins a freed node; the handle read here is minted from that identity on demand.
+			The seat is held as the scene entity's identity rather than as a handle, so membership survives the scene being rebuilt and never pins a freed node; the handle read here is created from that identity on demand.
 		</member>
 		<member name="identity" type="NetwIdentity" setter="" getter="get_identity">
 			The validated auth identity for this peer, or [code]null[/code].
-			Present only when the session has an auth provider, and never part of the replicated roster, which is what [ResolvedJoin] is. Read from the session's own book through [method NetwMultiplayer.peer_get_identity], which is the one answer to who authenticated.
+			Present only when the session has an auth provider, and never part of the replicated roster, which is what [ResolvedJoin] is. Read from the session's own book through [method NetwMultiplayer.peer_get_identity], which is the one result to who authenticated.
 		</member>
 		<member name="join" type="ResolvedJoin" setter="" getter="get_join">
 			The accepted join record for this peer, or [code]null[/code] before the join is accepted.
-			Read through [method NetwMultiplayer.peer_get_accepted_join] on every access rather than held, so a join enriched after the participant was minted is answered by the participant that already exists.
+			Read through [method NetwMultiplayer.peer_get_accepted_join] on every access. Updates made after participant creation are visible through the existing participant.
 		</member>
 		<member name="peer_id" type="int" setter="" getter="get_peer_id" default="0">
 			The peer this participant represents. The one piece of state it holds, because everything else is a read.

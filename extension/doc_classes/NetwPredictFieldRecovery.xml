@@ -4,7 +4,7 @@
 		One state field's recovery history, accumulated since the entity spawned.
 	</brief_description>
 	<description>
-		A field may be admitted to the trigger set without being reachable by any operator in the ladder. [method NetwPropertyConfig.teleport_only] withholds a field from every sub-teleport restore while leaving it free to trigger, so it can raise corrections that are forbidden to write it and are answered by repairing some other field instead.
+		A field may trigger recovery without being writable by any recovery operator. [method NetwPropertyConfig.teleport_only] allows the field to trigger recovery but reserves its write for a teleport. Smaller recoveries may update other fields instead.
 		Each comparison looks ordinary on its own and no single-tick reading can show it, because the evidence is the whole run rather than any one tick. These six counts are that run.
 		[codeblock]
 		var row := entity.prediction.field_recovery[&amp;"sphere_angular_velocity"]
@@ -15,7 +15,7 @@
 		[codeblock lang=text]
 		triggered  ──&gt; repaired ──&gt; contracted    the field is served
 		triggered  ──&gt; repaired ──&gt; .             written, and the write is no help
-		triggered  ──&gt; .        ──&gt; .             asking, and answered elsewhere
+		triggered  ──&gt; .        ──&gt; .             triggers; another field is restored
 		.          ──&gt; repaired ──&gt; .             written on someone else's behalf
 		[/codeblock]
 		Reached through [member NetwPredictionHandle.field_recovery], which holds a row for every field something has charged and none for a field nothing has.
@@ -28,11 +28,11 @@
 		</member>
 		<member name="contracted" type="int" setter="" getter="get_contracted" default="0">
 			Writes to this field that a later comparison found smaller.
-			A recovery lands on the body now while the comparisons just behind it were driven at the acknowledgement, so a write is only judged once a comparison reaches a transition driven past it. Scoring the very next comparison would read back the error the write was answering, which is the same lag that makes a correction train look like a divergence refusing to close.
+			A recovery lands on the body now while the comparisons just behind it were driven at the acknowledgement, so a write is only judged once a comparison reaches a transition driven past it. Scoring the very next comparison would read back the error the write was returning, which is the same lag that makes a correction train look like a divergence rejecting to close.
 		</member>
 		<member name="declined" type="int" setter="" getter="get_declined" default="0">
-			Carries the engine refused, each of which wrote the acknowledged value instead, which is what an undeclared field always writes.
-			A rule is refused when the recorded transitions it would fold over are missing or incomplete, when it returns the wrong type or a non-finite value, when it moves the value further than a teleport would, or once it has been retired.
+			Carries the engine rejected, each of which wrote the acknowledged value instead, which is what an undeclared field always writes.
+			A rule is rejected when the recorded transitions it would fold over are missing or incomplete, when it returns the wrong type or a non-finite value, when it moves the value further than a teleport would, or once it has been retired.
 		</member>
 		<member name="field" type="StringName" setter="" getter="get_field" default="&amp;&quot;&quot;">
 			The state field this row counts.
@@ -45,7 +45,7 @@
 			Recoveries that wrote this field, whether or not it asked for one.
 		</member>
 		<member name="triggered" type="int" setter="" getter="get_triggered" default="0">
-			Comparisons that corrected while this field was past its own [method NetwPropertyConfig.epsilon], so a recovery was materially answering it.
+			Comparisons that corrected while this field was past its own [method NetwPropertyConfig.epsilon], so a recovery was materially returning it.
 		</member>
 	</members>
 </class>

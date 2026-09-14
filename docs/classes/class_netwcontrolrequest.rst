@@ -12,7 +12,7 @@ NetwControlRequest
 
 **Inherits:** :godot:`RefCounted`
 
-One peer's bid to steer an entity, and the latch any listener refuses it with.
+One peer's bid to steer an entity, and the latch any listener rejects it with.
 
 .. rst-class:: classref-introduction-group
 
@@ -21,7 +21,7 @@ Description
 
 :ref:`NetwEntity<class_NetwEntity>` emits :ref:`NetwEntity.control_requested<class_NetwEntity_signal_control_requested>` with one **NetwControlRequest** per request. Gameplay code may inspect :ref:`requester<class_NetwControlRequest_property_requester>` and call :ref:`deny()<class_NetwControlRequest_method_deny>` before the default grant path runs.
 
-Every listener sees the same record, so :ref:`denied<class_NetwControlRequest_property_denied>` is a latch: once a listener refuses, no listener after it can take the refusal back, and listener order does not decide who gets to steer.
+Every listener sees the same record, so :ref:`denied<class_NetwControlRequest_property_denied>` is a latch: once a listener rejects, no listener after it can take the rejection back, and listener order does not decide who gets to steer.
 
 ::
 
@@ -75,7 +75,7 @@ Property Descriptions
 - |void| **set_denied**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_denied**\ (\ )
 
-Whether the request should be rejected. Writing ``false`` over a refusal does nothing, because the refusal is a latch.
+Whether the request should be rejected. Writing ``false`` over a rejection does nothing, because the rejection is a latch.
 
 .. rst-class:: classref-item-separator
 

@@ -12,16 +12,16 @@ NetwPredictStats
 
 **Inherits:** :godot:`RefCounted`
 
-Everything a prediction engine counted, on one object with one name per fact.
+Diagnostic counters for one prediction engine.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-This is the demoted half of the evidence surface. What a game is meant to react to -- the six signals, the verdict reason, the per-field divergence and recovery rows, ``reachability()`` -- stays on the handle and is contract. What is here is diagnostic: counters, histograms, tape bookkeeping, fingerprint tallies. Read it, print it, chart it; do not build a rule on it, because the freeze table does not protect it.
+Contains counters, histograms, fingerprint totals, and prediction history diagnostics. Use :ref:`NetwPredictionHandle<class_NetwPredictionHandle>` signals and reports for gameplay decisions.
 
-\ :ref:`authoring_clamped<class_NetwPredictStats_property_authoring_clamped>`, :ref:`speculation_held<class_NetwPredictStats_property_speculation_held>`, :ref:`drive_seq<class_NetwPredictStats_property_drive_seq>`, :ref:`last_drive_label<class_NetwPredictStats_property_last_drive_label>`, :ref:`last_drive_kind<class_NetwPredictStats_property_last_drive_kind>`, :ref:`chain_breaks<class_NetwPredictStats_property_chain_breaks>`, :ref:`joint_passes<class_NetwPredictStats_property_joint_passes>`, :ref:`joint_floor<class_NetwPredictStats_property_joint_floor>`, :ref:`joint_present<class_NetwPredictStats_property_joint_present>`, :ref:`joint_members<class_NetwPredictStats_property_joint_members>`, :ref:`cells_relayed<class_NetwPredictStats_property_cells_relayed>`, :ref:`cells_substituted<class_NetwPredictStats_property_cells_substituted>`, and :ref:`floor_moves_by_source<class_NetwPredictStats_property_floor_moves_by_source>` read the live drive and joint columns the engine keeps for the entity's slot. Assigning any of them is a no-op, because the engine is the only writer and this object only relays its columns. Before the entity is registered for prediction, or once the engine no longer holds the slot, each answers its fallback instead. Every other member holds its value on this object and is ordinary read-write state a caller or the engine sets directly.
+Engine-backed members are read-only and return their defaults when the entity has no active prediction slot. Other members are writable diagnostic state.
 
 ::
 
@@ -606,7 +606,7 @@ Older eligible inputs skipped by a FRAME-scheduled backlog fold. The newest elig
 
 Acknowledged transitions whose prediction fingerprinted unequal to the authority state, counted out of :ref:`fp_verified<class_NetwPredictStats_property_fp_verified>`. On a run where every antecedent of the recurrence matched this stays zero, so a nonzero count names a broken antecedent rather than a tolerance that wants widening.
 
-The verdict is the correction trigger for a transition labeled :godot:`NetwPredictJournal.Domain.IN_DOMAIN <NetwPredictJournal#class_NetwPredictJournal_constant_Domain.IN_DOMAIN>`, and a report for one that is not. Which label a transition earns is decided by the entity's island membership, so an entity that declares no island keeps the tolerance compare it always had.
+The verdict is the correction trigger for a transition labeled :godot:`NetwPredictJournal.Domain.IN_DOMAIN <NetwPredictJournal#class_NetwPredictJournal_constant_Domain.IN_DOMAIN>`, and a report for one that is not. Which label a transition receives is decided by the entity's island membership, so an entity that declares no island keeps the tolerance compare it always had.
 
 It is the trigger only where it arrives in time to be one. The verdict rides the acknowledgement lane while the comparison runs when the authoritative state arrives, so a transition compared before its acknowledgement is judged by tolerance and this counter reports a divergence nothing acted on. A set that ships whole rows can be judged on arrival. A :ref:`NetwPropertyConfig.masked()<class_NetwPropertyConfig_method_masked>` set cannot, because a masked frame carries only the fields that changed and the authority row it belongs to cannot be fingerprinted from it. Read this counter as what the peers disagreed about, never as what was corrected.
 
@@ -1008,7 +1008,7 @@ Counts cells rather than frames, so the redundancy window's re-sends do not infl
 
 Standing queued-transition depth at each authority frame's consume boundary, bucketed by depth. :godot:`NetwPredict.Schedule.FRAME <NetwPredict#class_NetwPredict_constant_Schedule.FRAME>` consume only.
 
-Depth is the owner's lead over authority measured in transitions, so this reads the clock relationship rather than a queue: a distribution parked near zero says the two peers run at the same rate, and one that ratchets upward says the owner is authoring faster than authority is solving. Neither is answered by a replay buffer depth setting, which shifts this whole distribution and changes its shape not at all.
+Depth is the owner's lead over authority measured in transitions, so this reads the clock relationship rather than a queue: a distribution parked near zero says the two peers run at the same rate, and one that ratchets upward says the owner is authoring faster than authority is solving. Neither is returned by a replay buffer depth setting, which shifts this whole distribution and changes its shape not at all.
 
 Indexed by depth, saturating at :ref:`REPLAY_DEPTH_BUCKETS<class_NetwPredictStats_constant_REPLAY_DEPTH_BUCKETS>` minus one.
 
@@ -1135,7 +1135,7 @@ Transitions authority ran with a command the owner never authored, as declared o
 
 Epoch of the active prediction tape, or ``-1`` before one is authored or received. Rewiring starts a new client-authored epoch.
 
-A bump re-keys every cursor over the tape along with it, because a position retained across the bump would name a transition the new epoch is about to reuse, and the reader would then be answered a row from a run it was never following.
+An epoch change re-keys every tape cursor. Retaining a cursor could resolve it to a transition reused by the new epoch.
 
 .. rst-class:: classref-item-separator
 

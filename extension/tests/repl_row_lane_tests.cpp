@@ -131,9 +131,7 @@ TEST_CASE(
     CodeRow second;
     REQUIRE(lane.gather(pair(10, 21), second));
 
-    // The row is polled ONCE and shared. Each peer's mask is its own, because
-    // the diff is against what that peer holds rather than against the last
-    // thing the lane sent anybody.
+    // Poll the row once. Compute each mask from that peer's current state.
     const uint64_t caught_up = lane.mask_for(PEER, second);
     const uint64_t fresh = lane.mask_for(OTHER, second);
     NETW_CHECK_EQ(caught_up, uint64_t(0b10));

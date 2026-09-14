@@ -19,7 +19,7 @@ Everything about one entity's display that is not about a single value stream, w
 Description
 -----------
 
-A :ref:`NetwInterpolate<class_NetwInterpolate>` spec configures one value stream. Everything that applies to the whole entity instead of one stream lives here, so there is one answer per entity to which node receives the smoothed write, which timeline it renders on, and how far behind the newest snapshot the playhead sits. The session pumps what this declares.
+A :ref:`NetwInterpolate<class_NetwInterpolate>` spec configures one value stream. Everything that applies to the whole entity instead of one stream lives here, so there is one result per entity to which node receives the smoothed write, which timeline it renders on, and how far behind the newest snapshot the playhead sits. The session pumps what this declares.
 
 Every setting below is a view, not a store. A write goes out through the session's display book and a read comes back from the same declaration, so the two spellings can never disagree about one entity. A setting authored before the entity has a live :ref:`NetwEntity.rid<class_NetwEntity_property_rid>` waits until it does, and is re-applied to each of the entity's lives, because liveness hands a re-admitted entity a fresh :ref:`NetwEntity.rid<class_NetwEntity_property_rid>` and the settings have to outlive it.
 

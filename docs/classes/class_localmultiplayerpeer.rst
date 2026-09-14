@@ -19,7 +19,7 @@ An in-process :godot:`MultiplayerPeer` that routes packets through memory.
 Description
 -----------
 
-No socket is opened. Peer IDs, connection status and packet queues answer exactly what :godot:`ENetMultiplayerPeer`'s do, so a :godot:`MultiplayerAPI` cannot tell which one it is holding, and a test drives a real session without a network.
+Opens no socket. It implements the same peer IDs, connection status, and packet queues as :godot:`ENetMultiplayerPeer`, allowing tests to run a session without a network.
 
 ::
 
@@ -34,7 +34,7 @@ No socket is opened. Peer IDs, connection status and packet queues answer exactl
 
 Connection events are queued and emitted on :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>`, which is what makes them land at a point the caller chose.
 
-Setting :ref:`loopback_session<class_LocalMultiplayerPeer_property_loopback_session>` gives that session first refusal on every inbound packet, so :ref:`LocalLinkConditions<class_LocalLinkConditions>` can hold or drop one before it is ever visible here.
+Setting :ref:`loopback_session<class_LocalMultiplayerPeer_property_loopback_session>` gives that session first rejection on every inbound packet, so :ref:`LocalLinkConditions<class_LocalLinkConditions>` can hold or drop one before it is ever visible here.
 
 .. rst-class:: classref-reftable-group
 

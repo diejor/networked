@@ -21,9 +21,9 @@ Description
 
 Assign it to :ref:`NetwDatabase.warm_policy<class_NetwDatabase_property_warm_policy>`. The database walks the registered schema at init and asks the policy for one :ref:`WarmRequest<class_WarmRequest>` per table, then hands the batch to the backend.
 
-A plain **WarmPolicy** warms EVERYTHING, and it is what :ref:`NetwDatabase.warm_policy<class_NetwDatabase_property_warm_policy>` holds by default, so a write-behind backend pre-loads the whole open slot before the first read. Warming nothing is a ``null`` policy, not a bare one: the two are different answers and the class carries only the first.
+A plain **WarmPolicy** warms EVERYTHING, and it is what :ref:`NetwDatabase.warm_policy<class_NetwDatabase_property_warm_policy>` holds by default, so a write-behind backend pre-loads the whole open slot before the first read. Warming nothing is a ``null`` policy, not a bare one: the two are different returns and the class carries only the first.
 
-Subclass it and override :ref:`_plan_table()<class_WarmPolicy_private_method__plan_table>` to narrow that default. An override that answers ``null`` for a table leaves that table on the warm-everything answer, so a policy states only what it changes.
+Override :ref:`_plan_table()<class_WarmPolicy_private_method__plan_table>` to change the default for a table. Returning ``null`` keeps the warm-all default.
 
 ::
 
@@ -63,7 +63,7 @@ Method Descriptions
 
 :ref:`WarmRequest<class_WarmRequest>` **_plan_table**\ (\ table\: :godot:`StringName`, columns\: :godot:`Array`\[:godot:`StringName`\]\ ) |virtual| :ref:`🔗<class_WarmPolicy_private_method__plan_table>`
 
-Override to return the :ref:`WarmRequest<class_WarmRequest>` for ``table`` given its declared ``columns``. Answer :ref:`WarmRequest.none()<class_WarmRequest_method_none>` to leave a table lazy; answering ``null`` is not a way to abstain from warming, because the warm-everything default is what stands when this answers nothing.
+Override to return the :ref:`WarmRequest<class_WarmRequest>` for ``table`` given its declared ``columns``. Return :ref:`WarmRequest.none()<class_WarmRequest_method_none>` to leave a table lazy; returning ``null`` is not a way to abstain from warming, because the warm-everything default is what stands when this returns nothing.
 
 This is the override point only. Callers ask :ref:`plan_table()<class_WarmPolicy_method_plan_table>`, which is what dispatches here.
 
@@ -77,7 +77,7 @@ This is the override point only. Callers ask :ref:`plan_table()<class_WarmPolicy
 
 :ref:`WarmRequest<class_WarmRequest>` **plan_table**\ (\ table\: :godot:`StringName`, columns\: :godot:`Array`\[:godot:`StringName`\]\ ) :ref:`🔗<class_WarmPolicy_method_plan_table>`
 
-Returns the :ref:`WarmRequest<class_WarmRequest>` this policy plans for ``table`` given its declared ``columns``, which is :ref:`WarmRequest.all()<class_WarmRequest_method_all>` unless :ref:`_plan_table()<class_WarmPolicy_private_method__plan_table>` answers otherwise.
+Returns the :ref:`WarmRequest<class_WarmRequest>` this policy plans for ``table`` given its declared ``columns``, which is :ref:`WarmRequest.all()<class_WarmRequest_method_all>` unless :ref:`_plan_table()<class_WarmPolicy_private_method__plan_table>` returns otherwise.
 
 Called once per registered table when the database initializes its backend. Synchronous backends ignore the result, so a policy can never break a read.
 

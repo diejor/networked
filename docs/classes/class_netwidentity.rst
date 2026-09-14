@@ -19,9 +19,9 @@ A player identity an auth flow has already validated.
 Description
 -----------
 
-An auth provider produces one of these and hands it back inside an :ref:`AuthResult<class_AuthResult>`, so everything downstream treats :ref:`username<class_NetwIdentity_property_username>` as server-authoritative rather than as something the connecting peer claimed. It is stored per peer and answered by :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>`.
+An auth provider returns this inside an :ref:`AuthResult<class_AuthResult>`. The session treats :ref:`username<class_NetwIdentity_property_username>` as server-authoritative and stores the identity per peer. Access it through :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>`.
 
-A session without an auth provider has no identities at all, and :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>` answers ``null`` there. It is not part of the replicated roster: :ref:`ResolvedJoin<class_ResolvedJoin>` is what the server sends to peers.
+A session without an auth provider has no identities at all, and :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>` returns ``null`` there. It is not part of the replicated roster: :ref:`ResolvedJoin<class_ResolvedJoin>` is what the server sends to peers.
 
 ::
 
@@ -156,7 +156,7 @@ Method Descriptions
 
 A key for ``node`` that survives the node being rebuilt, for a debugger or a log that has to match rows across frames.
 
-It answers the peer ``node``'s entity represents when there is one, then the peer its name spells, and only then the node path, because a path changes when the node moves and the first two do not. A node that is not valid answers an empty :godot:`String`.
+It returns the peer ``node``'s entity represents when there is one, then the peer its name spells, and only then the node path, because a path changes when the node moves and the first two do not. A node that is not valid returns an empty :godot:`String`.
 
 .. rst-class:: classref-item-separator
 
@@ -170,7 +170,7 @@ It answers the peer ``node``'s entity represents when there is one, then the pee
 
 A display name for ``node``, for UI and logs.
 
-It answers the entity id ``node`` was bound under when it has one, and otherwise the part of the node's name before the ``|`` separator, which is where a bound name keeps it. A node that is not valid answers an empty :godot:`String`.
+It returns the entity id ``node`` was bound under when it has one, and otherwise the part of the node's name before the ``|`` separator, which is where a bound name keeps it. A node that is not valid returns an empty :godot:`String`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

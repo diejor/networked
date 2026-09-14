@@ -21,7 +21,7 @@ Description
 
 Pairs a local :ref:`predict<class_NetwAction_property_predict>` effect with a reliable server request. The server receives a :ref:`NetwActionContext<class_NetwActionContext>`, validates at :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>`, and either binds an authoritative spawned :ref:`NetwEntity<class_NetwEntity>` result with :ref:`NetwActionContext.bind()<class_NetwActionContext_method_bind>` or denies it with :ref:`NetwActionContext.deny()<class_NetwActionContext_method_deny>`.
 
-Every authority method on an entity holds its own slot, so two actions armed at one view tick never share an effect key. Mint one with :ref:`Netw.action()<class_Netw_method_action>`, which reads the session off the authority's own host node; the authority method must be a plain :godot:`Callable`, never an RPC.
+Each authority method on an entity has its own slot, so actions created at one view tick use distinct effect keys. Create one with :ref:`Netw.action()<class_Netw_method_action>`. The authority method must be a plain :godot:`Callable`, not an RPC.
 
 ::
 

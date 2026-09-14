@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the installable addon from staged cells, or refuse to."""
+"""Assemble the installable addon from staged build cells."""
 
 from __future__ import annotations
 

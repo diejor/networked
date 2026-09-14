@@ -7,7 +7,7 @@ const STUCK_TIME := 4.0
 const REVERSE_DURATION := 0.5
 const TURN_DEADZONE := 0.1
 
-@onready var inputs: Node = get_parent().get_node(^"Input")
+@onready var car: RocketCar = get_parent()
 @onready var ball: RocketBall = NetwEntity.of(get_parent()).scene.root.get_node(
 	^"ball|0",
 )
@@ -18,17 +18,17 @@ var reverse_timer := 0.0
 
 
 func _ready() -> void:
-	inputs.ai_enabled = true
+	car.ai_enabled = true
 
 
 func _input(event: InputEvent) -> void:
 	# Disable AI if the player presses any key
 	if event is InputEventKey and event.pressed:
-		inputs.ai_enabled = false
+		car.ai_enabled = false
 
 
 func _process(delta: float) -> void:
-	if not inputs.ai_enabled or not inputs.is_multiplayer_authority():
+	if not car.ai_enabled or not car.entity.is_controlled_locally:
 		return
 
 	if stuck_check(delta):
@@ -45,7 +45,7 @@ func _process(delta: float) -> void:
 	elif cross < -TURN_DEADZONE:
 		steering = 1.0 # Steer left
 
-	inputs.ai_motion = Vector2(steering, 1.0)
+	car.ai_motion = Vector2(steering, 1.0)
 
 
 func stuck_check(delta: float) -> bool:
@@ -61,11 +61,11 @@ func stuck_check(delta: float) -> bool:
 		reverse_timer = REVERSE_DURATION
 	stuck_timer = minf(stuck_timer, STUCK_TIME)
 
-	inputs.ai_jumping = false
+	car.ai_jumping = false
 	if reverse_timer <= 0.0:
 		return false
 
 	reverse_timer -= delta
-	inputs.ai_motion = Vector2(0.0, -1.0) # Reverse out
-	inputs.ai_jumping = true # Jump as well, why not.
+	car.ai_motion = Vector2(0.0, -1.0) # Reverse out
+	car.ai_jumping = true # Jump as well, why not.
 	return true

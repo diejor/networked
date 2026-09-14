@@ -19,7 +19,7 @@ Which input one prediction frame drives, and under what label.
 Description
 -----------
 
-:ref:`NetwMultiplayer._predict_drive()<class_NetwMultiplayer_private_method__predict_drive>` answers with one of these, and a game overriding that seam mints its own through :ref:`of()<class_NetwPredictFold_method_of>`.
+:ref:`NetwMultiplayer._predict_drive()<class_NetwMultiplayer_private_method__predict_drive>` returns one of these, and a game overriding that seam creates its own through :ref:`of()<class_NetwPredictFold_method_of>`.
 
 Every driven frame is labeled, including one that had no new input, so a frame with nothing newer than the last driven repeats the input it already had rather than inventing one. That is why :ref:`label()<class_NetwPredictFold_method_label>` is never absent and :ref:`fresh()<class_NetwPredictFold_method_fresh>` is what separates the two cases.
 
@@ -102,7 +102,7 @@ The tick the transition is filed under, which is the input's own tick whenever o
 
 :ref:`NetwPredictFold<class_NetwPredictFold>` **of**\ (\ label\: :godot:`int`, fresh\: :godot:`bool`, kind\: :ref:`DriveKind<enum_NetwPredict_DriveKind>`\ ) |static| :ref:`🔗<class_NetwPredictFold_method_of>`
 
-Mints one drive choice. ``kind`` is a :ref:`DriveKind<enum_NetwPredict_DriveKind>` and naming no member of it is refused, because a fold the tape cannot classify would file an entry under a kind no reader can act on.
+Creates one drive choice. ``kind`` is a :ref:`DriveKind<enum_NetwPredict_DriveKind>` and naming no member of it is rejected, because a fold the tape cannot classify would file an entry under a kind no reader can act on.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

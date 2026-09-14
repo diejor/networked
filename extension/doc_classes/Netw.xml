@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="Netw" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The networked API most netcode and game scripts are written against, and the door that resolves a node's [NetwMultiplayer].
+		Static entry points for the Networked API.
 	</brief_description>
 	<description>
-		The networked API a game's scripts and netcode are expected to write against. Every method here is static and takes the node it acts on, finding that node's [NetwMultiplayer] much as [member Node.multiplayer] finds the engine's own [MultiplayerAPI]. [method of] hands that [NetwMultiplayer] over when a game wants the object itself.
+		Each method resolves the [NetwMultiplayer] associated with its node argument. Use [method of] to access that session directly.
 		[codeblock]
 		Netw.session(self).participants       # who is playing
 		Netw.clock(self).tick                 # the tick every peer shares
@@ -13,7 +13,7 @@
 		Netw.rpc(turret.aim, yaw)             # call a method on every peer
 		[/codeblock]
 		[b]Joining a session[/b]
-		Connecting a [MultiplayerPeer] puts this peer on the wire. [method join] is what asks for a place in the game, and the session answers it with a [NetwParticipant] carrying the [member NetwParticipant.username] that was asked for. Call it before or after [member MultiplayerAPI.multiplayer_peer] is assigned, since a session that is not online yet holds the request until it is.
+		Connecting a [MultiplayerPeer] starts the network connection. [method join] requests a place in the game and returns a [NetwParticipant]. It may be called before or after assigning [member MultiplayerAPI.multiplayer_peer]; an offline session queues the request.
 		[codeblock]
 		func host() -&gt; void:
 		    var peer := ENetMultiplayerPeer.new()
@@ -29,7 +29,7 @@
 		func seat_player(participant: NetwParticipant, team: StringName) -&gt; void:
 		    arena.add_child(Netw.spawn_player(participant, _spawn_avatar, team))
 		[/codeblock]
-		A session declaring no handler falls back to [NetwDefaultJoin]. A refused join announces as [signal NetwConnectHandle.join_failed]. The seat this peer was given is [member NetwSessionHandle.local_participant], filled at [signal NetwSessionHandle.local_joined].
+		A session declaring no handler falls back to [NetwDefaultJoin]. A rejected join announces as [signal NetwConnectHandle.join_failed]. The seat this peer was given is [member NetwSessionHandle.local_participant], filled at [signal NetwSessionHandle.local_joined].
 		[b]The tick[/b]
 		Every peer in a session counts the same tick, and it is the time everything networked is stamped with. [method clock] reaches it. [method configure_clock] chooses how fast it runs, and a session that declares nothing has no clock at all.
 		[codeblock]
@@ -80,7 +80,7 @@
 		func aim(yaw: float) -&gt; void:
 		    turret.rotation.y = yaw
 		[/codeblock]
-		A request is an RPC that answers back, as a [NetwPromise] the caller awaits through [method NetwPromise.wait]. [method request] asks the server, [method request_id] asks one peer, and [method request_all] asks every client at once through a [NetwGroupPromise].
+		A request is an RPC with a response. [method request] calls the server, [method request_id] calls one peer, and [method request_all] calls every client through a [NetwGroupPromise]. Each method returns a promise.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_rpc(self.buy)
@@ -126,7 +126,7 @@
 		arena.admit(participant)
 		arena.player_entered.connect(_on_car_entered)
 		[/codeblock]
-		A game opens a world by spawning it and admitting players to it, and it can also travel players the way the engine travels a scene. [method change_scene_to_file] is that second shape made multiplayer correct, since [method SceneTree.change_scene_to_file] moves this peer alone and leaves the rest of the session running without it. The [enum SceneChange] scope says who the change is for. The server's own call applies straight away. A client's call is a request, and an arriving request is refused unless [method configure_scene_requests] declared a handler that admits it.
+		A game opens a world by spawning it and admitting players to it, and it can also travel players the way the engine travels a scene. [method change_scene_to_file] is that second shape made multiplayer correct, since [method SceneTree.change_scene_to_file] moves this peer alone and leaves the rest of the session running without it. The [enum SceneChange] scope says who the change is for. The server's own call applies straight away. A client's call is a request, and an arriving request is rejected unless [method configure_scene_requests] declared a handler that admits it.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_scene_requests(self, authorize)
@@ -181,7 +181,7 @@
 		    if not past.has_value(&amp;"position"):
 		        ctx.deny()
 		[/codeblock]
-		[method action] is the same idea for a one-off act such as firing or placing something. It plays the effect declared on [member NetwAction.predict] right away, sends the server a request it judges at [member NetwActionContext.view_tick], and takes the effect back when the server answers with [method NetwActionContext.deny]. [method configure_lagcomp] only tunes this, since the recording starts itself as soon as anything asks for it.
+		[method action] is the same idea for a one-off act such as firing or placing something. It plays the effect declared on [member NetwAction.predict] right away, sends the server a request it judges at [member NetwActionContext.view_tick], and takes the effect back when the server returns [method NetwActionContext.deny]. [method configure_lagcomp] only tunes this, since the recording starts itself as soon as anything asks for it.
 		[codeblock]
 		@onready var place_bomb := Netw.action(_place_bomb)
 
@@ -211,7 +211,7 @@
 			<param index="0" name="authority" type="Callable" />
 			<description>
 				A [NetwAction] for a one-off act such as firing or placing something, bound to the method [param authority] the server runs to judge it.
-				[param authority] is a method on an entity root or on one of its children, and the session is found through that node. Asking twice for the same method answers the same [NetwAction], so a component may mint one and keep it.
+				[param authority] is a method on an entity root or one of its children. Repeated calls for the same method return the same [NetwAction].
 				[codeblock]
 				@onready var place_bomb := Netw.action(_place_bomb)
 
@@ -233,7 +233,7 @@
 			<description>
 				Travels players to [param path] the way [method SceneTree.change_scene_to_file] travels this peer, except that the rest of the session comes along.
 				[param scope] says who is travelling, and it means the same thing whoever calls it. [constant SCENE_CHANGE_SESSION] brings everyone, [constant SCENE_CHANGE_PARTICIPANT] brings one player and leaves every world standing, and [constant SCENE_CHANGE_SCENE] brings whoever is in the world [param node] sits in.
-				The server's own call applies. A client's call is a request that [method configure_scene_requests] decides, so a session declaring no handler refuses it.
+				The server's own call applies. A client's call is a request that [method configure_scene_requests] decides, so a session declaring no handler rejects it.
 				[codeblock]
 				var err: Error = await Netw.change_scene_to_file(
 				        self, "res://match.tscn").wait()
@@ -248,7 +248,7 @@
 			<param index="1" name="packed" type="PackedScene" />
 			<param index="2" name="scope" type="int" enum="Netw.SceneChange" default="0" />
 			<description>
-				The same travel as [method change_scene_to_file], from a [PackedScene] that came from a file. A [PackedScene] built in memory is refused, because a client can only ask for a scene by path.
+				The same travel as [method change_scene_to_file], from a [PackedScene] that came from a file. A [PackedScene] built in memory is rejected, because a client can only ask for a scene by path.
 			</description>
 		</method>
 		<method name="channel" qualifiers="static">
@@ -306,7 +306,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="preset" type="NetwClockConfig" default="null" />
 			<description>
-				Sets up the clock of the session [param node] belongs to, and answers the [NetwClockConfig] to fill in.
+				Sets up the clock of the session [param node] belongs to, and returns the [NetwClockConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_clock(self) \
@@ -314,14 +314,14 @@
 				            .display_offset(2)
 				[/codeblock]
 				Declaring this is what starts the clock. From then on the session steps it once per physics frame, and a rig that wants to step the ticks itself turns that off with [constant NetwMultiplayer.CLOCK_PARAM_MANUAL_TICK].
-				Declare it from [method Object._init]. A [param preset] is copied as it is taken, so chaining onto what comes back never edits a shared [code].tres[/code]. To fill it in from the inspector instead, hold the returned config in an exported field and declare from [method Node._enter_tree], since an exported value cannot be read during [method Object._init]. Declaring twice for one [param node] is an error and answers the first config unchanged. A value written after the session has read the config is reported and changes nothing. [NetwClockConfig] documents every field, and [method NetwMultiplayer.clock_get_config] is what the running session holds.
+				Declare it from [method Object._init]. A [param preset] is copied as it is taken, so chaining onto what comes back never edits a shared [code].tres[/code]. To fill it in from the inspector instead, hold the returned config in an exported field and declare from [method Node._enter_tree], since an exported value cannot be read during [method Object._init]. Declaring twice for one [param node] is an error and returns the first config unchanged. A value written after the session has read the config is reported and changes nothing. [NetwClockConfig] documents every field, and [method NetwMultiplayer.clock_get_config] is what the running session holds.
 			</description>
 		</method>
 		<method name="configure_despawn" qualifiers="static">
 			<return type="NetwDespawnConfig" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares what the other peers do with [param node] when [method despawn] removes it, and answers the [NetwDespawnConfig] to fill in.
+				Declares what the other peers do with [param node] when [method despawn] removes it, and returns the [NetwDespawnConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_despawn(self).linger(0.5)
@@ -339,7 +339,7 @@
 				            NetwEntity.INITIAL_REPRESENTED_PEER
 				    Netw.configure_property(self, &amp;"position").on_spawn()
 				[/codeblock]
-				Call it from [method Object._init], while the node has no parent yet. It walks up to the topmost parentless node and puts the [NetwEntity] there, which is what makes a whole scene one entity rather than one per script. A node the tree already holds is past the moment one could be created for it, so it answers what [method NetwEntity.of] would. A component under a root with no script has no parents to walk during [method Object._init], so it declares at [constant Node.NOTIFICATION_PARENTED] instead.
+				Call it from [method Object._init], while the node has no parent yet. It walks up to the topmost parentless node and puts the [NetwEntity] there, which is what makes a whole scene one entity rather than one per script. A node the tree already holds is past the moment one could be created for it, so it returns what [method NetwEntity.of] would. A component under a root with no script has no parents to walk during [method Object._init], so it declares at [constant Node.NOTIFICATION_PARENTED] instead.
 				[method NetwEntity.of] is the everyday read and creates nothing. [method NetwEntity.ensure] puts the [NetwEntity] on the exact node given rather than walking up.
 			</description>
 		</method>
@@ -347,7 +347,7 @@
 			<return type="NetwInterestHandle" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares which [NetwInterestLayer] groups [param node] belongs to, and answers the [NetwInterestHandle] that is also [member NetwEntity.interest].
+				Declares which [NetwInterestLayer] groups [param node] belongs to, and returns the [NetwInterestHandle] that is also [member NetwEntity.interest].
 				Call it from [method Object._init] so every peer names the same groups and the same callbacks. The server decides the real membership. A group joined or left later goes through this same handle.
 				[codeblock]
 				func _init() -&gt; void:
@@ -367,7 +367,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="handler" type="Callable" />
 			<description>
-				Declares what the server does with each player it lets in, and answers the [NetwJoinConfig] that can [method NetwJoinConfig.quantize] the extra values they sent.
+				Declares what the server does with each player it lets in, and returns the [NetwJoinConfig] that can [method NetwJoinConfig.quantize] the extra values they sent.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_join(self, spawn_at)
@@ -385,33 +385,33 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="preset" type="NetwLagCompensationConfig" default="null" />
 			<description>
-				Tunes how far back the session records what every node held, and answers the [NetwLagCompensationConfig] to fill in.
+				Tunes how far back the session records what every node held, and returns the [NetwLagCompensationConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_lagcomp(self).input_gate_deadline_ticks(16)
 				[/codeblock]
 				This is optional. The recording starts itself as soon as a predicted node or a [NetwAction] needs it, using this config if one was declared and the defaults otherwise. Declare one to move a tick count off its default, or to bound the [NetwAction] traffic in a game that predicts nothing of its own. Once the session has read it there is no way to take it back, and the recording ends with the session.
-				Declare it from [method Object._init]. A [param preset] is copied as it is taken, so chaining onto what comes back never edits a shared [code].tres[/code]. To fill it in from the inspector instead, hold the returned config in an exported field and declare from [method Node._enter_tree]. Declaring twice for one [param node] is an error and answers the first config unchanged. [NetwLagCompensationConfig] documents every field.
+				Declare it from [method Object._init]. A [param preset] is copied as it is taken, so chaining onto what comes back never edits a shared [code].tres[/code]. To fill it in from the inspector instead, hold the returned config in an exported field and declare from [method Node._enter_tree]. Declaring twice for one [param node] is an error and returns the first config unchanged. [NetwLagCompensationConfig] documents every field.
 			</description>
 		</method>
 		<method name="configure_multiplayer_scene" qualifiers="static">
 			<return type="NetwSceneConfig" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Makes [param node] a world players are let into one at a time, and answers the [NetwSceneConfig] to fill in.
+				Makes [param node] a world players are let into one at a time, and returns the [NetwSceneConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_multiplayer_scene(self).labeled(&amp;"Arena")
 				[/codeblock]
 				Every node under [param node] belongs to this world, and a player receives what is inside only once [method NetwSceneHandle.admit] has let them in. Call it from the scene root's [method Object._init], because this has to be true before the scene is sent to anyone. Nothing else about the node changes, so it still replicates its own properties.
-				[method NetwSceneConfig.labeled] gives it a name [method scene] can look up, and [method NetwSceneConfig.isolated] gives it a physics world of its own. A node with no script answers [code]null[/code], since there would be nothing to hold the declaration.
+				[method NetwSceneConfig.labeled] gives it a name [method scene] can look up, and [method NetwSceneConfig.isolated] gives it a physics world of its own. A node with no script returns [code]null[/code], since there would be nothing to hold the declaration.
 			</description>
 		</method>
 		<method name="configure_persistence" qualifiers="static">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares where [param node] is saved and loaded, and answers the [NetwPersistenceConfig] to fill in.
+				Declares where [param node] is saved and loaded, and returns the [NetwPersistenceConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_persistence(self) \
@@ -428,7 +428,7 @@
 			<param index="1" name="property" type="StringName" />
 			<param index="2" name="warn_late" type="bool" default="true" />
 			<description>
-				Declares how [param property] travels between peers, and answers the [NetwPropertyConfig] to fill in.
+				Declares how [param property] travels between peers, and returns the [NetwPropertyConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_property(self, &amp;"position").state()       # sent every tick
@@ -443,7 +443,7 @@
 			<return type="NetwMemberConfig" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Registers [param callable] so [method rpc] and [method request] may call it, and answers the [NetwMemberConfig] that declares what [code]@rpc[/code] cannot.
+				Registers [param callable] so [method rpc] and [method request] may call it, and returns the [NetwMemberConfig] that declares what [code]@rpc[/code] cannot.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_rpc(self.aim).controller().quantize(
@@ -505,7 +505,7 @@
 			<description>
 				Declares what this server says about itself when a [NetwServerBrowser] asks.
 				[param provider] is handed a [NetwServerInfo] already filled in from the session and returns what to send back, normally the same one with a few fields edited.
-				A session declaring nothing answers with [method NetwServerInfo.from_session]. Two live declarations on one session, and a [param provider] returning anything that is not a [NetwServerInfo], each answer the asking peer with an error rather than advertising something made up. Declare it from [method Object._init] on a node in the session's branch, and pass [code]Callable()[/code] to clear it.
+				A session with no provider uses [method NetwServerInfo.from_session]. Conflicting providers or an invalid return value report an error. Declare the provider from [method Object._init] on a node in the session branch. Pass [code]Callable()[/code] to clear it.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_server_info(self, server_info)
@@ -522,7 +522,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="preset" type="NetwSessionConfig" default="null" />
 			<description>
-				Sets up the session [param node] belongs to, and answers the [NetwSessionConfig] to fill in.
+				Sets up the session [param node] belongs to, and returns the [NetwSessionConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_session(self) \
@@ -530,14 +530,14 @@
 				            .desired_role(NetwMultiplayer.ROLE_LISTEN_SERVER)
 				[/codeblock]
 				The fields exported on a [MultiplayerTree] are only what a session falls back to when nothing declares this. Declaring it replaces those fields together rather than one at a time, so a tree field left out of the config is dropped and named once in a warning.
-				Declare it from [method Object._init]. A [param preset] is copied as it is taken, so chaining onto what comes back never edits a shared [code].tres[/code]. To fill it in from the inspector instead, hold the returned config in an exported field and declare from [method Node._enter_tree], since an exported value cannot be read during [method Object._init]. Declaring twice for one [param node] is an error and answers the first config unchanged. A value written after the session has read the config is reported and changes nothing. [NetwSessionConfig] documents every field, and [method NetwMultiplayer.session_get_config] is what the running session holds.
+				Declare it from [method Object._init]. A [param preset] is copied as it is taken, so chaining onto what comes back never edits a shared [code].tres[/code]. To fill it in from the inspector instead, hold the returned config in an exported field and declare from [method Node._enter_tree], since an exported value cannot be read during [method Object._init]. Declaring twice for one [param node] is an error and returns the first config unchanged. A value written after the session has read the config is reported and changes nothing. [NetwSessionConfig] documents every field, and [method NetwMultiplayer.session_get_config] is what the running session holds.
 			</description>
 		</method>
 		<method name="configure_signal" qualifiers="static">
 			<return type="NetwMemberConfig" />
 			<param index="0" name="sig" type="Signal" />
 			<description>
-				Registers [param sig] so [method emit_entity_signal] may emit it on every peer, and answers the [NetwMemberConfig] that declares who is allowed to.
+				Registers [param sig] so [method emit_entity_signal] may emit it on every peer, and returns the [NetwMemberConfig] that declares who is allowed to.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_signal(self.exploded)   # only the server may emit it
@@ -591,7 +591,7 @@
 				Netw.despawn(bullet)
 				[/codeblock]
 				[param opts] changes how this one removal goes, such as how long the node lingers before it is freed and whether what it held is saved first. [NetwDespawnOpts] documents every field, and [method configure_despawn] is where the same choices are declared once for a whole script.
-				It answers [constant @GlobalScope.ERR_DOES_NOT_EXIST] for a node that is not a spawned one and [constant @GlobalScope.ERR_UNAVAILABLE] for a node in no session.
+				It returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] for a node that is not a spawned one and [constant @GlobalScope.ERR_UNAVAILABLE] for a node in no session.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -622,7 +622,7 @@
 				multiplayer.multiplayer_peer = peer
 				[/codeblock]
 				Call it before or after the peer is assigned. A session that is not online yet holds the request and sends it once it is, so the login cannot outrun it either way. Await the [NetwPromise] to tell a player their credentials were turned down before their connection is.
-				A join that is turned down is reported whether or not the promise is read, and it announces as [signal NetwConnectHandle.join_failed]. An empty [param username] is refused with [constant @GlobalScope.ERR_INVALID_PARAMETER].
+				A join that is turned down is reported whether or not the promise is read, and it announces as [signal NetwConnectHandle.join_failed]. An empty [param username] is rejected with [constant @GlobalScope.ERR_INVALID_PARAMETER].
 				[b]Player request.[/b]
 			</description>
 		</method>
@@ -635,7 +635,7 @@
 				var api := Netw.of(self)
 				api.entity_despawn(route)
 				[/codeblock]
-				A node that is in no tree, and a node whose branch runs no session, both answer [code]null[/code]. The rest of [Netw] is built on this, so [method session], [method clock], [method connection] and [method scene] answer [code]null[/code] in the same two cases.
+				A node that is in no tree, and a node whose branch runs no session, both return [code]null[/code]. The rest of [Netw] is built on this, so [method session], [method clock], [method connection] and [method scene] return [code]null[/code] in the same two cases.
 			</description>
 		</method>
 		<method name="reload_current_scene" qualifiers="static">
@@ -652,7 +652,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="owner" type="NetwParticipant" default="null" />
 			<description>
-				Sends a node the game built itself to every peer, which rebuild it from its [member Node.scene_file_path], and answers its [NetwEntity].
+				Sends a node the game built itself to every peer, which rebuild it from its [member Node.scene_file_path], and returns its [NetwEntity].
 				[param node] has no parent yet. [member NetwEntity.route], [member NetwEntity.entity_id], [member NetwEntity.peer_id] and [member NetwEntity.controller] are all filled in by the time this returns, and the other peers are not told anything until the node enters the tree. That gap is where a save is loaded and where the node's first values are written.
 				[codeblock]
 				var player := PlayerScene.instantiate()
@@ -668,7 +668,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on the server and answers a [NetwPromise] carrying what it returned.
+				Calls [param callable] on the server and returns a [NetwPromise] carrying what it returned.
 				[codeblock]
 				var sold: bool = await Netw.request(shop.buy, &amp;"shield").wait()
 				[/codeblock]
@@ -679,7 +679,7 @@
 			<return type="NetwGroupPromise" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on every peer that can see the node, and answers a [NetwGroupPromise] gathering what they each returned.
+				Calls [param callable] on every peer that can see the node, and returns a [NetwGroupPromise] gathering what they each returned.
 				Which peers are waited for is decided when the call goes out, so a peer arriving afterwards is not one of them. [NetwGroupPromise] is where one reply and the whole set are read.
 			</description>
 		</method>
@@ -687,7 +687,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on the peer driving the node, its [member NetwEntity.controller], and answers a [NetwPromise] carrying what it returned.
+				Calls [param callable] on the peer driving the node, its [member NetwEntity.controller], and returns a [NetwPromise] carrying what it returned.
 			</description>
 		</method>
 		<method name="request_id" qualifiers="vararg static">
@@ -695,7 +695,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on [param peer_id] alone and answers a [NetwPromise] carrying what it returned. A [param peer_id] of [code]0[/code] is refused, since asking everyone is [method request_all].
+				Calls [param callable] on [param peer_id] alone and returns a [NetwPromise] carrying what it returned. A [param peer_id] of [code]0[/code] is rejected, since asking everyone is [method request_all].
 			</description>
 		</method>
 		<method name="rewind" qualifiers="static">
@@ -754,7 +754,7 @@
 				        ctx.deny()
 				        return
 				[/codeblock]
-				Nothing recorded at [param tick] answers an empty record rather than [code]null[/code], so a caller asks [method NetwRecord.has_value] rather than checking for a missing object. Writing to what comes back changes nothing that was recorded.
+				Nothing recorded at [param tick] returns an empty record rather than [code]null[/code], so a caller asks [method NetwRecord.has_value] rather than checking for a missing object. Writing to what comes back changes nothing that was recorded.
 			</description>
 		</method>
 		<method name="scene" qualifiers="static">
@@ -764,7 +764,7 @@
 			<description>
 				The [NetwSceneHandle] for a world, which is how a game reads who is in it, lets players in, and hears when that changes.
 				Left empty, [param named] means the world [param node] is in, which is also [member NetwEntity.scene]. Given a name, it means the one live world carrying that [method NetwSceneConfig.labeled] name, whether or not [param node] is inside it.
-				A name says what kind of world it is rather than which one, so two live worlds sharing it refuse the lookup rather than answering with either. A game that spawned both already holds the handle for the one it means.
+				A name identifies a kind of world, not an instance. If two live worlds share a name, the lookup fails. Use the handle returned when the world was spawned to select an instance.
 				[codeblock]
 				var here := Netw.scene(self)              # the scene I am in
 				var arena := Netw.scene(spawned)         # the one I just spawned
@@ -781,7 +781,7 @@
 				[codeblock]
 				var gamestate := Netw.service(self, MyGamestate) as MyGamestate
 				[/codeblock]
-				A session holding nothing under [param type] answers [code]null[/code], and so does one whose service has since been freed. [method service_register] and [method service_unregister] are the other two halves, and [method NetwMultiplayer.service_get] says what [param type] may be.
+				A session holding nothing under [param type] returns [code]null[/code], and so does one whose service has since been freed. [method service_register] and [method service_unregister] are the other two halves, and [method NetwMultiplayer.service_get] says what [param type] may be.
 			</description>
 		</method>
 		<method name="service_register" qualifiers="static">
@@ -821,7 +821,7 @@
 			<return type="Node" />
 			<param index="0" name="fn" type="Callable" />
 			<description>
-				Builds the same node on every peer by running [param fn] with the arguments given after it, and answers this peer's copy for the caller to parent.
+				Builds the same node on every peer by running [param fn] with the arguments given after it, and returns this peer's copy for the caller to parent.
 				[codeblock]
 				muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 				[/codeblock]
@@ -865,7 +865,7 @@
 			Every participant converges on the destination and every other live scene retires. Whether a scene is isolated, how many are live, and whether authority also holds a local player do not change what this means.
 		</constant>
 		<constant name="SCENE_CHANGE_PARTICIPANT" value="1" enum="SceneChange">
-			One participant travels to the destination with the player entities it is enrolled in, and every world keeps running. A call with no participant to resolve is refused rather than widened to the session.
+			One participant travels to the destination with the player entities it is enrolled in, and every world keeps running. A call with no participant to resolve is rejected rather than widened to the session.
 		</constant>
 		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
 			The occupants of the one world the caller sits in travel to the destination and that world retires. Other worlds are untouched. Occupants means the participants whose [member NetwParticipant.current_scene] is that world, not the spectators admitted there while playing elsewhere.

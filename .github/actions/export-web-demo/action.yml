@@ -104,7 +104,7 @@ runs:
         run-id: ${{ inputs.run-id }}
         github-token: ${{ inputs.github-token }}
 
-    - name: Prove A Library Is Deployed
+    - name: Check deployed library
       shell: bash
       run: |
         set -eu

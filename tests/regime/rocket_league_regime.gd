@@ -166,12 +166,12 @@ func car_key(car: RocketCar) -> String:
 func drive_chase(seconds: float) -> void:
 	var car := local_car()
 	if car:
-		car.inputs.ai_enabled = true
+		car.ai_enabled = true
 	await session.get_tree().create_timer(seconds).timeout
 	if car:
-		car.inputs.ai_enabled = false
-		car.inputs.ai_motion = Vector2.ZERO
-		car.inputs.ai_jumping = false
+		car.ai_enabled = false
+		car.ai_motion = Vector2.ZERO
+		car.ai_jumping = false
 
 
 func hold(seconds: float) -> void:

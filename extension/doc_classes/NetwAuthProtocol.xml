@@ -10,7 +10,7 @@
 		 ┠╴ "NHEL"   a player opening a session
 		 ┃   ┠╴ version(1)    the framing this packet was written against
 		 ┃   ┠╴ app_tag(8)    the game build folded with the wire identity,
-		 ┃   ┃                so a mismatched build is refused before the
+		 ┃   ┃                so a mismatched build is rejected before the
 		 ┃   ┃                provider payload is read
 		 ┃   ┠╴ flags(1)      reserved
 		 ┃   ┖╴ provider payload, which is all a flow ever sees
@@ -18,7 +18,7 @@
 		     ┠╴ version(1)
 		     ┖╴ status-or-flags(1), then the reply payload
 		[/codeblock]
-		A probe peer is answered and disconnected without completing auth, so it never enters [method MultiplayerPeer.get_unique_id]'s peer list. This class is the only place that framing is written or read, so a change to it moves both sides at once.
+		A probe peer receives a response and disconnects without completing authentication, so it never enters [method MultiplayerPeer.get_unique_id]'s peer list. This class reads and writes the framing for both sides.
 		Every verb is static and the class is never instantiated.
 	</description>
 	<tutorials>
@@ -36,30 +36,30 @@
 			<param index="0" name="data" type="PackedByteArray" />
 			<param index="1" name="local_app_tag" type="int" default="0" />
 			<description>
-				Reads a hello packet, refusing it when its build tag differs from [param local_app_tag].
+				Reads a hello packet, rejecting it when its build tag differs from [param local_app_tag].
 				[codeblock lang=text]
 				Dictionary
-				┠╴ok                bool             false on a refusal
+				┠╴ok                bool             false on a rejection
 				┠╴reason            String           "framing", "version" or "app", empty when ok
 				┠╴version           int              the framing version the packet carried
 				┠╴app_tag           int              the 64-bit build tag the packet carried
 				┠╴flags             int              reserved
-				┖╴provider_payload  PackedByteArray  empty on a refusal
+				┖╴provider_payload  PackedByteArray  empty on a rejection
 				[/codeblock]
-				A refusal still reports the [code]version[/code] and [code]app_tag[/code] it read, so the refusing side can say what the peer claimed rather than only that it said no.
+				A rejection still reports the [code]version[/code] and [code]app_tag[/code] it read, so the rejecting side can say what the peer claimed rather than only that it said no.
 			</description>
 		</method>
 		<method name="decode_probe_reply" qualifiers="static">
 			<return type="Dictionary" />
 			<param index="0" name="data" type="PackedByteArray" />
 			<description>
-				Reads a probe reply. A packet with the wrong magic, a short header, or a foreign version answers [code]ok[/code] false and an empty payload. The status it carries is one value of [enum ProbeStatus].
+				Reads a probe reply. A packet with the wrong magic, a short header, or a foreign version returns [code]ok[/code] false and an empty payload. The status it carries is one value of [enum ProbeStatus].
 				[codeblock lang=text]
 				Dictionary
-				┠╴ok       bool             false on a refusal
+				┠╴ok       bool             false on a rejection
 				┠╴version  int              the framing version the packet carried
-				┠╴status   int              what the server said about answering
-				┖╴payload  PackedByteArray  the provider's own reply, empty on a refusal
+				┠╴status   int              what the server said about returning
+				┖╴payload  PackedByteArray  the provider's own reply, empty on a rejection
 				[/codeblock]
 			</description>
 		</method>
@@ -67,10 +67,10 @@
 			<return type="Dictionary" />
 			<param index="0" name="data" type="PackedByteArray" />
 			<description>
-				Reads a probe request. A packet with the wrong magic, a short header, or a foreign version answers [code]ok[/code] false.
+				Reads a probe request. A packet with the wrong magic, a short header, or a foreign version returns [code]ok[/code] false.
 				[codeblock lang=text]
 				Dictionary
-				┠╴ok       bool  false on a refusal
+				┠╴ok       bool  false on a rejection
 				┠╴version  int   the framing version the packet carried
 				┖╴flags    int   reserved
 				[/codeblock]
@@ -82,7 +82,7 @@
 			<param index="1" name="app_tag" type="int" default="0" />
 			<param index="2" name="flags" type="int" default="0" />
 			<description>
-				Wraps [param provider_payload] in a hello header stamped with [param app_tag], the 64-bit build tag folded from [member MultiplayerTree.app_id] and the wire identity by [method NetwMultiplayer.auth_set_app_tag]. There is no ungated value. An empty [member MultiplayerTree.app_id] still carries the wire the build speaks, so two builds that disagree about the format or the channel table are refused whether or not the game named itself. [param flags] is reserved.
+				Wraps [param provider_payload] in a hello header stamped with [param app_tag], the 64-bit build tag folded from [member MultiplayerTree.app_id] and the wire identity by [method NetwMultiplayer.auth_set_app_tag]. There is no ungated value. An empty [member MultiplayerTree.app_id] still carries the wire the build speaks, so two builds that disagree about the format or the channel table are rejected whether or not the game named itself. [param flags] is reserved.
 			</description>
 		</method>
 		<method name="encode_probe_reply" qualifiers="static">
@@ -115,7 +115,7 @@
 		<method name="protocol_version" qualifiers="static">
 			<return type="int" />
 			<description>
-				The framing version this build writes and is the only one it accepts. It is bumped when the framing changes in a way an older peer cannot read, which is what makes a version mismatch a clean refusal rather than a misparse.
+				The framing version this build writes and is the only one it accepts. It is bumped when the framing changes in a way an older peer cannot read, which is what makes a version mismatch a clean rejection rather than a misparse.
 			</description>
 		</method>
 	</methods>
@@ -127,19 +127,19 @@
 			A player opening a session.
 		</constant>
 		<constant name="KIND_PROBE" value="2" enum="Kind">
-			A browser asking what this server is. It is answered and dropped without ever joining.
+			A browser probe. The server responds and disconnects the peer without joining it.
 		</constant>
 		<constant name="PROBE_OK" value="0" enum="ProbeStatus">
 			The reply carries server metadata.
 		</constant>
 		<constant name="PROBE_BUSY" value="1" enum="ProbeStatus">
-			The server is up but will not answer this probe now.
+			The server is online but temporarily cannot respond to this probe.
 		</constant>
 		<constant name="PROBE_UNSUPPORTED" value="2" enum="ProbeStatus">
-			The server does not answer probes at all.
+			The server does not return probes at all.
 		</constant>
 		<constant name="PROBE_ERROR" value="3" enum="ProbeStatus">
-			The server tried to answer and could not.
+			The server tried to return and could not.
 		</constant>
 	</constants>
 </class>

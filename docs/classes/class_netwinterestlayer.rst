@@ -23,7 +23,7 @@ A layer combines :ref:`entities<class_NetwInterestLayer_property_entities>`, :re
 
 Membership never crosses the wire. The committed rows gate the spawn and synchronization pipelines directly, and a client learns only the attribution for its own row.
 
-Pick the signal by the gameplay question. :ref:`interest_enter<class_NetwInterestLayer_signal_interest_enter>` and :ref:`interest_exit<class_NetwInterestLayer_signal_interest_exit>` answer server authority, :ref:`entity_visible<class_NetwInterestLayer_signal_entity_visible>` and :ref:`entity_hidden<class_NetwInterestLayer_signal_entity_hidden>` answer what the local peer sees, and :ref:`NetwEntity.observer_entered<class_NetwEntity_signal_observer_entered>` answers who can see one entity.
+Use :ref:`interest_enter<class_NetwInterestLayer_signal_interest_enter>` and :ref:`interest_exit<class_NetwInterestLayer_signal_interest_exit>` for server authority. Use :ref:`entity_visible<class_NetwInterestLayer_signal_entity_visible>` and :ref:`entity_hidden<class_NetwInterestLayer_signal_entity_hidden>` for local visibility. :ref:`NetwEntity.observer_entered<class_NetwEntity_signal_observer_entered>` reports observers of one entity.
 
 ::
 
@@ -345,7 +345,7 @@ Enrols ``entity`` in this layer and returns whether the roster changed. Idempote
 
 :godot:`bool` **add_viewer**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwInterestLayer_method_add_viewer>`
 
-Adds ``peer_id`` to :ref:`viewers<class_NetwInterestLayer_property_viewers>` and returns whether the set changed. Idempotent. ``peer_id`` must be non-zero, and the visibility edges it earns arrive at the next interest flush rather than here.
+Adds ``peer_id`` to :ref:`viewers<class_NetwInterestLayer_property_viewers>` and returns whether the set changed. Idempotent. ``peer_id`` must be non-zero, and the visibility edges it receives arrive at the next interest flush rather than here.
 
 .. rst-class:: classref-item-separator
 
@@ -417,8 +417,8 @@ Returns this layer's state and the engine's own explanation of ``peer_id``'s ver
     ┠╴viewers      Array    the peer ids watching
     ┠╴entities     int      roster size
     ┠╴peer_id      int      the peer asked about
-    ┠╴verdict      bool     what verdict_for answers for that peer
-    ┖╴explanation  String   why the engine answered that
+    ┠╴verdict      bool     what verdict_for returns for that peer
+    ┖╴explanation  String   why the engine returned that
 
 .. rst-class:: classref-item-separator
 
@@ -454,7 +454,7 @@ Whether ``peer_id`` is in :ref:`viewers<class_NetwInterestLayer_property_viewers
 
 :godot:`bool` **is_visible_to**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwInterestLayer_method_is_visible_to>`
 
-Whether the session's committed matrix admits ``entity`` to ``peer_id``, which composes every layer and the ancestry clamp rather than this layer alone. A client can answer only for its own projected row.
+Whether the session's committed matrix admits ``entity`` to ``peer_id``, which composes every layer and the ancestry clamp rather than this layer alone. A client can return only for its own projected row.
 
 .. rst-class:: classref-item-separator
 
@@ -514,7 +514,7 @@ Removes ``peer_id`` from :ref:`viewers<class_NetwInterestLayer_property_viewers>
 
 :godot:`bool` **set_policy**\ (\ value\: :godot:`int`\ ) :ref:`🔗<class_NetwInterestLayer_method_set_policy>`
 
-Replaces :ref:`policy<class_NetwInterestLayer_property_policy>` and returns whether it changed. The spelling that answers whether anything moved.
+Replaces :ref:`policy<class_NetwInterestLayer_property_policy>` and returns whether it changed. The spelling that returns whether anything moved.
 
 .. rst-class:: classref-item-separator
 

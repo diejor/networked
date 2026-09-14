@@ -30,10 +30,10 @@
 		</member>
 		<member name="delta_mode" type="int" setter="set_delta_mode" getter="get_delta_mode" default="0">
 			Whether the column spends a per-element selector to write a signed step from the baseline its frame names, or writes its whole code every time.
-			[constant DELTA_AUTO] derives the answer from the declaration, and the derivation is the measured one: a ladder pays 39 to 71 percent on a value a solver integrates and costs 12.5 percent on one a player authors or one that wraps, so it is taken only for a quantized column wider than eight bits on a set whose [member NetwPropertySet.record] is [constant NetwPropertySet.RECORD_STATE], and never for a [NetwQuantizeAngle].
+			[constant DELTA_AUTO] derives the result from the declaration, and the derivation is the measured one: a ladder pays 39 to 71 percent on a value a solver integrates and costs 12.5 percent on one a player authors or one that wraps, so it is taken only for a quantized column wider than eight bits on a set whose [member NetwPropertySet.record] is [constant NetwPropertySet.RECORD_STATE], and never for a [NetwQuantizeAngle].
 			Override it where the declaration cannot see what the value does. An integrated column on a set that is not state is one such case, and an authored one whose declaration looks integrated is the other.
 			A column narrower than five bits is [constant DELTA_FULL] whatever this says, because no bucket is narrower than the code it would replace.
-			The answer folds into [method NetwPropertySet.wire_hash], so two builds that disagree about it refuse to pair rather than misdecoding each other.
+			The result is part of [method NetwPropertySet.wire_hash], so builds with different layouts reject the connection.
 		</member>
 		<member name="epsilon_override" type="float" setter="set_epsilon_override" getter="get_epsilon_override" default="-1.0">
 			The column's own divergence threshold, or a negative value to inherit the entity's default.

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwControlRequest" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		One peer's bid to steer an entity, and the latch any listener refuses it with.
+		One peer's bid to steer an entity, and the latch any listener rejects it with.
 	</brief_description>
 	<description>
 		[NetwEntity] emits [signal NetwEntity.control_requested] with one [NetwControlRequest] per request. Gameplay code may inspect [member requester] and call [method deny] before the default grant path runs.
-		Every listener sees the same record, so [member denied] is a latch: once a listener refuses, no listener after it can take the refusal back, and listener order does not decide who gets to steer.
+		Every listener sees the same record, so [member denied] is a latch: once a listener rejects, no listener after it can take the rejection back, and listener order does not decide who gets to steer.
 		[codeblock]
 		func _on_control_requested(peer_id: int, request: NetwControlRequest) -&gt; void:
 		    if not can_carry(peer_id):
@@ -24,7 +24,7 @@
 	</methods>
 	<members>
 		<member name="denied" type="bool" setter="set_denied" getter="get_denied" default="false">
-			Whether the request should be rejected. Writing [code]false[/code] over a refusal does nothing, because the refusal is a latch.
+			Whether the request should be rejected. Writing [code]false[/code] over a rejection does nothing, because the rejection is a latch.
 		</member>
 		<member name="requester" type="int" setter="set_requester" getter="get_requester" default="0">
 			Peer id reported by [method MultiplayerAPI.get_remote_sender_id].

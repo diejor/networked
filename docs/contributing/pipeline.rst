@@ -17,12 +17,12 @@ of a build command that drifts from the first.
     ci/build.py         builds one cell and records what it produced
     ci/package.py       assembles the installable addon from staged cells
     ci/test.py          the test lanes, each bounded and separately reported
-    ci/reports.py       grades a JUnit report and refuses what is not evidence
+    ci/reports.py       validates JUnit reports
     ci/export.py        exports a demo and proves the export in a browser
     ci/engine.py        installs and qualifies an engine from the catalog
     ci/changed.py       decides which lanes a change can reach
     ci/release.py       the inventory gate a publication has to pass
-    ci/local.py         runs a named local profile and records the evidence
+    ci/local.py         runs a named local profile and records its results
 
 Cells and profiles
 ------------------
@@ -64,7 +64,7 @@ Packaging
 
 The first writes ``dist/networked-<version>.zip``, its manifest and
 ``SHA256SUMS.txt``. The second populates an addon for a job that needs the
-extension to load. Both refuse a missing cell, a cell from another revision,
+extension to load. Both reject a missing cell, a cell from another revision,
 and two cells claiming one filename with different content.
 
 Testing
@@ -86,10 +86,10 @@ is graded rather than counted:
 ``res://tests`` and ``res://examples`` are always two invocations. One process
 carrying both exhausts the deferred-call queue and takes the whole run down.
 
-``ci/reports.py`` refuses a report that is missing, empty, malformed, older
+``ci/reports.py`` rejects a report that is missing, empty, malformed, older
 than the library it describes, truncated, or smaller than the corpus recorded
-for this revision, as well as one whose cases failed. ``--self-test`` shows it
-refusing each of those.
+for this revision, as well as one whose cases failed. ``--self-test`` checks
+each failure mode.
 
 Running a lane locally
 ----------------------
@@ -151,7 +151,7 @@ project keeps the folder somewhere other than ``addons/``.
 
 There is one manifest, ``extension/networked.gdextension``. ``ci/package.py``
 derives the shipped copy from it by rewriting every ``res://addons/networked/``
-path to ``./``, and refuses if any absolute path survives, so the two can
+path to ``./``, and fails if any absolute path remains, so the two can
 never disagree.
 
 The Asset Library takes a direct download URL rather than only a commit
@@ -184,4 +184,4 @@ The release profile declares 22 native compilations:
 macOS slices merge into one framework per target and the iOS slices assemble
 into an XCFramework, both of which need a Mac. A platform that a run cannot
 qualify is named in the manifest's ``unqualified`` list, and the release gate
-refuses to publish a candidate that carries one.
+rejects a candidate that contains one.

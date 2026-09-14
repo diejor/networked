@@ -29,7 +29,7 @@ It settles exactly once: :ref:`then()<class_NetwPromise_method_then>` fires with
             show_error(error_string(code) if detail.is_empty() else detail)
         )
 
-\ The settle vocabulary is closed. :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` means the deadline passed with no reply, :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` means the responder went away before it could answer, and :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` means the responder refused. The :ref:`detail<class_NetwPromise_property_detail>` string carries the human-readable reason and is never the thing code branches on.
+\ The settle vocabulary is closed. :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` means the deadline passed with no reply, :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` means the responder went away before it could answer, and :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` means the responder rejected. The :ref:`detail<class_NetwPromise_property_detail>` string carries the human-readable reason and is never the thing code branches on.
 
 A returned :godot:`Node` arrives resolved to the live local instance, deferred until it spawns if the reply beats its spawn packet. See :ref:`NetwGroupPromise<class_NetwGroupPromise>` for the one-to-many form.
 
@@ -122,7 +122,7 @@ Emitted when the promise is rejected, carrying the settle ``code`` and its human
 
 **ready**\ (\ answer\: :godot:`Variant`\ ) :ref:`🔗<class_NetwPromise_signal_ready>`
 
-The channel :ref:`wait()<class_NetwPromise_method_wait>` answers on, carrying :ref:`answer()<class_NetwPromise_method_answer>`. A pending promise emits it once on its settle edge, so every waiter is answered by that one emission. A promise that already settled emits it once per :ref:`wait()<class_NetwPromise_method_wait>` call, deferred, so a late caller is answered rather than left waiting.
+Carries :ref:`answer()<class_NetwPromise_method_answer>`. A pending promise emits this once when it settles. :ref:`wait()<class_NetwPromise_method_wait>` emits it later for each call made after settlement.
 
 \ **Note:** connect to :ref:`settled<class_NetwPromise_signal_settled>` instead. Because a settled promise emits this per call, a subscriber attached by hand can see it more than once. :ref:`wait()<class_NetwPromise_method_wait>` is its only intended producer and consumer.
 
@@ -262,9 +262,7 @@ Method Descriptions
 
 :godot:`Variant` **answer**\ (\ ) |const| :ref:`🔗<class_NetwPromise_method_answer>`
 
-What the promise settled with, as one value: :ref:`result<class_NetwPromise_property_result>` when it completed and :ref:`code<class_NetwPromise_property_code>` when it failed. This is the rule ``NetwDatabase.settled_error`` already applies, and it is what :ref:`ready<class_NetwPromise_signal_ready>` carries, so one channel answers both outcomes and a caller reads the answer without first asking which happened.
-
-A promise that has not settled answers :ref:`code<class_NetwPromise_property_code>`, which is zero, so read :ref:`is_settled<class_NetwPromise_property_is_settled>` first when the difference matters.
+Returns :ref:`result<class_NetwPromise_property_result>` after success or :ref:`code<class_NetwPromise_property_code>` after failure. :ref:`ready<class_NetwPromise_signal_ready>` carries the same value. Check :ref:`is_settled<class_NetwPromise_property_is_settled>` before reading an unsettled promise.
 
 .. rst-class:: classref-item-separator
 
@@ -276,7 +274,7 @@ A promise that has not settled answers :ref:`code<class_NetwPromise_property_cod
 
 :ref:`NetwPromise<class_NetwPromise>` **catch_error**\ (\ cb\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPromise_method_catch_error>`
 
-Chains ``cb`` to run if the promise is rejected or timed out. It receives :ref:`code<class_NetwPromise_property_code>` and :ref:`detail<class_NetwPromise_property_detail>`. A promise that already failed runs it immediately, and either way this answers the promise so calls chain.
+Chains ``cb`` to run if the promise is rejected or timed out. It receives :ref:`code<class_NetwPromise_property_code>` and :ref:`detail<class_NetwPromise_property_detail>`. A promise that already failed runs it immediately, and either way this returns the promise so calls chain.
 
 .. rst-class:: classref-item-separator
 
@@ -342,7 +340,7 @@ Settles the promise as completed with ``val``. Emits :ref:`completed<class_NetwP
 
 :ref:`NetwPromise<class_NetwPromise>` **then**\ (\ cb\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPromise_method_then>`
 
-Chains ``cb`` to run when the promise resolves. It receives :ref:`result<class_NetwPromise_property_result>`. A promise that already completed runs it immediately, and either way this answers the promise so calls chain.
+Chains ``cb`` to run when the promise resolves. It receives :ref:`result<class_NetwPromise_property_result>`. A promise that already completed runs it immediately, and either way this returns the promise so calls chain.
 
 .. rst-class:: classref-item-separator
 
@@ -354,7 +352,7 @@ Chains ``cb`` to run when the promise resolves. It receives :ref:`result<class_N
 
 :godot:`Signal` **wait**\ (\ ) :ref:`🔗<class_NetwPromise_method_wait>`
 
-Answers a :godot:`Signal` on the :ref:`ready<class_NetwPromise_signal_ready>` channel that is safe to ``await`` whether or not the promise has already settled, carrying :ref:`answer()<class_NetwPromise_method_answer>`.
+Returns a :godot:`Signal` on the :ref:`ready<class_NetwPromise_signal_ready>` channel that is safe to ``await`` whether or not the promise has already settled, carrying :ref:`answer()<class_NetwPromise_method_answer>`.
 
 This is the idiom. Awaiting :ref:`settled<class_NetwPromise_signal_settled>` directly is a race the caller cannot win: a promise that settled first has already emitted it and the caller waits forever, which is why call sites grew a hand-written :ref:`is_settled<class_NetwPromise_property_is_settled>` guard. An already-settled promise defers its emission here, so the ``await`` subscribes before the answer is delivered.
 
@@ -374,7 +372,7 @@ This is the idiom. Awaiting :ref:`settled<class_NetwPromise_signal_settled>` dir
 
 :ref:`NetwPromise<class_NetwPromise>` **when_settled**\ (\ cb\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPromise_method_when_settled>`
 
-Chains a zero-argument ``cb`` to run the moment :ref:`is_settled<class_NetwPromise_property_is_settled>` becomes true, whichever way it went. An already-settled promise runs it immediately, and either way this answers the promise so calls chain.
+Chains a zero-argument ``cb`` to run the moment :ref:`is_settled<class_NetwPromise_property_is_settled>` becomes true, whichever way it went. An already-settled promise runs it immediately, and either way this returns the promise so calls chain.
 
 This is what a caller with no coroutine uses in place of ``await promise.settled``. Awaiting is a race the caller cannot win, because a promise that settled before the ``await`` has already emitted :ref:`settled<class_NetwPromise_signal_settled>` and the caller waits forever; subscribing here has no such window. It is also the only chain that survives both outcomes, since :ref:`then()<class_NetwPromise_method_then>` never fires on a rejection and :ref:`catch_error()<class_NetwPromise_method_catch_error>` never fires on a success.
 

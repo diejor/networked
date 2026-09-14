@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		Pairs a local [member predict] effect with a reliable server request. The server receives a [NetwActionContext], validates at [member NetwActionContext.view_tick], and either binds an authoritative spawned [NetwEntity] result with [method NetwActionContext.bind] or denies it with [method NetwActionContext.deny].
-		Every authority method on an entity holds its own slot, so two actions armed at one view tick never share an effect key. Mint one with [method Netw.action], which reads the session off the authority's own host node; the authority method must be a plain [Callable], never an RPC.
+		Each authority method on an entity has its own slot, so actions created at one view tick use distinct effect keys. Create one with [method Netw.action]. The authority method must be a plain [Callable], not an RPC.
 		[codeblock]
 		@onready var place_bomb := Netw.action(_place_bomb)
 

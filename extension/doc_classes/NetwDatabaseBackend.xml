@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDatabaseBackend" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Where a [NetwDatabase] actually stores what it saves, as nine methods each answering a [NetwPromise].
+		Where a [NetwDatabase] actually stores what it saves, as nine methods each returning a [NetwPromise].
 	</brief_description>
 	<description>
 		A game subclasses this to save into something of its own, and [FileSystemDatabase] is the backend this addon ships.
-		Every method here answers a [NetwPromise] straight away and none of them may suspend. [NetwDatabase.TableRepository] is the layer above that waits on the promise, and that is where a coroutine belongs.
-		That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot answer a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
+		Every method here returns a [NetwPromise] straight away and none of them may suspend. [NetwDatabase.TableRepository] is the layer above that waits on the promise, and that is where a coroutine belongs.
+		That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot return a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
 		[codeblock]
-		# A backend that answers on the spot.
+		# A backend that returns on the spot.
 		func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
 		    return NetwPromise.resolved(_read(table, id))
 
-		# A backend that answers later. The promise IS how the caller waits, so
+		# A backend that returns later. The caller waits on the promise.
 		# the coroutine is deliberately not awaited here.
 		func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
 		    var settling := NetwPromise.new()
@@ -22,10 +22,10 @@
 		func _settle_later(settling: NetwPromise, table, id) -&gt; void:
 		    settling.resolve(await _service.read(table, id))
 		[/codeblock]
-		A verb whose value is an [enum @GlobalScope.Error] resolves WITH that code: [constant @GlobalScope.OK] and a storage failure are both answers the operation reached. A rejection means the operation could not run at all.
+		A method returning [enum @GlobalScope.Error] resolves its promise with that code. A rejected promise means the operation could not run.
 		Two refusals ship from the dispatcher rather than from any backend, and both are observable:
-		- An override that answers no promise is rejected with [constant @GlobalScope.ERR_INVALID_DATA], because a null would be waited on forever.
-		- The default [method commit], the one a backend gets when it overrides no [method _commit], refuses with [constant @GlobalScope.ERR_UNAVAILABLE] when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
+		- An override that returns no promise is rejected with [constant @GlobalScope.ERR_INVALID_DATA], because a null would be waited on forever.
+		- The default [method commit], the one a backend gets when it overrides no [method _commit], rejects with [constant @GlobalScope.ERR_UNAVAILABLE] when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -57,7 +57,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="filter" type="Dictionary" />
 			<description>
-				Override to answer every record of [param table] whose fields match [param filter]. [method find_all] calls this.
+				Override to return every record of [param table] whose fields match [param filter]. [method find_all] calls this.
 			</description>
 		</method>
 		<method name="_find_by_id" qualifiers="virtual">
@@ -65,7 +65,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
-				Override to answer one record by its [param id]. [method find_by_id] calls this.
+				Override to return one record by its [param id]. [method find_by_id] calls this.
 			</description>
 		</method>
 		<method name="_initialize" qualifiers="virtual">
@@ -79,7 +79,7 @@
 		<method name="_list_namespaces" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<description>
-				Override to answer every slot the backend currently holds. [method list_namespaces] calls this.
+				Override to return every slot the backend currently holds. [method list_namespaces] calls this.
 			</description>
 		</method>
 		<method name="_upsert" qualifiers="virtual">
@@ -110,7 +110,7 @@
 				  ┠╴id     StringName  the record written
 				  ┖╴data   Dictionary  the fields to merge in
 				[/codeblock]
-				Calls [method _commit] when a backend overrides it. Otherwise plays the batch through [method upsert] in order and refuses with [constant @GlobalScope.ERR_UNAVAILABLE] the instant a write has not settled by the time its [NetwPromise] is checked, since a backend whose writes settle later owns its own [method _commit] to sequence them.
+				Calls [method _commit] when a backend overrides it. Otherwise plays the batch through [method upsert] in order and rejects with [constant @GlobalScope.ERR_UNAVAILABLE] the instant a write has not settled by the time its [NetwPromise] is checked, since a backend whose writes settle later owns its own [method _commit] to sequence them.
 			</description>
 		</method>
 		<method name="delete_namespace">
@@ -133,7 +133,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="filter" type="Dictionary" default="{}" />
 			<description>
-				Answers every record of [param table] whose fields match [param filter]. Calls [method _find_all].
+				Returns every record of [param table] whose fields match [param filter]. Calls [method _find_all].
 			</description>
 		</method>
 		<method name="find_by_id">
@@ -141,7 +141,7 @@
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="id" type="StringName" />
 			<description>
-				Answers one record of [param table] by its [param id]. Calls [method _find_by_id].
+				Returns one record of [param table] by its [param id]. Calls [method _find_by_id].
 			</description>
 		</method>
 		<method name="in_memory" qualifiers="static">
@@ -162,7 +162,7 @@
 		<method name="list_namespaces">
 			<return type="NetwPromise" />
 			<description>
-				Answers every slot the backend currently holds. Calls [method _list_namespaces].
+				Returns every slot the backend currently holds. Calls [method _list_namespaces].
 			</description>
 		</method>
 		<method name="upsert">

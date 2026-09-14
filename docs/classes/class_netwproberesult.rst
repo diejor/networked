@@ -19,7 +19,7 @@ Categorical outcome of a server probe.
 Description
 -----------
 
-:godot:`NetwConnector.probe() <NetwConnector#class_NetwConnector_method_probe>` answers one, and :godot:`NetwServerBrowser` caches the latest one per target so a browser row can render before anyone commits to joining. A probe never throws and never half-answers: every route out of it, including a null target and a transport that cannot probe at all, ends at one :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` .. :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` value, so a caller branches on :ref:`status<class_NetwProbeResult_property_status>` rather than on whether it got an answer.
+:godot:`NetwConnector.probe() <NetwConnector#class_NetwConnector_method_probe>` returns one, and :godot:`NetwServerBrowser` caches the latest one per target so a browser row can render before anyone commits to joining. A probe never throws and never half-returns: every route out of it, including a null target and a transport that cannot probe at all, ends at one :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` .. :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` value, so a caller branches on :ref:`status<class_NetwProbeResult_property_status>` rather than on whether it got a result.
 
 \ :ref:`status<class_NetwProbeResult_property_status>` decides which of the other members carries anything. Only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` and :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` carry an :ref:`info<class_NetwProbeResult_property_info>`, only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` carries a meaningful :ref:`latency_ms<class_NetwProbeResult_property_latency_ms>`, and :ref:`message<class_NetwProbeResult_property_message>` is diagnostic detail rather than text to show a player.
 
@@ -34,7 +34,7 @@ Description
         # info survives here, so the row can still show who is on the server.
         show_banner("That server runs a different build.")
 
-\ The seven static factories are the only way to get a result whose status and payload agree, and a :ref:`NetwTransport<class_NetwTransport>` that answers a probe at all answers with one of them.
+\ The seven static factories are the only way to get a result whose status and payload agree, and a :ref:`NetwTransport<class_NetwTransport>` that returns a probe at all returns one of them.
 
 .. rst-class:: classref-reftable-group
 
@@ -101,7 +101,7 @@ enum **Status**: :ref:`🔗<enum_NetwProbeResult_Status>`
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_OK** = ``0``
 
-The server answered and this build may join it. :ref:`is_ok()<class_NetwProbeResult_method_is_ok>` tests for exactly this.
+The server returned and this build may join it. :ref:`is_ok()<class_NetwProbeResult_method_is_ok>` tests for exactly this.
 
 .. _class_NetwProbeResult_constant_STATUS_UNREACHABLE:
 
@@ -133,7 +133,7 @@ The transport cannot probe, so the server's state is unknown rather than bad.
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_BUSY** = ``4``
 
-The server answered and refused, being full or rate limiting probes.
+The server returned and rejected, being full or rate limiting probes.
 
 .. _class_NetwProbeResult_constant_STATUS_ERROR:
 
@@ -149,7 +149,7 @@ The probe itself failed, with :ref:`message<class_NetwProbeResult_property_messa
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_INCOMPATIBLE** = ``6``
 
-The server answered with a build this client cannot join, and :ref:`info<class_NetwProbeResult_property_info>` survives so a row can still be rendered.
+The server returned with a build this client cannot join, and :ref:`info<class_NetwProbeResult_property_info>` survives so a row can still be rendered.
 
 .. rst-class:: classref-section-separator
 
@@ -171,7 +171,7 @@ Property Descriptions
 - |void| **set_info**\ (\ value\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )
 - :ref:`NetwServerInfo<class_NetwServerInfo>` **get_info**\ (\ )
 
-What the server advertised about itself, or ``null`` when it never answered. Carried by :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` and :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>`, and by nothing else.
+What the server advertised about itself, or ``null`` when it never returned. Carried by :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` and :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>`, and by nothing else.
 
 .. rst-class:: classref-item-separator
 
@@ -239,7 +239,7 @@ Method Descriptions
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **busy**\ (\ message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_busy>`
 
-Returns a :ref:`STATUS_BUSY<class_NetwProbeResult_constant_STATUS_BUSY>` result carrying ``message``. The server answered and refused: it is full, or the probe arrived outside its rate window.
+Returns a :ref:`STATUS_BUSY<class_NetwProbeResult_constant_STATUS_BUSY>` result carrying ``message``. The server returned and rejected: it is full, or the probe arrived outside its rate window.
 
 .. rst-class:: classref-item-separator
 
@@ -251,7 +251,7 @@ Returns a :ref:`STATUS_BUSY<class_NetwProbeResult_constant_STATUS_BUSY>` result 
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **error**\ (\ message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_error>`
 
-Returns a :ref:`STATUS_ERROR<class_NetwProbeResult_constant_STATUS_ERROR>` result carrying ``message``. The probe itself went wrong, rather than the server answering something.
+Returns a :ref:`STATUS_ERROR<class_NetwProbeResult_constant_STATUS_ERROR>` result carrying ``message``. The probe itself went wrong, rather than the server returning something.
 
 .. rst-class:: classref-item-separator
 
@@ -263,7 +263,7 @@ Returns a :ref:`STATUS_ERROR<class_NetwProbeResult_constant_STATUS_ERROR>` resul
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **incompatible**\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>` = null, message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_incompatible>`
 
-Returns a :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` result carrying ``message``. The server answered with a :ref:`NetwServerInfo.app_id<class_NetwServerInfo_property_app_id>` or :ref:`NetwServerInfo.version<class_NetwServerInfo_property_version>` this build cannot join, so ``info`` is kept: a browser row still has something to show even though the join would be refused.
+Returns a :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` result carrying ``message``. The server returned with a :ref:`NetwServerInfo.app_id<class_NetwServerInfo_property_app_id>` or :ref:`NetwServerInfo.version<class_NetwServerInfo_property_version>` this build cannot join, so ``info`` is kept: a browser row still has something to show even though the join would be rejected.
 
 .. rst-class:: classref-item-separator
 
@@ -275,7 +275,7 @@ Returns a :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMP
 
 :godot:`bool` **is_ok**\ (\ ) |const| :ref:`🔗<class_NetwProbeResult_method_is_ok>`
 
-Returns ``true`` when :ref:`status<class_NetwProbeResult_property_status>` is :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>`, which is the one status that says the server answered and this build may join it.
+Returns ``true`` when :ref:`status<class_NetwProbeResult_property_status>` is :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>`, which is the one status that says the server returned and this build may join it.
 
 .. rst-class:: classref-item-separator
 
@@ -323,7 +323,7 @@ Returns a :ref:`STATUS_UNREACHABLE<class_NetwProbeResult_constant_STATUS_UNREACH
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **unsupported**\ (\ ) |static| :ref:`🔗<class_NetwProbeResult_method_unsupported>`
 
-Returns a :ref:`STATUS_UNSUPPORTED<class_NetwProbeResult_constant_STATUS_UNSUPPORTED>` result. This is what a :ref:`NetwTransport<class_NetwTransport>` answers when it has no cheap way to ask, so a caller reads it as "unknown", never as "down".
+Returns a :ref:`STATUS_UNSUPPORTED<class_NetwProbeResult_constant_STATUS_UNSUPPORTED>` result. This is what a :ref:`NetwTransport<class_NetwTransport>` returns when it has no cheap way to ask, so a caller reads it as "unknown", never as "down".
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

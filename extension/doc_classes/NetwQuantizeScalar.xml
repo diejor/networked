@@ -13,7 +13,7 @@
 		[/codeblock]
 		[b]Declare the limits before the step.[/b] [member resolution_step] is a request rather than a stored field: setting it picks the smallest [member bit_count] whose grid is at least that fine over the range currently declared, so a step written before its limits is derived against the wrong range. [method bits] is exact at any point in a chain.
 		A [Vector3] or [Vector2] quantizes each axis the same way and costs [member bit_count] bits per axis. The per-axis error is at most half [member resolution_step].
-		Only the three stored fields decide the layout, so two of these that address the same grid answer [code]true[/code] to [method NetwQuantize.is_same_layout] however each was authored.
+		Only the three stored fields decide the layout, so two of these that address the same grid return [code]true[/code] to [method NetwQuantize.is_same_layout] however each was authored.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -52,7 +52,7 @@
 			Inclusive lower bound of the encoded range. A value below it is clamped.
 		</member>
 		<member name="resolution_step" type="float" setter="set_resolution_step" getter="get_resolution_step" default="0.007874016">
-			Distance between two adjacent grid points, DERIVED from the other three rather than stored: reading it answers [code](max_limit - min_limit) / (2 ** bit_count - 1)[/code], and writing it moves [member bit_count] to the smallest budget that is at least that fine. A step of zero or less is refused, because no bit count satisfies it.
+			Distance between two adjacent grid points, DERIVED from the other three rather than stored: reading it returns [code](max_limit - min_limit) / (2 ** bit_count - 1)[/code], and writing it moves [member bit_count] to the smallest budget that is at least that fine. A step of zero or less is rejected, because no bit count satisfies it.
 		</member>
 	</members>
 </class>

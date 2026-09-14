@@ -21,7 +21,15 @@ const VELOCITY_LIMIT := MOTION_SPEED
 var last_bomb_time := BOMB_RATE
 var current_anim: String = ""
 
-@onready var inputs: Node = $Inputs
+var motion := Vector2.ZERO
+var bombing := false
+var pressed := {
+	&"move_left": false,
+	&"move_right": false,
+	&"move_up": false,
+	&"move_down": false,
+	&"set_bomb": false,
+}
 @onready var label: Label = %label
 
 @onready var entity := NetwEntity.of(self)
@@ -38,6 +46,10 @@ func _init() -> void:
 	entity.interpolation.visual_root = ^"sprite"
 	entity.interpolation.predicted_mode = \
 	NetwMultiplayer.PREDICTED_MODE_BRACKETED
+	Netw.configure_property(self, &"motion").input().quantize(
+		NetwQuantizeScalar.new().bits(16),
+	)
+	Netw.configure_property(self, &"bombing").input()
 
 	Netw.configure_property(self, &"position").state().masked().on_spawn() \
 			.quantize(
@@ -56,6 +68,8 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	var clock: NetwClockHandle = Netw.clock(self)
+	clock.before_tick.connect(gather_input)
 	stunned = false
 	bomb_action.timing_mode = NetwAction.TIMING_TICK_ALIGNED_STATE_READY
 	bomb_action.predict = func() -> Node:
@@ -65,10 +79,28 @@ func _ready() -> void:
 		return ghost
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if not entity.is_controlled_locally:
+		return
+	for action: StringName in pressed:
+		if event.is_action(action):
+			pressed[action] = event.is_action_pressed(action, true)
+
+
+func gather_input(_delta: float, _tick: int) -> void:
+	if not entity.is_controlled_locally:
+		return
+	motion = Vector2(
+		float(pressed[&"move_right"]) - float(pressed[&"move_left"]),
+		float(pressed[&"move_down"]) - float(pressed[&"move_up"]),
+	).normalized()
+	bombing = pressed[&"set_bomb"]
+
+
 func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	last_bomb_time += delta
 	if is_fresh and entity.is_controlled_locally \
-			and not stunned and inputs.bombing:
+			and not stunned and bombing:
 		if last_bomb_time < BOMB_RATE:
 			return
 		bomb_action.request(tick, position)
@@ -78,7 +110,7 @@ func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	if stunned:
 		velocity = Vector2.ZERO
 	else:
-		velocity = inputs.motion * MOTION_SPEED
+		velocity = motion.clamp(Vector2(-1, -1), Vector2(1, 1)) * MOTION_SPEED
 
 	var factor: float = Netw.clock(self).monitor(
 		NetwMultiplayer.CLOCK_MONITOR_PHYSICS_FACTOR,

@@ -23,7 +23,7 @@ The shell captures :ref:`route<class_NetwPropertySetBinding_property_route>`, :r
 
 A set's :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` fields ride the SYNC_ROW channel freshest-wins, and its :ref:`NetwPropertySet.RETAINED<class_NetwPropertySet_constant_RETAINED>` fields ride the reliable SYNC_ROW_DELTA lane only when they change, so the two lanes of one set never re-send each other.
 
-Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per lane and answers with the columns that moved, which is why a binding carries no per-peer book of its own.
+Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per lane and returns the columns that moved, which is why a binding carries no per-peer book of its own.
 
 .. rst-class:: classref-reftable-group
 
@@ -268,7 +268,7 @@ Returns the declaring node, or ``null`` once it has freed.
 
 Returns what ``property`` does in the simulation, or :ref:`NetwPropertySet.CAUSAL<class_NetwPropertySet_constant_CAUSAL>` when the set does not declare it.
 
-A reconciliation reads this to decide which values it may compare and restore. Undeclared properties answer causal because that is the class whose mistake is a correction rather than a silent divergence.
+Reconciliation uses this to decide which values it may compare and restore. Undeclared properties default to causal recovery.
 
 .. rst-class:: classref-item-separator
 

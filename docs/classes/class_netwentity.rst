@@ -25,7 +25,7 @@ Identity is sealed once, at :ref:`arm()<class_NetwEntity_method_arm>`, and never
 
 \ :ref:`peer_id<class_NetwEntity_property_peer_id>` classifies the entity. A non-zero value is a player and names the peer it represents. ``0`` is a server-owned entity such as an NPC or world object. See :ref:`is_player<class_NetwEntity_property_is_player>` and :ref:`Ownership<enum_NetwEntity_Ownership>`.
 
-\ **Reaching the record**\ 
+\ **Reaching the record**\
 
 Three entry points, chosen by moment. :ref:`of()<class_NetwEntity_method_of>` walks up from any node to its record and is the everyday in-tree lookup. :ref:`Netw.configure_entity()<class_Netw_method_configure_entity>` get-or-creates on an orphan, so it is how a root claims its own record before the tree, and it is named for the declaration it makes rather than for the lookup it starts with. :ref:`ensure()<class_NetwEntity_method_ensure>` forces the record onto one exact node.
 
@@ -35,7 +35,7 @@ Three entry points, chosen by moment. :ref:`of()<class_NetwEntity_method_of>` wa
     Netw.configure_entity(self) # get-or-create on an orphan, for a root's _init
     NetwEntity.ensure(root)     # force the record onto this exact root
 
-\ **Authoring a root**\ 
+\ **Authoring a root**\
 
 A root configures itself in ``_init``. It is still an orphan there, so :ref:`Netw.configure_entity()<class_Netw_method_configure_entity>` creates the record on the root, and the archetype (:ref:`initial_controller<class_NetwEntity_property_initial_controller>`), the spawn-packet properties (:ref:`NetwPropertyConfig.on_spawn()<class_NetwPropertyConfig_method_on_spawn>`) and any lifecycle connections all settle in one place before the entity spawns, beside the rest of the ``Netw.configure_*`` sheet.
 
@@ -47,7 +47,7 @@ A root configures itself in ``_init``. It is still an orphan there, so :ref:`Net
         entity.spawned.connect(_on_spawned)
         Netw.configure_property(self, &"position").on_spawn()
 
-\ **Reaching it from a sibling**\ 
+\ **Reaching it from a sibling**\
 
 A child marks its own :ref:`NetwPropertyConfig.on_spawn()<class_NetwPropertyConfig_method_on_spawn>` properties in ``_init``, the same as a root, because the mark records against the script and needs no parent, and the spawn packet collects it by walking the whole subtree. Connecting the entity's signals is the part that waits for :godot:`Node._ready() <Node#class_Node_private_method__ready>`, where :ref:`of()<class_NetwEntity_method_of>` walks up to the resolved record, because a signal needs that record and a child has no parent in its own ``_init``. A reusable component that must also work under a scriptless root calls :ref:`Netw.configure_entity()<class_Netw_method_configure_entity>` on :godot:`Node.NOTIFICATION_PARENTED <Node#class_Node_constant_NOTIFICATION_PARENTED>` to provision the record itself before the tree, which is the first moment its parent chain exists to be climbed.
 
@@ -59,7 +59,7 @@ A child marks its own :ref:`NetwPropertyConfig.on_spawn()<class_NetwPropertyConf
     func _ready() -> void:
         NetwEntity.of(self).despawning.connect(_on_despawning)
 
-\ **Acting on an entity**\ 
+\ **Acting on an entity**\
 
 The server drives the lifecycle. It creates entities through the spawn pipeline (:godot:`ReplicationCore.replicate() <ReplicationCore#class_ReplicationCore_method_replicate>`) and moves or ends one with :ref:`reparent_to()<class_NetwEntity_method_reparent_to>` and :ref:`despawn()<class_NetwEntity_method_despawn>`. A client asks the server through :ref:`request_control()<class_NetwEntity_method_request_control>` and reads whether it steers the entity from :ref:`is_controlled_locally<class_NetwEntity_property_is_controlled_locally>`.
 
@@ -69,13 +69,13 @@ The server drives the lifecycle. It creates entities through the spawn pipeline 
     if entity and entity.is_player:
         eliminate(entity.peer_id)
 
-\ **Owning identity before the tree**\ 
+\ **Owning identity before the tree**\
 
 A spawned :godot:`Node` must own its identity before it enters the tree. Replicated spawns carry it in the SPAWN frame and stamp it during reconstruction, and :ref:`bind()<class_NetwEntity_method_bind>` stamps it when identity rides the :godot:`Node.name <Node#class_Node_property_name>` channel: call it inside a :godot:`MultiplayerSpawner.spawn_function <MultiplayerSpawner#class_MultiplayerSpawner_property_spawn_function>` before returning the node. A scene requires each spawned :godot:`Node` to own its record, which :ref:`ensure()<class_NetwEntity_method_ensure>` provides before the node joins the scene's subtree.
 
-\ **The facets it answers with**\ 
+\ **The facets it returns**\
 
-\ :ref:`scene<class_NetwEntity_property_scene>`, :ref:`interest<class_NetwEntity_property_interest>`, :ref:`prediction<class_NetwEntity_property_prediction>` and :ref:`interpolation<class_NetwEntity_property_interpolation>` are minted once per entity and held on the entity's own row, so two reads answer the same object. They are typed :godot:`Variant` here because the types that own them are script-side; assign them to a typed variable at the call site.
+\ :ref:`scene<class_NetwEntity_property_scene>`, :ref:`interest<class_NetwEntity_property_interest>`, :ref:`prediction<class_NetwEntity_property_prediction>`, and :ref:`interpolation<class_NetwEntity_property_interpolation>` are created once per entity. Repeated reads return the same object. They are :godot:`Variant` values because their types are implemented in scripts.
 
 .. rst-class:: classref-reftable-group
 
@@ -686,7 +686,7 @@ The entity's derived broadcast property-set binding, the registry set handle a s
 
 Whether this entity's component ids are being honoured. The digest of the registered structure rides the spawn packet, and a client that computes a different one has a different structure, so the ids cannot be trusted to mean the same node on both sides.
 
-A poisoned entity is not a broken one: every routed frame falls back to string paths and names, which both peers resolve for themselves, so the cost is bytes rather than correctness. :ref:`comp_of()<class_NetwEntity_method_comp_of>` answers ``255`` for everything but the root while this holds.
+A poisoned entity is not a broken one: every routed frame falls back to string paths and names, which both peers resolve for themselves, so the cost is bytes rather than correctness. :ref:`comp_of()<class_NetwEntity_method_comp_of>` returns ``255`` for everything but the root while this holds.
 
 .. rst-class:: classref-item-separator
 
@@ -1008,7 +1008,7 @@ Derived from :ref:`peer_id<class_NetwEntity_property_peer_id>`. See :ref:`Owners
 
 - :ref:`NetwParticipant<class_NetwParticipant>` **get_participant**\ (\ )
 
-The participant :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or ``null``. This resolves the live session handle for player avatars; server-owned entities, props and NPCs answer ``null``.
+The participant :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or ``null``. This resolves the live session handle for player avatars; server-owned entities, props and NPCs return ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -1077,7 +1077,7 @@ The entity-level prediction handle. It holds the prediction and reconciliation c
 
 The handle naming this entity, valid from construction until this record is freed.
 
-One handle names one entity across every life it has, minted from :godot:`NetwEntityIds` rather than from any session, because an entity is configured and read before a session exists to number it. Nothing clears it: an entity re-admitted onto a tombstoned :ref:`route<class_NetwEntity_property_route>` adopts the record that route already stands for, one :ref:`NetwMultiplayer.entity_get_epoch()<class_NetwMultiplayer_method_entity_get_epoch>` higher, and that epoch is what tells a packet authored before the re-admission from one authored after.
+One handle names one entity across every life it has, created from :godot:`NetwEntityIds` rather than from any session, because an entity is configured and read before a session exists to number it. Nothing clears it: an entity re-admitted onto a tombstoned :ref:`route<class_NetwEntity_property_route>` adopts the record that route already stands for, one :ref:`NetwMultiplayer.entity_get_epoch()<class_NetwMultiplayer_method_entity_get_epoch>` higher, and that epoch is what tells a packet authored before the re-admission from one authored after.
 
 Holding a handle is not the same as a session knowing it, so compare :ref:`NetwMultiplayer.entity_get_state()<class_NetwMultiplayer_method_entity_get_state>` against :ref:`NetwMultiplayer.ENTITY_STATE_UNKNOWN<class_NetwMultiplayer_constant_ENTITY_STATE_UNKNOWN>` before using a flat verb rather than asking :godot:`RID.is_valid() <RID#class_RID_method_is_valid>`.
 
@@ -1119,9 +1119,9 @@ The compact wire route naming this entity, or ``0`` when unroutable. Decoded fro
 
 The scene this entity belongs to. Never ``null``.
 
-Self-inclusive: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask the handle whether it is declared to tell "no scene resolved" from a real one, because it answers either way rather than handing back null.
+Self-inclusive: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask the handle whether it is declared to tell "no scene resolved" from a real one, because it returns either way rather than handing back null.
 
-One scene has one handle, so two entities in the same scene read the same object and ``==`` answers "the same scene" without anyone having to compare by hand.
+One scene has one handle, so two entities in the same scene read the same object and ``==`` returns "the same scene" without anyone having to compare by hand.
 
 ::
 
@@ -1144,7 +1144,7 @@ One scene has one handle, so two entities in the same scene read the same object
 
 Whether this scene hosts its own world, as a :ref:`SceneIsolation<enum_NetwMultiplayer_SceneIsolation>`.
 
-Write-once while the record is :ref:`STAGE_UNBOUND<class_NetwEntity_constant_STAGE_UNBOUND>`, the same discipline as :ref:`initial_controller<class_NetwEntity_property_initial_controller>`, because it selects the container the spawn recipe builds on every peer. A later write is refused rather than producing two peers that disagree about the container.
+Write-once while the record is :ref:`STAGE_UNBOUND<class_NetwEntity_constant_STAGE_UNBOUND>`, the same discipline as :ref:`initial_controller<class_NetwEntity_property_initial_controller>`, because it selects the container the spawn recipe builds on every peer. A later write is rejected rather than producing two peers that disagree about the container.
 
 .. rst-class:: classref-item-separator
 
@@ -1162,7 +1162,7 @@ Write-once while the record is :ref:`STAGE_UNBOUND<class_NetwEntity_constant_STA
 
 The non-unique stem naming this scene's archetype, empty when :ref:`declares_scene<class_NetwEntity_property_declares_scene>` is ``false``.
 
-Identity is the :ref:`rid<class_NetwEntity_property_rid>`, never this string. Two live instances of one arena share a stem and own separate admission boundaries, so :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>` answers "an instance of this stem" rather than "the arena". The stem is declared once per script through :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` and read back through the script whenever no instance wrote its own, so it is correct on an orphan, on a spawned instance and on a client that decoded it off the SPAWN packet alike.
+Identity is the :ref:`rid<class_NetwEntity_property_rid>`, never this string. Two live instances of one arena share a stem and own separate admission boundaries, so :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>` returns "an instance of this stem" rather than "the arena". The stem is declared once per script through :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` and read back through the script whenever no instance wrote its own, so it is correct on an orphan, on a spawned instance and on a client that decoded it off the SPAWN packet alike.
 
 .. rst-class:: classref-item-separator
 
@@ -1178,7 +1178,7 @@ Identity is the :ref:`rid<class_NetwEntity_property_rid>`, never this string. Tw
 
 - :godot:`int` **get_stage**\ (\ )
 
-The entity's current lifecycle position, as a :ref:`Stage<enum_NetwEntity_Stage>`. Read-only, and moved only along an edge the stage table admits, so a refused move leaves it where it was.
+The entity's current lifecycle position, as a :ref:`Stage<enum_NetwEntity_Stage>`. Read-only, and moved only along an edge the stage table admits, so a rejected move leaves it where it was.
 
 .. rst-class:: classref-item-separator
 
@@ -1261,9 +1261,9 @@ The single choke point every spawn path funnels through, called on the orphan be
 
 :godot:`Node` **bind**\ (\ node\: :godot:`Node`, entity_id\: :godot:`StringName`, peer_id\: :godot:`int`\ ) |static| :ref:`🔗<class_NetwEntity_method_bind>`
 
-Binds ``entity_id`` and ``peer_id`` onto ``node`` and answers it. This is the public identity binding surface; once bound, the node's name is owned by the synchronization system and must not be modified.
+Binds ``entity_id`` and ``peer_id`` onto ``node`` and returns it. This is the public identity binding surface; once bound, the node's name is owned by the synchronization system and must not be modified.
 
-A ``entity_id`` the codec cannot name binds nothing, rather than stamping the record and letting the engine refuse the node name, which would leave the two disagreeing.
+An invalid ``entity_id`` binds nothing and leaves the record unchanged.
 
 ::
 
@@ -1294,7 +1294,7 @@ The entity bound to ``route`` in ``api``, or ``null``.
 
 The node ``comp`` addresses inside this entity, which is :ref:`comp_of()<class_NetwEntity_method_comp_of>` read backwards: ``0`` is the entity root, and ``1`` to ``254`` is whatever the table registered under that id.
 
-Answers ``null`` for an id this entity's table does not carry, which is every id while :ref:`comps_poisoned<class_NetwEntity_property_comps_poisoned>` holds. It never answers the root as a consolation, because an address that resolved to the wrong node is worse than one that resolved to none.
+Returns ``null`` for an id this entity's table does not carry, which is every id while :ref:`comps_poisoned<class_NetwEntity_property_comps_poisoned>` holds. It never returns the root as a consolation, because an address that resolved to the wrong node is worse than one that resolved to none.
 
 .. rst-class:: classref-item-separator
 
@@ -1308,7 +1308,7 @@ Answers ``null`` for an id this entity's table does not carry, which is every id
 
 The component id that addresses ``node`` inside this entity: ``0`` for the entity root itself, ``1`` to ``254`` for a node the component table registered, and ``255`` for one it did not, which is addressed by a path relative to the root instead.
 
-A poisoned table answers ``255`` for everything but the root, because an id the two peers disagree on is worse than a path they both resolve.
+A poisoned table returns ``255`` for everything but the root, because an id the two peers disagree on is worse than a path they both resolve.
 
 .. rst-class:: classref-item-separator
 
@@ -1320,7 +1320,7 @@ A poisoned table answers ``255`` for everything but the root, because an id the 
 
 :godot:`String` **comp_path_of**\ (\ node\: :godot:`Node`\ ) |const| :ref:`🔗<class_NetwEntity_method_comp_path_of>`
 
-The path relative to this entity's root that addresses ``node`` when :ref:`comp_of()<class_NetwEntity_method_comp_of>` answers ``255``, and an empty string otherwise. A frame carries one or the other, never both, because an id the table holds is always the shorter and safer address.
+The path relative to this entity's root that addresses ``node`` when :ref:`comp_of()<class_NetwEntity_method_comp_of>` returns ``255``, and an empty string otherwise. A frame carries one or the other, never both, because an id the table holds is always the shorter and safer address.
 
 .. rst-class:: classref-item-separator
 
@@ -1487,7 +1487,7 @@ The **NetwEntity** on ``node``'s entity root, walking the parent chain, or ``nul
 
 :ref:`NetwEntity<class_NetwEntity>` **parent_entity**\ (\ ) |const| :ref:`🔗<class_NetwEntity_method_parent_entity>`
 
-The nearest ancestor **NetwEntity**, or ``null``. The session walks the marked ancestors, so the mark and the walk that reads it stay one implementation and the answer follows a move with nothing to invalidate.
+The nearest ancestor **NetwEntity**, or ``null``. The session walks the marked ancestors, so the mark and the walk that reads it stay one implementation and the result follows a move with nothing to invalidate.
 
 .. rst-class:: classref-item-separator
 
@@ -1541,7 +1541,7 @@ The ids are sealed when the entity hydrates and their digest rides the spawn pac
 
 Moves :ref:`owner<class_NetwEntity_property_owner>` under ``new_parent`` as a networked reparent, keeping this entity alive across the move.
 
-\ :godot:`Node.reparent() <Node#class_Node_method_reparent>` and a bare :godot:`Node.remove_child() <Node#class_Node_method_remove_child>` followed by :godot:`Node.add_child() <Node#class_Node_method_add_child>` are moves too, and reach every peer the same way, because the move is detected where the owner lands rather than declared at the call. What this verb adds is :ref:`NetwReparentOpts<class_NetwReparentOpts>` and, when the destination sits in another scene, the player's admission edge, which parenting alone does not carry. A move that leaves a player standing in a scene its peer was never admitted to is counted and named in the log, and :ref:`NetwMultiplayer.scene_admit()<class_NetwMultiplayer_method_scene_admit>` is the verb that answers it.
+\ :godot:`Node.reparent() <Node#class_Node_method_reparent>` and a bare :godot:`Node.remove_child() <Node#class_Node_method_remove_child>` followed by :godot:`Node.add_child() <Node#class_Node_method_add_child>` are moves too, and reach every peer the same way, because the move is detected where the owner lands rather than declared at the call. What this verb adds is :ref:`NetwReparentOpts<class_NetwReparentOpts>` and, when the destination sits in another scene, the player's admission edge, which parenting alone does not carry. A move that leaves a player standing in a scene its peer was never admitted to is counted and named in the log, and :ref:`NetwMultiplayer.scene_admit()<class_NetwMultiplayer_method_scene_admit>` is the verb that returns it.
 
 Components re-register from :ref:`reparented<class_NetwEntity_signal_reparented>`, which reports once per settled move whichever way it was made. Several hops before one settle are one move, because the report states where the owner landed rather than what a caller asked for. The owner's :godot:`Node._ready() <Node#class_Node_private_method__ready>` does not run a second time.
 
@@ -1563,7 +1563,7 @@ Components re-register from :ref:`reparented<class_NetwEntity_signal_reparented>
 
 |void| **request_control**\ (\ ) :ref:`🔗<class_NetwEntity_method_request_control>`
 
-Asks the server for control of this entity. The server arbitrates through :ref:`control_requested<class_NetwEntity_signal_control_requested>` and answers with a control frame.
+Asks the server for control of this entity. The server arbitrates through :ref:`control_requested<class_NetwEntity_signal_control_requested>` and returns a control frame.
 
 \ **Player request.**
 
@@ -1591,7 +1591,7 @@ Takes control back to the server.
 
 :ref:`NetwMultiplayer<class_NetwMultiplayer>` **session_plane_for**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_NetwEntity_method_session_plane_for>`
 
-The :ref:`NetwMultiplayer<class_NetwMultiplayer>` governing ``node``'s branch, or ``null`` when the branch has none. Resolves from the node's own :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` first and falls back to :ref:`NetwMultiplayer.of()<class_NetwMultiplayer_method_of>`, so it answers for an orphan a session has provisioned but the tree does not hold yet.
+The :ref:`NetwMultiplayer<class_NetwMultiplayer>` governing ``node``'s branch, or ``null`` when the branch has none. Resolves from the node's own :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` first and falls back to :ref:`NetwMultiplayer.of()<class_NetwMultiplayer_method_of>`, so it returns for an orphan a session has provisioned but the tree does not hold yet.
 
 .. rst-class:: classref-item-separator
 

@@ -12,14 +12,14 @@ NetwPredictionHandle
 
 **Inherits:** :godot:`RefCounted`
 
-One entity's prediction declaration, and everything its last comparison concluded.
+Prediction settings and diagnostics for one :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Everything one :ref:`NetwEntity<class_NetwEntity>` declares about predicting itself, and everything its last comparison against the server concluded. Every entity has one, reached as :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`, and a setting is written and read back under the same name.
+Access this handle through :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`. It stores entity-level prediction settings and the latest comparison against authoritative state.
 
 ::
 
@@ -29,23 +29,11 @@ Everything one :ref:`NetwEntity<class_NetwEntity>` declares about predicting its
     pred.breach_response = NetwPredict.BREACH_RESPONSE_DEMOTE
     pred.island.add(opponent)
 
-\ **What lives here and what does not**\ 
+\ Declare field-level behavior, including tolerances and recovery rules, with :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. Configure related predicted entities with :ref:`NetwPredictIsland<class_NetwPredictIsland>`.
 
-A setting about the whole entity is a property on this object. A setting about one field is declared on that field through :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` and is not here at all, which covers a tolerance, a restriction on restoring, and a forward model.
+A :godot:`MultiplayerSynchronizer` may provide scene defaults. Later assignments in code override those values.
 
-\ :ref:`NetwPredictIsland<class_NetwPredictIsland>` is the one part with a class of its own, because who is simulated alongside this entity and how faithfully each of them is simulated are one fact.
-
-\ **Where a value comes from**\ 
-
-A scene may declare prediction on its :godot:`MultiplayerSynchronizer`. It applies its :ref:`archetype<class_NetwPredictionHandle_property_archetype>` first and then writes only the values the scene moved off their defaults, so a scene value overrides the preset it refines and a value left alone keeps the preset's.
-
-Between a scene and code the later write wins. A property reports the value written to it, because refusing an assignment would make it report a value nobody wrote.
-
-\ **Reading what happened**\ 
-
-The client compares what it simulated against the row the server acknowledged. :ref:`input_source<class_NetwPredictionHandle_property_input_source>` and :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>` say whether this peer authors the entity, receives it, predicts it, or only draws it.
-
-\ :ref:`stats<class_NetwPredictionHandle_property_stats>`, :ref:`journal()<class_NetwPredictionHandle_method_journal>` and :ref:`episode()<class_NetwPredictionHandle_method_episode>` answer what that comparison found, and change nothing by being read. :ref:`reachability()<class_NetwPredictionHandle_method_reachability>` answers a different question, which is whether a declaration can reach the thing it names at all.
+Use :ref:`input_source<class_NetwPredictionHandle_property_input_source>` and :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>` to inspect the entity's role. Use :ref:`stats<class_NetwPredictionHandle_property_stats>`, :ref:`journal()<class_NetwPredictionHandle_method_journal>`, and :ref:`episode()<class_NetwPredictionHandle_method_episode>` for comparison diagnostics. Use :ref:`reachability()<class_NetwPredictionHandle_method_reachability>` to validate referenced objects.
 
 .. rst-class:: classref-reftable-group
 
@@ -515,7 +503,7 @@ Raising it reopens the tolerance window, because two peers cannot have taken a c
 
 How often each field has asked for a recovery and how often one repaired it, counted since the entity spawned.
 
-A field can be allowed to trigger a correction and still be one nothing is allowed to write. :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` withholds a field from every restore short of a teleport while leaving it free to trigger, so it raises corrections that are forbidden to fix it and are answered by repairing something else instead. Every comparison looks ordinary on its own and :ref:`last_field_divergence<class_NetwPredictionHandle_property_last_field_divergence>` cannot show it, because the evidence is the whole run rather than any one tick.
+A field may trigger correction without being writable by that correction. :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` reserves its write for a teleport, so smaller corrections may update other fields. This flag records that condition across the full run.
 
 ::
 
@@ -543,7 +531,7 @@ Inside the comparison a correction is decided by fingerprint rather than by tole
 
 Where this peer's copy of the entity gets its input, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
 
-This and :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>` are the two separate facts that :ref:`Role<enum_NetwPredict_Role>` gives one name to. Reading them apart is what lets a question about one of them be answered without naming a whole role.
+This and :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>` are the two values combined by :ref:`Role<enum_NetwPredict_Role>`. Read them separately when only one axis matters.
 
 .. rst-class:: classref-item-separator
 
@@ -626,7 +614,7 @@ The transition :ref:`last_attribution<class_NetwPredictionHandle_property_last_a
 
 What the most recent divergence was blamed on, as a :ref:`Attribution<enum_NetwPredictJournal_Attribution>` value. It means nothing until :ref:`last_attributed_transition<class_NetwPredictionHandle_property_last_attributed_transition>` is no longer ``-1``.
 
-\ :godot:`NetwPredictJournal.Attribution.UNKNOWN <NetwPredictJournal#class_NetwPredictJournal_constant_Attribution.UNKNOWN>` means the evidence needed to answer was not there. Every other value names the first thing the two runs disagreed about.
+\ :godot:`NetwPredictJournal.Attribution.UNKNOWN <NetwPredictJournal#class_NetwPredictJournal_constant_Attribution.UNKNOWN>` means the evidence needed to return was not there. Every other value names the first thing the two runs disagreed about.
 
 .. rst-class:: classref-item-separator
 
@@ -708,11 +696,11 @@ More than one reason can stand at once, and the ranking is fixed.
 
 - :ref:`NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED<class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED>` outranks a pending operator
 
-- :ref:`NetwPredict.VERDICT_REASON_TRANSPORT_PENDING<class_NetwPredict_constant_VERDICT_REASON_TRANSPORT_PENDING>` outranks :ref:`NetwPredict.VERDICT_REASON_DISSIPATE_PENDING<class_NetwPredict_constant_VERDICT_REASON_DISSIPATE_PENDING>`\ 
+- :ref:`NetwPredict.VERDICT_REASON_TRANSPORT_PENDING<class_NetwPredict_constant_VERDICT_REASON_TRANSPORT_PENDING>` outranks :ref:`NetwPredict.VERDICT_REASON_DISSIPATE_PENDING<class_NetwPredict_constant_VERDICT_REASON_DISSIPATE_PENDING>`\
 
-The difference is whose move it is next. A caller reading :ref:`NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED<class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED>` owes the fallback itself, while the two pending reasons are answered by the pass already gathering what it needs.
+For :ref:`NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED<class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED>`, the caller must choose the fallback. The pending reasons indicate that the current pass is still gathering data.
 
-A comparison that agreed is never refused and reads :ref:`NetwPredict.VERDICT_REASON_NONE<class_NetwPredict_constant_VERDICT_REASON_NONE>`, so this rather than the corrected flag is what tells a refusal from an agreement. Counting corrections off the verdict alone counts comparisons that wrote nothing and cannot tell them from repairs.
+A comparison that agreed is never rejected and reads :ref:`NetwPredict.VERDICT_REASON_NONE<class_NetwPredict_constant_VERDICT_REASON_NONE>`, so this rather than the corrected flag is what tells a rejection from an agreement. Counting corrections off the verdict alone counts comparisons that wrote nothing and cannot tell them from repairs.
 
 ::
 
@@ -904,7 +892,7 @@ A body the physics engine solves declares :ref:`NetwPredict.SCHEDULE_FRAME<class
 
 The world facts this entity's transition reads, by name.
 
-Each sampler is called once before each drive and recorded with it, which is what lets a divergence be blamed on the world rather than left unexplained. :ref:`sensor()<class_NetwPredictionHandle_method_sensor>` reads the sample back. A sampler that cannot be called is skipped when it would have been sampled rather than refused here, so the record describes exactly the facts the drive ran against.
+Each sampler is called once before each drive and recorded with it, which is what lets a divergence be blamed on the world rather than left unexplained. :ref:`sensor()<class_NetwPredictionHandle_method_sensor>` reads the sample back. A sampler that cannot be called is skipped when it would have been sampled rather than rejected here, so the record describes exactly the facts the drive ran against.
 
 Declaring a sensor says where a divergence came from and claims nothing about exactness, so declaring them alone leaves every transition :godot:`NetwPredictJournal.Domain.OUT_OF_DOMAIN <NetwPredictJournal#class_NetwPredictJournal_constant_Domain.OUT_OF_DOMAIN>`.
 
@@ -1032,11 +1020,11 @@ This is the default for such a field that named no distance of its own, and it o
 - |void| **set_transport_corridor**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_transport_corridor**\ (\ )
 
-Answers whether the path to a proposed pose is clear.
+Returns whether the path to a proposed pose is clear.
 
 A correction that moves a body to where it should be now, across a path nobody checked, is how a body arrives inside a wall, so that correction is only available once this is declared. An unset or invalid :godot:`Callable` leaves it unavailable.
 
-It is called as ``corridor(current, proposed)``, and only after everything the engine can decide for itself has already passed, so it is the game's last word rather than its first. A game refusing a move the engine would have refused anyway is paying for a call that changes nothing.
+It is called as ``corridor(current, proposed)``, and only after everything the engine can decide for itself has already passed, so it is the game's last word rather than its first. A game rejecting a move the engine would have rejected anyway is paying for a call that changes nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -1055,7 +1043,7 @@ It is called as ``corridor(current, proposed)``, and only after everything the e
 
 Samples what this peer's body actually touched on the transition just solved.
 
-It is called once per solved transition and answers the colliders the body touched, which is what lets a divergence be blamed on a contact. An unset or invalid :godot:`Callable` leaves that unknown, which is the absence of an observation rather than an observation that nothing was touched.
+It is called once per solved transition and returns the colliders the body touched, which is what lets a divergence be blamed on a contact. An unset or invalid :godot:`Callable` leaves that unknown, which is the absence of an observation rather than an observation that nothing was touched.
 
 .. rst-class:: classref-section-separator
 
@@ -1072,7 +1060,7 @@ Method Descriptions
 
 |void| **bind_entity**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwPredictionHandle_method_bind_entity>`
 
-Binds the entity this handle belongs to and arms its island. Called by the entity record's factory, which is the only thing that mints a handle.
+Binds the entity this handle belongs to and arms its island. Called by the entity record's factory, which is the only thing that creates a handle.
 
 .. rst-class:: classref-item-separator
 
@@ -1112,7 +1100,7 @@ The largest error any one property shows between a predicted and an authoritativ
 
 :godot:`float` **divergence_by_field**\ (\ predicted\: :godot:`Dictionary`, authoritative\: :godot:`Dictionary`, out\: :godot:`Dictionary`, angles\: :godot:`Dictionary` = {}\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_divergence_by_field>`
 
-Fills ``out`` with each field's own divergence and answers the worst of them, which is the same value :ref:`divergence()<class_NetwPredictionHandle_method_divergence>` reports.
+Fills ``out`` with each field's own divergence and returns the worst of them, which is the same value :ref:`divergence()<class_NetwPredictionHandle_method_divergence>` reports.
 
 That one number cannot say which field drifted, and a set of fields mixing meters, radians and meters per second drifts differently in each, so a caller working out why corrections do or do not fire reads the breakdown.
 
@@ -1142,7 +1130,7 @@ The entity this handle declares prediction for, or ``null`` once that entity is 
 
 :godot:`Dictionary` **episode**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_episode>`
 
-The episode this entity is in, or the last one it finished. An episode opens when prediction diverges far enough to act on, so an empty answer means none has opened. What comes back is a copy and writing to it changes nothing.
+The current or most recent prediction episode. An empty result means no episode has started. Returns a copy.
 
 .. code:: text
 
@@ -1179,7 +1167,7 @@ The episode this entity is in, or the last one it finished. An episode opens whe
     ┃ ┖╴evidence_dropped      int
     ┖╴reopen_chain  Array[int]
 
-\ ``generator.row`` is the journal row that was kept, and its ``witness_detail`` carries the contact behind the witness fingerprint. A run that began before the kept window starts reads :ref:`GENERATOR_UNKNOWN_BEYOND_RETENTION<class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION>`. Later diverging rows appear under ``taint``, and failures that began on their own appear under ``secondary_generators``. An operator that was refused has ``outcome = -1`` and an empty ``write``.
+\ ``generator.row`` is the journal row that was kept, and its ``witness_detail`` carries the contact behind the witness fingerprint. A run that began before the kept window starts reads :ref:`GENERATOR_UNKNOWN_BEYOND_RETENTION<class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION>`. Later diverging rows appear under ``taint``, and failures that began on their own appear under ``secondary_generators``. An operator that was rejected has ``outcome = -1`` and an empty ``write``.
 
 Each series is kept only to a bounded window, because an episode has no limit on how long it may stay open. A trim keeps the newest entries and counts what it dropped, so a truncated series can be told apart from a short one.
 
@@ -1224,7 +1212,7 @@ The episode's current numbers, without copying any of its evidence.
                                         taint, secondary_generators,
                                         dropped}
 
-\ ``evidence.dropped`` counts the entries a trim removed once the episode outlived the kept window, so a short series can be told from a truncated one. ``last_operator.outcome`` is ``-1`` for an attempt refused before it wrote.
+\ ``evidence.dropped`` counts the entries a trim removed once the episode outlived the kept window, so a short series can be told from a truncated one. ``last_operator.outcome`` is ``-1`` for an attempt rejected before it wrote.
 
 .. rst-class:: classref-item-separator
 
@@ -1248,7 +1236,7 @@ One field's error, wrapped as an angle when the declaration says the field wraps
 
 :godot:`bool` **has_consumed_state_tick**\ (\ state_tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_has_consumed_state_tick>`
 
-Whether the engine has consumed everything up to ``state_tick``. A handle with no engine, or one that is not consuming, answers ready.
+Whether the engine has consumed everything up to ``state_tick``. A handle with no engine, or one that is not consuming, returns ready.
 
 .. rst-class:: classref-item-separator
 
@@ -1260,7 +1248,7 @@ Whether the engine has consumed everything up to ``state_tick``. A handle with n
 
 :godot:`int` **history_record_tick**\ (\ fallback\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_history_record_tick>`
 
-The :ref:`NetwTimeline<class_NetwTimeline>` key to record the newest authoritative snapshot under. It answers ``fallback``, or the tick an input backed on a consuming engine, or ``-1`` when this tick consumed no input and so wrote no state worth keying. A caller recording history skips a negative key and leaves the slot as the last real consume wrote it.
+The :ref:`NetwTimeline<class_NetwTimeline>` key to record the newest authoritative snapshot under. It returns ``fallback``, or the tick an input backed on a consuming engine, or ``-1`` when this tick consumed no input and so wrote no state worth keying. A caller recording history skips a negative key and leaves the slot as the last real consume wrote it.
 
 .. rst-class:: classref-item-separator
 
@@ -1330,7 +1318,7 @@ The substituted command producer this entity runs, taken from the lowest-numbere
 
 What this entity's declarations actually reach, field by field, or an empty :godot:`Dictionary` before the entity is attached to an engine.
 
-A declaration can be legal, be accepted, and still do nothing. :ref:`NetwPropertyConfig.carry_step()<class_NetwPropertyConfig_method_carry_step>` under :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` is refused the first time it is used and never tried again, a :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` field that is free to trigger asks for corrections no smaller restore may write, and an :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` on a field no comparison reads bounds nothing. This is where a game finds that out while wiring rather than in a capture.
+A declaration can be legal, be accepted, and still do nothing. :ref:`NetwPropertyConfig.carry_step()<class_NetwPropertyConfig_method_carry_step>` under :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` is rejected the first time it is used and never tried again, a :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` field that is free to trigger asks for corrections no smaller restore may write, and an :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` on a field no comparison reads bounds nothing. This is where a game finds that out while wiring rather than in a capture.
 
 ::
 
@@ -1393,7 +1381,7 @@ Resolves ``mode`` against what ``body`` is. :ref:`NetwPredict.CORRECTION_MODE_AU
 
 :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **resolved_correction_mode**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_resolved_correction_mode>`
 
-The :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` this entity actually corrects with. It never answers :ref:`NetwPredict.CORRECTION_MODE_AUTO<class_NetwPredict_constant_CORRECTION_MODE_AUTO>`, because that has already been resolved into one of the real modes.
+The :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` this entity actually corrects with. It never returns :ref:`NetwPredict.CORRECTION_MODE_AUTO<class_NetwPredict_constant_CORRECTION_MODE_AUTO>`, because that has already been resolved into one of the real modes.
 
 .. rst-class:: classref-item-separator
 
@@ -1535,7 +1523,7 @@ Bumps the revision an episode reader watches for change. The record itself is th
 
 :godot:`Array`\[:godot:`Dictionary`\] **tape_transitions**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_tape_transitions>`
 
-Every recorded transition, oldest first. The client that owns the entity answers the transitions it wrote, and the consuming server answers the ones it decoded. For an entity at :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` the index, the label and the tick are all the same number and every entry is fresh.
+Every recorded transition, oldest first. The client that owns the entity returns the transitions it wrote, and the consuming server returns the ones it decoded. For an entity at :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` the index, the label and the tick are all the same number and every entry is fresh.
 
 .. code:: text
 
@@ -1557,9 +1545,9 @@ Every recorded transition, oldest first. The client that owns the entity answers
 
 The teleport distance in force for each field, as a copy.
 
-\ :ref:`reachability()<class_NetwPredictionHandle_method_reachability>` answers this too and much more besides, which is why it is the wrong call for a recorder. It rebuilds its whole report every time, and a recorder runs once per arriving state. This is the cheap read of the one fact.
+\ :ref:`reachability()<class_NetwPredictionHandle_method_reachability>` returns this too and much more besides, which is why it is the wrong call for a recorder. It rebuilds its whole report every time, and a recorder runs once per arriving state. This is the cheap read of the one fact.
 
-A field missing from the answer declared no distance of its own and uses :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
+A field missing from the result declared no distance of its own and uses :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1583,7 +1571,7 @@ The predicted state ``transition`` produced, or an empty :godot:`Dictionary` bef
 
 :godot:`bool` **triggers**\ (\ error\: :godot:`float`, tolerance\: :godot:`float`\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_triggers>`
 
-Whether an error on one field needs a recovery at a given tolerance. Everything asking that question calls this, so the ranking that decides which divergence a recovery answers cannot read a tolerance differently from the test that raised the correction.
+Whether an error on one field needs a recovery at a given tolerance. Everything asking that question calls this, so the ranking that decides which divergence a recovery returns cannot read a tolerance differently from the test that raised the correction.
 
 The comparison is strictly greater, so a tolerance is the largest error a field may hold rather than the smallest it is corrected for. A tolerance of ``0.0`` therefore means any error at all, which is what lets a field ask to be exact.
 
@@ -1597,7 +1585,7 @@ The comparison is strictly greater, so a tolerance is the largest error a field 
 
 :godot:`float` **value_error**\ (\ a\: :godot:`Variant`, b\: :godot:`Variant`\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_value_error>`
 
-The error between two values of one property. A rotation answers radians, whether it is a :godot:`Quaternion` or a :godot:`Basis`, so a rotation wants a threshold of its own.
+The error between two values of one property. A rotation returns radians, whether it is a :godot:`Quaternion` or a :godot:`Basis`, so a rotation wants a threshold of its own.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -164,7 +164,7 @@
 				ring.
 				This and [method domain_at] are the per-transition reads the
 				compare path makes on every authoritative frame, which is why
-				they answer with a scalar instead of going through
+				they return a scalar instead of going through
 				[method row_at]. Materializing a row dictionary to read one byte out of
 				it allocates once per frame per predicted entity.
 			</description>

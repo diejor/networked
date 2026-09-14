@@ -27,7 +27,7 @@ Every value a prediction setting is written with. :ref:`NetwPredictionHandle<cla
     if entity.prediction.role == NetwPredict.ROLE_PREDICT:
         ...
 
-\ **What a game declares**\ 
+\ **What a game declares**\
 
 - :ref:`Archetype<enum_NetwPredict_Archetype>` what kind of body this is, which presets the rest
 
@@ -51,7 +51,7 @@ Every value a prediction setting is written with. :ref:`NetwPredictionHandle<cla
 
 - :ref:`Reconcile<enum_NetwPredict_Reconcile>` whether an island is corrected together or apart
 
-\ **What the session reports back**\ 
+\ **What the session reports back**\
 
 - :ref:`Role<enum_NetwPredict_Role>` the name for one :ref:`InputSource<enum_NetwPredict_InputSource>` and :ref:`SimMode<enum_NetwPredict_SimMode>` pair
 
@@ -180,7 +180,7 @@ enum **InputSource**: :ref:`🔗<enum_NetwPredict_InputSource>`
 
 :ref:`InputSource<enum_NetwPredict_InputSource>` **INPUT_SOURCE_LOCAL** = ``0``
 
-This peer produces the input it simulates with. :ref:`NetwPredictionHandle.input_source<class_NetwPredictionHandle_property_input_source>` is where an entity's answer is read.
+This peer produces the input it simulates. Read the entity value from :ref:`NetwPredictionHandle.input_source<class_NetwPredictionHandle_property_input_source>`.
 
 .. _class_NetwPredict_constant_INPUT_SOURCE_RECEIVED:
 
@@ -222,7 +222,7 @@ enum **SimMode**: :ref:`🔗<enum_NetwPredict_SimMode>`
 
 :ref:`SimMode<enum_NetwPredict_SimMode>` **SIM_MODE_AUTHORITATIVE** = ``0``
 
-The simulation produces the truth other peers correct themselves against. :ref:`NetwPredictionHandle.sim_mode<class_NetwPredictionHandle_property_sim_mode>` is where an entity's answer is read.
+The simulation produces the authoritative state. Read the entity value from :ref:`NetwPredictionHandle.sim_mode<class_NetwPredictionHandle_property_sim_mode>`.
 
 .. _class_NetwPredict_constant_SIM_MODE_SPECULATIVE:
 
@@ -494,7 +494,7 @@ enum **TriggerShape**: :ref:`🔗<enum_NetwPredict_TriggerShape>`
 
 No field that can trigger was past its own tolerance. The fingerprints can still disagree while every field sits inside its tolerance, so a recovery can be prepared with nothing having asked for one.
 
-A :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` records what the triggering fields looked like when the recovery was judged. The distinction that matters is whether the recovery could write any of them. A write answering a withheld field and a writable one did repair something, while a write whose every trigger was withheld repaired nothing.
+A :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` records what the triggering fields looked like when the recovery was judged. The distinction that matters is whether the recovery could write any of them. A write returning a withheld field and a writable one did repair something, while a write whose every trigger was withheld repaired nothing.
 
 .. _class_NetwPredict_constant_TRIGGER_SHAPE_MIXED:
 
@@ -596,7 +596,7 @@ enum **MissingInput**: :ref:`🔗<enum_NetwPredict_MissingInput>`
 
 :ref:`MissingInput<enum_NetwPredict_MissingInput>` **MISSING_INPUT_STALL** = ``0``
 
-With no input the entity does not move, which is the honest answer and the default.
+With no input, the entity does not move.
 
 .. _class_NetwPredict_constant_MISSING_INPUT_REPEAT_LAST:
 
@@ -1042,7 +1042,7 @@ enum **VerdictReason**: :ref:`🔗<enum_NetwPredict_VerdictReason>`
 
 Nothing stood between the comparison and the body. Either it found agreement, or a recovery ran and decided what to write.
 
-\ :ref:`NetwPredictionHandle.state_evaluated<class_NetwPredictionHandle_signal_state_evaluated>` reports what a comparison decided, and deciding is not writing. Several paths find a divergence and then answer it with nothing, and from that signal alone each of them looks exactly like agreement. This names which one ran.
+\ :ref:`NetwPredictionHandle.state_evaluated<class_NetwPredictionHandle_signal_state_evaluated>` reports a comparison, not a write. This value identifies paths that detect divergence without applying a correction.
 
 .. _class_NetwPredict_constant_VERDICT_REASON_AWAITING_RECONSTRUCTION:
 
@@ -1066,7 +1066,7 @@ The reseed's evidence-free horizon alignment is still waiting for its command ep
 
 :ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_RESEED_IGNORED** = ``3``
 
-The acknowledgement is at or before the reseed horizon, so the row answers for transitions the seed has already replaced.
+The acknowledgement is at or before the reseed horizon, so the row returns for transitions the seed has already replaced.
 
 .. _class_NetwPredict_constant_VERDICT_REASON_PROBATION_REQUARANTINE:
 
@@ -1090,7 +1090,7 @@ The episode's bounded recovery evidence ran out on this comparison, so speculati
 
 :ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_TRANSPORT_PENDING** = ``6``
 
-A transport is already staged against this divergence and owns the write that answers it.
+A transport is already staged against this divergence and owns the write that returns it.
 
 .. _class_NetwPredict_constant_VERDICT_REASON_DISSIPATE_PENDING:
 
@@ -1106,7 +1106,7 @@ A dissipation is already staged against this divergence.
 
 :ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_DISSIPATED** = ``8``
 
-The comparison was answered by letting the divergence fade, which is a decision to write nothing rather than a failure to write.
+The comparison chose to let the divergence fade without writing a correction.
 
 .. _class_NetwPredict_constant_VERDICT_REASON_WITNESS_DEFERRED:
 
@@ -1158,7 +1158,7 @@ Method Descriptions
 
 :godot:`String` **drive_kind_name**\ (\ kind\: :ref:`DriveKind<enum_NetwPredict_DriveKind>`\ ) |static| :ref:`🔗<class_NetwPredict_method_drive_kind_name>`
 
-The :ref:`DriveKind<enum_NetwPredict_DriveKind>` member ``kind`` names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+The :ref:`DriveKind<enum_NetwPredict_DriveKind>` member ``kind`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 
 .. rst-class:: classref-item-separator
 
@@ -1170,7 +1170,7 @@ The :ref:`DriveKind<enum_NetwPredict_DriveKind>` member ``kind`` names, without 
 
 :godot:`String` **episode_state_name**\ (\ state\: :ref:`EpisodeState<enum_NetwPredict_EpisodeState>`\ ) |static| :ref:`🔗<class_NetwPredict_method_episode_state_name>`
 
-The :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` member ``state`` names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+The :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` member ``state`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 
 .. rst-class:: classref-item-separator
 
@@ -1182,7 +1182,7 @@ The :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` member ``state`` names, w
 
 :godot:`int` **joint_cell**\ (\ authored\: :godot:`bool`, relayed\: :godot:`bool`, predictor_valid\: :godot:`bool`\ ) |static| :ref:`🔗<class_NetwPredict_method_joint_cell>`
 
-The :ref:`CellProvenance<enum_NetwPredict_CellProvenance>` one replayed input earns, ranked. What the owner actually did outranks a relay, a relay outranks a substituted guess, and one with none of the three coasts on what it already held.
+The :ref:`CellProvenance<enum_NetwPredict_CellProvenance>` one replayed input receives, ranked. What the owner actually did outranks a relay, a relay outranks a substituted guess, and one with none of the three coasts on what it already held.
 
 Ranked rather than exclusive because more than one can be true at once, and a replay that charged the weaker of two would report a guess where authorship was reproduced.
 
@@ -1232,7 +1232,7 @@ A floor older than ``history_floor`` is one no member can still replay across, s
 
 :godot:`String` **schedule_name**\ (\ schedule\: :ref:`Schedule<enum_NetwPredict_Schedule>`\ ) |static| :ref:`🔗<class_NetwPredict_method_schedule_name>`
 
-The :ref:`Schedule<enum_NetwPredict_Schedule>` member ``schedule`` names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+The :ref:`Schedule<enum_NetwPredict_Schedule>` member ``schedule`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 
 .. rst-class:: classref-item-separator
 
@@ -1244,7 +1244,7 @@ The :ref:`Schedule<enum_NetwPredict_Schedule>` member ``schedule`` names, withou
 
 :godot:`String` **verdict_reason_name**\ (\ reason\: :ref:`VerdictReason<enum_NetwPredict_VerdictReason>`\ ) |static| :ref:`🔗<class_NetwPredict_method_verdict_reason_name>`
 
-The :ref:`VerdictReason<enum_NetwPredict_VerdictReason>` member ``reason`` names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+The :ref:`VerdictReason<enum_NetwPredict_VerdictReason>` member ``reason`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

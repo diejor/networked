@@ -12,14 +12,14 @@ AuthResult
 
 **Inherits:** :godot:`RefCounted`
 
-The verdict :ref:`NetwAuthFlow.verify()<class_NetwAuthFlow_method_verify>` answers a joining peer's credentials with.
+The verdict :ref:`NetwAuthFlow.verify()<class_NetwAuthFlow_method_verify>` returns a joining peer's credentials with.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-An accepted verdict carries the :ref:`NetwIdentity<class_NetwIdentity>` the session seats the peer under. A rejected one carries the sentence handed back instead. Nothing carries both, and that is what :ref:`accept()<class_AuthResult_method_accept>` and :ref:`reject()<class_AuthResult_method_reject>` are for: each sets :ref:`accepted<class_AuthResult_property_accepted>` and leaves the other field empty, so a result assembled through them cannot claim an identity it also refused. :ref:`rejection_reason<class_AuthResult_property_rejection_reason>` on an accepted result reads as the empty string, which is the absence of a reason rather than a blank one.
+An accepted verdict carries the :ref:`NetwIdentity<class_NetwIdentity>` the session seats the peer under. A rejected one carries the sentence handed back instead. Nothing carries both, and that is what :ref:`accept()<class_AuthResult_method_accept>` and :ref:`reject()<class_AuthResult_method_reject>` are for: each sets :ref:`accepted<class_AuthResult_property_accepted>` and leaves the other field empty, so a result assembled through them cannot claim an identity it also rejected. :ref:`rejection_reason<class_AuthResult_property_rejection_reason>` on an accepted result reads as the empty string, which is the absence of a reason rather than a blank one.
 
 ::
 
@@ -29,9 +29,9 @@ An accepted verdict carries the :ref:`NetwIdentity<class_NetwIdentity>` the sess
             return AuthResult.reject("unknown token")
         return AuthResult.accept(identity)
 
-\ Accepting with no identity is a whole answer rather than a half one: it says the credentials are good and leaves the display name to the one the client claimed, which is what a flow that only gates entry wants. It is not reported as a fault. A flow answering no **AuthResult** at all is, because a policy that decides nothing has not accepted anyone.
+\ Accepting without an identity validates the credentials and keeps the display name claimed by the client. Returning no **AuthResult** is an error.
 
-A flow that overrides nothing still answers one of these, because :ref:`NetwAuthFlow.verify_default()<class_NetwAuthFlow_method_verify_default>` rejects.
+A flow that overrides nothing still returns one of these, because :ref:`NetwAuthFlow.verify_default()<class_NetwAuthFlow_method_verify_default>` rejects.
 
 .. rst-class:: classref-reftable-group
 
@@ -100,7 +100,7 @@ Whether the peer is admitted. This is the only field the session reads to decide
 - |void| **set_identity**\ (\ value\: :ref:`NetwIdentity<class_NetwIdentity>`\ )
 - :ref:`NetwIdentity<class_NetwIdentity>` **get_identity**\ (\ )
 
-The identity an accepted peer is seated under, and ``null`` on a refusal.
+The identity an accepted peer is seated under, and ``null`` on a rejection.
 
 .. rst-class:: classref-item-separator
 
@@ -117,7 +117,7 @@ The identity an accepted peer is seated under, and ``null`` on a refusal.
 - |void| **set_rejection_reason**\ (\ value\: :godot:`String`\ )
 - :godot:`String` **get_rejection_reason**\ (\ )
 
-What the refused peer is told, and the empty string on an acceptance.
+What the rejected peer is told, and the empty string on an acceptance.
 
 .. rst-class:: classref-section-separator
 
@@ -146,7 +146,7 @@ Returns an accepting verdict seating the peer under ``identity``, with no reject
 
 :ref:`AuthResult<class_AuthResult>` **reject**\ (\ reason\: :godot:`String`\ ) |static| :ref:`🔗<class_AuthResult_method_reject>`
 
-Returns a refusing verdict carrying ``reason`` back to the peer, with no identity.
+Returns a rejecting verdict carrying ``reason`` back to the peer, with no identity.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -4,7 +4,7 @@
 		How long the server waits for a late player action, and how far ahead of itself it will take one.
 	</brief_description>
 	<description>
-		Two numbers, both optional. [method Netw.configure_lagcomp] answers one of these to fill in.
+		Two numbers, both optional. [method Netw.configure_lagcomp] returns one of these to fill in.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_lagcomp(self) \
@@ -21,23 +21,23 @@
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
-				Sets [member input_gate_deadline_ticks] and answers this same config, so a declaration reads as one chained expression.
+				Sets [member input_gate_deadline_ticks] and returns this same config, so a declaration reads as one chained expression.
 			</description>
 		</method>
 		<method name="max_future_action_ticks">
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
-				Sets [member max_future_action_ticks] and answers this same config, so a declaration reads as one chained expression.
+				Sets [member max_future_action_ticks] and returns this same config, so a declaration reads as one chained expression.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="input_gate_deadline_ticks" type="int" setter="set_input_gate_deadline_ticks" getter="get_input_gate_deadline_ticks" default="12">
-			How many ticks a [constant NetwAction.TIMING_TICK_ALIGNED_STATE_READY] action waits for the state its tick needs before it gives up and resolves on what it has. Raise it for a link that loses input often, and lower it to answer a player sooner at the cost of judging on less. A negative count is refused and the previous value stands.
+			How many ticks a [constant NetwAction.TIMING_TICK_ALIGNED_STATE_READY] action waits for the state its tick needs before it gives up and resolves on what it has. Raise it for a link that loses input often, and lower it to return a player sooner at the cost of judging on less. A negative count is rejected and the previous value stands.
 		</member>
 		<member name="max_future_action_ticks" type="int" setter="set_max_future_action_ticks" getter="get_max_future_action_ticks" default="8">
-			How far ahead of the server's own tick an action may ask to happen before it is denied. This is what stops a client claiming it acted in the future. A negative count is refused and the previous value stands.
+			How far ahead of the server's own tick an action may ask to happen before it is denied. This is what stops a client claiming it acted in the future. A negative count is rejected and the previous value stands.
 		</member>
 	</members>
 </class>

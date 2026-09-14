@@ -33,7 +33,7 @@ Godot advances a physics space once per physics frame, from the state that frame
 
     api.predict_stepper_install(space_rid, MyStepper.new())
 
-\ Install one per space with :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>`, which refuses a stepper whose :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>` does not answer ``true``; installing with a ``null`` stepper uninstalls. Read back what a space holds with :ref:`NetwMultiplayer.predict_get_stepper()<class_NetwMultiplayer_method_predict_get_stepper>`. Only a member declared :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` reaches a stepper at all: a space with none downgrades that member to :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>` instead, as :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` describes, and a member on :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` never asks for one.
+\ Install one per space with :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>`, which rejects a stepper whose :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>` does not return ``true``; installing with a ``null`` stepper uninstalls. Read back what a space holds with :ref:`NetwMultiplayer.predict_get_stepper()<class_NetwMultiplayer_method_predict_get_stepper>`. Only a member declared :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` reaches a stepper at all: a space with none downgrades that member to :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>` instead, as :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` describes, and a member on :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` never asks for one.
 
 The hold on a space starts at the first network tick a :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` member stands in it, because :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` takes a bare ``RID`` and only a member standing in it reveals the dimension the hold needs, and the hold ends when the stepper is uninstalled.
 
@@ -84,7 +84,7 @@ Method Descriptions
 
 :godot:`bool` **_can_step**\ (\ ) |virtual| :ref:`🔗<class_NetwPhysicsStepper_private_method__can_step>`
 
-Whether this stepper can drive a space at all. Answering ``false``, which is also what an unimplemented seam answers, makes :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` install nothing.
+Whether this stepper can drive a space at all. Returning ``false``, which is also what an unimplemented seam returns, makes :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` install nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -132,7 +132,7 @@ Advances ``space`` by exactly ``delta`` and nothing else. Member state belongs t
 
 :godot:`bool` **can_step**\ (\ ) :ref:`🔗<class_NetwPhysicsStepper_method_can_step>`
 
-Answers :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>`, or ``false`` when nothing overrode it.
+Returns :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>`, or ``false`` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 

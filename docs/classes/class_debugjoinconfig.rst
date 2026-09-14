@@ -30,7 +30,7 @@ The join intent stays coherent with the server because :ref:`join_args<class_Deb
 
 \ The array is copied on the way in and on the way out, so a tree that hosts twice off one config cannot have its second join mutated by whatever the first did with the args.
 
-\ :ref:`MultiplayerTree.debug_join<class_MultiplayerTree_property_debug_join>` is the one place it is read, and only when :godot:`OS.has_feature() <OS#class_OS_method_has_feature>` answers ``true`` for ``"debug"``, so a release build never auto connects.
+\ :ref:`MultiplayerTree.debug_join<class_MultiplayerTree_property_debug_join>` is the one place it is read, and only when :godot:`OS.has_feature() <OS#class_OS_method_has_feature>` returns ``true`` for ``"debug"``, so a release build never auto connects.
 
 .. rst-class:: classref-reftable-group
 

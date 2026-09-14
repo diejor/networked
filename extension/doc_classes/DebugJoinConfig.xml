@@ -12,7 +12,7 @@
 		debug_join.join_args = [&amp;"Arena", ^"Player"]
 		[/codeblock]
 		The array is copied on the way in and on the way out, so a tree that hosts twice off one config cannot have its second join mutated by whatever the first did with the args.
-		[member MultiplayerTree.debug_join] is the one place it is read, and only when [method OS.has_feature] answers [code]true[/code] for [code]"debug"[/code], so a release build never auto connects.
+		[member MultiplayerTree.debug_join] is the one place it is read, and only when [method OS.has_feature] returns [code]true[/code] for [code]"debug"[/code], so a release build never auto connects.
 	</description>
 	<tutorials>
 	</tutorials>

@@ -70,8 +70,8 @@ TEST_CASE(
     NetwCarrierBuffers held;
     NetwCarrierBuffers *const buffers = &held;
 
-    // Nothing is owed, because there is nothing held to owe. Refusing here
-    // would drop a frame the caller has no other way to send.
+    // No value is pending. Rejecting here would drop the only copy of the
+    // frame.
     CHECK(buffers->append(PEER, frame(400, 9), false, BUDGET).is_empty());
     NETW_CHECK_EQ(buffers->pending(PEER, false), 400);
 

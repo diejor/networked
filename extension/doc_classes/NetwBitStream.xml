@@ -4,7 +4,7 @@
 		One bit vocabulary in three modes, so a payload is described once and written, read and measured by the same code.
 	</brief_description>
 	<description>
-		Every verb takes the value and answers the value, so a description written once runs in all three [enum Mode] values: [method writer] spends bits, [method reader] takes them back, and [method measurer] counts what they would cost without storing anything. Write the description as one function over a [NetwBitStream] and call it three times rather than writing an encoder and a decoder that must be kept in step.
+		Every verb takes the value and returns the value, so a description written once runs in all three [enum Mode] values: [method writer] spends bits, [method reader] takes them back, and [method measurer] counts what they would cost without storing anything. Write the description as one function over a [NetwBitStream] and call it three times rather than writing an encoder and a decoder that must be kept in step.
 		[codeblock]
 		func describe(s: NetwBitStream, row: Dictionary) -&gt; Dictionary:
 		    row.hp = s.bits(row.get("hp", 0), 12)
@@ -19,12 +19,12 @@
 		var back := NetwBitStream.reader(bytes)
 		var row := describe(back, {})
 		if not back.ok() or back.bits_remaining() != 0:
-		    push_error("refused")
+		    push_error("rejected")
 		[/codeblock]
-		[b]A failed read poisons the stream.[/b] Every verb after the failure is a no-op answering the value it was given, so a decoder checks [method ok] once at the end rather than after each call. This is what makes a hand-written decoder safe against a remote sender: the values a poisoned read answers are the caller's own defaults and never bytes that were not there.
-		[b]A decoder that stops before its input is exhausted has not decoded.[/b] [method bits_remaining] reading anything but [code]0[/code] after a whole payload means the sender framed it under a description this one does not share, so refuse it rather than keep the part that parsed.
-		[method align_verify] pads to the next byte on a write and, on a read, refuses padding that is not zero. A payload ends with it so its length is a whole number of bytes and its tail cannot carry anything undeclared.
-		[method varuint] and [method svarint] are canonical and bounded by the [code]max_bytes[/code] the field declares: a value too large to spell in that many groups is refused rather than truncated, and a redundant final group is refused rather than accepted as a second spelling of one number.
+		[b]A failed read poisons the stream.[/b] Every verb after the failure is a no-op returning the value it was given, so a decoder checks [method ok] once at the end rather than after each call. This is what makes a hand-written decoder safe against a remote sender: the values a poisoned read returns are the caller's own defaults and never bytes that were not there.
+		After decoding a complete payload, [method bits_remaining] must return [code]0[/code]. Reject payloads with unread bits.
+		[method align_verify] pads to the next byte on a write and, on a read, rejects padding that is not zero. A payload ends with it so its length is a whole number of bytes and its tail cannot carry anything undeclared.
+		[method varuint] and [method svarint] are canonical and bounded by the [code]max_bytes[/code] the field declares: a value too large to spell in that many groups is rejected rather than truncated, and a redundant final group is rejected rather than accepted as a second spelling of one number.
 		This is the same vocabulary the framework's own frames are written in, and [code]extension/WIRE.md[/code] states them field for field in it.
 	</description>
 	<tutorials>
@@ -33,7 +33,7 @@
 		<method name="align_verify">
 			<return type="bool" />
 			<description>
-				Pads to the next byte boundary when writing, and when reading refuses padding whose bits are not zero. Returns [code]false[/code] on refusal, which poisons the stream.
+				Pads to the next byte boundary when writing, and when reading rejects padding whose bits are not zero. Returns [code]false[/code] on rejection, which poisons the stream.
 			</description>
 		</method>
 		<method name="bit_length">
@@ -47,7 +47,7 @@
 			<param index="0" name="value" type="int" />
 			<param index="1" name="count" type="int" />
 			<description>
-				Spends [param count] raw bits of [param value], at most 64, and answers what was spent. Reading answers the decoded bits; a [param count] outside [code]1[/code] to [code]64[/code] is refused.
+				Spends [param count] raw bits of [param value], at most 64, and returns what was spent. Reading returns the decoded bits; a [param count] outside [code]1[/code] to [code]64[/code] is rejected.
 			</description>
 		</method>
 		<method name="bits_remaining">
@@ -68,7 +68,7 @@
 			<param index="0" name="value" type="PackedByteArray" />
 			<param index="1" name="cap" type="int" />
 			<description>
-				Spends a length wide enough for [param cap], then the bytes. A run longer than [param cap] is refused by the writer, and a declared length above [param cap] is refused by the reader, so the bound is checked on both sides rather than trusted from the wire.
+				Spends a length wide enough for [param cap], then the bytes. A run longer than [param cap] is rejected by the writer, and a declared length above [param cap] is rejected by the reader, so the bound is checked on both sides rather than trusted from the wire.
 			</description>
 		</method>
 		<method name="get_mode" qualifiers="const">
@@ -83,7 +83,7 @@
 			<param index="1" name="low" type="int" />
 			<param index="2" name="high" type="int" />
 			<description>
-				Spends exactly the bits the span [param low] to [param high] needs. A [param value] outside the span is refused by the writer and a decoded value outside it is refused by the reader, so an enum on the wire cannot arrive as a case the game has no branch for.
+				Spends exactly the bits the span [param low] to [param high] needs. A [param value] outside the span is rejected by the writer and a decoded value outside it is rejected by the reader, so an enum on the wire cannot arrive as a case the game has no branch for.
 			</description>
 		</method>
 		<method name="measurer" qualifiers="static">
@@ -95,7 +95,7 @@
 		<method name="ok">
 			<return type="bool" />
 			<description>
-				Whether the stream is still healthy. A read that ran past the end, a refused bound, or padding that was not zero clears this and it never comes back.
+				Whether the stream is still healthy. A read that ran past the end, a rejected bound, or padding that was not zero clears this and it never comes back.
 			</description>
 		</method>
 		<method name="reader" qualifiers="static">
@@ -131,7 +131,7 @@
 			<param index="0" name="value" type="int" />
 			<param index="1" name="max_bytes" type="int" default="10" />
 			<description>
-				Spends an unsigned value as seven bit groups with a continuation bit, at most [param max_bytes] of them. Canonical and bounded: see the class description for what each end refuses.
+				Spends an unsigned value as seven bit groups with a continuation bit, at most [param max_bytes] of them. Canonical and bounded: see the class description for what each end rejects.
 			</description>
 		</method>
 		<method name="writer" qualifiers="static">
@@ -143,13 +143,13 @@
 	</methods>
 	<constants>
 		<constant name="WRITE" value="0" enum="Mode">
-			The stream spends the value it is given and [method to_bytes] answers the result.
+			The stream spends the value it is given and [method to_bytes] returns the result.
 		</constant>
 		<constant name="READ" value="1" enum="Mode">
-			The stream takes values back out of the bytes [method reader] was given, ignoring the value it is passed and answering it unchanged once the stream is poisoned.
+			The stream takes values back out of the bytes [method reader] was given, ignoring the value it is passed and returning it unchanged once the stream is poisoned.
 		</constant>
 		<constant name="MEASURE" value="2" enum="Mode">
-			The stream stores nothing and only counts, so [method bit_length] answers what the same description would cost to write.
+			The stream stores nothing and only counts, so [method bit_length] returns what the same description would cost to write.
 		</constant>
 	</constants>
 </class>

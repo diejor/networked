@@ -9,7 +9,7 @@
 		var bytes := payload.serialize()
 		copy.deserialize(bytes)
 		[/codeblock]
-		A subclass supplies the representation by overriding [method _serialize] and [method _deserialize], and callers always use the plain [method serialize] and [method deserialize] pair. The two spellings are one contract: the plain verb answers the override when a script supplies one and falls back to the native implementation otherwise, so the caller never asks which kind of subclass it holds.
+		A subclass supplies the representation by overriding [method _serialize] and [method _deserialize], and callers always use the plain [method serialize] and [method deserialize] pair. The two spellings are one contract: the plain verb returns the override when a script supplies one and falls back to the native implementation otherwise, so the caller never asks which kind of subclass it holds.
 		[DictionaryRecord] is the implementation this addon ships.
 	</description>
 	<tutorials>
@@ -32,13 +32,13 @@
 			<return type="void" />
 			<param index="0" name="bytes" type="PackedByteArray" />
 			<description>
-				Repopulates this resource from [param bytes]. A subclass that overrides [method _deserialize] answers through it, and a [Serde] with neither an override nor a native implementation ignores the call.
+				Repopulates this resource from [param bytes]. A subclass that overrides [method _deserialize] returns through it, and a [Serde] with neither an override nor a native implementation ignores the call.
 			</description>
 		</method>
 		<method name="serialize">
 			<return type="PackedByteArray" />
 			<description>
-				Converts this resource to a [PackedByteArray]. A subclass that overrides [method _serialize] answers through it, and a [Serde] with neither an override nor a native implementation answers an empty array.
+				Converts this resource to a [PackedByteArray]. A subclass that overrides [method _serialize] returns through it, and a [Serde] with neither an override nor a native implementation returns an empty array.
 			</description>
 		</method>
 	</methods>

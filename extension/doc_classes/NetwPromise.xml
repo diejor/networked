@@ -12,7 +12,7 @@
 		        show_error(error_string(code) if detail.is_empty() else detail)
 		    )
 		[/codeblock]
-		The settle vocabulary is closed. [constant @GlobalScope.ERR_TIMEOUT] means the deadline passed with no reply, [constant @GlobalScope.ERR_UNAVAILABLE] means the responder went away before it could answer, and [constant @GlobalScope.ERR_UNAUTHORIZED] means the responder refused. The [member detail] string carries the human-readable reason and is never the thing code branches on.
+		The settle vocabulary is closed. [constant @GlobalScope.ERR_TIMEOUT] means the deadline passed with no reply, [constant @GlobalScope.ERR_UNAVAILABLE] means the responder went away before it could answer, and [constant @GlobalScope.ERR_UNAUTHORIZED] means the responder rejected. The [member detail] string carries the human-readable reason and is never the thing code branches on.
 		A returned [Node] arrives resolved to the live local instance, deferred until it spawns if the reply beats its spawn packet. See [NetwGroupPromise] for the one-to-many form.
 	</description>
 	<tutorials>
@@ -21,15 +21,14 @@
 		<method name="answer" qualifiers="const">
 			<return type="Variant" />
 			<description>
-				What the promise settled with, as one value: [member result] when it completed and [member code] when it failed. This is the rule [code]NetwDatabase.settled_error[/code] already applies, and it is what [signal ready] carries, so one channel answers both outcomes and a caller reads the answer without first asking which happened.
-				A promise that has not settled answers [member code], which is zero, so read [member is_settled] first when the difference matters.
+				Returns [member result] after success or [member code] after failure. [signal ready] carries the same value. Check [member is_settled] before reading an unsettled promise.
 			</description>
 		</method>
 		<method name="catch_error">
 			<return type="NetwPromise" />
 			<param index="0" name="cb" type="Callable" />
 			<description>
-				Chains [param cb] to run if the promise is rejected or timed out. It receives [member code] and [member detail]. A promise that already failed runs it immediately, and either way this answers the promise so calls chain.
+				Chains [param cb] to run if the promise is rejected or timed out. It receives [member code] and [member detail]. A promise that already failed runs it immediately, and either way this returns the promise so calls chain.
 			</description>
 		</method>
 		<method name="reject">
@@ -65,13 +64,13 @@
 			<return type="NetwPromise" />
 			<param index="0" name="cb" type="Callable" />
 			<description>
-				Chains [param cb] to run when the promise resolves. It receives [member result]. A promise that already completed runs it immediately, and either way this answers the promise so calls chain.
+				Chains [param cb] to run when the promise resolves. It receives [member result]. A promise that already completed runs it immediately, and either way this returns the promise so calls chain.
 			</description>
 		</method>
 		<method name="wait">
 			<return type="Signal" />
 			<description>
-				Answers a [Signal] on the [signal ready] channel that is safe to [code]await[/code] whether or not the promise has already settled, carrying [method answer].
+				Returns a [Signal] on the [signal ready] channel that is safe to [code]await[/code] whether or not the promise has already settled, carrying [method answer].
 				This is the idiom. Awaiting [signal settled] directly is a race the caller cannot win: a promise that settled first has already emitted it and the caller waits forever, which is why call sites grew a hand-written [member is_settled] guard. An already-settled promise defers its emission here, so the [code]await[/code] subscribes before the answer is delivered.
 				[codeblock]
 				var err: Error = await engine.flush(keys).wait()
@@ -83,7 +82,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="cb" type="Callable" />
 			<description>
-				Chains a zero-argument [param cb] to run the moment [member is_settled] becomes true, whichever way it went. An already-settled promise runs it immediately, and either way this answers the promise so calls chain.
+				Chains a zero-argument [param cb] to run the moment [member is_settled] becomes true, whichever way it went. An already-settled promise runs it immediately, and either way this returns the promise so calls chain.
 				This is what a caller with no coroutine uses in place of [code]await promise.settled[/code]. Awaiting is a race the caller cannot win, because a promise that settled before the [code]await[/code] has already emitted [signal settled] and the caller waits forever; subscribing here has no such window. It is also the only chain that survives both outcomes, since [method then] never fires on a rejection and [method catch_error] never fires on a success.
 				[codeblock]
 				func answer_when_settled(operation: NetwPromise) -&gt; void:
@@ -129,7 +128,7 @@
 		<signal name="ready">
 			<param index="0" name="answer" type="Variant" />
 			<description>
-				The channel [method wait] answers on, carrying [method answer]. A pending promise emits it once on its settle edge, so every waiter is answered by that one emission. A promise that already settled emits it once per [method wait] call, deferred, so a late caller is answered rather than left waiting.
+				Carries [method answer]. A pending promise emits this once when it settles. [method wait] emits it later for each call made after settlement.
 				[b]Note:[/b] connect to [signal settled] instead. Because a settled promise emits this per call, a subscriber attached by hand can see it more than once. [method wait] is its only intended producer and consumer.
 			</description>
 		</signal>

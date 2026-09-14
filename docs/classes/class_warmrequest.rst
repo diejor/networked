@@ -32,7 +32,7 @@ A request is a value naming what a write-behind backend should pre-load for one 
     # Warm nothing eagerly (lazy fetch-on-miss still applies):
     WarmRequest.none()
 
-\ Calling ``new()`` instead gives the same request :ref:`none()<class_WarmRequest_method_none>` answers.
+\ Calling ``new()`` instead gives the same request :ref:`none()<class_WarmRequest_method_none>` returns.
 
 .. rst-class:: classref-reftable-group
 

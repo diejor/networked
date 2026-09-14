@@ -151,8 +151,7 @@ TEST_CASE(
     CHECK(static_geometry(wall));
     CHECK(static_geometry(floor_3d));
     CHECK(static_geometry(tiles));
-    // A moving platform IS a StaticBody2D subclass, so the exclusion has to
-    // run before the class list is asked.
+    // Exclude moving platforms before accepting StaticBody2D subclasses.
     CHECK(!static_geometry(platform));
     CHECK(!static_geometry(walker));
     CHECK(!static_geometry(crate));

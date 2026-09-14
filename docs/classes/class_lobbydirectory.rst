@@ -23,7 +23,7 @@ Description
 
 A directory is what the connect plane asks when a game names a :ref:`MultiplayerTree.peer_class<class_MultiplayerTree_property_peer_class>` the plane has no built-in transport for. Register one under a session and it becomes the provider for the peer class :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>` names, so hosting, joining and browsing that class all reach this node.
 
-Every request seam answers ``void`` and reports later through :ref:`deliver()<class_LobbyDirectory_method_deliver>`, :ref:`fail()<class_LobbyDirectory_method_fail>` or :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>`. A request is answered exactly once, and a directory that abandons an attempt reports the failure rather than staying silent, because the plane holds the caller's request open until it hears.
+Every request method returns ``void`` and completes later through :ref:`deliver()<class_LobbyDirectory_method_deliver>`, :ref:`fail()<class_LobbyDirectory_method_fail>`, or :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>`. Each request completes exactly once.
 
 ::
 
@@ -35,7 +35,7 @@ Every request seam answers ``void`` and reports later through :ref:`deliver()<cl
     func _host_lobby(settings: Dictionary) -> void:
         var room := await Rooms.open(settings.get("name", "room"))
         if room == null:
-            fail(ERR_CANT_CREATE, "the room service refused the lobby")
+            fail(ERR_CANT_CREATE, "the room service rejected the lobby")
             return
         deliver(room.peer())
 
@@ -56,7 +56,7 @@ Every request seam answers ``void`` and reports later through :ref:`deliver()<cl
     func _leave_lobby() -> void:
         Rooms.leave()
 
-\ Each seam has a stock answer, so a provider overrides only what it differs on. The reading verbs are C++ and the plane calls them directly; a script reads its own override.
+\ Each seam has a default result, so a provider overrides only what it differs on. The reading verbs are C++ and the plane calls them directly; a script reads its own override.
 
 .. rst-class:: classref-reftable-group
 
@@ -145,7 +145,7 @@ A platform invite arrived. Only a directory advertising :ref:`CAPABILITY_INVITES
 
 **lobby_failed**\ (\ error\: :godot:`int`, message\: :godot:`String`\ ) :ref:`🔗<class_LobbyDirectory_signal_lobby_failed>`
 
-Emitted by :ref:`fail()<class_LobbyDirectory_method_fail>` with the reason the request in flight was refused.
+Emitted by :ref:`fail()<class_LobbyDirectory_method_fail>` with the reason the request in flight was rejected.
 
 .. rst-class:: classref-item-separator
 
@@ -305,7 +305,7 @@ Whether this build may open a lobby, as opposed to only joining one. Defaults to
 
 :godot:`bool` **_can_probe**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__can_probe>`
 
-Whether an address can be asked what it is without joining it. Lobby providers usually answer that through :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` instead, so this defaults to ``false``.
+Whether an address supports probing without joining. Lobby providers usually expose this through :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>`, so the default is ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -331,7 +331,7 @@ The :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory can h
 
 The settings a join form starts from, which :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>` is later handed with the player's edits applied. Defaults to empty.
 
-Answer a key here when joining reads it, the way :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>` answers for hosting. The two overlap by however much the two paths share.
+Return a setting key here when joining uses it. :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>` provides the host settings. Shared settings may appear in both.
 
 .. rst-class:: classref-item-separator
 
@@ -355,7 +355,7 @@ The provider name a browser shows. Defaults to :ref:`_peer_class()<class_LobbyDi
 
 |void| **_host_lobby**\ (\ settings\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__host_lobby>`
 
-Creates a lobby, answered through :ref:`deliver()<class_LobbyDirectory_method_deliver>` or :ref:`fail()<class_LobbyDirectory_method_fail>` with a connected host :godot:`MultiplayerPeer`.
+Creates a lobby. Completes through :ref:`deliver()<class_LobbyDirectory_method_deliver>` or :ref:`fail()<class_LobbyDirectory_method_fail>` with a connected host :godot:`MultiplayerPeer`.
 
 \ ``settings`` is :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>` with the caller's edits applied, so a directory reads only the keys its provider can honor. The advert keys are ``name``, ``max_players`` and ``visibility``, the last a :ref:`Visibility<enum_NetwServerInfo_Visibility>`.
 
@@ -405,7 +405,7 @@ The address others join the lobby this directory currently holds by, so a host c
 
 |void| **_join_lobby**\ (\ address\: :godot:`String`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__join_lobby>`
 
-Joins the lobby named by ``address``, answered through :ref:`deliver()<class_LobbyDirectory_method_deliver>` or :ref:`fail()<class_LobbyDirectory_method_fail>` with a connected :godot:`MultiplayerPeer`.
+Joins the lobby named by ``address``. Completes through :ref:`deliver()<class_LobbyDirectory_method_deliver>` or :ref:`fail()<class_LobbyDirectory_method_fail>` with a connected :godot:`MultiplayerPeer`.
 
 \ ``address`` is one of the strings :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` published, or whatever a player typed into the field :ref:`_address_label()<class_LobbyDirectory_private_method__address_label>` names.
 
@@ -431,7 +431,7 @@ Leaves the lobby this directory holds, if any. Idempotent, and reached when a ma
 
 |void| **_list_lobbies**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__list_lobbies>`
 
-Requests the browse rows, answered through :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` or :ref:`fail()<class_LobbyDirectory_method_fail>`.
+Requests the browse rows. Completes through :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` or :ref:`fail()<class_LobbyDirectory_method_fail>`.
 
 .. rst-class:: classref-item-separator
 
@@ -479,7 +479,7 @@ The :godot:`MultiplayerPeer` class this directory's lobbies join through, such a
 
 |void| **deliver**\ (\ peer\: :godot:`MultiplayerPeer`\ ) :ref:`🔗<class_LobbyDirectory_method_deliver>`
 
-Reports ``peer`` as the answer to the request in flight.
+Reports ``peer`` as the result to the request in flight.
 
 The plane hands the peer to whoever asked for it, so a directory neither assigns it nor keeps it alive on the caller's behalf.
 
@@ -493,9 +493,9 @@ The plane hands the peer to whoever asked for it, so a directory neither assigns
 
 |void| **fail**\ (\ error\: :godot:`int`, message\: :godot:`String`\ ) :ref:`🔗<class_LobbyDirectory_method_fail>`
 
-Reports that the request in flight cannot be answered.
+Reports that the request in flight cannot be completed.
 
-\ ``message`` is shown to a player, so it names what the provider refused rather than restating ``error``.
+\ ``message`` is shown to a player, so it names what the provider rejected rather than restating ``error``.
 
 .. rst-class:: classref-item-separator
 
@@ -507,7 +507,7 @@ Reports that the request in flight cannot be answered.
 
 :godot:`String` **local_member_name_default**\ (\ ) |static| :ref:`🔗<class_LobbyDirectory_method_local_member_name_default>`
 
-The stock answer for :ref:`_local_member_name()<class_LobbyDirectory_private_method__local_member_name>`.
+The default result for :ref:`_local_member_name()<class_LobbyDirectory_private_method__local_member_name>`.
 
 An override calls this for the case it does not resolve itself, because a script cannot ``super()`` into a virtual the extension declares.
 
@@ -521,7 +521,7 @@ An override calls this for the case it does not resolve itself, because a script
 
 :godot:`String` **member_name_default**\ (\ peer_id\: :godot:`int`\ ) |static| :ref:`🔗<class_LobbyDirectory_method_member_name_default>`
 
-The stock answer for :ref:`_member_name()<class_LobbyDirectory_private_method__member_name>`, ``"Player <peer_id>"``.
+The default result for :ref:`_member_name()<class_LobbyDirectory_private_method__member_name>`, ``"Player <peer_id>"``.
 
 An override calls this for the peers it cannot name itself, because a script cannot ``super()`` into a virtual the extension declares.
 

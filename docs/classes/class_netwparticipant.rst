@@ -19,7 +19,7 @@ Live handle for one accepted session player.
 Description
 -----------
 
-A view over one peer's row in the session, holding nothing but the peer id: every member is read back through the session when it is asked for, so a participant is correct after a rehost, a scene rebuild or a respawn without anything re-issuing it. One peer has one participant, so ``==`` answers "the same player".
+A view over one peer's row in the session, holding nothing but the peer id: every member is read back through the session when it is asked for, so a participant is correct after a rehost, a scene rebuild or a respawn without anything re-issuing it. One peer has one participant, so ``==`` returns "the same player".
 
 \ :ref:`current_scene<class_NetwParticipant_property_current_scene>` tracks the peer's primary scene independently of any spawned player node, which is what lets a session seat a player before it has a body and keep the seat after the body is gone.
 
@@ -30,7 +30,7 @@ A view over one peer's row in the session, holding nothing but the peer id: ever
         greet(participant.username)
     await participant.move_to(arena).completed
 
-\ Minted by the session and never by a caller: :ref:`NetwMultiplayer.peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>` mints the row the first time a peer is asked about, so two reads of one peer answer the same object.
+\ Created by the session. :ref:`NetwMultiplayer.peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>` creates the participant on first access and returns the same object on later calls.
 
 .. rst-class:: classref-reftable-group
 
@@ -128,7 +128,7 @@ Primary, not exclusive: a participant may be admitted to several scenes at once,
 
 Read-only, because writing it would record arrival without performing it. :ref:`move_to()<class_NetwParticipant_method_move_to>` is the verb that actually moves a participant, and the deliberate low-level seat verbs on :ref:`NetwMultiplayer<class_NetwMultiplayer>` are there for a caller managing membership without moving anything.
 
-The seat is held as the scene entity's identity rather than as a handle, so membership survives the scene being rebuilt and never pins a freed node; the handle read here is minted from that identity on demand.
+The seat is held as the scene entity's identity rather than as a handle, so membership survives the scene being rebuilt and never pins a freed node; the handle read here is created from that identity on demand.
 
 .. rst-class:: classref-item-separator
 
@@ -146,7 +146,7 @@ The seat is held as the scene entity's identity rather than as a handle, so memb
 
 The validated auth identity for this peer, or ``null``.
 
-Present only when the session has an auth provider, and never part of the replicated roster, which is what :ref:`ResolvedJoin<class_ResolvedJoin>` is. Read from the session's own book through :ref:`NetwMultiplayer.peer_get_identity()<class_NetwMultiplayer_method_peer_get_identity>`, which is the one answer to who authenticated.
+Present only when the session has an auth provider, and never part of the replicated roster, which is what :ref:`ResolvedJoin<class_ResolvedJoin>` is. Read from the session's own book through :ref:`NetwMultiplayer.peer_get_identity()<class_NetwMultiplayer_method_peer_get_identity>`, which is the one result to who authenticated.
 
 .. rst-class:: classref-item-separator
 
@@ -164,7 +164,7 @@ Present only when the session has an auth provider, and never part of the replic
 
 The accepted join record for this peer, or ``null`` before the join is accepted.
 
-Read through :ref:`NetwMultiplayer.peer_get_accepted_join()<class_NetwMultiplayer_method_peer_get_accepted_join>` on every access rather than held, so a join enriched after the participant was minted is answered by the participant that already exists.
+Read through :ref:`NetwMultiplayer.peer_get_accepted_join()<class_NetwMultiplayer_method_peer_get_accepted_join>` on every access. Updates made after participant creation are visible through the existing participant.
 
 .. rst-class:: classref-item-separator
 
@@ -215,7 +215,7 @@ Method Descriptions
 
 Travels this participant into ``destination``: the player entity roots it is enrolled in move first, then its admission and its :ref:`current_scene<class_NetwParticipant_property_current_scene>` follow.
 
-This is the whole of arriving rather than the membership half of it, which is why it answers a promise. Admissions this participant holds elsewhere are untouched, so a spectator seat survives travel. A move into the scene already held is a successful no-op raising no roster event.
+This is the whole of arriving rather than the membership half of it, which is why it returns a promise. Admissions this participant holds elsewhere are untouched, so a spectator seat survives travel. A move into the scene already held is a successful no-op raising no roster event.
 
 The returned :ref:`NetwPromise<class_NetwPromise>` resolves once the transfer has committed on authority. It rejects with :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>` while another transfer of the same participant is in flight, with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``destination`` retired while the transfer was preparing, and with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` off authority.
 

@@ -123,7 +123,7 @@ def probe_capabilities(binary: Path, expected: dict[str, bool], *, timeout: floa
     missing = [name for name in expected if name not in found]
     if missing:
         sys.stdout.write(text)
-        raise fail("the capability probe did not answer for %s" % ", ".join(missing))
+        raise fail("the capability probe returned no value for %s" % ", ".join(missing))
     return found
 
 
@@ -181,7 +181,7 @@ def install(
         got = found[capability]
         print("CAPABILITY %s %s=%s (declared %s)" % (chosen, capability, got, want))
         if got != want:
-            raise fail("engine '%s' declares %s=%s but the binary answers %s" % (chosen, capability, want, got))
+            raise fail("engine '%s' declares %s=%s but the binary reports %s" % (chosen, capability, want, got))
     print("ENGINE %s at %s" % (chosen, binary))
     return binary
 
@@ -299,7 +299,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         print("CAPABILITY %s %s=%s (declared %s)" % (chosen, capability, found[capability], want))
         if found[capability] != want:
             raise fail(
-                "engine '%s' declares %s=%s but %s answers %s"
+                "engine '%s' declares %s=%s but %s reports %s"
                 % (chosen, capability, want, args.binary, found[capability])
             )
     return 0

@@ -14,7 +14,7 @@ NetwDatabaseBackend
 
 **Inherited By:** :ref:`FileSystemDatabase<class_FileSystemDatabase>`, :ref:`NakamaDatabase<class_NakamaDatabase>`
 
-Where a :ref:`NetwDatabase<class_NetwDatabase>` actually stores what it saves, as nine methods each answering a :ref:`NetwPromise<class_NetwPromise>`.
+Where a :ref:`NetwDatabase<class_NetwDatabase>` actually stores what it saves, as nine methods each returning a :ref:`NetwPromise<class_NetwPromise>`.
 
 .. rst-class:: classref-introduction-group
 
@@ -23,17 +23,17 @@ Description
 
 A game subclasses this to save into something of its own, and :ref:`FileSystemDatabase<class_FileSystemDatabase>` is the backend this addon ships.
 
-Every method here answers a :ref:`NetwPromise<class_NetwPromise>` straight away and none of them may suspend. :godot:`NetwDatabase.TableRepository` is the layer above that waits on the promise, and that is where a coroutine belongs.
+Every method here returns a :ref:`NetwPromise<class_NetwPromise>` straight away and none of them may suspend. :godot:`NetwDatabase.TableRepository` is the layer above that waits on the promise, and that is where a coroutine belongs.
 
-That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot answer a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
+That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot return a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
 
 ::
 
-    # A backend that answers on the spot.
+    # A backend that returns on the spot.
     func _find_by_id(table: StringName, id: StringName) -> NetwPromise:
         return NetwPromise.resolved(_read(table, id))
 
-    # A backend that answers later. The promise IS how the caller waits, so
+    # A backend that returns later. The caller waits on the promise.
     # the coroutine is deliberately not awaited here.
     func _find_by_id(table: StringName, id: StringName) -> NetwPromise:
         var settling := NetwPromise.new()
@@ -43,13 +43,13 @@ That is what makes a backend allowed to be slow. A backend talking to a service 
     func _settle_later(settling: NetwPromise, table, id) -> void:
         settling.resolve(await _service.read(table, id))
 
-\ A verb whose value is an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` resolves WITH that code: :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` and a storage failure are both answers the operation reached. A rejection means the operation could not run at all.
+\ A method returning :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` resolves its promise with that code. A rejected promise means the operation could not run.
 
 Two refusals ship from the dispatcher rather than from any backend, and both are observable:
 
-- An override that answers no promise is rejected with :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`, because a null would be waited on forever.
+- An override that returns no promise is rejected with :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`, because a null would be waited on forever.
 
-- The default :ref:`commit()<class_NetwDatabaseBackend_method_commit>`, the one a backend gets when it overrides no :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>`, refuses with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
+- The default :ref:`commit()<class_NetwDatabaseBackend_method_commit>`, the one a backend gets when it overrides no :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>`, rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
 
 .. rst-class:: classref-reftable-group
 
@@ -150,7 +150,7 @@ Override to drop every table stored under ``slot``. :ref:`delete_namespace()<cla
 
 :ref:`NetwPromise<class_NetwPromise>` **_find_all**\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__find_all>`
 
-Override to answer every record of ``table`` whose fields match ``filter``. :ref:`find_all()<class_NetwDatabaseBackend_method_find_all>` calls this.
+Override to return every record of ``table`` whose fields match ``filter``. :ref:`find_all()<class_NetwDatabaseBackend_method_find_all>` calls this.
 
 .. rst-class:: classref-item-separator
 
@@ -162,7 +162,7 @@ Override to answer every record of ``table`` whose fields match ``filter``. :ref
 
 :ref:`NetwPromise<class_NetwPromise>` **_find_by_id**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__find_by_id>`
 
-Override to answer one record by its ``id``. :ref:`find_by_id()<class_NetwDatabaseBackend_method_find_by_id>` calls this.
+Override to return one record by its ``id``. :ref:`find_by_id()<class_NetwDatabaseBackend_method_find_by_id>` calls this.
 
 .. rst-class:: classref-item-separator
 
@@ -186,7 +186,7 @@ Override to prepare the backend for ``slot`` against ``schema``, creating whatev
 
 :ref:`NetwPromise<class_NetwPromise>` **_list_namespaces**\ (\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__list_namespaces>`
 
-Override to answer every slot the backend currently holds. :ref:`list_namespaces()<class_NetwDatabaseBackend_method_list_namespaces>` calls this.
+Override to return every slot the backend currently holds. :ref:`list_namespaces()<class_NetwDatabaseBackend_method_list_namespaces>` calls this.
 
 .. rst-class:: classref-item-separator
 
@@ -232,7 +232,7 @@ Writes a batch of ``operations`` as one unit.
       ┠╴id     StringName  the record written
       ┖╴data   Dictionary  the fields to merge in
 
-\ Calls :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>` when a backend overrides it. Otherwise plays the batch through :ref:`upsert()<class_NetwDatabaseBackend_method_upsert>` in order and refuses with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` the instant a write has not settled by the time its :ref:`NetwPromise<class_NetwPromise>` is checked, since a backend whose writes settle later owns its own :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>` to sequence them.
+\ Calls :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>` when a backend overrides it. Otherwise plays the batch through :ref:`upsert()<class_NetwDatabaseBackend_method_upsert>` in order and rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` the instant a write has not settled by the time its :ref:`NetwPromise<class_NetwPromise>` is checked, since a backend whose writes settle later owns its own :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>` to sequence them.
 
 .. rst-class:: classref-item-separator
 
@@ -268,7 +268,7 @@ Removes the record named by ``id`` from ``table``. Calls :ref:`_delete()<class_N
 
 :ref:`NetwPromise<class_NetwPromise>` **find_all**\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwDatabaseBackend_method_find_all>`
 
-Answers every record of ``table`` whose fields match ``filter``. Calls :ref:`_find_all()<class_NetwDatabaseBackend_private_method__find_all>`.
+Returns every record of ``table`` whose fields match ``filter``. Calls :ref:`_find_all()<class_NetwDatabaseBackend_private_method__find_all>`.
 
 .. rst-class:: classref-item-separator
 
@@ -280,7 +280,7 @@ Answers every record of ``table`` whose fields match ``filter``. Calls :ref:`_fi
 
 :ref:`NetwPromise<class_NetwPromise>` **find_by_id**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_find_by_id>`
 
-Answers one record of ``table`` by its ``id``. Calls :ref:`_find_by_id()<class_NetwDatabaseBackend_private_method__find_by_id>`.
+Returns one record of ``table`` by its ``id``. Calls :ref:`_find_by_id()<class_NetwDatabaseBackend_private_method__find_by_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -318,7 +318,7 @@ Prepares the backend for ``slot`` against ``schema`` before any other verb runs 
 
 :ref:`NetwPromise<class_NetwPromise>` **list_namespaces**\ (\ ) :ref:`🔗<class_NetwDatabaseBackend_method_list_namespaces>`
 
-Answers every slot the backend currently holds. Calls :ref:`_list_namespaces()<class_NetwDatabaseBackend_private_method__list_namespaces>`.
+Returns every slot the backend currently holds. Calls :ref:`_list_namespaces()<class_NetwDatabaseBackend_private_method__list_namespaces>`.
 
 .. rst-class:: classref-item-separator
 

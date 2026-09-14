@@ -385,7 +385,7 @@ CAPTURE_MAGICS = {
 
 
 def read_capture(path):
-    """Split a .netwcap into its header and its record list, refusing residue."""
+    """Split a .netwcap into its header and record list. Reject trailing data."""
     with open(path, "rb") as handle:
         raw = handle.read()
     split = raw.find(b"\n")
@@ -446,7 +446,7 @@ def capture(path, verbose):
         )
     )
 
-    refused = 0
+    errors = 0
     frames = 0
     per_channel = {0: {}, 1: {}}
     per_direction = {0: 0, 1: 0}
@@ -458,8 +458,8 @@ def capture(path, verbose):
         try:
             head, walked = walk_datagram(records, channels, row["bytes"])
         except Poisoned as stopped:
-            refused += 1
-            print("REFUSED record %d %s" % (index, stopped))
+            errors += 1
+            print("ERROR record %d: %s" % (index, stopped))
             continue
         frames += len(walked)
         lane = per_channel.setdefault(direction, {})
@@ -505,8 +505,8 @@ def capture(path, verbose):
         )
         for key in sorted(lane, key=lambda k: -lane[k]):
             print("      %-28s %9d" % (key, lane[key]))
-    print("CAPTURE %d records %d frames %d refused" % (len(rows), frames, refused))
-    return 1 if refused else 0
+    print("CAPTURE %d records %d frames %d errors" % (len(rows), frames, errors))
+    return 1 if errors else 0
 
 
 def self_test(spec_path=None):
@@ -519,7 +519,7 @@ def self_test(spec_path=None):
         wrong += 0 if ok else 1
         print("%s %-52s %s" % ("ok  " if ok else "FAIL", name, "" if ok else "got %r want %r" % (got, want)))
 
-    def refuses(name, thunk):
+    def rejects(name, thunk):
         nonlocal wrong
         try:
             thunk()
@@ -527,7 +527,7 @@ def self_test(spec_path=None):
             print("ok   %-52s" % name)
             return
         wrong += 1
-        print("FAIL %-52s accepted what it must refuse" % name)
+        print("FAIL %-52s accepted invalid input" % name)
 
     got = decode(HAND_BUILT["fields"], HAND_BUILT["bytes"])
     check("the 8.3 reference frame decodes to its values", got, HAND_BUILT["values"])
@@ -546,15 +546,15 @@ def self_test(spec_path=None):
         decode(MASKED_ROW["fields"], MASKED_ROW["bytes"]),
         MASKED_ROW["values"],
     )
-    refuses(
-        "the 9.4 masked row refuses a trailing byte",
+    rejects(
+        "the 9.4 masked row rejects a trailing byte",
         lambda: decode(MASKED_ROW["fields"], MASKED_ROW["bytes"] + b"\xff"),
     )
 
     laddered = decode(LADDER_ROW["fields"], LADDER_ROW["bytes"])
     check("the 9.5 laddered row decodes to its values", laddered, LADDER_ROW["values"])
-    refuses(
-        "the 9.5 laddered row refuses a trailing byte",
+    rejects(
+        "the 9.5 laddered row rejects a trailing byte",
         lambda: decode(LADDER_ROW["fields"], LADDER_ROW["bytes"] + b"\xff"),
     )
     check(
@@ -574,11 +574,11 @@ def self_test(spec_path=None):
         decode([{"name": "n", "kind": "varuint", "max_bytes": 5}], bytes([0xAC, 0x02]))["n"],
         300,
     )
-    refuses(
+    rejects(
         "a varuint with a redundant final group",
         lambda: decode([{"name": "n", "kind": "varuint", "max_bytes": 5}], bytes([0xAC, 0x82, 0x00])),
     )
-    refuses(
+    rejects(
         "a varuint past its byte limit",
         lambda: decode([{"name": "n", "kind": "varuint", "max_bytes": 1}], bytes([0x80, 0x01])),
     )
@@ -596,9 +596,9 @@ def self_test(spec_path=None):
         bytes([0xAA, 0xBB]),
     )
 
-    refuses("a frame with residue", lambda: decode(HAND_BUILT["fields"], HAND_BUILT["bytes"] + b"\xff"))
-    refuses("a frame that ends early", lambda: decode(HAND_BUILT["fields"], HAND_BUILT["bytes"][:2]))
-    refuses(
+    rejects("a frame with residue", lambda: decode(HAND_BUILT["fields"], HAND_BUILT["bytes"] + b"\xff"))
+    rejects("a frame that ends early", lambda: decode(HAND_BUILT["fields"], HAND_BUILT["bytes"][:2]))
+    rejects(
         "alignment padding that is not zero",
         lambda: decode(
             [{"name": "one", "kind": "bool1"}, {"name": "b", "kind": "bytes_capped", "cap": 3}], bytes([0x83, 0xAA])
@@ -623,11 +623,11 @@ def self_test(spec_path=None):
                 got = decode(records[name], frame["bytes"])
             except Poisoned as refused:
                 wrong += 1
-                print("FAIL %-52s REFUSED %s" % (name, refused))
+                print("FAIL %-52s %s" % (name, refused))
                 continue
             check("%s decodes as its prose reads (%s)" % (name, frame["why"]), got, frame["values"])
-            refuses(
-                "%s refuses a trailing byte" % name, lambda f=frame, r=records[name]: decode(r, f["bytes"] + b"\xff")
+            rejects(
+                "%s rejects a trailing byte" % name, lambda f=frame, r=records[name]: decode(r, f["bytes"] + b"\xff")
             )
 
     print("SELFTEST %d wrong" % wrong)
@@ -650,7 +650,7 @@ def main():
         try:
             return capture(args.capture, args.verbose)
         except Poisoned as refused:
-            sys.exit("REFUSED %s" % refused)
+            sys.exit("ERROR %s" % refused)
     if not (args.spec and args.record and args.hex):
         parser.error("--spec, --record and --hex are required without --self-test")
 
@@ -662,7 +662,7 @@ def main():
     try:
         decoded = decode(records[args.record], bytes.fromhex(args.hex))
     except Poisoned as refused:
-        sys.exit("REFUSED %s" % refused)
+        sys.exit("ERROR %s" % refused)
     for name, value in decoded.items():
         print("%s = %r" % (name, value))
     return 0

@@ -32,7 +32,7 @@ The grid is one number said two ways, and the class publishes both: :ref:`bit_co
 
 A :godot:`Vector3` or :godot:`Vector2` quantizes each axis the same way and costs :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` bits per axis. The per-axis error is at most half :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>`.
 
-Only the three stored fields decide the layout, so two of these that address the same grid answer ``true`` to :ref:`NetwQuantize.is_same_layout()<class_NetwQuantize_method_is_same_layout>` however each was authored.
+Only the three stored fields decide the layout, so two of these that address the same grid return ``true`` to :ref:`NetwQuantize.is_same_layout()<class_NetwQuantize_method_is_same_layout>` however each was authored.
 
 .. rst-class:: classref-reftable-group
 
@@ -139,7 +139,7 @@ Inclusive lower bound of the encoded range. A value below it is clamped.
 - |void| **set_resolution_step**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_resolution_step**\ (\ )
 
-Distance between two adjacent grid points, DERIVED from the other three rather than stored: reading it answers ``(max_limit - min_limit) / (2 ** bit_count - 1)``, and writing it moves :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` to the smallest budget that is at least that fine. A step of zero or less is refused, because no bit count satisfies it.
+Distance between two adjacent grid points, DERIVED from the other three rather than stored: reading it returns ``(max_limit - min_limit) / (2 ** bit_count - 1)``, and writing it moves :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` to the smallest budget that is at least that fine. A step of zero or less is rejected, because no bit count satisfies it.
 
 .. rst-class:: classref-section-separator
 

@@ -12,7 +12,7 @@
 		label.text = "tick %d" % c.tick
 		[/codeblock]
 		[b]What this object buys over the flat surface is its two signals.[/b] [Netw] is static and a static class publishes none, so a component that drives itself off the tick has to name the session to hear it. One handle exists per session for the life of that session, because a session has exactly one clock, so there is nothing to select and nothing to pass: the door is the clock.
-		[method Netw.configure_clock] is the other half of the pair. That verb DECLARES, before the session comes up, and answers a [NetwClockConfig] to author. This one REACHES, once it is running. A param this object refuses to set is a param the declaration owns: [constant NetwMultiplayer.CLOCK_PARAM_TICKRATE] answers [constant @GlobalScope.ERR_UNAUTHORIZED] here, because a session cannot change its tickrate underneath the peers already synchronized to it.
+		[method Netw.configure_clock] is the other half of the pair. That verb DECLARES, before the session comes up, and returns a [NetwClockConfig] to author. This one REACHES, once it is running. A param this object rejects to set is a param the declaration owns: [constant NetwMultiplayer.CLOCK_PARAM_TICKRATE] returns [constant @GlobalScope.ERR_UNAUTHORIZED] here, because a session cannot change its tickrate underneath the peers already synchronized to it.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -21,7 +21,7 @@
 			<return type="float" />
 			<param index="0" name="monitor" type="int" />
 			<description>
-				[method NetwMultiplayer.clock_get_monitor]: the live reading named by [param monitor], one of [enum NetwMultiplayer.ClockMonitor]. Answers [code]0.0[/code] for a clock that has measured nothing yet.
+				[method NetwMultiplayer.clock_get_monitor]: the live reading named by [param monitor], one of [enum NetwMultiplayer.ClockMonitor]. Returns [code]0.0[/code] for a clock that has measured nothing yet.
 			</description>
 		</method>
 		<method name="param" qualifiers="const">
@@ -36,7 +36,7 @@
 			<param index="0" name="param" type="int" />
 			<param index="1" name="value" type="Variant" />
 			<description>
-				[method NetwMultiplayer.clock_set_param]. Writes the setting named by [param param] at runtime, answering [constant @GlobalScope.ERR_UNAUTHORIZED] for a param the declaration owns rather than silently keeping the old value.
+				[method NetwMultiplayer.clock_set_param]. Writes the setting named by [param param] at runtime, returning [constant @GlobalScope.ERR_UNAUTHORIZED] for a param the declaration owns rather than silently keeping the old value.
 				[codeblock lang=text]
 				Error
 				┠╴OK                      written

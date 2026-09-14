@@ -19,7 +19,7 @@ A transport a game subclasses so its own :godot:`MultiplayerPeer` works with the
 Description
 -----------
 
-A transport is everything the session knows about one :godot:`MultiplayerPeer` class. It builds a peer, lists what that class can reach, probes an address, and adopts a peer a game built itself. A session makes one instance the first time it needs one, and a class registered through :ref:`NetwMultiplayer.transport_register()<class_NetwMultiplayer_method_transport_register>` or :ref:`NetwConnectHandle.register_transport()<class_NetwConnectHandle_method_register_transport>` answers what it is called before any instance exists.
+A transport is everything the session knows about one :godot:`MultiplayerPeer` class. It builds a peer, lists what that class can reach, probes an address, and adopts a peer a game built itself. A session makes one instance the first time it needs one, and a class registered through :ref:`NetwMultiplayer.transport_register()<class_NetwMultiplayer_method_transport_register>` or :ref:`NetwConnectHandle.register_transport()<class_NetwConnectHandle_method_register_transport>` returns what it is called before any instance exists.
 
 A transport is keyed by :ref:`peer_class()<class_NetwTransport_method_peer_class>` and never by a URL scheme, and :ref:`recognizes_peer()<class_NetwTransport_method_recognizes_peer>` is what decides whether a peer a game built and assigned itself belongs to this transport. A transport that has to exchange its own connection details before a peer can be built, as WebRTC does, subclasses :ref:`NetwWebRTCSignaler<class_NetwWebRTCSignaler>` for that half.
 
@@ -40,7 +40,7 @@ A transport is keyed by :ref:`peer_class()<class_NetwTransport_method_peer_class
         var peer := RelayMultiplayerPeer.new()
         var err: Error = await peer.connect_async(address, settings.region)
         if err != OK:
-            fail(ticket, ERR_CANT_CONNECT, "relay refused")
+            fail(ticket, ERR_CANT_CONNECT, "relay rejected")
             return
         _room = peer.room
         deliver(ticket, peer)
@@ -55,11 +55,11 @@ A transport is keyed by :ref:`peer_class()<class_NetwTransport_method_peer_class
     func _ready() -> void:
         Netw.connection(self).register_transport(RelayTransport)
 
-\ :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` and :ref:`_probe()<class_NetwTransport_private_method__probe>` answer ``void`` and report through :ref:`deliver()<class_NetwTransport_method_deliver>`, :ref:`deliver_probe()<class_NetwTransport_method_deliver_probe>` and :ref:`fail()<class_NetwTransport_method_fail>`, called once from any frame. A ``GDVIRTUAL`` with a typed return coerces a suspended coroutine to an empty value and reports success, so a seam that answered its result directly would answer nothing the instant it first awaited; a ``void`` seam discards that empty return harmlessly and the coroutine keeps running on whatever signals it awaits. A seam that reports neither is caught by the deadline :ref:`timeout_hint()<class_NetwTransport_method_timeout_hint>` declares, unless that hint is negative.
+\ :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` and :ref:`_probe()<class_NetwTransport_private_method__probe>` return ``void`` and report through :ref:`deliver()<class_NetwTransport_method_deliver>`, :ref:`deliver_probe()<class_NetwTransport_method_deliver_probe>` and :ref:`fail()<class_NetwTransport_method_fail>`, called once from any frame. A ``GDVIRTUAL`` with a typed return coerces a suspended coroutine to an empty value and reports success, so a seam that returned its result directly would return nothing the instant it first awaited; a ``void`` seam discards that empty return harmlessly and the coroutine keeps running on whatever signals it awaits. A seam that reports neither is caught by the deadline :ref:`timeout_hint()<class_NetwTransport_method_timeout_hint>` declares, unless that hint is negative.
 
-Every report carries the :godot:`RID` ticket the seam was handed, and an implementation that awaits captures that ticket in a local before the first ``await`` rather than reading it from a field. A report under a retired ticket is discarded, which is what keeps a slow provider answering an abandoned request from publishing its peer under a newer one's identity.
+Every report carries the :godot:`RID` ticket the seam was handed, and an implementation that awaits captures that ticket in a local before the first ``await`` rather than reading it from a field. A report under a retired ticket is discarded, which is what keeps a slow provider returning an abandoned request from publishing its peer under a newer one's identity.
 
-A transport belongs to the session that registered it, and a peer class is unique within one: a second registration of the same script answers the standing one, and a different script for a class the session already registers is refused. :ref:`NetwMultiplayer.transport_register()<class_NetwMultiplayer_method_transport_register>` carries that law, and :ref:`NetwMultiplayer.transport_unregister()<class_NetwMultiplayer_method_transport_unregister>` is how a registration is replaced or withdrawn.
+A transport belongs to the session that registered it, and a peer class is unique within one: a second registration of the same script returns the standing one, and a different script for a class the session already registers is rejected. :ref:`NetwMultiplayer.transport_register()<class_NetwMultiplayer_method_transport_register>` carries that law, and :ref:`NetwMultiplayer.transport_unregister()<class_NetwMultiplayer_method_transport_unregister>` is how a registration is replaced or withdrawn.
 
 .. rst-class:: classref-reftable-group
 
@@ -249,7 +249,7 @@ Method Descriptions
 
 :godot:`bool` **_accepts_empty_address**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__accepts_empty_address>`
 
-Override to declare that an empty address means something to this transport, so a form accepts a blank field. :ref:`accepts_empty_address()<class_NetwTransport_method_accepts_empty_address>` answers this, or :ref:`accepts_empty_address_default()<class_NetwTransport_method_accepts_empty_address_default>` when nothing overrode it, which answers ``false``.
+Override to declare that an empty address means something to this transport, so a form accepts a blank field. :ref:`accepts_empty_address()<class_NetwTransport_method_accepts_empty_address>` returns this, or :ref:`accepts_empty_address_default()<class_NetwTransport_method_accepts_empty_address_default>` when nothing overrode it, which returns ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -261,7 +261,7 @@ Override to declare that an empty address means something to this transport, so 
 
 :godot:`String` **_address_help**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__address_help>`
 
-Override to answer the sentence a form shows under the address field. :ref:`address_help()<class_NetwTransport_method_address_help>` answers this, or :ref:`address_help_default()<class_NetwTransport_method_address_help_default>` when nothing overrode it, which answers an empty string.
+Override to return the sentence a form shows under the address field. :ref:`address_help()<class_NetwTransport_method_address_help>` returns this, or :ref:`address_help_default()<class_NetwTransport_method_address_help_default>` when nothing overrode it, which returns an empty string.
 
 .. rst-class:: classref-item-separator
 
@@ -273,7 +273,7 @@ Override to answer the sentence a form shows under the address field. :ref:`addr
 
 :godot:`String` **_address_label**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__address_label>`
 
-Override to title the address field a Host or Add form draws for this transport: a server IP, a URL, a room id. :ref:`address_label()<class_NetwTransport_method_address_label>` answers this, or :ref:`address_label_default()<class_NetwTransport_method_address_label_default>` when nothing overrode it, which answers ``"Address"``.
+Override to title the address field a Host or Add form draws for this transport: a server IP, a URL, a room id. :ref:`address_label()<class_NetwTransport_method_address_label>` returns this, or :ref:`address_label_default()<class_NetwTransport_method_address_label_default>` when nothing overrode it, which returns ``"Address"``.
 
 .. rst-class:: classref-item-separator
 
@@ -285,7 +285,7 @@ Override to title the address field a Host or Add form draws for this transport:
 
 :godot:`String` **_address_placeholder**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__address_placeholder>`
 
-Override to answer what a form shows in the empty address field. :ref:`address_placeholder()<class_NetwTransport_method_address_placeholder>` answers this, or :ref:`address_placeholder_default()<class_NetwTransport_method_address_placeholder_default>` when nothing overrode it, which answers an empty string.
+Override to return what a form shows in the empty address field. :ref:`address_placeholder()<class_NetwTransport_method_address_placeholder>` returns this, or :ref:`address_placeholder_default()<class_NetwTransport_method_address_placeholder_default>` when nothing overrode it, which returns an empty string.
 
 .. rst-class:: classref-item-separator
 
@@ -309,7 +309,7 @@ Override to receive ``peer`` once it has been built or elevated onto this transp
 
 |void| **_browse**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__browse>`
 
-Override to list what this peer class can reach and report it with :ref:`publish_targets()<class_NetwTransport_method_publish_targets>`. Called by :ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>` on a transport whose :ref:`_can_browse()<class_NetwTransport_private_method__can_browse>` answers ``true``, and answered as many times as the listing changes rather than once: a lobby service that pushes updates publishes again from :ref:`_poll()<class_NetwTransport_private_method__poll>`.
+Override to list what this peer class can reach and report it with :ref:`publish_targets()<class_NetwTransport_method_publish_targets>`. Called by :ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>` on a transport whose :ref:`_can_browse()<class_NetwTransport_private_method__can_browse>` returns ``true``, and returned as many times as the listing changes rather than once: a lobby service that pushes updates publishes again from :ref:`_poll()<class_NetwTransport_private_method__poll>`.
 
 The listing this publishes REPLACES this peer class's rows, and a row's browse id is stable per address, so republishing does not renumber what a browser has drawn.
 
@@ -323,7 +323,7 @@ The listing this publishes REPLACES this peer class's rows, and a row's browse i
 
 :godot:`bool` **_can_browse**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__can_browse>`
 
-Override to answer whether this transport lists at all. :ref:`can_browse()<class_NetwTransport_method_can_browse>` answers this, or :ref:`can_browse_default()<class_NetwTransport_method_can_browse_default>` when nothing overrode it, which answers ``false``: a transport that only builds and probes is asked for no listing.
+Override to return whether this transport lists at all. :ref:`can_browse()<class_NetwTransport_method_can_browse>` returns this, or :ref:`can_browse_default()<class_NetwTransport_method_can_browse_default>` when nothing overrode it, which returns ``false``: a transport that only builds and probes is asked for no listing.
 
 .. rst-class:: classref-item-separator
 
@@ -335,7 +335,7 @@ Override to answer whether this transport lists at all. :ref:`can_browse()<class
 
 :godot:`bool` **_can_host_here**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__can_host_here>`
 
-Override to refuse hosting from this process, for a transport whose backend only ever joins. :ref:`can_host_here()<class_NetwTransport_method_can_host_here>` answers this, or :ref:`can_host_here_default()<class_NetwTransport_method_can_host_here_default>` when nothing overrode it.
+Override and return ``false`` when this process cannot host with the transport. :ref:`can_host_here()<class_NetwTransport_method_can_host_here>` returns this value or :ref:`can_host_here_default()<class_NetwTransport_method_can_host_here_default>`.
 
 .. rst-class:: classref-item-separator
 
@@ -347,7 +347,7 @@ Override to refuse hosting from this process, for a transport whose backend only
 
 :godot:`bool` **_can_probe**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__can_probe>`
 
-Override to declare that a row of this peer class can be asked what is there without joining it, which is what :ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultiplayer_method_endpoint_probe>` needs. :ref:`can_probe()<class_NetwTransport_method_can_probe>` answers this, or :ref:`can_probe_default()<class_NetwTransport_method_can_probe_default>` when nothing overrode it, which answers ``false``.
+Override to declare that a row of this peer class can be asked what is there without joining it, which is what :ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultiplayer_method_endpoint_probe>` needs. :ref:`can_probe()<class_NetwTransport_method_can_probe>` returns this, or :ref:`can_probe_default()<class_NetwTransport_method_can_probe_default>` when nothing overrode it, which returns ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -373,9 +373,9 @@ A request whose work cannot be recalled keeps only enough state to discard the e
 
 :godot:`Dictionary` **_client_settings**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__client_settings>`
 
-Override to answer the fields a join form asks for, in the shape :ref:`_host_settings()<class_NetwTransport_private_method__host_settings>` answers, and :ref:`NetwMultiplayer.transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>` reads them back the same way. A transport that overrides nothing offers no fields.
+Override to return the fields a join form asks for, in the shape :ref:`_host_settings()<class_NetwTransport_private_method__host_settings>` returns, and :ref:`NetwMultiplayer.transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>` reads them back the same way. A transport that overrides nothing offers no fields.
 
-Answer a key here when :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` reads it under :ref:`NetwMultiplayer.TRANSPORT_MODE_CLIENT<class_NetwMultiplayer_constant_TRANSPORT_MODE_CLIENT>`. The two answers overlap by however much the two modes share, and neither is derived from the other.
+Return settings used by :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` in :ref:`NetwMultiplayer.TRANSPORT_MODE_CLIENT<class_NetwMultiplayer_constant_TRANSPORT_MODE_CLIENT>`. Client and host settings may contain the same keys.
 
 ::
 
@@ -409,7 +409,7 @@ Override to release whatever this transport is holding when the session it was m
 
 :godot:`Dictionary` **_diagnostics**\ (\ peer_id\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__diagnostics>`
 
-Override to answer free-form transport state for ``peer_id``, surfaced through :ref:`NetwConnectHandle.diagnostics()<class_NetwConnectHandle_method_diagnostics>`. :ref:`diagnostics()<class_NetwTransport_method_diagnostics>` answers this, or :ref:`diagnostics_default()<class_NetwTransport_method_diagnostics_default>` when nothing overrode it.
+Override to return free-form transport state for ``peer_id``, surfaced through :ref:`NetwConnectHandle.diagnostics()<class_NetwConnectHandle_method_diagnostics>`. :ref:`diagnostics()<class_NetwTransport_method_diagnostics>` returns this, or :ref:`diagnostics_default()<class_NetwTransport_method_diagnostics_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -421,7 +421,7 @@ Override to answer free-form transport state for ``peer_id``, surfaced through :
 
 :godot:`String` **_display_name**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__display_name>`
 
-Override to name this transport for a Host or Add form's transport picker. :ref:`display_name()<class_NetwTransport_method_display_name>` answers this, or :ref:`display_name_default()<class_NetwTransport_method_display_name_default>` when nothing overrode it.
+Override to name this transport for a Host or Add form's transport picker. :ref:`display_name()<class_NetwTransport_method_display_name>` returns this, or :ref:`display_name_default()<class_NetwTransport_method_display_name_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -433,9 +433,9 @@ Override to name this transport for a Host or Add form's transport picker. :ref:
 
 :godot:`Dictionary` **_host_settings**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__host_settings>`
 
-Override to answer the fields a host form asks for, one entry per field, typed by its own value. It is what :ref:`NetwMultiplayer.TRANSPORT_PARAM_HOST_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_HOST_SETTINGS>` answers and what :ref:`NetwMultiplayer.transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>` reads back. A transport that overrides nothing offers no fields.
+Override to return the fields a host form asks for, one entry per field, typed by its own value. It is what :ref:`NetwMultiplayer.TRANSPORT_PARAM_HOST_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_HOST_SETTINGS>` returns and what :ref:`NetwMultiplayer.transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>` reads back. A transport that overrides nothing offers no fields.
 
-Answer a key here when :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` reads it while hosting. :ref:`_client_settings()<class_NetwTransport_private_method__client_settings>` is the same question asked of a join, and a key both modes read belongs in both answers.
+Return settings used by :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` while hosting. Include shared keys in both host and client settings.
 
 .. rst-class:: classref-item-separator
 
@@ -447,7 +447,7 @@ Answer a key here when :ref:`_make_peer()<class_NetwTransport_private_method__ma
 
 :godot:`bool` **_is_available**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__is_available>`
 
-Override to gate this transport on the current platform. :ref:`is_available()<class_NetwTransport_method_is_available>` answers this, or :ref:`is_available_default()<class_NetwTransport_method_is_available_default>` when nothing overrode it.
+Override to gate this transport on the current platform. :ref:`is_available()<class_NetwTransport_method_is_available>` returns this, or :ref:`is_available_default()<class_NetwTransport_method_is_available_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -459,7 +459,7 @@ Override to gate this transport on the current platform. :ref:`is_available()<cl
 
 :godot:`String` **_join_address**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__join_address>`
 
-Override to answer what another peer joins this host by, once hosting. :ref:`join_address()<class_NetwTransport_method_join_address>` answers this, or :ref:`join_address_default()<class_NetwTransport_method_join_address_default>` when nothing overrode it.
+Override to return what another peer joins this host by, once hosting. :ref:`join_address()<class_NetwTransport_method_join_address>` returns this, or :ref:`join_address_default()<class_NetwTransport_method_join_address_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -477,7 +477,7 @@ Report :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_
 
 Deliver a peer that is still connecting rather than waiting for it to connect: the assignment edge is what watches for the connection, and a peer that came alive before the session held it would have announced to nobody.
 
-\ ``ticket`` identifies this request and nothing else. Capture it in a local before the first ``await``: it is the only thing that tells :ref:`deliver()<class_NetwTransport_method_deliver>` which request a late answer belongs to.
+\ ``ticket`` identifies this request. Store it before the first ``await`` so :ref:`deliver()<class_NetwTransport_method_deliver>` can match a delayed result to the request.
 
 .. rst-class:: classref-item-separator
 
@@ -489,7 +489,7 @@ Deliver a peer that is still connecting rather than waiting for it to connect: t
 
 :godot:`MultiplayerPeer` **_make_probe_peer**\ (\ address\: :godot:`String`\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__make_probe_peer>`
 
-Override to build the :godot:`MultiplayerPeer` :ref:`probe_default()<class_NetwTransport_method_probe_default>` opens against ``address`` to speak the stock probe protocol. :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` answers this, or :ref:`make_probe_peer_default()<class_NetwTransport_method_make_probe_peer_default>` when nothing overrode it, which answers ``null``.
+Override to build the :godot:`MultiplayerPeer` :ref:`probe_default()<class_NetwTransport_method_probe_default>` opens against ``address`` to speak the stock probe protocol. :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` returns this, or :ref:`make_probe_peer_default()<class_NetwTransport_method_make_probe_peer_default>` when nothing overrode it, which returns ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -501,7 +501,7 @@ Override to build the :godot:`MultiplayerPeer` :ref:`probe_default()<class_NetwT
 
 :godot:`StringName` **_peer_class**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__peer_class>`
 
-Override to name the :godot:`MultiplayerPeer` class this transport owns, ``&"ENetMultiplayerPeer"`` or a scripted peer's own ``class_name``. This is the key the transport book looks a transport up by. :ref:`peer_class()<class_NetwTransport_method_peer_class>` answers this, or :ref:`peer_class_default()<class_NetwTransport_method_peer_class_default>` when nothing overrode it.
+Override to name the :godot:`MultiplayerPeer` class this transport owns, ``&"ENetMultiplayerPeer"`` or a scripted peer's own ``class_name``. This is the key the transport book looks a transport up by. :ref:`peer_class()<class_NetwTransport_method_peer_class>` returns this, or :ref:`peer_class_default()<class_NetwTransport_method_peer_class_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -525,7 +525,7 @@ Override to service this transport's carrier once per frame, before the plane re
 
 |void| **_probe**\ (\ ticket\: :godot:`RID`, address\: :godot:`String`\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__probe>`
 
-Override to answer what a host at ``address`` is without joining it, reporting the :ref:`NetwServerInfo<class_NetwServerInfo>` with :ref:`deliver_probe()<class_NetwTransport_method_deliver_probe>` or an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` with :ref:`fail()<class_NetwTransport_method_fail>`. :ref:`probe_default()<class_NetwTransport_method_probe_default>` is the stock answer, opening :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` and speaking the built-in probe protocol over it, and it is this seam's only route back to that stock behaviour, because a GDScript subclass cannot ``super()`` into a ``GDVIRTUAL``. The default fails with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` answers ``null``.
+Override to return what a host at ``address`` is without joining it, reporting the :ref:`NetwServerInfo<class_NetwServerInfo>` with :ref:`deliver_probe()<class_NetwTransport_method_deliver_probe>` or an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` with :ref:`fail()<class_NetwTransport_method_fail>`. :ref:`probe_default()<class_NetwTransport_method_probe_default>` is the default result, opening :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` and speaking the built-in probe protocol over it, and it is this seam's only route back to that stock behaviour, because a GDScript subclass cannot ``super()`` into a ``GDVIRTUAL``. The default fails with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` returns ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -537,7 +537,7 @@ Override to answer what a host at ``address`` is without joining it, reporting t
 
 :godot:`bool` **_recognizes_peer**\ (\ peer\: :godot:`MultiplayerPeer`\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__recognizes_peer>`
 
-Override to decide whether ``peer``, built and assigned by hand rather than through this transport, still elevates onto it. Claiming a peer subclass this transport did not build, or refusing a peer of the exact class it configures under some other condition, both go here. :ref:`recognizes_peer()<class_NetwTransport_method_recognizes_peer>` answers this, or :ref:`recognizes_peer_default()<class_NetwTransport_method_recognizes_peer_default>` when nothing overrode it.
+Override to decide whether ``peer``, built and assigned by hand rather than through this transport, still elevates onto it. Claiming a peer subclass this transport did not build, or rejecting a peer of the exact class it configures under some other condition, both go here. :ref:`recognizes_peer()<class_NetwTransport_method_recognizes_peer>` returns this, or :ref:`recognizes_peer_default()<class_NetwTransport_method_recognizes_peer_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -549,7 +549,7 @@ Override to decide whether ``peer``, built and assigned by hand rather than thro
 
 :godot:`float` **_timeout_hint**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__timeout_hint>`
 
-Override to bound how long :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` or :ref:`_probe()<class_NetwTransport_private_method__probe>` may run before the plane fails the attempt with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. A negative answer declares this transport self-managed, and it is never counted down. :ref:`timeout_hint()<class_NetwTransport_method_timeout_hint>` answers this, or :ref:`timeout_hint_default()<class_NetwTransport_method_timeout_hint_default>` when nothing overrode it, which answers ``5.0``.
+Override to limit how long :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` or :ref:`_probe()<class_NetwTransport_private_method__probe>` may run before returning :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. A negative value disables this timeout. The default is ``5.0``.
 
 .. rst-class:: classref-item-separator
 
@@ -561,7 +561,7 @@ Override to bound how long :ref:`_make_peer()<class_NetwTransport_private_method
 
 :godot:`bool` **accepts_empty_address**\ (\ ) :ref:`🔗<class_NetwTransport_method_accepts_empty_address>`
 
-Answers :ref:`_accepts_empty_address()<class_NetwTransport_private_method__accepts_empty_address>`, or :ref:`accepts_empty_address_default()<class_NetwTransport_method_accepts_empty_address_default>` when nothing overrode it.
+Returns :ref:`_accepts_empty_address()<class_NetwTransport_private_method__accepts_empty_address>`, or :ref:`accepts_empty_address_default()<class_NetwTransport_method_accepts_empty_address_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -585,7 +585,7 @@ Answers :ref:`_accepts_empty_address()<class_NetwTransport_private_method__accep
 
 :godot:`String` **address_help**\ (\ ) :ref:`🔗<class_NetwTransport_method_address_help>`
 
-Answers :ref:`_address_help()<class_NetwTransport_private_method__address_help>`, or :ref:`address_help_default()<class_NetwTransport_method_address_help_default>` when nothing overrode it.
+Returns :ref:`_address_help()<class_NetwTransport_private_method__address_help>`, or :ref:`address_help_default()<class_NetwTransport_method_address_help_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -609,7 +609,7 @@ An empty string.
 
 :godot:`String` **address_label**\ (\ ) :ref:`🔗<class_NetwTransport_method_address_label>`
 
-Answers :ref:`_address_label()<class_NetwTransport_private_method__address_label>`, or :ref:`address_label_default()<class_NetwTransport_method_address_label_default>` when nothing overrode it.
+Returns :ref:`_address_label()<class_NetwTransport_private_method__address_label>`, or :ref:`address_label_default()<class_NetwTransport_method_address_label_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -633,7 +633,7 @@ Answers :ref:`_address_label()<class_NetwTransport_private_method__address_label
 
 :godot:`String` **address_placeholder**\ (\ ) :ref:`🔗<class_NetwTransport_method_address_placeholder>`
 
-Answers :ref:`_address_placeholder()<class_NetwTransport_private_method__address_placeholder>`, or :ref:`address_placeholder_default()<class_NetwTransport_method_address_placeholder_default>` when nothing overrode it.
+Returns :ref:`_address_placeholder()<class_NetwTransport_private_method__address_placeholder>`, or :ref:`address_placeholder_default()<class_NetwTransport_method_address_placeholder_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -657,7 +657,7 @@ An empty string.
 
 :godot:`bool` **can_browse**\ (\ ) :ref:`🔗<class_NetwTransport_method_can_browse>`
 
-Answers :ref:`_can_browse()<class_NetwTransport_private_method__can_browse>`, or :ref:`can_browse_default()<class_NetwTransport_method_can_browse_default>` when nothing overrode it.
+Returns :ref:`_can_browse()<class_NetwTransport_private_method__can_browse>`, or :ref:`can_browse_default()<class_NetwTransport_method_can_browse_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -681,7 +681,7 @@ Answers :ref:`_can_browse()<class_NetwTransport_private_method__can_browse>`, or
 
 :godot:`bool` **can_host_here**\ (\ ) :ref:`🔗<class_NetwTransport_method_can_host_here>`
 
-Answers :ref:`_can_host_here()<class_NetwTransport_private_method__can_host_here>`, or :ref:`can_host_here_default()<class_NetwTransport_method_can_host_here_default>` when nothing overrode it.
+Returns :ref:`_can_host_here()<class_NetwTransport_private_method__can_host_here>`, or :ref:`can_host_here_default()<class_NetwTransport_method_can_host_here_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -705,7 +705,7 @@ Answers :ref:`_can_host_here()<class_NetwTransport_private_method__can_host_here
 
 :godot:`bool` **can_probe**\ (\ ) :ref:`🔗<class_NetwTransport_method_can_probe>`
 
-Answers :ref:`_can_probe()<class_NetwTransport_private_method__can_probe>`, or :ref:`can_probe_default()<class_NetwTransport_method_can_probe_default>` when nothing overrode it.
+Returns :ref:`_can_probe()<class_NetwTransport_private_method__can_probe>`, or :ref:`can_probe_default()<class_NetwTransport_method_can_probe_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -729,7 +729,7 @@ Answers :ref:`_can_probe()<class_NetwTransport_private_method__can_probe>`, or :
 
 :godot:`Dictionary` **client_settings**\ (\ ) :ref:`🔗<class_NetwTransport_method_client_settings>`
 
-Answers :ref:`_client_settings()<class_NetwTransport_private_method__client_settings>`, or :ref:`client_settings_default()<class_NetwTransport_method_client_settings_default>` when nothing overrode it.
+Returns :ref:`_client_settings()<class_NetwTransport_private_method__client_settings>`, or :ref:`client_settings_default()<class_NetwTransport_method_client_settings_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -777,7 +777,7 @@ Reports ``info`` as what :ref:`_probe()<class_NetwTransport_private_method__prob
 
 :godot:`Dictionary` **diagnostics**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwTransport_method_diagnostics>`
 
-Answers :ref:`_diagnostics()<class_NetwTransport_private_method__diagnostics>` for ``peer_id``, or :ref:`diagnostics_default()<class_NetwTransport_method_diagnostics_default>` when nothing overrode it.
+Returns :ref:`_diagnostics()<class_NetwTransport_private_method__diagnostics>` for ``peer_id``, or :ref:`diagnostics_default()<class_NetwTransport_method_diagnostics_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -801,7 +801,7 @@ An empty :godot:`Dictionary`, ignoring ``peer_id``.
 
 :godot:`String` **display_name**\ (\ ) :ref:`🔗<class_NetwTransport_method_display_name>`
 
-Answers :ref:`_display_name()<class_NetwTransport_private_method__display_name>`, or :ref:`display_name_default()<class_NetwTransport_method_display_name_default>` when nothing overrode it.
+Returns :ref:`_display_name()<class_NetwTransport_private_method__display_name>`, or :ref:`display_name_default()<class_NetwTransport_method_display_name_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -837,7 +837,7 @@ Reports that ``ticket`` cannot finish, with ``error`` as the reason and ``messag
 
 :godot:`Dictionary` **host_settings**\ (\ ) :ref:`🔗<class_NetwTransport_method_host_settings>`
 
-Answers :ref:`_host_settings()<class_NetwTransport_private_method__host_settings>`, or :ref:`host_settings_default()<class_NetwTransport_method_host_settings_default>` when nothing overrode it.
+Returns :ref:`_host_settings()<class_NetwTransport_private_method__host_settings>`, or :ref:`host_settings_default()<class_NetwTransport_method_host_settings_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -861,7 +861,7 @@ An empty :godot:`Dictionary`: a host form offers no fields until a transport nam
 
 :godot:`bool` **is_available**\ (\ ) :ref:`🔗<class_NetwTransport_method_is_available>`
 
-Answers :ref:`_is_available()<class_NetwTransport_private_method__is_available>`, or :ref:`is_available_default()<class_NetwTransport_method_is_available_default>` when nothing overrode it.
+Returns :ref:`_is_available()<class_NetwTransport_private_method__is_available>`, or :ref:`is_available_default()<class_NetwTransport_method_is_available_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -885,7 +885,7 @@ Answers :ref:`_is_available()<class_NetwTransport_private_method__is_available>`
 
 :godot:`String` **join_address**\ (\ ) :ref:`🔗<class_NetwTransport_method_join_address>`
 
-Answers :ref:`_join_address()<class_NetwTransport_private_method__join_address>`, or :ref:`join_address_default()<class_NetwTransport_method_join_address_default>` when nothing overrode it.
+Returns :ref:`_join_address()<class_NetwTransport_private_method__join_address>`, or :ref:`join_address_default()<class_NetwTransport_method_join_address_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -909,7 +909,7 @@ An empty :godot:`String`.
 
 :godot:`MultiplayerPeer` **make_probe_peer**\ (\ address\: :godot:`String`\ ) :ref:`🔗<class_NetwTransport_method_make_probe_peer>`
 
-Answers :ref:`_make_probe_peer()<class_NetwTransport_private_method__make_probe_peer>` for ``address``, or :ref:`make_probe_peer_default()<class_NetwTransport_method_make_probe_peer_default>` when nothing overrode it.
+Returns :ref:`_make_probe_peer()<class_NetwTransport_private_method__make_probe_peer>` for ``address``, or :ref:`make_probe_peer_default()<class_NetwTransport_method_make_probe_peer_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -933,7 +933,7 @@ Answers :ref:`_make_probe_peer()<class_NetwTransport_private_method__make_probe_
 
 :godot:`StringName` **peer_class**\ (\ ) :ref:`🔗<class_NetwTransport_method_peer_class>`
 
-Answers :ref:`_peer_class()<class_NetwTransport_private_method__peer_class>`, or :ref:`peer_class_default()<class_NetwTransport_method_peer_class_default>` when nothing overrode it. :ref:`NetwConnectHandle.transports()<class_NetwConnectHandle_method_transports>` lists every class currently answered this way, in registration order.
+Returns :ref:`_peer_class()<class_NetwTransport_private_method__peer_class>`, or :ref:`peer_class_default()<class_NetwTransport_method_peer_class_default>` when nothing overrode it. :ref:`NetwConnectHandle.transports()<class_NetwConnectHandle_method_transports>` lists every class currently returned this way, in registration order.
 
 .. rst-class:: classref-item-separator
 
@@ -969,7 +969,7 @@ The class ``peer`` would elevate under: its native class name, or a scripted pee
 
 |void| **probe_default**\ (\ ticket\: :godot:`RID`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwTransport_method_probe_default>`
 
-The stock probe: opens :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` against ``address``, speaks the built-in probe protocol over it, and reports the :ref:`NetwServerInfo<class_NetwServerInfo>` it answers with. Fails with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` answers ``null``. This is :ref:`_probe()<class_NetwTransport_private_method__probe>`'s only route back to stock behaviour, since a GDScript subclass cannot ``super()`` into a ``GDVIRTUAL``.
+The stock probe: opens :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` against ``address``, speaks the built-in probe protocol over it, and reports the :ref:`NetwServerInfo<class_NetwServerInfo>` it returns. Fails with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when :ref:`make_probe_peer()<class_NetwTransport_method_make_probe_peer>` returns ``null``. This is :ref:`_probe()<class_NetwTransport_private_method__probe>`'s only route back to stock behaviour, since a GDScript subclass cannot ``super()`` into a ``GDVIRTUAL``.
 
 .. rst-class:: classref-item-separator
 
@@ -1006,7 +1006,7 @@ Publishes what :ref:`_browse()<class_NetwTransport_private_method__browse>` foun
 
 :godot:`bool` **recognizes_peer**\ (\ peer\: :godot:`MultiplayerPeer`\ ) :ref:`🔗<class_NetwTransport_method_recognizes_peer>`
 
-Answers :ref:`_recognizes_peer()<class_NetwTransport_private_method__recognizes_peer>` for ``peer``, or :ref:`recognizes_peer_default()<class_NetwTransport_method_recognizes_peer_default>` when nothing overrode it.
+Returns :ref:`_recognizes_peer()<class_NetwTransport_private_method__recognizes_peer>` for ``peer``, or :ref:`recognizes_peer_default()<class_NetwTransport_method_recognizes_peer_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 
@@ -1018,7 +1018,7 @@ Answers :ref:`_recognizes_peer()<class_NetwTransport_private_method__recognizes_
 
 :godot:`bool` **recognizes_peer_default**\ (\ peer\: :godot:`MultiplayerPeer`\ ) :ref:`🔗<class_NetwTransport_method_recognizes_peer_default>`
 
-``true`` when :ref:`peer_class_of()<class_NetwTransport_method_peer_class_of>` applied to ``peer`` answers the same :godot:`StringName` as :ref:`peer_class()<class_NetwTransport_method_peer_class>`.
+``true`` when :ref:`peer_class_of()<class_NetwTransport_method_peer_class_of>` applied to ``peer`` returns the same :godot:`StringName` as :ref:`peer_class()<class_NetwTransport_method_peer_class>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1042,7 +1042,7 @@ Forwards ``step``, ``message`` and ``ratio`` to the progress :godot:`Callable` `
 
 :godot:`float` **timeout_hint**\ (\ ) :ref:`🔗<class_NetwTransport_method_timeout_hint>`
 
-Answers :ref:`_timeout_hint()<class_NetwTransport_private_method__timeout_hint>`, or :ref:`timeout_hint_default()<class_NetwTransport_method_timeout_hint_default>` when nothing overrode it.
+Returns :ref:`_timeout_hint()<class_NetwTransport_private_method__timeout_hint>`, or :ref:`timeout_hint_default()<class_NetwTransport_method_timeout_hint_default>` when nothing overrode it.
 
 .. rst-class:: classref-item-separator
 

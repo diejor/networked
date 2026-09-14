@@ -34,9 +34,9 @@ Description
     for key in row:
         print(key, " = ", row.get_value(key))
 
-\ A stored name is also readable and writable as a property, so ``row.health`` answers :ref:`get_value()<class_NetwRecord_method_get_value>` and assigning to it calls :ref:`set_value()<class_NetwRecord_method_set_value>`. The class's own properties are never captured that way: ``resource_name``, ``resource_path``, ``resource_local_to_scene``, ``resource_scene_unique_id``, ``script`` and a subclass's declared properties keep their normal meaning, so a record may hold a value under any of those names without shadowing the resource itself.
+\ A stored name is also readable and writable as a property, so ``row.health`` returns :ref:`get_value()<class_NetwRecord_method_get_value>` and assigning to it calls :ref:`set_value()<class_NetwRecord_method_set_value>`. The class's own properties are never captured that way: ``resource_name``, ``resource_path``, ``resource_local_to_scene``, ``resource_scene_unique_id``, ``script`` and a subclass's declared properties keep their normal meaning, so a record may hold a value under any of those names without shadowing the resource itself.
 
-A script subclass supplies the storage by overriding :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>`, :ref:`_has_value()<class_NetwRecord_private_method__has_value>` and :ref:`_get_property_names()<class_NetwRecord_private_method__get_property_names>`, and may remap stored names by overriding :ref:`_to_dict()<class_NetwRecord_private_method__to_dict>` and :ref:`_from_dict()<class_NetwRecord_private_method__from_dict>`. Callers always use the plain verbs, which answer an override when a script supplies one. :ref:`DictionaryRecord<class_DictionaryRecord>` is the storage this addon ships.
+A script subclass supplies the storage by overriding :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>`, :ref:`_has_value()<class_NetwRecord_private_method__has_value>` and :ref:`_get_property_names()<class_NetwRecord_private_method__get_property_names>`, and may remap stored names by overriding :ref:`_to_dict()<class_NetwRecord_private_method__to_dict>` and :ref:`_from_dict()<class_NetwRecord_private_method__from_dict>`. Callers always use the plain verbs, which return an override when a script supplies one. :ref:`DictionaryRecord<class_DictionaryRecord>` is the storage this addon ships.
 
 .. rst-class:: classref-reftable-group
 
@@ -219,7 +219,7 @@ Returns ``true`` if ``property`` is present.
 
 :godot:`bool` **is_empty**\ (\ ) |const| :ref:`🔗<class_NetwRecord_method_is_empty>`
 
-Returns ``true`` when no values are stored, which is :ref:`get_property_names()<class_NetwRecord_method_get_property_names>` answering nothing.
+Returns ``true`` when no values are stored, which is :ref:`get_property_names()<class_NetwRecord_method_get_property_names>` returning nothing.
 
 .. rst-class:: classref-item-separator
 

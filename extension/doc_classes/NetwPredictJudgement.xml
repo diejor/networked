@@ -4,7 +4,7 @@
 		What one acknowledged transition was judged to be worth.
 	</brief_description>
 	<description>
-		[method NetwMultiplayer._predict_evaluate] answers with one of these, and a game overriding that seam mints its own through [method of].
+		[method NetwMultiplayer._predict_evaluate] returns one of these, and a game overriding that seam creates its own through [method of].
 		[method corrected] is not a threshold over [method divergence]. A transition whose antecedents were all declared equal claimed reproducibility, so an exact predicate decides it and the magnitude is only ever reported. One whose antecedents were not is decided by tolerance, since the peers never claimed the exactness a fingerprint would test for.
 		[codeblock]
 		var judged := NetwPredictJudgement.of(INF, true)
@@ -32,7 +32,7 @@
 			<param index="0" name="divergence" type="float" />
 			<param index="1" name="corrected" type="bool" />
 			<description>
-				Mints one judgement.
+				Creates one judgement.
 			</description>
 		</method>
 	</methods>

@@ -21,7 +21,7 @@ The travel declaration every script member shares, and the whole of what an RPC,
 Description
 -----------
 
-A member is an RPC, a property, or a signal, and the same fluent builder declares all three because the axes are the same ones: who may author the stream (:ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>`, :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>`), how it travels (:ref:`reliable()<class_NetwMemberConfig_method_reliable>`, :ref:`unreliable()<class_NetwMemberConfig_method_unreliable>`, :ref:`quantize()<class_NetwMemberConfig_method_quantize>`), and what the receiver does with it (:ref:`defer_until()<class_NetwMemberConfig_method_defer_until>`, :ref:`interpolate()<class_NetwMemberConfig_method_interpolate>`). :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`, :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>` and :ref:`Netw.configure_spawn()<class_Netw_method_configure_spawn>` each answer one of these, and :ref:`Netw.configure_property()<class_Netw_method_configure_property>` answers the :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` that extends it.
+A member is an RPC, a property, or a signal, and the same fluent builder declares all three because the axes are the same ones: who may author the stream (:ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>`, :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>`), how it travels (:ref:`reliable()<class_NetwMemberConfig_method_reliable>`, :ref:`unreliable()<class_NetwMemberConfig_method_unreliable>`, :ref:`quantize()<class_NetwMemberConfig_method_quantize>`), and what the receiver does with it (:ref:`defer_until()<class_NetwMemberConfig_method_defer_until>`, :ref:`interpolate()<class_NetwMemberConfig_method_interpolate>`). :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`, :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>` and :ref:`Netw.configure_spawn()<class_Netw_method_configure_spawn>` each return one of these, and :ref:`Netw.configure_property()<class_Netw_method_configure_property>` returns the :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` that extends it.
 
 \ :ref:`context_type<class_NetwMemberConfig_property_context_type>` is which of the three this is: ``0`` an RPC or spawn function, ``1`` a property, ``2`` a signal. Everything that has to tell them apart reads that ordinal, which is also why one class serves three doors.
 
@@ -32,11 +32,11 @@ A member is an RPC, a property, or a signal, and the same fluent builder declare
         Netw.configure_signal(self.exploded).any_peer()
         Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
 
-\ A configuration is keyed per script while :godot:`Object._init() <Object#class_Object_private_method__init>` runs per instance, so every spawn of a script re-declares onto the config the first instance minted. Re-declaring an axis with the value it already carries is therefore SILENT, and only a genuine disagreement between two call sites warns. That rule is what makes authoring in :godot:`Object._init() <Object#class_Object_private_method__init>` quiet rather than one warning per spawn.
+\ A configuration is keyed per script while :godot:`Object._init() <Object#class_Object_private_method__init>` runs per instance, so every spawn of a script re-declares onto the config the first instance created. Re-declaring an axis with the value it already carries is therefore SILENT, and only a genuine disagreement between two call sites warns. That rule is what makes authoring in :godot:`Object._init() <Object#class_Object_private_method__init>` quiet rather than one warning per spawn.
 
-\ **The chain downgrades to this type.**\ 
+\ **The chain downgrades to this type.**\
 
-A bound method records one return type, so every verb here answers a **NetwMemberConfig** even when it was called on a :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. A chain that passes through a base verb loses the property-only verbs from that point on, and a property declaration therefore orders its property-only verbs LAST:
+A bound method records one return type, so every verb here returns a **NetwMemberConfig** even when it was called on a :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. A chain that passes through a base verb loses the property-only verbs from that point on, and a property declaration therefore orders its property-only verbs LAST:
 
 ::
 
@@ -198,7 +198,7 @@ Property Descriptions
 - |void| **set_context_name**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_context_name**\ (\ )
 
-The member this config declares: a method name, a property name, or a signal name, decided by :ref:`context_type<class_NetwMemberConfig_property_context_type>`. Written by the ``Netw.configure_*`` door that minted the config.
+The member this config declares: a method name, a property name, or a signal name, decided by :ref:`context_type<class_NetwMemberConfig_property_context_type>`. Written by the ``Netw.configure_*`` door that created the config.
 
 .. rst-class:: classref-item-separator
 
@@ -215,7 +215,7 @@ The member this config declares: a method name, a property name, or a signal nam
 - |void| **set_context_node_ref**\ (\ value\: :godot:`Variant`\ )
 - :godot:`Variant` **get_context_node_ref**\ (\ )
 
-An opaque weak reference to the body a property config was authored on, or ``null``. It is dereferenced only while resolving a property's declared type, which is read off the live body rather than off :ref:`context_script<class_NetwMemberConfig_property_context_script>`, because a node the framework tracks without a script has no declaration to read it from. A body that has been freed answers :godot:`@GlobalScope.TYPE_NIL <@GlobalScope#class_@GlobalScope_constant_TYPE_NIL>`, which is why the reference is weak.
+An opaque weak reference to the body a property config was authored on, or ``null``. It is dereferenced only while resolving a property's declared type, which is read off the live body rather than off :ref:`context_script<class_NetwMemberConfig_property_context_script>`, because a node the framework tracks without a script has no declaration to read it from. A body that has been freed returns :godot:`@GlobalScope.TYPE_NIL <@GlobalScope#class_@GlobalScope_constant_TYPE_NIL>`, which is why the reference is weak.
 
 .. rst-class:: classref-item-separator
 
@@ -232,9 +232,9 @@ An opaque weak reference to the body a property config was authored on, or ``nul
 - |void| **set_context_script**\ (\ value\: :godot:`Script`\ )
 - :godot:`Script` **get_context_script**\ (\ )
 
-The :godot:`Script` declaring the member, which is what the declaration is keyed by and what :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` compiles into. ``null`` for a property declared on a node that carries no script, which is answered by its own body instead.
+The :godot:`Script` that declares the member. The declaration and :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` use this as their key. ``null`` means the property is declared directly on a node without a script.
 
-Named WITHOUT being owned: the script is held by instance id and resolved on every read, so a script that has been freed answers ``null`` here rather than a stale object. A declaration is stored in the declaring script's own metadata book, so an owning back-reference would close a cycle out of which neither the script nor any config declared on it could ever be freed.
+Named WITHOUT being owned: the script is held by instance id and resolved on every read, so a script that has been freed returns ``null`` here rather than a stale object. A declaration is stored in the declaring script's own metadata book, so an owning back-reference would close a cycle out of which neither the script nor any config declared on it could ever be freed.
 
 .. rst-class:: classref-item-separator
 
@@ -372,7 +372,7 @@ How the member travels. Declared through :ref:`reliable()<class_NetwMemberConfig
 
 Who may write or emit this member. Declared through :ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>` and :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>`, and re-declaring the value it already carries is silent.
 
-Writing it also COMPILES the rule into the declaring script's own metadata book, so the receive gate answers off the script rather than walking this registry for every arriving frame. Nothing is published for an RPC (:ref:`context_type<class_NetwMemberConfig_property_context_type>` ``0``), which is policed by its caller gate instead, or for a config naming no :ref:`context_script<class_NetwMemberConfig_property_context_script>`, which has no book to write into.
+Writing it also COMPILES the rule into the declaring script's own metadata book, so the receive gate returns off the script rather than walking this registry for every arriving frame. Nothing is published for an RPC (:ref:`context_type<class_NetwMemberConfig_property_context_type>` ``0``), which is policed by its caller gate instead, or for a config naming no :ref:`context_script<class_NetwMemberConfig_property_context_script>`, which has no book to write into.
 
 .. rst-class:: classref-section-separator
 
@@ -463,7 +463,7 @@ Declares :ref:`is_controller_only<class_NetwMemberConfig_property_is_controller_
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **defer_until**\ (\ sig\: :godot:`Signal`\ ) :ref:`🔗<class_NetwMemberConfig_method_defer_until>`
 
-Holds a received call until ``sig`` has fired on the target node, instead of running it the moment the node is live. ``self.ready`` is the common choice. Only the signal's NAME is kept, in :ref:`defer_signal_name<class_NetwMemberConfig_property_defer_signal_name>`, because the gate is declared once per script and awaited on whichever instance receives the call. A second gate on one member warns, since that is two call sites disagreeing about when the call is safe.
+Defers a received call until ``sig`` fires on the target node. ``self.ready`` is a common choice. The configuration stores the signal name in :ref:`defer_signal_name<class_NetwMemberConfig_property_defer_signal_name>`. Declaring a second signal for one member reports a warning.
 
 .. rst-class:: classref-item-separator
 
@@ -475,7 +475,7 @@ Holds a received call until ``sig`` has fired on the target node, instead of run
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **interpolate**\ (\ ...\ ) |vararg| :ref:`🔗<class_NetwMemberConfig_method_interpolate>`
 
-Declares :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`, one :ref:`NetwInterpolate<class_NetwInterpolate>` per value the member carries, in the order the member declares them. A property or a one-argument member therefore takes exactly one, and ``null`` leaves a value unsmoothed. The rules are :ref:`quantize()<class_NetwMemberConfig_method_quantize>`'s, read against :ref:`NetwInterpolate.is_same_spec()<class_NetwInterpolate_method_is_same_spec>` rather than a bit layout: a re-declaration of equal specs answers immediately and changes nothing, so an authoring shell can push freshly built but identical specs after a reparent, and one that genuinely differs replaces the standing list and warns.
+Declares :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`, one :ref:`NetwInterpolate<class_NetwInterpolate>` per value the member carries, in the order the member declares them. A property or a one-argument member therefore takes exactly one, and ``null`` leaves a value unsmoothed. The rules are :ref:`quantize()<class_NetwMemberConfig_method_quantize>`'s, read against :ref:`NetwInterpolate.is_same_spec()<class_NetwInterpolate_method_is_same_spec>` rather than a bit layout: a re-declaration of equal specs returns immediately and changes nothing, so an authoring shell can push freshly built but identical specs after a reparent, and one that genuinely differs replaces the standing list and warns.
 
 ::
 
@@ -535,7 +535,7 @@ Declares :ref:`quantizers<class_NetwMemberConfig_property_quantizers>`, one :ref
     Netw.configure_property(self, &"position").quantize(pos_q)
     Netw.configure_rpc(self.fire).quantize(dir_q, null, power_q)
 
-\ The count is checked against the arity of :ref:`context_name<class_NetwMemberConfig_property_context_name>`, which :ref:`context_type<class_NetwMemberConfig_property_context_type>` decides how to read, so a member taking three arguments and given one quantizer is refused rather than packed halfway. A member whose declaration cannot be read at all is taken on trust. Passing nothing, or an argument that is not a :ref:`NetwQuantize<class_NetwQuantize>`, is refused with an error and leaves the previous declaration standing.
+\ The count is checked against the arity of :ref:`context_name<class_NetwMemberConfig_property_context_name>`, which :ref:`context_type<class_NetwMemberConfig_property_context_type>` decides how to read, so a member taking three arguments and given one quantizer is rejected rather than packed halfway. A member whose declaration cannot be read at all is taken on trust. Passing nothing, or an argument that is not a :ref:`NetwQuantize<class_NetwQuantize>`, is rejected with an error and leaves the previous declaration standing.
 
 Re-declaring a layout-equal list (:ref:`NetwQuantize.is_same_layout()<class_NetwQuantize_method_is_same_layout>`) is silent. Only a re-declaration that changes the bit layout warns, since that is two call sites genuinely disagreeing about one member's schema. Whether a declared quantizer can pack the type it sits over is checked against that same declared type.
 

@@ -21,7 +21,7 @@
 		db.backend = fs
 		[/codeblock]
 		A subdirectory under the slot root that no registered table claims is a ghost table. Initialization reports each one as a warning and never deletes data on its own, because a directory the schema stopped naming is more often a migration than garbage.
-		Two live backends pointing at one slot root is refused with an error rather than tolerated: both would write the same files and each would report the other's tables as ghosts. Share one [NetwDatabase] instead, or give them different [member base_dir].
+		Two live backends pointing at one slot root is rejected with an error rather than tolerated: both would write the same files and each would report the other's tables as ghosts. Share one [NetwDatabase] instead, or give them different [member base_dir].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -33,7 +33,7 @@
 			Root directory for every table subdirectory. Point it at [code]user://saves[/code] for a shipped game: a [code]res://[/code] root is rewritten to [code]user://[/code] outside the editor, because an exported project's resources are read-only.
 		</member>
 		<member name="use_text_format" type="bool" setter="set_use_text_format" getter="get_use_text_format" default="false">
-			Picks the record file extension. [code]true[/code] writes the readable [code].tres[/code] text form, and [code]false[/code] the compact binary [code].res[/code]. [ResourceSaver] dispatches on the extension and refuses one it does not recognize, so these are the engine's own two and not a format this class invents.
+			Picks the record file extension. [code]true[/code] writes the readable [code].tres[/code] text form, and [code]false[/code] the compact binary [code].res[/code]. [ResourceSaver] dispatches on the extension and rejects one it does not recognize, so these are the engine's own two and not a format this class invents.
 		</member>
 	</members>
 </class>

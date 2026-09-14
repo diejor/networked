@@ -19,7 +19,7 @@
 		    api.session_entered.disconnect(_on_session_entered)
 		[/codeblock]
 		A node that already extends a non-[Node] base cannot adopt this one under GDScript single inheritance. It calls [method register] and [method unregister] directly instead.
-		A subclass written in C++ rather than GDScript overrides the [code]service_entered[/code] and [code]service_exiting[/code] C++ virtuals instead, and skips [method _service_type] entirely: a class with no script attached has no [Script] to answer with, and [method NetwMultiplayer.service_register] keys it by its own class name. [LobbyDirectory] is the shipped example.
+		A subclass written in C++ rather than GDScript overrides the [code]service_entered[/code] and [code]service_exiting[/code] C++ virtuals instead, and skips [method _service_type] entirely: a class with no script attached has no [Script] to return with, and [method NetwMultiplayer.service_register] keys it by its own class name. [LobbyDirectory] is the shipped example.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -29,7 +29,7 @@
 			<param index="0" name="api" type="NetwMultiplayer" />
 			<description>
 				Called after the service registers, with the [param api] of its branch.
-				Override for per-service setup such as signal wiring or clock binding. It does not run in the editor, when [method _should_register] answers [code]false[/code], or when the node resolves no session at all.
+				Override for per-service setup such as signal wiring or clock binding. It does not run in the editor, when [method _should_register] returns [code]false[/code], or when the node resolves no session at all.
 			</description>
 		</method>
 		<method name="_service_exiting" qualifiers="virtual">
@@ -44,13 +44,13 @@
 			<return type="Script" />
 			<description>
 				Override to return the registration key for this service.
-				Return a family base type so [method NetwMultiplayer.service_get] and [method NetwMultiplayer.service_get_all] resolve subclasses under it. Return [code]null[/code], which is also what an unoverridden service answers, to register under the concrete script, so each instance keeps a unique key. Several instances sharing one key overwrite each other in the registry, so a family with many instances keeps the concrete answer and is collected through [method NetwMultiplayer.service_get_all].
+				Return a family base type so [method NetwMultiplayer.service_get] and [method NetwMultiplayer.service_get_all] resolve its subclasses. Return [code]null[/code] to register the concrete script. Instances that share a key replace each other, so multi-instance families should keep concrete keys and use [method NetwMultiplayer.service_get_all].
 			</description>
 		</method>
 		<method name="_should_register" qualifiers="virtual">
 			<return type="bool" />
 			<description>
-				Override to answer [code]false[/code] when this service should not register on entering the tree, for example under a test runner or behind a feature flag. A service that does not override this always registers.
+				Override to return [code]false[/code] when this service should not register on entering the tree, for example under a test runner or behind a feature flag. A service that does not override this always registers.
 				A transport service that needs peer-to-peer or a native client consults [method is_transport_restricted] here to stay dormant in a restricted environment.
 			</description>
 		</method>
@@ -83,7 +83,7 @@
 			<return type="void" />
 			<param index="0" name="probe" type="Callable" />
 			<description>
-				Installs the [param probe] an embedding addon calls when the runtime environment allows only a WebSocket or HTTP relay, such as a Discord iframe that forbids WebRTC and native SDKs. The probe answers a [bool] and [method is_transport_restricted] is what reads it. Nothing installs one in a normal build, so nothing pays for it.
+				Installs the [param probe] an embedding addon calls when the runtime environment allows only a WebSocket or HTTP relay, such as a Discord iframe that forbids WebRTC and native SDKs. The probe returns a [bool] and [method is_transport_restricted] is what reads it. Nothing installs one in a normal build, so nothing pays for it.
 			</description>
 		</method>
 		<method name="unregister" qualifiers="static">

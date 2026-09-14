@@ -33,8 +33,14 @@ const DISPLAY_SMOOTH := 0.05
 
 # Networking
 
-@onready var inputs: Node = $Inputs
 @onready var entity := NetwEntity.of(self)
+
+var pressed := {
+	&"left": false,
+	&"right": false,
+	&"forward": false,
+	&"back": false,
+}
 
 var input: Vector3
 var normal: Vector3
@@ -115,6 +121,14 @@ func _ready() -> void:
 	display_heading = vehicle_model.rotation.y
 	prev_position = vehicle_model.position
 
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not entity.is_controlled_locally:
+		return
+	for action: StringName in pressed:
+		if event.is_action(action):
+			pressed[action] = event.is_action_pressed(action, true)
+
 # Public Functions
 
 
@@ -183,8 +197,8 @@ func _physics_process(delta):
 
 func handle_input(delta):
 	if raycast.is_colliding():
-		input.x = inputs.steer
-		input.z = inputs.throttle
+		input.x = float(pressed[&"right"]) - float(pressed[&"left"])
+		input.z = float(pressed[&"forward"]) - float(pressed[&"back"])
 
 	sphere.angular_velocity += vehicle_model.get_global_transform().basis.x * (linear_speed * 100) * delta
 

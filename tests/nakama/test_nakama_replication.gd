@@ -68,15 +68,15 @@ func test_quick_start_players_spawn_and_replicate() -> void:
 	)
 
 	var jose_on_host := _find_player(host_tree, "jose") as Node2D
-	var input := _input_for(_find_player(jose_tree, "jose"))
+	var player := _find_player(jose_tree, "jose")
 	var input_start := jose_on_host.position.x
-	input.state[&"move_right"] = true
+	player.pressed[&"move_right"] = true
 	await _await(
 		func() -> bool:
 			return _player_x_greater(host_tree, "jose", input_start + 8.0),
 		"client input to move server player",
 	)
-	input.state[&"move_right"] = false
+	player.pressed[&"move_right"] = false
 
 
 func _track(tree: MultiplayerTree) -> void:
@@ -136,7 +136,3 @@ func _find_player(tree: MultiplayerTree, username: String) -> Node:
 		if owner and StringName(NetwEntity.parse_entity(owner.name)) == username_id:
 			return owner
 	return null
-
-
-func _input_for(player: Node) -> MoveInputComponent:
-	return player.get_node("%InputComponent") as MoveInputComponent

@@ -185,7 +185,7 @@ Returns the newest state snapshot at or before ``tick`` (carry-forward), or an e
 
 Returns the tick :ref:`latest_state_at_or_before()<class_NetwTimeline_method_latest_state_at_or_before>` would read for ``tick``, or ``-1`` when it would read nothing.
 
-Carry-forward means a read keyed at one tick can answer with a snapshot recorded at an older one, so a caller comparing two peers at "the same tick" is only truly matched when this returns the tick it asked for. Read it to tell a matched comparison from one carried forward across a gap.
+Carry-forward means a read keyed at one tick can return with a snapshot recorded at an older one, so a caller comparing two peers at "the same tick" is only truly matched when this returns the tick it asked for. Read it to tell a matched comparison from one carried forward across a gap.
 
 ::
 

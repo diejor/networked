@@ -19,7 +19,7 @@ How long the server waits for a late player action, and how far ahead of itself 
 Description
 -----------
 
-Two numbers, both optional. :ref:`Netw.configure_lagcomp()<class_Netw_method_configure_lagcomp>` answers one of these to fill in.
+Two numbers, both optional. :ref:`Netw.configure_lagcomp()<class_Netw_method_configure_lagcomp>` returns one of these to fill in.
 
 ::
 
@@ -80,7 +80,7 @@ Property Descriptions
 - |void| **set_input_gate_deadline_ticks**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_input_gate_deadline_ticks**\ (\ )
 
-How many ticks a :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwAction_constant_TIMING_TICK_ALIGNED_STATE_READY>` action waits for the state its tick needs before it gives up and resolves on what it has. Raise it for a link that loses input often, and lower it to answer a player sooner at the cost of judging on less. A negative count is refused and the previous value stands.
+How many ticks a :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwAction_constant_TIMING_TICK_ALIGNED_STATE_READY>` action waits for the state its tick needs before it gives up and resolves on what it has. Raise it for a link that loses input often, and lower it to return a player sooner at the cost of judging on less. A negative count is rejected and the previous value stands.
 
 .. rst-class:: classref-item-separator
 
@@ -97,7 +97,7 @@ How many ticks a :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwActi
 - |void| **set_max_future_action_ticks**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_max_future_action_ticks**\ (\ )
 
-How far ahead of the server's own tick an action may ask to happen before it is denied. This is what stops a client claiming it acted in the future. A negative count is refused and the previous value stands.
+How far ahead of the server's own tick an action may ask to happen before it is denied. This is what stops a client claiming it acted in the future. A negative count is rejected and the previous value stands.
 
 .. rst-class:: classref-section-separator
 
@@ -114,7 +114,7 @@ Method Descriptions
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **input_gate_deadline_ticks**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_input_gate_deadline_ticks>`
 
-Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` and answers this same config, so a declaration reads as one chained expression.
+Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` and returns this same config, so a declaration reads as one chained expression.
 
 .. rst-class:: classref-item-separator
 
@@ -126,7 +126,7 @@ Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_in
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **max_future_action_ticks**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_max_future_action_ticks>`
 
-Sets :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>` and answers this same config, so a declaration reads as one chained expression.
+Sets :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>` and returns this same config, so a declaration reads as one chained expression.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

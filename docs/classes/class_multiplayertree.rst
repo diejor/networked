@@ -19,9 +19,9 @@ The node one session's branch is rooted at.
 Description
 -----------
 
-A tree owns one :ref:`NetwMultiplayer<class_NetwMultiplayer>` and installs it on its own branch of the :godot:`SceneTree`, so every descendant answers :ref:`Netw.of()<class_Netw_method_of>` with that session and two trees in one :godot:`SceneTree` are two independent sessions. It carries the exports that configure the session and nothing else: the state, the role, the roster and the service registry all belong to :ref:`api<class_MultiplayerTree_property_api>`.
+A tree owns one :ref:`NetwMultiplayer<class_NetwMultiplayer>` and installs it on its own branch of the :godot:`SceneTree`, so every descendant returns :ref:`Netw.of()<class_Netw_method_of>` with that session and two trees in one :godot:`SceneTree` are two independent sessions. It carries the exports that configure the session and nothing else: the state, the role, the roster and the service registry all belong to :ref:`api<class_MultiplayerTree_property_api>`.
 
-A session comes online the ordinary Godot way, by assigning a :godot:`MultiplayerPeer`. The tree publishes no verb for that, because the assignment IS the bring-up. An assignment made while a declaration is still being authored is refused rather than silently deferred, so bring up through :ref:`Netw.connection()<class_Netw_method_connection>` or wait for the deferred settle.
+Assign a :godot:`MultiplayerPeer` to start a session. Assigning one while configuration is still being declared fails. Use :ref:`Netw.connection()<class_Netw_method_connection>` or wait until configuration is complete.
 
 \ :ref:`app_id<class_MultiplayerTree_property_app_id>`, :ref:`desired_role<class_MultiplayerTree_property_desired_role>` and :ref:`link_conditions<class_MultiplayerTree_property_link_conditions>` are the session's whole FALLBACK, used when no node declared one through :ref:`Netw.configure_session()<class_Netw_method_configure_session>`. An explicit declaration replaces them whole: no field is merged, and any non-default export it discards is named once in a warning. Once the session has consumed its configuration these exports are immutable, and a setter reports the late write and keeps its old value.
 
@@ -49,7 +49,7 @@ A session comes online the ordinary Godot way, by assigning a :godot:`Multiplaye
                 tree.api.multiplayer_peer = peer,
     )
 
-\ The tree brings itself up in exactly two cases, both of which have no caller to answer to: a headless build with :ref:`auto_host_headless<class_MultiplayerTree_property_auto_host_headless>` set, and a debug build carrying a :ref:`debug_join<class_MultiplayerTree_property_debug_join>`. Everything else is the game's own composition.
+\ The tree brings itself up in exactly two cases, both of which have no caller to return to: a headless build with :ref:`auto_host_headless<class_MultiplayerTree_property_auto_host_headless>` set, and a debug build carrying a :ref:`debug_join<class_MultiplayerTree_property_debug_join>`. Everything else is the game's own composition.
 
 .. rst-class:: classref-reftable-group
 
@@ -152,11 +152,11 @@ The one door a game replaces this session's stages through. Immutable once the t
 
 A game-build tag that gates admission, baked into every build.
 
-A joining peer whose tag differs is rejected during the auth handshake before it reaches :godot:`MultiplayerAPI.get_peers() <MultiplayerAPI#class_MultiplayerAPI_method_get_peers>`, so an incompatible build never corrupts a session. The tag folds this name together with the wire identity the build speaks, so no value turns the gate off: leaving this empty still refuses a peer whose format version or channel table differs, and naming it adds the game's own compatibility on top. Bump it when the game's own payloads break in a way the wire identity cannot see.
+A joining peer whose tag differs is rejected during the auth handshake before it reaches :godot:`MultiplayerAPI.get_peers() <MultiplayerAPI#class_MultiplayerAPI_method_get_peers>`, so an incompatible build never corrupts a session. The tag folds this name together with the wire identity the build speaks, so no value turns the gate off: leaving this empty still rejects a peer whose format version or channel table differs, and naming it adds the game's own compatibility on top. Bump it when the game's own payloads break in a way the wire identity cannot see.
 
 This export is part of the tree's session FALLBACK, not a live setting. It is immutable once the session has consumed its configuration.
 
-The tag also names the space a signalled transport mints its room codes in, so two builds carrying different tags never meet on the rendezvous at all, rather than meeting and being refused a handshake later. A tag is what makes a room code short: scoped by one, five characters are unique enough, and without one a room must be unique across every game sharing the trackers, which costs twenty hex characters instead. Bumping the tag therefore retires every room code minted under the old one, which is what those rooms deserved, since they would refuse the new build anyway.
+The tag also scopes room codes for signaled transports. Builds with different tags do not share rendezvous rooms. Changing the tag invalidates room codes created with the previous value.
 
 .. rst-class:: classref-item-separator
 
@@ -194,7 +194,7 @@ Only a :ref:`NetwMultiplayer.ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_R
 
 An auto-connect applied on play, in debug builds only.
 
-When set, the tree hosts on ready under the username and join arguments it carries, skipping the server browser. A release build strips this path because :godot:`OS.has_feature() <OS#class_OS_method_has_feature>` answers ``false`` for ``"debug"``, which is also what keeps :ref:`link_conditions<class_MultiplayerTree_property_link_conditions>` free of a release cost.
+When set, the tree hosts on ready under the username and join arguments it carries, skipping the server browser. A release build strips this path because :godot:`OS.has_feature() <OS#class_OS_method_has_feature>` returns ``false`` for ``"debug"``, which is also what keeps :ref:`link_conditions<class_MultiplayerTree_property_link_conditions>` free of a release cost.
 
 .. rst-class:: classref-item-separator
 

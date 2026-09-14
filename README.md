@@ -12,6 +12,9 @@
 
 A drop-in replacement for Godot's [`SceneMultiplayer`](https://docs.godotengine.org/en/stable/classes/class_scenemultiplayer.html), shipped as a GDExtension.
 
+After cloning, [build the GDExtension](extension/BUILDING.md) before opening
+the project in Godot.
+
 `NetwMultiplayer` is a strict superset of `SceneMultiplayer`'s surface, and the
 extension installs it as the project's default multiplayer interface at load.
 Every `SceneTree` gets it with **no node authored and no scene changed**, your
@@ -147,3 +150,16 @@ dance when moving nodes around.
   reads and writes them straight off the live scene.
 - **Transports.** ENet, WebSocket, WebRTC and a local loopback. Listen-server,
   dedicated server, local play and host-relay P2P are all the same session.
+
+## Credits
+
+- The lag compensation, prediction, and rollback architecture is based
+  on [netfox](https://github.com/foxssake/netfox). Its documentation,
+  documented issues, and Discord discussions were valuable references.
+- The WebRTC signaler, transport, and related work are based on
+  [Tube](https://github.com/koopmyers/tube/).
+- The wire architecture is based on
+  [yojimbo](https://github.com/mas-bandwidth/yojimbo).
+- *Multiplayer Game Programming. Architecting Networked Games* by Joshua
+  Glazer and Sanjay Madhav was insightful reading for general netcode
+  architecture.

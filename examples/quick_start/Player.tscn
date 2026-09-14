@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://d3hydnehhflk" path="res://examples/quick_start/player.gd" id="1_kne1u"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://examples/quick_start/tp_component.gd" id="4_e80uo"]
-[ext_resource type="Script" uid="uid://cwf8sf34fk0ib" path="res://examples/quick_start/move_input_component.gd" id="9_5h0xu"]
 [ext_resource type="Texture2D" uid="uid://b8cn2fun55jsg" path="res://assets/networked.png" id="9_u2lnn"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
@@ -17,12 +16,10 @@ func _ready() -> void:
 	if not is_multiplayer_authority():
 		queue_free()
 		return
-	NetwEntity.of(self).view_activated.connect(_on_view)
-	# A teleport snaps the player to another scene, so drop the smoothing history
-	# on the commit or the view pans across the gap during the reveal.
+	NetwEntity.of(self).view_activated.connect(on_view)
 	%TPComponent.teleport_committed.connect(reset_smoothing)
 
-func _on_view() ->  void:
+func on_view() ->  void:
 	make_current()
 "
 
@@ -40,13 +37,8 @@ speed = 256.0
 [node name="TPComponent" type="Node" parent="Components" unique_id=1784597384]
 unique_name_in_owner = true
 script = ExtResource("4_e80uo")
-starting_scene = "res://examples/quick_start/Level1.tscn"
+current_scene_path = "res://examples/quick_start/Level1.tscn"
 metadata/_custom_type_script = "uid://c4gt8tvkmcals"
-
-[node name="InputComponent" type="Node" parent="Components" unique_id=2127544558]
-unique_name_in_owner = true
-script = ExtResource("9_5h0xu")
-metadata/_custom_type_script = "uid://cwf8sf34fk0ib"
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]
 replication_interval = 0.25

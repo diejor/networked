@@ -15,7 +15,7 @@
 		# Warm nothing eagerly (lazy fetch-on-miss still applies):
 		WarmRequest.none()
 		[/codeblock]
-		Calling [code]new()[/code] instead gives the same request [method none] answers.
+		Calling [code]new()[/code] instead gives the same request [method none] returns.
 	</description>
 	<tutorials>
 	</tutorials>

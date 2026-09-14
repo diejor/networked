@@ -274,10 +274,8 @@ void Slot::trim_history(int64_t p_ack) {
 void Slot::reset_tape(int64_t p_epoch) {
     tape_epoch = p_epoch;
     tape.clear();
-    // The journal, the decoded command window and the entry book are all
-    // transition-keyed, and a transition is injective only within an epoch, so
-    // a row any of them retained would answer for a number the new epoch is
-    // about to reuse.
+    // These stores use transition keys, which are unique only within an epoch.
+    // Clear them before the new epoch reuses a key.
     journal.clear(p_epoch);
     commands.clear();
     reset_entry_history();

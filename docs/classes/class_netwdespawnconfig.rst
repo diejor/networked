@@ -21,7 +21,7 @@ Description
 
 The policy is authored on a :godot:`Script` and read back for every node that script drives, because :ref:`Netw.configure_despawn()<class_Netw_method_configure_despawn>` runs from :godot:`Object._init() <Object#class_Object_private_method__init>` and the removal happens later, on whichever peer received the DESPAWN frame.
 
-\ :ref:`before_removal()<class_NetwDespawnConfig_method_before_removal>` records the method NAME and nothing else, so a config authored from one node's :godot:`Callable` never retains that :godot:`Node` and stays reusable for every later instance of the same script. The removing peer resolves the name against the node it is about to remove, and skips a name that node does not answer.
+\ :ref:`before_removal()<class_NetwDespawnConfig_method_before_removal>` stores only the method name, so the config does not retain a :godot:`Node` and can be reused for other instances. Before removal, the peer resolves the method on the node and skips it when absent.
 
 An author who declared nothing gets an empty :ref:`hook_method<class_NetwDespawnConfig_property_hook_method>` and a :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>` of ``0.0``, which frees immediately, so the defaults are the policy rather than an absence a reader branches on.
 
@@ -114,7 +114,7 @@ Method Descriptions
 
 :ref:`NetwDespawnConfig<class_NetwDespawnConfig>` **before_removal**\ (\ callable\: :godot:`Callable`\ ) :ref:`🔗<class_NetwDespawnConfig_method_before_removal>`
 
-Declares that ``callable``'s method runs on the entity root before the node leaves the tree, for death VFX or for handing children off. Only :godot:`Callable.get_method() <Callable#class_Callable_method_get_method>` is kept, into :ref:`hook_method<class_NetwDespawnConfig_property_hook_method>`. Answers the same config so the declaration chains.
+Declares that ``callable``'s method runs on the entity root before the node leaves the tree, for death VFX or for handing children off. Only :godot:`Callable.get_method() <Callable#class_Callable_method_get_method>` is kept, into :ref:`hook_method<class_NetwDespawnConfig_property_hook_method>`. Returns the same config so the declaration chains.
 
 .. rst-class:: classref-item-separator
 
@@ -126,7 +126,7 @@ Declares that ``callable``'s method runs on the entity root before the node leav
 
 :ref:`NetwDespawnConfig<class_NetwDespawnConfig>` **linger**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwDespawnConfig_method_linger>`
 
-Declares :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>`. Answers the same config so the declaration chains.
+Declares :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>`. Returns the same config so the declaration chains.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

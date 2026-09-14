@@ -19,9 +19,9 @@ The server metadata an ``NPRB`` probe reply carries.
 Description
 -----------
 
-A probe asks a host what it is without joining it, and this is the answer: the fields a browser row needs to decide whether to connect at all. It is a plain record with a codec, so the same object crosses the wire and fills a list entry.
+A probe asks a host what it is without joining it, and this is the result: the fields a browser row needs to decide whether to connect at all. It is a plain record with a codec, so the same object crosses the wire and fills a list entry.
 
-A session with no declared provider answers with :ref:`from_session()<class_NetwServerInfo_method_from_session>`. A game that wants more declares one through :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>`, and is handed that same base record to edit rather than an API to read.
+A session with no declared provider returns :ref:`from_session()<class_NetwServerInfo_method_from_session>`. A game that wants more declares one through :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>`, and is handed that same base record to edit rather than an API to read.
 
 ::
 
@@ -33,7 +33,7 @@ A session with no declared provider answers with :ref:`from_session()<class_Netw
         info.game_mode = &"ranked"
         return info
 
-\ Returning ``null`` or anything that is not a **NetwServerInfo** is a defect rather than a request for the default: the probe answers :ref:`NetwAuthProtocol.PROBE_ERROR<class_NetwAuthProtocol_constant_PROBE_ERROR>`, so a browser row reads a broken host as broken instead of as an empty one.
+\ Returning ``null`` or anything that is not a **NetwServerInfo** is a defect rather than a request for the default: the probe returns :ref:`NetwAuthProtocol.PROBE_ERROR<class_NetwAuthProtocol_constant_PROBE_ERROR>`, so a browser row reads a broken host as broken instead of as an empty one.
 
 \ :ref:`metadata<class_NetwServerInfo_property_metadata>` is the open field: anything a game wants a browser to read that the named fields do not carry, encoded and decoded with the rest of the record.
 
@@ -176,7 +176,7 @@ The mode the host is running, as the game names it. Unset by the built-in provid
 - |void| **set_is_local_listener**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_is_local_listener**\ (\ )
 
-Whether this record was built by a live host rather than assembled from a directory listing. A browser reads it to tell a host that answered from one it only heard about.
+Whether this record came from a live host rather than a directory listing.
 
 .. rst-class:: classref-item-separator
 
@@ -324,9 +324,9 @@ Decodes ``bytes`` into a fresh record, or ``null`` when ``bytes`` is empty or do
 
 :ref:`NetwServerInfo<class_NetwServerInfo>` **from_session**\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |static| :ref:`🔗<class_NetwServerInfo_method_from_session>`
 
-The default probe reply: a copy of :ref:`NetwSessionConfig.server_info<class_NetwSessionConfig_property_server_info>` with the live fields overlaid, which are the connected participant count as :ref:`players<class_NetwServerInfo_property_players>` and :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>`. :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than answered, so replying to a probe can never write back into what the game authored.
+The default probe reply: a copy of :ref:`NetwSessionConfig.server_info<class_NetwSessionConfig_property_server_info>` with the live fields overlaid, which are the connected participant count as :ref:`players<class_NetwServerInfo_property_players>` and :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>`. :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than returned, so replying to a probe can never write back into what the game authored.
 
-This is what a probe answers with when no :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` declaration governs the session, and it is also the record a declared provider is handed.
+This is what a probe returns when no :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` declaration governs the session, and it is also the record a declared provider is handed.
 
 .. rst-class:: classref-item-separator
 

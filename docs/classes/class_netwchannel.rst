@@ -113,7 +113,7 @@ Broadcasts the custom channel payload to all other connected peers.
 
 :ref:`NetwChannel<class_NetwChannel>` **of**\ (\ node\: :godot:`Node`, id\: :godot:`int`\ ) |static| :ref:`🔗<class_NetwChannel_method_of>`
 
-Opens channel ``id`` over the session governing ``node``, or answers ``null`` and reports when no session governs it or ``id`` is outside ``100`` to ``254``. :ref:`Netw.channel()<class_Netw_method_channel>` is the front door and this is what it answers with.
+Opens channel ``id`` over the session governing ``node``, or returns ``null`` and reports when no session governs it or ``id`` is outside ``100`` to ``254``. :ref:`Netw.channel()<class_Netw_method_channel>` is the front door and this is what it returns.
 
 .. rst-class:: classref-item-separator
 

@@ -23,7 +23,7 @@ The policy is authored on a :godot:`Script` and read back for every node that sc
 
 An author who declared nothing already carries a :ref:`default_interval<class_NetwPersistenceConfig_property_default_interval>` of ``5.0`` and a :ref:`hydrate_on_spawn_enabled<class_NetwPersistenceConfig_property_hydrate_on_spawn_enabled>` of ``true``. Those are the policy a reader applies, not an absence it branches on: a script that names only a database and a table snapshots every five seconds and restores its saved row before the spawn frame is taken.
 
-\ :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` records the method NAME and nothing else, so a config authored from one node's :godot:`Callable` never retains that :godot:`Node` and stays reusable for every later instance of the same script. The server resolves the name against the entity root when it needs a record id, and falls back to :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>` and then the node name when :ref:`record_id_provider<class_NetwPersistenceConfig_property_record_id_provider>` is empty.
+\ :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` stores only the method name, so the config does not retain a :godot:`Node` and can be reused for other instances. The server resolves the method on the entity root. Without a provider, it uses :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>` and then the node name.
 
 \ :ref:`db<class_NetwPersistenceConfig_property_db>` is typed :godot:`Variant` because :ref:`NetwDatabase<class_NetwDatabase>` is a GDScript class with no native counterpart, so the config carries whatever the author handed it without narrowing it, and GDScript resolves the real script type on the way back out.
 
@@ -182,7 +182,7 @@ Method Descriptions
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **database**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_database>`
 
-Declares the :ref:`NetwDatabase<class_NetwDatabase>` every flush and hydrate reads and writes, into :ref:`db<class_NetwPersistenceConfig_property_db>`. Answers the same config so the declaration chains.
+Declares the :ref:`NetwDatabase<class_NetwDatabase>` every flush and hydrate reads and writes, into :ref:`db<class_NetwPersistenceConfig_property_db>`. Returns the same config so the declaration chains.
 
 .. rst-class:: classref-item-separator
 
@@ -194,7 +194,7 @@ Declares the :ref:`NetwDatabase<class_NetwDatabase>` every flush and hydrate rea
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **hydrate_on_spawn**\ (\ enabled\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPersistenceConfig_method_hydrate_on_spawn>`
 
-Declares :ref:`hydrate_on_spawn_enabled<class_NetwPersistenceConfig_property_hydrate_on_spawn_enabled>`. Answers the same config so the declaration chains.
+Declares :ref:`hydrate_on_spawn_enabled<class_NetwPersistenceConfig_property_hydrate_on_spawn_enabled>`. Returns the same config so the declaration chains.
 
 .. rst-class:: classref-item-separator
 
@@ -206,7 +206,7 @@ Declares :ref:`hydrate_on_spawn_enabled<class_NetwPersistenceConfig_property_hyd
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **interval**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_interval>`
 
-Declares :ref:`default_interval<class_NetwPersistenceConfig_property_default_interval>`. Answers the same config so the declaration chains.
+Declares :ref:`default_interval<class_NetwPersistenceConfig_property_default_interval>`. Returns the same config so the declaration chains.
 
 .. rst-class:: classref-item-separator
 
@@ -218,7 +218,7 @@ Declares :ref:`default_interval<class_NetwPersistenceConfig_property_default_int
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **record_id**\ (\ callable\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_record_id>`
 
-Declares that ``callable``'s method on the entity root computes the record id rows are keyed by. Only :godot:`Callable.get_method() <Callable#class_Callable_method_get_method>` is kept, into :ref:`record_id_provider<class_NetwPersistenceConfig_property_record_id_provider>`. Answers the same config so the declaration chains.
+Declares that ``callable``'s method on the entity root computes the record id rows are keyed by. Only :godot:`Callable.get_method() <Callable#class_Callable_method_get_method>` is kept, into :ref:`record_id_provider<class_NetwPersistenceConfig_property_record_id_provider>`. Returns the same config so the declaration chains.
 
 .. rst-class:: classref-item-separator
 
@@ -230,7 +230,7 @@ Declares that ``callable``'s method on the entity root computes the record id ro
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **table**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_table>`
 
-Declares :ref:`table_name<class_NetwPersistenceConfig_property_table_name>`. Answers the same config so the declaration chains.
+Declares :ref:`table_name<class_NetwPersistenceConfig_property_table_name>`. Returns the same config so the declaration chains.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

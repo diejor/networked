@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export a demo and prove the export, shared by both deployments."""
+"""Export and validate a demo for deployment."""
 
 from __future__ import annotations
 

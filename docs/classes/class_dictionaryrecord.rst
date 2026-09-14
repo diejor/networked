@@ -12,7 +12,7 @@ DictionaryRecord
 
 **Inherits:** :ref:`NetwRecord<class_NetwRecord>` **<** :ref:`Serde<class_Serde>` **<** :godot:`Resource`
 
-The record this addon ships, and the one a table mints when it declares none of its own.
+The record this addon ships, and the one a table creates when it declares none of its own.
 
 .. rst-class:: classref-introduction-group
 

@@ -29,9 +29,9 @@ Delays are authored in milliseconds and loss as a percent, the units a game desi
     conditions.lag_packet_loss_percent = 2.0
     config.link_conditions = conditions
 
-\ :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` answers the peer it was given unchanged, with a warning, when :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` is on but the build carries no ``LaggyMultiplayerPeer`` extension. A missing simulator is a reason to run without it, never a reason the session fails to come up.
+\ :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` returns the peer it was given unchanged, with a warning, when :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` is on but the build carries no ``LaggyMultiplayerPeer`` extension. A missing simulator is a reason to run without it, never a reason the session fails to come up.
 
-This is a development instrument and :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` is the gate on it: a release export never wraps, whatever :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` says, so a spec that ships with a scene or a ``.tres`` costs a shipped player nothing. The gate sits inside :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` rather than at any one author's call site, which is what makes it hold for :ref:`MultiplayerTree.link_conditions<class_MultiplayerTree_property_link_conditions>`, ``ConnectBrowser.debug_link``, a hand-authored resource, and a game that assigns one from script alike. Nothing publishes the gate's answer on its own, so a caller that needs to know reads it by wrapping and comparing: :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` hands back the very peer it was given when this build does not shape its link.
+This is a development tool. :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` returns the original peer in release exports, regardless of :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>`. Compare the returned peer with the input to determine whether simulation is active.
 
 A debug build and the editor shape their link, and a release export does not. ``NETW_SHAPING`` in the environment, or ``--netw-shaping=on|off`` on the command line, overrides that in both directions, for the playtest shipped on a debug template and for the release build a tester needs to impair. The environment wins over the flag, and a value that is neither an on word (``on``, ``1``, ``true``, ``yes``) nor an off word (``off``, ``0``, ``false``, ``no``) is no override at all, so a typo cannot quietly impair a shipped build.
 
@@ -138,7 +138,7 @@ The lower bound of the simulated one-way delay, in milliseconds. :ref:`wrap_peer
 - |void| **set_simulate_lag**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_simulate_lag**\ (\ )
 
-Whether :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` wraps the peer at all. ``false`` answers the base peer untouched, so a spec left on a config with this off costs nothing.
+Whether :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` wraps the peer at all. ``false`` returns the base peer untouched, so a spec left on a config with this off costs nothing.
 
 .. rst-class:: classref-section-separator
 
@@ -157,7 +157,7 @@ Method Descriptions
 
 Returns ``base`` wrapped in a ``LaggyMultiplayerPeer`` carrying this spec's delays and loss, converted to the wrapper's units. Returns ``base`` itself when :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` is ``false``, when ``base`` is ``null``, when this build does not shape its link, or when the wrapper class is unavailable or publishes no ``create``.
 
-\ **Note:** Impairment also needs the optional ``LaggyMultiplayerPeer`` extension present in the build. A build that shapes its link but carries no simulator still answers ``base``.
+\ **Note:** Impairment also needs the optional ``LaggyMultiplayerPeer`` extension present in the build. A build that shapes its link but carries no simulator still returns ``base``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

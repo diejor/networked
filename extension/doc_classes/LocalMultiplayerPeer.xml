@@ -4,7 +4,7 @@
 		An in-process [MultiplayerPeer] that routes packets through memory.
 	</brief_description>
 	<description>
-		No socket is opened. Peer IDs, connection status and packet queues answer exactly what [ENetMultiplayerPeer]'s do, so a [MultiplayerAPI] cannot tell which one it is holding, and a test drives a real session without a network.
+		Opens no socket. It implements the same peer IDs, connection status, and packet queues as [ENetMultiplayerPeer], allowing tests to run a session without a network.
 		[codeblock]
 		var server := LocalMultiplayerPeer.new()
 		var client := LocalMultiplayerPeer.new()
@@ -15,7 +15,7 @@
 		[/codeblock]
 		The links form a star and not a mesh: a client is linked to the server and to nobody else, so a packet addressed to another client reaches the server for relaying and costs a second poll.
 		Connection events are queued and emitted on [method MultiplayerPeer.poll], which is what makes them land at a point the caller chose.
-		Setting [member loopback_session] gives that session first refusal on every inbound packet, so [LocalLinkConditions] can hold or drop one before it is ever visible here.
+		Setting [member loopback_session] gives that session first rejection on every inbound packet, so [LocalLinkConditions] can hold or drop one before it is ever visible here.
 	</description>
 	<tutorials>
 	</tutorials>

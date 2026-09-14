@@ -45,14 +45,14 @@
 			<return type="String" />
 			<param index="0" name="kind" type="int" enum="NetwPredict.DriveKind" />
 			<description>
-				The [enum DriveKind] member [param kind] names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+				The [enum DriveKind] member [param kind] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 			</description>
 		</method>
 		<method name="episode_state_name" qualifiers="static">
 			<return type="String" />
 			<param index="0" name="state" type="int" enum="NetwPredict.EpisodeState" />
 			<description>
-				The [enum EpisodeState] member [param state] names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+				The [enum EpisodeState] member [param state] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 			</description>
 		</method>
 		<method name="joint_cell" qualifiers="static">
@@ -61,7 +61,7 @@
 			<param index="1" name="relayed" type="bool" />
 			<param index="2" name="predictor_valid" type="bool" />
 			<description>
-				The [enum CellProvenance] one replayed input earns, ranked. What the owner actually did outranks a relay, a relay outranks a substituted guess, and one with none of the three coasts on what it already held.
+				The [enum CellProvenance] one replayed input receives, ranked. What the owner actually did outranks a relay, a relay outranks a substituted guess, and one with none of the three coasts on what it already held.
 				Ranked rather than exclusive because more than one can be true at once, and a replay that charged the weaker of two would report a guess where authorship was reproduced.
 			</description>
 		</method>
@@ -93,14 +93,14 @@
 			<return type="String" />
 			<param index="0" name="schedule" type="int" enum="NetwPredict.Schedule" />
 			<description>
-				The [enum Schedule] member [param schedule] names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+				The [enum Schedule] member [param schedule] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 			</description>
 		</method>
 		<method name="verdict_reason_name" qualifiers="static">
 			<return type="String" />
 			<param index="0" name="reason" type="int" enum="NetwPredict.VerdictReason" />
 			<description>
-				The [enum VerdictReason] member [param reason] names, without its prefix. Answers with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+				The [enum VerdictReason] member [param reason] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
 			</description>
 		</method>
 	</methods>
@@ -127,7 +127,7 @@
 			A replicated remote stepped locally with a predicted command.
 		</constant>
 		<constant name="INPUT_SOURCE_LOCAL" value="0" enum="InputSource">
-			This peer produces the input it simulates with. [member NetwPredictionHandle.input_source] is where an entity's answer is read.
+			This peer produces the input it simulates. Read the entity value from [member NetwPredictionHandle.input_source].
 		</constant>
 		<constant name="INPUT_SOURCE_RECEIVED" value="1" enum="InputSource">
 			This peer reads a command another peer authored and sent.
@@ -139,7 +139,7 @@
 			This peer simulates nothing, so it needs no command.
 		</constant>
 		<constant name="SIM_MODE_AUTHORITATIVE" value="0" enum="SimMode">
-			The simulation produces the truth other peers correct themselves against. [member NetwPredictionHandle.sim_mode] is where an entity's answer is read.
+			The simulation produces the authoritative state. Read the entity value from [member NetwPredictionHandle.sim_mode].
 		</constant>
 		<constant name="SIM_MODE_SPECULATIVE" value="1" enum="SimMode">
 			The simulation produces a guess this peer will reconcile.
@@ -219,7 +219,7 @@
 		</constant>
 		<constant name="TRIGGER_SHAPE_NONE" value="0" enum="TriggerShape">
 			No field that can trigger was past its own tolerance. The fingerprints can still disagree while every field sits inside its tolerance, so a recovery can be prepared with nothing having asked for one.
-			A [enum TriggerShape] records what the triggering fields looked like when the recovery was judged. The distinction that matters is whether the recovery could write any of them. A write answering a withheld field and a writable one did repair something, while a write whose every trigger was withheld repaired nothing.
+			A [enum TriggerShape] records what the triggering fields looked like when the recovery was judged. The distinction that matters is whether the recovery could write any of them. A write returning a withheld field and a writable one did repair something, while a write whose every trigger was withheld repaired nothing.
 		</constant>
 		<constant name="TRIGGER_SHAPE_MIXED" value="1" enum="TriggerShape">
 			At least one field past its epsilon is one a sub-teleport restore may write.
@@ -246,7 +246,7 @@
 			The two independently recorded fingerprints differ.
 		</constant>
 		<constant name="MISSING_INPUT_STALL" value="0" enum="MissingInput">
-			With no input the entity does not move, which is the honest answer and the default.
+			With no input, the entity does not move.
 		</constant>
 		<constant name="MISSING_INPUT_REPEAT_LAST" value="1" enum="MissingInput">
 			Carry the last input forward over the gap.
@@ -366,7 +366,7 @@
 		</constant>
 		<constant name="VERDICT_REASON_NONE" value="0" enum="VerdictReason">
 			Nothing stood between the comparison and the body. Either it found agreement, or a recovery ran and decided what to write.
-			[signal NetwPredictionHandle.state_evaluated] reports what a comparison decided, and deciding is not writing. Several paths find a divergence and then answer it with nothing, and from that signal alone each of them looks exactly like agreement. This names which one ran.
+			[signal NetwPredictionHandle.state_evaluated] reports a comparison, not a write. This value identifies paths that detect divergence without applying a correction.
 		</constant>
 		<constant name="VERDICT_REASON_AWAITING_RECONSTRUCTION" value="1" enum="VerdictReason">
 			No comparison ran. A masked set is reconciled only once the stream has seen its gain-edge full row, and before that edge a receive is recorded having judged nothing.
@@ -375,7 +375,7 @@
 			The reseed's evidence-free horizon alignment is still waiting for its command epoch, so this receive is neither compared nor written.
 		</constant>
 		<constant name="VERDICT_REASON_RESEED_IGNORED" value="3" enum="VerdictReason">
-			The acknowledgement is at or before the reseed horizon, so the row answers for transitions the seed has already replaced.
+			The acknowledgement is at or before the reseed horizon, so the row returns for transitions the seed has already replaced.
 		</constant>
 		<constant name="VERDICT_REASON_PROBATION_REQUARANTINE" value="4" enum="VerdictReason">
 			The first comparison after resuming disagreed, so the entity went straight back to following authority. It writes nothing, spends no evidence, and does not count against the next attempt, because a resume that was never proven says nothing a longer wait would not settle.
@@ -384,13 +384,13 @@
 			The episode's bounded recovery evidence ran out on this comparison, so speculation closed instead of correcting.
 		</constant>
 		<constant name="VERDICT_REASON_TRANSPORT_PENDING" value="6" enum="VerdictReason">
-			A transport is already staged against this divergence and owns the write that answers it.
+			A transport is already staged against this divergence and owns the write that returns it.
 		</constant>
 		<constant name="VERDICT_REASON_DISSIPATE_PENDING" value="7" enum="VerdictReason">
 			A dissipation is already staged against this divergence.
 		</constant>
 		<constant name="VERDICT_REASON_DISSIPATED" value="8" enum="VerdictReason">
-			The comparison was answered by letting the divergence fade, which is a decision to write nothing rather than a failure to write.
+			The comparison chose to let the divergence fade without writing a correction.
 		</constant>
 		<constant name="VERDICT_REASON_WITNESS_DEFERRED" value="9" enum="VerdictReason">
 			The operator is deferred until an authority witness covers the boundary it would rebase across.

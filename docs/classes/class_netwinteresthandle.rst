@@ -21,7 +21,7 @@ Description
 
 Membership declarations survive tree exits and reapply when the entity enters a session, so a layer declared in :godot:`Object._init() <Object#class_Object_private_method__init>` is the same layer the server admits later. The server owns the real :ref:`NetwInterestLayer<class_NetwInterestLayer>` membership. Clients keep the same labels and callback surface for local visibility and observer-awareness events.
 
-Declaring interest and reading it back are ONE type: :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>` answers this handle and so does :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`, so a helper takes either and a chain in :godot:`Object._init() <Object#class_Object_private_method__init>` is the same object a later frame mutates. Every verb answers the handle, so one chained expression declares an entity's layers and the callbacks that ride them.
+Declaring interest and reading it back are ONE type: :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>` returns this handle and so does :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`, so a helper takes either and a chain in :godot:`Object._init() <Object#class_Object_private_method__init>` is the same object a later frame mutates. Every verb returns the handle, so one chained expression declares an entity's layers and the callbacks that ride them.
 
 ::
 
@@ -131,7 +131,7 @@ Removes the entity from ``layer_id`` and returns this handle. Idempotent.
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **of**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_NetwInterestHandle_method_of>`
 
-Ensures the entity rooted at ``node`` and answers its :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`. :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>` is the front door and this is what it answers with. A ``node`` that roots no entity is reported and answered ``null``.
+Ensures the entity rooted at ``node`` and returns its :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`. :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>` is the front door and this is what it returns. A ``node`` that roots no entity is reported and returned ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -145,7 +145,7 @@ Ensures the entity rooted at ``node`` and answers its :ref:`NetwEntity.interest<
 
 Calls ``callback`` with ``(layer_id, peer_id)`` whenever this entity becomes visible through ``layer_id``, and returns this handle.
 
-An empty ``layer_id`` registers ``callback`` against every layer :ref:`layer_ids()<class_NetwInterestHandle_method_layer_ids>` currently answers, which is what lets one chain declare a set of layers and then give them all one callback. It reads what the entity has joined, not what this expression joined, so a callback declared after a later :ref:`join()<class_NetwInterestHandle_method_join>` does not reach back to it.
+An empty ``layer_id`` registers ``callback`` against every layer :ref:`layer_ids()<class_NetwInterestHandle_method_layer_ids>` currently returns, which is what lets one chain declare a set of layers and then give them all one callback. It reads what the entity has joined, not what this expression joined, so a callback declared after a later :ref:`join()<class_NetwInterestHandle_method_join>` does not reach back to it.
 
 .. rst-class:: classref-item-separator
 
@@ -159,7 +159,7 @@ An empty ``layer_id`` registers ``callback`` against every layer :ref:`layer_ids
 
 Calls ``callback`` with ``(layer_id, peer_id)`` whenever this entity stops being visible through ``layer_id``, and returns this handle.
 
-An empty ``layer_id`` registers against every layer :ref:`layer_ids()<class_NetwInterestHandle_method_layer_ids>` currently answers, as :ref:`on_enter()<class_NetwInterestHandle_method_on_enter>` does.
+An empty ``layer_id`` registers against every layer :ref:`layer_ids()<class_NetwInterestHandle_method_layer_ids>` currently returns, as :ref:`on_enter()<class_NetwInterestHandle_method_on_enter>` does.
 
 .. rst-class:: classref-item-separator
 

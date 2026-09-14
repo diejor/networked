@@ -57,9 +57,9 @@ Method Descriptions
 
 Activates ``scene_stem``, resolves the template at ``spawner_path``, and adds the node ``participant`` plays. The returned promise settles with the entered :ref:`NetwSceneHandle<class_NetwSceneHandle>`.
 
-\ ``scene_stem`` is a declared scene's stem, the name :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>` answers to, never a ``res://`` path or a ``uid://`` reference.
+\ ``scene_stem`` is the registered scene name used by :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>`, not a ``res://`` path or ``uid://`` reference.
 
-A persistence hydration the player's engine asked for completes before the player is seated, so a returning player enters with its saved state already applied. That hydration is why this answers a promise rather than the handle. See :ref:`NetwMultiplayer.scene_activate()<class_NetwMultiplayer_method_scene_activate>` and :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>`.
+A persistence hydration the player's engine asked for completes before the player is seated, so a returning player enters with its saved state already applied. That hydration is why this returns a promise rather than the handle. See :ref:`NetwMultiplayer.scene_activate()<class_NetwMultiplayer_method_scene_activate>` and :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>`.
 
 A game that restores a player to whichever scene it left from registers its own handler with :ref:`Netw.configure_join()<class_Netw_method_configure_join>` and reads that scene itself, because only the game knows where it recorded one.
 

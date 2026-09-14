@@ -19,7 +19,7 @@ The scene an entity belongs to, reached as :ref:`NetwEntity.scene<class_NetwEnti
 Description
 -----------
 
-The view a game holds for one scene: who is in it, who may enter it, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so ``==`` answers "the same scene" and a listener connected through any route hears every edge. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. Never ``null`` for an entity in a session: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` when the difference matters.
+The view a game holds for one scene: who is in it, who may enter it, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so ``==`` returns "the same scene" and a listener connected through any route hears every edge. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. Never ``null`` for an entity in a session: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` when the difference matters.
 
 ::
 
@@ -29,7 +29,7 @@ The view a game holds for one scene: who is in it, who may enter it, and when th
         for participant in track.participants:
             track.admit(participant)
 
-\ A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree answers :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` ``false`` and every other member empty.
+\ A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree returns :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` ``false`` and every other member empty.
 
 \ :ref:`NetwMultiplayer<class_NetwMultiplayer>` keeps the same surface keyed by :godot:`RID` for callers that already hold one, and :ref:`entity<class_NetwSceneHandle_property_entity>` is the bridge to it: :ref:`NetwMultiplayer.scene_get_players()<class_NetwMultiplayer_method_scene_get_players>`, :ref:`NetwMultiplayer.scene_admit()<class_NetwMultiplayer_method_scene_admit>` and :ref:`NetwMultiplayer.scene_observe()<class_NetwMultiplayer_method_scene_observe>` are the flat spellings of :ref:`players<class_NetwSceneHandle_property_players>`, :ref:`admit()<class_NetwSceneHandle_method_admit>` and the signals here.
 
@@ -157,7 +157,7 @@ Property Descriptions
 
 - :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_entities**\ (\ )
 
-Every entity standing in this scene, as the :ref:`NetwEntity<class_NetwEntity>` each one is read through. :ref:`NetwMultiplayer.scene_get_entities()<class_NetwMultiplayer_method_scene_get_entities>` answers the same set under the flat spelling, as the internal handles the session keys its rows by; this member resolves each one so a caller never holds an :godot:`RID` it would only hand straight back.
+Every entity standing in this scene, as the :ref:`NetwEntity<class_NetwEntity>` each one is read through. :ref:`NetwMultiplayer.scene_get_entities()<class_NetwMultiplayer_method_scene_get_entities>` returns the same set under the flat spelling, as the internal handles the session keys its rows by; this member resolves each one so a caller never holds an :godot:`RID` it would only hand straight back.
 
 .. rst-class:: classref-item-separator
 
@@ -239,7 +239,7 @@ The player entity this peer represents in this scene, or ``null`` when this peer
 
 - :godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] **get_participants**\ (\ )
 
-Every participant seated in this scene. A participant is a person in the session; a player is the entity they steer, and :ref:`players<class_NetwSceneHandle_property_players>` answers those.
+Every participant seated in this scene. A participant is a person in the session; a player is the entity they steer, and :ref:`players<class_NetwSceneHandle_property_players>` returns those.
 
 .. rst-class:: classref-item-separator
 
@@ -273,7 +273,7 @@ Every player entity in this scene, in no declared order.
 
 The authored node this scene was declared on, which is the scene's own identity, or ``null`` outside a session.
 
-This is the node a game parents content under and reparents players into. :ref:`Netw.spawn()<class_Netw_method_spawn>` answers :ref:`world<class_NetwSceneHandle_property_world>` rather than this node when the scene declared :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, so a caller that spawned an isolated scene reads the root back through here.
+This is the node a game parents content under and reparents players into. :ref:`Netw.spawn()<class_Netw_method_spawn>` returns :ref:`world<class_NetwSceneHandle_property_world>` rather than this node when the scene declared :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, so a caller that spawned an isolated scene reads the root back through here.
 
 .. rst-class:: classref-item-separator
 
@@ -362,7 +362,7 @@ Idempotent, so admitting a participant this scene already admits changes nothing
 
 :godot:`bool` **admits**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |const| :ref:`🔗<class_NetwSceneHandle_method_admits>`
 
-Whether this scene currently admits ``participant``. Reads the admission boundary rather than the seat, so it answers for a participant admitted before it was seated.
+Whether this scene currently admits ``participant``. Reads the admission boundary rather than the seat, so it returns for a participant admitted before it was seated.
 
 .. rst-class:: classref-item-separator
 
@@ -374,14 +374,14 @@ Whether this scene currently admits ``participant``. Reads the admission boundar
 
 :ref:`NetwPromise<class_NetwPromise>` **move**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, opts\: :ref:`NetwReparentOpts<class_NetwReparentOpts>` = null\ ) :ref:`🔗<class_NetwSceneHandle_method_move>`
 
-Moves ``entity`` into THIS scene, answering the :ref:`NetwPromise<class_NetwPromise>` the settle carries. :ref:`NetwMultiplayer.scene_move()<class_NetwMultiplayer_method_scene_move>` holds the law, the carry window included; what differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
+Moves ``entity`` into THIS scene, returning the :ref:`NetwPromise<class_NetwPromise>` the settle carries. :ref:`NetwMultiplayer.scene_move()<class_NetwMultiplayer_method_scene_move>` holds the law, the carry window included; what differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
 
 ::
 
     var moved := destination.move(NetwEntity.of(player), opts)
     await moved.wait()
 
-\ Answers an already-settled :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` for a null ``entity`` or outside a session.
+\ Returns an already-settled :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` for a null ``entity`` or outside a session.
 
 \ **Server Only.**
 

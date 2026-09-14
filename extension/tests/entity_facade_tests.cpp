@@ -1,11 +1,6 @@
-// Laws for NetwEntity's static facade: of, ensure, resolve and bind.
-//
-// The wrapper verbs underneath these are covered beside the session that owns
-// them. What is stated HERE is the facade's own contract, which is that every
-// one of them answers a NetwEntity or nothing: the index is typed on
-// RefCounted so it can hold whatever the mint produced, and a caller of this
-// class is entitled to the typed answer or to null, never to a wrapper it has
-// to test the class of.
+// Tests for the NetwEntity static facade: of, ensure, resolve, and bind.
+// Each method returns a NetwEntity or null. The internal RefCounted index may
+// hold wrapper types, but they are not exposed by this facade.
 
 #include "support/netw_test.h"
 
@@ -47,7 +42,7 @@ TEST_CASE(
     const Ref<NetwEntity> minted = NetwEntity::ensure(clean);
     REQUIRE(minted.is_valid());
     CHECK(NetwEntity::of(clean) == minted);
-    // Minting twice is the same record, because a node stands for one entity.
+    // One node maps to one entity, so repeated calls return the same record.
     CHECK(NetwEntity::ensure(clean) == minted);
 
     memdelete(clean);
@@ -70,7 +65,7 @@ TEST_CASE(
     const Ref<NetwEntity> own = NetwEntity::ensure(child);
     REQUIRE(own.is_valid());
     CHECK(own != owned);
-    // Minting does NOT walk up, so the child now answers for itself.
+    // Creation does not search ancestors. The child gets its own entity.
     CHECK(NetwEntity::of(child) == own);
     CHECK(NetwEntity::of(root) == owned);
 

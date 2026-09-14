@@ -4,8 +4,8 @@
 		The server metadata an [code]NPRB[/code] probe reply carries.
 	</brief_description>
 	<description>
-		A probe asks a host what it is without joining it, and this is the answer: the fields a browser row needs to decide whether to connect at all. It is a plain record with a codec, so the same object crosses the wire and fills a list entry.
-		A session with no declared provider answers with [method from_session]. A game that wants more declares one through [method Netw.configure_server_info], and is handed that same base record to edit rather than an API to read.
+		A probe asks a host what it is without joining it, and this is the result: the fields a browser row needs to decide whether to connect at all. It is a plain record with a codec, so the same object crosses the wire and fills a list entry.
+		A session with no declared provider returns [method from_session]. A game that wants more declares one through [method Netw.configure_server_info], and is handed that same base record to edit rather than an API to read.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_server_info(self, server_info)
@@ -15,7 +15,7 @@
 		    info.game_mode = &amp;"ranked"
 		    return info
 		[/codeblock]
-		Returning [code]null[/code] or anything that is not a [NetwServerInfo] is a defect rather than a request for the default: the probe answers [constant NetwAuthProtocol.PROBE_ERROR], so a browser row reads a broken host as broken instead of as an empty one.
+		Returning [code]null[/code] or anything that is not a [NetwServerInfo] is a defect rather than a request for the default: the probe returns [constant NetwAuthProtocol.PROBE_ERROR], so a browser row reads a broken host as broken instead of as an empty one.
 		[member metadata] is the open field: anything a game wants a browser to read that the named fields do not carry, encoded and decoded with the rest of the record.
 	</description>
 	<tutorials>
@@ -32,8 +32,8 @@
 			<return type="NetwServerInfo" />
 			<param index="0" name="api" type="NetwMultiplayer" />
 			<description>
-				The default probe reply: a copy of [member NetwSessionConfig.server_info] with the live fields overlaid, which are the connected participant count as [member players] and [member NetwSessionConfig.app_id]. [member is_local_listener] is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than answered, so replying to a probe can never write back into what the game authored.
-				This is what a probe answers with when no [method Netw.configure_server_info] declaration governs the session, and it is also the record a declared provider is handed.
+				The default probe reply: a copy of [member NetwSessionConfig.server_info] with the live fields overlaid, which are the connected participant count as [member players] and [member NetwSessionConfig.app_id]. [member is_local_listener] is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than returned, so replying to a probe can never write back into what the game authored.
+				This is what a probe returns when no [method Netw.configure_server_info] declaration governs the session, and it is also the record a declared provider is handed.
 			</description>
 		</method>
 		<method name="to_payload" qualifiers="static">
@@ -52,7 +52,7 @@
 			The mode the host is running, as the game names it. Unset by the built-in provider.
 		</member>
 		<member name="is_local_listener" type="bool" setter="set_is_local_listener" getter="get_is_local_listener" default="false">
-			Whether this record was built by a live host rather than assembled from a directory listing. A browser reads it to tell a host that answered from one it only heard about.
+			Whether this record came from a live host rather than a directory listing.
 		</member>
 		<member name="latency_ms" type="int" setter="set_latency_ms" getter="get_latency_ms" default="-1">
 			The round trip [method NetwMultiplayer.endpoint_probe] measured reaching this host, in milliseconds. [code]-1[/code] means unmeasured, which is what a row assembled from a listing carries.

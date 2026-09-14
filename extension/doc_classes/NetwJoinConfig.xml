@@ -4,7 +4,7 @@
 		Everything one declaration says about the wire schema of its join handler.
 	</brief_description>
 	<description>
-		[method Netw.configure_join] declares the handler run once for each join its session accepts, and answers this config, which carries the packing that one declaration asks for. It belongs to that declaration: a second node declaring the same handler gets its own, and re-declaring on one node replaces it.
+		[method Netw.configure_join] declares the handler run once for each join its session accepts, and returns this config, which carries the packing that one declaration asks for. It belongs to that declaration: a second node declaring the same handler gets its own, and re-declaring on one node replaces it.
 		A client fills only the handler's parameters after the [NetwParticipant] the server supplies itself, and passes them as the [code]args[/code] of [method Netw.join]. So [member quantizers] lines up with that shorter list, and its position zero is the handler's second parameter.
 		An author who declared nothing carries an empty [member quantizers], which sends every wire argument self-describing. A null slot inside a declared list does the same for that one argument, so a schema packs the fields worth packing and leaves the rest alone.
 		[codeblock]
@@ -23,8 +23,8 @@
 		<method name="quantize" qualifiers="vararg">
 			<return type="NetwJoinConfig" />
 			<description>
-				Declares [member quantizers], one [NetwQuantize] per argument in the order the handler declares them past its [NetwParticipant], and [code]null[/code] for an argument that travels self-describing. The count is checked against that sliced schema, so a handler taking two wire arguments and given one quantizer is refused rather than packed halfway, and a handler whose parameters cannot be read at all is taken on trust. Passing nothing, or an argument that is not a [NetwQuantize], is refused with an error and leaves the previous declaration standing, because a typo in one chained call should not silently unpack a schema that was already declared.
-				Answers the same config so the declaration chains.
+				Declares [member quantizers], one [NetwQuantize] per argument in the order the handler declares them past its [NetwParticipant], and [code]null[/code] for an argument that travels self-describing. The count is checked against that sliced schema, so a handler taking two wire arguments and given one quantizer is rejected rather than packed halfway, and a handler whose parameters cannot be read at all is taken on trust. Passing nothing, or an argument that is not a [NetwQuantize], is rejected with an error and leaves the previous declaration standing, because a typo in one chained call should not silently unpack a schema that was already declared.
+				Returns the same config so the declaration chains.
 			</description>
 		</method>
 	</methods>

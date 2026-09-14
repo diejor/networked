@@ -4,7 +4,7 @@
 		The scene an entity belongs to, reached as [member NetwEntity.scene].
 	</brief_description>
 	<description>
-		The view a game holds for one scene: who is in it, who may enter it, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so [code]==[/code] answers "the same scene" and a listener connected through any route hears every edge. Reach it with [method Netw.scene] or [member NetwEntity.scene]. Never [code]null[/code] for an entity in a session: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask [member is_declared] when the difference matters.
+		The view a game holds for one scene: who is in it, who may enter it, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so [code]==[/code] returns "the same scene" and a listener connected through any route hears every edge. Reach it with [method Netw.scene] or [member NetwEntity.scene]. Never [code]null[/code] for an entity in a session: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask [member is_declared] when the difference matters.
 		[codeblock]
 		func _on_scene_live(track: NetwSceneHandle) -&gt; void:
 		    track.player_entered.connect(_on_car_entered)
@@ -12,7 +12,7 @@
 		    for participant in track.participants:
 		        track.admit(participant)
 		[/codeblock]
-		A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree answers [member is_declared] [code]false[/code] and every other member empty.
+		A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree returns [member is_declared] [code]false[/code] and every other member empty.
 		[NetwMultiplayer] keeps the same surface keyed by [RID] for callers that already hold one, and [member entity] is the bridge to it: [method NetwMultiplayer.scene_get_players], [method NetwMultiplayer.scene_admit] and [method NetwMultiplayer.scene_observe] are the flat spellings of [member players], [method admit] and the signals here.
 	</description>
 	<tutorials>
@@ -59,7 +59,7 @@
 			<return type="bool" />
 			<param index="0" name="participant" type="NetwParticipant" />
 			<description>
-				Whether this scene currently admits [param participant]. Reads the admission boundary rather than the seat, so it answers for a participant admitted before it was seated.
+				Whether this scene currently admits [param participant]. Reads the admission boundary rather than the seat, so it returns for a participant admitted before it was seated.
 			</description>
 		</method>
 		<method name="move">
@@ -67,12 +67,12 @@
 			<param index="0" name="entity" type="NetwEntity" />
 			<param index="1" name="opts" type="NetwReparentOpts" default="null" />
 			<description>
-				Moves [param entity] into THIS scene, answering the [NetwPromise] the settle carries. [method NetwMultiplayer.scene_move] holds the law, the carry window included; what differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
+				Moves [param entity] into THIS scene, returning the [NetwPromise] the settle carries. [method NetwMultiplayer.scene_move] holds the law, the carry window included; what differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
 				[codeblock]
 				var moved := destination.move(NetwEntity.of(player), opts)
 				await moved.wait()
 				[/codeblock]
-				Answers an already-settled [constant @GlobalScope.ERR_INVALID_PARAMETER] for a null [param entity] or outside a session.
+				Returns an already-settled [constant @GlobalScope.ERR_INVALID_PARAMETER] for a null [param entity] or outside a session.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -118,7 +118,7 @@
 	</methods>
 	<members>
 		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
-			Every entity standing in this scene, as the [NetwEntity] each one is read through. [method NetwMultiplayer.scene_get_entities] answers the same set under the flat spelling, as the internal handles the session keys its rows by; this member resolves each one so a caller never holds an [RID] it would only hand straight back.
+			Every entity standing in this scene, as the [NetwEntity] each one is read through. [method NetwMultiplayer.scene_get_entities] returns the same set under the flat spelling, as the internal handles the session keys its rows by; this member resolves each one so a caller never holds an [RID] it would only hand straight back.
 		</member>
 		<member name="entity" type="RID" setter="" getter="get_entity" default="RID()">
 			The resolved scene's entity RID, or an invalid RID outside a session.
@@ -134,14 +134,14 @@
 			The player entity this peer represents in this scene, or [code]null[/code] when this peer has none here.
 		</member>
 		<member name="participants" type="NetwParticipant[]" setter="" getter="get_participants" default="[]">
-			Every participant seated in this scene. A participant is a person in the session; a player is the entity they steer, and [member players] answers those.
+			Every participant seated in this scene. A participant is a person in the session; a player is the entity they steer, and [member players] returns those.
 		</member>
 		<member name="players" type="NetwEntity[]" setter="" getter="get_players" default="[]">
 			Every player entity in this scene, in no declared order.
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
 			The authored node this scene was declared on, which is the scene's own identity, or [code]null[/code] outside a session.
-			This is the node a game parents content under and reparents players into. [method Netw.spawn] answers [member world] rather than this node when the scene declared [method NetwSceneConfig.isolated], so a caller that spawned an isolated scene reads the root back through here.
+			This is the node a game parents content under and reparents players into. [method Netw.spawn] returns [member world] rather than this node when the scene declared [method NetwSceneConfig.isolated], so a caller that spawned an isolated scene reads the root back through here.
 		</member>
 		<member name="world" type="Node" setter="" getter="get_world">
 			The [SubViewport] the framework inserted above [member root] to give this scene a [World2D] and [World3D] of its own, or [code]null[/code] for a scene that shares the session's world.

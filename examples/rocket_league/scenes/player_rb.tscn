@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" path="res://examples/rocket_league/scripts/player_rb.gd" id="1_car"]
 [ext_resource type="PackedScene" path="res://examples/rocket_league/models/car.glb" id="2_model"]
-[ext_resource type="Script" path="res://examples/rocket_league/scripts/input.gd" id="3_input"]
 [ext_resource type="PackedScene" uid="uid://c7rlwheelrktl" path="res://examples/rocket_league/scenes/wheel.tscn" id="4_wheel"]
 [ext_resource type="Script" path="res://examples/rocket_league/scripts/car_ai.gd" id="5_ai"]
 
@@ -36,10 +35,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0643204, -0.231174)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1023757]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
 shape = SubResource("BoxShape3D_car")
-
-[node name="Input" type="Node" parent="." unique_id=1039595]
-script = ExtResource("3_input")
-tick_mode = true
 
 [node name="Label3D" type="Label3D" parent="." unique_id=1047514]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8478, 0)

@@ -19,9 +19,9 @@ The resolved placement target for one player spawn.
 Description
 -----------
 
-A slot answers one question, "where does this player node go", and it answers it the same way whether the destination is a declared network scene or a plain branch of the tree. That is what lets a spawner be written once: it asks :ref:`for_scene()<class_SpawnSlot_method_for_scene>` for a slot and hands the player to :ref:`place_player()<class_SpawnSlot_method_place_player>`, instead of branching on whether the scene was declared.
+A slot returns one question, "where does this player node go", and it returns it the same way whether the destination is a declared network scene or a plain branch of the tree. That is what lets a spawner be written once: it asks :ref:`for_scene()<class_SpawnSlot_method_for_scene>` for a slot and hands the player to :ref:`place_player()<class_SpawnSlot_method_place_player>`, instead of branching on whether the scene was declared.
 
-A slot resolves at the moment it is asked for, so it is a value to use now rather than a handle to keep. A session that declares no scene under the requested stem answers a slot that :ref:`is_valid()<class_SpawnSlot_method_is_valid>` rejects, and placing into it does nothing.
+A slot resolves at the moment it is asked for, so it is a value to use now rather than a handle to keep. A session that declares no scene under the requested stem returns a slot that :ref:`is_valid()<class_SpawnSlot_method_is_valid>` rejects, and placing into it does nothing.
 
 ::
 
@@ -70,7 +70,7 @@ Method Descriptions
 
 Resolves the slot for the scene ``session`` declares under ``scene_stem``.
 
-This is the verb a spawner calls. A session declaring no such scene, and a null ``session``, both answer a slot :ref:`is_valid()<class_SpawnSlot_method_is_valid>` rejects rather than an error, so a spawner asks once and tests the answer.
+This is the verb a spawner calls. A session declaring no such scene, and a null ``session``, both return a slot :ref:`is_valid()<class_SpawnSlot_method_is_valid>` rejects rather than an error, so a spawner asks once and tests the result.
 
 ::
 
@@ -100,7 +100,7 @@ Returns the declared :ref:`NetwSceneHandle<class_NetwSceneHandle>` this slot pla
 
 :godot:`bool` **has_scene**\ (\ ) |const| :ref:`🔗<class_SpawnSlot_method_has_scene>`
 
-Returns ``true`` when this slot carries a scene that is still declared. A handle to a scene the session has since dropped answers ``false``, which is why this is asked rather than the handle being tested for null.
+Returns ``true`` when this slot carries a scene that is still declared. A handle to a scene the session has since dropped returns ``false``, which is why this is asked rather than the handle being tested for null.
 
 .. rst-class:: classref-item-separator
 

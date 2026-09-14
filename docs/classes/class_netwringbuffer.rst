@@ -173,7 +173,7 @@ Returns the oldest tick still held, or ``-1`` when the buffer is empty.
 
 Records ``value`` at ``tick``. Recording past capacity evicts the oldest entry.
 
-A tick the buffer ALREADY holds is REPLACED in place rather than appended, so one tick is one entry and the newest write for it is the one :ref:`get_at()<class_NetwRingBuffer_method_get_at>` answers. A replay that re-runs a tick and records the state it reached is the caller this exists for: appending would leave the pre-replay value in front of the corrected one, where every reader would keep finding the value the replay was run to supersede.
+A tick the buffer already holds is replaced in place rather than appended, so one tick is one entry and the newest write for it is the one :ref:`get_at()<class_NetwRingBuffer_method_get_at>` returns. A replay that re-runs a tick and records the state it reached is the caller this exists for: appending would leave the pre-replay value in front of the corrected one, where every reader would keep finding the value the replay was run to supersede.
 
 The replace path is guarded by a single comparison against :ref:`newest_tick()<class_NetwRingBuffer_method_newest_tick>`, so an append at a rising tick, which is what every hot caller does, never scans.
 

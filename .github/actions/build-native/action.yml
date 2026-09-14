@@ -30,7 +30,7 @@ inputs:
     required: false
     default: "false"
   require-fresh:
-    description: Refuse an output this run did not write, which a release candidate must.
+    description: Require output produced by the current run for release candidates.
     required: false
     default: "false"
   staging:

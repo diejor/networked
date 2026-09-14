@@ -15,8 +15,8 @@
 		for key in row:
 		    print(key, " = ", row.get_value(key))
 		[/codeblock]
-		A stored name is also readable and writable as a property, so [code]row.health[/code] answers [method get_value] and assigning to it calls [method set_value]. The class's own properties are never captured that way: [code]resource_name[/code], [code]resource_path[/code], [code]resource_local_to_scene[/code], [code]resource_scene_unique_id[/code], [code]script[/code] and a subclass's declared properties keep their normal meaning, so a record may hold a value under any of those names without shadowing the resource itself.
-		A script subclass supplies the storage by overriding [method _set_value], [method _get_value], [method _has_value] and [method _get_property_names], and may remap stored names by overriding [method _to_dict] and [method _from_dict]. Callers always use the plain verbs, which answer an override when a script supplies one. [DictionaryRecord] is the storage this addon ships.
+		A stored name is also readable and writable as a property, so [code]row.health[/code] returns [method get_value] and assigning to it calls [method set_value]. The class's own properties are never captured that way: [code]resource_name[/code], [code]resource_path[/code], [code]resource_local_to_scene[/code], [code]resource_scene_unique_id[/code], [code]script[/code] and a subclass's declared properties keep their normal meaning, so a record may hold a value under any of those names without shadowing the resource itself.
+		A script subclass supplies the storage by overriding [method _set_value], [method _get_value], [method _has_value] and [method _get_property_names], and may remap stored names by overriding [method _to_dict] and [method _from_dict]. Callers always use the plain verbs, which return an override when a script supplies one. [DictionaryRecord] is the storage this addon ships.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -102,7 +102,7 @@
 		<method name="is_empty" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when no values are stored, which is [method get_property_names] answering nothing.
+				Returns [code]true[/code] when no values are stored, which is [method get_property_names] returning nothing.
 			</description>
 		</method>
 		<method name="set_value">

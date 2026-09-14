@@ -103,7 +103,7 @@ Property Descriptions
 - |void| **set_mounted_tree**\ (\ value\: :godot:`Node`\ )
 - :godot:`Node` **get_mounted_tree**\ (\ )
 
-The session tree mounted inside this window. Identity rather than machinery: nothing here reads it, and it is how a caller holding a window finds the participant's session. Answers ``null`` once that tree is freed.
+The session tree mounted inside this window. Identity rather than machinery: nothing here reads it, and it is how a caller holding a window finds the participant's session. Returns ``null`` once that tree is freed.
 
 .. rst-class:: classref-item-separator
 
@@ -137,7 +137,7 @@ The network peer id assigned to the participant in this window. Zero until the p
 - |void| **set_stretch_aspect**\ (\ value\: :ref:`StretchAspect<enum_ParticipantView_StretchAspect>`\ )
 - :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **get_stretch_aspect**\ (\ )
 
-How the design resolution is fitted into this window, resolved onto :godot:`Window.content_scale_aspect <Window#class_Window_property_content_scale_aspect>`. Inherits the project's answer by default.
+How the design resolution fits this window. Maps to :godot:`Window.content_scale_aspect <Window#class_Window_property_content_scale_aspect>` and defaults to the project setting.
 
 .. rst-class:: classref-item-separator
 
@@ -171,7 +171,7 @@ The logical resolution this window's contents draw at, resolved onto :godot:`Win
 - |void| **set_stretch_mode**\ (\ value\: :ref:`StretchMode<enum_ParticipantView_StretchMode>`\ )
 - :ref:`StretchMode<enum_ParticipantView_StretchMode>` **get_stretch_mode**\ (\ )
 
-Which end of the fit this window renders at, resolved onto :godot:`Window.content_scale_mode <Window#class_Window_property_content_scale_mode>`. Inherits the project's answer by default.
+Which end of the fit this window renders. Maps to :godot:`Window.content_scale_mode <Window#class_Window_property_content_scale_mode>` and defaults to the project setting.
 
 .. rst-class:: classref-item-separator
 
@@ -188,7 +188,7 @@ Which end of the fit this window renders at, resolved onto :godot:`Window.conten
 - |void| **set_stretch_scale**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_stretch_scale**\ (\ )
 
-Divides the design resolution, resolved onto :godot:`Window.content_scale_factor <Window#class_Window_property_content_scale_factor>`. Zero or less inherits the project's answer.
+Divides the design resolution. Maps to :godot:`Window.content_scale_factor <Window#class_Window_property_content_scale_factor>`. A value of zero or less uses the project setting.
 
 .. rst-class:: classref-item-separator
 
@@ -205,7 +205,7 @@ Divides the design resolution, resolved onto :godot:`Window.content_scale_factor
 - |void| **set_stretch_scale_mode**\ (\ value\: :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>`\ )
 - :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>` **get_stretch_scale_mode**\ (\ )
 
-Whether the fit may land on a fractional multiple of the design, resolved onto :godot:`Window.content_scale_stretch <Window#class_Window_property_content_scale_stretch>`. Inherits the project's answer by default.
+Whether the fit may use a fractional scale. Maps to :godot:`Window.content_scale_stretch <Window#class_Window_property_content_scale_stretch>` and defaults to the project setting.
 
 .. rst-class:: classref-item-separator
 
