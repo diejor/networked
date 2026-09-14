@@ -10,7 +10,7 @@
 # Export outputs (CI stages the examples site here; see pages-examples.yml)
 /build/
 
-# Native artifacts stay local until the WS-6 distribution decision.
+# Native build artifacts are generated locally and are not committed.
 /addons/networked/bin/
 
 # SCons object cache for the native build.

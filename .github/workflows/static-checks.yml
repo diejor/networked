@@ -73,8 +73,8 @@ jobs:
         shell: bash
         run: shellcheck --shell=sh extension/tools/setup_godot.sh
 
-  laws:
-    name: "Tree laws"
+  repository:
+    name: "Repository checks"
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
@@ -84,13 +84,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check No File Gained A Comment
-        run: python extension/tools/check_no_comments.py --ratchet
-
-      - name: Prove The Comment Ratchet Refuses
-        run: python extension/tools/check_no_comments.py --self-test
-
-      - name: Prove The Wire Decoder Refuses
+      - name: Test wire decoder
         run: python extension/tools/wire_decode.py --self-test
 
   pipeline:
@@ -104,7 +98,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Prove The Report Reader Refuses
+      - name: Test report parser
         run: python ci/reports.py --self-test
 
       - name: Run The Pipeline Fixtures

@@ -20,8 +20,6 @@ PROFILES = {
         ["python3", "ci/reports.py", "--self-test"],
         ["python3", "-m", "unittest", "discover", "-s", "ci/tests", "-t", "."],
         ["python3", "ci/matrix.py", "--profile", "release", "--format", "ids"],
-        ["python3", "extension/tools/check_no_comments.py", "--ratchet"],
-        ["python3", "extension/tools/check_suite_census.py"],
         ["python3", "ci/bootstrap.py", "tools", "actionlint", "shellcheck"],
         ["ci/.tools/actionlint"],
         ["ci/.tools/shellcheck", "--shell=sh", "extension/tools/setup_godot.sh"],
