@@ -83,7 +83,7 @@ Property Descriptions
 
 :godot:`Callable` **erase_benign_error** = ``Callable()`` :ref:`🔗<class_WebRTCTestSupport_property_erase_benign_error>`
 
-Erases a recorded error the running framework would otherwise report as a failure, as ``func(Array[String]) -> void``.  Injected the way :godot:`NetwGameHarness.reporter <NetwGameHarness#class_NetwGameHarness_property_reporter>` is, because reaching into a framework's error monitor is the framework adapter's business and this file runs under any framework or none. Left unassigned it erases nothing, which is the right answer for a caller whose framework records no errors.
+Erases a recorded error the running framework would otherwise report as a failure, as ``func(Array[String]) -> void``.  Injected the way :ref:`NetwGameHarness.reporter<class_NetwGameHarness_property_reporter>` is, because reaching into a framework's error monitor is the framework adapter's business and this file runs under any framework or none. Left unassigned it erases nothing, which is the right answer for a caller whose framework records no errors.
 
 .. rst-class:: classref-section-separator
 

@@ -10,6 +10,7 @@
 #include "netw/sync_kernel.hpp"
 #include "netw/table/core.hpp"
 #include "netw/wire/capture.hpp"
+#include "netw/wire/control_record.hpp"
 #include "netw/wire/frame.hpp"
 #include "netw/wire/plan.hpp"
 #include "netw/wire/registry.hpp"
@@ -114,6 +115,7 @@ Dictionary spec_records() {
     out.merge(sync_kernel::frame_spec_records());
     out.merge(NetwCarrierFrame::spec_records());
     out.merge(capture_spec_records());
+    out.merge(control_spec_records());
     return out;
 }
 

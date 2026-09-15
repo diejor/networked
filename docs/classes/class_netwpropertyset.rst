@@ -728,7 +728,7 @@ Types every member column of ``set`` from ``node``, falling back to ``script``'s
 
 :godot:`int` **wire_hash**\ (\ ) |const| :ref:`🔗<class_NetwPropertySet_method_wire_hash>`
 
-Returns the 16-bit fingerprint of this binding: each member's shape folded with its membership position and its lane.
+Returns the 32-bit fingerprint of this binding. Each member's shape is folded with its membership position and its lane.
 
 The shape half is what the schema fixed, so a peer that declared a different key, type, stride, or quantizer disagrees here. The binding half is membership, order, and lane, so a peer that bound a different subset, in a different order, or moved a column between lanes disagrees too. The two lanes ride separate channels, which is why a lane change is a wire change rather than a local one.
 

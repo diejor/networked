@@ -36,9 +36,9 @@ struct DatagramHead {
 
 struct NetwCarrierFrame {
     enum Magic {
-        MAGIC_RELIABLE = 0x57,
-        MAGIC_UNRELIABLE = 0x77,
-        MAGIC_UNRELIABLE_ACKED = 0x97,
+        MAGIC_RELIABLE = 0x58,
+        MAGIC_UNRELIABLE = 0x78,
+        MAGIC_UNRELIABLE_ACKED = 0x98,
     };
 
     enum Kind {

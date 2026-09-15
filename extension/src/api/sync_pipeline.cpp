@@ -13,6 +13,7 @@
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 #include "netw/property_set_builder.hpp"
+#include "netw/repl/snapshot_frame.hpp"
 #include "netw/script/model.hpp"
 #include "netw/subsystems.hpp"
 #include "netw/sync_authoring.hpp"
@@ -66,12 +67,14 @@ void SyncPipeline::set_channels(
     int64_t p_row,
     int64_t p_row_window,
     int64_t p_row_delta,
+    int64_t p_row_control,
     int64_t p_property,
     int64_t p_signal
 ) {
     channel_row = p_row;
     channel_row_window = p_row_window;
     channel_row_delta = p_row_delta;
+    channel_row_control = p_row_control;
     channel_property = p_property;
     channel_signal = p_signal;
 }
@@ -143,19 +146,19 @@ Error SyncPipeline::decode_stage_body() {
         return ERR_INVALID_DATA;
     }
     if (stage_lane == LANE_WINDOW) {
-        stage_decoded = stage_binding->apply_window_frame(
+        stage_decoded = stage_binding->stage_window_frame(
             row_send(),
             stage_payload,
             stage_arrival
         );
     } else if (stage_lane == LANE_RETAINED) {
-        stage_decoded = stage_binding->apply_retained_row(
+        stage_decoded = stage_binding->stage_retained_row(
             row_send(),
             stage_payload,
             stage_arrival
         );
     } else {
-        stage_decoded = stage_binding->apply_row_frame(
+        stage_decoded = stage_binding->stage_row_frame(
             row_send(),
             stage_payload,
             stage_arrival
@@ -672,6 +675,7 @@ void SyncPipeline::pump(int64_t p_tick) {
         callable_mp(plane, &NetwMultiplayer::sync_pipeline_bind_declaration),
         tap_seam
     ));
+    flush_row_control();
 }
 
 void SyncPipeline::flush_row_offers(
@@ -692,10 +696,50 @@ void SyncPipeline::flush_row_offers(
     );
 }
 
-void SyncPipeline::commit_pending_masked(int64_t p_peer_id, int64_t p_seq) {
-    if (row_sender_armed) {
-        row_sender.commit(p_peer_id, p_seq);
+void SyncPipeline::flush_row_control() {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || !row_sender_armed) {
+        return;
     }
+    plane->row_control_flush(row_send(), channel_row_control);
+}
+
+void SyncPipeline::open_carrier_batch(
+    int64_t p_peer_id,
+    const LocalVector<CarrierRow> *p_rows,
+    int64_t p_frames,
+    int64_t p_bits
+) {
+    carrier_peer = p_peer_id;
+    carrier_rows = p_rows;
+    carrier_frames = p_frames;
+    carrier_bits = p_bits;
+}
+
+void SyncPipeline::commit_pending_masked(int64_t p_peer_id, int64_t p_seq) {
+    const LocalVector<CarrierRow> *rows = carrier_rows;
+    if (rows == nullptr || carrier_peer != p_peer_id) {
+        return;
+    }
+    carrier_rows = nullptr;
+    if (row_sender_armed) {
+        row_sender.commit(
+            p_peer_id,
+            p_seq,
+            *rows,
+            carrier_frames,
+            carrier_bits
+        );
+    }
+}
+
+void SyncPipeline::close_carrier_batch() {
+    const LocalVector<CarrierRow> *rows = carrier_rows;
+    carrier_rows = nullptr;
+    if (rows == nullptr || !row_sender_armed) {
+        return;
+    }
+    row_sender.cancel(carrier_peer, *rows, datagram_tick);
 }
 
 void SyncPipeline::note_peer_ack(
@@ -1007,6 +1051,22 @@ bool SyncPipeline::accept_unreliable(
     return progress.accept_in_datagram(p_sender, p_route, p_channel, p_seq);
 }
 
+void SyncPipeline::reset_stream_of(int p_peer, uint64_t p_token) {
+    wire::StreamReaderBook &book = row_send()->reader_book();
+    wire::StreamLane named;
+    if (!book.names(p_peer, p_token, named)) {
+        return;
+    }
+    wire::ControlRecord answer;
+    answer.tag = wire::ControlTag::RESET;
+    answer.token = p_token;
+    if (!book.invalidate(p_peer, named, answer.request, answer.token)) {
+        return;
+    }
+    row_send()->control_scheduler().drop_token(p_peer, p_token);
+    row_send()->control_scheduler().queue(p_peer, answer);
+}
+
 void SyncPipeline::open_datagram(int64_t p_base_tick, int64_t p_seq) {
     datagram_tick = p_base_tick;
     datagram_seq = p_seq;
@@ -1077,11 +1137,69 @@ void SyncPipeline::apply_row(
         );
         return;
     }
+    wire::StreamReaderBook &book = row_send()->reader_book();
+    repl::SnapshotHeader named;
+    const bool windowed = p_lane == LANE_WINDOW;
+    const bool readable = windowed
+        ? repl::name_snapshot_window(p_payload, named)
+        : repl::name_snapshot_row(p_payload, named);
+    if (!readable) {
+        plane->attribution_note_refusal(
+            p_sender,
+            p_channel,
+            wire::Refusal::MALFORMED
+        );
+        return;
+    }
+    wire::StreamLane addressed;
+    const bool names_this_lane = book.names(int(p_sender), named.token, addressed)
+        && addressed.route == route && addressed.ordinal == uint8_t(p_ordinal);
+    wire::SnapshotReceiver *reader
+        = names_this_lane ? book.receiver(int(p_sender), named.token) : nullptr;
+    if (reader == nullptr) {
+        plane->attribution_note_refusal(
+            p_sender,
+            p_channel,
+            wire::Refusal::UNBOUND
+        );
+        return;
+    }
+    const wire::RowAdmission admission = reader->admits(named.revision);
+    if (admission != wire::RowAdmission::ACCEPTABLE) {
+        rows_refused_stale += 1;
+        if (admission == wire::RowAdmission::DUPLICATE) {
+            row_send()->control_scheduler().accept(
+                int(p_sender),
+                named.token,
+                reader->accepted_at()
+            );
+        }
+        plane->attribution_note_refusal(
+            p_sender,
+            p_channel,
+            wire::Refusal::STALE
+        );
+        return;
+    }
+    const wire::CodeRow *baseline
+        = named.absolute() ? nullptr
+                           : reader->baseline(named.baseline_revision());
+    if (!named.absolute() && baseline == nullptr) {
+        reset_stream_of(int(p_sender), named.token);
+        plane->attribution_note_refusal(
+            p_sender,
+            p_channel,
+            wire::Refusal::BASELINE_UNKNOWN
+        );
+        return;
+    }
+    binding->name_baseline(baseline);
+    const int64_t seq = p_lane == LANE_ROW ? datagram_seq : -1;
     stage_binding = binding;
     stage_payload = p_payload;
     stage_arrival.ordinal = p_ordinal;
     stage_arrival.base_tick = datagram_tick;
-    stage_arrival.seq = p_lane == LANE_ROW ? datagram_seq : -1;
+    stage_arrival.seq = seq;
     stage_arrival.life = plane->liveness_route_wire_life(route);
     stage_lane = p_lane;
     stage_decoded = Dictionary();
@@ -1091,10 +1209,20 @@ void SyncPipeline::apply_row(
         binding->comp,
         p_payload
     );
-    const Dictionary decoded = stage_decoded;
+    const bool staged = verdict == OK && binding->has_staged();
     stage_binding = Ref<NetwPropertySetBinding>();
     stage_decoded = Dictionary();
-    if (verdict != OK || decoded.is_empty()) {
+    Dictionary committed;
+    const wire::CodeRow *accepted = staged ? binding->staged_row() : nullptr;
+    wire::CodeRow settled;
+    if (accepted != nullptr) {
+        settled.copy_from(*accepted);
+    }
+    const Error intake
+        = staged ? binding->commit_staged(row_send(), committed) : FAILED;
+    binding->discard_staged();
+    binding->name_baseline(nullptr);
+    if (intake != OK) {
         const bool baseline_moved
             = row_send()->baseline_drops() > baseline_drops_before;
         plane->attribution_note_refusal(
@@ -1105,8 +1233,14 @@ void SyncPipeline::apply_row(
         );
         return;
     }
+    reader->commit(named.revision, settled);
+    row_send()->control_scheduler().accept(
+        int(p_sender),
+        named.token,
+        named.revision
+    );
     sync_model->note_row_applied();
-    feed_derived_interpolation(binding, decoded);
+    feed_derived_interpolation(binding, committed);
 }
 
 void SyncPipeline::handle_derived_row(
@@ -1254,6 +1388,10 @@ void SyncPipeline::clear_session() {
 
 void SyncPipeline::clear_route(int64_t p_route) {
     progress.clear_route(p_route);
+    NetwMultiplayer *plane = core();
+    if (plane != nullptr) {
+        plane->carrier_close_route(p_route);
+    }
     if (row_sender_armed) {
         row_sender.close_route(p_route);
     }
@@ -1295,7 +1433,8 @@ Dictionary SyncPipeline::counters() const {
     Dictionary out;
     out[StringName("sends_dropped_unroutable")] = sends_dropped_unroutable;
     out[StringName("sends_dropped_not_live")] = sends_dropped_not_live;
-    out[StringName("sync_drops_stale")] = progress.stale_count();
+    out[StringName("sync_drops_stale")]
+        = progress.stale_count() + rows_refused_stale;
     out[StringName("row_frames_dropped_baseline")]
         = row_sender_armed ? row_sender.baseline_drops() : int64_t(0);
     out[StringName("derived_sets_active")] = int64_t(bindings.size());

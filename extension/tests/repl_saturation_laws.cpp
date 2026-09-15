@@ -1,4 +1,6 @@
 #include "support/netw_test.h"
+
+#include "support/stream_seat.h"
 #include "support/send_drive.h"
 
 #include <cstdint>
@@ -97,6 +99,7 @@ int64_t one_frame_bits() {
     SessionSend probe;
     LocalVector<RowOffer> offers;
     offers.push_back(offer(1, 1, 1.0f));
+    netw_test::seat_streams(probe, offers);
     const SessionResult out = probe.run(reg, offers, 1 << 20, 0);
     return out.sends.is_empty() ? 0 : out.sends[0].bits;
 }

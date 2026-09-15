@@ -394,6 +394,9 @@ void NetwMultiplayer::entity_enter_tree(
     }
     if (p_record->get_route() > 0 && p_session != nullptr) {
         p_session->liveness_bind_route(p_record->get_route(), p_wrapper);
+        if (p_is_authority) {
+            p_session->spawn_note_nested_candidate(p_record->get_route());
+        }
     }
 
     if (is_reparent) {

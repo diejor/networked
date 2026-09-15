@@ -19,7 +19,7 @@ Window scoped :godot:`GdUnitSceneRunner` for one :ref:`ParticipantWindow<class_P
 Description
 -----------
 
-All inherited input simulation methods route through :ref:`slot<class_NetwSceneRunner_property_slot>`. Session wide time and stepping are owned by :godot:`NetwGameHarness`.
+All inherited input simulation methods route through :ref:`slot<class_NetwSceneRunner_property_slot>`. Session wide time and stepping are owned by :ref:`NetwGameHarness<class_NetwGameHarness>`.
 
 .. rst-class:: classref-reftable-group
 

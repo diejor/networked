@@ -1,5 +1,7 @@
 #include "netw/replication_send.hpp"
 
+#include "netw/repl/snapshot_frame.hpp"
+
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -48,14 +50,15 @@ bool ReplicationSend::declare_channel(
 repl::SessionResult ReplicationSend::run(
     const LocalVector<repl::RowOffer> &p_offers,
     int64_t p_max_bits,
-    int64_t p_base_tick
+    int64_t p_base_tick,
+    int64_t p_now_ms
 ) {
     NETW_ZONE_NC("Replication send", colors::WIRE);
-    return impl.run(registry, p_offers, p_max_bits, p_base_tick);
+    return impl.run(registry, p_offers, p_max_bits, p_base_tick, p_now_ms);
 }
 
-void ReplicationSend::confirm(const repl::RowSend &p_send) {
-    impl.defer(p_send);
+bool ReplicationSend::describe(const repl::RowSend &p_send, CarrierRow &r_row) {
+    return impl.describe(p_send, r_row);
 }
 
 repl::RowExplain ReplicationSend::explain(
@@ -66,12 +69,28 @@ repl::RowExplain ReplicationSend::explain(
     return impl.explain(p_route, uint8_t(p_comp), int(p_peer));
 }
 
-bool ReplicationSend::commit(int64_t p_peer, int64_t p_seq) {
-    return impl.commit(int(p_peer), uint16_t(p_seq));
+bool ReplicationSend::commit(
+    int64_t p_peer,
+    int64_t p_seq,
+    const godot::LocalVector<CarrierRow> &p_rows,
+    int64_t p_frames,
+    int64_t p_bits
+) {
+    return impl.commit(
+        int(p_peer),
+        uint16_t(p_seq),
+        p_rows,
+        p_frames,
+        p_bits
+    );
 }
 
-int64_t ReplicationSend::pending_count(int64_t p_peer) const {
-    return int64_t(impl.pending_count(int(p_peer)));
+void ReplicationSend::cancel(
+    int64_t p_peer,
+    const godot::LocalVector<CarrierRow> &p_rows,
+    int64_t p_tick
+) {
+    impl.cancel(int(p_peer), p_rows, p_tick);
 }
 
 void ReplicationSend::set_encode_stage(const Callable &p_stage) {
@@ -120,17 +139,14 @@ void ReplicationSend::close_route(int64_t p_route) {
     impl.close_route(p_route);
 }
 
-Dictionary ReplicationSend::apply(
+Dictionary ReplicationSend::stage_snapshot(
     const SchemaRecord &p_schema,
-    const PackedByteArray &p_held,
     const PackedByteArray &p_frame,
     int64_t p_base_tick,
-    int64_t p_expected_life,
-    repl::BaselineRing *p_ring,
-    int64_t p_seq,
-    repl::BaselineNaming p_naming
+    const wire::CodeRow *p_baseline,
+    wire::CodeRow *r_staged
 ) {
-    NETW_ZONE_NC("Replication apply bridge", colors::WIRE);
+    NETW_ZONE_NC("Replication snapshot stage bridge", colors::WIRE);
     Dictionary out;
     out["ok"] = false;
     out["values"] = Array();
@@ -139,50 +155,85 @@ Dictionary ReplicationSend::apply(
     if (!plan.valid()) {
         return out;
     }
-    wire::CodeRow held = wire::CodeRow::for_plan(plan);
-    if (!p_held.is_empty()) {
-        held = wire::CodeRow::from_bytes(plan, p_held);
-        if (!held.valid_for(plan)) {
-            return out;
-        }
-    }
-
-    repl::RowBaselineSource source;
-    source.ring = p_ring;
-    source.seq = p_seq;
-    source.naming = p_naming;
-    repl::RowRefusal refusal = repl::RowRefusal::NONE;
-    repl::RowFrameHeader header;
-    if (!repl::read_row_frame(
+    wire::CodeRow row;
+    repl::SnapshotHeader header;
+    repl::SnapshotRefusal refusal = repl::SnapshotRefusal::NONE;
+    if (!repl::read_snapshot_row(
             p_frame,
             p_base_tick,
-            p_expected_life,
             plan,
             header,
-            held,
-            source,
+            row,
+            p_baseline,
             &refusal
         )) {
-        if (refusal == repl::RowRefusal::BASELINE_UNKNOWN) {
+        if (refusal == repl::SnapshotRefusal::BASELINE_UNKNOWN) {
             drops_baseline_unknown += 1;
         }
         return out;
     }
-    if (p_ring != nullptr && p_seq >= 0) {
-        p_ring->record(uint16_t(p_seq), held);
-    }
     Array values;
-    if (!wire::decode_scalar_row(p_schema, held, values)) {
+    if (!wire::decode_scalar_row(p_schema, row, values)) {
         return out;
+    }
+    if (r_staged != nullptr) {
+        *r_staged = row;
     }
     out["ok"] = true;
     out["values"] = values;
-    out["held"] = held.to_bytes();
+    out["held"] = row.to_bytes();
     out["mask"] = int64_t(header.mask);
-    out["life"] = header.life;
+    out["token"] = int64_t(header.token);
+    out["revision"] = int64_t(header.revision);
     out["tick"] = header.tick;
     out["ack"] = header.reconcile_ack;
-    out["whole"] = header.mask == plan.full_mask();
+    out["whole"] = header.absolute();
+    return out;
+}
+
+Dictionary ReplicationSend::apply_snapshot_window(
+    const SchemaRecord &p_schema,
+    const PackedByteArray &p_frame,
+    int64_t p_base_tick
+) {
+    NETW_ZONE_NC("Replication snapshot window bridge", colors::WIRE);
+    Dictionary out;
+    out["ok"] = false;
+    out["samples"] = Array();
+
+    const wire::WirePlan plan = wire::WirePlan::compile(p_schema);
+    if (!plan.valid()) {
+        return out;
+    }
+    repl::SnapshotHeader header;
+    LocalVector<repl::WindowSample> samples;
+    if (!repl::read_snapshot_window(
+            p_frame,
+            p_base_tick,
+            plan,
+            header,
+            samples
+        )) {
+        return out;
+    }
+    Array rows;
+    for (uint32_t at = 0; at < samples.size(); ++at) {
+        Array values;
+        if (!wire::decode_scalar_row(p_schema, samples[at].row, values)) {
+            return out;
+        }
+        Dictionary entry;
+        entry["tick"] = samples[at].tick;
+        entry["values"] = values;
+        rows.push_back(entry);
+    }
+
+    out["ok"] = true;
+    out["samples"] = rows;
+    out["token"] = int64_t(header.token);
+    out["revision"] = int64_t(header.revision);
+    out["tick"] = header.tick;
+    out["ack"] = header.reconcile_ack;
     return out;
 }
 

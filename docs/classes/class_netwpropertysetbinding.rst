@@ -23,7 +23,7 @@ The shell captures :ref:`route<class_NetwPropertySetBinding_property_route>`, :r
 
 A set's :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` fields ride the SYNC_ROW channel freshest-wins, and its :ref:`NetwPropertySet.RETAINED<class_NetwPropertySet_constant_RETAINED>` fields ride the reliable SYNC_ROW_DELTA lane only when they change, so the two lanes of one set never re-send each other.
 
-Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per lane and returns the columns that moved, which is why a binding carries no per-peer book of its own.
+Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per stream, a stream being one route, one component ordinal and one lane, and returns the columns that moved, which is why a binding carries no per-peer book of its own.
 
 .. rst-class:: classref-reftable-group
 
@@ -114,7 +114,7 @@ Registered component address under the entity root.
 - |void| **set_on_applied**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_on_applied**\ (\ )
 
-Called after a frame applies, with the decoded header ``{ordinal, tick, ack, payload, samples?}``. A prediction engine subscribes here so a state receive drives reconciliation and an input receive opens the consume cursor, the way the synchronizer callbacks did. Unset for a plain display set, which just snaps the node.
+Called once per committed row, with the decoded header ``{ordinal, tick, ack, payload, samples?}``. It observes a row the receiver has already committed and cannot refuse one, so raising an error here does not undo it. A refused row never reaches this call. A prediction engine subscribes here so a state receive drives reconciliation and an input receive opens the consume cursor. Unset for a plain display set, which just snaps the node.
 
 .. rst-class:: classref-item-separator
 

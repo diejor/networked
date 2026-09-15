@@ -1,5 +1,7 @@
 #include "support/netw_test.h"
 
+#include "support/stream_seat.h"
+
 #include <cstdint>
 
 #include "netw/api/netw_multiplayer.hpp"
@@ -73,6 +75,7 @@ TEST_CASE(
     LocalVector<netw::repl::RowOffer> offers;
     offers.push_back(an_offer(set, 1, SYNC_ROW, false));
 
+    netw_test::seat_streams(send, offers);
     core->sync_flush_offers(
         &send,
         offers,
@@ -104,6 +107,7 @@ TEST_CASE(
     LocalVector<netw::repl::RowOffer> offers;
     offers.push_back(an_offer(set, 1, SYNC_ROW_WINDOW, true));
 
+    netw_test::seat_streams(send, offers);
     core->sync_flush_offers(
         &send,
         offers,
@@ -129,6 +133,7 @@ TEST_CASE(
 
     LocalVector<netw::repl::RowOffer> offers;
     offers.push_back(an_offer(set, 1, SYNC_ROW, false));
+    netw_test::seat_streams(send, offers);
     core->sync_flush_offers(
         &send,
         offers,
@@ -172,6 +177,9 @@ TEST_CASE(
     for (int at = 0; at < 3; at++) {
         LocalVector<netw::repl::RowOffer> offers;
         offers.push_back(an_offer(set, 1, SYNC_ROW, false));
+        offers[0].values.clear();
+        offers[0].values.push_back(7 + at);
+        netw_test::seat_streams(send, offers);
         core->sync_flush_offers(
             &send,
             offers,

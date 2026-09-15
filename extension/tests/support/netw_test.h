@@ -49,6 +49,21 @@
         CHECK(netw_ok); \
     } while (0)
 
+#define NETW_REQUIRE_EQ(m_a, m_b) \
+    do { \
+        const long long netw_lhs = (long long)(m_a); \
+        const long long netw_rhs = (long long)(m_b); \
+        const bool netw_ok = netw_lhs == netw_rhs; \
+        NETW_FORMAT_INT(netw_lhs_text, netw_lhs); \
+        NETW_FORMAT_INT(netw_rhs_text, netw_rhs); \
+        CAPTURE(netw_lhs_text); \
+        CAPTURE(netw_rhs_text); \
+        CHECK(netw_ok); \
+        if (!netw_ok) { \
+            return; \
+        } \
+    } while (0)
+
 #define NETW_CHECK_ORDER(m_a, m_b, m_op) \
     do { \
         const double netw_lhs = (double)(m_a); \

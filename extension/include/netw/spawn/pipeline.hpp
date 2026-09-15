@@ -98,6 +98,7 @@ private:
     int64_t moves_unadmitted = 0;
     int64_t spawn_parked_cancelled = 0;
     int64_t spawn_park_expired = 0;
+    int64_t spawn_nested_published = 0;
 
 #ifdef NETW_TESTS
     godot::TypedArray<godot::Dictionary> armed_spawn_state;
@@ -147,6 +148,15 @@ private:
     void on_armed_tree_entered(int64_t p_route);
     void schedule_armed_flush(int64_t p_route);
     void flush_armed_spawn(int64_t p_route);
+    static bool roots_published_entity(godot::Node *p_node);
+    static void gather_nested_boundaries(
+        godot::Node *p_root,
+        godot::LocalVector<godot::Node *> &r_out
+    );
+    bool is_booked(int64_t p_route) const;
+    void publish_nested(godot::Node *p_node);
+    void reconcile_nested(int64_t p_owner_route);
+    void reconcile_nested_child(int64_t p_route);
     void settle_move(int64_t p_route);
     void settle_death(int64_t p_route);
     void settle_absence(int64_t p_route);
@@ -309,6 +319,7 @@ public:
     );
 
     void schedule_visibility_sweep();
+    void note_nested_candidate(int64_t p_route);
     bool owns_spawned_route(int64_t p_route) const;
     godot::TypedArray<godot::Dictionary> collect_spawn_state(
         godot::Node *p_root

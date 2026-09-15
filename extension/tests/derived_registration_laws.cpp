@@ -30,7 +30,7 @@ struct Stand {
         core.instantiate();
         pipeline = core->get_replication_plane()->get_sync_pipeline();
         pipeline->set_sync_model(&model);
-        pipeline->set_channels(20, 21, 22, 17, 18);
+        pipeline->set_channels(20, 21, 22, 43, 17, 18);
     }
 
     ~Stand() {

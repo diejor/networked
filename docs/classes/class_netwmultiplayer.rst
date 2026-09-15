@@ -29,43 +29,43 @@ Use :ref:`Netw.of()<class_Netw_method_of>` to get the session for a node. Most g
 
 \ Method prefixes identify their subsystem and related API class:
 
-- ``scene_*``: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\
+- ``scene_*``: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ 
 
-- ``interest_*``: :ref:`NetwInterestHandle<class_NetwInterestHandle>`\
+- ``interest_*``: :ref:`NetwInterestHandle<class_NetwInterestHandle>`\ 
 
-- ``session_*``: :ref:`NetwSessionHandle<class_NetwSessionHandle>`\
+- ``session_*``: :ref:`NetwSessionHandle<class_NetwSessionHandle>`\ 
 
-- ``clock_*``: :ref:`NetwClockHandle<class_NetwClockHandle>`\
+- ``clock_*``: :ref:`NetwClockHandle<class_NetwClockHandle>`\ 
 
-- ``predict_*``: :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`\
+- ``predict_*``: :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`\ 
 
-- ``entity_*``, ``liveness_*``, and ``spawn_*``: :ref:`NetwEntity<class_NetwEntity>`\
+- ``entity_*``, ``liveness_*``, and ``spawn_*``: :ref:`NetwEntity<class_NetwEntity>`\ 
 
-- ``table_*``: :ref:`NetwRecordTable<class_NetwRecordTable>`\
+- ``table_*``: :ref:`NetwRecordTable<class_NetwRecordTable>`\ 
 
-- ``schema_*``: :ref:`NetwSchema<class_NetwSchema>`\
+- ``schema_*``: :ref:`NetwSchema<class_NetwSchema>`\ 
 
-- ``lagcomp_*``: :ref:`NetwAction<class_NetwAction>`\
+- ``lagcomp_*``: :ref:`NetwAction<class_NetwAction>`\ 
 
-- ``peer_*``: :ref:`NetwParticipant<class_NetwParticipant>`\
+- ``peer_*``: :ref:`NetwParticipant<class_NetwParticipant>`\ 
 
-- ``display_*``: :ref:`NetwDisplayHandle<class_NetwDisplayHandle>`\
+- ``display_*``: :ref:`NetwDisplayHandle<class_NetwDisplayHandle>`\ 
 
-- ``endpoint_*`` and ``embed_*``: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\
+- ``endpoint_*`` and ``embed_*``: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\ 
 
-- ``transport_*``: :ref:`NetwTransport<class_NetwTransport>`\
+- ``transport_*``: :ref:`NetwTransport<class_NetwTransport>`\ 
 
-- ``rpc_*`` and ``sync_*``: :ref:`NetwMemberConfig<class_NetwMemberConfig>`\
+- ``rpc_*`` and ``sync_*``: :ref:`NetwMemberConfig<class_NetwMemberConfig>`\ 
 
-- ``property_set_*``: :ref:`NetwPropertySet<class_NetwPropertySet>`\
+- ``property_set_*``: :ref:`NetwPropertySet<class_NetwPropertySet>`\ 
 
-- ``service_*``: :ref:`NetwService<class_NetwService>`\
+- ``service_*``: :ref:`NetwService<class_NetwService>`\ 
 
-- ``persist_*``: :ref:`NetwDatabase<class_NetwDatabase>`\
+- ``persist_*``: :ref:`NetwDatabase<class_NetwDatabase>`\ 
 
-- ``auth_*``: :ref:`NetwAuthFlow<class_NetwAuthFlow>`\
+- ``auth_*``: :ref:`NetwAuthFlow<class_NetwAuthFlow>`\ 
 
-- ``stats_*`` and ``attribution_*``: :ref:`NetwPredictStats<class_NetwPredictStats>`\
+- ``stats_*`` and ``attribution_*``: :ref:`NetwPredictStats<class_NetwPredictStats>`\ 
 
 Methods beginning with an underscore are virtual extension points. Override one in a :godot:`Script` and call its corresponding ``_default`` method to use the default implementation.
 
@@ -3599,7 +3599,7 @@ Counter. Outbound frames for an entity that stopped being live before the send.
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_SYNC_DROPS_STALE** = ``8``
 
-Counter. Sync frames older than what has already been applied. Expected under reordering, and the reason stamps travel.
+Counter. Sync frames a stream declined. A row frame counts here when its revision is one the stream already accepted, an equal revision counting as a duplicate and a lower one as stale. A datagram counts here when its sequence for that route and channel is one a fresher datagram already overtook. Expected under reordering, and the reason stamps travel.
 
 .. _class_NetwMultiplayer_constant_STAT_DERIVED_SETS_ACTIVE:
 
@@ -3759,7 +3759,7 @@ Counter. Sync frames from a peer the set's :ref:`NetwPropertySet.policy<class_Ne
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_DROPS_SYNC_POISONED** = ``28``
 
-Counter. Sync frames rejected because the stream's baseline is no longer trustworthy, so a delta cannot be applied against it.
+Counter. Sync frames dropped because the consumed :godot:`MultiplayerSynchronizer` they address is poisoned. A synchronizer is poisoned when its replication configuration fingerprints differently here than on the sender, or when a decoded frame carries a different column count than its configuration declares. Its replication configuration must be identical on every peer.
 
 .. _class_NetwMultiplayer_constant_STAT_DROPS_SYNC_UNKNOWN_FLAG:
 
@@ -3831,7 +3831,7 @@ Counter. Bytes taken from the carrier, framing included.
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_STATE_ACKS_OUT** = ``37``
 
-Counter. State acknowledgements sent, which is how a peer's delta baseline advances.
+Counter. State acknowledgements sent, each naming the freshest sequence received from that peer and the delivery history behind it.
 
 .. _class_NetwMultiplayer_constant_STAT_STATE_ACKS_IN:
 
@@ -4247,11 +4247,7 @@ Gauge. Departed members still stepped because the group's replay horizon has not
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_DROPS_LINGERING_ROUTE** = ``89``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+Counter. Inbound frames dropped for a route sitting at :ref:`ENTITY_STATE_LINGERING<class_NetwMultiplayer_constant_ENTITY_STATE_LINGERING>`. The share of :ref:`STAT_DROPS_NOT_LIVE<class_NetwMultiplayer_constant_STAT_DROPS_NOT_LIVE>` that arrived for an entity on its way out, which a peer that has not seen the despawn yet is expected to produce.
 
 .. _class_NetwMultiplayer_constant_STAT_DROPS_DEAD_ROUTE:
 
@@ -4259,11 +4255,7 @@ Gauge. Departed members still stepped because the group's replay horizon has not
 
 :ref:`Stat<enum_NetwMultiplayer_Stat>` **STAT_DROPS_DEAD_ROUTE** = ``90``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+Counter. Inbound frames dropped for a route sitting at :ref:`ENTITY_STATE_DEAD<class_NetwMultiplayer_constant_ENTITY_STATE_DEAD>`. The rest of :ref:`STAT_DROPS_NOT_LIVE<class_NetwMultiplayer_constant_STAT_DROPS_NOT_LIVE>`, for an entity whose route is gone.
 
 .. _class_NetwMultiplayer_constant_STAT_ATTRIBUTED_BYTES_OUT:
 
@@ -4545,7 +4537,7 @@ Installing one makes the session authenticate the game's way instead of its own.
 
 The :ref:`NetwAuthFlow<class_NetwAuthFlow>` this session checks arriving peers with, resolved in this order.
 
-- a flow installed through :ref:`auth_set_flow()<class_NetwMultiplayer_method_auth_set_flow>`\
+- a flow installed through :ref:`auth_set_flow()<class_NetwMultiplayer_method_auth_set_flow>`\ 
 
 - the flow built by the factory :ref:`Netw.configure_auth()<class_Netw_method_configure_auth>` declared
 
@@ -5119,14 +5111,16 @@ An override that wants the stock write calls the default method directly. A boun
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_sync_decode**\ (\ entity\: :godot:`RID`, comp\: :godot:`int`, flags\: :godot:`int`, tick\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__sync_decode>`
 
-Applies one admitted sync body to ``entity``'s ``comp`` address.
+Decodes one admitted sync body into a staged row for ``entity``'s ``comp`` address.
 
 Decoding runs after the sync gate validates the route and payload. It may still reject bytes that do not match the attached property set.
+
+The staged row reaches the component only when this answers :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. An override that calls the decoder and then answers an error leaves the held row and the stream's accepted revision exactly as the last committed row left them, and writes nothing to the node.
 
 .. code:: text
 
     Error
-    ┠╴OK                 the payload was applied to the component
+    ┠╴OK                 the staged row is handed to the component
     ┖╴ERR_UNCONFIGURED   no decoder is installed for this address
 
 \ ``flags`` carries the frame's sync bits and ``tick`` the authoring tick, which is what lets a late frame be recognized as stale. ``payload`` is the body :ref:`_sync_encode()<class_NetwMultiplayer_private_method__sync_encode>` produced on the sender.
@@ -5181,9 +5175,11 @@ An override that wants the stock gather calls the default method directly. A bou
 
 Records that ``peer`` acknowledged everything through ``sequence``. With no override this returns :ref:`sync_note_ack_default()<class_NetwMultiplayer_method_sync_note_ack_default>`.
 
-Delta encoding is only sound against a baseline the recipient is known to hold, and this is how that baseline advances. A peer whose acks stop moving keeps its old baseline, so its deltas grow rather than going wrong. ``sequence`` is monotonic per peer, and an out-of-order or repeated acknowledgement is ignored rather than rewinding the baseline.
+The acknowledgement settles every datagram that peer has outstanding as delivered or lost, and those counts are what :ref:`peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>` reads for its loss, its mode and its budget. ``sequence`` is monotonic per peer, and an out-of-order or repeated acknowledgement is ignored.
 
-An override that wants the baseline to keep advancing calls the default method directly. A bound native method is not a virtual super call for a script subclass.
+A row's delta baseline is the revision ``peer`` has confirmed applying, which :ref:`sync_explain()<class_NetwMultiplayer_method_sync_explain>` answers under ``confirmed``. It advances on the receipt that peer sends naming that revision, and nothing here moves it.
+
+An override that wants the stock accounting calls the default method directly. A bound native method is not a virtual super call for a script subclass.
 
 .. rst-class:: classref-item-separator
 
@@ -5197,9 +5193,9 @@ An override that wants the baseline to keep advancing calls the default method d
 
 Records that ``sequence`` was sent to ``peer``. With no override this returns :ref:`sync_note_sent_default()<class_NetwMultiplayer_method_sync_note_sent_default>`.
 
-The send side commits its pending masked state at the moment it goes out rather than when it is acknowledged, so the delta this frame produced is the delta the next one builds on. The send-side twin of :ref:`_sync_note_ack()<class_NetwMultiplayer_private_method__sync_note_ack>`.
+The datagram enters that peer's acknowledgement book under ``sequence``, carrying the frame count and the bit count it spent, which is what a later acknowledgement settles. The send-side twin of :ref:`_sync_note_ack()<class_NetwMultiplayer_private_method__sync_note_ack>`.
 
-An override that wants the stock commit calls the default method directly. A bound native method is not a virtual super call for a script subclass.
+An override that wants the stock accounting calls the default method directly, and one that does not discards the rows that datagram carried, withdrawing each staged revision from its stream. A bound native method is not a virtual super call for a script subclass.
 
 .. rst-class:: classref-item-separator
 
@@ -5235,9 +5231,11 @@ Whether the grain behind :ref:`attribution_set_armed()<class_NetwMultiplayer_met
 
 |void| **attribution_set_armed**\ (\ armed\: :godot:`bool`\ ) :ref:`🔗<class_NetwMultiplayer_method_attribution_set_armed>`
 
-Arms the per-column byte table that a row frame writes as it encodes, which is the fine grain of :ref:`attribution_snapshot()<class_NetwMultiplayer_method_attribution_snapshot>`.
+Arms the per-column bit table that :ref:`attribution_snapshot()<class_NetwMultiplayer_method_attribution_snapshot>` answers under ``columns``, which is its finest grain.
 
-The per-peer, per-channel and per-route byte tables are always recorded and are unaffected by this, because they cost one add per frame. Column grain costs one add per masked column per frame, which is why it is asked for rather than assumed. This is a runtime switch and not a build flavour, so a shipped game can arm it against a session that is already misbehaving.
+Each column a row frame carried is charged its declared width times its stride, the nominal cost of the column in the wire plan. A column on the :ref:`NetwPropertySetColumn.DELTA_LADDER<class_NetwPropertySetColumn_constant_DELTA_LADDER>` ladder writes a two-bit selector and a bucket narrower than that, so this table prices the plan and not the bits the encoder spent. Read it to find which columns dominate a payload, and read ``bytes_out`` for what the payload actually cost.
+
+The per-peer, per-channel and per-route byte tables are always recorded and are unaffected by this, because they cost one add per frame. Column grain costs one add per carried column per frame, which is why it is asked for. This is a runtime switch and not a build flavour, so a shipped game can arm it against a session that is already misbehaving.
 
 .. rst-class:: classref-item-separator
 
@@ -5263,19 +5261,41 @@ Where this session's bytes went, at tooling cadence.
     ┠╴framing_out           int         counted as sent, carrying no frame
     ┠╴frames_out            int         frames sent
     ┠╴frames_in             int         frames received
-    ┠╴staged_dropped_out    int         frames encoded and never sent
+    ┠╴staged_dropped_out    int         bytes encoded and never sent
     ┠╴frames_in_by_channel  Dictionary  peer -> channel -> frames received
     ┠╴refused_in            int         frames rejected on arrival
     ┠╴refusals              Dictionary  peer -> channel -> rejection name -> count
     ┠╴armed                 bool        whether column grain is being recorded
     ┠╴columns               Dictionary  a packed key -> schema, column, bits
-    ┖╴residual              Dictionary  datagram and wire totals, see below
+    ┖╴residual              Dictionary  the same bytes at the datagram boundary
 
-\ Every byte :ref:`stats_snapshot()<class_NetwMultiplayer_method_stats_snapshot>` reports under ``sent_bytes`` is either attributed to one peer and one channel here or reported under ``framing_out``, which is the standalone acknowledgement traffic carrying no frame at all. A frame encoded and then never sent is reported under ``staged_dropped_out`` and was never part of ``sent_bytes``.
+\ Every byte :ref:`stats_snapshot()<class_NetwMultiplayer_method_stats_snapshot>` reports under ``sent_bytes`` is either attributed to one peer and one channel here or reported under ``framing_out``, which is the standalone acknowledgement traffic carrying no frame at all. The bytes of a frame encoded and then never sent are reported under ``staged_dropped_out`` and were never part of ``sent_bytes``.
 
 Route ``0`` is session-scope traffic that names no entity. A send site that knows its subject while addressing no route reports it anyway, so a spawn frame is attributed to the entity it spawns.
 
-The inbound side counts frame payloads, so ``attributed_in`` sits below ``received_bytes`` by the envelope and datagram framing the sender spent to carry them.
+The outbound tables charge a whole packed frame, its own envelope included. The inbound tables charge only the payload inside that envelope, so ``attributed_in`` sits below ``received_bytes`` by the envelopes the sender spent to carry it.
+
+\ ``sent_bytes`` and ``received_bytes`` count what the carrier handed over, which is the frames alone. The ``residual`` dictionary counts the same traffic at the datagram boundary, where the header carrying the sequence, the acknowledgement and the base tick is part of every byte. Its two datagram members are counts of datagrams and everything else in it is bytes.
+
+.. code:: text
+
+    Dictionary
+    ┠╴datagram_bytes_out    int  what sent_bytes holds
+    ┠╴attributed_out        int  the sum of bytes_out
+    ┠╴framing_out           int  sent bytes carrying no frame
+    ┠╴staged_dropped_out    int  bytes encoded and never sent
+    ┠╴residual_out          int  sent bytes neither table claims
+    ┠╴datagram_bytes_in     int  what received_bytes holds
+    ┠╴attributed_in         int  the sum of bytes_in
+    ┠╴residual_in           int  the envelopes around those payloads
+    ┠╴wire_bytes_out        int  whole datagrams given the transport
+    ┠╴wire_bytes_in         int  whole datagrams taken from it
+    ┠╴datagrams_out         int  how many of those went out
+    ┠╴datagrams_in          int  how many came in
+    ┠╴carrier_overhead_out  int  datagram headers written
+    ┖╴carrier_overhead_in   int  those headers plus the envelopes
+
+\ ``residual_out`` is zero on a session whose every staged frame reached the transport. It rises with the bytes of a run that was dropped between encoding and sending.
 
 .. rst-class:: classref-item-separator
 
@@ -7465,9 +7485,11 @@ The scene identity ``peer``'s participant is seated in, or an invalid :godot:`RI
 
 :godot:`int` **peer_ack**\ (\ peer\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_peer_ack>`
 
-The freshest sequence ``peer`` has confirmed holding, or ``-1`` when it has confirmed nothing. Negative rather than zero, because zero is a sequence a peer can genuinely have acked.
+The freshest datagram sequence ``peer`` has acknowledged receiving, or ``-1`` when it has acknowledged nothing. Negative rather than zero, because zero is a sequence a peer can genuinely have acked.
 
-A per-peer delta is sent against what that peer has confirmed, which is what this records. A peer that has confirmed nothing is sent a full state rather than a delta against a baseline it never held.
+It moves only forward. An acknowledgement naming an older sequence is ignored, so a link that reorders its acknowledgements never rewinds this.
+
+A row's delta baseline is a revision and is read through :ref:`sync_explain()<class_NetwMultiplayer_method_sync_explain>`, which counts per stream and not per datagram.
 
 .. rst-class:: classref-item-separator
 
@@ -7606,14 +7628,16 @@ What the link to ``peer`` is actually doing, measured rather than configured.
 
     Dictionary
     ┠╴loss          float   lost share of the last 32 acked datagrams
-    ┠╴rtt           float   seconds, the clock's averaged round trip
-    ┠╴jitter        float   seconds, the clock's own deviation
+    ┠╴rtt           float   seconds, the session clock's averaged round trip
+    ┠╴jitter        float   seconds, the session clock's own deviation
     ┠╴reorders      int     datagrams that arrived behind a fresher one
     ┠╴duplicates    int     datagrams that arrived twice
     ┠╴mode          String  "good" or "bad", the send governor's own reading
     ┖╴budget_bits   int     what one datagram to this peer may spend
 
-\ ``mode`` turns ``bad`` when loss or round trip crosses the governor's thresholds, and ``budget_bits`` halves with it, so a link that is failing degrades instead of collapsing. It returns to ``good`` only after a clean interval, and that interval doubles each time the link relapses, so a flapping link is not chased.
+\ ``loss``, ``mode`` and ``budget_bits`` are measured for ``peer`` alone. ``rtt`` and ``jitter`` come from the session clock, which counts one round trip for the session, so every peer of one session reads the same two numbers.
+
+\ ``mode`` turns ``bad`` when loss or round trip crosses the governor's thresholds, and ``budget_bits`` halves with it down to a floor, so a link that is failing degrades instead of collapsing. It returns to ``good`` only after a clean interval, and that interval doubles each time the link relapses, so a flapping link is not chased.
 
 This is a tooling-cadence read. Read it beside :ref:`sync_explain()<class_NetwMultiplayer_method_sync_explain>`, which returns what one row did rather than what the link did.
 
@@ -9671,13 +9695,13 @@ This is for a debug overlay rather than for a tick. It walks no history and reco
 .. code:: text
 
     Dictionary
-    ┠╴verdict       String  "sent", "deferred", "caught_up", "ungathered", "rejected" or "unoffered"
+    ┠╴verdict       String  "sent", "deferred", "caught_up", "ungathered", "refused" or "unoffered"
     ┠╴tick          int     the datagram base tick the verdict was taken at
-    ┠╴sticky        int     the columns owed to this peer and not yet confirmed
-    ┠╴in_flight     int     staged rows this peer has neither acked nor lost
+    ┠╴confirmed     int     the newest revision this peer reported applying
+    ┠╴exposed       int     the newest revision the sender has put on the wire
     ┖╴has_baseline  bool    whether a delta may be sent at all
 
-\ ``deferred`` means the tick ran out of budget for the row, which keeps the priority it has built up so a later pass outranks whatever kept beating it. ``caught_up`` means the peer already holds every column. ``rejected`` means the frame could not be written or the encode turned it down. ``ungathered`` means the values never became a row at all.
+\ ``deferred`` means the tick ran out of budget for the row, which keeps the priority it has built up so a later pass outranks whatever kept beating it. ``caught_up`` means the peer already holds every column. ``refused`` means the frame could not be written or the encode turned it down. ``ungathered`` means the values never became a row at all.
 
 Read this beside :ref:`peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>`, which returns what the link did rather than what one row did.
 
@@ -9703,9 +9727,9 @@ The stock body of :ref:`_sync_gather_set()<class_NetwMultiplayer_private_method_
 
 |void| **sync_note_ack_default**\ (\ peer\: :godot:`int`, sequence\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_sync_note_ack_default>`
 
-Advances the sync pipeline's baseline for ``peer`` to ``sequence``, and what an override of :ref:`_sync_note_ack()<class_NetwMultiplayer_private_method__sync_note_ack>` adds to rather than replaces.
+Settles ``peer``'s outstanding datagrams through ``sequence`` as delivered or lost, and what an override of :ref:`_sync_note_ack()<class_NetwMultiplayer_private_method__sync_note_ack>` adds to rather than replaces.
 
-The receiving twin of :ref:`sync_note_sent_default()<class_NetwMultiplayer_method_sync_note_sent_default>`. A peer whose acknowledgements stop moving keeps its old baseline, so its deltas grow rather than going wrong. A session that replicates nothing records nothing.
+The delivered and lost counts feed the send governor, which is what :ref:`peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>` answers under ``loss``, ``mode`` and ``budget_bits``. A session that replicates nothing records nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -9717,9 +9741,9 @@ The receiving twin of :ref:`sync_note_sent_default()<class_NetwMultiplayer_metho
 
 |void| **sync_note_sent_default**\ (\ peer\: :godot:`int`, sequence\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_sync_note_sent_default>`
 
-Commits the pending masked delta state for ``peer`` as of ``sequence``, and what an override of :ref:`_sync_note_sent()<class_NetwMultiplayer_private_method__sync_note_sent>` adds to rather than replaces.
+Enters the datagram ``sequence`` in ``peer``'s acknowledgement book with the frame count and the bit count it spent, and an override of :ref:`_sync_note_sent()<class_NetwMultiplayer_private_method__sync_note_sent>` replaces it rather than adding to it.
 
-A delta is only sound against a baseline the recipient is known to hold, and this is how that baseline moves forward. It moves when a frame goes out rather than when it is acknowledged, so the delta this frame produced is the one the next frame builds on. A session that replicates nothing commits nothing.
+A datagram that is never entered is one a later acknowledgement cannot settle, so its rows are discarded and each staged revision is withdrawn from its stream. A send that fails discards its rows with its bytes the same way, and the lane owes them again. A session that replicates nothing records nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -10086,7 +10110,7 @@ One peer class has one transport per session. Registering the same ``type`` retu
 
 A registration does hide a stock transport of the same peer class, checked in this order, closest first.
 
-- **a transport registered on this session**\
+- **a transport registered on this session**\ 
 
 - the stock transport for that peer class
 

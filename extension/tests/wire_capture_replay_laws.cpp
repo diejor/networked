@@ -4,7 +4,7 @@
 
 #include "netw/api/schema_core.hpp"
 #include "netw/carrier_frame.hpp"
-#include "netw/repl/row_frame.hpp"
+#include "netw/repl/snapshot_frame.hpp"
 #include "netw/wire/capture.hpp"
 #include "netw/wire/frame.hpp"
 
@@ -13,8 +13,8 @@ namespace TestWireCaptureReplay {
 using namespace godot;
 using netw::NetwCarrierFrame;
 using netw::SchemaCore;
-using netw::repl::RowFrameHeader;
-using netw::repl::RowRefusal;
+using netw::repl::SnapshotHeader;
+using netw::repl::SnapshotRefusal;
 using netw::table::SchemaRecord;
 using netw::wire::CaptureDirection;
 using netw::wire::CaptureRecord;
@@ -41,11 +41,20 @@ PackedByteArray row_payload(const WirePlan &p_plan, uint64_t p_seed) {
     row.write(p_plan.column(0), 0, p_seed);
     row.write(p_plan.column(1), 0, p_seed + 11);
     row.write(p_plan.column(2), 0, p_seed + 22);
-    RowFrameHeader head;
-    head.life = 0;
+    SnapshotHeader head;
+    head.token = 77;
+    head.revision = 1;
+    head.distance = 0;
     head.reconcile_ack = -1;
+    head.tick = -1;
     head.mask = p_plan.full_mask();
-    return netw::repl::write_row_frame(head, BASE_TICK, p_plan, row);
+    return netw::repl::write_snapshot_row(
+        head,
+        BASE_TICK,
+        p_plan,
+        row,
+        nullptr
+    );
 }
 
 PackedByteArray corpus_capture(const WirePlan &p_plan) {
@@ -133,17 +142,16 @@ void replay_datagram(
         if (frame.channel != ROW_CHANNEL) {
             continue;
         }
-        RowFrameHeader read_head;
+        SnapshotHeader read_head;
         CodeRow held = CodeRow::for_plan(p_plan);
-        RowRefusal refusal = RowRefusal::NONE;
-        const bool admitted = netw::repl::read_row_frame(
+        SnapshotRefusal refusal = SnapshotRefusal::NONE;
+        const bool admitted = netw::repl::read_snapshot_row(
             frame.payload,
             BASE_TICK,
-            -1,
             p_plan,
             read_head,
             held,
-            netw::repl::RowBaselineSource(),
+            nullptr,
             &refusal
         );
         if (admitted) {

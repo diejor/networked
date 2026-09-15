@@ -166,13 +166,13 @@ How firmly a restored value is pulled toward the authoritative one instead of be
 
 Whether the column spends a per-element selector to write a signed step from the baseline its frame names, or writes its whole code every time.
 
-\ :ref:`DELTA_AUTO<class_NetwPropertySetColumn_constant_DELTA_AUTO>` derives the result from the declaration, and the derivation is the measured one: a ladder pays 39 to 71 percent on a value a solver integrates and costs 12.5 percent on one a player authors or one that wraps, so it is taken only for a quantized column wider than eight bits on a set whose :ref:`NetwPropertySet.record<class_NetwPropertySet_property_record>` is :ref:`NetwPropertySet.RECORD_STATE<class_NetwPropertySet_constant_RECORD_STATE>`, and never for a :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`.
+\ :ref:`DELTA_AUTO<class_NetwPropertySetColumn_constant_DELTA_AUTO>` derives the result from the declaration, and the derivation is the measured one. A ladder pays 39 to 71 percent on a value a solver integrates and costs 12.5 percent on one a player authors or one that wraps, so it is taken only for a quantized column wider than eight bits on a set whose :ref:`NetwPropertySet.record<class_NetwPropertySet_property_record>` is :ref:`NetwPropertySet.RECORD_STATE<class_NetwPropertySet_constant_RECORD_STATE>`, and never for a :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`.
 
 Override it where the declaration cannot see what the value does. An integrated column on a set that is not state is one such case, and an authored one whose declaration looks integrated is the other.
 
 A column narrower than five bits is :ref:`DELTA_FULL<class_NetwPropertySetColumn_constant_DELTA_FULL>` whatever this says, because no bucket is narrower than the code it would replace.
 
-The result is part of :ref:`NetwPropertySet.wire_hash()<class_NetwPropertySet_method_wire_hash>`, so builds with different layouts reject the connection.
+The result is absent from :ref:`NetwPropertySet.wire_hash()<class_NetwPropertySet_method_wire_hash>`. Both ends derive it from the same declaration and neither writes it on the wire, so a build that overrides it here overrides it on every peer.
 
 .. rst-class:: classref-item-separator
 

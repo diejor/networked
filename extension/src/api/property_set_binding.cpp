@@ -5,8 +5,10 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/call_args.hpp"
 #include "netw/colors.hpp"
+#include "netw/log.hpp"
 #include "netw/profile.hpp"
 #include "netw/replication_send.hpp"
+#include "netw/subsystems.hpp"
 #include "netw/staged_writes.hpp"
 #include "netw/wire/registry.hpp"
 
@@ -412,64 +414,185 @@ void NetwPropertySetBinding::offer_rows(
     }
 }
 
+Dictionary NetwPropertySetBinding::header_of(const Candidate &p_candidate
+) const {
+    StagedWrites staged;
+    staged.ordinal = p_candidate.ordinal;
+    staged.tick = int64_t(p_candidate.decoded.get("tick", -1));
+    staged.ack = int64_t(p_candidate.decoded.get("ack", -1));
+    staged.whole = bool(p_candidate.decoded.get("whole", true));
+    staged.keys = p_candidate.keys;
+    staged.values = p_candidate.values;
+    staged.samples = p_candidate.samples;
+    for (int at = 0; at < p_candidate.keys.size(); at++) {
+        staged.row[p_candidate.keys[at]] = p_candidate.values[at];
+    }
+    if (p_candidate.lane == STAGED_WINDOW && !p_candidate.samples.is_empty()) {
+        const Dictionary newest
+            = p_candidate.samples[p_candidate.samples.size() - 1];
+        staged.row = newest[StringName("payload")];
+    }
+    return staged.header();
+}
+
+bool NetwPropertySetBinding::targets_present(
+    Node *p_node,
+    const Array &p_keys,
+    StringName *r_missing
+) const {
+    if (p_node == nullptr) {
+        return false;
+    }
+    for (int at = 0; at < p_keys.size(); at++) {
+        const StringName key = p_keys[at];
+        if (!property_present(p_node, key)) {
+            if (r_missing != nullptr) {
+                *r_missing = key;
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+void NetwPropertySetBinding::reset_stream() {
+    stream_reset = true;
+}
+
+void NetwPropertySetBinding::discard_staged() {
+    candidate = Candidate();
+}
+
+void NetwPropertySetBinding::name_baseline(const wire::CodeRow *p_baseline) {
+    arriving_baseline = p_baseline;
+}
+
+const wire::CodeRow *NetwPropertySetBinding::staged_row() const {
+    return candidate.lane == STAGED_NONE ? nullptr : &candidate.row;
+}
+
+bool NetwPropertySetBinding::has_staged() const {
+    return candidate.lane != STAGED_NONE;
+}
+
+bool NetwPropertySetBinding::stream_is_reset() const {
+    return stream_reset;
+}
+
+Dictionary NetwPropertySetBinding::stage_row_frame(
+    ReplicationSend *p_send,
+    const PackedByteArray &p_frame,
+    const repl::RowArrival &p_arrival
+) {
+    discard_staged();
+    Node *held = node();
+    if (held == nullptr || p_send == nullptr || set.is_null()) {
+        return Dictionary();
+    }
+    const Array fields = lane_fields(NetwPropertySet::VOLATILE);
+    if (fields.is_empty()) {
+        return Dictionary();
+    }
+    Candidate staged;
+    const Dictionary decoded = p_send->stage_snapshot(
+        set->get_volatile_schema(),
+        p_frame,
+        p_arrival.base_tick,
+        arriving_baseline,
+        &staged.row
+    );
+    if (!bool(decoded.get("ok", false))) {
+        return Dictionary();
+    }
+    const Array values = decoded["values"];
+    if (values.size() != fields.size()) {
+        return Dictionary();
+    }
+    staged.lane = STAGED_VOLATILE;
+    staged.ordinal = p_arrival.ordinal;
+    staged.seq = p_arrival.seq;
+    staged.fields = fields;
+    staged.keys = keys_of(fields);
+    staged.values = values;
+    staged.bytes = decoded["held"];
+    staged.decoded = decoded;
+    candidate = staged;
+    return header_of(candidate);
+}
+
+Error NetwPropertySetBinding::commit_staged(
+    ReplicationSend *p_send,
+    Dictionary &r_header
+) {
+    if (candidate.lane == STAGED_NONE) {
+        return ERR_INVALID_DATA;
+    }
+    const StagedLane lane = candidate.lane;
+    Node *held = node();
+    if (held == nullptr) {
+        discard_staged();
+        return ERR_INVALID_DATA;
+    }
+    const bool writes_node = lane == STAGED_RETAINED || write_gate;
+    StringName missing;
+    if (writes_node && !targets_present(held, candidate.keys, &missing)) {
+        NETW_WARN(
+            sys::WIRE,
+            "A row for route %d ordinal %d names the property '%s', which the "
+            "receiving node does not carry, so nothing is committed.",
+            int(route),
+            int(candidate.ordinal),
+            String(missing).utf8().get_data()
+        );
+        discard_staged();
+        reset_stream();
+        return ERR_UNAVAILABLE;
+    }
+    resolve_entity_columns(
+        p_send,
+        candidate.fields,
+        candidate.ordinal,
+        candidate.values
+    );
+    if (writes_node && apply_values(held, candidate.keys, candidate.values)
+            != OK) {
+        const bool targets_survived = targets_present(node(), candidate.keys);
+        discard_staged();
+        if (!targets_survived) {
+            reset_stream();
+        }
+        return ERR_CANT_RESOLVE;
+    }
+    stream_reset = false;
+    r_header = header_of(candidate);
+    discard_staged();
+    if (lane != STAGED_RETAINED && on_applied.is_valid()) {
+        on_applied.call(r_header);
+    }
+    return OK;
+}
+
 Dictionary NetwPropertySetBinding::apply_row_frame(
     ReplicationSend *p_send,
     const PackedByteArray &p_frame,
     const repl::RowArrival &p_arrival
 ) {
-    Node *held = node();
-    if (held == nullptr || p_send == nullptr || set.is_null()) {
+    if (stage_row_frame(p_send, p_frame, p_arrival).is_empty()) {
         return Dictionary();
     }
-    const Array fields = lane_fields(NetwPropertySet::VOLATILE);
-    if (fields.is_empty()) {
+    Dictionary header;
+    if (commit_staged(p_send, header) != OK) {
         return Dictionary();
-    }
-    const Dictionary applied = p_send->apply(
-        set->get_volatile_schema(),
-        held_row,
-        p_frame,
-        p_arrival.base_tick,
-        p_arrival.life,
-        &volatile_ring,
-        p_arrival.seq
-    );
-    if (!bool(applied.get("ok", false))) {
-        return Dictionary();
-    }
-    Array values = applied["values"];
-    if (values.size() != fields.size()) {
-        return Dictionary();
-    }
-    resolve_entity_columns(p_send, fields, p_arrival.ordinal, values);
-    held_row = applied["held"];
-
-    StagedWrites staged;
-    staged.ordinal = p_arrival.ordinal;
-    staged.tick = int64_t(applied.get("tick", -1));
-    staged.ack = int64_t(applied.get("ack", -1));
-    staged.whole = bool(applied.get("whole", true));
-    staged.values = values;
-    const Array keys = keys_of(fields);
-    staged.keys = keys;
-    for (int at = 0; at < fields.size(); at++) {
-        staged.row[keys[at]] = values[at];
-    }
-    if (write_gate && apply_values(held, keys, values) != OK) {
-        return Dictionary();
-    }
-    const Dictionary header = staged.header();
-    if (on_applied.is_valid()) {
-        on_applied.call(header);
     }
     return header;
 }
 
-Dictionary NetwPropertySetBinding::apply_window_frame(
+Dictionary NetwPropertySetBinding::stage_window_frame(
     ReplicationSend *p_send,
     const PackedByteArray &p_frame,
     const repl::RowArrival &p_arrival
 ) {
+    discard_staged();
     Node *held = node();
     if (held == nullptr || p_send == nullptr || set.is_null()) {
         return Dictionary();
@@ -478,16 +601,15 @@ Dictionary NetwPropertySetBinding::apply_window_frame(
     if (fields.is_empty()) {
         return Dictionary();
     }
-    const Dictionary applied = p_send->apply_window(
+    const Dictionary decoded = p_send->apply_snapshot_window(
         set->get_volatile_schema(),
         p_frame,
-        p_arrival.base_tick,
-        p_arrival.life
+        p_arrival.base_tick
     );
-    if (!bool(applied.get("ok", false))) {
+    if (!bool(decoded.get("ok", false))) {
         return Dictionary();
     }
-    const Array samples = applied["samples"];
+    const Array samples = decoded["samples"];
     if (samples.is_empty()) {
         return Dictionary();
     }
@@ -509,31 +631,40 @@ Dictionary NetwPropertySetBinding::apply_window_frame(
         rows.push_back(entry);
     }
 
-    const Dictionary newest = rows[rows.size() - 1];
-    StagedWrites staged;
+    Candidate staged;
+    staged.lane = STAGED_WINDOW;
     staged.ordinal = p_arrival.ordinal;
-    staged.tick = int64_t(applied.get("tick", -1));
-    staged.ack = int64_t(applied.get("ack", -1));
+    staged.fields = fields;
     staged.keys = keys;
     const Dictionary last = samples[samples.size() - 1];
     staged.values = last["values"];
-    staged.row = newest[StringName("payload")];
     staged.samples = rows;
-    if (write_gate && apply_values(held, keys, staged.values) != OK) {
-        return Dictionary();
-    }
-    const Dictionary header = staged.header();
-    if (on_applied.is_valid()) {
-        on_applied.call(header);
-    }
-    return header;
+    staged.decoded = decoded;
+    candidate = staged;
+    return header_of(candidate);
 }
 
-Dictionary NetwPropertySetBinding::apply_retained_row(
+Dictionary NetwPropertySetBinding::apply_window_frame(
     ReplicationSend *p_send,
     const PackedByteArray &p_frame,
     const repl::RowArrival &p_arrival
 ) {
+    if (stage_window_frame(p_send, p_frame, p_arrival).is_empty()) {
+        return Dictionary();
+    }
+    Dictionary header;
+    if (commit_staged(p_send, header) != OK) {
+        return Dictionary();
+    }
+    return header;
+}
+
+Dictionary NetwPropertySetBinding::stage_retained_row(
+    ReplicationSend *p_send,
+    const PackedByteArray &p_frame,
+    const repl::RowArrival &p_arrival
+) {
+    discard_staged();
     Node *held = node();
     if (held == nullptr || p_send == nullptr || set.is_null()) {
         return Dictionary();
@@ -542,41 +673,45 @@ Dictionary NetwPropertySetBinding::apply_retained_row(
     if (fields.is_empty()) {
         return Dictionary();
     }
-    const Dictionary applied = p_send->apply(
+    Candidate staged;
+    const Dictionary decoded = p_send->stage_snapshot(
         set->get_retained_schema(),
-        held_retained,
         p_frame,
         p_arrival.base_tick,
-        p_arrival.life,
-        nullptr,
-        -1,
-        repl::BaselineNaming::BY_ORDER
+        arriving_baseline,
+        &staged.row
     );
-    if (!bool(applied.get("ok", false))) {
+    if (!bool(decoded.get("ok", false))) {
         return Dictionary();
     }
-    Array values = applied["values"];
+    const Array values = decoded["values"];
     if (values.size() != fields.size()) {
         return Dictionary();
     }
-    resolve_entity_columns(p_send, fields, p_arrival.ordinal, values);
-    held_retained = applied["held"];
-
-    StagedWrites staged;
+    staged.lane = STAGED_RETAINED;
     staged.ordinal = p_arrival.ordinal;
-    staged.tick = int64_t(applied.get("tick", -1));
-    staged.ack = int64_t(applied.get("ack", -1));
-    staged.whole = bool(applied.get("whole", true));
+    staged.fields = fields;
+    staged.keys = keys_of(fields);
     staged.values = values;
-    const Array keys = keys_of(fields);
-    staged.keys = keys;
-    for (int at = 0; at < fields.size(); at++) {
-        staged.row[keys[at]] = values[at];
-    }
-    if (apply_values(held, keys, values) != OK) {
+    staged.bytes = decoded["held"];
+    staged.decoded = decoded;
+    candidate = staged;
+    return header_of(candidate);
+}
+
+Dictionary NetwPropertySetBinding::apply_retained_row(
+    ReplicationSend *p_send,
+    const PackedByteArray &p_frame,
+    const repl::RowArrival &p_arrival
+) {
+    if (stage_retained_row(p_send, p_frame, p_arrival).is_empty()) {
         return Dictionary();
     }
-    return staged.header();
+    Dictionary header;
+    if (commit_staged(p_send, header) != OK) {
+        return Dictionary();
+    }
+    return header;
 }
 
 Dictionary NetwPropertySetBinding::snapshot_payload() {
@@ -779,9 +914,6 @@ double NetwPropertySetBinding::teleport_at_of(
 }
 
 void NetwPropertySetBinding::clear_peer(int64_t p_peer) {
-    held_row = PackedByteArray();
-    held_retained = PackedByteArray();
-    volatile_ring.clear();
 }
 
 void NetwPropertySetBinding::_bind_methods() {

@@ -610,22 +610,122 @@ void Pipeline::flush_armed_spawn(int64_t p_route) {
         return;
     }
     Node *node = record->node();
-    if (!has_peer()) {
+    if (has_peer()) {
+        const PackedByteArray payload = encode_spawn_frame(p_route, node);
+        if (payload.is_empty()) {
+            return;
+        }
+        plane->spawn_fan_out(
+            &spawn_book,
+            record,
+            node,
+            payload,
+            connected_peers(),
+            channel_spawn
+        );
+        schedule_carrier_flush();
+    }
+    reconcile_nested(p_route);
+}
+
+bool Pipeline::roots_published_entity(Node *p_node) {
+    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    return entity.is_valid() && entity->get_route() > 0
+        && entity->get_owner() == p_node;
+}
+
+void Pipeline::gather_nested_boundaries(
+    Node *p_root,
+    LocalVector<Node *> &r_out
+) {
+    if (p_root == nullptr) {
         return;
     }
-    const PackedByteArray payload = encode_spawn_frame(p_route, node);
-    if (payload.is_empty()) {
+    for (int at = 0; at < p_root->get_child_count(); ++at) {
+        Node *child = p_root->get_child(at);
+        if (roots_published_entity(child)) {
+            r_out.push_back(child);
+        } else {
+            gather_nested_boundaries(child, r_out);
+        }
+    }
+}
+
+bool Pipeline::is_booked(int64_t p_route) const {
+    return spawn_book.has_spawned(p_route) || spawn_book.has_armed(p_route)
+        || spawn_book.is_recv(p_route);
+}
+
+void Pipeline::publish_nested(Node *p_node) {
+    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    if (entity.is_null() || p_node == nullptr || !p_node->is_inside_tree()) {
         return;
     }
-    plane->spawn_fan_out(
-        &spawn_book,
-        record,
-        node,
-        payload,
-        connected_peers(),
-        channel_spawn
+    const int64_t route = entity->get_route();
+    if (route <= 0 || is_booked(route)) {
+        return;
+    }
+    Record record;
+    record.set_recipe(Book::RECIPE_ADOPT);
+    if (arm_authoritative_spawn(&record, p_node, Ref<NetwParticipant>())
+            .is_null()) {
+        return;
+    }
+    if (NetwMultiplayer *plane = core()) {
+        plane->liveness_bind_route(record.get_route(), entity.ptr());
+    }
+    spawn_nested_published += 1;
+    flush_armed_spawn(record.get_route());
+}
+
+void Pipeline::reconcile_nested(int64_t p_owner_route) {
+    if (!is_server_authority()) {
+        return;
+    }
+    const Record *owner = spawn_book.spawned_of(p_owner_route);
+    Node *root = owner != nullptr ? owner->node() : nullptr;
+    if (root == nullptr || !root->is_inside_tree()) {
+        return;
+    }
+    LocalVector<Node *> boundaries;
+    gather_nested_boundaries(root, boundaries);
+    for (uint32_t at = 0; at < boundaries.size(); ++at) {
+        publish_nested(boundaries[at]);
+    }
+}
+
+void Pipeline::reconcile_nested_child(int64_t p_route) {
+    if (!is_server_authority()) {
+        return;
+    }
+    NetwMultiplayer *plane = core();
+    Node *node = plane != nullptr ? plane->liveness_node_of(p_route) : nullptr;
+    if (node == nullptr || is_booked(p_route)) {
+        return;
+    }
+    for (Node *above = node->get_parent(); above != nullptr;
+         above = above->get_parent()) {
+        if (!roots_published_entity(above)) {
+            continue;
+        }
+        const Ref<NetwEntity> owner = NetwEntity::of(above);
+        if (spawn_book.has_spawned(owner->get_route())) {
+            publish_nested(node);
+        }
+        return;
+    }
+}
+
+void Pipeline::note_nested_candidate(int64_t p_route) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || !is_server_authority() || is_booked(p_route)) {
+        return;
+    }
+    plane->session_defer(
+        callable_mp(plane, &NetwMultiplayer::spawn_reconcile_nested_child)
+            .bind(p_route),
+        StringName(vformat("spawn-nested?%d", p_route))
     );
-    schedule_carrier_flush();
 }
 
 bool Pipeline::owns_spawned_route(int64_t p_route) const {
@@ -893,7 +993,10 @@ TypedArray<Dictionary> Pipeline::collect_spawn_state(Node *p_root) {
         }
         const int children = node->get_child_count();
         for (int at = children - 1; at >= 0; --at) {
-            stack.push_back(node->get_child(at));
+            Node *child = node->get_child(at);
+            if (!roots_published_entity(child)) {
+                stack.push_back(child);
+            }
         }
     }
     return out;
@@ -1657,6 +1760,8 @@ void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
         spawn_book.enroll_recv(route, node);
         plane->liveness_bind_route(route, entity.ptr());
         plane->liveness_adopt_epoch(route, frame.epoch);
+        plane->sync_pipeline_recapture_entity(entity);
+        plane->predict_reconcile_declaration(entity);
         return;
     }
 
@@ -2158,6 +2263,7 @@ Dictionary Pipeline::counters() const {
     out[StringName("moves_unadmitted")] = moves_unadmitted;
     out[StringName("spawn_parked_cancelled")] = spawn_parked_cancelled;
     out[StringName("spawn_park_expired")] = spawn_park_expired;
+    out[StringName("spawn_nested_published")] = spawn_nested_published;
     out[StringName("spawn_book_armed")] = spawn_book.armed_count();
     out[StringName("spawn_book_spawned")] = spawn_book.spawned_count();
     out[StringName("spawn_book_recv")] = spawn_book.recv_count();
@@ -2212,6 +2318,18 @@ Error NetwMultiplayer::spawn_declare_stage(
 void NetwMultiplayer::spawn_on_armed_tree_entered(int64_t p_route) {
     if (spawn::Pipeline *pipeline = spawn_plane()) {
         pipeline->on_armed_tree_entered(p_route);
+    }
+}
+
+void NetwMultiplayer::spawn_reconcile_nested_child(int64_t p_route) {
+    if (spawn::Pipeline *pipeline = spawn_plane()) {
+        pipeline->reconcile_nested_child(p_route);
+    }
+}
+
+void NetwMultiplayer::spawn_note_nested_candidate(int64_t p_route) {
+    if (spawn::Pipeline *pipeline = spawn_plane()) {
+        pipeline->note_nested_candidate(p_route);
     }
 }
 

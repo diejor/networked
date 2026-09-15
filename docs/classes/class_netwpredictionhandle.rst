@@ -696,7 +696,7 @@ More than one reason can stand at once, and the ranking is fixed.
 
 - :ref:`NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED<class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED>` outranks a pending operator
 
-- :ref:`NetwPredict.VERDICT_REASON_TRANSPORT_PENDING<class_NetwPredict_constant_VERDICT_REASON_TRANSPORT_PENDING>` outranks :ref:`NetwPredict.VERDICT_REASON_DISSIPATE_PENDING<class_NetwPredict_constant_VERDICT_REASON_DISSIPATE_PENDING>`\
+- :ref:`NetwPredict.VERDICT_REASON_TRANSPORT_PENDING<class_NetwPredict_constant_VERDICT_REASON_TRANSPORT_PENDING>` outranks :ref:`NetwPredict.VERDICT_REASON_DISSIPATE_PENDING<class_NetwPredict_constant_VERDICT_REASON_DISSIPATE_PENDING>`\ 
 
 For :ref:`NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED<class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED>`, the caller must choose the fallback. The pending reasons indicate that the current pass is still gathering data.
 

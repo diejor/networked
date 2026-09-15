@@ -190,11 +190,12 @@
 			<param index="3" name="tick" type="int" />
 			<param index="4" name="payload" type="PackedByteArray" />
 			<description>
-				Applies one admitted sync body to [param entity]'s [param comp] address.
+				Decodes one admitted sync body into a staged row for [param entity]'s [param comp] address.
 				Decoding runs after the sync gate validates the route and payload. It may still reject bytes that do not match the attached property set.
+				The staged row reaches the component only when this answers [constant @GlobalScope.OK]. An override that calls the decoder and then answers an error leaves the held row and the stream's accepted revision exactly as the last committed row left them, and writes nothing to the node.
 				[codeblock lang=text]
 				Error
-				┠╴OK                 the payload was applied to the component
+				┠╴OK                 the staged row is handed to the component
 				┖╴ERR_UNCONFIGURED   no decoder is installed for this address
 				[/codeblock]
 				[param flags] carries the frame's sync bits and [param tick] the authoring tick, which is what lets a late frame be recognized as stale. [param payload] is the body [method _sync_encode] produced on the sender.
@@ -229,8 +230,9 @@
 			<param index="1" name="sequence" type="int" />
 			<description>
 				Records that [param peer] acknowledged everything through [param sequence]. With no override this returns [method sync_note_ack_default].
-				Delta encoding is only sound against a baseline the recipient is known to hold, and this is how that baseline advances. A peer whose acks stop moving keeps its old baseline, so its deltas grow rather than going wrong. [param sequence] is monotonic per peer, and an out-of-order or repeated acknowledgement is ignored rather than rewinding the baseline.
-				An override that wants the baseline to keep advancing calls the default method directly. A bound native method is not a virtual super call for a script subclass.
+				The acknowledgement settles every datagram that peer has outstanding as delivered or lost, and those counts are what [method peer_link_stats] reads for its loss, its mode and its budget. [param sequence] is monotonic per peer, and an out-of-order or repeated acknowledgement is ignored.
+				A row's delta baseline is the revision [param peer] has confirmed applying, which [method sync_explain] answers under [code]confirmed[/code]. It advances on the receipt that peer sends naming that revision, and nothing here moves it.
+				An override that wants the stock accounting calls the default method directly. A bound native method is not a virtual super call for a script subclass.
 			</description>
 		</method>
 		<method name="_sync_note_sent" qualifiers="virtual">
@@ -239,8 +241,8 @@
 			<param index="1" name="sequence" type="int" />
 			<description>
 				Records that [param sequence] was sent to [param peer]. With no override this returns [method sync_note_sent_default].
-				The send side commits its pending masked state at the moment it goes out rather than when it is acknowledged, so the delta this frame produced is the delta the next one builds on. The send-side twin of [method _sync_note_ack].
-				An override that wants the stock commit calls the default method directly. A bound native method is not a virtual super call for a script subclass.
+				The datagram enters that peer's acknowledgement book under [param sequence], carrying the frame count and the bit count it spent, which is what a later acknowledgement settles. The send-side twin of [method _sync_note_ack].
+				An override that wants the stock accounting calls the default method directly, and one that does not discards the rows that datagram carried, withdrawing each staged revision from its stream. A bound native method is not a virtual super call for a script subclass.
 			</description>
 		</method>
 		<method name="_table_admit_frame" qualifiers="virtual">
@@ -262,8 +264,9 @@
 			<return type="void" />
 			<param index="0" name="armed" type="bool" />
 			<description>
-				Arms the per-column byte table that a row frame writes as it encodes, which is the fine grain of [method attribution_snapshot].
-				The per-peer, per-channel and per-route byte tables are always recorded and are unaffected by this, because they cost one add per frame. Column grain costs one add per masked column per frame, which is why it is asked for rather than assumed. This is a runtime switch and not a build flavour, so a shipped game can arm it against a session that is already misbehaving.
+				Arms the per-column bit table that [method attribution_snapshot] answers under [code]columns[/code], which is its finest grain.
+				Each column a row frame carried is charged its declared width times its stride, the nominal cost of the column in the wire plan. A column on the [constant NetwPropertySetColumn.DELTA_LADDER] ladder writes a two-bit selector and a bucket narrower than that, so this table prices the plan and not the bits the encoder spent. Read it to find which columns dominate a payload, and read [code]bytes_out[/code] for what the payload actually cost.
+				The per-peer, per-channel and per-route byte tables are always recorded and are unaffected by this, because they cost one add per frame. Column grain costs one add per carried column per frame, which is why it is asked for. This is a runtime switch and not a build flavour, so a shipped game can arm it against a session that is already misbehaving.
 			</description>
 		</method>
 		<method name="attribution_snapshot" qualifiers="const">
@@ -281,17 +284,36 @@
 				┠╴framing_out           int         counted as sent, carrying no frame
 				┠╴frames_out            int         frames sent
 				┠╴frames_in             int         frames received
-				┠╴staged_dropped_out    int         frames encoded and never sent
+				┠╴staged_dropped_out    int         bytes encoded and never sent
 				┠╴frames_in_by_channel  Dictionary  peer -&gt; channel -&gt; frames received
 				┠╴refused_in            int         frames rejected on arrival
 				┠╴refusals              Dictionary  peer -&gt; channel -&gt; rejection name -&gt; count
 				┠╴armed                 bool        whether column grain is being recorded
 				┠╴columns               Dictionary  a packed key -&gt; schema, column, bits
-				┖╴residual              Dictionary  datagram and wire totals, see below
+				┖╴residual              Dictionary  the same bytes at the datagram boundary
 				[/codeblock]
-				Every byte [method stats_snapshot] reports under [code]sent_bytes[/code] is either attributed to one peer and one channel here or reported under [code]framing_out[/code], which is the standalone acknowledgement traffic carrying no frame at all. A frame encoded and then never sent is reported under [code]staged_dropped_out[/code] and was never part of [code]sent_bytes[/code].
+				Every byte [method stats_snapshot] reports under [code]sent_bytes[/code] is either attributed to one peer and one channel here or reported under [code]framing_out[/code], which is the standalone acknowledgement traffic carrying no frame at all. The bytes of a frame encoded and then never sent are reported under [code]staged_dropped_out[/code] and were never part of [code]sent_bytes[/code].
 				Route [code]0[/code] is session-scope traffic that names no entity. A send site that knows its subject while addressing no route reports it anyway, so a spawn frame is attributed to the entity it spawns.
-				The inbound side counts frame payloads, so [code]attributed_in[/code] sits below [code]received_bytes[/code] by the envelope and datagram framing the sender spent to carry them.
+				The outbound tables charge a whole packed frame, its own envelope included. The inbound tables charge only the payload inside that envelope, so [code]attributed_in[/code] sits below [code]received_bytes[/code] by the envelopes the sender spent to carry it.
+				[code]sent_bytes[/code] and [code]received_bytes[/code] count what the carrier handed over, which is the frames alone. The [code]residual[/code] dictionary counts the same traffic at the datagram boundary, where the header carrying the sequence, the acknowledgement and the base tick is part of every byte. Its two datagram members are counts of datagrams and everything else in it is bytes.
+				[codeblock lang=text]
+				Dictionary
+				┠╴datagram_bytes_out    int  what sent_bytes holds
+				┠╴attributed_out        int  the sum of bytes_out
+				┠╴framing_out           int  sent bytes carrying no frame
+				┠╴staged_dropped_out    int  bytes encoded and never sent
+				┠╴residual_out          int  sent bytes neither table claims
+				┠╴datagram_bytes_in     int  what received_bytes holds
+				┠╴attributed_in         int  the sum of bytes_in
+				┠╴residual_in           int  the envelopes around those payloads
+				┠╴wire_bytes_out        int  whole datagrams given the transport
+				┠╴wire_bytes_in         int  whole datagrams taken from it
+				┠╴datagrams_out         int  how many of those went out
+				┠╴datagrams_in          int  how many came in
+				┠╴carrier_overhead_out  int  datagram headers written
+				┖╴carrier_overhead_in   int  those headers plus the envelopes
+				[/codeblock]
+				[code]residual_out[/code] is zero on a session whose every staged frame reached the transport. It rises with the bytes of a run that was dropped between encoding and sending.
 			</description>
 		</method>
 		<method name="auth_seat_host_identity">
@@ -1667,8 +1689,9 @@
 			<return type="int" />
 			<param index="0" name="peer" type="int" />
 			<description>
-				The freshest sequence [param peer] has confirmed holding, or [code]-1[/code] when it has confirmed nothing. Negative rather than zero, because zero is a sequence a peer can genuinely have acked.
-				A per-peer delta is sent against what that peer has confirmed, which is what this records. A peer that has confirmed nothing is sent a full state rather than a delta against a baseline it never held.
+				The freshest datagram sequence [param peer] has acknowledged receiving, or [code]-1[/code] when it has acknowledged nothing. Negative rather than zero, because zero is a sequence a peer can genuinely have acked.
+				It moves only forward. An acknowledgement naming an older sequence is ignored, so a link that reorders its acknowledgements never rewinds this.
+				A row's delta baseline is a revision and is read through [method sync_explain], which counts per stream and not per datagram.
 			</description>
 		</method>
 		<method name="peer_forget">
@@ -1752,14 +1775,15 @@
 				[codeblock lang=text]
 				Dictionary
 				┠╴loss          float   lost share of the last 32 acked datagrams
-				┠╴rtt           float   seconds, the clock's averaged round trip
-				┠╴jitter        float   seconds, the clock's own deviation
+				┠╴rtt           float   seconds, the session clock's averaged round trip
+				┠╴jitter        float   seconds, the session clock's own deviation
 				┠╴reorders      int     datagrams that arrived behind a fresher one
 				┠╴duplicates    int     datagrams that arrived twice
 				┠╴mode          String  "good" or "bad", the send governor's own reading
 				┖╴budget_bits   int     what one datagram to this peer may spend
 				[/codeblock]
-				[code]mode[/code] turns [code]bad[/code] when loss or round trip crosses the governor's thresholds, and [code]budget_bits[/code] halves with it, so a link that is failing degrades instead of collapsing. It returns to [code]good[/code] only after a clean interval, and that interval doubles each time the link relapses, so a flapping link is not chased.
+				[code]loss[/code], [code]mode[/code] and [code]budget_bits[/code] are measured for [param peer] alone. [code]rtt[/code] and [code]jitter[/code] come from the session clock, which counts one round trip for the session, so every peer of one session reads the same two numbers.
+				[code]mode[/code] turns [code]bad[/code] when loss or round trip crosses the governor's thresholds, and [code]budget_bits[/code] halves with it down to a floor, so a link that is failing degrades instead of collapsing. It returns to [code]good[/code] only after a clean interval, and that interval doubles each time the link relapses, so a flapping link is not chased.
 				This is a tooling-cadence read. Read it beside [method sync_explain], which returns what one row did rather than what the link did.
 			</description>
 		</method>
@@ -3096,13 +3120,13 @@
 				This is for a debug overlay rather than for a tick. It walks no history and records nothing, but it is not cheap enough to call every frame. A route the session has never offered to [param peer] returns a [code]verdict[/code] of [code]unoffered[/code] and leaves the rest empty.
 				[codeblock lang=text]
 				Dictionary
-				┠╴verdict       String  "sent", "deferred", "caught_up", "ungathered", "rejected" or "unoffered"
+				┠╴verdict       String  "sent", "deferred", "caught_up", "ungathered", "refused" or "unoffered"
 				┠╴tick          int     the datagram base tick the verdict was taken at
-				┠╴sticky        int     the columns owed to this peer and not yet confirmed
-				┠╴in_flight     int     staged rows this peer has neither acked nor lost
+				┠╴confirmed     int     the newest revision this peer reported applying
+				┠╴exposed       int     the newest revision the sender has put on the wire
 				┖╴has_baseline  bool    whether a delta may be sent at all
 				[/codeblock]
-				[code]deferred[/code] means the tick ran out of budget for the row, which keeps the priority it has built up so a later pass outranks whatever kept beating it. [code]caught_up[/code] means the peer already holds every column. [code]rejected[/code] means the frame could not be written or the encode turned it down. [code]ungathered[/code] means the values never became a row at all.
+				[code]deferred[/code] means the tick ran out of budget for the row, which keeps the priority it has built up so a later pass outranks whatever kept beating it. [code]caught_up[/code] means the peer already holds every column. [code]refused[/code] means the frame could not be written or the encode turned it down. [code]ungathered[/code] means the values never became a row at all.
 				Read this beside [method peer_link_stats], which returns what the link did rather than what one row did.
 			</description>
 		</method>
@@ -3119,8 +3143,8 @@
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="sequence" type="int" />
 			<description>
-				Advances the sync pipeline's baseline for [param peer] to [param sequence], and what an override of [method _sync_note_ack] adds to rather than replaces.
-				The receiving twin of [method sync_note_sent_default]. A peer whose acknowledgements stop moving keeps its old baseline, so its deltas grow rather than going wrong. A session that replicates nothing records nothing.
+				Settles [param peer]'s outstanding datagrams through [param sequence] as delivered or lost, and what an override of [method _sync_note_ack] adds to rather than replaces.
+				The delivered and lost counts feed the send governor, which is what [method peer_link_stats] answers under [code]loss[/code], [code]mode[/code] and [code]budget_bits[/code]. A session that replicates nothing records nothing.
 			</description>
 		</method>
 		<method name="sync_note_sent_default">
@@ -3128,8 +3152,8 @@
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="sequence" type="int" />
 			<description>
-				Commits the pending masked delta state for [param peer] as of [param sequence], and what an override of [method _sync_note_sent] adds to rather than replaces.
-				A delta is only sound against a baseline the recipient is known to hold, and this is how that baseline moves forward. It moves when a frame goes out rather than when it is acknowledged, so the delta this frame produced is the one the next frame builds on. A session that replicates nothing commits nothing.
+				Enters the datagram [param sequence] in [param peer]'s acknowledgement book with the frame count and the bit count it spent, and an override of [method _sync_note_sent] replaces it rather than adding to it.
+				A datagram that is never entered is one a later acknowledgement cannot settle, so its rows are discarded and each staged revision is withdrawn from its stream. A send that fails discards its rows with its bytes the same way, and the lane owes them again. A session that replicates nothing records nothing.
 			</description>
 		</method>
 		<method name="table_admit_frame_default">
@@ -4531,7 +4555,7 @@
 			Counter. Outbound frames for an entity that stopped being live before the send.
 		</constant>
 		<constant name="STAT_SYNC_DROPS_STALE" value="8" enum="Stat">
-			Counter. Sync frames older than what has already been applied. Expected under reordering, and the reason stamps travel.
+			Counter. Sync frames a stream declined. A row frame counts here when its revision is one the stream already accepted, an equal revision counting as a duplicate and a lower one as stale. A datagram counts here when its sequence for that route and channel is one a fresher datagram already overtook. Expected under reordering, and the reason stamps travel.
 		</constant>
 		<constant name="STAT_DERIVED_SETS_ACTIVE" value="9" enum="Stat">
 			Gauge. Derived property sets currently registered.
@@ -4591,7 +4615,7 @@
 			Counter. Sync frames from a peer the set's [member NetwPropertySet.policy] does not admit.
 		</constant>
 		<constant name="STAT_DROPS_SYNC_POISONED" value="28" enum="Stat">
-			Counter. Sync frames rejected because the stream's baseline is no longer trustworthy, so a delta cannot be applied against it.
+			Counter. Sync frames dropped because the consumed [MultiplayerSynchronizer] they address is poisoned. A synchronizer is poisoned when its replication configuration fingerprints differently here than on the sender, or when a decoded frame carries a different column count than its configuration declares. Its replication configuration must be identical on every peer.
 		</constant>
 		<constant name="STAT_DROPS_SYNC_UNKNOWN_FLAG" value="29" enum="Stat">
 			Counter. Sync frames carrying a flag bit this build does not know.
@@ -4618,7 +4642,7 @@
 			Counter. Bytes taken from the carrier, framing included.
 		</constant>
 		<constant name="STAT_STATE_ACKS_OUT" value="37" enum="Stat">
-			Counter. State acknowledgements sent, which is how a peer's delta baseline advances.
+			Counter. State acknowledgements sent, each naming the freshest sequence received from that peer and the delivery history behind it.
 		</constant>
 		<constant name="STAT_STATE_ACKS_IN" value="38" enum="Stat">
 			Counter. State acknowledgements received.
@@ -4774,8 +4798,10 @@
 			Gauge. Departed members still stepped because the group's replay horizon has not passed their departure.
 		</constant>
 		<constant name="STAT_DROPS_LINGERING_ROUTE" value="89" enum="Stat">
+			Counter. Inbound frames dropped for a route sitting at [constant ENTITY_STATE_LINGERING]. The share of [constant STAT_DROPS_NOT_LIVE] that arrived for an entity on its way out, which a peer that has not seen the despawn yet is expected to produce.
 		</constant>
 		<constant name="STAT_DROPS_DEAD_ROUTE" value="90" enum="Stat">
+			Counter. Inbound frames dropped for a route sitting at [constant ENTITY_STATE_DEAD]. The rest of [constant STAT_DROPS_NOT_LIVE], for an entity whose route is gone.
 		</constant>
 		<constant name="STAT_ATTRIBUTED_BYTES_OUT" value="91" enum="Stat">
 			Counter. Sent bytes attributed to a peer and a channel. With [constant STAT_ATTRIBUTION_FRAMING_OUT] this totals [constant STAT_SENT_BYTES], and [method attribution_snapshot] is the same bytes broken out by peer, channel and route.

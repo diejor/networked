@@ -61,7 +61,7 @@ Pass a subclass to the WebRTC transport as the ``signaler`` settings key. The de
 
 The distinction between :ref:`report_lost()<class_NetwWebRTCSignaler_method_report_lost>` and :ref:`report_unreachable()<class_NetwWebRTCSignaler_method_report_unreachable>` is which end of the attempt failed: unreachable means no signaling route ever opened, lost means one opened and then went away. A wind-down the signaler chose itself, after :ref:`_on_session_connected()<class_NetwWebRTCSignaler_private_method__on_session_connected>` told it the native link is up, is neither and reports nothing.
 
-\ **Tracker diagnostics**\
+\ **Tracker diagnostics**\ 
 
 The default tracker signaler warns once when every tracker it was given failed, naming each url and why. One tracker failing out of a redundant list is not a fault and is silent until ``networked/webrtc/warn_on_tracker_failure`` turns per-url warnings on.
 

@@ -87,52 +87,6 @@ void LaneSet::close_route(int64_t p_route) {
     }
 }
 
-void LaneSet::retain(const LocalVector<int> &p_recipients) {
-    NETW_ZONE_NC("Lane set retain", colors::WIRE);
-    for (KeyValue<uint64_t, RowLane> &entry : lanes) {
-        entry.value.retain(p_recipients);
-    }
-    for (KeyValue<uint64_t, RetainedLane> &entry : retained) {
-        entry.value.retain(p_recipients);
-    }
-}
-
-void LaneSet::retain_row(
-    int64_t p_route,
-    uint8_t p_comp,
-    const LocalVector<int> &p_recipients
-) {
-    RowLane *lane = find(p_route, p_comp);
-    if (lane != nullptr) {
-        lane->retain(p_recipients);
-    }
-    RetainedLane *reliable = find_retained(p_route, p_comp);
-    if (reliable != nullptr) {
-        reliable->retain(p_recipients);
-    }
-}
-
-void LaneSet::forget_peer(int p_peer) {
-    NETW_ZONE_NC("Lane set forget", colors::WIRE);
-    for (KeyValue<uint64_t, RowLane> &entry : lanes) {
-        entry.value.forget(p_peer);
-    }
-    for (KeyValue<uint64_t, RetainedLane> &entry : retained) {
-        entry.value.forget(p_peer);
-    }
-}
-
-void LaneSet::acknowledge_peer(
-    int p_peer,
-    uint16_t p_acked_seq,
-    uint32_t p_history
-) {
-    NETW_ZONE_NC("Lane set acknowledge", colors::WIRE);
-    for (KeyValue<uint64_t, RowLane> &entry : lanes) {
-        entry.value.acknowledge(p_peer, p_acked_seq, p_history);
-    }
-}
-
 void LaneSet::clear() {
     lanes.clear();
     retained.clear();

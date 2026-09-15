@@ -34,7 +34,7 @@ A member is an RPC, a property, or a signal, and the same fluent builder declare
 
 \ A configuration is keyed per script while :godot:`Object._init() <Object#class_Object_private_method__init>` runs per instance, so every spawn of a script re-declares onto the config the first instance created. Re-declaring an axis with the value it already carries is therefore SILENT, and only a genuine disagreement between two call sites warns. That rule is what makes authoring in :godot:`Object._init() <Object#class_Object_private_method__init>` quiet rather than one warning per spawn.
 
-\ **The chain downgrades to this type.**\
+\ **The chain downgrades to this type.**\ 
 
 A bound method records one return type, so every verb here returns a **NetwMemberConfig** even when it was called on a :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. A chain that passes through a base verb loses the property-only verbs from that point on, and a property declaration therefore orders its property-only verbs LAST:
 

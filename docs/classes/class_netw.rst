@@ -29,7 +29,7 @@ Each method resolves the :ref:`NetwMultiplayer<class_NetwMultiplayer>` associate
     Netw.spawn(_spawn_bullet, dir)        # make a node on every peer
     Netw.rpc(turret.aim, yaw)             # call a method on every peer
 
-\ **Joining a session**\
+\ **Joining a session**\ 
 
 Connecting a :godot:`MultiplayerPeer` starts the network connection. :ref:`join()<class_Netw_method_join>` requests a place in the game and returns a :ref:`NetwParticipant<class_NetwParticipant>`. It may be called before or after assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`; an offline session queues the request.
 
@@ -53,7 +53,7 @@ Connecting a :godot:`MultiplayerPeer` starts the network connection. :ref:`join(
 
 \ A session declaring no handler falls back to :ref:`NetwDefaultJoin<class_NetwDefaultJoin>`. A rejected join announces as :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>`. The seat this peer was given is :ref:`NetwSessionHandle.local_participant<class_NetwSessionHandle_property_local_participant>`, filled at :ref:`NetwSessionHandle.local_joined<class_NetwSessionHandle_signal_local_joined>`.
 
-\ **The tick**\
+\ **The tick**\ 
 
 Every peer in a session counts the same tick, and it is the time everything networked is stamped with. :ref:`clock()<class_Netw_method_clock>` reaches it. :ref:`configure_clock()<class_Netw_method_configure_clock>` chooses how fast it runs, and a session that declares nothing has no clock at all.
 
@@ -70,7 +70,7 @@ Every peer in a session counts the same tick, and it is the time everything netw
 
 \ :ref:`NetwClockHandle.before_tick<class_NetwClockHandle_signal_before_tick>` is where a player's input is read and :ref:`NetwClockHandle.on_tick<class_NetwClockHandle_signal_on_tick>` is where the tick is simulated, which is the order prediction and lag compensation both assume. :ref:`NetwClockHandle<class_NetwClockHandle>` is the whole clock.
 
-\ **Declare in _init**\
+\ **Declare in _init**\ 
 
 Declare from :godot:`Object._init() <Object#class_Object_private_method__init>` and never from :godot:`Node._ready() <Node#class_Node_private_method__ready>`. A spawned node is addressable through its :ref:`NetwEntity.route<class_NetwEntity_property_route>` before :godot:`Node._ready() <Node#class_Node_private_method__ready>` runs, so a declaration made there can arrive after the first packet it was meant to govern.
 
@@ -86,7 +86,7 @@ Declare from :godot:`Object._init() <Object#class_Object_private_method__init>` 
         # arrived and been read on the wrong grid
         pass
 
-\ **Replicated Properties**\
+\ **Replicated Properties**\ 
 
 \ :ref:`configure_property()<class_Netw_method_configure_property>` declares a variable's delivery once, and the variable is written normally afterwards.
 
@@ -102,7 +102,7 @@ Declare from :godot:`Object._init() <Object#class_Object_private_method__init>` 
 
 \ :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` is everything a field can be told about how it travels, and :ref:`Record<enum_NetwPropertySet_Record>` is where :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>`, :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` and :ref:`NetwPropertyConfig.broadcast()<class_NetwPropertyConfig_method_broadcast>` are compared.
 
-\ **RPCs, requests and signals**\
+\ **RPCs, requests and signals**\ 
 
 A call is addressed by :ref:`NetwEntity.route<class_NetwEntity_property_route>` rather than by a node path, so it never errors on a node that has not spawned yet, and it reaches only the peers that see the entity. Godot's ``@rpc`` supplies the authority mode and the transport. :ref:`configure_rpc()<class_Netw_method_configure_rpc>` registers the method and declares what the annotation has no spelling for, such as a :ref:`NetwMemberConfig.controller()<class_NetwMemberConfig_method_controller>` write policy or a :ref:`NetwQuantize<class_NetwQuantize>` per argument.
 
@@ -141,7 +141,7 @@ A call is addressed by :ref:`NetwEntity.route<class_NetwEntity_property_route>` 
 
 \ A :ref:`NetwEntity<class_NetwEntity>` or entity root :godot:`Node` passed as an argument crosses the wire as its :ref:`NetwEntity.route<class_NetwEntity_property_route>` and arrives live on the far side. An :godot:`Array` in trailing position is one argument, never an argument list. Bytes belonging to no entity at all go through a :ref:`channel()<class_Netw_method_channel>` instead.
 
-\ **Spawning and despawning**\
+\ **Spawning and despawning**\ 
 
 A spawn function runs on every peer and constructs from its arguments alone, so it is registered like an RPC and called like one. The caller parents what :ref:`spawn()<class_Netw_method_spawn>` returns, and :ref:`despawn()<class_Netw_method_despawn>` removes the entity everywhere.
 
@@ -162,7 +162,7 @@ A spawn function runs on every peer and constructs from its arguments alone, so 
 
 \ The arguments decide what is built and a field marked :ref:`NetwPropertyConfig.on_spawn()<class_NetwPropertyConfig_method_on_spawn>` carries what it was holding, applied on the other peers once the function has run. :ref:`spawn_player()<class_Netw_method_spawn_player>` is the same act for the node a player drives, and it fills :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` before the node enters the tree so the node leaves with its peer. :ref:`replicate()<class_Netw_method_replicate>` is the door for a node the game instantiated itself, which is where loading a saved player belongs.
 
-\ **Scenes**\
+\ **Scenes**\ 
 
 A multiplayer scene is a world a player is let into. :ref:`configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` declares one, every node under it belongs to it, and a player receives what is inside only once :ref:`NetwSceneHandle.admit()<class_NetwSceneHandle_method_admit>` has let them in.
 
@@ -190,7 +190,7 @@ A multiplayer scene is a world a player is let into. :ref:`configure_multiplayer
     await Netw.change_scene_to_file(
             self, "res://match.tscn", Netw.SCENE_CHANGE_PARTICIPANT).wait()
 
-\ **Interest**\
+\ **Interest**\ 
 
 A :ref:`NetwInterestLayer<class_NetwInterestLayer>` decides which peers are told about which entities, so what a player cannot see is never sent to them at all. Every peer declares the layers a node belongs to, and the server owns the real membership and the viewers.
 
@@ -209,7 +209,7 @@ A :ref:`NetwInterestLayer<class_NetwInterestLayer>` decides which peers are told
 
 \ :ref:`NetwInterestLayer<class_NetwInterestLayer>` holds the membership and the signals that report it, and :ref:`NetwInterestHandle<class_NetwInterestHandle>` is the same declaration read back from :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`.
 
-\ **Prediction**\
+\ **Prediction**\ 
 
 A predicted node runs the same simulation locally that the server will run, so it moves the moment a player presses something instead of a round trip later. The property marks are what make that possible. A :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` field is what this peer authors and replays, and a :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` field is what the server corrects when the two disagree.
 
@@ -225,7 +225,7 @@ A predicted node runs the same simulation locally that the server will run, so i
 
 \ :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`, reached as :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`, holds every prediction setting one node has and the evidence of its last comparison. :ref:`NetwPredict<class_NetwPredict>` names the values those settings are written with.
 
-\ **Interpolation**\
+\ **Interpolation**\ 
 
 A node driven by another peer arrives a few times a second and is drawn every frame, so what a player sees is smoothed between the values that arrived. :ref:`NetwMemberConfig.interpolate()<class_NetwMemberConfig_method_interpolate>` declares how one value is smoothed. :ref:`NetwEntity.interpolation<class_NetwEntity_property_interpolation>` holds what is true of the whole node, such as the :ref:`NetwDisplayHandle.visual_root<class_NetwDisplayHandle_property_visual_root>` that receives the smoothed writes while the body keeps its own.
 
@@ -239,7 +239,7 @@ A node driven by another peer arrives a few times a second and is drawn every fr
 
 \ :ref:`NetwInterpolate<class_NetwInterpolate>` is the spec for one value and :ref:`NetwDisplayHandle<class_NetwDisplayHandle>` is the one for the whole node.
 
-\ **Lag compensation**\
+\ **Lag compensation**\ 
 
 The server keeps what every node held over the last few seconds, so a shot can be judged against the world the shooter was actually looking at rather than the one that has arrived since. :ref:`sample()<class_Netw_method_sample>` reads one node's past. :ref:`rewind()<class_Netw_method_rewind>` puts a set of them back for the length of one call and always restores the present afterwards.
 
@@ -261,7 +261,7 @@ The server keeps what every node held over the last few seconds, so a shot can b
         ctx.bind(bomb)
         bombs.add_child(bomb)
 
-\ **Everything else**\
+\ **Everything else**\ 
 
 The sections above are what a game needs in order to play. Each row below is something else this addon owns, and the class named is where it is documented.
 

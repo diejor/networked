@@ -104,13 +104,11 @@ bool NetwCompTable::path_shape_is_safe(const String &p_path) {
 bool NetwCompTable::reconcile(bool p_is_authority) {
     if (p_is_authority) {
         wire_hash = table_hash;
+        poisoned = false;
         return false;
     }
-    if (wire_hash == table_hash) {
-        return false;
-    }
-    poisoned = true;
-    return true;
+    poisoned = wire_hash != table_hash;
+    return poisoned;
 }
 
 } // namespace netw

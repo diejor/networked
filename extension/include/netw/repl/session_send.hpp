@@ -7,11 +7,15 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/carrier_row.hpp"
 #include "netw/repl/lane_set.hpp"
 #include "netw/repl/link_governor.hpp"
 #include "netw/repl/row_frame.hpp"
 #include "netw/repl/send_pass.hpp"
+#include "netw/repl/snapshot_frame.hpp"
 #include "netw/repl/window_ring.hpp"
+#include "netw/wire/control_scheduler.hpp"
+#include "netw/wire/stream_book.hpp"
 
 namespace netw::repl {
 
@@ -45,6 +49,8 @@ struct RowSend {
     int peer = 0;
     uint32_t offer = 0;
     uint64_t mask = 0;
+    uint64_t token = 0;
+    uint64_t revision = 0;
     int64_t bits = 0;
     uint32_t sample_count = 0;
     bool masked = false;
@@ -81,24 +87,18 @@ enum class RowVerdict : uint8_t {
 struct RowExplain {
     RowVerdict verdict = RowVerdict::UNOFFERED;
     int64_t tick = -1;
-    uint64_t sticky = 0;
-    uint32_t in_flight = 0;
+    uint64_t confirmed = 0;
+    uint64_t exposed = 0;
     bool has_baseline = false;
 };
 
 class SessionSend {
-    struct Pending {
-        int64_t route = 0;
-        uint8_t comp = 0;
-        int64_t bits = 0;
-        bool masked = false;
-        wire::CodeRow row;
-    };
-
     LaneSet lanes;
     SendPass pass;
     LinkGovernor link;
-    godot::HashMap<int, godot::LocalVector<Pending>> pending;
+    wire::StreamReaderBook readers;
+    wire::StreamWriterBook writers;
+    wire::ControlScheduler control;
     godot::HashMap<int, godot::HashMap<uint64_t, float>> owed;
     godot::HashMap<int, godot::HashMap<uint64_t, RowExplain>> verdicts;
     godot::Callable stage;
@@ -121,6 +121,34 @@ class SessionSend {
         int64_t p_tick
     );
 
+    wire::SnapshotSender *stream_ready(
+        int p_peer,
+        const RowOffer &p_offer,
+        wire::StreamFamily p_family,
+        uint64_t &r_token,
+        wire::StreamLane &r_lane
+    );
+
+    bool row_is_owed(
+        wire::SnapshotSender &p_stream,
+        int p_peer,
+        const wire::StreamLane &p_lane,
+        int64_t p_now_ms,
+        bool &r_repairing
+    );
+
+    uint64_t revision_for(
+        wire::SnapshotSender &p_stream,
+        int p_peer,
+        const wire::StreamLane &p_lane,
+        int64_t p_now_ms,
+        bool p_repairing
+    );
+
+    void expose_send(const RowSend &p_send);
+
+    godot::LocalVector<int> known_peers() const;
+
     float owed_by(const RowSend &p_send, float p_priority) const;
 
     godot::PackedByteArray price(
@@ -131,6 +159,7 @@ class SessionSend {
     godot::LocalVector<RowSend> collect(
         const godot::LocalVector<RowOffer> &p_offers,
         int64_t p_base_tick,
+        int64_t p_now_ms,
         godot::LocalVector<wire::FitCandidate> &r_candidates,
         SessionResult &r_out
     );
@@ -150,14 +179,25 @@ public:
         const wire::WireRegistry &p_registry,
         const godot::LocalVector<RowOffer> &p_offers,
         int64_t p_max_bits,
-        int64_t p_base_tick
+        int64_t p_base_tick,
+        int64_t p_now_ms = 0
     );
 
-    void defer(const RowSend &p_send);
+    bool describe(const RowSend &p_send, CarrierRow &r_row);
 
-    bool commit(int p_peer, uint16_t p_seq);
+    bool commit(
+        int p_peer,
+        uint16_t p_seq,
+        const godot::LocalVector<CarrierRow> &p_rows,
+        int64_t p_frames,
+        int64_t p_bits
+    );
 
-    uint32_t pending_count(int p_peer) const;
+    void cancel(
+        int p_peer,
+        const godot::LocalVector<CarrierRow> &p_rows,
+        int64_t p_tick = 0
+    );
 
     void forget_peer(int p_peer);
 
@@ -184,15 +224,25 @@ public:
         return link.budget_bits(p_peer, p_full_bits);
     }
 
+    wire::StreamReaderBook &reader_book() {
+        return readers;
+    }
+
+    wire::StreamWriterBook &writer_book() {
+        return writers;
+    }
+
+    wire::ControlScheduler &control_scheduler() {
+        return control;
+    }
+
     void retain(const godot::LocalVector<int> &p_recipients);
 
     void retain_row(
         int64_t p_route,
         uint8_t p_comp,
         const godot::LocalVector<int> &p_recipients
-    ) {
-        lanes.retain_row(p_route, p_comp, p_recipients);
-    }
+    );
 
     void close_route(int64_t p_route);
 

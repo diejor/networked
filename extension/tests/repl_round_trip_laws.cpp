@@ -6,8 +6,8 @@
 #include "godot/variant.hpp"
 #include "netw/api/quantize.hpp"
 #include "netw/api/schema_core.hpp"
-#include "netw/repl/row_frame.hpp"
 #include "netw/repl/session_send.hpp"
+#include "netw/repl/snapshot_frame.hpp"
 #include "netw/wire/value_row.hpp"
 
 using namespace godot;
@@ -20,12 +20,11 @@ using godot::PackedByteArray;
 using godot::Ref;
 using netw::NetwQuantizeScalar;
 using netw::SchemaCore;
-using netw::repl::read_row_frame;
-using netw::repl::RowFrameHeader;
+using netw::repl::read_snapshot_row;
 using netw::repl::RowOffer;
 using netw::repl::SessionResult;
 using netw::repl::SessionSend;
-using netw::repl::write_row_frame;
+using netw::repl::SnapshotHeader;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::CodeRow;
@@ -104,10 +103,19 @@ Array receive(
     const SchemaRecord &p_schema,
     const WirePlan &p_plan,
     const PackedByteArray &p_bytes,
+    const CodeRow *p_baseline,
     CodeRow &r_held
 ) {
-    RowFrameHeader header;
-    if (!read_row_frame(p_bytes, 41, -1, p_plan, header, r_held)) {
+    SnapshotHeader header;
+    if (!read_snapshot_row(
+            p_bytes,
+            41,
+            p_plan,
+            header,
+            r_held,
+            p_baseline,
+            nullptr
+        )) {
         return Array();
     }
     Array out;
@@ -133,14 +141,11 @@ TEST_CASE(
     const SessionResult sent = drive_send(session, reg, offers, 100000, 1);
     REQUIRE(sent.sends.size() == 1);
 
-    RowFrameHeader header;
-    header.mask = sent.sends[0].mask;
-    const PackedByteArray bytes
-        = write_row_frame(header, 41, plan, sent.sends[0].row);
+    const PackedByteArray bytes = sent.sends[0].bytes;
     REQUIRE(bytes.size() > 0);
 
     CodeRow held = CodeRow::for_plan(plan);
-    const Array got = receive(schema, plan, bytes, held);
+    const Array got = receive(schema, plan, bytes, nullptr, held);
     REQUIRE(got.size() == 3);
 
     CodeRow canonical = CodeRow::for_plan(plan);
@@ -173,21 +178,13 @@ TEST_CASE(
     const SessionResult one = drive_send(session, reg, first, 100000, 1);
     REQUIRE(one.sends.size() == 1);
 
-    RowFrameHeader head;
-    head.mask = one.sends[0].mask;
     CodeRow held = CodeRow::for_plan(plan);
     REQUIRE(
-        receive(
-            schema,
-            plan,
-            write_row_frame(head, 41, plan, one.sends[0].row),
-            held
-        )
-            .size()
-        == 3
+        receive(schema, plan, one.sends[0].bytes, nullptr, held).size() == 3
     );
 
-    session.acknowledge(PEER, 1, 0);
+    const CodeRow confirmed = one.sends[0].row;
+    netw_test::accept_streams(session, first, PEER);
 
     LocalVector<RowOffer> second;
     second.push_back(offer(schema, values_of(1.0, 2.0, 99)));
@@ -195,13 +192,8 @@ TEST_CASE(
     REQUIRE(two.sends.size() == 1);
     NETW_CHECK_EQ(two.sends[0].mask, uint64_t(0b100));
 
-    head.mask = two.sends[0].mask;
-    const Array got = receive(
-        schema,
-        plan,
-        write_row_frame(head, 41, plan, two.sends[0].row),
-        held
-    );
+    const Array got
+        = receive(schema, plan, two.sends[0].bytes, &confirmed, held);
     REQUIRE(got.size() == 3);
 
     NETW_CHECK_EQ(int64_t(got[2]), 99);
@@ -220,7 +212,7 @@ TEST_CASE(
     LocalVector<RowOffer> first;
     first.push_back(offer(schema, values_of(1.0, 2.0, 3)));
     REQUIRE(drive_send(session, reg, first, 100000, 1).sends.size() == 1);
-    session.acknowledge(PEER, 1, 0);
+    netw_test::accept_streams(session, first, PEER);
 
     LocalVector<RowOffer> same;
     same.push_back(offer(schema, values_of(1.0, 2.0, 3)));

@@ -1,12 +1,3 @@
-// The carrier's aggregation laws.
-//
-// Every case here is about the boundary between one datagram and the next,
-// because that is the only thing this class decides. The shell version made
-// the same decision at its call site, where the budget read, the flush and the
-// re-fetch of the emptied run were three statements a caller had to keep in
-// that order; the one that mattered was the re-fetch, since appending to the
-// stale run would have put the frame back into the datagram just sent.
-
 #include "support/netw_test.h"
 
 #include "netw/carrier_buffers.hpp"
@@ -17,6 +8,7 @@ namespace TestNetwCarrierBuffers {
 
 using godot::PackedByteArray;
 using godot::Ref;
+using netw::CarrierBatch;
 using netw::NetwCarrierBuffers;
 
 constexpr int64_t PEER = 7;
@@ -43,23 +35,19 @@ TEST_CASE(
     CHECK(buffers->append(PEER, frame(40, 2), false, BUDGET).is_empty());
     NETW_CHECK_EQ(buffers->pending(PEER, false), 80);
 
-    // The third would take the run past the budget, so the first two go out
-    // and the third opens the next datagram rather than joining theirs.
-    const PackedByteArray owed
+    const CarrierBatch owed
         = buffers->append(PEER, frame(40, 3), false, BUDGET);
     NETW_CHECK_EQ(owed.size(), 80);
     if (owed.size() == 80) {
-        NETW_CHECK_EQ(owed[0], 1);
-        NETW_CHECK_EQ(owed[40], 2);
+        NETW_CHECK_EQ(owed.bytes()[0], 1);
+        NETW_CHECK_EQ(owed.bytes()[40], 2);
     }
     NETW_CHECK_EQ(buffers->pending(PEER, false), 40);
 
-    // The handed-back run must not still be in the lane, or the frame just
-    // sent rides again in the next datagram.
-    const PackedByteArray rest = buffers->take(PEER, false);
+    const CarrierBatch rest = buffers->take(PEER, false);
     NETW_CHECK_EQ(rest.size(), 40);
     if (rest.size() == 40) {
-        NETW_CHECK_EQ(rest[0], 3);
+        NETW_CHECK_EQ(rest.bytes()[0], 3);
     }
 }
 
@@ -70,14 +58,10 @@ TEST_CASE(
     NetwCarrierBuffers held;
     NetwCarrierBuffers *const buffers = &held;
 
-    // No value is pending. Rejecting here would drop the only copy of the
-    // frame.
     CHECK(buffers->append(PEER, frame(400, 9), false, BUDGET).is_empty());
     NETW_CHECK_EQ(buffers->pending(PEER, false), 400);
 
-    // And it does not swallow the next frame with it: the oversized run is
-    // handed back exactly once.
-    const PackedByteArray owed
+    const CarrierBatch owed
         = buffers->append(PEER, frame(10, 8), false, BUDGET);
     NETW_CHECK_EQ(owed.size(), 400);
     NETW_CHECK_EQ(buffers->pending(PEER, false), 10);
@@ -100,8 +84,6 @@ TEST_CASE(
     NETW_CHECK_EQ(buffers->pending(PEER, true), 400);
     NETW_CHECK_EQ(buffers->pending(PEER, false), 40);
 
-    // Taking one lane leaves the other standing, because they are two
-    // datagrams and a flush of one is not a flush of both.
     NETW_CHECK_EQ(buffers->take(PEER, false).size(), 40);
     NETW_CHECK_EQ(buffers->pending(PEER, true), 400);
 }
@@ -129,8 +111,6 @@ TEST_CASE(
     NETW_CHECK_EQ(buffers->pending(3, false), 0);
     NETW_CHECK_EQ(buffers->peers(false).size(), 1);
 
-    // A peer that never buffered anything answers an empty run rather than
-    // opening one.
     CHECK(buffers->take(99, false).is_empty());
     NETW_CHECK_EQ(buffers->peers(false).size(), 1);
 }

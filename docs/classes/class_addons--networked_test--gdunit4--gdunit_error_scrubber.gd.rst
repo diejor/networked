@@ -19,7 +19,7 @@ GdUnit4-adapted eraser for errors a test knowingly tolerates.
 Description
 -----------
 
-A native library may log an error that is harmless and unavoidable, and GdUnit4 turns any recorded error into a failure. Erasing one is reaching into the framework's own error monitor, which is why it lives here rather than in the harness: everything under ``harness/`` runs under any framework or none, and this runs under exactly one.  :godot:`NetwTestSessionHook.startup() <NetwTestSessionHook#class_NetwTestSessionHook_method_startup>` installs it, the way :godot:`NetwTestSuite.make_game_harness() <NetwTestSuite#class_NetwTestSuite_method_make_game_harness>` installs the timeout reporter. A caller outside GdUnit4 leaves it unassigned and erases nothing, which is correct: a framework that records no errors has none to erase.
+A native library may log an error that is harmless and unavoidable, and GdUnit4 turns any recorded error into a failure. Erasing one is reaching into the framework's own error monitor, which is why it lives here rather than in the harness: everything under ``harness/`` runs under any framework or none, and this runs under exactly one.  :ref:`NetwTestSessionHook.startup()<class_NetwTestSessionHook_method_startup>` installs it, the way :ref:`NetwTestSuite.make_game_harness()<class_NetwTestSuite_method_make_game_harness>` installs the timeout reporter. A caller outside GdUnit4 leaves it unassigned and erases nothing, which is correct: a framework that records no errors has none to erase.
 
 .. rst-class:: classref-reftable-group
 

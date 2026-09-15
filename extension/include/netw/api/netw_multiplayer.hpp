@@ -1429,6 +1429,11 @@ public:
         int64_t p_window_channel,
         int64_t p_delta_channel
     );
+    void row_control_receive(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    void row_control_flush(ReplicationSend *p_send, int64_t p_channel);
     void sync_note_columns(const repl::RowOffer &p_offer, uint64_t p_mask);
     godot::Dictionary sync_flush_stats() const;
     godot::Dictionary sync_explain(
@@ -1997,6 +2002,8 @@ public:
     );
     void spawn_on_armed_tree_entered(int64_t p_route);
     void spawn_flush_armed_spawn(int64_t p_route);
+    void spawn_reconcile_nested_child(int64_t p_route);
+    void spawn_note_nested_candidate(int64_t p_route);
     godot::Node *spawn_build_adopt(
         godot::Object *p_parent,
         const godot::String &p_name
@@ -2641,6 +2648,29 @@ public:
         bool p_batched
     );
 
+    godot::Error send_frame(
+        int64_t p_peer,
+        int64_t p_route,
+        int64_t p_channel,
+        const godot::PackedByteArray &p_payload,
+        bool p_reliable,
+        int64_t p_comp,
+        const godot::String &p_path,
+        bool p_batched,
+        const CarrierRow *p_row
+    );
+
+    godot::Error send_row_to(
+        int64_t p_peer,
+        int64_t p_route,
+        int64_t p_channel,
+        const godot::PackedByteArray &p_payload,
+        bool p_reliable,
+        int64_t p_comp,
+        bool p_batched,
+        const CarrierRow *p_row
+    );
+
     void set_relay_sender(int64_t p_sender);
     int64_t rpc_get_relay_sender() const;
 
@@ -2731,7 +2761,8 @@ public:
         int64_t p_peer,
         const godot::PackedByteArray &p_payload,
         bool p_reliable,
-        bool p_carrier = true
+        bool p_carrier = true,
+        bool *r_sent = nullptr
     );
 
     NetwCarrierDatagram frame_datagram(
@@ -2744,12 +2775,26 @@ public:
     int64_t carrier_append(
         int64_t p_peer,
         const godot::PackedByteArray &p_frame,
-        bool p_reliable
+        bool p_reliable,
+        const CarrierRow *p_row = nullptr
     );
 
     godot::PackedInt64Array carrier_flush();
 
     void carrier_clear();
+    void carrier_close_route(int64_t p_route);
+    int64_t carrier_dispose(
+        int64_t p_peer,
+        bool p_reliable,
+        const CarrierBatch &p_batch,
+        bool p_carrier = true
+    );
+    void carrier_settle(
+        int64_t p_peer,
+        int64_t p_seq,
+        const CarrierBatch &p_batch
+    );
+    void carrier_cancel(int64_t p_peer, const CarrierBatch &p_batch);
     int64_t carrier_pending(int64_t p_peer, bool p_reliable) const;
 
     static bool seq_is_fresher(int64_t a, int64_t b);
@@ -2759,6 +2804,7 @@ public:
     uint32_t inbound_delivery_history(int64_t p_peer) const;
     uint32_t peer_ack_history(int64_t p_peer) const;
     int64_t datagram_base_tick() const;
+    int64_t session_elapsed_ms() const;
     bool note_inbound_seq(int64_t p_peer, int64_t p_seq);
     bool note_peer_ack(int64_t p_peer, int64_t p_ack, uint32_t p_history);
     void sync_note_sent_default(int64_t p_peer, int64_t p_sequence);

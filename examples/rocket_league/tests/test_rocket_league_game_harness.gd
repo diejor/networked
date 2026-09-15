@@ -129,6 +129,41 @@ func test_cars_hold_their_markers_and_the_ball_returns_to_its_spot() -> void:
 			).is_less(1.0)
 
 
+func test_the_ball_holds_one_route_on_every_peer_and_keeps_its_own_body() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await begin_match(host)
+	await host.await_scene(&"Arena", 2.0)
+	await client.await_scene(&"Arena", 2.0)
+	var host_ball := arena_ball(host)
+	var client_ball := arena_ball(client)
+	var car := await host.await_player(&"mario", 2.0)
+	await await_kickoff(car)
+	quiet_ai(host)
+	quiet_ai(client)
+	await game.sync_ticks(10)
+
+	var host_route: int = host_ball.entity.route
+	assert_int(host_route).override_failure_message(
+		"the ball is an entity of its own, so the host routes it",
+	).is_greater(0)
+	assert_int(client_ball.entity.route).override_failure_message(
+		"the client holds the ball under the route the host published, "
+		+ "and read %d against the host's %d"
+		% [client_ball.entity.route, host_route],
+	).is_equal(host_route)
+
+	assert_int(host_ball.entity.prediction.archetype).override_failure_message(
+		"the ball keeps its own prediction body on every peer",
+	).is_equal(NetwPredict.ARCHETYPE_SOLVER_BODY)
+	assert_int(client_ball.entity.prediction.archetype).is_equal(
+		NetwPredict.ARCHETYPE_SOLVER_BODY,
+	)
+	assert_that(client_ball.entity.scene.root).override_failure_message(
+		"the client's ball answers the arena its route was published under",
+	).is_equal(arena_level(client))
+
+
 func test_a_car_drives_itself_toward_the_ball_with_no_local_input() -> void:
 	var host := await game.add_host("mario", false)
 	await begin_match(host)

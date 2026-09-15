@@ -6,7 +6,7 @@
 	<description>
 		The shell captures [member route], [member comp], and [member order_key] at registration. The set carries the wire contract, while the binding carries the live gather state: the two lanes' rows, the windowed input ring, and the row each lane last merged a frame onto.
 		A set's [constant NetwPropertySet.VOLATILE] fields ride the SYNC_ROW channel freshest-wins, and its [constant NetwPropertySet.RETAINED] fields ride the reliable SYNC_ROW_DELTA lane only when they change, so the two lanes of one set never re-send each other.
-		Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per lane and returns the columns that moved, which is why a binding carries no per-peer book of its own.
+		Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per stream, a stream being one route, one component ordinal and one lane, and returns the columns that moved, which is why a binding carries no per-peer book of its own.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -92,7 +92,7 @@
 			Registered component address under the entity root.
 		</member>
 		<member name="on_applied" type="Callable" setter="set_on_applied" getter="get_on_applied" default="Callable()">
-			Called after a frame applies, with the decoded header [code]{ordinal, tick, ack, payload, samples?}[/code]. A prediction engine subscribes here so a state receive drives reconciliation and an input receive opens the consume cursor, the way the synchronizer callbacks did. Unset for a plain display set, which just snaps the node.
+			Called once per committed row, with the decoded header [code]{ordinal, tick, ack, payload, samples?}[/code]. It observes a row the receiver has already committed and cannot refuse one, so raising an error here does not undo it. A refused row never reaches this call. A prediction engine subscribes here so a state receive drives reconciliation and an input receive opens the consume cursor. Unset for a plain display set, which just snaps the node.
 		</member>
 		<member name="order_key" type="StringName" setter="set_order_key" getter="get_order_key" default="&amp;&quot;&quot;">
 			Stable registration key used by the session's declaration table.

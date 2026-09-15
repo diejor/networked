@@ -1646,6 +1646,29 @@ void NetwMultiplayer::rpc_handle_call(
     rpc_execute_call(p_entity, p_comp_node, method, args, txn, p_sender);
 }
 
+Error NetwMultiplayer::send_row_to(
+    int64_t p_peer,
+    int64_t p_route,
+    int64_t p_channel,
+    const PackedByteArray &p_payload,
+    bool p_reliable,
+    int64_t p_comp,
+    bool p_batched,
+    const CarrierRow *p_row
+) {
+    return send_frame(
+        p_peer,
+        p_route,
+        p_channel,
+        p_payload,
+        p_reliable,
+        p_comp,
+        String(),
+        p_batched,
+        p_row
+    );
+}
+
 Error NetwMultiplayer::send_to(
     int64_t p_peer,
     int64_t p_route,
@@ -1655,6 +1678,30 @@ Error NetwMultiplayer::send_to(
     int64_t p_comp,
     const String &p_path,
     bool p_batched
+) {
+    return send_frame(
+        p_peer,
+        p_route,
+        p_channel,
+        p_payload,
+        p_reliable,
+        p_comp,
+        p_path,
+        p_batched,
+        nullptr
+    );
+}
+
+Error NetwMultiplayer::send_frame(
+    int64_t p_peer,
+    int64_t p_route,
+    int64_t p_channel,
+    const PackedByteArray &p_payload,
+    bool p_reliable,
+    int64_t p_comp,
+    const String &p_path,
+    bool p_batched,
+    const CarrierRow *p_row
 ) {
     NETW_ZONE_NC("session send frame", colors::TRANSPORT);
     NETW_ERR_COND_V(
@@ -1718,31 +1765,20 @@ Error NetwMultiplayer::send_to(
     const bool aggregating = channel_aggregates(p_channel, p_batched);
     if (!aggregating) {
         if (p_reliable) {
-            const PackedByteArray pending = carrier.take(p_peer, true);
-            if (!pending.is_empty()) {
-                send_datagram(p_peer, pending, true, true);
-            }
+            carrier_dispose(p_peer, true, carrier.take(p_peer, true));
         }
         attribution.stage(p_reliable, false, outgoing);
-        send_datagram(p_peer, framed, p_reliable, false);
+        CarrierBatch immediate;
+        immediate.take_frame(framed);
+        if (p_row != nullptr) {
+            immediate.attach(*p_row);
+        }
+        carrier_dispose(p_peer, p_reliable, immediate, false);
         return OK;
     }
 
-    const int64_t seq = carrier_append(p_peer, framed, p_reliable);
+    carrier_append(p_peer, framed, p_reliable, p_row);
     attribution.stage(p_reliable, true, outgoing);
-    if (seq < 0) {
-        return OK;
-    }
-    ReplicationCore *plane = get_replication_plane();
-    NETW_ERR_COND_V(
-        plane == nullptr,
-        ERR_UNCONFIGURED,
-        sys::TRANSPORT,
-        "peer %d was staged at seq %d with no dispatcher to tell",
-        int(p_peer),
-        int(seq)
-    );
-    plane->note_staged(p_peer, seq);
     return OK;
 }
 
@@ -1750,8 +1786,12 @@ int64_t NetwMultiplayer::send_datagram(
     int64_t p_peer,
     const PackedByteArray &p_payload,
     bool p_reliable,
-    bool p_carrier
+    bool p_carrier,
+    bool *r_sent
 ) {
+    if (r_sent != nullptr) {
+        *r_sent = false;
+    }
     if (p_payload.is_empty() || inner.is_null()) {
         attribution.discard(p_peer, p_reliable, p_carrier);
         return -1;
@@ -1778,6 +1818,9 @@ int64_t NetwMultiplayer::send_datagram(
         attribution.discard(p_peer, p_reliable, p_carrier);
         return -1;
     }
+    if (r_sent != nullptr) {
+        *r_sent = true;
+    }
     attribution.note_datagram(false, int64_t(datagram.bytes.size()));
     capture_note(wire::CaptureDirection::OUT, p_peer, datagram.bytes);
     if (plane.wants(EventPlane::DATAGRAM_SENT, 0)) {
@@ -1800,44 +1843,117 @@ int64_t NetwMultiplayer::send_datagram(
 int64_t NetwMultiplayer::carrier_append(
     int64_t p_peer,
     const PackedByteArray &p_frame,
-    bool p_reliable
+    bool p_reliable,
+    const CarrierRow *p_row
 ) {
-    const PackedByteArray owed = carrier.append(
+    const CarrierBatch owed = carrier.append(
         p_peer,
         p_frame,
         p_reliable,
-        p_reliable ? 0 : datagram_budget()
+        p_reliable ? 0 : datagram_budget(),
+        p_row
     );
-    if (owed.is_empty()) {
+    return carrier_dispose(p_peer, p_reliable, owed);
+}
+
+int64_t NetwMultiplayer::carrier_dispose(
+    int64_t p_peer,
+    bool p_reliable,
+    const CarrierBatch &p_batch,
+    bool p_carrier
+) {
+    if (p_batch.is_empty()) {
         return -1;
     }
-    return send_datagram(p_peer, owed, p_reliable);
+    bool sent = false;
+    const int64_t seq = send_datagram(
+        p_peer,
+        p_batch.bytes(),
+        p_reliable,
+        p_carrier,
+        &sent
+    );
+    if (!sent) {
+        carrier_cancel(p_peer, p_batch);
+        return -1;
+    }
+    carrier_settle(p_peer, seq, p_batch);
+    return seq;
+}
+
+void NetwMultiplayer::carrier_settle(
+    int64_t p_peer,
+    int64_t p_seq,
+    const CarrierBatch &p_batch
+) {
+    ReplicationCore *plane = get_replication_plane();
+    if (plane == nullptr) {
+        return;
+    }
+    SyncPipeline *pipeline = plane->get_sync_pipeline();
+    if (pipeline != nullptr) {
+        pipeline->open_carrier_batch(
+            p_peer,
+            &p_batch.rows(),
+            p_batch.frame_count(),
+            p_batch.bit_count()
+        );
+    }
+    plane->note_staged(p_peer, p_seq);
+    if (pipeline != nullptr) {
+        pipeline->close_carrier_batch();
+    }
+}
+
+void NetwMultiplayer::carrier_cancel(
+    int64_t p_peer,
+    const CarrierBatch &p_batch
+) {
+    ReplicationCore *plane = get_replication_plane();
+    SyncPipeline *pipeline
+        = plane != nullptr ? plane->get_sync_pipeline() : nullptr;
+    if (pipeline == nullptr) {
+        return;
+    }
+    pipeline->open_carrier_batch(
+        p_peer,
+        &p_batch.rows(),
+        p_batch.frame_count(),
+        p_batch.bit_count()
+    );
+    pipeline->close_carrier_batch();
 }
 
 PackedInt64Array NetwMultiplayer::carrier_flush() {
     PackedInt64Array staged;
     for (const int32_t peer : carrier.peers(false)) {
         const int64_t seq
-            = send_datagram(peer, carrier.take(peer, false), false);
+            = carrier_dispose(peer, false, carrier.take(peer, false));
         if (seq >= 0) {
             staged.push_back(peer);
             staged.push_back(seq);
         }
     }
     for (const int32_t peer : carrier.peers(true)) {
-        send_datagram(peer, carrier.take(peer, true), true);
+        carrier_dispose(peer, true, carrier.take(peer, true));
     }
     return staged;
 }
 
 void NetwMultiplayer::carrier_clear() {
     for (const int32_t peer : carrier.peers(false)) {
+        carrier_cancel(peer, carrier.take(peer, false));
         attribution.discard(peer, false, true);
     }
     for (const int32_t peer : carrier.peers(true)) {
+        carrier_cancel(peer, carrier.take(peer, true));
         attribution.discard(peer, true, true);
     }
     carrier.clear();
+}
+
+void NetwMultiplayer::carrier_close_route(int64_t p_route) {
+    carrier.close_route(p_route);
 }
 
 int64_t NetwMultiplayer::carrier_pending(
@@ -1883,6 +1999,14 @@ NetwCarrierDatagram NetwMultiplayer::frame_datagram(
 
 int64_t NetwMultiplayer::datagram_base_tick() const {
     return int64_t(clock_engine().get_tick());
+}
+
+int64_t NetwMultiplayer::session_elapsed_ms() const {
+    const int64_t rate = int64_t(clock_engine().get_tickrate());
+    if (rate <= 0) {
+        return int64_t(Time::get_singleton()->get_ticks_msec());
+    }
+    return int64_t(clock_engine().get_tick()) * 1000 / rate;
 }
 
 int64_t NetwMultiplayer::next_send_seq(int64_t p_peer) {

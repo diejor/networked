@@ -22,6 +22,7 @@ Testing
     class_enettestsupport
     class_framelockstepstepper
     class_nakamatestsupport
+    class_netwgameharness
     class_netwharnesssession
     class_netwharnesssession.backendadapter
     class_netwharnesssession.loopbackadapter
@@ -34,6 +35,8 @@ Testing
     class_netwregimethrottle
     class_netwscenerunner
     class_netwtestdiscordservice
+    class_netwtestsessionhook
+    class_netwtestsuite
     class_netwwaiter
     class_webrtctestsupport
 
@@ -167,3 +170,4 @@ Other classes
     class_spawnslot
     class_warmpolicy
     class_warmrequest
+

@@ -75,6 +75,9 @@ Ref<NetwEntity> Record::stamp_header(
     entity->comp_table().set_wire_hash(
         int64_t(p_header.get(StringName("wire_hash"), 0))
     );
+    if (entity->comp_table().get_table_hash() != 0) {
+        entity->comp_table().reconcile(entity->get_is_authority());
+    }
     entity->set_declares_scene(
         bool(p_header.get(StringName("declares_scene"), false))
     );

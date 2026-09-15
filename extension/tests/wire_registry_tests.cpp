@@ -19,7 +19,7 @@ TEST_CASE(
     "[Networked][Wire][Hosted] default registry populates built-in channels"
 ) {
     const WireRegistry reg = WireRegistry::create_default();
-    NETW_CHECK_EQ(reg.active_count(), 40);
+    NETW_CHECK_EQ(reg.active_count(), 41);
 
     const ChannelDecl *call = reg.find_channel(3);
     REQUIRE(call != nullptr);
@@ -121,7 +121,7 @@ TEST_CASE(
     custom.reliability = Reliability::RELIABLE;
     reg3.register_channel(custom);
 
-    NETW_CHECK_EQ(reg3.active_count(), 41);
+    NETW_CHECK_EQ(reg3.active_count(), 42);
     CHECK(reg3.identity_hash() != hash1);
 }
 

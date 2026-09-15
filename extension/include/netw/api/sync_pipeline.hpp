@@ -44,11 +44,13 @@ private:
     int64_t channel_row = 0;
     int64_t channel_row_window = 0;
     int64_t channel_row_delta = 0;
+    int64_t channel_row_control = 0;
     int64_t channel_property = 0;
     int64_t channel_signal = 0;
 
     int64_t sends_dropped_unroutable = 0;
     int64_t sends_dropped_not_live = 0;
+    int64_t rows_refused_stale = 0;
 
     godot::HashMap<int64_t, bool> schemas_sealed_before_open;
 
@@ -56,6 +58,10 @@ private:
     godot::Array stage_values;
     godot::Ref<NetwPropertySetBinding> stage_binding;
     godot::PackedByteArray stage_payload;
+    const godot::LocalVector<CarrierRow> *carrier_rows = nullptr;
+    int64_t carrier_peer = 0;
+    int64_t carrier_frames = 0;
+    int64_t carrier_bits = 0;
     repl::RowArrival stage_arrival;
     int64_t datagram_tick = -1;
     int64_t datagram_seq = -1;
@@ -67,6 +73,15 @@ private:
     NetwMultiplayer *core() const;
     godot::Object *api() const;
     ReplicationSend *row_send();
+
+#if defined(NETW_TESTS)
+public:
+    ReplicationSend *row_send_under_test() {
+        return row_send();
+    }
+
+private:
+#endif
 
     godot::PackedByteArray stage_row_frame(
         int64_t p_peer,
@@ -135,6 +150,8 @@ private:
         const godot::Dictionary &p_header
     );
     void flush_row_offers(const godot::LocalVector<repl::RowOffer> &p_offers);
+    void flush_row_control();
+    void reset_stream_of(int p_peer, uint64_t p_token);
     void record_interpolated_signal_args(
         godot::Node *p_comp_node,
         const godot::Array &p_args,
@@ -151,6 +168,7 @@ public:
         int64_t p_row,
         int64_t p_row_window,
         int64_t p_row_delta,
+        int64_t p_row_control,
         int64_t p_property,
         int64_t p_signal
     );
@@ -175,7 +193,14 @@ public:
     godot::TypedArray<NetwPropertySetBinding> derived_group(int64_t p_route);
 
     void pump(int64_t p_tick);
+    void open_carrier_batch(
+        int64_t p_peer_id,
+        const godot::LocalVector<CarrierRow> *p_rows,
+        int64_t p_frames,
+        int64_t p_bits
+    );
     void commit_pending_masked(int64_t p_peer_id, int64_t p_seq);
+    void close_carrier_batch();
     void note_peer_ack(
         int64_t p_peer_id,
         int64_t p_acked_seq,

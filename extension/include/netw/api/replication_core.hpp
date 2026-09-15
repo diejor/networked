@@ -43,6 +43,7 @@ private:
         int64_t sync_row = 0;
         int64_t sync_row_delta = 0;
         int64_t sync_row_window = 0;
+        int64_t row_control = 0;
         int64_t predict_command = 0;
         int64_t predict_ack = 0;
         int64_t predict_relay = 0;

@@ -114,7 +114,7 @@ Method Descriptions
 
 Gives the scene its own physics and render world, so geometry overlapping another scene's cannot interact with it. Without this the scene shares the world it is parented into.
 
-Only a :godot:`Viewport` owns a world in Godot, so an isolated scene needs one and the framework builds it: :ref:`Netw.spawn()<class_Netw_method_spawn>` returns a :godot:`SubViewport` with the authored root inside, and the caller parents that. **So the node :ref:`Netw.spawn()<class_Netw_method_spawn>` returns is not the node the callable built.**\
+Only a :godot:`Viewport` owns a world in Godot, so an isolated scene needs one and the framework builds it: :ref:`Netw.spawn()<class_Netw_method_spawn>` returns a :godot:`SubViewport` with the authored root inside, and the caller parents that. **So the node :ref:`Netw.spawn()<class_Netw_method_spawn>` returns is not the node the callable built.**\ 
 
 The scene is still the authored root. :ref:`Netw.scene()<class_Netw_method_scene>`, the roster, the admissions and the signals are unchanged, and the viewport carries no identity of its own. The one thing that differs is that the root's :godot:`Node.get_parent() <Node#class_Node_method_get_parent>` is the viewport rather than the node it was added to.
 

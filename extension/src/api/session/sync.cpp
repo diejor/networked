@@ -36,8 +36,11 @@
 #include "netw/script/model.hpp"
 #include "netw/sync_authoring.hpp"
 #include "netw/synchronizers.hpp"
+#include "netw/wire/control_record.hpp"
+#include "netw/wire/control_scheduler.hpp"
 #include "netw/wire/frame.hpp"
 #include "netw/wire/registry.hpp"
+#include "netw/wire/stream_book.hpp"
 
 using namespace godot;
 using namespace netw;
@@ -695,8 +698,12 @@ void NetwMultiplayer::sync_flush_offers(
     if (p_send == nullptr || p_offers.is_empty()) {
         return;
     }
-    const repl::SessionResult result
-        = p_send->run(p_offers, datagram_budget() * 8, datagram_base_tick());
+    const repl::SessionResult result = p_send->run(
+        p_offers,
+        datagram_budget() * 8,
+        datagram_base_tick(),
+        session_elapsed_ms()
+    );
     if (event_wants(int64_t(EventPlane::GATHER), 0)) {
         Dictionary detail;
         detail[StringName("offers")] = int64_t(p_offers.size());
@@ -717,7 +724,9 @@ void NetwMultiplayer::sync_flush_offers(
         if (grain) {
             sync_note_columns(p_offers[send.offer], send.mask);
         }
-        send_to(
+        CarrierRow descriptor;
+        const bool owns_baseline = p_send->describe(send, descriptor);
+        send_row_to(
             int64_t(send.peer),
             send.route,
             send.reliable ? p_delta_channel
@@ -725,10 +734,9 @@ void NetwMultiplayer::sync_flush_offers(
             send.bytes,
             send.reliable,
             int64_t(send.comp),
-            String(),
-            true
+            true,
+            owns_baseline ? &descriptor : nullptr
         );
-        p_send->confirm(send);
         if (send.reliable) {
             sync_flush.retained++;
             continue;
@@ -748,6 +756,120 @@ void NetwMultiplayer::sync_flush_offers(
     sync_flush.staged_out += int64_t(result.staged_out);
     sync_flush.ungathered += int64_t(result.ungathered);
     sync_flush.deferred += int64_t(result.deferred);
+}
+
+void NetwMultiplayer::row_control_receive(
+    const PackedByteArray &p_payload,
+    int64_t p_sender
+) {
+    NETW_ZONE_NC("Row control receive", colors::WIRE);
+    ReplicationCore *plane = get_replication_plane();
+    SyncPipeline *pipeline
+        = plane != nullptr ? plane->get_sync_pipeline() : nullptr;
+    ReplicationSend *send
+        = pipeline != nullptr ? pipeline->row_send() : nullptr;
+    if (send == nullptr) {
+        return;
+    }
+    const int64_t channel = wire::builtin_channel(StringName("ROW_CONTROL"));
+    wire::ControlRecord record;
+    if (!wire::read_control_record(p_payload, record)) {
+        attribution_note_refusal(
+            p_sender,
+            channel,
+            wire::Refusal::MALFORMED
+        );
+        return;
+    }
+    const int peer = int(p_sender);
+    wire::StreamLane lane;
+    lane.route = record.route;
+    lane.ordinal = record.ordinal;
+    lane.family = record.family;
+
+    switch (record.tag) {
+        case wire::ControlTag::OPEN: {
+            if (liveness_route_state(record.route)
+                == NetwLivenessCore::STATE_UNKNOWN) {
+                return;
+            }
+            if (uint64_t(liveness_route_epoch(record.route)) != record.epoch) {
+                return;
+            }
+            uint64_t token = 0;
+            const wire::OpenVerdict verdict = send->reader_book().open(
+                peer,
+                lane,
+                record.request,
+                record.epoch,
+                record.schema,
+                token
+            );
+            const bool live = verdict == wire::OpenVerdict::MINTED
+                || verdict == wire::OpenVerdict::REPEATED;
+            wire::ControlRecord answer;
+            answer.tag
+                = live ? wire::ControlTag::READY : wire::ControlTag::RESET;
+            answer.request = record.request;
+            answer.token = token;
+            send->control_scheduler().queue(peer, answer);
+            return;
+        }
+        case wire::ControlTag::READY: {
+            send->writer_book().ready(peer, record.request, record.token);
+            return;
+        }
+        case wire::ControlTag::ACCEPT: {
+            for (uint32_t at = 0; at < record.receipts.size(); ++at) {
+                send->writer_book().receipt(
+                    peer,
+                    record.receipts[at].token,
+                    record.receipts[at].revision
+                );
+            }
+            return;
+        }
+        case wire::ControlTag::RESET: {
+            send->writer_book().reset(peer, record.request, record.token);
+            return;
+        }
+        case wire::ControlTag::CLOSE: {
+            send->reader_book().close(peer, record.token);
+            return;
+        }
+    }
+}
+
+void NetwMultiplayer::row_control_flush(
+    ReplicationSend *p_send,
+    int64_t p_channel
+) {
+    if (p_send == nullptr) {
+        return;
+    }
+    NETW_ZONE_NC("Row control flush", colors::WIRE);
+    wire::ControlScheduler &scheduler = p_send->control_scheduler();
+    const int64_t now = session_elapsed_ms();
+    const LocalVector<int> ready = scheduler.ready_peers(now);
+    for (uint32_t at = 0; at < ready.size(); ++at) {
+        const LocalVector<wire::ControlRecord> records = scheduler.flush(
+            ready[at],
+            now,
+            wire::CONTROL_TICK_RESERVATION_BYTES
+        );
+        for (uint32_t which = 0; which < records.size(); ++which) {
+            send_to(
+                int64_t(ready[at]),
+                0,
+                p_channel,
+                wire::write_control_record(records[which]),
+                true,
+                0,
+                String(),
+                true
+            );
+        }
+    }
 }
 
 void NetwMultiplayer::sync_note_columns(
@@ -821,8 +943,8 @@ Dictionary NetwMultiplayer::sync_explain(
            "refused"};
     out[StringName("verdict")] = String(NAMES[int(held.verdict)]);
     out[StringName("tick")] = held.tick;
-    out[StringName("sticky")] = int64_t(held.sticky);
-    out[StringName("in_flight")] = int64_t(held.in_flight);
+    out[StringName("confirmed")] = int64_t(held.confirmed);
+    out[StringName("exposed")] = int64_t(held.exposed);
     out[StringName("has_baseline")] = held.has_baseline;
     return out;
 }

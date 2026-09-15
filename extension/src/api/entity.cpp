@@ -639,7 +639,8 @@ void NetwEntity::hydrate_components() {
     NetwCompTable &table = record->get_comp_table();
     table.assign(paths);
     table.set_table_hash(comp_structure_hash(table.sorted_paths()));
-    if (table.reconcile(get_is_authority())) {
+    const bool unannounced = !get_is_authority() && table.get_wire_hash() == 0;
+    if (!unannounced && table.reconcile(get_is_authority())) {
         NETW_WARN(
             sys::ENTITY,
             "component table hash mismatch on entity '%s': server=%d, "

@@ -1,5 +1,7 @@
 #include "support/netw_test.h"
 
+#include "support/stream_seat.h"
+
 #include "support/declared_nodes.h"
 
 #include "support/minted_script.h"
@@ -89,6 +91,7 @@ PackedByteArray one_frame(
     }
     LocalVector<netw::repl::RowOffer> offers;
     offers.push_back(offer);
+    netw_test::seat_streams(p_send, offers);
     const netw::repl::SessionResult result
         = p_send.run(offers, 1 << 20, p_tick);
     if (result.sends.is_empty()) {

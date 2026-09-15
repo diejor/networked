@@ -1,5 +1,7 @@
 #include "support/loopback_rig.h"
 
+#include "support/stream_seat.h"
+
 #if defined(NETW_TIER_HOSTED)
 
 #include "netw/api/netw_multiplayer.hpp"
@@ -244,7 +246,12 @@ TEST_CASE(
     host->attribution_set_armed(true);
     CHECK(host->attribution_is_armed());
     a_synced_body(rig, "Watched", 2.0);
-    rig.step_ticks(12);
+    rig.step_ticks(4);
+    netw_test::seat_pending(
+        *host->get_replication_plane()->get_sync_pipeline()->row_send_under_test(),
+        rig.peer_id(0)
+    );
+    rig.step_ticks(8);
 
     const bool armed_recorded = column_rows(host) > 0;
     CHECK(armed_recorded);

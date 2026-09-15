@@ -19,7 +19,7 @@ Fluent control for one player's inbound, outbound, or both paths.
 Description
 -----------
 
-Created by :godot:`NetwGameHarness.degrade() <NetwGameHarness#class_NetwGameHarness_method_degrade>`. Direction filters such as :ref:`inbound()<class_NetwLink_NetwLinkMulti_method_inbound>` and :ref:`outbound()<class_NetwLink_NetwLinkMulti_method_outbound>` return a new handle so the original both direction handle remains reusable.
+Created by :ref:`NetwGameHarness.degrade()<class_NetwGameHarness_method_degrade>`. Direction filters such as :ref:`inbound()<class_NetwLink_NetwLinkMulti_method_inbound>` and :ref:`outbound()<class_NetwLink_NetwLinkMulti_method_outbound>` return a new handle so the original both direction handle remains reusable.
 
 .. rst-class:: classref-reftable-group
 

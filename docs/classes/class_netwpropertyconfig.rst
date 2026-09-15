@@ -37,7 +37,7 @@ Marking a field with :ref:`state()<class_NetwPropertyConfig_method_state>`, :ref
 
 \ :ref:`volatile()<class_NetwPropertyConfig_method_volatile>`, :ref:`retained()<class_NetwPropertyConfig_method_retained>`, :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`, and :ref:`persisted()<class_NetwPropertyConfig_method_persisted>` refine one property. :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>`, :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, :ref:`audience()<class_NetwPropertyConfig_method_audience>`, and :ref:`masked()<class_NetwPropertyConfig_method_masked>` write through to the script's whole :ref:`NetwPropertySet<class_NetwPropertySet>` from any member, so the last member to name a knob owns it.
 
-\ **The chain downgrades to the base type.**\
+\ **The chain downgrades to the base type.**\ 
 
 \ :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`NetwMemberConfig.call_remote()<class_NetwMemberConfig_method_call_remote>` are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb returns a :ref:`NetwMemberConfig<class_NetwMemberConfig>` from that point on even though the object is still this **NetwPropertyConfig**. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
 

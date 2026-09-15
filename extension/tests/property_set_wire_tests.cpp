@@ -1,5 +1,7 @@
 #include "support/netw_test.h"
 
+#include "support/stream_seat.h"
+
 #include <cstdint>
 
 #include "godot/node.hpp"
@@ -75,12 +77,30 @@ netw::repl::RowOffer retained_offer(
     return offer;
 }
 
+netw::wire::SnapshotSender *retained_stream(ReplicationSend &p_send) {
+    netw::wire::StreamLane lane;
+    lane.route = 1;
+    lane.ordinal = 0;
+    lane.family = netw::wire::StreamFamily::RETAINED;
+    return p_send.writer_book().sender(2, lane);
+}
+
+void accept_pass(
+    ReplicationSend &p_send,
+    const Ref<NetwPropertySetBinding> &p_binding
+) {
+    LocalVector<netw::repl::RowOffer> owed;
+    owed.push_back(retained_offer(p_binding));
+    netw_test::accept_streams(p_send, owed, 2);
+}
+
 Array one_pass(
     ReplicationSend &p_send,
     const Ref<NetwPropertySetBinding> &p_binding
 ) {
     LocalVector<netw::repl::RowOffer> offers;
     offers.push_back(retained_offer(p_binding));
+    netw_test::seat_streams(p_send, offers);
     const netw::repl::SessionResult result = p_send.run(offers, 1 << 20, 0);
     Array out;
     for (uint32_t at = 0; at < result.sends.size(); ++at) {
@@ -288,15 +308,18 @@ TEST_CASE(
     NETW_CHECK_CLOSE(double(dst->get_rotation()), 0.5, 0.0001);
 
     NETW_CHECK_EQ(one_pass(send, binding).size(), 0);
+    accept_pass(send, binding);
 
     src->set_rotation(1.5);
     const Array partial = one_pass(send, binding);
     NETW_CHECK_EQ(partial.size(), 1);
+    dst_binding->name_baseline(retained_stream(send)->confirmed());
     const Dictionary header = dst_binding->apply_retained_row(
         &send,
         partial[0],
         netw::repl::RowArrival()
     );
+    dst_binding->name_baseline(nullptr);
     CHECK_FALSE(bool(header["whole"]));
     NETW_CHECK_CLOSE(double(dst->get_rotation()), 1.5, 0.0001);
     CHECK(dst->get_scale() == Vector2(1.0, 1.0));

@@ -39,6 +39,106 @@ uint64_t identity_of(const ChannelDecl &decl) {
     return registry.identity_hash();
 }
 
+uint64_t fold(uint64_t h, uint64_t v) {
+    return h ^ (v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
+}
+
+uint64_t identity_oracle(
+    uint16_t p_format,
+    const ChannelDecl *p_decls,
+    int p_count
+) {
+    uint64_t hash = fold(14695981039346656037ULL, p_format);
+    for (int at = 0; at < p_count; ++at) {
+        const ChannelDecl &d = p_decls[at];
+        hash = fold(hash, d.id);
+        hash = fold(hash, uint64_t(d.kind));
+        hash = fold(hash, uint64_t(d.reliability));
+        hash = fold(hash, uint64_t(d.freshness));
+        hash = fold(hash, uint64_t(d.delivery));
+        hash = fold(hash, uint64_t(d.direction));
+        hash = fold(hash, uint64_t(d.payload));
+        if (d.payload_revision != 0) {
+            hash = fold(hash, d.payload_revision);
+        }
+        hash = fold(hash, d.name.hash());
+    }
+    return hash;
+}
+
+ChannelDecl row_channel(
+    uint8_t p_id,
+    const char *p_name,
+    ChannelKind p_kind,
+    Reliability p_reliability,
+    Freshness p_freshness,
+    PayloadContract p_payload,
+    uint16_t p_revision
+) {
+    ChannelDecl decl;
+    decl.id = p_id;
+    decl.name = godot::StringName(p_name);
+    decl.kind = p_kind;
+    decl.reliability = p_reliability;
+    decl.freshness = p_freshness;
+    decl.delivery = Delivery::FITTED;
+    decl.direction = Direction::EITHER;
+    decl.payload = p_payload;
+    decl.payload_revision = p_revision;
+    return decl;
+}
+
+int row_table(ChannelDecl *p_out, uint16_t p_revision, bool p_has_control) {
+    int count = 0;
+    p_out[count++] = row_channel(
+        39,
+        "SYNC_ROW",
+        ChannelKind::KEYED,
+        Reliability::UNRELIABLE_ACKED,
+        Freshness::FRESHEST_WINS,
+        PayloadContract::DELTA,
+        p_revision
+    );
+    p_out[count++] = row_channel(
+        40,
+        "SYNC_ROW_DELTA",
+        ChannelKind::ROUTED,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        PayloadContract::DELTA,
+        p_revision
+    );
+    p_out[count++] = row_channel(
+        41,
+        "SYNC_ROW_WINDOW",
+        ChannelKind::KEYED,
+        Reliability::UNRELIABLE,
+        Freshness::FRESHEST_WINS,
+        PayloadContract::PLANNED,
+        p_revision
+    );
+    if (p_has_control) {
+        p_out[count++] = row_channel(
+            43,
+            "ROW_CONTROL",
+            ChannelKind::SESSION,
+            Reliability::RELIABLE,
+            Freshness::NONE,
+            PayloadContract::PLANNED,
+            0
+        );
+    }
+    return count;
+}
+
+uint64_t registered_identity(const ChannelDecl *p_decls, int p_count) {
+    WireRegistry registry;
+    for (int at = 0; at < p_count; ++at) {
+        registry.register_channel(p_decls[at]);
+    }
+    return registry.identity_hash();
+}
+
 TEST_CASE(
     "[Networked][Wire][Hosted] every field that decides the bytes is inside "
     "protocol identity"
@@ -105,7 +205,39 @@ TEST_CASE(
     unrevised.payload_revision = 0;
     NETW_CHECK_EQ(identity_of(unrevised), identity_of(probe()));
 
-    CHECK(bool(netw::wire::FORMAT_VERSION == 10));
+    const bool the_format_is_v11 = netw::wire::FORMAT_VERSION == 11;
+    CHECK(the_format_is_v11);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] the format version is folded into protocol "
+    "identity ahead of the channels, so a v10 row table cannot answer a v11 "
+    "identity"
+) {
+    ChannelDecl v11_rows[4];
+    const int v11_count = row_table(v11_rows, 1, true);
+    ChannelDecl v10_rows[4];
+    const int v10_count = row_table(v10_rows, 0, false);
+
+    NETW_CHECK_EQ(
+        registered_identity(v11_rows, v11_count),
+        identity_oracle(netw::wire::FORMAT_VERSION, v11_rows, v11_count)
+    );
+
+    const bool the_format_alone_moves_identity
+        = identity_oracle(10, v11_rows, v11_count)
+        != identity_oracle(11, v11_rows, v11_count);
+    CHECK(the_format_alone_moves_identity);
+
+    const bool a_v10_peer_cannot_answer_this_identity
+        = identity_oracle(10, v10_rows, v10_count)
+        != registered_identity(v11_rows, v11_count);
+    CHECK(a_v10_peer_cannot_answer_this_identity);
+
+    const bool the_row_table_alone_moves_identity
+        = identity_oracle(11, v10_rows, v10_count)
+        != identity_oracle(11, v11_rows, v11_count);
+    CHECK(the_row_table_alone_moves_identity);
 }
 
 TEST_CASE(

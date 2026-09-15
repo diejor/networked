@@ -121,7 +121,8 @@ WireRegistry WireRegistry::create_default() {
                      Freshness fresh,
                      Delivery deliv,
                      Direction dir,
-                     PayloadContract payload) {
+                     PayloadContract payload,
+                     uint16_t revision = 0) {
         ChannelDecl d;
         d.id = id;
         d.name = godot::StringName(name);
@@ -131,6 +132,7 @@ WireRegistry WireRegistry::create_default() {
         d.delivery = deliv;
         d.direction = dir;
         d.payload = payload;
+        d.payload_revision = revision;
         reg.register_channel(d);
     };
 
@@ -512,7 +514,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::FRESHEST_WINS,
         Delivery::FITTED,
         Direction::EITHER,
-        PayloadContract::DELTA
+        PayloadContract::DELTA,
+        1
     );
     reg_c(
         40,
@@ -522,7 +525,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::EITHER,
-        PayloadContract::DELTA
+        PayloadContract::DELTA,
+        1
     );
 
     reg_c(
@@ -533,7 +537,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::FRESHEST_WINS,
         Delivery::FITTED,
         Direction::EITHER,
-        PayloadContract::PLANNED
+        PayloadContract::PLANNED,
+        1
     );
 
     reg_c(
@@ -544,6 +549,17 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
+        PayloadContract::PLANNED
+    );
+
+    reg_c(
+        43,
+        "ROW_CONTROL",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::EITHER,
         PayloadContract::PLANNED
     );
 

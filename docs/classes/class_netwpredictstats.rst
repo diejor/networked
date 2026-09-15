@@ -627,7 +627,7 @@ It is the trigger only where it arrives in time to be one. The verdict rides the
 
 Acknowledged transitions the owner reached a fingerprint verdict on, the denominator :ref:`fp_mismatches<class_NetwPredictStats_property_fp_mismatches>` is unreadable without.
 
-Once the acknowledgement lane is live every acknowledged transition counts here, because authority sends the fingerprint of the state its own replay produced. While the lane is dark the owner must reassemble the state from authority frames instead, so a row merged from several frames describes no single moment and is left unverified rather than charged as a divergence.
+Every acknowledged transition counts here, because authority sends the fingerprint of the state its own replay produced alongside the acknowledgement it answers.
 
 .. rst-class:: classref-item-separator
 

@@ -26,10 +26,11 @@ public:
     repl::SessionResult run(
         const godot::LocalVector<repl::RowOffer> &p_offers,
         int64_t p_max_bits,
-        int64_t p_base_tick
+        int64_t p_base_tick,
+        int64_t p_now_ms = 0
     );
 
-    void confirm(const repl::RowSend &p_send);
+    bool describe(const repl::RowSend &p_send, CarrierRow &r_row);
 
     repl::RowExplain explain(
         int64_t p_route,
@@ -37,8 +38,19 @@ public:
         int64_t p_peer
     ) const;
 
-    bool commit(int64_t p_peer, int64_t p_seq);
-    int64_t pending_count(int64_t p_peer) const;
+    bool commit(
+        int64_t p_peer,
+        int64_t p_seq,
+        const godot::LocalVector<CarrierRow> &p_rows,
+        int64_t p_frames,
+        int64_t p_bits
+    );
+
+    void cancel(
+        int64_t p_peer,
+        const godot::LocalVector<CarrierRow> &p_rows,
+        int64_t p_tick
+    );
 
     void set_encode_stage(const godot::Callable &p_stage);
     bool has_encode_stage() const;
@@ -72,19 +84,34 @@ public:
     void forget_peer(int64_t p_peer);
     void close_route(int64_t p_route);
 
-    godot::Dictionary apply(
+    godot::Dictionary stage_snapshot(
         const SchemaRecord &p_schema,
-        const godot::PackedByteArray &p_held,
         const godot::PackedByteArray &p_frame,
         int64_t p_base_tick,
-        int64_t p_expected_life,
-        repl::BaselineRing *p_ring = nullptr,
-        int64_t p_seq = -1,
-        repl::BaselineNaming p_naming = repl::BaselineNaming::BY_SEQ
+        const wire::CodeRow *p_baseline,
+        wire::CodeRow *r_staged
+    );
+
+    godot::Dictionary apply_snapshot_window(
+        const SchemaRecord &p_schema,
+        const godot::PackedByteArray &p_frame,
+        int64_t p_base_tick
     );
 
     int64_t baseline_drops() const {
         return drops_baseline_unknown;
+    }
+
+    wire::StreamReaderBook &reader_book() {
+        return impl.reader_book();
+    }
+
+    wire::StreamWriterBook &writer_book() {
+        return impl.writer_book();
+    }
+
+    wire::ControlScheduler &control_scheduler() {
+        return impl.control_scheduler();
     }
 
     int64_t entity_resolve(const repl::EntitySlot &p_slot, int64_t p_wanted) {

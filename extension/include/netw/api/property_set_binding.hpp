@@ -13,6 +13,7 @@
 #include "netw/predict/feed.hpp"
 #include "netw/repl/row_frame.hpp"
 #include "netw/repl/session_send.hpp"
+#include "netw/wire/code_row.hpp"
 
 namespace netw {
 
@@ -57,6 +58,31 @@ public:
         int64_t p_life,
         godot::LocalVector<repl::RowOffer> &r_offers
     );
+    godot::Dictionary stage_row_frame(
+        ReplicationSend *p_send,
+        const godot::PackedByteArray &p_frame,
+        const repl::RowArrival &p_arrival
+    );
+    godot::Dictionary stage_window_frame(
+        ReplicationSend *p_send,
+        const godot::PackedByteArray &p_frame,
+        const repl::RowArrival &p_arrival
+    );
+    godot::Dictionary stage_retained_row(
+        ReplicationSend *p_send,
+        const godot::PackedByteArray &p_frame,
+        const repl::RowArrival &p_arrival
+    );
+    void name_baseline(const wire::CodeRow *p_baseline);
+    const wire::CodeRow *staged_row() const;
+    godot::Error commit_staged(
+        ReplicationSend *p_send,
+        godot::Dictionary &r_header
+    );
+    void discard_staged();
+    bool has_staged() const;
+    bool stream_is_reset() const;
+
     godot::Dictionary apply_row_frame(
         ReplicationSend *p_send,
         const godot::PackedByteArray &p_frame,
@@ -155,10 +181,38 @@ public:
     }
 
 private:
+    enum StagedLane {
+        STAGED_NONE,
+        STAGED_VOLATILE,
+        STAGED_WINDOW,
+        STAGED_RETAINED,
+    };
+
+    struct Candidate {
+        StagedLane lane = STAGED_NONE;
+        int64_t ordinal = 0;
+        int64_t seq = -1;
+        godot::Array fields;
+        godot::Array keys;
+        godot::Array values;
+        godot::PackedByteArray bytes;
+        wire::CodeRow row;
+        godot::Dictionary decoded;
+        godot::Array samples;
+    };
+
     godot::ObjectID node_id;
-    godot::PackedByteArray held_row;
-    godot::PackedByteArray held_retained;
-    repl::BaselineRing volatile_ring;
+    Candidate candidate;
+    const wire::CodeRow *arriving_baseline = nullptr;
+    bool stream_reset = false;
+
+    void reset_stream();
+    bool targets_present(
+        godot::Node *p_node,
+        const godot::Array &p_keys,
+        godot::StringName *r_missing = nullptr
+    ) const;
+    godot::Dictionary header_of(const Candidate &p_candidate) const;
 
     NetwMultiplayer *core() const;
     godot::RID entity_rid() const;

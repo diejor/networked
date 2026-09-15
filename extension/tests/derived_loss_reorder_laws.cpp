@@ -26,7 +26,7 @@ using netw_test::LoopbackRig;
 
 constexpr int TICKRATE = 30;
 constexpr double POLL_PERIOD_MS = 1000.0 / 60.0;
-constexpr int HEAL_TICKS = 6;
+constexpr int HEAL_TICKS = 20;
 constexpr int CHATTY_TICKS = 8;
 
 const char *PLAIN_BODY = "res://tests/support/chains/state_base.gd";

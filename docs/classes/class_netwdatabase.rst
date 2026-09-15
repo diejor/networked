@@ -27,7 +27,7 @@ Every verb that reaches the backend returns a :ref:`NetwPromise<class_NetwPromis
 
     var record: NetwRecord = await db.table(&"players").fetch(username).wait()
 
-\ **Tables**\
+\ **Tables**\ 
 
 A table is a named set of records reached through :ref:`table()<class_NetwDatabase_method_table>`, which returns a :ref:`NetwRecordTable<class_NetwRecordTable>`. A registered table name also resolves as a property, so ``db.players`` is ``db.table(&"players")`` with autocompletion.
 
@@ -36,7 +36,7 @@ A table is a named set of records reached through :ref:`table()<class_NetwDataba
     var record := await db.table(&"players").fetch(username).wait()
     var same := await db.players.fetch(username).wait()
 
-\ **Slots**\
+\ **Slots**\ 
 
 A slot is one independent save namespace. Choose one with :ref:`open_slot()<class_NetwDatabase_method_open_slot>` before the first schema registration locks the backend, which is what makes the choice startup-only. Backends receive the selected slot when they initialize and scope every record under it.
 
@@ -54,7 +54,7 @@ A slot is one independent save namespace. Choose one with :ref:`open_slot()<clas
 
 \ :ref:`list_slots()<class_NetwDatabase_method_list_slots>` and :ref:`delete_slot()<class_NetwDatabase_method_delete_slot>` work before a slot is open, because they read and remove backend namespaces by name. That is what a save-select menu needs.
 
-\ **Schema drift**\
+\ **Schema drift**\ 
 
 When a loaded record carries columns the current schema does not declare, :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` decides what happens to it. When a column's stored value disagrees with the type its :ref:`NetwSchema<class_NetwSchema>` declared, that one column is dropped with a warning and the live scene keeps its default, so a save written by an older build stays partly readable rather than wholly rejected.
 

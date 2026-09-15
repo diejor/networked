@@ -48,18 +48,6 @@ public:
 
     void close_route(int64_t p_route);
 
-    void retain(const godot::LocalVector<int> &p_recipients);
-
-    void retain_row(
-        int64_t p_route,
-        uint8_t p_comp,
-        const godot::LocalVector<int> &p_recipients
-    );
-
-    void forget_peer(int p_peer);
-
-    void acknowledge_peer(int p_peer, uint16_t p_acked_seq, uint32_t p_history);
-
     void clear();
 
     uint32_t size() const {

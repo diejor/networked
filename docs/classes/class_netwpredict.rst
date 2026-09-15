@@ -27,7 +27,7 @@ Every value a prediction setting is written with. :ref:`NetwPredictionHandle<cla
     if entity.prediction.role == NetwPredict.ROLE_PREDICT:
         ...
 
-\ **What a game declares**\
+\ **What a game declares**\ 
 
 - :ref:`Archetype<enum_NetwPredict_Archetype>` what kind of body this is, which presets the rest
 
@@ -51,7 +51,7 @@ Every value a prediction setting is written with. :ref:`NetwPredictionHandle<cla
 
 - :ref:`Reconcile<enum_NetwPredict_Reconcile>` whether an island is corrected together or apart
 
-\ **What the session reports back**\
+\ **What the session reports back**\ 
 
 - :ref:`Role<enum_NetwPredict_Role>` the name for one :ref:`InputSource<enum_NetwPredict_InputSource>` and :ref:`SimMode<enum_NetwPredict_SimMode>` pair
 

@@ -52,6 +52,7 @@ void ReplicationCore::resolve_channel_ids() {
     ids.sync_row = id_of(registry, "SYNC_ROW");
     ids.sync_row_delta = id_of(registry, "SYNC_ROW_DELTA");
     ids.sync_row_window = id_of(registry, "SYNC_ROW_WINDOW");
+    ids.row_control = id_of(registry, "ROW_CONTROL");
     ids.predict_command = id_of(registry, "PREDICT_COMMAND");
     ids.predict_ack = id_of(registry, "PREDICT_ACK");
     ids.predict_relay = id_of(registry, "PREDICT_RELAY");
@@ -108,6 +109,7 @@ void ReplicationCore::install(Object *p_api) {
         ids.sync_row,
         ids.sync_row_window,
         ids.sync_row_delta,
+        ids.row_control,
         ids.property_sync,
         ids.signal
     );
@@ -198,6 +200,10 @@ void ReplicationCore::install(Object *p_api) {
     register_protocol(
         ids.lagcomp_deny,
         callable_mp(plane, &NetwMultiplayer::handle_deny)
+    );
+    register_protocol(
+        ids.row_control,
+        callable_mp(plane, &NetwMultiplayer::row_control_receive)
     );
 }
 
@@ -357,15 +363,7 @@ void ReplicationCore::flush_all_buffers() {
     if (plane == nullptr || shell == nullptr) {
         return;
     }
-    const PackedInt64Array staged = plane->carrier_flush();
-    Object *seam = gate_seam(StringName("_sync_note_sent"));
-    for (int at = 0; at + 1 < staged.size(); at += 2) {
-        if (seam != nullptr) {
-            seam->call("_sync_note_sent", staged[at], staged[at + 1]);
-            continue;
-        }
-        plane->note_sent(staged[at], staged[at + 1]);
-    }
+    plane->carrier_flush();
 }
 
 void ReplicationCore::note_staged(int64_t p_peer_id, int64_t p_seq) {
@@ -586,7 +584,7 @@ void ReplicationCore::dispatch_frame(
         return;
     }
 
-    if (p_seq >= 0
+    if (p_seq >= 0 && !channel_addresses_a_set(p_channel)
         && !sync_pipeline
                 .accept_unreliable(p_sender, p_route, p_channel, p_seq)) {
         plane->attribution_note_refusal(

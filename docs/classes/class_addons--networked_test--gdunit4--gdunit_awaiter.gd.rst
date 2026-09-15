@@ -19,7 +19,7 @@ GdUnit4-adapted timeout reporter for Networked test harnesses.
 Description
 -----------
 
-:godot:`NetwTestSuite.make_game_harness() <NetwTestSuite#class_NetwTestSuite_method_make_game_harness>` installs this reporter so timeouts land in the GdUnit4 test report. Plain Godot callers can use the harness default reporter or assign their own.
+:ref:`NetwTestSuite.make_game_harness()<class_NetwTestSuite_method_make_game_harness>` installs this reporter so timeouts land in the GdUnit4 test report. Plain Godot callers can use the harness default reporter or assign their own.
 
 .. rst-class:: classref-reftable-group
 

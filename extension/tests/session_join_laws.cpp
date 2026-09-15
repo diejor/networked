@@ -903,6 +903,39 @@ TEST_CASE(
     core->embed_dispose();
 }
 
+TEST_CASE(
+    "[Networked][Session] a peer whose wire identity is not this build's is "
+    "refused at the join gate with a reason naming the wire, and is never "
+    "seated"
+) {
+    LoopbackRig rig(1);
+    rig.pump(4);
+
+    NetwMultiplayer *host = rig.server();
+    const int stranger = rig.peer_id(0);
+
+    netw::JoinRequest older;
+    older.username = StringName("v10");
+    older.app_tag = host->auth_app_tag_of();
+    older.wire_identity = netw::SessionCore::compute_wire_identity() ^ 0xA5A5;
+    older.schema_identity = host->session_schema_identity();
+
+    host->session_receive_join(older.serialize(), stranger);
+    rig.pump(4);
+
+    CHECK(participant_of(host, stranger).is_null());
+    CHECK(host->session_refusal(stranger).contains("wire"));
+
+    netw::JoinRequest current = older;
+    current.username = StringName("v11");
+    current.wire_identity = netw::SessionCore::compute_wire_identity();
+
+    host->session_receive_join(current.serialize(), stranger);
+    rig.pump(4);
+
+    CHECK(participant_of(host, stranger).is_valid());
+}
+
 } // namespace TestNetwSessionJoinLaws
 
 #endif

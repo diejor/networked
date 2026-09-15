@@ -164,7 +164,7 @@
 		</member>
 		<member name="fp_verified" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
 			Acknowledged transitions the owner reached a fingerprint verdict on, the denominator [member fp_mismatches] is unreadable without.
-			Once the acknowledgement lane is live every acknowledged transition counts here, because authority sends the fingerprint of the state its own replay produced. While the lane is dark the owner must reassemble the state from authority frames instead, so a row merged from several frames describes no single moment and is left unverified rather than charged as a divergence.
+			Every acknowledged transition counts here, because authority sends the fingerprint of the state its own replay produced alongside the acknowledgement it answers.
 		</member>
 		<member name="frames_dropped_invalid" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
 			Owner-lane frames authority dropped whole because they were malformed or carried a fresh transition without its command. A frame is never parsed into a shorter one, so this counts frames rather than transitions.

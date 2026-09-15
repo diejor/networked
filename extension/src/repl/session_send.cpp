@@ -21,6 +21,77 @@ RowFrameHeader header_of(const RowOffer &p_offer, uint64_t p_mask) {
 
 } // namespace
 
+wire::SnapshotSender *SessionSend::stream_ready(
+    int p_peer,
+    const RowOffer &p_offer,
+    wire::StreamFamily p_family,
+    uint64_t &r_token,
+    wire::StreamLane &r_lane
+) {
+    wire::StreamLane lane;
+    lane.route = p_offer.route;
+    lane.ordinal = p_offer.comp;
+    lane.family = p_family;
+    r_lane = lane;
+    r_token = writers.token_of(p_peer, lane);
+    if (r_token != 0) {
+        return writers.sender(p_peer, lane);
+    }
+    const uint64_t epoch = uint64_t(p_offer.life);
+    const uint32_t schema = uint32_t(p_offer.declared().shape_hash);
+    const uint64_t request = writers.open(p_peer, lane, epoch, schema);
+    if (request == 0) {
+        return nullptr;
+    }
+    wire::ControlRecord asking;
+    asking.tag = wire::ControlTag::OPEN;
+    asking.request = request;
+    asking.route = lane.route;
+    asking.ordinal = lane.ordinal;
+    asking.family = p_family;
+    asking.epoch = epoch;
+    asking.schema = schema;
+    control.queue(p_peer, asking);
+    return nullptr;
+}
+
+bool SessionSend::row_is_owed(
+    wire::SnapshotSender &p_stream,
+    int p_peer,
+    const wire::StreamLane &p_lane,
+    int64_t p_now_ms,
+    bool &r_repairing
+) {
+    r_repairing = false;
+    if (p_stream.quiet()) {
+        return false;
+    }
+    if (!p_stream.awaiting_receipt()) {
+        return true;
+    }
+    r_repairing = true;
+    return writers.repair_due(
+        p_peer,
+        p_lane,
+        p_now_ms,
+        int64_t(link.rtt_ms(p_peer))
+    );
+}
+
+uint64_t SessionSend::revision_for(
+    wire::SnapshotSender &p_stream,
+    int p_peer,
+    const wire::StreamLane &p_lane,
+    int64_t p_now_ms,
+    bool p_repairing
+) {
+    if (p_repairing) {
+        return p_stream.pinned_repair();
+    }
+    writers.note_attempt(p_peer, p_lane, p_now_ms);
+    return p_stream.reserve();
+}
+
 PackedByteArray SessionSend::price(
     const RowSend &p_send,
     int64_t p_base_tick
@@ -41,6 +112,7 @@ PackedByteArray SessionSend::price(
 LocalVector<RowSend> SessionSend::collect(
     const LocalVector<RowOffer> &p_offers,
     int64_t p_base_tick,
+    int64_t p_now_ms,
     LocalVector<wire::FitCandidate> &r_candidates,
     SessionResult &r_out
 ) {
@@ -95,23 +167,48 @@ LocalVector<RowSend> SessionSend::collect(
                 int(offer.recipients.size())
             );
             const uint64_t whole = ring->plan().full_mask();
-            const PackedByteArray window_bytes = write_window_frame(
-                header_of(offer, whole),
-                p_base_tick,
-                ring->plan(),
-                samples
-            );
             for (uint32_t which = 0; which < offer.recipients.size(); ++which) {
+                uint64_t token = 0;
+                wire::StreamLane lane;
+                wire::SnapshotSender *stream = stream_ready(
+                    offer.recipients[which],
+                    offer,
+                    wire::StreamFamily::WINDOW,
+                    token,
+                    lane
+                );
+                if (stream == nullptr) {
+                    r_out.deferred += 1;
+                    note_verdict(
+                        offer.route,
+                        offer.comp,
+                        offer.recipients[which],
+                        RowVerdict::DEFERRED,
+                        p_base_tick
+                    );
+                    continue;
+                }
+                SnapshotHeader header;
+                header.token = token;
+                header.revision = stream->reserve();
+                header.reconcile_ack = offer.ack;
                 RowSend send;
                 send.route = offer.route;
                 send.comp = offer.comp;
                 send.peer = offer.recipients[which];
                 send.offer = at;
                 send.mask = whole;
+                send.token = token;
+                send.revision = header.revision;
                 send.windowed = true;
                 send.sample_count = samples.size();
                 send.row = row;
-                send.bytes = window_bytes;
+                send.bytes = write_snapshot_window(
+                    header,
+                    p_base_tick,
+                    ring->plan(),
+                    samples
+                );
                 send.bytes = price(send, p_base_tick);
                 if (send.bytes.is_empty()) {
                     r_out.staged_out += 1;
@@ -154,10 +251,29 @@ LocalVector<RowSend> SessionSend::collect(
             }
             for (uint32_t which = 0; which < offer.recipients.size(); ++which) {
                 const int peer = offer.recipients[which];
-                const RetainedLane::Delivery ordered
-                    = reliable->send(peer, row);
-                const uint64_t mask = ordered.mask;
-                if (mask == 0) {
+                uint64_t token = 0;
+                wire::StreamLane lane;
+                wire::SnapshotSender *stream = stream_ready(
+                    peer,
+                    offer,
+                    wire::StreamFamily::RETAINED,
+                    token,
+                    lane
+                );
+                if (stream == nullptr) {
+                    r_out.deferred += 1;
+                    note_verdict(
+                        offer.route,
+                        offer.comp,
+                        peer,
+                        RowVerdict::DEFERRED,
+                        p_base_tick
+                    );
+                    continue;
+                }
+                stream->desire(row);
+                bool repairing = false;
+                if (!row_is_owed(*stream, peer, lane, p_now_ms, repairing)) {
                     r_out.caught_up += 1;
                     note_verdict(
                         offer.route,
@@ -168,26 +284,41 @@ LocalVector<RowSend> SessionSend::collect(
                     );
                     continue;
                 }
+                SnapshotHeader header;
+                header.token = token;
+                header.revision
+                    = revision_for(*stream, peer, lane, p_now_ms, repairing);
+                header.distance = repairing
+                    ? 0
+                    : stream->distance_for(header.revision);
+                header.tick = offer.tick;
+                header.reconcile_ack = offer.ack;
+                const wire::CodeRow *baseline
+                    = header.absolute() ? nullptr : stream->confirmed();
+                header.mask = header.absolute()
+                    ? reliable->plan().full_mask()
+                    : wire::CodeRow::changed_mask(
+                          reliable->plan(),
+                          *baseline,
+                          row
+                      );
                 RowSend send;
                 send.route = offer.route;
                 send.comp = offer.comp;
                 send.peer = peer;
                 send.offer = at;
-                send.mask = mask;
-                send.masked = true;
+                send.mask = header.mask;
+                send.token = token;
+                send.revision = header.revision;
+                send.masked = !header.absolute();
                 send.reliable = true;
                 send.row = row;
-                RowBaseline stepping;
-                stepping.naming = BaselineNaming::BY_ORDER;
-                if (ordered.steps_from_baseline) {
-                    stepping.row = &ordered.ordered_baseline;
-                }
-                send.bytes = write_row_frame(
-                    header_of(offer, mask),
+                send.bytes = write_snapshot_row(
+                    header,
                     p_base_tick,
                     reliable->plan(),
                     row,
-                    stepping
+                    baseline
                 );
                 send.bytes = price(send, p_base_tick);
                 if (send.bytes.is_empty()) {
@@ -239,9 +370,29 @@ LocalVector<RowSend> SessionSend::collect(
         }
         for (uint32_t which = 0; which < offer.recipients.size(); ++which) {
             const int peer = offer.recipients[which];
-            const uint64_t mask = offer.masked ? lane->mask_for(peer, row)
-                                               : lane->plan().full_mask();
-            if (mask == 0) {
+            uint64_t token = 0;
+            wire::StreamLane stream_lane;
+            wire::SnapshotSender *stream = stream_ready(
+                peer,
+                offer,
+                wire::StreamFamily::VOLATILE,
+                token,
+                stream_lane
+            );
+            if (stream == nullptr) {
+                r_out.deferred += 1;
+                note_verdict(
+                    offer.route,
+                    offer.comp,
+                    peer,
+                    RowVerdict::DEFERRED,
+                    p_base_tick
+                );
+                continue;
+            }
+            stream->desire(row);
+            bool repairing = false;
+            if (!row_is_owed(*stream, peer, stream_lane, p_now_ms, repairing)) {
                 r_out.caught_up += 1;
                 note_verdict(
                     offer.route,
@@ -252,19 +403,40 @@ LocalVector<RowSend> SessionSend::collect(
                 );
                 continue;
             }
+            SnapshotHeader header;
+            header.token = token;
+            header.revision = revision_for(
+                *stream,
+                peer,
+                stream_lane,
+                p_now_ms,
+                repairing
+            );
+            header.distance
+                = repairing ? 0 : stream->distance_for(header.revision);
+            header.tick = offer.tick;
+            header.reconcile_ack = offer.ack;
+            const wire::CodeRow *baseline
+                = header.absolute() ? nullptr : stream->confirmed();
+            header.mask = header.absolute()
+                ? lane->plan().full_mask()
+                : wire::CodeRow::changed_mask(lane->plan(), *baseline, row);
             RowSend send;
             send.route = offer.route;
             send.comp = offer.comp;
             send.peer = peer;
             send.offer = at;
-            send.mask = mask;
-            send.masked = offer.masked;
+            send.mask = header.mask;
+            send.token = token;
+            send.revision = header.revision;
+            send.masked = !header.absolute();
             send.row = row;
-            send.bytes = write_row_frame(
-                header_of(offer, mask),
+            send.bytes = write_snapshot_row(
+                header,
                 p_base_tick,
                 lane->plan(),
-                row
+                row,
+                baseline
             );
             send.bytes = price(send, p_base_tick);
             if (send.bytes.is_empty()) {
@@ -344,13 +516,36 @@ RowExplain SessionSend::explain(
             out = *held;
         }
     }
-    const RowLane *lane = const_cast<LaneSet &>(lanes).find(p_route, p_comp);
-    if (lane != nullptr) {
-        out.sticky = lane->sticky(p_peer);
-        out.in_flight = lane->in_flight(p_peer);
-        out.has_baseline = lane->knows(p_peer);
+    const wire::StreamFamily families[3] = {
+        wire::StreamFamily::VOLATILE,
+        wire::StreamFamily::RETAINED,
+        wire::StreamFamily::WINDOW,
+    };
+    for (uint32_t family = 0; family < 3; ++family) {
+        wire::StreamLane named;
+        named.route = p_route;
+        named.ordinal = p_comp;
+        named.family = families[family];
+        const wire::SnapshotSender *stream
+            = const_cast<wire::StreamWriterBook &>(writers)
+                  .sender(p_peer, named);
+        if (stream == nullptr) {
+            continue;
+        }
+        out.confirmed = stream->confirmed_at();
+        out.exposed = stream->exposed_high_water();
+        out.has_baseline = stream->confirmed() != nullptr;
+        break;
     }
     return out;
+}
+
+void SessionSend::expose_send(const RowSend &p_send) {
+    wire::SnapshotSender *stream
+        = writers.sender_of_token(p_send.peer, p_send.token);
+    if (stream != nullptr) {
+        stream->expose(p_send.revision, p_send.row);
+    }
 }
 
 float SessionSend::owed_by(const RowSend &p_send, float p_priority) const {
@@ -366,7 +561,8 @@ SessionResult SessionSend::run(
     const wire::WireRegistry &p_registry,
     const LocalVector<RowOffer> &p_offers,
     int64_t p_max_bits,
-    int64_t p_base_tick
+    int64_t p_base_tick,
+    int64_t p_now_ms
 ) {
     NETW_ZONE_NC("Session send", colors::WIRE);
     NETW_ZONE_VALUE(p_offers.size());
@@ -374,7 +570,7 @@ SessionResult SessionSend::run(
 
     LocalVector<wire::FitCandidate> candidates;
     LocalVector<RowSend> staged
-        = collect(p_offers, p_base_tick, candidates, out);
+        = collect(p_offers, p_base_tick, p_now_ms, candidates, out);
 
     LocalVector<int> peers;
     LocalVector<int64_t> reliable_bits;
@@ -390,6 +586,7 @@ SessionResult SessionSend::run(
         }
         if (send.reliable) {
             reliable_bits[slot] += send.bits;
+            expose_send(send);
             out.sends.push_back(send);
         }
     }
@@ -453,56 +650,71 @@ SessionResult SessionSend::run(
     return out;
 }
 
-void SessionSend::defer(const RowSend &p_send) {
+bool SessionSend::describe(const RowSend &p_send, CarrierRow &r_row) {
     if (p_send.reliable) {
-        return;
+        return false;
     }
-    Pending held;
-    held.route = p_send.route;
-    held.comp = p_send.comp;
-    held.bits = p_send.bits;
-    held.masked = p_send.masked;
-    held.row = p_send.row;
-    pending[p_send.peer].push_back(held);
+    r_row.route = p_send.route;
+    r_row.comp = p_send.comp;
+    r_row.bits = p_send.bits;
+    r_row.token = p_send.token;
+    r_row.revision = p_send.revision;
+    r_row.masked = p_send.masked;
+    r_row.row.copy_from(p_send.row);
+    expose_send(p_send);
+    return true;
 }
 
-bool SessionSend::commit(int p_peer, uint16_t p_seq) {
-    godot::HashMap<int, LocalVector<Pending>>::Iterator held
-        = pending.find(p_peer);
-    if (held == pending.end()) {
-        return true;
-    }
-    int64_t bits = 0;
-    for (uint32_t at = 0; at < held->value.size(); ++at) {
-        const Pending &row = held->value[at];
-        bits += row.bits;
-        RowLane *lane = lanes.find(row.route, row.comp);
-        if (lane != nullptr && row.masked) {
-            lane->stage(p_peer, p_seq, row.row);
+bool SessionSend::commit(
+    int p_peer,
+    uint16_t p_seq,
+    const LocalVector<CarrierRow> &p_rows,
+    int64_t p_frames,
+    int64_t p_bits
+) {
+    return pass.record_datagram(
+        p_peer,
+        p_seq,
+        uint16_t(p_frames),
+        p_bits
+    );
+}
+
+void SessionSend::cancel(
+    int p_peer,
+    const LocalVector<CarrierRow> &p_rows,
+    int64_t p_tick
+) {
+    for (uint32_t at = 0; at < p_rows.size(); ++at) {
+        wire::SnapshotSender *stream
+            = writers.sender_of_token(p_peer, p_rows[at].token);
+        if (stream != nullptr) {
+            stream->withdraw(p_rows[at].revision);
         }
+        note_verdict(
+            p_rows[at].route,
+            p_rows[at].comp,
+            p_peer,
+            RowVerdict::REFUSED,
+            p_tick
+        );
     }
-    const uint16_t frames = uint16_t(held->value.size());
-    pending.erase(p_peer);
-    return pass.record_datagram(p_peer, p_seq, frames, bits);
-}
-
-uint32_t SessionSend::pending_count(int p_peer) const {
-    godot::HashMap<int, LocalVector<Pending>>::ConstIterator held
-        = pending.find(p_peer);
-    return held == pending.end() ? 0 : held->value.size();
 }
 
 void SessionSend::forget_peer(int p_peer) {
-    lanes.forget_peer(p_peer);
-    pending.erase(p_peer);
     owed.erase(p_peer);
     verdicts.erase(p_peer);
     link.forget(p_peer);
     pass.forget(p_peer);
+    readers.forget_peer(p_peer);
+    writers.forget_peer(p_peer);
+    control.forget_peer(p_peer);
 }
 
 void SessionSend::close_route(int64_t p_route) {
     lanes.close_route(p_route);
+    readers.close_route(p_route);
+    writers.close_route(p_route);
     for (godot::KeyValue<int, godot::HashMap<uint64_t, float>> &book : owed) {
         LocalVector<uint64_t> gone;
         for (const godot::KeyValue<uint64_t, float> &row : book.value) {
@@ -539,7 +751,6 @@ AckReport SessionSend::acknowledge(
     LocalVector<wire::AckEntry> delivered;
     LocalVector<wire::AckEntry> lost;
     pass.acknowledge(p_peer, p_acked_seq, p_history, delivered, lost);
-    lanes.acknowledge_peer(p_peer, p_acked_seq, p_history);
     link.note_ack(
         p_peer,
         delivered.size(),
@@ -558,40 +769,76 @@ AckReport SessionSend::acknowledge(
     return report;
 }
 
-void SessionSend::retain(const LocalVector<int> &p_recipients) {
-    lanes.retain(p_recipients);
-    LocalVector<int> forgotten;
-    for (const godot::KeyValue<int, LocalVector<Pending>> &held : pending) {
-        bool kept = false;
-        for (uint32_t at = 0; at < p_recipients.size(); ++at) {
-            if (p_recipients[at] == held.key) {
-                kept = true;
-                break;
-            }
-        }
-        if (!kept) {
-            forgotten.push_back(held.key);
-        }
-    }
+LocalVector<int> SessionSend::known_peers() const {
+    LocalVector<int> known;
     for (const godot::KeyValue<int, godot::HashMap<uint64_t, float>> &book :
          owed) {
+        known.push_back(book.key);
+    }
+    for (const godot::KeyValue<int, godot::HashMap<uint64_t, RowExplain>> &seen :
+         verdicts) {
+        bool counted = false;
+        for (uint32_t at = 0; at < known.size(); ++at) {
+            counted = counted || known[at] == seen.key;
+        }
+        if (!counted) {
+            known.push_back(seen.key);
+        }
+    }
+    return known;
+}
+
+void SessionSend::retain_row(
+    int64_t p_route,
+    uint8_t p_comp,
+    const LocalVector<int> &p_recipients
+) {
+    const LocalVector<int> known = known_peers();
+    for (uint32_t which = 0; which < known.size(); ++which) {
         bool kept = false;
         for (uint32_t at = 0; at < p_recipients.size(); ++at) {
-            if (p_recipients[at] == book.key) {
-                kept = true;
-                break;
-            }
+            kept = kept || p_recipients[at] == known[which];
+        }
+        if (kept) {
+            continue;
+        }
+        const wire::StreamFamily families[3] = {
+            wire::StreamFamily::VOLATILE,
+            wire::StreamFamily::RETAINED,
+            wire::StreamFamily::WINDOW,
+        };
+        for (uint32_t family = 0; family < 3; ++family) {
+            wire::StreamLane lane;
+            lane.route = p_route;
+            lane.ordinal = p_comp;
+            lane.family = families[family];
+            uint64_t token = 0;
+            writers.close(known[which], lane, token);
+            control.drop_token(known[which], token);
+        }
+    }
+}
+
+void SessionSend::retain(const LocalVector<int> &p_recipients) {
+    const LocalVector<int> known = known_peers();
+    LocalVector<int> forgotten;
+    for (uint32_t which = 0; which < known.size(); ++which) {
+        bool kept = false;
+        for (uint32_t at = 0; at < p_recipients.size(); ++at) {
+            kept = kept || p_recipients[at] == known[which];
         }
         if (!kept) {
-            forgotten.push_back(book.key);
+            forgotten.push_back(known[which]);
         }
     }
     for (uint32_t at = 0; at < forgotten.size(); ++at) {
-        pending.erase(forgotten[at]);
         owed.erase(forgotten[at]);
         verdicts.erase(forgotten[at]);
         link.forget(forgotten[at]);
         pass.forget(forgotten[at]);
+        readers.forget_peer(forgotten[at]);
+        writers.forget_peer(forgotten[at]);
+        control.forget_peer(forgotten[at]);
     }
 }
 
