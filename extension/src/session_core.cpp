@@ -90,9 +90,17 @@ void SessionCore::exit_state(State prev) {
 }
 
 void SessionCore::enter_state(State next) {
-    if (next == STATE_ONLINE && host != nullptr) {
+    if (next != STATE_ONLINE) {
+        return;
+    }
+    generation += 1;
+    if (host != nullptr) {
         host->session_announce_entered();
     }
+}
+
+uint64_t SessionCore::get_generation() const {
+    return generation;
 }
 
 void SessionCore::on_peer_assigned(

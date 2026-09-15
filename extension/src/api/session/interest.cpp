@@ -168,7 +168,7 @@ void NetwMultiplayer::interest_release_body(const Ref<NetwEntity> &p_entity) {
     const int64_t slot = p_entity->get_rid_handle().get_id();
     const Array named = interest_engine.memberships(slot);
     for (int at = 0; at < named.size(); ++at) {
-        const Ref<NetwInterestLayer> exiting = interest_layer_named(named[at]);
+        const Ref<NetwInterestLayer> exiting = layer_record_named(named[at]);
         if (exiting.is_null()) {
             continue;
         }
@@ -182,6 +182,7 @@ void NetwMultiplayer::interest_release_body(const Ref<NetwEntity> &p_entity) {
     interest_retire_entity(p_entity);
     interest_leave_engine.forget_entity(slot);
     interest_engine.set_scene_membership(slot, StringName());
+    interest_engine.set_scene_root(slot, StringName());
     interest_clear_perception(p_entity, false);
 }
 
@@ -374,7 +375,9 @@ void NetwMultiplayer::interest_apply_awareness(
     edge.kind = int32_t(p_kind);
     const bool entered = edge.kind == interest::Awareness::ENTER;
     if (edge.type == interest::Awareness::LAYER) {
-        const Ref<NetwInterestLayer> event_layer = interest_layer(p_layer_id);
+        const Ref<NetwInterestLayer> event_layer = layer_record_ensure(
+            p_layer_id
+        );
         if (event_layer.is_null()) {
             return;
         }
@@ -541,7 +544,7 @@ void NetwMultiplayer::interest_apply_delta(const interest::Delta &p_delta) {
                     wrapper_for_id(int64_t(row[1])).ptr()
                 ));
             const int64_t peer_id = interest_engine.peer_of_bit(int(row[2]));
-            const Ref<NetwInterestLayer> layer = interest_layer_named(layer_id);
+            const Ref<NetwInterestLayer> layer = layer_record_named(layer_id);
             if (layer.is_null() || entity.is_null() || peer_id == 0) {
                 continue;
             }
@@ -945,17 +948,22 @@ void NetwMultiplayer::interest_sync_scene_membership(
     const RID scene = scene_of(entity_of(p_entity->get_owner()));
     const StringName current
         = scene.is_valid() ? scene_layer_id(scene) : StringName();
+    interest_engine.set_scene_root(
+        slot,
+        p_entity->get_declares_scene() ? scene_layer_id(p_entity->get_rid_handle())
+                                       : StringName()
+    );
     if (!interest_engine.set_scene_membership(slot, current)) {
         return;
     }
     if (!previous.is_empty()) {
-        const Ref<NetwInterestLayer> before = interest_layer_named(previous);
+        const Ref<NetwInterestLayer> before = layer_record_named(previous);
         if (before.is_valid()) {
             before->remove_entity(p_entity);
         }
     }
     if (!current.is_empty()) {
-        interest_layer(current)->add_entity(p_entity);
+        layer_record_ensure(current)->add_entity(p_entity);
     }
 }
 
@@ -1283,7 +1291,20 @@ StringName NetwMultiplayer::layer_name_of(const RID &p_layer) const {
 }
 
 Ref<NetwInterestLayer> NetwMultiplayer::layer_record(const RID &p_layer) const {
-    return interest_layer_view(p_layer);
+    const Ref<NetwInterestLayer> *held = layer_views.getptr(p_layer.get_id());
+    return held != nullptr ? *held : Ref<NetwInterestLayer>();
+}
+
+Ref<NetwInterestLayer> NetwMultiplayer::layer_record_named(
+    const StringName &p_name
+) const {
+    return layer_record(interest_layer_find(p_name));
+}
+
+Ref<NetwInterestLayer> NetwMultiplayer::layer_record_ensure(
+    const StringName &p_name
+) {
+    return layer_record(layer_open(p_name));
 }
 
 RID NetwMultiplayer::interest_layer_create(const StringName &p_name) {
@@ -1533,8 +1554,31 @@ TypedArray<RID> NetwMultiplayer::interest_get_membership(const RID &p_entity) {
 Ref<NetwInterestLayer> NetwMultiplayer::interest_layer_view(
     const RID &p_layer
 ) const {
-    const Ref<NetwInterestLayer> *held = layer_views.getptr(p_layer.get_id());
-    return held != nullptr ? *held : Ref<NetwInterestLayer>();
+    if (scene_owns_layer(layer_name_of(p_layer))) {
+        NETW_ERROR(
+            sys::INTEREST,
+            "a live scene owns this layer, and a scene's roster is derived "
+            "from the settled tree, so a write through the layer is either "
+            "erased by the next settle or never reconciled at all. Reach the "
+            "scene through Netw.scene(...) instead."
+        );
+        return Ref<NetwInterestLayer>();
+    }
+    return layer_record(p_layer);
+}
+
+bool NetwMultiplayer::scene_owns_layer(const StringName &p_layer) const {
+    if (p_layer.is_empty()) {
+        return false;
+    }
+    const Array live = scene_core->live_scenes();
+    for (int at = 0; at < live.size(); ++at) {
+        const RID scene = live[at];
+        if (scene_layer_id(scene) == p_layer) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void NetwMultiplayer::layer_close(const RID &p_layer) {
@@ -1703,14 +1747,14 @@ void NetwMultiplayer::interest_join(
     RID layer = interest_layer_find(p_layer_id);
     if (!layer.is_valid()) {
         layer = layer_open(p_layer_id);
-        if (layer.is_valid() && interest_layer_view(layer).is_null()) {
+        if (layer.is_valid() && layer_record(layer).is_null()) {
             layer_close(layer);
             return;
         }
     }
     if (is_server() && layer.is_valid()) {
         liveness_adopt(entity.ptr());
-        const Ref<NetwInterestLayer> record = interest_layer_view(layer);
+        const Ref<NetwInterestLayer> record = layer_record(layer);
         if (record.is_valid()) {
             record->add_entity(entity);
         }
@@ -1728,7 +1772,7 @@ void NetwMultiplayer::interest_leave(
     }
     if (is_server()) {
         const Ref<NetwInterestLayer> record
-            = interest_layer_view(interest_layer_find(p_layer_id));
+            = layer_record(interest_layer_find(p_layer_id));
         if (record.is_valid()) {
             record->remove_entity(entity);
         }

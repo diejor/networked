@@ -368,7 +368,7 @@ TEST_CASE(
     rig.pump(6);
 
     const RID scene = api->entity_of(authored);
-    api->scene_admit(scene, rig.peer_id(0));
+    api->scene_watch(scene, rig.peer_id(0));
     rig.pump(6);
 
     const int route = int(api->entity_get_route(scene));

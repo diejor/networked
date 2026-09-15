@@ -16,6 +16,7 @@ namespace {
 constexpr int PORT_RANGE_START = 30300;
 constexpr int PORT_RANGE_SIZE = 100;
 constexpr int64_t STEP_BUDGET_MSEC = 5000;
+constexpr int SETTLE_POLLS = 10;
 
 struct RefusalEvidence {
     bool driven = false;
@@ -29,6 +30,9 @@ struct RefusalEvidence {
     bool host_forgot_client = false;
     bool host_still_seats = false;
     int client_end_state = -1;
+    bool second_reached = false;
+    bool second_told = false;
+    bool host_still_seats_second = false;
 };
 
 RefusalEvidence &refusal_evidence() {
@@ -41,6 +45,10 @@ void record_join_failed(int64_t p_error, const String &p_reason) {
     evidence.client_told = true;
     evidence.client_error = p_error;
     evidence.client_reason = p_reason;
+}
+
+void record_second_join_failed(int64_t, const String &) {
+    refusal_evidence().second_told = true;
 }
 
 bool seats(const Ref<netw::NetwMultiplayer> &p_session, int p_peer) {
@@ -57,6 +65,7 @@ class EnetJoinRefusalScenario final : public netw_test::FrameScenario {
     int step = 0;
     int64_t step_opened = 0;
     int client_id = 0;
+    int settle_count = 0;
     Ref<netw::NetwMultiplayer> host;
     Ref<netw::NetwMultiplayer> client;
     Ref<RefCounted> policy;
@@ -102,7 +111,27 @@ class EnetJoinRefusalScenario final : public netw_test::FrameScenario {
         return 0;
     }
 
-    bool arm_refusing_policy() {
+    bool arm_schema_refusing_policy() {
+        const Ref<Script> shape = netw_test::minted_script(
+            "extends RefCounted\n"
+            "func seat(_rj, _team: int) -> void:\n"
+            "\tpass\n"
+        );
+        if (shape.is_null()) {
+            return false;
+        }
+        policy = shape->call("new");
+        if (policy.is_null()) {
+            return false;
+        }
+        host->session_set_join_override(
+            Callable(policy.ptr(), StringName("seat")),
+            Array()
+        );
+        return true;
+    }
+
+    bool arm_return_ignored_policy() {
         const Ref<Script> shape = netw_test::minted_script(
             "extends RefCounted\n"
             "func seat(_rj) -> String:\n"
@@ -122,7 +151,7 @@ class EnetJoinRefusalScenario final : public netw_test::FrameScenario {
         return true;
     }
 
-    bool open_client(int p_port) {
+    bool open_client(int p_port, bool p_second) {
         const Ref<MultiplayerPeer> peer = enet_peer();
         if (peer.is_null()) {
             return false;
@@ -140,7 +169,8 @@ class EnetJoinRefusalScenario final : public netw_test::FrameScenario {
         client.instantiate();
         client->connect(
             StringName("session_join_failed"),
-            callable_mp_static(&record_join_failed)
+            p_second ? callable_mp_static(&record_second_join_failed)
+                     : callable_mp_static(&record_join_failed)
         );
         client->session_prepare_join(StringName("turned_away"), Array());
         client->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
@@ -183,7 +213,8 @@ public:
                 if (host->is_online() && host->participant_local().is_valid()) {
                     evidence.host_online = true;
                     evidence.host_seated_itself = true;
-                    if (!arm_refusing_policy() || !open_client(evidence.port)) {
+                    if (!arm_schema_refusing_policy()
+                        || !open_client(evidence.port, false)) {
                         enter(99);
                         return true;
                     }
@@ -198,16 +229,21 @@ public:
                 if (seated > 1) {
                     evidence.client_reached = true;
                     client_id = seated;
-                    enter(3);
+                    settle_count = 0;
+                    enter(20);
                 } else if (over_budget()) {
                     enter(99);
                 }
                 return true;
             }
+            case 20: {
+                enter(3);
+                return true;
+            }
             case 3: {
                 if (evidence.client_told || over_budget()) {
                     evidence.host_forgot_client
-                        = host->peer_get_accepted_join(client_id).is_null();
+                        = !host->session_has_accepted(client_id);
                     enter(4);
                 }
                 return true;
@@ -225,6 +261,39 @@ public:
             case 5: {
                 evidence.host_still_seats = seats(host, client_id);
                 if (!evidence.host_still_seats || over_budget()) {
+                    close(client);
+                    client.unref();
+                    policy.unref();
+                    if (!arm_return_ignored_policy()
+                        || !open_client(evidence.port, true)) {
+                        enter(99);
+                        return true;
+                    }
+                    enter(6);
+                }
+                return true;
+            }
+            case 6: {
+                const int seated = client->NETW_API_VIRTUAL(get_unique_id)();
+                if (seated > 1) {
+                    evidence.second_reached = true;
+                    client_id = seated;
+                    settle_count = 0;
+                    enter(60);
+                } else if (over_budget()) {
+                    enter(99);
+                }
+                return true;
+            }
+            case 60: {
+                settle_count = 0;
+                enter(7);
+                return true;
+            }
+            case 7: {
+                settle_count++;
+                if (settle_count >= SETTLE_POLLS || over_budget()) {
+                    evidence.host_still_seats_second = seats(host, client_id);
                     enter(99);
                 }
                 return true;
@@ -264,18 +333,14 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Frame] JR2 a handler answering something that is "
-    "not a placement seats nobody, so the peer is turned away rather than "
-    "left holding a session it is not in"
+    "not a placement leaves the peer seated, because a return value has no "
+    "network effect and only an explicit refusal turns a peer away"
 ) {
     const RefusalEvidence &evidence = refusal_evidence();
     REQUIRE(evidence.driven);
-    REQUIRE(evidence.client_reached);
-    CHECK(evidence.host_forgot_client);
-    CHECK_FALSE(evidence.host_still_seats);
-    NETW_CHECK_EQ(
-        evidence.client_end_state,
-        int(netw::NetwMultiplayer::SESSION_STATE_OFFLINE)
-    );
+    REQUIRE(evidence.second_reached);
+    CHECK_FALSE(evidence.second_told);
+    CHECK(evidence.host_still_seats_second);
 }
 
 TEST_CASE(

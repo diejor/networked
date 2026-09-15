@@ -4,11 +4,31 @@
 
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/resolved_join.hpp"
 #include "netw/wire/describe.hpp"
 #include "netw/wire/stream.hpp"
 
 namespace netw::session {
+
+struct AcceptFrame {
+    int64_t peer_id = 0;
+    godot::StringName username;
+    uint64_t membership = 0;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&AcceptFrame::peer_id>(
+            "peer_id",
+            netw::wire::svarint(5)
+        ),
+        netw::wire::field<&AcceptFrame::username>(
+            "username",
+            netw::wire::string()
+        ),
+        netw::wire::field<&AcceptFrame::membership>(
+            "membership",
+            netw::wire::varuint(5)
+        )
+    );
+};
 
 struct ClockRate {
     uint64_t tickrate = 0;
@@ -94,6 +114,8 @@ struct SceneRequest {
     uint64_t request_id = 0;
     godot::String path;
     int64_t scope = 0;
+    int64_t source_route = 0;
+    int64_t source_epoch = 0;
 
     static constexpr auto wire = netw::wire::describe(
         netw::wire::field<&SceneRequest::request_id>(
@@ -101,7 +123,15 @@ struct SceneRequest {
             netw::wire::varuint(5)
         ),
         netw::wire::field<&SceneRequest::path>("path", netw::wire::string()),
-        netw::wire::field<&SceneRequest::scope>("scope", netw::wire::svarint(2))
+        netw::wire::field<&SceneRequest::scope>("scope", netw::wire::svarint(2)),
+        netw::wire::field<&SceneRequest::source_route>(
+            "source_route",
+            netw::wire::svarint(4)
+        ),
+        netw::wire::field<&SceneRequest::source_epoch>(
+            "source_epoch",
+            netw::wire::svarint(2)
+        )
     );
 };
 
@@ -129,15 +159,45 @@ struct SceneReleased {
     );
 };
 
-struct SceneSeat {
+struct SceneViewersHead {
     int64_t route = 0;
-    int64_t peer = 0;
-    bool present = false;
+    uint64_t epoch = 0;
+    uint64_t generation = 0;
+    uint64_t revision = 0;
+    uint64_t count = 0;
 
     static constexpr auto wire = netw::wire::describe(
-        netw::wire::field<&SceneSeat::route>("route", netw::wire::varuint(5)),
-        netw::wire::field<&SceneSeat::peer>("peer", netw::wire::svarint(5)),
-        netw::wire::field<&SceneSeat::present>("present", netw::wire::bool1())
+        netw::wire::field<&SceneViewersHead::route>(
+            "route",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&SceneViewersHead::epoch>(
+            "epoch",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&SceneViewersHead::generation>(
+            "generation",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&SceneViewersHead::revision>(
+            "revision",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&SceneViewersHead::count>(
+            "count",
+            netw::wire::varuint(2)
+        )
+    );
+};
+
+struct SceneViewerRow {
+    uint64_t membership = 0;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&SceneViewerRow::membership>(
+            "membership",
+            netw::wire::varuint(5)
+        )
     );
 };
 
@@ -186,6 +246,19 @@ godot::PackedByteArray roster_write(
 bool roster_read(
     const godot::PackedByteArray &bytes,
     godot::LocalVector<AcceptFrame> &r_rows
+);
+
+constexpr uint64_t VIEWERS_MAX = 1023;
+
+godot::PackedByteArray viewers_write(
+    const SceneViewersHead &head,
+    const godot::LocalVector<uint64_t> &members
+);
+
+bool viewers_read(
+    const godot::PackedByteArray &bytes,
+    SceneViewersHead &r_head,
+    godot::LocalVector<uint64_t> &r_members
 );
 
 godot::Dictionary frame_spec_records();

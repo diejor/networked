@@ -13,22 +13,22 @@ EntityDecl crate() {
     return EntityDecl().named("Crate").on_route(91).placed_at(godot::Vector2());
 }
 
-Scenario seated_entity() {
+Scenario placed_entity() {
     Scenario scenario;
-    scenario.label = "seated-entity";
+    scenario.label = "placed-entity";
     scenario.world.scene("Arena").scene("Annex").entity(crate(), "Arena");
     return scenario.until(2);
 }
 
 Scenario moved_entity() {
-    Scenario scenario = seated_entity();
+    Scenario scenario = placed_entity();
     scenario.label = "moved-entity";
-    scenario.seat(1, "Crate", "Annex");
+    scenario.place(1, "Crate", "Annex");
     return scenario;
 }
 
 Scenario relocated_entity() {
-    Scenario scenario = seated_entity();
+    Scenario scenario = placed_entity();
     scenario.label = "relocated-entity";
     scenario.move(1, "Crate", "Annex");
     return scenario;
@@ -38,22 +38,22 @@ Scenario nested_scene() {
     Scenario scenario;
     scenario.label = "nested-scene";
     scenario.world.scene("Arena").scene("Vault").entity(crate(), "Vault");
-    scenario.seat(1, "Vault", "Arena");
+    scenario.place(1, "Vault", "Arena");
     return scenario.until(2);
 }
 
-Scenario admitted_scene() {
-    Scenario scenario = seated_entity();
-    scenario.label = "admitted-scene";
+Scenario watched_scene() {
+    Scenario scenario = placed_entity();
+    scenario.label = "watched-scene";
     scenario.clients = 2;
-    scenario.admit(1, "Arena", 0);
+    scenario.watch(1, "Arena", 0);
     return scenario;
 }
 
-Scenario released_scene() {
-    Scenario scenario = admitted_scene();
-    scenario.label = "released-scene";
-    scenario.release(2, "Arena", 0);
+Scenario unwatched_scene() {
+    Scenario scenario = watched_scene();
+    scenario.label = "unwatched-scene";
+    scenario.unwatch(2, "Arena", 0);
     return scenario.until(3);
 }
 
@@ -61,7 +61,7 @@ Scenario sibling_scenes() {
     Scenario scenario;
     scenario.label = "sibling-scenes";
     scenario.world.scene("First", "Arena").scene("Second", "Arena");
-    scenario.admit(1, "First", 0);
+    scenario.watch(1, "First", 0);
     return scenario.until(2);
 }
 
@@ -71,13 +71,13 @@ LawVerdict law_membership_follows_the_tree(const ScenarioRun &p_run) {
     if (!arena.taken() || !annex.taken()) {
         return law_broken("a declared scene answered nothing");
     }
-    const bool relocated = p_run.scenario().declares("seat")
+    const bool relocated = p_run.scenario().declares("place")
         || p_run.scenario().declares("move");
     const Membership &home = relocated ? annex : arena;
     const Membership &vacated = relocated ? arena : annex;
     if (!home.encloses("Crate")) {
         return law_broken(
-            "the scene the crate is seated in encloses %d entities and not it",
+            "the scene the crate resides in encloses %d entities and not it",
             home.members()
         );
     }
@@ -121,23 +121,23 @@ LawVerdict law_a_nested_scene_owns_its_own(const ScenarioRun &p_run) {
     return law_held();
 }
 
-bool declared_admission(
+bool declared_watch(
     const Scenario &p_scenario,
     const godot::StringName &p_scene,
     int p_client
 ) {
-    bool admitted = false;
+    bool watching = false;
     for (const Scenario::Step &step : p_scenario.steps) {
         if (step.subject != p_scene || int(step.value) != p_client) {
             continue;
         }
-        if (step.verb == godot::StringName("admit")) {
-            admitted = true;
-        } else if (step.verb == godot::StringName("release")) {
-            admitted = false;
+        if (step.verb == godot::StringName("watch")) {
+            watching = true;
+        } else if (step.verb == godot::StringName("unwatch")) {
+            watching = false;
         }
     }
-    return admitted;
+    return watching;
 }
 
 LawVerdict law_a_boundary_is_answerable(const ScenarioRun &p_run) {
@@ -150,13 +150,13 @@ LawVerdict law_a_boundary_is_answerable(const ScenarioRun &p_run) {
         }
         bool named = false;
         for (int client = 0; client < scenario.clients; ++client) {
-            named = named || declared_admission(scenario, name, client);
+            named = named || declared_watch(scenario, name, client);
         }
         if (scene.has_boundary() != named) {
             return law_broken(
                 named
                     ? "a scene holding %d viewer(s) answers with no layer"
-                    : "a scene nobody admitted anyone to answers with a layer, "
+                    : "a scene nobody watches answers with a layer, "
                       "holding %d viewer(s)",
                 scene.viewers()
             );
@@ -165,7 +165,7 @@ LawVerdict law_a_boundary_is_answerable(const ScenarioRun &p_run) {
     return law_held();
 }
 
-LawVerdict law_admission_is_per_scene(const ScenarioRun &p_run) {
+LawVerdict law_a_watch_is_per_scene(const ScenarioRun &p_run) {
     const Scenario &scenario = p_run.scenario();
     for (int at = 0; at < scenario.world.scene_count(); ++at) {
         const godot::StringName name = scenario.world.scene_at(at).name;
@@ -174,12 +174,12 @@ LawVerdict law_admission_is_per_scene(const ScenarioRun &p_run) {
             return law_broken("a declared scene answered nothing");
         }
         for (int client = 0; client < scenario.clients; ++client) {
-            const bool owed = declared_admission(scenario, name, client);
-            if (scene.admits(client) != owed) {
+            const bool owed = declared_watch(scenario, name, client);
+            if (scene.subscribes(client) != owed) {
                 return law_broken(
-                    owed ? "a scene that admitted client %d holds %d viewer(s) "
+                    owed ? "a scene client %d watches holds %d viewer(s) "
                            "without it"
-                         : "a scene that admitted client %d nothing holds %d "
+                         : "a scene client %d watches nothing of holds %d "
                            "viewer(s) with it",
                     client,
                     scene.viewers()
@@ -192,15 +192,15 @@ LawVerdict law_admission_is_per_scene(const ScenarioRun &p_run) {
 
 const LawRow L_BOUNDARY = {
     "L-BOUNDARY",
-    "a scene that admitted a peer answers with the layer its admission opened, "
+    "a scene a peer watches answers with the layer that watch opened, "
     "and a scene nobody named answers with none",
     law_a_boundary_is_answerable,
 };
 
 const LawRow L_MEMBER = {
     "L-MEMBER",
-    "an entity belongs to the scene above it, and a seat that moves it moves "
-    "the membership with nothing re-enrolling it",
+    "an entity belongs to the scene above it, and a placement that moves it "
+    "moves the membership with nothing re-enrolling it",
     law_membership_follows_the_tree,
 };
 
@@ -211,12 +211,12 @@ const LawRow L_NEST = {
     law_a_nested_scene_owns_its_own,
 };
 
-const LawRow L_ADMIT = {
-    "L-ADMIT",
-    "a scene admits exactly the peers admitted to it and not released since, "
+const LawRow L_WATCH = {
+    "L-WATCH",
+    "a scene reaches exactly the peers watching it and not unwatched since, "
     "so a scene nobody named denies, and an instance sharing another's stem "
     "carries its own boundary",
-    law_admission_is_per_scene,
+    law_a_watch_is_per_scene,
 };
 
 TEST_CASE(
@@ -266,9 +266,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Declared][Law] a seated entity belongs to its scene"
+    "[Networked][Scene][Declared][Law] a placed entity belongs to its scene"
 ) {
-    const Scenario scenario = seated_entity();
+    const Scenario scenario = placed_entity();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::scenes(rig, scenario);
     REQUIRE(run.regime_reached());
@@ -277,7 +277,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Declared][Law] a seat moves the membership with it"
+    "[Networked][Scene][Declared][Law] a placement moves the membership with it"
 ) {
     const Scenario scenario = moved_entity();
     LoopbackRig rig(scenario.clients);
@@ -351,13 +351,13 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Scene][Declared][Law] a scene nobody named denies every peer"
 ) {
-    const Scenario scenario = seated_entity();
+    const Scenario scenario = placed_entity();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::scenes(rig, scenario);
     REQUIRE(run.regime_reached());
     {
-        NETW_CELL(L_ADMIT, scenario);
-        NETW_LAW_HOLDS(L_ADMIT, run);
+        NETW_CELL(L_WATCH, scenario);
+        NETW_LAW_HOLDS(L_WATCH, run);
     }
     {
         NETW_CELL(L_BOUNDARY, scenario);
@@ -366,37 +366,38 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Declared][Law] an admitted scene admits only its peer"
+    "[Networked][Scene][Declared][Law] a watched scene reaches only its peer"
 ) {
-    const Scenario scenario = admitted_scene();
+    const Scenario scenario = watched_scene();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::scenes(rig, scenario);
     REQUIRE(run.regime_reached());
-    NETW_CELL(L_ADMIT, scenario);
-    NETW_LAW_HOLDS(L_ADMIT, run);
+    NETW_CELL(L_WATCH, scenario);
+    NETW_LAW_HOLDS(L_WATCH, run);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Declared][Law] a released peer is admitted nowhere"
+    "[Networked][Scene][Declared][Law] an unwatched peer reaches nowhere"
 ) {
-    const Scenario scenario = released_scene();
+    const Scenario scenario = unwatched_scene();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::scenes(rig, scenario);
     REQUIRE(run.regime_reached());
-    NETW_CELL(L_ADMIT, scenario);
-    NETW_LAW_HOLDS(L_ADMIT, run);
+    NETW_CELL(L_WATCH, scenario);
+    NETW_LAW_HOLDS(L_WATCH, run);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Declared][Law] two instances of one level admit apart"
+    "[Networked][Scene][Declared][Law] two instances of one level are watched "
+    "apart"
 ) {
     const Scenario scenario = sibling_scenes();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::scenes(rig, scenario);
     REQUIRE(run.regime_reached());
     {
-        NETW_CELL(L_ADMIT, scenario);
-        NETW_LAW_HOLDS(L_ADMIT, run);
+        NETW_CELL(L_WATCH, scenario);
+        NETW_LAW_HOLDS(L_WATCH, run);
     }
     {
         NETW_CELL(L_BOUNDARY, scenario);
@@ -406,7 +407,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Declared][Law] a boundary keyed by stem answers for "
-    "the instance nobody admitted"
+    "the instance nobody watches"
 ) {
     const Scenario scenario = sibling_scenes();
     LoopbackRig rig(scenario.clients);
@@ -418,7 +419,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Declared][Law] an admission keyed by stem reaches the "
+    "[Networked][Scene][Declared][Law] a watch keyed by stem reaches the "
     "sibling instance"
 ) {
     const Scenario scenario = sibling_scenes();
@@ -426,8 +427,8 @@ TEST_CASE(
     const ScenarioRun run
         = ScenarioRun::scenes(rig, scenario, PLANT_SHARED_ADMISSION);
     REQUIRE(run.regime_reached());
-    NETW_CELL(L_ADMIT, scenario);
-    NETW_LAW_BREAKS(L_ADMIT, run);
+    NETW_CELL(L_WATCH, scenario);
+    NETW_LAW_BREAKS(L_WATCH, run);
 }
 
 } // namespace TestNetwDeclaredSceneLaws

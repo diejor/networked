@@ -13,7 +13,7 @@ namespace TestEntityReparentSettleLaws {
 using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
-using netw::NetwReparentOpts;
+using netw::NetwMultiplayer;
 
 struct Stand {
     LoopbackRig rig;
@@ -63,12 +63,10 @@ TEST_CASE(
     "reports the completed fact rather than the options that asked"
 ) {
     Stand stand;
-    Ref<NetwReparentOpts> opts;
-    opts.instantiate();
 
     NETW_CHECK_EQ(stand.seen.count("reparented"), 0);
 
-    stand.entity->reparent_to(stand.away, opts);
+    NetwMultiplayer::entity_move(stand.body, stand.away);
 
     const bool moved = stand.body->get_parent() == stand.away;
     CHECK(moved);
@@ -86,13 +84,9 @@ TEST_CASE(
     "never rested under is not a fact about it"
 ) {
     Stand stand;
-    Ref<NetwReparentOpts> first;
-    first.instantiate();
-    Ref<NetwReparentOpts> second;
-    second.instantiate();
 
-    stand.entity->reparent_to(stand.away, first);
-    stand.entity->reparent_to(stand.home, second);
+    NetwMultiplayer::entity_move(stand.body, stand.away);
+    NetwMultiplayer::entity_move(stand.body, stand.home);
 
     stand.settle();
 
@@ -110,9 +104,7 @@ TEST_CASE(
     NETW_CHECK_EQ(stand.seen.count("ready"), 1);
     NETW_CHECK_EQ(stand.seen.count("reparented"), 0);
 
-    Ref<NetwReparentOpts> opts;
-    opts.instantiate();
-    stand.entity->reparent_to(stand.away, opts);
+    NetwMultiplayer::entity_move(stand.body, stand.away);
     stand.settle();
 
     NETW_CHECK_EQ(stand.seen.count("ready"), 1);

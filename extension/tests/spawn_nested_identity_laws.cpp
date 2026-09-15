@@ -257,19 +257,19 @@ TEST_CASE(
     REQUIRE(level != nullptr);
     rig.pump(6);
     const RID scene = api->entity_of(level);
-    REQUIRE(api->scene_admit(scene, rig.peer_id(0)) == OK);
+    REQUIRE(api->scene_watch(scene, rig.peer_id(0)) == OK);
     rig.pump(6);
 
     const int arena_route = spawn_arena(rig, level);
     const Nest host = read_nest(rig.route_node(arena_route));
     check_matches(host, read_nest(rig.route_node(arena_route, 0)));
 
-    REQUIRE(api->scene_release(scene, rig.peer_id(0)));
+    REQUIRE(api->scene_unwatch(scene, rig.peer_id(0)));
     rig.pump(10);
     const bool ball_left = rig.route_node(int(host.ball), 0) == nullptr;
     CHECK(ball_left);
 
-    REQUIRE(api->scene_admit(scene, rig.peer_id(0)) == OK);
+    REQUIRE(api->scene_watch(scene, rig.peer_id(0)) == OK);
     rig.pump(10);
 
     Node *seat = rig.route_node(arena_route, 0);

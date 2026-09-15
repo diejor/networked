@@ -68,28 +68,28 @@ struct Scenario {
         return step(p_tick, "rewind_at", p_who, godot::Variant());
     }
 
-    Scenario &admit(
+    Scenario &watch(
         int p_tick,
         const godot::StringName &p_scene,
         int p_client
     ) {
-        return step(p_tick, "admit", p_scene, p_client);
+        return step(p_tick, "watch", p_scene, p_client);
     }
 
-    Scenario &release(
+    Scenario &unwatch(
         int p_tick,
         const godot::StringName &p_scene,
         int p_client
     ) {
-        return step(p_tick, "release", p_scene, p_client);
+        return step(p_tick, "unwatch", p_scene, p_client);
     }
 
-    Scenario &seat(
+    Scenario &place(
         int p_tick,
         const godot::StringName &p_who,
         const godot::StringName &p_destination
     ) {
-        return step(p_tick, "seat", p_who, p_destination);
+        return step(p_tick, "place", p_who, p_destination);
     }
 
     Scenario &move(

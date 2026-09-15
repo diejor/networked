@@ -3,8 +3,11 @@ extends Node
 const TRACK := preload("res://examples/racing/scenes/track.tscn")
 
 @onready var browser: ConnectBrowser = %ConnectBrowser
+@onready var session: NetwSessionHandle = Netw.session(self)
 
 var track: Node
+var spawner: RacingVehicleSpawner
+var grid: Array[NetwParticipant] = []
 
 
 func _init() -> void:
@@ -15,8 +18,9 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	var session: NetwSessionHandle = Netw.session(self)
-	session.local_scene_changed.connect(on_local_scene_changed)
+	session.scene_live.connect(on_scene_live)
+	session.presentation_changed.connect(on_presentation_changed)
+	session.participant_left.connect(leave_race)
 	session.ended.connect(show_browser)
 	session.disconnected.connect(show_browser)
 
@@ -25,14 +29,30 @@ func spawn_track() -> Node:
 	return TRACK.instantiate()
 
 
-func enter_race(_participant: NetwParticipant) -> NetwSceneHandle:
-	if not is_instance_valid(track):
-		track = Netw.spawn(spawn_track)
-		add_child(track)
-	return Netw.scene(track)
+func open_track() -> void:
+	if is_instance_valid(track):
+		return
+	track = Netw.spawn(spawn_track)
+	add_child(track)
+	spawner = Netw.scene(track).root.get_node(^"VehicleSpawner")
 
 
-func on_local_scene_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
+func enter_race(participant: NetwParticipant) -> void:
+	open_track()
+	grid.append(participant)
+	Netw.scene(track).watch(participant)
+	spawner.spawn_vehicle(participant, grid.size() - 1)
+
+
+func leave_race(participant: NetwParticipant) -> void:
+	grid.erase(participant)
+
+
+func on_scene_live(scene: NetwSceneHandle) -> void:
+	session.present(scene)
+
+
+func on_presentation_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
 	browser.visible = to == null
 
 

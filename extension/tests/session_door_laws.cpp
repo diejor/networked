@@ -58,7 +58,10 @@ TEST_CASE(
         session->participant_joined_all().size()
     );
     CHECK(door->get_local_participant() == session->participant_local());
-    CHECK(door->get_local_player() == session->scene_player_local());
+    CHECK(
+        door->get_presented_scene()
+        == session->scene_handle_of(session->scene_presented())
+    );
     NETW_CHECK_EQ(door->get_stats().size(), session->stats_snapshot().size());
 }
 
@@ -154,7 +157,8 @@ TEST_CASE(
     CHECK(door->get_config().is_null());
     CHECK(door->get_auth_flow().is_null());
     CHECK(door->get_local_participant().is_null());
-    CHECK(door->get_local_player().is_null());
+    CHECK(door->get_presented_scene().is_null());
+    NETW_CHECK_EQ(int(door->present(Ref<netw::NetwSceneHandle>())), int(ERR_UNCONFIGURED));
     NETW_CHECK_EQ(door->get_participants().size(), 0);
     NETW_CHECK_EQ(door->get_scenes().size(), 0);
     NETW_CHECK_EQ(door->get_stats().size(), 0);

@@ -330,7 +330,8 @@ TEST_CASE(
     const godot::String destination = godot::String("res://moved.tscn");
     const godot::Ref<NetwPromise> asked = pair.client.core->scene_request_send(
         destination,
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        godot::RID()
     );
     REQUIRE(asked.is_valid());
 
@@ -356,10 +357,12 @@ TEST_CASE(
         pair.client_id,
         0
     );
-    REQUIRE(row.size() == 3);
+    REQUIRE(row.size() == 5);
     NETW_CHECK_EQ(int(row[0]), request_id);
     NETW_CHECK_EQ(godot::String(row[1]) == destination, true);
     NETW_CHECK_EQ(int(row[2]), int(NetwSceneCore::SCOPE_SESSION));
+    NETW_CHECK_EQ(int(row[3]), 0);
+    NETW_CHECK_EQ(int(row[4]), 0);
 
     server_scene->set_request_handler(callable_mp_static(&admit_scene_request));
     const godot::String verified

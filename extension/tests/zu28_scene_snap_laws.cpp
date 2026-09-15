@@ -2,8 +2,6 @@
 
 #include "support/loopback_rig.h"
 
-#include "netw/api/entity_options.hpp"
-
 #if defined(NETW_TIER_HOSTED)
 
 namespace TestZu28SceneSnapLaws {
@@ -32,18 +30,14 @@ TEST_CASE("[Networked][Scene] move snaps to the declared marker") {
 
     const RID entity
         = rig.declare_entity(EntityDecl().named("Crate").on_route(91));
-    rig.seat(entity, source);
+    rig.place(entity, source);
 
     Node2D *body = Object::cast_to<Node2D>(rig.node_of(entity));
     REQUIRE(body != nullptr);
     body->set_global_position(marker->get_global_position());
 
-    Ref<netw::NetwPromise> settled = rig.server()->call(
-        "scene_move",
-        entity,
-        destination,
-        Ref<netw::NetwReparentOpts>()
-    );
+    Ref<netw::NetwPromise> settled
+        = rig.server()->call("scene_move", entity, destination);
     REQUIRE(settled.is_valid());
     REQUIRE(settled->get_is_settled());
     REQUIRE(settled->get_code() == 0);

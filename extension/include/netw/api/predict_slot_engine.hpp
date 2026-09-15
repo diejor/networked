@@ -17,7 +17,6 @@ namespace netw {
 
 class NetwMultiplayer;
 class NetwPredictionHandle;
-class NetwReparentOpts;
 
 class NetwPredictSlotEngine {
     friend class NetwMultiplayer;

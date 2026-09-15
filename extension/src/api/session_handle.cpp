@@ -23,7 +23,9 @@ const char *SIG_DISCONNECTING = "disconnecting";
 const char *SIG_PARTICIPANT_JOINED = "participant_joined";
 const char *SIG_LOCAL_JOINED = "local_joined";
 const char *SIG_SCENE_LIVE = "scene_live";
-const char *SIG_LOCAL_SCENE_CHANGED = "local_scene_changed";
+const char *SIG_PRESENTATION_CHANGED = "presentation_changed";
+const char *SIG_PARTICIPANT_LEFT = "participant_left";
+const char *SIG_JOIN_FAILED = "join_failed";
 
 } // namespace
 
@@ -61,12 +63,20 @@ void NetwSessionHandle::bind_session(NetwMultiplayer *p_session) {
         callable_mp(this, &NetwSessionHandle::relay_local_joined)
     );
     p_session->connect(
+        StringName("participant_left"),
+        callable_mp(this, &NetwSessionHandle::relay_participant_left)
+    );
+    p_session->connect(
+        StringName("session_join_failed"),
+        callable_mp(this, &NetwSessionHandle::relay_join_failed)
+    );
+    p_session->connect(
         StringName("scene_live"),
         callable_mp(this, &NetwSessionHandle::relay_scene_live)
     );
     p_session->connect(
-        StringName("scene_local_changed"),
-        callable_mp(this, &NetwSessionHandle::relay_local_scene_changed)
+        StringName("scene_presentation_changed"),
+        callable_mp(this, &NetwSessionHandle::relay_presentation_changed)
     );
 }
 
@@ -96,15 +106,53 @@ void NetwSessionHandle::relay_local_joined(const Ref<NetwParticipant> &p_who) {
     emit_signal(StringName(SIG_LOCAL_JOINED), p_who);
 }
 
+void NetwSessionHandle::relay_participant_left(
+    const Ref<NetwParticipant> &p_who
+) {
+    emit_signal(StringName(SIG_PARTICIPANT_LEFT), p_who);
+}
+
+void NetwSessionHandle::relay_join_failed(
+    int64_t p_code,
+    const String &p_reason
+) {
+    emit_signal(StringName(SIG_JOIN_FAILED), p_code, p_reason);
+}
+
+Error NetwSessionHandle::kick(
+    const Ref<NetwParticipant> &p_who,
+    const String &p_reason
+) {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->participant_kick(p_who, p_reason)
+                          : ERR_UNCONFIGURED;
+}
+
 void NetwSessionHandle::relay_scene_live(const Ref<NetwSceneHandle> &p_scene) {
     emit_signal(StringName(SIG_SCENE_LIVE), p_scene);
 }
 
-void NetwSessionHandle::relay_local_scene_changed(
+void NetwSessionHandle::relay_presentation_changed(
     const Ref<NetwSceneHandle> &p_from,
     const Ref<NetwSceneHandle> &p_to
 ) {
-    emit_signal(StringName(SIG_LOCAL_SCENE_CHANGED), p_from, p_to);
+    emit_signal(StringName(SIG_PRESENTATION_CHANGED), p_from, p_to);
+}
+
+Error NetwSessionHandle::present(const Ref<NetwSceneHandle> &p_scene) {
+    NetwMultiplayer *api = session();
+    if (api == nullptr) {
+        return ERR_UNCONFIGURED;
+    }
+    return api->scene_present(
+        p_scene.is_valid() ? p_scene->get_entity() : RID()
+    );
+}
+
+Ref<NetwSceneHandle> NetwSessionHandle::get_presented_scene() const {
+    NetwMultiplayer *api = session();
+    return api == nullptr ? Ref<NetwSceneHandle>()
+                          : api->scene_handle_of(api->scene_presented());
 }
 
 TypedArray<NetwParticipant> NetwSessionHandle::get_participants() const {
@@ -116,11 +164,6 @@ TypedArray<NetwParticipant> NetwSessionHandle::get_participants() const {
 Ref<NetwParticipant> NetwSessionHandle::get_local_participant() const {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->participant_local() : Ref<NetwParticipant>();
-}
-
-Ref<NetwEntity> NetwSessionHandle::get_local_player() const {
-    NetwMultiplayer *api = session();
-    return api != nullptr ? api->scene_player_local() : Ref<NetwEntity>();
 }
 
 Ref<NetwParticipant> NetwSessionHandle::participant_of(int64_t p_peer) const {
@@ -257,19 +300,24 @@ void NetwSessionHandle::_bind_methods() {
         "get_local_participant"
     );
     ClassDB::bind_method(
-        D_METHOD("get_local_player"),
-        &NetwSessionHandle::get_local_player
+        D_METHOD("present", "scene"),
+        &NetwSessionHandle::present,
+        DEFVAL(Ref<NetwSceneHandle>())
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_presented_scene"),
+        &NetwSessionHandle::get_presented_scene
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
-            "local_player",
+            "presented_scene",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwEntity",
+            "NetwSceneHandle",
             PROPERTY_USAGE_NONE
         ),
         "",
-        "get_local_player"
+        "get_presented_scene"
     );
     ClassDB::bind_method(
         D_METHOD("participant_of", "peer"),
@@ -363,6 +411,11 @@ void NetwSessionHandle::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("leave"), &NetwSessionHandle::leave);
     ClassDB::bind_method(
+        D_METHOD("kick", "participant", "reason"),
+        &NetwSessionHandle::kick,
+        DEFVAL(String())
+    );
+    ClassDB::bind_method(
         D_METHOD("activate_scene", "destination"),
         &NetwSessionHandle::activate_scene
     );
@@ -397,6 +450,20 @@ void NetwSessionHandle::_bind_methods() {
         )
     ));
     ADD_SIGNAL(MethodInfo(
+        SIG_PARTICIPANT_LEFT,
+        PropertyInfo(
+            Variant::OBJECT,
+            "participant",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwParticipant"
+        )
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_JOIN_FAILED,
+        PropertyInfo(Variant::INT, "code"),
+        PropertyInfo(Variant::STRING, "reason")
+    ));
+    ADD_SIGNAL(MethodInfo(
         SIG_SCENE_LIVE,
         PropertyInfo(
             Variant::OBJECT,
@@ -406,7 +473,7 @@ void NetwSessionHandle::_bind_methods() {
         )
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_LOCAL_SCENE_CHANGED,
+        SIG_PRESENTATION_CHANGED,
         PropertyInfo(
             Variant::OBJECT,
             "from",

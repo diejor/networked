@@ -8,94 +8,99 @@ namespace netw {
 
 LocalVector<int64_t> JoinRoster::peers_in_order() const {
     LocalVector<int64_t> out;
-    for (const KeyValue<int64_t, Ref<ResolvedJoin>> &entry : accepted) {
+    for (const KeyValue<int64_t, session::AcceptFrame> &entry : accepted) {
         out.push_back(entry.key);
     }
     out.sort();
     return out;
 }
 
-bool JoinRoster::remember(const Ref<ResolvedJoin> &rj) {
-    if (rj.is_null()) {
+bool JoinRoster::remember(const session::AcceptFrame &p_entry) {
+    if (p_entry.peer_id == 0 || p_entry.membership == 0) {
         return false;
     }
-    const int64_t peer_id = rj->get_peer_id();
-    const HashMap<int64_t, Ref<ResolvedJoin>>::ConstIterator found
-        = accepted.find(peer_id);
-    if (found != accepted.end()) {
-        const bool enriches = found->value->get_arg_values().is_empty()
-            && !rj->get_arg_values().is_empty();
-        if (!enriches) {
-            return false;
-        }
+    const HashMap<int64_t, session::AcceptFrame>::ConstIterator found
+        = accepted.find(p_entry.peer_id);
+    if (found != accepted.end()
+        && found->value.membership == p_entry.membership) {
+        return false;
     }
-    accepted[peer_id] = rj;
+    accepted[p_entry.peer_id] = p_entry;
     return true;
 }
 
-Ref<ResolvedJoin> JoinRoster::accepted_join(int64_t peer_id) const {
-    const HashMap<int64_t, Ref<ResolvedJoin>>::ConstIterator found
-        = accepted.find(peer_id);
-    return found != accepted.end() ? found->value : Ref<ResolvedJoin>();
+bool JoinRoster::has_accepted(int64_t p_peer) const {
+    return accepted.has(p_peer);
 }
 
-Array JoinRoster::accepted_joins() const {
-    Array out;
-    for (const int64_t peer_id : peers_in_order()) {
-        out.push_back(accepted[peer_id]);
+session::AcceptFrame JoinRoster::accepted_join(int64_t p_peer) const {
+    const HashMap<int64_t, session::AcceptFrame>::ConstIterator found
+        = accepted.find(p_peer);
+    return found != accepted.end() ? found->value : session::AcceptFrame();
+}
+
+LocalVector<session::AcceptFrame> JoinRoster::accepted_joins() const {
+    LocalVector<session::AcceptFrame> out;
+    for (const int64_t peer : peers_in_order()) {
+        out.push_back(accepted[peer]);
     }
     return out;
 }
 
 PackedByteArray JoinRoster::roster_frame() const {
-    LocalVector<AcceptFrame> rows;
-    for (const int64_t peer_id : peers_in_order()) {
-        rows.push_back(accepted[peer_id]->accept_frame());
+    return session::roster_write(accepted_joins());
+}
+
+PackedByteArray JoinRoster::accept_frame(int64_t p_peer) const {
+    const HashMap<int64_t, session::AcceptFrame>::ConstIterator found
+        = accepted.find(p_peer);
+    if (found == accepted.end()) {
+        return PackedByteArray();
     }
-    return session::roster_write(rows);
+    return session::frame_write(found->value);
 }
 
 int JoinRoster::name_verdict(
-    const StringName &name,
-    const PackedStringArray &taken,
-    bool renames_on_collision,
-    bool has_identity
+    const StringName &p_name,
+    const PackedStringArray &p_taken,
+    bool p_renames_on_collision,
+    bool p_has_identity
 ) const {
-    if (!taken.has(String(name))) {
+    if (!p_taken.has(String(p_name))) {
         return ADMIT;
     }
-    if (has_identity) {
+    if (p_has_identity) {
         return REFUSE;
     }
-    return renames_on_collision ? RENAME : ADMIT;
+    return p_renames_on_collision ? RENAME : ADMIT;
 }
 
 StringName JoinRoster::free_name(
-    const StringName &name,
-    const PackedStringArray &taken
+    const StringName &p_name,
+    const PackedStringArray &p_taken
 ) const {
     int suffix = 1;
-    String candidate = String(name) + String::num_int64(suffix);
-    while (taken.has(candidate)) {
+    String candidate = String(p_name) + String::num_int64(suffix);
+    while (p_taken.has(candidate)) {
         suffix += 1;
-        candidate = String(name) + String::num_int64(suffix);
+        candidate = String(p_name) + String::num_int64(suffix);
     }
     return StringName(candidate);
 }
 
-void JoinRoster::refuse(int64_t peer_id, const String &reason) {
-    refusals[peer_id] = reason;
+void JoinRoster::refuse(int64_t p_peer, const String &p_reason) {
+    refusals[p_peer] = p_reason;
 }
 
-String JoinRoster::refusal(int64_t peer_id) const {
+String JoinRoster::refusal(int64_t p_peer) const {
     const HashMap<int64_t, String>::ConstIterator found
-        = refusals.find(peer_id);
+        = refusals.find(p_peer);
     return found != refusals.end() ? found->value : String();
 }
 
-void JoinRoster::forget(int64_t peer_id) {
-    accepted.erase(peer_id);
-    refusals.erase(peer_id);
+void JoinRoster::forget(int64_t p_peer) {
+    accepted.erase(p_peer);
+    refusals.erase(p_peer);
 }
 
 void JoinRoster::clear() {

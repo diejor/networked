@@ -223,7 +223,7 @@ func test_host_lobby_ui_spawns_inside_scene_with_roster() -> void:
 	var browser := valeria.scene().find_child("ConnectBrowser", true, false) as Control
 	assert_bool(browser.visible).is_false()
 	assert_that(
-		Netw.session(valeria.tree).local_participant.current_scene.label,
+		Netw.session(valeria.tree).presented_scene.label,
 	).is_equal(&"Lobby")
 
 
@@ -269,6 +269,23 @@ func test_the_reachability_report_answers_for_the_tick_path() -> void:
 	assert_str(String(model[&"kind"])).override_failure_message(
 		"the game declares no step, so the report must not invent one",
 	).is_equal("none")
+
+
+func test_a_late_join_gets_a_player_in_the_running_match() -> void:
+	var valeria := await game.add_host("valeria", false)
+	await _begin_game(valeria)
+	await valeria.await_scene(&"World", 2.0)
+	await valeria.await_player(&"valeria", 2.0)
+
+	var jose := await game.add_client("jose", false)
+	await jose.await_scene(&"World", 2.0)
+	var late := await jose.await_player(&"jose", 2.0)
+	assert_that(jose.local_player).override_failure_message(
+		"a peer joining a running match is given a player of its own",
+	).is_equal(late)
+	assert_that(valeria.find_player(&"jose")).override_failure_message(
+		"the late player reaches the host that spawned it",
+	).is_not_null()
 
 
 func _begin_game(host: NetwSceneRunner) -> void:

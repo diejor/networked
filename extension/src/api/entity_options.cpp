@@ -35,10 +35,6 @@ void NetwDespawnOpts::_bind_methods() {
     NETW_OPTION(NetwDespawnOpts, Variant::FLOAT, linger_seconds);
 }
 
-void NetwReparentOpts::_bind_methods() {
-    NETW_OPTION(NetwReparentOpts, Variant::STRING_NAME, reason);
-}
-
 void NetwControlRequest::_bind_methods() {
     ClassDB::bind_method(D_METHOD("deny"), &NetwControlRequest::deny);
     NETW_OPTION(NetwControlRequest, Variant::INT, requester);

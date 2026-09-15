@@ -4,14 +4,13 @@ extends NetwService
 const WORLD_SCENE := "res://examples/bomber/game/world.tscn"
 const LOBBY_SCENE := "res://examples/bomber/game/lobby_level.tscn"
 
-var player_name: String = "The Warrior"
-var players := { }
-
-signal player_list_changed()
 signal game_ended()
 signal game_error(what: String)
 
 @onready var session: NetwSessionHandle = Netw.session(self)
+
+var roster: Array[NetwParticipant] = []
+var spawner: BomberPlayerSpawner
 
 var world: NetwSceneHandle:
 	get:
@@ -24,10 +23,13 @@ var lobby: NetwSceneHandle:
 
 func _init() -> void:
 	Netw.configure_spawn(spawn_lobby)
+	Netw.configure_join(self, place_player)
 
 
 func _ready() -> void:
-	setup_connections()
+	session.participant_left.connect(leave_game)
+	session.disconnected.connect(on_server_disconnected)
+	session.scene_live.connect(on_scene_live)
 
 
 func spawn_lobby() -> Node:
@@ -36,54 +38,31 @@ func spawn_lobby() -> Node:
 
 
 func open_lobby() -> NetwSceneHandle:
+	var waiting := lobby
+	if waiting != null:
+		return waiting
 	var level: Node = Netw.spawn(spawn_lobby)
-	if level == null:
-		return null
 	get_parent().add_child(level)
 	return Netw.scene(level)
 
 
-func active_scene() -> NetwSceneHandle:
+func place_player(participant: NetwParticipant) -> void:
+	roster.append(participant)
 	var running := world
-	if running != null:
-		return running
-	var waiting := lobby
-	return waiting if waiting != null else open_lobby()
-
-
-func on_participant_joined(participant: NetwParticipant) -> void:
-	players[participant.peer_id] = participant.username
-	player_list_changed.emit()
-	if not multiplayer.is_server():
+	if running == null:
+		open_lobby().watch(participant)
 		return
-	var target := active_scene()
-	if target != null:
-		target.admit(participant)
+	running.watch(participant)
+	spawner.spawn_participant(participant, roster.size() - 1)
 
 
-func on_peer_disconnected(id: int) -> void:
-	unregister_player(id)
+func leave_game(participant: NetwParticipant) -> void:
+	roster.erase(participant)
 
 
 func on_server_disconnected() -> void:
 	game_error.emit("Server disconnected")
 	end_game()
-
-
-@rpc("any_peer", "call_local")
-func register_player(new_player_name: String) -> void:
-	var id := multiplayer.get_remote_sender_id()
-	players[id] = new_player_name
-	player_list_changed.emit()
-
-
-func unregister_player(id: int) -> void:
-	players.erase(id)
-	player_list_changed.emit()
-
-
-func get_player_list() -> Array:
-	return players.values()
 
 
 func begin_game() -> NetwPromise:
@@ -96,25 +75,39 @@ func end_game() -> void:
 	var peer_active := mp != null \
 			and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	if peer_active and multiplayer.is_server() and world != null:
+		release_players()
+		spawner = null
 		Netw.change_scene_to_file(self, LOBBY_SCENE)
 
 	game_ended.emit()
-	players.clear()
 
 
-func setup_connections() -> void:
-	session.participant_joined.connect(on_participant_joined)
-	multiplayer.peer_disconnected.connect(on_peer_disconnected)
-	session.disconnected.connect(on_server_disconnected)
-	session.scene_live.connect(on_scene_live)
+func release_players() -> void:
+	for player: NetwEntity in world.players:
+		player.owner.queue_free()
 
 
 func on_scene_live(arrived: NetwSceneHandle) -> void:
-	if not multiplayer.is_server():
+	session.present(arrived)
+	if arrived.label == &"Lobby":
+		var in_lobby: InLobby = arrived.root.find_child("InLobby", true, false)
+		in_lobby.start_pressed.connect(begin_game)
 		return
-	for participant: NetwParticipant in session.participants:
-		if participant.current_scene == null:
-			arrived.admit(participant)
+	if arrived.label != &"World" or not multiplayer.is_server():
+		return
+	open_match(arrived)
+
+
+func open_match(world_scene: NetwSceneHandle) -> void:
+	if not world_scene.root.is_node_ready():
+		world_scene.root.ready.connect(
+			open_match.bind(world_scene),
+			CONNECT_ONE_SHOT,
+		)
+		return
+	spawner = world_scene.root.get_node(^"PlayerSpawner")
+	for slot in roster.size():
+		spawner.spawn_participant(roster[slot], slot)
 
 
 func get_player_color(p_name: String) -> Color:

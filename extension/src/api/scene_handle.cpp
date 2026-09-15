@@ -15,8 +15,8 @@ namespace {
 
 const char *SNAME_PLAYER_ENTERED = "player_entered";
 const char *SNAME_PLAYER_LEFT = "player_left";
-const char *SNAME_PARTICIPANT_ENTERED = "participant_entered";
-const char *SNAME_PARTICIPANT_LEFT = "participant_left";
+const char *SNAME_VIEWER_ENTERED = "viewer_entered";
+const char *SNAME_VIEWER_LEFT = "viewer_left";
 
 } // namespace
 
@@ -96,20 +96,16 @@ TypedArray<NetwEntity> NetwSceneHandle::get_players() const {
                               : TypedArray<NetwEntity>();
 }
 
-TypedArray<NetwParticipant> NetwSceneHandle::get_participants() const {
+TypedArray<NetwParticipant> NetwSceneHandle::get_viewers() const {
     NetwMultiplayer *session = core();
-    return session != nullptr ? session->scene_get_participants(get_entity())
+    return session != nullptr ? session->scene_get_viewers(get_entity())
                               : TypedArray<NetwParticipant>();
 }
 
-Ref<NetwEntity> NetwSceneHandle::get_local_player() const {
+TypedArray<NetwEntity> NetwSceneHandle::get_local_players() const {
     NetwMultiplayer *session = core();
-    if (session == nullptr) {
-        return Ref<NetwEntity>();
-    }
-    const RID player = session->scene_get_local_player(get_entity());
-    return player.is_valid() ? session->entity_get_view(player)
-                             : Ref<NetwEntity>();
+    return session != nullptr ? session->scene_get_local_players(get_entity())
+                              : TypedArray<NetwEntity>();
 }
 
 TypedArray<NetwEntity> NetwSceneHandle::get_entities() const {
@@ -135,7 +131,7 @@ Variant NetwSceneHandle::translate_edge(
     NetwMultiplayer *session = core();
     Variant subject;
     if (session != nullptr) {
-        if (p_event == NetwMultiplayer::SCENE_EVENT_PARTICIPANT) {
+        if (p_event == NetwMultiplayer::SCENE_EVENT_VIEWER) {
             subject = session->participant_of(int64_t(p_subject));
         } else {
             subject = session->entity_get_view(RID(p_subject));
@@ -185,40 +181,37 @@ void NetwSceneHandle::unobserve(int64_t p_event, const Callable &p_callback) {
     }
 }
 
-Ref<NetwPromise> NetwSceneHandle::move(
-    const Ref<NetwEntity> &p_entity,
-    const Ref<NetwReparentOpts> &p_opts
-) {
+Ref<NetwPromise> NetwSceneHandle::move(const Ref<NetwEntity> &p_entity) {
     NetwMultiplayer *session = core();
     if (session == nullptr || p_entity.is_null()) {
         return NetwPromise::resolved(ERR_INVALID_PARAMETER);
     }
-    return session
-        ->scene_move(p_entity->get_rid_handle(), get_entity(), p_opts);
+    return session->scene_move(p_entity->get_rid_handle(), get_entity());
 }
 
-Error NetwSceneHandle::admit(const Ref<NetwParticipant> &p_participant) {
+Error NetwSceneHandle::watch(const Ref<NetwParticipant> &p_participant) {
     NetwMultiplayer *session = core();
-    if (session == nullptr || p_participant.is_null()) {
+    if (session == nullptr || !session->participant_holds(p_participant)) {
         return ERR_INVALID_PARAMETER;
     }
-    return session->scene_admit(get_entity(), p_participant->get_peer_id());
+    return session->scene_watch(get_entity(), p_participant->get_peer_id());
 }
 
-Error NetwSceneHandle::release(const Ref<NetwParticipant> &p_participant) {
+Error NetwSceneHandle::unwatch(const Ref<NetwParticipant> &p_participant) {
     NetwMultiplayer *session = core();
-    if (session == nullptr || p_participant.is_null()) {
+    if (session == nullptr || !session->participant_holds(p_participant)) {
         return ERR_INVALID_PARAMETER;
     }
-    return session->scene_release(get_entity(), p_participant->get_peer_id())
+    return session->scene_unwatch(get_entity(), p_participant->get_peer_id())
         ? OK
         : ERR_DOES_NOT_EXIST;
 }
 
-bool NetwSceneHandle::admits(const Ref<NetwParticipant> &p_participant) const {
+bool NetwSceneHandle::is_watching(const Ref<NetwParticipant> &p_participant
+) const {
     NetwMultiplayer *session = core();
     return session != nullptr && p_participant.is_valid()
-        && session->scene_admits(get_entity(), p_participant->get_peer_id());
+        && session->scene_subscribes(get_entity(), p_participant->get_peer_id());
 }
 
 void NetwSceneHandle::announce_player(
@@ -228,22 +221,14 @@ void NetwSceneHandle::announce_player(
     emit_signal(p_present ? SNAME_PLAYER_ENTERED : SNAME_PLAYER_LEFT, p_player);
 }
 
-void NetwSceneHandle::announce_participant(
+void NetwSceneHandle::announce_viewer(
     const Ref<NetwParticipant> &p_participant,
     bool p_present
 ) {
     emit_signal(
-        p_present ? SNAME_PARTICIPANT_ENTERED : SNAME_PARTICIPANT_LEFT,
+        p_present ? SNAME_VIEWER_ENTERED : SNAME_VIEWER_LEFT,
         p_participant
     );
-}
-
-Error NetwSceneHandle::add_player(const Ref<NetwEntity> &p_player) {
-    NetwMultiplayer *session = core();
-    if (session == nullptr || p_player.is_null()) {
-        return ERR_UNAVAILABLE;
-    }
-    return session->scene_add_player_record(get_entity(), p_player);
 }
 
 void NetwSceneHandle::_bind_methods() {
@@ -284,10 +269,6 @@ void NetwSceneHandle::_bind_methods() {
         "",
         "get_world"
     );
-    ClassDB::bind_method(
-        D_METHOD("add_player", "player"),
-        &NetwSceneHandle::add_player
-    );
     ClassDB::bind_method(D_METHOD("get_label"), &NetwSceneHandle::get_label);
     ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "label"), "", "get_label");
     ClassDB::bind_method(
@@ -305,33 +286,32 @@ void NetwSceneHandle::_bind_methods() {
         "get_players"
     );
     ClassDB::bind_method(
-        D_METHOD("get_participants"),
-        &NetwSceneHandle::get_participants
+        D_METHOD("get_viewers"),
+        &NetwSceneHandle::get_viewers
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "participants",
+            "viewers",
             PROPERTY_HINT_ARRAY_TYPE,
             "NetwParticipant"
         ),
         "",
-        "get_participants"
+        "get_viewers"
     );
     ClassDB::bind_method(
-        D_METHOD("get_local_player"),
-        &NetwSceneHandle::get_local_player
+        D_METHOD("get_local_players"),
+        &NetwSceneHandle::get_local_players
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::OBJECT,
-            "local_player",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwEntity",
-            PROPERTY_USAGE_NONE
+            Variant::ARRAY,
+            "local_players",
+            PROPERTY_HINT_ARRAY_TYPE,
+            "NetwEntity"
         ),
         "",
-        "get_local_player"
+        "get_local_players"
     );
     ClassDB::bind_method(
         D_METHOD("get_entities"),
@@ -356,21 +336,20 @@ void NetwSceneHandle::_bind_methods() {
         &NetwSceneHandle::unobserve
     );
     ClassDB::bind_method(
-        D_METHOD("move", "entity", "opts"),
-        &NetwSceneHandle::move,
-        DEFVAL(Ref<NetwReparentOpts>())
+        D_METHOD("move", "entity"),
+        &NetwSceneHandle::move
     );
     ClassDB::bind_method(
-        D_METHOD("admit", "participant"),
-        &NetwSceneHandle::admit
+        D_METHOD("watch", "participant"),
+        &NetwSceneHandle::watch
     );
     ClassDB::bind_method(
-        D_METHOD("release", "participant"),
-        &NetwSceneHandle::release
+        D_METHOD("unwatch", "participant"),
+        &NetwSceneHandle::unwatch
     );
     ClassDB::bind_method(
-        D_METHOD("admits", "participant"),
-        &NetwSceneHandle::admits
+        D_METHOD("is_watching", "participant"),
+        &NetwSceneHandle::is_watching
     );
 
     ADD_SIGNAL(MethodInfo(
@@ -392,7 +371,7 @@ void NetwSceneHandle::_bind_methods() {
         )
     ));
     ADD_SIGNAL(MethodInfo(
-        SNAME_PARTICIPANT_ENTERED,
+        SNAME_VIEWER_ENTERED,
         PropertyInfo(
             Variant::OBJECT,
             "participant",
@@ -401,7 +380,7 @@ void NetwSceneHandle::_bind_methods() {
         )
     ));
     ADD_SIGNAL(MethodInfo(
-        SNAME_PARTICIPANT_LEFT,
+        SNAME_VIEWER_LEFT,
         PropertyInfo(
             Variant::OBJECT,
             "participant",

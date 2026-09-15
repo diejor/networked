@@ -19,12 +19,16 @@ Ref<NetwMultiplayer> hosting_core() {
 PackedByteArray request_frame(
     int p_request_id,
     const String &p_path,
-    int p_scope
+    int p_scope,
+    int64_t p_source_route = 0,
+    int64_t p_source_epoch = 0
 ) {
     netw::session::SceneRequest frame;
     frame.request_id = uint64_t(p_request_id);
     frame.path = p_path;
     frame.scope = p_scope;
+    frame.source_route = p_source_route;
+    frame.source_epoch = p_source_epoch;
     return netw::session::frame_write(frame);
 }
 
@@ -36,15 +40,17 @@ TEST_CASE(
     const Ref<NetwMultiplayer> core = hosting_core();
 
     const Array row = core->scene_request_frame_row(
-        request_frame(9, String("res://arena.tscn"), 1),
+        request_frame(9, String("res://arena.tscn"), 1, 31, 4),
         7,
         1000
     );
 
-    REQUIRE(row.size() == 3);
+    REQUIRE(row.size() == 5);
     NETW_CHECK_EQ(int(row[0]), 9);
     CHECK(String(row[1]) == String("res://arena.tscn"));
     NETW_CHECK_EQ(int(row[2]), 1);
+    NETW_CHECK_EQ(int(row[3]), 31);
+    NETW_CHECK_EQ(int(row[4]), 4);
 }
 
 TEST_CASE(

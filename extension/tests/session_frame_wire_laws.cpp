@@ -1,20 +1,22 @@
 #include "support/netw_test.h"
 
 #include "netw/api/join_request.hpp"
-#include "netw/api/resolved_join.hpp"
 #include "netw/session/frames.hpp"
+#include "netw/session_core.hpp"
+#include "netw/wire/registry.hpp"
 
 namespace TestSessionFrameWire {
 
 using namespace godot;
-using netw::AcceptFrame;
 using netw::JoinFrame;
 using netw::JoinRequest;
+using netw::session::AcceptFrame;
 
 AcceptFrame row_of(int64_t p_peer, const char *p_name) {
     AcceptFrame row;
     row.peer_id = p_peer;
     row.username = StringName(p_name);
+    row.membership = uint64_t(p_peer);
     return row;
 }
 
@@ -78,6 +80,39 @@ TEST_CASE(
     REQUIRE(whole_reads);
     NETW_CHECK_EQ(int64_t(admitted.size()), int64_t(2));
     NETW_CHECK_EQ(admitted[1].peer_id, int64_t(7));
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] SW4 the accept and roster channels declare "
+    "the payload revision their frame layout is on, so a build whose accept "
+    "frame differs answers a different wire identity and is refused at the "
+    "join gate rather than decoding a roster it cannot read"
+) {
+    const netw::wire::WireRegistry table
+        = netw::wire::WireRegistry::create_default();
+
+    const netw::wire::ChannelDecl *accept
+        = table.find_channel_by_name(StringName("SESSION_ACCEPT"));
+    const netw::wire::ChannelDecl *roster
+        = table.find_channel_by_name(StringName("SESSION_ROSTER"));
+    REQUIRE(accept != nullptr);
+    REQUIRE(roster != nullptr);
+    NETW_CHECK_EQ(int(accept->payload_revision), 1);
+    NETW_CHECK_EQ(int(roster->payload_revision), 1);
+
+    netw::wire::WireRegistry older = netw::wire::WireRegistry::create_default();
+    netw::wire::ChannelDecl unrevised_accept = *accept;
+    netw::wire::ChannelDecl unrevised_roster = *roster;
+    unrevised_accept.payload_revision = 0;
+    unrevised_roster.payload_revision = 0;
+    REQUIRE(older.register_channel(unrevised_accept));
+    REQUIRE(older.register_channel(unrevised_roster));
+
+    CHECK(older.identity_hash() != table.identity_hash());
+    NETW_CHECK_EQ(
+        int64_t(table.identity_hash()),
+        netw::SessionCore::compute_wire_identity()
+    );
 }
 
 } // namespace TestSessionFrameWire

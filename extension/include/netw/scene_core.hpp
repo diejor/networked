@@ -78,6 +78,8 @@ private:
         int64_t roster_index = 0;
         godot::HashSet<int64_t> moved;
         godot::Ref<NetwPromise> promise;
+        int scope = SCOPE_SESSION;
+        godot::PackedInt64Array watchers;
     };
 
     Transition transition;
@@ -94,7 +96,6 @@ private:
     int32_t pending_request_id = 0;
     godot::Ref<NetwPromise> pending_request;
     godot::Callable request_handler;
-    godot::RID current_scene;
 
     Row *row_for(int event, const godot::RID &scene);
     void promote_survivors();
@@ -135,9 +136,6 @@ public:
     godot::Array pump_retired();
     godot::Array retiring_scenes() const;
 
-    void set_current_scene(const godot::RID &scene);
-    godot::RID get_current_scene() const;
-    godot::RID resolve_current(bool presents, const godot::RID &seat) const;
 
     bool is_live(const godot::RID &scene) const;
     godot::RID scene_named(const godot::StringName &stem) const;
@@ -154,10 +152,14 @@ public:
     void transition_arm(
         const godot::Variant &target,
         const godot::Array &sources,
-        const godot::Ref<NetwPromise> &promise
+        const godot::Ref<NetwPromise> &promise,
+        int scope,
+        const godot::PackedInt64Array &watchers
     );
     godot::Variant transition_target() const;
     godot::Array transition_sources() const;
+    int transition_scope() const;
+    godot::PackedInt64Array transition_watchers() const;
     godot::Variant transition_next_mover(const godot::Callable &roster_of);
     bool transition_accept(int code, int64_t peer);
     bool transition_moved(int64_t peer) const;

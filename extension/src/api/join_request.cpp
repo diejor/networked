@@ -8,18 +8,6 @@ using namespace godot;
 
 namespace netw {
 
-Ref<ResolvedJoin> JoinRequest::resolve() const {
-    if (String(username).is_empty()) {
-        return Ref<ResolvedJoin>();
-    }
-    Ref<ResolvedJoin> out;
-    out.instantiate();
-    out->set_peer_id(peer_id);
-    out->set_username(username);
-    out->set_arg_values(arg_values.duplicate(true));
-    return out;
-}
-
 PackedByteArray JoinRequest::serialize() const {
     JoinFrame frame;
     frame.username = username;

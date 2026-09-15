@@ -56,23 +56,6 @@ public:
     }
 };
 
-class NetwReparentOpts : public godot::RefCounted {
-    GDCLASS(NetwReparentOpts, godot::RefCounted)
-
-protected:
-    static void _bind_methods();
-
-public:
-    godot::StringName reason;
-
-    godot::StringName get_reason() const {
-        return reason;
-    }
-    void set_reason(const godot::StringName &p_reason) {
-        reason = p_reason;
-    }
-};
-
 class NetwControlRequest : public godot::RefCounted {
     GDCLASS(NetwControlRequest, godot::RefCounted)
 

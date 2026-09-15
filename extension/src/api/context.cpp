@@ -466,8 +466,8 @@ Ref<NetwJoinConfig> Netw::configure_join(
             sys::SESSION,
             "Netw.configure_join: a handler taking wire arguments must be a "
             "named method, because its parameter types are the join's wire "
-            "schema and a lambda publishes none. Write 'func seat(join: "
-            "ResolvedJoin, at: Vector3) -> void' and declare it by name."
+            "schema and a lambda publishes none. Write 'func seat(who: "
+            "NetwParticipant, at: Vector3) -> void' and declare it by name."
         );
         config.instantiate();
         config->set_context_script(declaring);
@@ -1100,11 +1100,10 @@ void Netw::_bind_methods() {
         &Netw::service_unregister,
         DEFVAL(static_cast<Object *>(nullptr))
     );
-    ClassDB::bind_static_method(
+    gd::bind_static_vararg(
         "Netw",
-        D_METHOD("join", "node", "username", "args"),
-        &Netw::join,
-        DEFVAL(Array())
+        D_METHOD("join", "node", "username"),
+        &Netw::join
     );
     ClassDB::bind_static_method(
         "Netw",

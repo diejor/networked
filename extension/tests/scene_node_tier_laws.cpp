@@ -154,7 +154,6 @@ TEST_CASE(
     const Mounted annex = mount_plain(core, root, StringName("Annex"));
 
     core->get_scene_core()->scene_retire(arena.scene, 0);
-    core->scene_settle_refresh();
     NETW_CHECK_EQ(arena.root->get_parent(), root);
     CHECK_FALSE(arena.root->is_queued_for_deletion());
     NETW_CHECK_EQ(core->get_scene_core()->retiring_scenes().size(), 1);
@@ -197,35 +196,31 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SNT9 a scene edge takes the scene out of the "
-    "live book and DEFERS the refresh to the settle, so a cascade of edges "
-    "re-reads the presented scene once rather than once each"
+    "[Networked][Scene][Hosted] SNT9 a scene leaving the live book clears the "
+    "presentation that named it and chooses nothing in its place, so a host "
+    "whose world went away draws nothing rather than whatever is left"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount_plain(core, root, StringName("Arena"));
     const Mounted annex = mount_plain(core, root, StringName("Annex"));
-    const StringName refresh_key("scene-refresh-current");
 
     NETW_CHECK_EQ(core->get_scene_core()->live_count(), 2);
-    core->get_scene_core()->set_current_scene(arena.scene);
+    NETW_CHECK_EQ(int(core->scene_present(arena.scene)), int(OK));
 
     core->scene_forget(arena.root);
-    core->get_scene_core()->scene_retire(annex.scene, 4);
-    core->scene_settle_refresh();
 
-    NETW_CHECK_EQ(core->get_scene_core()->live_count(), 0);
+    NETW_CHECK_EQ(core->get_scene_core()->live_count(), 1);
     NETW_CHECK_EQ(core->scene_container(StringName("Arena")), nullptr);
     NETW_CHECK_EQ(arena.root->get_parent(), root);
     NETW_CHECK_EQ(annex.root->get_parent(), root);
-    CHECK(core->settle_has_key(refresh_key));
-    CHECK(core->get_scene_core()->get_current_scene() == arena.scene);
+    CHECK_FALSE(core->scene_presented().is_valid());
 
-    core->settle_drain();
+    core->scene_forget(annex.root);
 
-    CHECK_FALSE(core->settle_has_key(refresh_key));
-    CHECK_FALSE(core->get_scene_core()->get_current_scene().is_valid());
+    NETW_CHECK_EQ(core->get_scene_core()->live_count(), 0);
+    CHECK_FALSE(core->scene_presented().is_valid());
 
     memdelete(root);
 }
@@ -522,17 +517,23 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SNT18 a joining participant spends the "
-    "admission parked for it against every live scene and seats it there, "
-    "and a participant nothing parked for is seated nowhere"
+    "admission parked for it against every live scene and is announced as a "
+    "viewer there, and a participant nothing parked for is announced nowhere"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Mounted arena = mount_plain(core, root, StringName("Arena"));
+    const CallLog seen;
+    core->scene_observe(
+        arena.scene,
+        NetwMultiplayer::SCENE_EVENT_VIEWER,
+        seen.callable("viewer")
+    );
 
     Ref<netw::NetwParticipant> waiting;
     waiting.instantiate();
-    waiting->seat_at(core.ptr(), 9);
+    waiting->bind_to(core.ptr(), 9);
     core->participant_adopt(9, waiting);
     core->participant_admit(9);
     CHECK(core->get_scene_core()->admission_park(arena.scene, 9));
@@ -541,25 +542,25 @@ TEST_CASE(
     core->scene_on_participant_joined(waiting);
 
     CHECK_FALSE(core->get_scene_core()->admission_is_parked(arena.scene, 9));
-    CHECK(core->participant_seat(9) == arena.scene);
+    NETW_CHECK_EQ(seen.count(StringName("viewer")), 1);
 
     Ref<netw::NetwParticipant> stranger;
     stranger.instantiate();
-    stranger->seat_at(core.ptr(), 11);
+    stranger->bind_to(core.ptr(), 11);
     core->participant_adopt(11, stranger);
     core->participant_admit(11);
 
     core->scene_on_participant_joined(stranger);
 
-    CHECK_FALSE(core->participant_seat(11).is_valid());
+    NETW_CHECK_EQ(seen.count(StringName("viewer")), 1);
 
     memdelete(root);
 }
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SNT19 opening a scene's admission on a server "
-    "seats every peer its boundary already admits, opens the row once so a "
-    "second open reports nothing, and closing it clears the seats it wrote"
+    "announces every peer its boundary already reaches, opens the row once so "
+    "a second open announces nothing, and closing it forgets the viewers"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -571,30 +572,36 @@ TEST_CASE(
     core->set_interest_flush(flushed.callable("flush"));
     Node *root = memnew(Node);
     const Mounted arena = mount_plain(core, root, StringName("Arena"));
+    const CallLog seen;
+    core->scene_observe(
+        arena.scene,
+        NetwMultiplayer::SCENE_EVENT_VIEWER,
+        seen.callable("viewer")
+    );
 
     REQUIRE(core->scene_admit_peer(arena.scene, 7));
-    Ref<netw::NetwParticipant> seated;
-    seated.instantiate();
-    seated->seat_at(core.ptr(), 7);
-    core->participant_adopt(7, seated);
+    Ref<netw::NetwParticipant> watching;
+    watching.instantiate();
+    watching->bind_to(core.ptr(), 7);
+    core->participant_adopt(7, watching);
     core->participant_admit(7);
-    REQUIRE_FALSE(core->participant_seat(7).is_valid());
+    const int announced = seen.count(StringName("viewer"));
 
     core->scene_open_admission(arena.root);
 
-    CHECK(core->participant_seat(7) == arena.scene);
+    NETW_CHECK_EQ(seen.count(StringName("viewer")), announced + 1);
+    CHECK(core->scene_subscribes(arena.scene, 7));
 
-    core->participant_seat_clear(7, arena.scene);
     core->scene_open_admission(arena.root);
 
-    CHECK_FALSE(core->participant_seat(7).is_valid());
-
-    core->scene_report_participant(arena.scene, 7, true);
-    REQUIRE(core->participant_seat(7) == arena.scene);
+    NETW_CHECK_EQ(seen.count(StringName("viewer")), announced + 1);
 
     core->scene_close_admission(arena.root);
 
-    CHECK_FALSE(core->participant_seat(7).is_valid());
+    NETW_CHECK_EQ(
+        int(core->membership_book().members_of(arena.scene).size()),
+        0
+    );
 
     memdelete(root);
 }
@@ -642,19 +649,19 @@ TEST_CASE(
     player->set_peer_id(host);
 
     REQUIRE(core->scene_of(mover) == scene);
-    CHECK_FALSE(core->scene_admits(scene, host));
+    CHECK_FALSE(core->scene_subscribes(scene, host));
 
     core->scene_adopt_entity(mover);
 
-    CHECK(core->scene_admits(scene, host));
+    CHECK(core->scene_subscribes(scene, host));
 
-    SUBCASE("a prop carrying no peer is admitted nowhere") {
+    SUBCASE("a prop carrying no peer reaches nowhere") {
         core->scene_release_peer(scene, host);
         player->set_peer_id(0);
 
         core->scene_adopt_entity(mover);
 
-        CHECK_FALSE(core->scene_admits(scene, host));
+        CHECK_FALSE(core->scene_subscribes(scene, host));
     }
 
     SUBCASE("an entity that is its own scene is already where it belongs") {
@@ -663,7 +670,7 @@ TEST_CASE(
 
         core->scene_adopt_entity(scene);
 
-        CHECK_FALSE(core->scene_admits(scene, host));
+        CHECK_FALSE(core->scene_subscribes(scene, host));
     }
 
     memdelete(root);

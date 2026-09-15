@@ -28,9 +28,9 @@ A client over the ``session_*``, ``participant_*``, ``peer_*`` and ``stats_*`` f
     s.disconnected.connect(on_over)
     s.ended.connect(on_over)
     for participant: NetwParticipant in s.participants:
-            seat(participant)
+            scoreboard.add(participant)
 
-\ **What this object buys over the flat surface is its signals.** :ref:`Netw<class_Netw>` is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: :ref:`entered<class_NetwSessionHandle_signal_entered>`, :ref:`ended<class_NetwSessionHandle_signal_ended>`, :ref:`disconnected<class_NetwSessionHandle_signal_disconnected>`, :ref:`disconnecting<class_NetwSessionHandle_signal_disconnecting>`, :ref:`participant_joined<class_NetwSessionHandle_signal_participant_joined>`, :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>`, :ref:`scene_live<class_NetwSessionHandle_signal_scene_live>` and :ref:`local_scene_changed<class_NetwSessionHandle_signal_local_scene_changed>`, all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
+\ **What this object buys over the flat surface is its signals.** :ref:`Netw<class_Netw>` is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: :ref:`entered<class_NetwSessionHandle_signal_entered>`, :ref:`ended<class_NetwSessionHandle_signal_ended>`, :ref:`disconnected<class_NetwSessionHandle_signal_disconnected>`, :ref:`disconnecting<class_NetwSessionHandle_signal_disconnecting>`, :ref:`participant_joined<class_NetwSessionHandle_signal_participant_joined>`, :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>`, :ref:`participant_left<class_NetwSessionHandle_signal_participant_left>`, :ref:`join_failed<class_NetwSessionHandle_signal_join_failed>`, :ref:`scene_live<class_NetwSessionHandle_signal_scene_live>` and :ref:`presentation_changed<class_NetwSessionHandle_signal_presentation_changed>`, all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
 
 \ :ref:`disconnected<class_NetwSessionHandle_signal_disconnected>` is the one member that relays a signal this framework does not own. :godot:`MultiplayerAPI.server_disconnected <MultiplayerAPI#class_MultiplayerAPI_signal_server_disconnected>` is Godot's and stays reachable on ``multiplayer``; it is re-emitted here so one object returns every cause a session has to end, which is what a game pairing it with :ref:`ended<class_NetwSessionHandle_signal_ended>` under one handler actually wants.
 
@@ -55,7 +55,7 @@ Properties
    +-----------------------------------------------------------------+------------------------------------------------------------------------------+-----------+
    | :ref:`NetwParticipant<class_NetwParticipant>`                   | :ref:`local_participant<class_NetwSessionHandle_property_local_participant>` |           |
    +-----------------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :ref:`NetwEntity<class_NetwEntity>`                             | :ref:`local_player<class_NetwSessionHandle_property_local_player>`           |           |
+   | :ref:`NetwSceneHandle<class_NetwSceneHandle>`                   | :ref:`presented_scene<class_NetwSessionHandle_property_presented_scene>`     |           |
    +-----------------------------------------------------------------+------------------------------------------------------------------------------+-----------+
    | :godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] | :ref:`participants<class_NetwSessionHandle_property_participants>`           | ``[]``    |
    +-----------------------------------------------------------------+------------------------------------------------------------------------------+-----------+
@@ -76,19 +76,23 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSceneHandle<class_NetwSceneHandle>` | :ref:`activate_scene<class_NetwSessionHandle_method_activate_scene>`\ (\ destination\: :godot:`Variant`\ )                       |
-   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                              | :ref:`bucket_of<class_NetwSessionHandle_method_bucket_of>`\ (\ peer\: :godot:`int`, type\: :godot:`Variant`\ ) |const|           |
-   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`         | :ref:`leave<class_NetwSessionHandle_method_leave>`\ (\ )                                                                         |
-   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwParticipant<class_NetwParticipant>` | :ref:`participant_of<class_NetwSessionHandle_method_participant_of>`\ (\ peer\: :godot:`int`\ ) |const|                          |
-   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`         | :ref:`request_scene<class_NetwSessionHandle_method_request_scene>`\ (\ path\: :godot:`String`, scope\: :godot:`int` = 0\ )       |
-   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`set_server_info<class_NetwSessionHandle_method_set_server_info>`\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) |
-   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSceneHandle<class_NetwSceneHandle>`         | :ref:`activate_scene<class_NetwSessionHandle_method_activate_scene>`\ (\ destination\: :godot:`Variant`\ )                                         |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                      | :ref:`bucket_of<class_NetwSessionHandle_method_bucket_of>`\ (\ peer\: :godot:`int`, type\: :godot:`Variant`\ ) |const|                             |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`kick<class_NetwSessionHandle_method_kick>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`, reason\: :godot:`String` = ""\ ) |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`leave<class_NetwSessionHandle_method_leave>`\ (\ )                                                                                           |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwParticipant<class_NetwParticipant>`         | :ref:`participant_of<class_NetwSessionHandle_method_participant_of>`\ (\ peer\: :godot:`int`\ ) |const|                                            |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`present<class_NetwSessionHandle_method_present>`\ (\ scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>` = null\ )                         |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`request_scene<class_NetwSessionHandle_method_request_scene>`\ (\ path\: :godot:`String`, scope\: :godot:`int` = 0\ )                         |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`set_server_info<class_NetwSessionHandle_method_set_server_info>`\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )                   |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -149,25 +153,41 @@ This peer's join was accepted and the session is live for it. Relayed from :ref:
 
 ----
 
+.. _class_NetwSessionHandle_signal_join_failed:
+
+.. rst-class:: classref-signal
+
+**join_failed**\ (\ code\: :godot:`int`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwSessionHandle_signal_join_failed>`
+
+This peer's own join was turned down, carrying the ``code`` and the ``reason`` the server gave. Relayed from :ref:`NetwMultiplayer.session_join_failed<class_NetwMultiplayer_signal_session_join_failed>`.
+
+No membership was created, so :ref:`local_participant<class_NetwSessionHandle_property_local_participant>` is still ``null`` and :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>` never fires for that attempt. :ref:`Netw.join()<class_Netw_method_join>`'s promise reports only that the request went out, so this is where a refusal arrives.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSessionHandle_signal_local_joined:
 
 .. rst-class:: classref-signal
 
 **local_joined**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_local_joined>`
 
-The :ref:`NetwParticipant<class_NetwParticipant>` seated for THIS peer has joined, which is also when :ref:`local_participant<class_NetwSessionHandle_property_local_participant>` starts returning. Relayed from :ref:`NetwMultiplayer.participant_local_joined<class_NetwMultiplayer_signal_participant_local_joined>`.
+The :ref:`NetwParticipant<class_NetwParticipant>` the session holds for THIS peer has joined, which is also when :ref:`local_participant<class_NetwSessionHandle_property_local_participant>` starts returning. Relayed from :ref:`NetwMultiplayer.participant_local_joined<class_NetwMultiplayer_signal_participant_local_joined>`.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwSessionHandle_signal_local_scene_changed:
+.. _class_NetwSessionHandle_signal_presentation_changed:
 
 .. rst-class:: classref-signal
 
-**local_scene_changed**\ (\ from\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`, to\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_local_scene_changed>`
+**presentation_changed**\ (\ from\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`, to\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_presentation_changed>`
 
-The scene :ref:`local_participant<class_NetwSessionHandle_property_local_participant>` is seated in has changed, carrying the handle left and the one arrived in, either of which may be ``null``. Relayed from :ref:`NetwMultiplayer.scene_local_changed<class_NetwMultiplayer_signal_scene_local_changed>`, which republishes the local row's own edge so a game hearing it never has to hold a participant to do it.
+The scene this peer presents has changed, carrying the handle left and the one taken, either of which may be ``null``. Relayed from :ref:`NetwMultiplayer.scene_presentation_changed<class_NetwMultiplayer_signal_scene_presentation_changed>`.
+
+Spent on a change and never on a repeat, so presenting the scene already presented announces nothing. A scene retiring clears the choice and announces that, naming ``null`` as the destination rather than picking another scene.
 
 .. rst-class:: classref-item-separator
 
@@ -185,6 +205,20 @@ A :ref:`NetwParticipant<class_NetwParticipant>` has joined, this peer's own row 
 
 ----
 
+.. _class_NetwSessionHandle_signal_participant_left:
+
+.. rst-class:: classref-signal
+
+**participant_left**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_participant_left>`
+
+A :ref:`NetwParticipant<class_NetwParticipant>`'s membership has ended, whether their peer disconnected or :ref:`kick()<class_NetwSessionHandle_method_kick>` ended it. Relayed from :ref:`NetwMultiplayer.participant_left<class_NetwMultiplayer_signal_participant_left>`, which carries the ordering.
+
+\ :ref:`NetwParticipant.is_active<class_NetwParticipant_property_is_active>` already reads ``false`` here, so this is the last edge at which a game can read the handle it filed that player under and erase its own row for them.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSessionHandle_signal_scene_live:
 
 .. rst-class:: classref-signal
@@ -193,7 +227,16 @@ A :ref:`NetwParticipant<class_NetwParticipant>` has joined, this peer's own row 
 
 A scene is live and reachable, carrying the :ref:`NetwSceneHandle<class_NetwSceneHandle>` it is read through. Relayed from :ref:`NetwMultiplayer.scene_live<class_NetwMultiplayer_signal_scene_live>`.
 
-This is where a game seats what a scene needs, and the handle it is handed is the one to keep: admitting a participant, observing an edge, and reading the scene's entities are all members on it.
+This is where a game puts what a scene needs, and the handle it is handed is the one to keep. Watching a participant, observing an edge, and reading the scene's entities are all members on it.
+
+\ **It fires from the scene root's own tree entry, so the root's children have not entered yet.** Their :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` is ``null`` and their ``@onready`` fields are unset, while :godot:`Node.get_node() <Node#class_Node_method_get_node>` still answers with the unmounted node, so a helper reaching one reads a null session deep inside itself rather than failing here. Work that touches the scene's contents waits for the root's own :godot:`Node.ready <Node#class_Node_signal_ready>`, which :godot:`Node.is_node_ready() <Node#class_Node_method_is_node_ready>` says whether it has already had.
+
+::
+
+    func _on_scene_live(arena: NetwSceneHandle) -> void:
+        if not arena.root.is_node_ready():
+            await arena.root.ready
+        arena.root.get_node(^"Spawns").arrange()
 
 .. rst-class:: classref-section-separator
 
@@ -278,23 +321,23 @@ Whether this session has a peer assigned and connected. :ref:`NetwMultiplayer.is
 
 - :ref:`NetwParticipant<class_NetwParticipant>` **get_local_participant**\ (\ )
 
-The :ref:`NetwParticipant<class_NetwParticipant>` seated for this peer, ``null`` before the local join is accepted. :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>` is the edge that fills it.
+The :ref:`NetwParticipant<class_NetwParticipant>` this session holds for this peer, ``null`` before the local join is accepted. :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>` is the edge that fills it.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwSessionHandle_property_local_player:
+.. _class_NetwSessionHandle_property_presented_scene:
 
 .. rst-class:: classref-property
 
-:ref:`NetwEntity<class_NetwEntity>` **local_player** :ref:`🔗<class_NetwSessionHandle_property_local_player>`
+:ref:`NetwSceneHandle<class_NetwSceneHandle>` **presented_scene** :ref:`🔗<class_NetwSessionHandle_property_presented_scene>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwEntity<class_NetwEntity>` **get_local_player**\ (\ )
+- :ref:`NetwSceneHandle<class_NetwSceneHandle>` **get_presented_scene**\ (\ )
 
-The :ref:`NetwEntity<class_NetwEntity>` this peer plays, ``null`` when it holds none. :ref:`NetwMultiplayer.local_player<class_NetwMultiplayer_property_local_player>`.
+The scene :ref:`present()<class_NetwSessionHandle_method_present>` last named, ``null`` while this peer presents none. :ref:`NetwMultiplayer.scene_presented()<class_NetwMultiplayer_method_scene_presented>`.
 
 .. rst-class:: classref-item-separator
 
@@ -413,6 +456,22 @@ This verb is on the session rather than on a scene view because a recipe names n
 
 ----
 
+.. _class_NetwSessionHandle_method_kick:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **kick**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`, reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwSessionHandle_method_kick>`
+
+:ref:`NetwMultiplayer.participant_kick()<class_NetwMultiplayer_method_participant_kick>`: ends ``participant``'s membership and turns their peer away carrying ``reason``, which holds the law and the errors.
+
+This ends a membership rather than closing a connection, and :ref:`leave()<class_NetwSessionHandle_method_leave>` is how a peer ends its own. The local server's participant is refused here for that reason.
+
+\ **Server Only.**
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSessionHandle_method_leave:
 
 .. rst-class:: classref-method
@@ -431,7 +490,50 @@ This verb is on the session rather than on a scene view because a recipe names n
 
 :ref:`NetwParticipant<class_NetwParticipant>` **participant_of**\ (\ peer\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwSessionHandle_method_participant_of>`
 
-The :ref:`NetwParticipant<class_NetwParticipant>` seated for ``peer``, ``null`` when no row is seated for it. Forwards to :ref:`NetwMultiplayer.peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>`, which is the same result under the flat spelling.
+The :ref:`NetwParticipant<class_NetwParticipant>` this session holds for ``peer``, ``null`` when it holds none. Forwards to :ref:`NetwMultiplayer.peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>`, which is the same result under the flat spelling.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionHandle_method_present:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **present**\ (\ scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>` = null\ ) :ref:`🔗<class_NetwSessionHandle_method_present>`
+
+Names the scene this peer looks at, and ``null`` names none.
+
+A local rendering choice and nothing else. It grants no viewership, sends nothing, and changes what no other peer sees, so a client presenting a scene it was never given still receives nothing of it. :ref:`NetwSceneHandle.watch()<class_NetwSceneHandle_method_watch>` is the verb that decides what reaches a participant.
+
+The framework never chooses for the game. A session presents nothing until something names a scene, and the scene it presents retiring clears the choice without taking another, so a peer between worlds draws nothing rather than whatever is left standing.
+
+::
+
+    func _on_scene_live(arena: NetwSceneHandle) -> void:
+        Netw.session(self).present(arena)
+
+\ That reads a scene going live as the scene to draw, which holds only while one world is live at a time. A game running several at once presents the world its own player stands in, or the last world any peer brought up takes the view from whoever was watching another.
+
+::
+
+    func _ready() -> void:
+        if not is_multiplayer_authority():
+            return
+        entity.reparented.connect(present_own_scene)
+        present_own_scene()
+
+    func present_own_scene() -> void:
+        Netw.session(self).present(entity.scene)
+
+\ On a listen server this is what :ref:`HostSceneView<class_HostSceneView>` draws, because only a host runs scenes in worlds of their own. Several bodies in the presented scene each hear :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>`, and the camera is adopted automatically only where exactly one of them is local.
+
+.. code:: text
+
+    Error
+    ┠╴OK              this peer now presents that scene, or none
+    ┠╴ERR_UNAVAILABLE this session holds no live scene by that handle
+    ┖╴ERR_UNCONFIGURED this handle outlived its session
 
 .. rst-class:: classref-item-separator
 

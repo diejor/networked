@@ -5,7 +5,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_identity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/resolved_join.hpp"
+#include "netw/session/frames.hpp"
 
 namespace TestNetwSessionUsername {
 
@@ -13,7 +13,7 @@ using namespace godot;
 using netw::NetwEntity;
 using netw::NetwIdentity;
 using netw::NetwMultiplayer;
-using netw::ResolvedJoin;
+using netw::session::AcceptFrame;
 
 Ref<NetwEntity> seated_as(Node *p_node, const StringName &p_id) {
     p_node->set_name("Held");
@@ -22,12 +22,11 @@ Ref<NetwEntity> seated_as(Node *p_node, const StringName &p_id) {
     return entity;
 }
 
-Ref<ResolvedJoin> claiming(int64_t p_peer, const StringName &p_name) {
-    Ref<ResolvedJoin> join;
-    join.instantiate();
-    join->set_peer_id(p_peer);
-    join->set_username(p_name);
-    return join;
+AcceptFrame claiming(int64_t p_peer, const StringName &p_name) {
+    AcceptFrame out;
+    out.peer_id = p_peer;
+    out.username = p_name;
+    return out;
 }
 
 TEST_CASE(
@@ -40,10 +39,10 @@ TEST_CASE(
 
     Ref<NetwMultiplayer> session;
     session.instantiate();
-    const Ref<ResolvedJoin> join = claiming(4, "bo");
+    AcceptFrame join = claiming(4, "bo");
 
     CHECK(session->session_admit_username(join, seated, Callable()));
-    CHECK(join->get_username() == StringName("bo"));
+    CHECK(bool(join.username == StringName("bo")));
 
     memdelete(held);
 }
@@ -60,10 +59,10 @@ TEST_CASE(
 
     Ref<NetwMultiplayer> session;
     session.instantiate();
-    const Ref<ResolvedJoin> join = claiming(4, "ana");
+    AcceptFrame join = claiming(4, "ana");
 
     CHECK(session->session_admit_username(join, seated, Callable()));
-    CHECK(join->get_username() == StringName("ana1"));
+    CHECK(bool(join.username == StringName("ana1")));
 
     memdelete(held);
 }
@@ -83,7 +82,7 @@ TEST_CASE(
     session->peer_set_identity(4, identity);
 
     netw_test::CallLog dropped;
-    const Ref<ResolvedJoin> join = claiming(4, "ana");
+    AcceptFrame join = claiming(4, "ana");
 
     CHECK_FALSE(
         session->session_admit_username(join, seated, dropped.callable("drop"))
@@ -91,7 +90,7 @@ TEST_CASE(
     NETW_CHECK_EQ(dropped.count("drop"), 1);
     NETW_CHECK_EQ(int64_t(dropped.args("drop")[0]), int64_t(4));
     CHECK_FALSE(session->session_refusal(4).is_empty());
-    CHECK(join->get_username() == StringName("ana"));
+    CHECK(bool(join.username == StringName("ana")));
 
     memdelete(held);
 }
@@ -123,8 +122,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] U5 a seated player with no stamped id "
-    "holds the leading slice of its node name, and no join row admits "
-    "nothing"
+    "holds the leading slice of its node name, and a record claiming no name "
+    "admits nothing"
 ) {
     Node *held = memnew(Node);
     held->set_name("ana|7");
@@ -133,13 +132,13 @@ TEST_CASE(
 
     Ref<NetwMultiplayer> session;
     session.instantiate();
-    const Ref<ResolvedJoin> join = claiming(4, "ana");
+    AcceptFrame join = claiming(4, "ana");
 
     CHECK(session->session_admit_username(join, seated, Callable()));
-    CHECK(join->get_username() == StringName("ana1"));
-    CHECK_FALSE(
-        session->session_admit_username(Ref<ResolvedJoin>(), seated, Callable())
-    );
+    CHECK(bool(join.username == StringName("ana1")));
+
+    AcceptFrame nameless = claiming(4, StringName());
+    CHECK_FALSE(session->session_admit_username(nameless, seated, Callable()));
 
     memdelete(held);
 }

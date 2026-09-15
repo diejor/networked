@@ -5,9 +5,10 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/scene_core.hpp"
+#include "support/joined_peer.h"
 #include "support/netw_call_log.h"
 
-namespace TestSceneSeatWiringLaws {
+namespace TestSceneMembershipWiringLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
@@ -53,46 +54,9 @@ Placed place(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SW1 the scene a session presents is the seat "
-    "its own participant holds, and a dedicated server holds no participant "
-    "to present through, so the same live book answers a scene on a host and "
-    "nothing on a server that only runs it"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    const CallLog flushed;
-    core->set_interest_flush(flushed.callable("flush"));
-    Node *root = memnew(Node);
-    const Placed arena = place(core, root, true);
-
-    const Ref<netw::NetwParticipant> local = core->participant_ensure(1);
-    REQUIRE(local.is_valid());
-    core->scene_bind_local_participant(local);
-    CHECK(core->participant_take_seat(1, arena.handle));
-
-    NETW_CHECK_EQ(int(core->participant_seat(1) == arena.handle), 1);
-
-    core->session_set_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
-    core->scene_refresh_current();
-    NETW_CHECK_EQ(
-        int(core->get_scene_core()->get_current_scene() == arena.handle),
-        1
-    );
-
-    core->session_set_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
-    core->scene_refresh_current();
-    NETW_CHECK_EQ(
-        int(core->get_scene_core()->get_current_scene().is_valid()),
-        0
-    );
-
-    memdelete(root);
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] SW2 a player leaving its scene gives the seat "
-    "back at the settle and not in the frame the body left, so the admission "
-    "outlives the exit that has not been resolved yet"
+    "[Networked][Scene][Hosted] SW2 a player leaving its scene gives the "
+    "subscription back at the settle and not in the frame the body left, so "
+    "delivery outlives the exit that has not been resolved yet"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -102,17 +66,18 @@ TEST_CASE(
     const Placed arena = place(core, root, true);
     const Placed pawn = place(core, arena.owner, false);
     pawn.record->set_peer_id(7);
-    NETW_CHECK_EQ(int(core->scene_admit(arena.handle, 7)), int(OK));
-    CHECK(core->scene_admits(arena.handle, 7));
+    REQUIRE(netw_test::seated_peer(core.ptr(), 7).is_valid());
+    core->membership_place_body(pawn.wrapper);
+    CHECK(core->scene_subscribes(arena.handle, 7));
 
     core->entity_capture_exit(pawn.wrapper.ptr());
     arena.owner->remove_child(pawn.owner);
 
-    CHECK(core->scene_admits(arena.handle, 7));
+    CHECK(core->scene_subscribes(arena.handle, 7));
 
     core->session_flush_deferred();
 
-    CHECK_FALSE(core->scene_admits(arena.handle, 7));
+    CHECK_FALSE(core->scene_subscribes(arena.handle, 7));
 
     memdelete(pawn.owner);
     memdelete(root);
@@ -134,45 +99,44 @@ TEST_CASE(
     const Placed pawn = place(core, first.owner, false);
 
     pawn.record->set_peer_id(7);
-    NETW_CHECK_EQ(int(core->scene_admit(first.handle, 7)), int(OK));
-    NETW_CHECK_EQ(int(core->scene_admit(second.handle, 7)), int(OK));
+    REQUIRE(netw_test::seated_peer(core.ptr(), 7).is_valid());
+    core->membership_place_body(pawn.wrapper);
+    NETW_CHECK_EQ(int(core->scene_watch(first.handle, 7)), int(OK));
 
     first.owner->remove_child(pawn.owner);
     second.owner->add_child(pawn.owner);
+    core->membership_place_body(pawn.wrapper);
 
     core->entity_capture_exit(pawn.wrapper.ptr());
     second.owner->remove_child(pawn.owner);
     core->session_flush_deferred();
 
-    CHECK_FALSE(core->scene_admits(second.handle, 7));
-    CHECK(core->scene_admits(first.handle, 7));
+    CHECK_FALSE(core->scene_subscribes(second.handle, 7));
+    CHECK(core->scene_subscribes(first.handle, 7));
 
     memdelete(pawn.owner);
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SW3 an entity landing in a scene moves its "
-    "peer's seat to the scene it landed in, so the participant record and the "
-    "body agree without anyone asking the tree where the body ended up"
+    "[Networked][Scene][Hosted] SW3 an arrival announces the move and writes "
+    "no subscription of its own, because the body's residency is what "
+    "subscribes and a second writer would disagree with it"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
+    const CallLog moved;
+    core->connect(StringName("scene_entity_moved"), moved.callable("moved"));
     Node *root = memnew(Node);
     const Placed source = place(core, root, true, StringName("Source"));
     const Placed destination = place(core, root, true, StringName("Dest"));
     const Placed pawn = place(core, source.owner, false);
     pawn.wrapper->set_peer_id(7);
-    REQUIRE(core->participant_ensure(7).is_valid());
-    CHECK(core->participant_take_seat(7, source.handle));
-    NETW_CHECK_EQ(int(core->participant_seat(7) == source.handle), 1);
-    NETW_CHECK_EQ(
-        int(core->scene_of(core->entity_of(destination.owner))
-            == destination.handle),
-        1
-    );
+    REQUIRE(netw_test::seated_peer(core.ptr(), 7).is_valid());
+    core->membership_place_body(pawn.wrapper);
+    REQUIRE(core->scene_subscribes(source.handle, 7));
 
     core->scene_arrive(
         pawn.wrapper,
@@ -181,16 +145,25 @@ TEST_CASE(
         Ref<netw::NetwPromise>()
     );
 
-    NETW_CHECK_EQ(int(core->participant_seat(7) == destination.handle), 1);
+    NETW_CHECK_EQ(moved.count(StringName("moved")), 1);
+    CHECK(core->scene_subscribes(source.handle, 7));
+    CHECK_FALSE(core->scene_subscribes(destination.handle, 7));
+
+    source.owner->remove_child(pawn.owner);
+    destination.owner->add_child(pawn.owner);
+    core->membership_place_body(pawn.wrapper);
+
+    CHECK(core->scene_subscribes(destination.handle, 7));
+    CHECK_FALSE(core->scene_subscribes(source.handle, 7));
 
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SW4 releasing a seat tells the peer holding "
-    "it before the membership goes away, so a peer released from the scene it "
-    "is standing in ends holding no seat rather than one the server no longer "
-    "admits it to"
+    "[Networked][Scene][Hosted] SW4 unwatching tells the peer before the "
+    "subscription goes away, so a peer unwatched from the scene it was "
+    "watching ends subscribed to nothing rather than to a scene the server "
+    "no longer delivers"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -204,16 +177,14 @@ TEST_CASE(
     row.instantiate();
     core->participant_adopt(here, row);
     REQUIRE(core->participant_admit(here));
-    NETW_CHECK_EQ(int(core->scene_admit(arena.handle, here)), int(OK));
-    core->participant_take_seat(here, arena.handle);
-    NETW_CHECK_EQ(int(core->participant_seat(here) == arena.handle), 1);
+    NETW_CHECK_EQ(int(core->scene_watch(arena.handle, here)), int(OK));
+    REQUIRE(core->scene_subscribes(arena.handle, here));
 
-    CHECK(core->scene_release(arena.handle, here));
+    CHECK(core->scene_unwatch(arena.handle, here));
 
-    CHECK_FALSE(core->scene_admits(arena.handle, here));
-    NETW_CHECK_EQ(int(core->participant_seat(here).is_valid()), 0);
+    CHECK_FALSE(core->scene_subscribes(arena.handle, here));
 
     memdelete(root);
 }
 
-} // namespace TestSceneSeatWiringLaws
+} // namespace TestSceneMembershipWiringLaws

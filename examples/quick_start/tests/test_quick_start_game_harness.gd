@@ -11,14 +11,13 @@ const _LEVEL_2_PATH := "res://examples/quick_start/Level2.tscn"
 const _TP_MARKER := ^"%Teleporter/Marker2D"
 
 var game: NetwGameHarness
-
-
-func before() -> void:
-	var fs := DATABASE.backend as FileSystemDatabase
-	fs.base_dir = create_temp_dir("quick_start_saves")
+var saves := 0
 
 
 func before_test() -> void:
+	saves += 1
+	var fs := DATABASE.backend as FileSystemDatabase
+	fs.base_dir = create_temp_dir("quick_start_saves/%d" % saves)
 	game = make_game_harness(MAIN)
 	await game.setup()
 	game.show_views()
@@ -279,24 +278,131 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 			.is_greater(jose_remote_x)
 
 
-func _teleport(participant: NetwSceneRunner, scene_path: String) -> void:
-	var tp := _tp_of(participant)
-	for _i in 240:
-		tp = _tp_of(participant)
-		if tp and not tp.is_settling() and not tp.is_moving:
-			break
-		await game.sync_ticks(1)
-	assert_that(tp) \
-			.override_failure_message("%s has no TPComponent to teleport with" % participant.username) \
-			.is_not_null()
-	var promise := tp.teleport(scene_path, _TP_MARKER)
-	for _i in 300:
-		if promise.is_completed:
-			break
-		await game.sync_ticks(1)
-	assert_that(promise.is_completed) \
-			.override_failure_message("teleport to %s never completed" % scene_path) \
+func test_a_reconnecting_player_is_restored_where_it_saved() -> void:
+	var valeria := await game.add_host("valeria", true)
+	var jose := await game.add_client("jose", true)
+	await _wait_for_transitions()
+
+	await _teleport_without_bridge(jose, valeria, _LEVEL_2_PATH, &"Level2")
+	_assert_arrived_at_marker(jose, "Level2")
+
+	await game.disconnect_runner(jose)
+	await game.sync_ticks(16)
+
+	var again := await game.add_client("jose", true)
+	await _wait_for_transition(again)
+	_assert_arrived_at_marker(again, "Level2")
+
+
+func test_teleport_to_a_missing_marker_rejects_and_leaves_the_player_home() -> void:
+	var valeria := await game.add_host("valeria", true)
+	await _wait_for_transition(valeria)
+
+	var tp := await _wait_for_tp(valeria)
+	assert_that(tp).is_not_null()
+	var before: Vector2 = (valeria.local_player as Node2D).global_position
+
+	var promise := await _wait_for_promise(
+		tp.teleport(_LEVEL_2_PATH, ^"%Teleporter/NoSuchMarker")
+	)
+	assert_bool(promise.is_settled) \
+			.override_failure_message("a missing marker never settled the promise") \
 			.is_true()
+	assert_int(promise.code) \
+			.override_failure_message("a missing marker did not reject the teleport") \
+			.is_equal(ERR_DOES_NOT_EXIST)
+
+	var player := valeria.local_player as Node2D
+	assert_that(player).is_not_null()
+	var level: Node = NetwEntity.of(player).scene.root
+	assert_that(String(level.name)) \
+			.override_failure_message("a rejected teleport moved valeria anyway") \
+			.is_equal("Level1")
+	assert_float(player.global_position.distance_to(before)).is_less(1.0)
+
+
+func test_completion_before_local_placement_waits_for_the_marker() -> void:
+	await game.add_host("valeria", true)
+	var jose := await game.add_client("jose", true)
+	await _wait_for_transitions()
+
+	var layer := _layer_of(jose)
+	var tp := await _wait_for_tp(jose)
+	assert_that(tp).is_not_null()
+
+	var promise := tp.teleport(_LEVEL_2_PATH, _TP_MARKER)
+	layer.answer(OK, "")
+
+	var level: Node = NetwEntity.of(jose.local_player).scene.root
+	assert_that(String(level.name)) \
+			.override_failure_message("the mover left Level1 before the server moved it") \
+			.is_equal("Level1")
+	assert_bool(layer.revealing) \
+			.override_failure_message("the mover revealed the destination before it arrived") \
+			.is_false()
+	assert_bool(promise.is_settled) \
+			.override_failure_message("a completion settled the teleport before it applied") \
+			.is_false()
+
+	await _wait_for_promise(promise)
+	assert_int(promise.code).is_equal(OK)
+	_assert_arrived_at_marker(jose, "Level2")
+
+
+func test_a_second_teleport_while_one_is_in_flight_is_one_operation() -> void:
+	var valeria := await game.add_host("valeria", true)
+	await _wait_for_transition(valeria)
+
+	var layer := _layer_of(valeria)
+	var tp := await _wait_for_tp(valeria)
+	assert_that(tp).is_not_null()
+
+	var first := tp.teleport(_LEVEL_2_PATH, _TP_MARKER)
+	var second := tp.teleport(_LEVEL_1_PATH, _TP_MARKER)
+
+	assert_that(second) \
+			.override_failure_message("a second teleport opened a second operation") \
+			.is_same(first)
+	assert_that(layer.pending) \
+			.override_failure_message("a second teleport replaced the pending request") \
+			.is_same(first)
+
+	await _wait_for_promise(first)
+	assert_int(first.code).is_equal(OK)
+
+	var level: Node = NetwEntity.of(valeria.local_player).scene.root
+	assert_that(String(level.name)) \
+			.override_failure_message("the overlapping request chose the destination") \
+			.is_equal("Level2")
+
+
+func test_a_mover_leaving_mid_teleport_leaves_the_others_playable() -> void:
+	var valeria := await game.add_host("valeria", true)
+	var jose := await game.add_client("jose", true)
+	await _wait_for_transitions()
+
+	var tp := await _wait_for_tp(jose)
+	assert_that(tp).is_not_null()
+	tp.teleport(_LEVEL_2_PATH, _TP_MARKER)
+	await game.sync_ticks(2)
+	await game.disconnect_runner(jose)
+	await game.sync_ticks(30)
+
+	var player := valeria.local_player as Node2D
+	assert_that(player) \
+			.override_failure_message("valeria lost her player when jose left") \
+			.is_not_null()
+	var level: Node = NetwEntity.of(player).scene.root
+	assert_that(String(level.name)).is_equal("Level1")
+
+	var start := player.position.x
+	valeria.simulate_action_press("move_right")
+	await game.sync_ticks(16)
+	valeria.simulate_action_release("move_right")
+	await game.sync_ticks(8)
+	assert_that(player.position.x) \
+			.override_failure_message("valeria could not move after jose left mid teleport") \
+			.is_greater(start)
 
 
 func _teleport_without_bridge(
@@ -305,12 +411,8 @@ func _teleport_without_bridge(
 		scene_path: String,
 		scene_name: StringName,
 ) -> void:
-	var tp := _tp_of(participant)
-	for _i in 240:
-		tp = _tp_of(participant)
-		if tp and not tp.is_settling() and not tp.is_moving:
-			break
-		await game.sync_ticks(1)
+	var layer := _layer_of(participant)
+	var tp := await _wait_for_tp(participant)
 	assert_that(tp).is_not_null()
 	participant.simulate_action_press("move_right")
 	var promise := tp.teleport(scene_path, _TP_MARKER)
@@ -320,9 +422,11 @@ func _teleport_without_bridge(
 	var input_held := true
 	for _i in 300:
 		await game.sync_ticks(1)
-		if tp.is_moving:
+		if layer.is_moving():
 			moving_frames += 1
-			assert_vector((tp.owner as CharacterBody2D).velocity).is_equal(Vector2.ZERO)
+			var body := participant.local_player as CharacterBody2D
+			if body:
+				assert_vector(body.velocity).is_equal(Vector2.ZERO)
 			if moving_frames == 4:
 				participant.simulate_action_release("move_right")
 				input_held = false
@@ -408,6 +512,28 @@ func _tp_of(participant: NetwSceneRunner) -> TPComponent:
 	if not is_instance_valid(player):
 		return null
 	return player.get_node_or_null("%TPComponent") as TPComponent
+
+
+func _layer_of(participant: NetwSceneRunner) -> TPLayer:
+	return Netw.service(participant.tree, TPLayer) as TPLayer
+
+
+func _wait_for_tp(participant: NetwSceneRunner) -> TPComponent:
+	var layer := _layer_of(participant)
+	for _i in 240:
+		var tp := _tp_of(participant)
+		if tp and not layer.is_settling() and not layer.is_moving():
+			return tp
+		await game.sync_ticks(1)
+	return null
+
+
+func _wait_for_promise(promise: NetwPromise) -> NetwPromise:
+	for _i in 300:
+		if promise.is_settled:
+			break
+		await game.sync_ticks(1)
+	return promise
 
 
 func _request_level_2(participant: NetwSceneRunner) -> NetwPromise:

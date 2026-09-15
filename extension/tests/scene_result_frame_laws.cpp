@@ -37,7 +37,8 @@ TEST_CASE(
 
     const Ref<NetwPromise> asked = core->scene_request_send(
         String("res://arena.tscn"),
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int request_id = scenes->get_pending_request_id();
 
@@ -61,7 +62,8 @@ TEST_CASE(
 
     const Ref<NetwPromise> asked = core->scene_request_send(
         String("res://arena.tscn"),
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int request_id = scenes->get_pending_request_id();
 
@@ -91,12 +93,14 @@ TEST_CASE(
 
     core->scene_request_send(
         String("res://arena.tscn"),
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int stale_id = scenes->get_pending_request_id();
     const Ref<NetwPromise> live = core->scene_request_send(
         String("res://annex.tscn"),
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int live_id = scenes->get_pending_request_id();
 
@@ -124,7 +128,8 @@ TEST_CASE(
 
     const Ref<NetwPromise> asked = core->scene_request_send(
         String("res://arena.tscn"),
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int request_id = scenes->get_pending_request_id();
 

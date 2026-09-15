@@ -3,7 +3,6 @@
 #include <cstdint>
 
 #include "godot/variant.hpp"
-#include "netw/api/resolved_join.hpp"
 #include "netw/wire/describe.hpp"
 
 namespace netw {
@@ -56,7 +55,6 @@ struct JoinRequest {
     int64_t wire_identity = 0;
     int64_t schema_identity = 0;
 
-    godot::Ref<ResolvedJoin> resolve() const;
     godot::PackedByteArray serialize() const;
     bool deserialize(const godot::PackedByteArray &p_bytes);
 };

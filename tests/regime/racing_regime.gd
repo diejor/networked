@@ -170,13 +170,13 @@ func summary_handles() -> Dictionary:
 
 
 func local_car() -> Vehicle:
-	var player: NetwEntity = session_handle.local_player
-	return player.owner as Vehicle if player else null
+	var here: NetwParticipant = session_handle.local_participant
+	var mine: Array[NetwEntity] = here.players if here else []
+	return mine[0].owner as Vehicle if mine.size() == 1 else null
 
 
 func race_level() -> Node:
-	var here: NetwParticipant = session_handle.local_participant
-	var scene: NetwSceneHandle = here.current_scene if here else null
+	var scene: NetwSceneHandle = session_handle.presented_scene
 	return scene.root if scene else null
 
 

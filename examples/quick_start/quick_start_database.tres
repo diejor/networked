@@ -1,3 +1,7 @@
-[gd_resource type="Resource" format=3 uid="uid://yv4uuygdxogs"]
+[gd_resource type="NetwDatabase" format=3 uid="uid://yv4uuygdxogs"]
+
+[sub_resource type="FileSystemDatabase" id="FileSystemDatabase_oudfo"]
+base_dir = "res://examples/quick_start/saves"
 
 [resource]
+backend = SubResource("FileSystemDatabase_oudfo")

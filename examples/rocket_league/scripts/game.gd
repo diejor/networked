@@ -19,7 +19,7 @@ func _init() -> void:
 func _ready() -> void:
 	if multiplayer.is_server():
 		queue_kickoff()
-		Netw.session(self).participant_joined.connect(_on_participant_joined)
+		Netw.session(self).participant_joined.connect(on_participant_joined)
 
 
 func rule_goal(team: int, _tick: int) -> void:
@@ -46,5 +46,5 @@ func tickrate() -> float:
 	return clock.param(NetwMultiplayer.CLOCK_PARAM_TICKRATE)
 
 
-func _on_participant_joined(_participant: NetwParticipant) -> void:
+func on_participant_joined(_participant: NetwParticipant) -> void:
 	queue_kickoff()

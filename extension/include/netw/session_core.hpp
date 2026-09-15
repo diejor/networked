@@ -30,6 +30,7 @@ private:
     Role role = ROLE_NONE;
     Role desired_role = ROLE_LISTEN_SERVER;
     NetwMultiplayer *host = nullptr;
+    uint64_t generation = 1;
 
     RateWindow join_window;
 
@@ -49,6 +50,8 @@ public:
     Role get_desired_role() const;
 
     void transition(State next);
+
+    uint64_t get_generation() const;
 
     void on_peer_assigned(bool has_live_peer, bool connected, int unique_id);
 

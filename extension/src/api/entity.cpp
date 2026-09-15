@@ -742,64 +742,6 @@ Node *NetwEntity::spawn_under(Node *p_parent, const StringName &p_id) {
     );
 }
 
-Node *NetwEntity::instantiate_player(
-    const Ref<NetwParticipant> &p_participant
-) {
-    if (!ensure_server_action(StringName("instantiate_player"))) {
-        return nullptr;
-    }
-    NetwMultiplayer *core = session_core();
-    if (core == nullptr) {
-        return nullptr;
-    }
-    return core->entity_instantiate_player(get_owner(), p_participant.ptr());
-}
-
-Node *NetwEntity::spawn_player(
-    const Ref<NetwParticipant> &p_participant,
-    const Ref<NetwSceneHandle> &p_scene
-) {
-    if (!ensure_server_action(StringName("spawn_player"))) {
-        return nullptr;
-    }
-    NetwMultiplayer *core = session_core();
-    if (core == nullptr) {
-        return nullptr;
-    }
-    return core
-        ->entity_spawn_player(get_owner(), p_participant.ptr(), p_scene.ptr());
-}
-
-void NetwEntity::reparent_to(
-    Node *p_new_parent,
-    const Ref<NetwReparentOpts> &p_opts
-) {
-    if (!ensure_server_action(StringName("reparent_to"))) {
-        return;
-    }
-    Node *owner = get_owner();
-    NETW_ERR_COND(
-        owner == nullptr,
-        sys::ENTITY,
-        "reparent_to requires an owner"
-    );
-    NETW_ERR_COND(
-        p_new_parent == nullptr,
-        sys::ENTITY,
-        "reparent_to requires a parent"
-    );
-    Ref<NetwReparentOpts> opts = p_opts;
-    if (opts.is_null()) {
-        opts.instantiate();
-    }
-    NetwMultiplayer *core = session_core();
-    if (core == nullptr) {
-        NetwMultiplayer::entity_move(record, owner, p_new_parent, opts);
-        return;
-    }
-    core->entity_reparent(record, owner, p_new_parent, opts);
-}
-
 void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
     if (!ensure_server_action(StringName("despawn"))) {
         return;
@@ -1120,7 +1062,7 @@ void NetwEntity::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwEntity",
-        D_METHOD("find", "root", "join"),
+        D_METHOD("find", "root", "participant"),
         &NetwEntity::find
     );
     ClassDB::bind_static_method(
@@ -1477,19 +1419,6 @@ void NetwEntity::_bind_methods() {
         &NetwEntity::spawn_under,
         DEFVAL((Node *)nullptr),
         DEFVAL(StringName())
-    );
-    ClassDB::bind_method(
-        D_METHOD("instantiate_player", "participant"),
-        &NetwEntity::instantiate_player
-    );
-    ClassDB::bind_method(
-        D_METHOD("spawn_player", "participant", "scene"),
-        &NetwEntity::spawn_player
-    );
-    ClassDB::bind_method(
-        D_METHOD("reparent_to", "new_parent", "opts"),
-        &NetwEntity::reparent_to,
-        DEFVAL(Ref<NetwReparentOpts>())
     );
     ClassDB::bind_method(
         D_METHOD("despawn", "opts"),

@@ -1,61 +1,40 @@
 class_name BomberPlayerSpawner
 extends MultiplayerSpawner
-## Spawns bomber player entities for accepted join payloads.
 
 const PLAYER_SCENE := preload("res://examples/bomber/game/player.tscn")
 
-@onready var ctx := Netw.of(self)
-@onready var gamestate: BomberGamestate = ctx.service_get(BomberGamestate)
+@onready var level: Node = Netw.scene(self).root
+@onready var players_root: Node = get_node(spawn_path)
 
 
 func _ready() -> void:
-	spawn_function = _spawn_player
-	if multiplayer.is_server():
-		var scene := Netw.scene(self)
-		scene.participant_entered.connect(_on_participant_entered)
-		for participant: NetwParticipant in scene.participants:
-			_on_participant_entered(participant)
+	spawn_function = make_player
 
 
-func _on_participant_entered(participant: NetwParticipant) -> void:
-	spawn_participant(participant)
-
-
-## Server only. Spawns one player for [param participant].
-func spawn_participant(participant: NetwParticipant) -> void:
+func spawn_participant(participant: NetwParticipant, slot: int) -> void:
 	assert(multiplayer.is_server())
-	if participant == null or participant.join == null:
+	if NetwEntity.find(players_root, participant) != null:
 		return
-	if _has_player(participant):
-		return
-
-	var ordered := Netw.scene(self).participants
-	ordered.sort_custom(
-		func(a: NetwParticipant, b: NetwParticipant) -> bool:
-			return a.peer_id < b.peer_id
-	)
-	var spawn_index := maxi(ordered.find(participant), 0)
 	spawn(
 		{
 			peer_id = participant.peer_id,
-			spawn_index = spawn_index,
+			spawn_index = slot,
 			username = participant.username,
 		},
 	)
 
 
-func _spawn_player(data: Dictionary) -> Node:
+func make_player(data: Dictionary) -> Node:
 	var player := PLAYER_SCENE.instantiate()
 	var peer_id := int(data.peer_id)
 	var username := str(data.username)
 	var spawn_index := int(data.spawn_index)
 	NetwEntity.bind(player, StringName(username), peer_id)
 
-	var world := _level()
-	var score := world.get_node("Score")
+	var score := level.get_node("Score")
 	score.add_player(peer_id, username)
 
-	player.position = _get_spawn_position(spawn_index)
+	player.position = spawn_position(spawn_index)
 
 	var label := player.get_node("%label") as Label
 	label.text = username
@@ -63,24 +42,8 @@ func _spawn_player(data: Dictionary) -> Node:
 	return player
 
 
-func _has_player(participant: NetwParticipant) -> bool:
-	var players_root := get_node_or_null(spawn_path)
-	return (
-			NetwEntity.find(players_root, participant) != null
-			if players_root
-			else false
-	)
-
-
-func _level() -> Node:
-	return Netw.scene(self).root
-
-
-func _get_spawn_position(spawn_index: int) -> Vector2:
-	var world := _level()
-
-	var spawn_points := world.get_node("SpawnPoints")
-
+func spawn_position(spawn_index: int) -> Vector2:
+	var spawn_points := level.get_node("SpawnPoints")
 	var point_index := spawn_index % spawn_points.get_child_count()
 	var marker := spawn_points.get_child(point_index) as Node2D
 	return marker.position if marker else Vector2.ZERO

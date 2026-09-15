@@ -21,7 +21,7 @@ Description
 
 An auth provider returns this inside an :ref:`AuthResult<class_AuthResult>`. The session treats :ref:`username<class_NetwIdentity_property_username>` as server-authoritative and stores the identity per peer. Access it through :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>`.
 
-A session without an auth provider has no identities at all, and :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>` returns ``null`` there. It is not part of the replicated roster: :ref:`ResolvedJoin<class_ResolvedJoin>` is what the server sends to peers.
+A session without an auth provider has no identities at all, and :ref:`NetwParticipant.identity<class_NetwParticipant_property_identity>` returns ``null`` there. It is never replicated. What the server sends other peers is the membership and the :ref:`NetwParticipant.username<class_NetwParticipant_property_username>`, so a game that wants an identity known elsewhere replicates what it chooses to share.
 
 ::
 

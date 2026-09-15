@@ -16,7 +16,6 @@ namespace netw {
 class NetwEntity;
 class NetwMultiplayer;
 class NetwParticipant;
-class NetwReparentOpts;
 
 class NetwSceneHandle : public godot::RefCounted {
     GDCLASS(NetwSceneHandle, godot::RefCounted)
@@ -31,30 +30,26 @@ public:
     bool get_is_declared() const;
     godot::Node *get_root() const;
     godot::Node *get_world() const;
-    godot::Error add_player(const godot::Ref<NetwEntity> &p_player);
 
     godot::StringName get_label() const;
     godot::TypedArray<NetwEntity> get_players() const;
-    godot::TypedArray<NetwParticipant> get_participants() const;
-    godot::Ref<NetwEntity> get_local_player() const;
+    godot::TypedArray<NetwParticipant> get_viewers() const;
+    godot::TypedArray<NetwEntity> get_local_players() const;
 
     godot::TypedArray<NetwEntity> get_entities() const;
     void observe(int64_t p_event, const godot::Callable &p_callback);
     void unobserve(int64_t p_event, const godot::Callable &p_callback);
-    godot::Ref<NetwPromise> move(
-        const godot::Ref<NetwEntity> &p_entity,
-        const godot::Ref<NetwReparentOpts> &p_opts
-    );
+    godot::Ref<NetwPromise> move(const godot::Ref<NetwEntity> &p_entity);
 
-    godot::Error admit(const godot::Ref<NetwParticipant> &p_participant);
-    godot::Error release(const godot::Ref<NetwParticipant> &p_participant);
-    bool admits(const godot::Ref<NetwParticipant> &p_participant) const;
+    godot::Error watch(const godot::Ref<NetwParticipant> &p_participant);
+    godot::Error unwatch(const godot::Ref<NetwParticipant> &p_participant);
+    bool is_watching(const godot::Ref<NetwParticipant> &p_participant) const;
 
     void announce_player(
         const godot::Ref<NetwEntity> &p_player,
         bool p_present
     );
-    void announce_participant(
+    void announce_viewer(
         const godot::Ref<NetwParticipant> &p_participant,
         bool p_present
     );

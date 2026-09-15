@@ -363,7 +363,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
-        PayloadContract::PLANNED
+        PayloadContract::PLANNED,
+        1
     );
     reg_c(
         25,
@@ -373,7 +374,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
-        PayloadContract::PLANNED
+        PayloadContract::PLANNED,
+        1
     );
     reg_c(
         26,
@@ -413,7 +415,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::CLIENT_TO_SERVER,
-        PayloadContract::PLANNED
+        PayloadContract::PLANNED,
+        1
     );
     reg_c(
         30,
@@ -543,13 +546,14 @@ WireRegistry WireRegistry::create_default() {
 
     reg_c(
         42,
-        "SESSION_SCENE_SEAT",
+        "SESSION_SCENE_VIEWERS",
         ChannelKind::SESSION,
         Reliability::RELIABLE,
         Freshness::NONE,
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
-        PayloadContract::PLANNED
+        PayloadContract::PLANNED,
+        1
     );
 
     reg_c(

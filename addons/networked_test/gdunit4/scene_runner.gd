@@ -20,10 +20,26 @@ var peer_id: int = 0
 ## Username used to join the session.
 var username: StringName = &""
 
-## Mirrors [member NetwMultiplayer.local_player].
+## Every body this runner's participant represents.
+var local_players: Array[NetwEntity]:
+	get:
+		if not tree:
+			return []
+		var who: NetwParticipant = tree.api.local_participant
+		if who == null:
+			return []
+		var owned: Array[NetwEntity] = []
+		for player: NetwEntity in who.players:
+			if is_instance_valid(player.owner):
+				owned.append(player)
+		return owned
+
+## The one body this runner represents, and null while it represents none or
+## several, because picking one of several would pick for the caller.
 var local_player: Node:
 	get:
-		return tree.api.local_player.owner if tree and tree.api.local_player else null
+		var mine: Array[NetwEntity] = local_players
+		return mine[0].owner if mine.size() == 1 else null
 
 
 func _init(

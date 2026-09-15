@@ -24,7 +24,13 @@ Ref<NetwSceneCore> armed(const Ref<NetwPromise> &p_promise) {
     Ref<NetwSceneCore> core;
     core.instantiate();
     CHECK(core->transition_open());
-    core->transition_arm(StringName("Arena"), two_sources(), p_promise);
+    core->transition_arm(
+        StringName("Arena"),
+        two_sources(),
+        p_promise,
+        NetwSceneCore::SCOPE_SESSION,
+        PackedInt64Array()
+    );
     return core;
 }
 
@@ -43,7 +49,13 @@ TEST_CASE(
     Ref<NetwPromise> refused;
     refused.instantiate();
     CHECK(core->transition_open());
-    core->transition_arm(StringName("Annex"), two_sources(), refused);
+    core->transition_arm(
+        StringName("Annex"),
+        two_sources(),
+        refused,
+        NetwSceneCore::SCOPE_SESSION,
+        PackedInt64Array()
+    );
     CHECK_FALSE(core->transition_open());
     core->transition_fail(int(ERR_UNAUTHORIZED));
     NETW_CHECK_EQ(refused->get_code(), int(ERR_UNAUTHORIZED));
@@ -206,7 +218,13 @@ TEST_CASE(
     Ref<NetwPromise> second;
     second.instantiate();
     CHECK(core->transition_open());
-    core->transition_arm(StringName("Annex"), two_sources(), second);
+    core->transition_arm(
+        StringName("Annex"),
+        two_sources(),
+        second,
+        NetwSceneCore::SCOPE_SESSION,
+        PackedInt64Array()
+    );
 
     CHECK(
         bool(

@@ -9,50 +9,21 @@ const START_ANCHOR := Vector3(5., 0.5, 5.0)
 
 
 func _ready() -> void:
-	spawn_function = _spawn_vehicle
-	if multiplayer.is_server():
-		_arm_spawns.call_deferred()
+	spawn_function = make_vehicle
 
 
-func _arm_spawns() -> void:
-	var scene := Netw.scene(self)
-	if scene == null or not scene.is_declared:
-		return
-	scene.participant_entered.connect(_on_participant_entered)
-	for participant: NetwParticipant in scene.participants:
-		_on_participant_entered(participant)
-
-
-func _on_participant_entered(participant: NetwParticipant) -> void:
-	spawn_participant(participant)
-
-
-## Server only. Spawns one vehicle for [param participant].
-func spawn_participant(participant: NetwParticipant) -> void:
+func spawn_vehicle(participant: NetwParticipant, slot: int) -> void:
 	assert(multiplayer.is_server())
-	if participant == null or participant.join == null:
-		return
-	if _has_vehicle(participant):
-		return
-
-	var ordered := Netw.scene(self).participants
-	ordered.sort_custom(
-		func(a: NetwParticipant, b: NetwParticipant) -> bool:
-			return a.peer_id < b.peer_id
-	)
-	var spawn_index := maxi(ordered.find(participant), 0)
 	spawn(
 		{
 			peer_id = participant.peer_id,
-			spawn_index = spawn_index,
-			username = _unique_username(str(participant.username)),
+			spawn_index = slot,
+			username = unique_username(String(participant.username)),
 		},
 	)
 
 
-# Duplicate display names would collide as entity ids, so two cars would be
-# one entity. A later duplicate gains a join-order suffix instead.
-func _unique_username(username: String) -> String:
+func unique_username(username: String) -> String:
 	var parent := get_node_or_null(spawn_path)
 	var taken := { }
 	if parent:
@@ -68,37 +39,27 @@ func _unique_username(username: String) -> String:
 	return claimed
 
 
-func _spawn_vehicle(data: Dictionary) -> Node:
+func make_vehicle(data: Dictionary) -> Node:
 	var vehicle := VEHICLE_SCENE.instantiate()
 	var peer_id := int(data.peer_id)
 	var username := str(data.username)
 	var spawn_index := int(data.spawn_index)
 	NetwEntity.bind(vehicle, StringName(username), peer_id)
 
-	# The root anchors at the origin and the sphere carries the offset, so the
-	# on-spawn snapshot of sphere_position places every car on its start slot.
 	var sphere := vehicle.get_node(^"Sphere") as Node3D
 	if sphere:
-		sphere.position = _spawn_slot(spawn_index)
+		sphere.position = spawn_slot(spawn_index)
 	return vehicle
 
 
-func _has_vehicle(participant: NetwParticipant) -> bool:
-	var root := get_node_or_null(spawn_path)
-	return NetwEntity.find(root, participant) != null if root else false
-
-
-# The world position of start slot [param spawn_index], from the authored spawn
-# markers when a SpawnPoints node supplies them, wrapping when there are more cars
-# than markers, else the computed grid.
-func _spawn_slot(spawn_index: int) -> Vector3:
-	var markers := _spawn_markers()
+func spawn_slot(spawn_index: int) -> Vector3:
+	var markers := spawn_markers()
 	if not markers.is_empty():
 		return markers[spawn_index % markers.size()].global_position
-	return _grid_slot(spawn_index)
+	return grid_slot(spawn_index)
 
 
-func _spawn_markers() -> Array[Marker3D]:
+func spawn_markers() -> Array[Marker3D]:
 	var out: Array[Marker3D] = []
 	var container := get_node_or_null(SPAWN_POINTS_PATH)
 	if container:
@@ -108,9 +69,8 @@ func _spawn_markers() -> Array[Marker3D]:
 	return out
 
 
-func _grid_slot(spawn_index: int) -> Vector3:
+func grid_slot(spawn_index: int) -> Vector3:
 	var column := spawn_index % GRID_COLUMNS
-	# The row index is the whole-columns count, so the truncation is the point.
 	@warning_ignore("integer_division")
 	var row := spawn_index / GRID_COLUMNS
 	var offset := (GRID_COLUMNS - 1) * GRID_SPACING * 0.5

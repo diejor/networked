@@ -182,6 +182,7 @@ private:
     godot::LocalVector<int64_t> bit_peers;
     godot::HashMap<int64_t, godot::Callable> exit_handlers;
     godot::HashMap<int64_t, godot::StringName> scene_memberships;
+    godot::HashMap<int64_t, godot::StringName> scene_roots;
     godot::HashMap<int64_t, int32_t> fallback_routes;
     int32_t next_fallback_route = 1;
     godot::PackedInt64Array live_peers;
@@ -194,6 +195,12 @@ private:
     void mark_entity_tree_dirty(int64_t root);
     bool layer_admits_bit(const godot::StringName &id, int bit) const;
     Order order_of(int64_t key) const;
+    bool descends_from(int64_t key, int64_t ancestor) const;
+    godot::PackedInt64Array nested_scene_residency(
+        int64_t key,
+        const godot::HashMap<godot::StringName, godot::PackedInt64Array>
+            &rows_by_layer
+    ) const;
 
     godot::PackedInt64Array compute_entity_row(
         int64_t key,
@@ -318,6 +325,10 @@ public:
     godot::StringName scene_membership(int64_t key) const;
 
     bool set_scene_membership(int64_t key, const godot::StringName &id);
+
+    bool set_scene_root(int64_t key, const godot::StringName &id);
+
+    godot::StringName scene_root_layer(int64_t key) const;
 
     godot::PackedInt64Array membership_keys() const;
 

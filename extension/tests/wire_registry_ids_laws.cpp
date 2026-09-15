@@ -54,7 +54,7 @@ const Declared TRANSCRIBED[] = {
     {"SYNC_ROW", 39},
     {"SYNC_ROW_DELTA", 40},
     {"SYNC_ROW_WINDOW", 41},
-    {"SESSION_SCENE_SEAT", 42},
+    {"SESSION_SCENE_VIEWERS", 42},
     {"ROW_CONTROL", 43},
 };
 

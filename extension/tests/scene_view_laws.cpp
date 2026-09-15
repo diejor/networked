@@ -7,6 +7,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/scene_handle.hpp"
+#include "support/joined_peer.h"
 #include "support/netw_call_log.h"
 
 namespace TestSceneViewLaws {
@@ -41,8 +42,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] the view admits and releases a participant "
-    "and reports what it admits, so a game never keys admission by peer id"
+    "[Networked][Scene] the view watches and unwatches a participant "
+    "and reports what it reaches, so a game never keys a watch by peer id"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -56,21 +57,21 @@ TEST_CASE(
     const Ref<netw::NetwSceneHandle> view = api->scene_handle_of(scene);
     REQUIRE(view.is_valid());
 
-    api->participant_ensure(7);
-    CHECK(api->participant_admit(7));
+    netw_test::seated_peer(api, 7);
+    CHECK(api->participant_has(7));
     const Ref<netw::NetwParticipant> joiner = api->participant_of(7);
     REQUIRE(joiner.is_valid());
     NETW_CHECK_EQ(int(joiner->get_peer_id()), 7);
 
-    NETW_CHECK_EQ(int(view->admit(joiner)), int(OK));
-    CHECK(view->admits(joiner));
+    NETW_CHECK_EQ(int(view->watch(joiner)), int(OK));
+    CHECK(view->is_watching(joiner));
 
-    NETW_CHECK_EQ(int(view->release(joiner)), int(OK));
-    CHECK_FALSE(view->admits(joiner));
+    NETW_CHECK_EQ(int(view->unwatch(joiner)), int(OK));
+    CHECK_FALSE(view->is_watching(joiner));
 
     const Ref<netw::NetwParticipant> nobody;
-    NETW_CHECK_EQ(int(view->admit(nobody)), int(ERR_INVALID_PARAMETER));
-    CHECK_FALSE(view->admits(nobody));
+    NETW_CHECK_EQ(int(view->watch(nobody)), int(ERR_INVALID_PARAMETER));
+    CHECK_FALSE(view->is_watching(nobody));
 
     rig.branch(-1)->remove_child(container);
 }
@@ -93,20 +94,20 @@ TEST_CASE(
     REQUIRE(view.is_valid());
 
     const CallLog heard;
-    view->connect(StringName("participant_entered"), heard.callable("entered"));
-    view->connect(StringName("participant_left"), heard.callable("left"));
+    view->connect(StringName("viewer_entered"), heard.callable("entered"));
+    view->connect(StringName("viewer_left"), heard.callable("left"));
 
-    api->participant_ensure(7);
-    CHECK(api->participant_admit(7));
+    netw_test::seated_peer(api, 7);
+    CHECK(api->participant_has(7));
     const Ref<netw::NetwParticipant> joiner = api->participant_of(7);
     REQUIRE(joiner.is_valid());
     NETW_CHECK_EQ(int(joiner->get_peer_id()), 7);
 
-    NETW_CHECK_EQ(int(view->admit(joiner)), int(OK));
+    NETW_CHECK_EQ(int(view->watch(joiner)), int(OK));
     NETW_CHECK_EQ(heard.count("entered"), 1);
     NETW_CHECK_EQ(heard.count("left"), 0);
 
-    NETW_CHECK_EQ(int(view->release(joiner)), int(OK));
+    NETW_CHECK_EQ(int(view->unwatch(joiner)), int(OK));
     NETW_CHECK_EQ(heard.count("entered"), 1);
     NETW_CHECK_EQ(heard.count("left"), 1);
 
@@ -158,13 +159,13 @@ TEST_CASE(
 
     const CallLog heard;
     const Callable watcher = heard.answering("edge", false);
-    view->observe(netw::NetwMultiplayer::SCENE_EVENT_PARTICIPANT, watcher);
+    view->observe(netw::NetwMultiplayer::SCENE_EVENT_VIEWER, watcher);
 
-    api->participant_ensure(7);
-    CHECK(api->participant_admit(7));
+    netw_test::seated_peer(api, 7);
+    CHECK(api->participant_has(7));
     const Ref<netw::NetwParticipant> joiner = api->participant_of(7);
     REQUIRE(joiner.is_valid());
-    NETW_CHECK_EQ(int(view->admit(joiner)), int(OK));
+    NETW_CHECK_EQ(int(view->watch(joiner)), int(OK));
 
     NETW_CHECK_EQ(heard.count("edge"), 1);
     const Array carried = heard.args("edge");
@@ -175,10 +176,10 @@ TEST_CASE(
 
     SUBCASE("unobserving the same callback stops the edges") {
         view->unobserve(
-            netw::NetwMultiplayer::SCENE_EVENT_PARTICIPANT,
+            netw::NetwMultiplayer::SCENE_EVENT_VIEWER,
             watcher
         );
-        NETW_CHECK_EQ(int(view->release(joiner)), int(OK));
+        NETW_CHECK_EQ(int(view->unwatch(joiner)), int(OK));
         NETW_CHECK_EQ(heard.count("edge"), 1);
     }
 

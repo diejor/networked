@@ -423,7 +423,8 @@ func _on_peer_created(
 		_fail_setup(error if error != OK else ERR_CANT_CREATE, detail)
 		return
 	if not String(username).is_empty():
-		Netw.join(self, username, join_args)
+		var submit: Callable = Netw.join
+		submit.callv([self, username] + join_args)
 	var shaped := _shaped(peer)
 	_api.multiplayer_peer = shaped
 	if _api.multiplayer_peer != shaped:

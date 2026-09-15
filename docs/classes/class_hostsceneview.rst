@@ -23,7 +23,9 @@ Only a scene declaring :ref:`NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD<class_Net
 
 The session creates this node for a listen server when a live scene owns its own world and no :ref:`ParticipantView<class_ParticipantView>` exists under the session root. Add one manually only to configure or position the window. Use :ref:`NetwMultiplayer.scene_set_host_view_factory()<class_NetwMultiplayer_method_scene_set_host_view_factory>` to create a different node type.
 
-It follows :ref:`NetwMultiplayer.participant_viewport_changed<class_NetwMultiplayer_signal_participant_viewport_changed>` to retarget, and re-announces on :ref:`NetwMultiplayer.scene_local_player_changed<class_NetwMultiplayer_signal_scene_local_player_changed>` because the display can resolve before the local player has spawned into it. On every announce it emits :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>` on the local player's entity, and when nothing is listening to that signal it makes the first conventional camera in the player branch current, falling back to the scene's level. Connect the signal to take that decision with a custom camera rig.
+The world it draws is the one :ref:`NetwSessionHandle.present()<class_NetwSessionHandle_method_present>` named, so a host presenting nothing draws nothing however many worlds stand live beside it. It follows :ref:`NetwMultiplayer.participant_viewport_changed<class_NetwMultiplayer_signal_participant_viewport_changed>` to retarget, and re-announces as entities go live, because the display resolves before the local player has spawned into it.
+
+On every announce it emits :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>` on every local player standing in that world, and it makes a camera current only where exactly one of them is there. Several local players is the couch case, and choosing one of them is the game's call rather than this node's, so connect the signal to take it. With one local player and nothing listening, the first conventional camera in the player branch becomes current, falling back to the scene's level.
 
 ::
 

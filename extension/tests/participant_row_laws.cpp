@@ -3,63 +3,73 @@
 #include "netw/api/netw_identity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/resolved_join.hpp"
-#include "support/netw_call_log.h"
+#include "support/joined_peer.h"
 
 namespace TestParticipantRowLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
 using netw::NetwParticipant;
-using netw::ResolvedJoin;
-using netw_test::CallLog;
-
-Ref<ResolvedJoin> a_join(int64_t p_peer, const StringName &p_name) {
-    Ref<ResolvedJoin> made;
-    made.instantiate();
-    made->set_peer_id(p_peer);
-    made->set_username(p_name);
-    return made;
-}
+using netw_test::seated_peer;
 
 TEST_CASE(
-    "[Networked][Session][Hosted] PR1 one peer has one row, so two asks about "
-    "the same peer answer the same object and a game may hold and compare it"
+    "[Networked][Session][Hosted] PR1 one membership has one row, so two asks "
+    "about the same peer answer the same object and a game may hold and "
+    "compare it"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
 
-    const Ref<netw::NetwParticipant> first = core->participant_ensure(7);
-    const Ref<netw::NetwParticipant> second = core->participant_ensure(7);
-
+    const Ref<NetwParticipant> first = seated_peer(core.ptr(), 7);
     REQUIRE(first.is_valid());
-    CHECK(first == second);
-    CHECK(core->participant_has(7));
-    CHECK(core->participant_of(7) == first);
+    const Ref<NetwParticipant> second = core->participant_of(7);
 
-    const Ref<NetwParticipant> row = first;
-    REQUIRE(row.is_valid());
-    NETW_CHECK_EQ(int(row->get_peer_id()), 7);
+    CHECK(bool(first == second));
+    CHECK(core->participant_has(7));
+    CHECK(bool(core->participant_of(7) == first));
+    NETW_CHECK_EQ(int(first->get_peer_id()), 7);
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] PR2 a row exists before its join does and "
-    "reads the roster on every ask, so a join accepted after the row was "
-    "minted is answered by the row that already exists"
+    "[Networked][Session][Hosted] PR2 a row exists exactly from the acceptance "
+    "that minted it and stores the username that acceptance carried, so a "
+    "connected peer that has not joined has no row to answer with"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    const Ref<NetwParticipant> row = core->participant_ensure(7);
+
+    CHECK_FALSE(core->participant_has(7));
+    CHECK(core->participant_of(7).is_null());
+    CHECK(core->participant_joined_of(7).is_null());
+
+    const Ref<NetwParticipant> row = seated_peer(core.ptr(), 7, "ana");
     REQUIRE(row.is_valid());
 
-    CHECK(row->get_join().is_null());
-    CHECK(row->get_username() == StringName());
-    CHECK(row->get_arg_values().is_empty());
+    CHECK(bool(row->get_username() == StringName("ana")));
+    CHECK(core->session_has_accepted(7));
+    CHECK(bool(core->participant_joined_of(7) == row));
+}
 
-    REQUIRE(core->join_book().remember(a_join(7, "ana")));
+TEST_CASE(
+    "[Networked][Session][Hosted] PR9 a membership outlives the roster row "
+    "that named it, so a handle a game kept from before a reconnect reads the "
+    "username it joined under rather than the one seated at that peer now"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
 
-    REQUIRE(row->get_join().is_valid());
-    CHECK(row->get_username() == StringName("ana"));
+    const Ref<NetwParticipant> before = seated_peer(core.ptr(), 7, "ana");
+    REQUIRE(before.is_valid());
+
+    core->session_forget_peer(7);
+    const Ref<NetwParticipant> after = seated_peer(core.ptr(), 7, "bo");
+    REQUIRE(after.is_valid());
+
+    CHECK(bool(after != before));
+    CHECK(bool(before->get_username() == StringName("ana")));
+    CHECK(bool(after->get_username() == StringName("bo")));
+    CHECK_FALSE(before->get_is_active());
+    CHECK(after->get_is_active());
 }
 
 TEST_CASE(
@@ -69,7 +79,7 @@ TEST_CASE(
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    const Ref<NetwParticipant> row = core->participant_ensure(7);
+    const Ref<NetwParticipant> row = seated_peer(core.ptr(), 7);
     REQUIRE(row.is_valid());
 
     CHECK(row->get_identity().is_null());
@@ -80,7 +90,7 @@ TEST_CASE(
     core->peer_set_identity(7, named);
 
     REQUIRE(row->get_identity().is_valid());
-    CHECK(row->get_identity() == named);
+    CHECK(bool(row->get_identity() == named));
     CHECK(core->peer_get_identity(8).is_null());
 }
 
@@ -124,44 +134,22 @@ TEST_CASE(
     core->peer_set_identity(7, Ref<netw::NetwIdentity>());
 
     CHECK(core->peer_get_identity(7).is_null());
-    CHECK(core->participant_ensure(7)->get_identity().is_null());
+    CHECK(seated_peer(core.ptr(), 7)->get_identity().is_null());
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] PR4 a seat written through the row is the "
-    "seat the session holds, because the row stores nothing and the session "
-    "is the one place a seat lives"
+    "[Networked][Session][Hosted] PR4 a participant answers the bodies the "
+    "session actually holds for it, so a membership nobody has spawned for "
+    "reads as an empty set rather than as a body it might be given"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    const Ref<NetwParticipant> row = core->participant_ensure(7);
+    const Ref<NetwParticipant> row = seated_peer(core.ptr(), 7);
     REQUIRE(row.is_valid());
 
-    CHECK(row->get_current_scene().is_null());
-    CHECK_FALSE(core->participant_seat(7).is_valid());
-
-    core->participant_seat_move(7, RID());
-
-    CHECK_FALSE(core->participant_seat(7).is_valid());
-    CHECK(row->get_current_scene().is_null());
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] PR5 a move naming no reachable scene is "
-    "refused rather than clearing the seat, so a destination that failed to "
-    "resolve never reads as an instruction to leave"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    const Ref<NetwParticipant> row = core->participant_ensure(7);
-    REQUIRE(row.is_valid());
-    const CallLog flushed;
-    core->set_interest_flush(flushed.callable("flush"));
-
-    row->move_to(Variant());
-
-    NETW_CHECK_EQ(flushed.count("flush"), 0);
-    CHECK_FALSE(core->participant_seat(7).is_valid());
+    CHECK(row->get_players().is_empty());
+    CHECK(core->participant_players(7).is_empty());
+    CHECK(core->participant_players(9).is_empty());
 }
 
 TEST_CASE(
@@ -171,17 +159,17 @@ TEST_CASE(
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    const Ref<netw::NetwParticipant> first = core->participant_ensure(7);
+    const Ref<NetwParticipant> first = seated_peer(core.ptr(), 7);
     REQUIRE(first.is_valid());
 
     core->participant_forget(7);
 
     CHECK_FALSE(core->participant_has(7));
 
-    const Ref<netw::NetwParticipant> second = core->participant_ensure(7);
+    const Ref<NetwParticipant> second = seated_peer(core.ptr(), 7);
 
     REQUIRE(second.is_valid());
-    CHECK(second != first);
+    CHECK(bool(second != first));
 }
 
 } // namespace TestParticipantRowLaws

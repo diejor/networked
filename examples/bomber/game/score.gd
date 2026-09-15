@@ -1,8 +1,9 @@
 extends HBoxContainer
 
-var player_labels := { }
-
 const MONTSERRAT = preload("uid://bqb7l2e05u3j0")
+
+var player_labels := { }
+var gamestate: BomberGamestate
 
 
 func _process(_delta: float) -> void:
@@ -27,7 +28,6 @@ func increase_score(for_who: int) -> void:
 	pl.label.set_text(pl.name + "\n" + str(pl.score))
 
 
-## Returns the score for [param for_who], or [code]0[/code] if absent.
 func get_score(for_who: int) -> int:
 	if not player_labels.has(for_who):
 		return 0
@@ -41,11 +41,7 @@ func add_player(id: int, new_player_name: String) -> void:
 	var label := Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text = new_player_name + "\n" + "0"
-	var ctx := Netw.of(self)
-	var gamestate: BomberGamestate = \
-			ctx.service_get(BomberGamestate) if ctx else null
-	if gamestate:
-		label.modulate = gamestate.get_player_color(new_player_name)
+	label.modulate = gamestate.get_player_color(new_player_name)
 	label.size_flags_horizontal = SIZE_EXPAND_FILL
 	label.add_theme_font_override(
 		&"font",
@@ -65,18 +61,8 @@ func add_player(id: int, new_player_name: String) -> void:
 
 func _ready() -> void:
 	$"../Winner".hide()
-
-	var ctx := Netw.of(self)
-	if not ctx:
-		return
-
-	for participant: NetwParticipant in ctx.participants:
-		add_player(participant.peer_id, str(participant.username))
+	gamestate = Netw.service(self, BomberGamestate) as BomberGamestate
 
 
 func _on_exit_game_pressed() -> void:
-	var ctx := Netw.of(self)
-	var gamestate: BomberGamestate = \
-			ctx.service_get(BomberGamestate) if ctx else null
-	if gamestate:
-		gamestate.end_game()
+	gamestate.end_game()

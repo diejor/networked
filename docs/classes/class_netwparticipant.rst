@@ -19,18 +19,21 @@ Live handle for one accepted session player.
 Description
 -----------
 
-A view over one peer's row in the session, holding nothing but the peer id: every member is read back through the session when it is asked for, so a participant is correct after a rehost, a scene rebuild or a respawn without anything re-issuing it. One peer has one participant, so ``==`` returns "the same player".
+One accepted membership, and the object is the membership. The session mints exactly one participant per acceptance and answers that same object every time, so ``==`` returns "the same player" and a :godot:`Dictionary` keys on it directly.
 
-\ :ref:`current_scene<class_NetwParticipant_property_current_scene>` tracks the peer's primary scene independently of any spawned player node, which is what lets a session seat a player before it has a body and keep the seat after the body is gone.
+A membership is not a transport peer. :ref:`peer_id<class_NetwParticipant_property_peer_id>` is where this player is reachable right now and is reused by whoever connects next, so a participant whose membership ended reports :ref:`is_active<class_NetwParticipant_property_is_active>` false and keeps the :ref:`username<class_NetwParticipant_property_username>` it joined under rather than reading whatever peer now holds that id.
+
+A membership is not a body either. :ref:`players<class_NetwParticipant_property_players>` is the set of bodies the session currently holds for it, which is empty for a spectator and holds more than one for a player the game gave several.
 
 ::
 
     var participant := api.peer_get_participant(peer_id)
     if participant.identity:
         greet(participant.username)
-    await participant.move_to(arena).completed
+    for body: NetwEntity in participant.players:
+        follow(body.owner)
 
-\ Created by the session. :ref:`NetwMultiplayer.peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>` creates the participant on first access and returns the same object on later calls.
+\ Created by the session at the moment it accepts a join. A peer that has connected and not joined has no membership, so :ref:`NetwMultiplayer.peer_get_participant()<class_NetwMultiplayer_method_peer_get_participant>` answers ``null`` for it.
 
 .. rst-class:: classref-reftable-group
 
@@ -40,52 +43,17 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------+--------------------------------------------------------------------+---------+
-   | :godot:`Array`                                | :ref:`arg_values<class_NetwParticipant_property_arg_values>`       | ``[]``  |
-   +-----------------------------------------------+--------------------------------------------------------------------+---------+
-   | :ref:`NetwSceneHandle<class_NetwSceneHandle>` | :ref:`current_scene<class_NetwParticipant_property_current_scene>` |         |
-   +-----------------------------------------------+--------------------------------------------------------------------+---------+
-   | :ref:`NetwIdentity<class_NetwIdentity>`       | :ref:`identity<class_NetwParticipant_property_identity>`           |         |
-   +-----------------------------------------------+--------------------------------------------------------------------+---------+
-   | :ref:`ResolvedJoin<class_ResolvedJoin>`       | :ref:`join<class_NetwParticipant_property_join>`                   |         |
-   +-----------------------------------------------+--------------------------------------------------------------------+---------+
-   | :godot:`int`                                  | :ref:`peer_id<class_NetwParticipant_property_peer_id>`             | ``0``   |
-   +-----------------------------------------------+--------------------------------------------------------------------+---------+
-   | :godot:`StringName`                           | :ref:`username<class_NetwParticipant_property_username>`           | ``&""`` |
-   +-----------------------------------------------+--------------------------------------------------------------------+---------+
-
-.. rst-class:: classref-reftable-group
-
-Methods
--------
-
-.. table::
-   :widths: auto
-
-   +---------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`move_to<class_NetwParticipant_method_move_to>`\ (\ destination\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) |
-   +---------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Signals
--------
-
-.. _class_NetwParticipant_signal_scene_changed:
-
-.. rst-class:: classref-signal
-
-**scene_changed**\ (\ from\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`, to\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwParticipant_signal_scene_changed>`
-
-Emitted when :ref:`current_scene<class_NetwParticipant_property_current_scene>` changes, carrying the :ref:`NetwSceneHandle<class_NetwSceneHandle>` left and the one arrived in, either of which may be ``null``.
-
-Emitted by the seat verbs themselves rather than by whoever called them, so a seat written by a move, by a release and by a session teardown all announce the same way. A silent write is the failure this closes: a seat that changed without announcing leaves every viewer showing the previous scene.
-
-The session republishes the local participant's edge as :ref:`NetwMultiplayer.scene_local_changed<class_NetwMultiplayer_signal_scene_local_changed>`, rebinding it as the local row comes and goes, so a game that only cares about this peer listens there and never has to hold a participant to do it.
+   +-------------------------------------------------------+------------------------------------------------------------+-----------+
+   | :ref:`NetwIdentity<class_NetwIdentity>`               | :ref:`identity<class_NetwParticipant_property_identity>`   |           |
+   +-------------------------------------------------------+------------------------------------------------------------+-----------+
+   | :godot:`bool`                                         | :ref:`is_active<class_NetwParticipant_property_is_active>` | ``false`` |
+   +-------------------------------------------------------+------------------------------------------------------------+-----------+
+   | :godot:`int`                                          | :ref:`peer_id<class_NetwParticipant_property_peer_id>`     | ``0``     |
+   +-------------------------------------------------------+------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`players<class_NetwParticipant_property_players>`     |           |
+   +-------------------------------------------------------+------------------------------------------------------------+-----------+
+   | :godot:`StringName`                                   | :ref:`username<class_NetwParticipant_property_username>`   | ``&""``   |
+   +-------------------------------------------------------+------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-section-separator
 
@@ -95,44 +63,6 @@ The session republishes the local participant's edge as :ref:`NetwMultiplayer.sc
 
 Property Descriptions
 ---------------------
-
-.. _class_NetwParticipant_property_arg_values:
-
-.. rst-class:: classref-property
-
-:godot:`Array` **arg_values** = ``[]`` :ref:`🔗<class_NetwParticipant_property_arg_values>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Array` **get_arg_values**\ (\ )
-
-The typed join arguments accepted for this peer. See :ref:`ResolvedJoin.arg_values<class_ResolvedJoin_property_arg_values>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwParticipant_property_current_scene:
-
-.. rst-class:: classref-property
-
-:ref:`NetwSceneHandle<class_NetwSceneHandle>` **current_scene** :ref:`🔗<class_NetwParticipant_property_current_scene>`
-
-.. rst-class:: classref-property-setget
-
-- :ref:`NetwSceneHandle<class_NetwSceneHandle>` **get_current_scene**\ (\ )
-
-The scene this peer counts as being in, or ``null`` outside every scene.
-
-Primary, not exclusive: a participant may be admitted to several scenes at once, and this names the one that places it and drives its default presentation. Admitting a participant somewhere else does not move this, and travel does.
-
-Read-only, because writing it would record arrival without performing it. :ref:`move_to()<class_NetwParticipant_method_move_to>` is the verb that actually moves a participant, and the deliberate low-level seat verbs on :ref:`NetwMultiplayer<class_NetwMultiplayer>` are there for a caller managing membership without moving anything.
-
-The seat is held as the scene entity's identity rather than as a handle, so membership survives the scene being rebuilt and never pins a freed node; the handle read here is created from that identity on demand.
-
-.. rst-class:: classref-item-separator
-
-----
 
 .. _class_NetwParticipant_property_identity:
 
@@ -146,25 +76,25 @@ The seat is held as the scene entity's identity rather than as a handle, so memb
 
 The validated auth identity for this peer, or ``null``.
 
-Present only when the session has an auth provider, and never part of the replicated roster, which is what :ref:`ResolvedJoin<class_ResolvedJoin>` is. Read from the session's own book through :ref:`NetwMultiplayer.peer_get_identity()<class_NetwMultiplayer_method_peer_get_identity>`, which is the one result to who authenticated.
+Present only when the session has an auth provider, and never replicated to other peers. Read from the session's own book through :ref:`NetwMultiplayer.peer_get_identity()<class_NetwMultiplayer_method_peer_get_identity>`, which is the one result to who authenticated.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwParticipant_property_join:
+.. _class_NetwParticipant_property_is_active:
 
 .. rst-class:: classref-property
 
-:ref:`ResolvedJoin<class_ResolvedJoin>` **join** :ref:`🔗<class_NetwParticipant_property_join>`
+:godot:`bool` **is_active** = ``false`` :ref:`🔗<class_NetwParticipant_property_is_active>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`ResolvedJoin<class_ResolvedJoin>` **get_join**\ (\ )
+- :godot:`bool` **get_is_active**\ (\ )
 
-The accepted join record for this peer, or ``null`` before the join is accepted.
+Whether this membership is still the one the session holds.
 
-Read through :ref:`NetwMultiplayer.peer_get_accepted_join()<class_NetwMultiplayer_method_peer_get_accepted_join>` on every access. Updates made after participant creation are visible through the existing participant.
+A handle a game kept across a disconnect answers ``false`` here even when another player has since connected onto the same :ref:`peer_id<class_NetwParticipant_property_peer_id>`, which is what a game checks before acting on a participant it stored.
 
 .. rst-class:: classref-item-separator
 
@@ -180,7 +110,27 @@ Read through :ref:`NetwMultiplayer.peer_get_accepted_join()<class_NetwMultiplaye
 
 - :godot:`int` **get_peer_id**\ (\ )
 
-The peer this participant represents. The one piece of state it holds, because everything else is a read.
+The transport peer this membership is currently reachable on. A routing detail rather than identity, because a reconnect reuses the id.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwParticipant_property_players:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **players** :ref:`🔗<class_NetwParticipant_property_players>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_players**\ (\ )
+
+Every body the session currently holds for this membership, in no promised order.
+
+Answered live from the session rather than stored, so a body that despawned is gone from the next read. A participant nothing has spawned for answers an empty array, which is the honest reading for a spectator and for a player whose join handler has not placed it yet.
+
+Several bodies at once is ordinary, so a game that means one body reads the array and says which one it means.
 
 .. rst-class:: classref-item-separator
 
@@ -196,34 +146,9 @@ The peer this participant represents. The one piece of state it holds, because e
 
 - :godot:`StringName` **get_username**\ (\ )
 
-The accepted username for this peer, empty before the join is accepted. See :ref:`ResolvedJoin.username<class_ResolvedJoin_property_username>`.
+The username this membership was accepted under, and the conventional save key when :ref:`identity<class_NetwParticipant_property_identity>` is absent.
 
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Method Descriptions
--------------------
-
-.. _class_NetwParticipant_method_move_to:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **move_to**\ (\ destination\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwParticipant_method_move_to>`
-
-Travels this participant into ``destination``: the player entity roots it is enrolled in move first, then its admission and its :ref:`current_scene<class_NetwParticipant_property_current_scene>` follow.
-
-This is the whole of arriving rather than the membership half of it, which is why it returns a promise. Admissions this participant holds elsewhere are untouched, so a spectator seat survives travel. A move into the scene already held is a successful no-op raising no roster event.
-
-The returned :ref:`NetwPromise<class_NetwPromise>` resolves once the transfer has committed on authority. It rejects with :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>` while another transfer of the same participant is in flight, with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when ``destination`` retired while the transfer was preparing, and with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` off authority.
-
-A client never calls this. It asks through :ref:`Netw.change_scene_to_file()<class_Netw_method_change_scene_to_file>` at :ref:`Netw.SCENE_CHANGE_PARTICIPANT<class_Netw_constant_SCENE_CHANGE_PARTICIPANT>`, and the server derives which participant is asking from the authenticated connection rather than from anything the client sent.
-
-To change which scene a participant belongs to without moving their node, use :ref:`NetwMultiplayer.scene_admit()<class_NetwMultiplayer_method_scene_admit>` and :ref:`NetwMultiplayer.scene_release()<class_NetwMultiplayer_method_scene_release>`.
-
-\ **Server Only.**
+Stamped at acceptance and never re-read, so it survives the membership ending and never reports a later player's name.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

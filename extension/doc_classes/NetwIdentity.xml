@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		An auth provider returns this inside an [AuthResult]. The session treats [member username] as server-authoritative and stores the identity per peer. Access it through [member NetwParticipant.identity].
-		A session without an auth provider has no identities at all, and [member NetwParticipant.identity] returns [code]null[/code] there. It is not part of the replicated roster: [ResolvedJoin] is what the server sends to peers.
+		A session without an auth provider has no identities at all, and [member NetwParticipant.identity] returns [code]null[/code] there. It is never replicated. What the server sends other peers is the membership and the [member NetwParticipant.username], so a game that wants an identity known elsewhere replicates what it chooses to share.
 		[codeblock]
 		func verify(data: PackedByteArray) -&gt; AuthResult:
 		    var identity := NetwIdentity.new()

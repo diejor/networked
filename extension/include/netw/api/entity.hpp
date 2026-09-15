@@ -185,17 +185,6 @@ public:
         godot::Node *p_parent,
         const godot::StringName &p_id
     );
-    godot::Node *instantiate_player(
-        const godot::Ref<NetwParticipant> &p_participant
-    );
-    godot::Node *spawn_player(
-        const godot::Ref<NetwParticipant> &p_participant,
-        const godot::Ref<NetwSceneHandle> &p_scene
-    );
-    void reparent_to(
-        godot::Node *p_new_parent,
-        const godot::Ref<NetwReparentOpts> &p_opts
-    );
     void despawn(const godot::Ref<NetwDespawnOpts> &p_opts);
 
     void register_component(godot::Node *p_component);

@@ -33,7 +33,7 @@
 		    NetwEntity.of(self).despawning.connect(_on_despawning)
 		[/codeblock]
 		[b]Acting on an entity[/b]
-		The server drives the lifecycle. It creates entities through the spawn pipeline ([method ReplicationCore.replicate]) and moves or ends one with [method reparent_to] and [method despawn]. A client asks the server through [method request_control] and reads whether it steers the entity from [member is_controlled_locally].
+		The server drives the lifecycle. It creates entities through the spawn pipeline ([method ReplicationCore.replicate]) , moves one with [method Node.reparent] or [method NetwSceneHandle.move], and ends one with [method despawn]. A client asks the server through [method request_control] and reads whether it steers the entity from [member is_controlled_locally].
 		[codeblock]
 		var entity := NetwEntity.of(hit_node)
 		if entity and entity.is_player:
@@ -65,7 +65,7 @@
 				An invalid [param entity_id] binds nothing and leaves the record unchanged.
 				[codeblock]
 				var player := NetwEntity.bind(copy, username, peer_id)
-				NetwEntity.of(self).scene.add_player(player)
+				NetwEntity.of(self).scene.root.add_child(player)
 				[/codeblock]
 			</description>
 		</method>
@@ -125,9 +125,10 @@
 		<method name="find" qualifiers="static">
 			<return type="Node" />
 			<param index="0" name="root" type="Node" />
-			<param index="1" name="join" type="NetwParticipant" />
+			<param index="1" name="participant" type="NetwParticipant" />
 			<description>
 				The node [param participant] plays, found under [param root], or [code]null[/code] when they have none there.
+				It resolves the one name [method name_for] builds, as a path under [param root], so it answers a body a spawn named by that convention and standing directly there. A body the game named itself, or parented deeper, is reached through [member NetwParticipant.players] instead, which is also the read for a participant holding more than one.
 			</description>
 		</method>
 		<method name="from_rid" qualifiers="static">
@@ -161,14 +162,6 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="instantiate_player">
-			<return type="Node" />
-			<param index="0" name="participant" type="NetwParticipant" />
-			<description>
-				An unparented player copy of [member owner]'s scene, bound to [param participant]'s identity. A participant exists only inside a session, so a session-less entity builds nothing.
-				[b]Server Only.[/b]
-			</description>
-		</method>
 		<method name="mark_template">
 			<return type="void" />
 			<description>
@@ -185,7 +178,7 @@
 			<return type="String" />
 			<param index="0" name="participant" type="NetwParticipant" />
 			<description>
-				The node name the player [param participant] is seated as, empty when their username holds the separator that name is built with.
+				The node name a spawn gives the player [param participant] drives, built from their [member NetwParticipant.username] and their peer id, and empty when that username holds the separator the two are joined with.
 			</description>
 		</method>
 		<method name="of" qualifiers="static">
@@ -222,22 +215,6 @@
 				Registers [param component] as an addressable sub-node of this entity, so an entity RPC or a masked sync frame addresses it by a 1-byte id instead of a [NodePath].
 				The ids are sealed when the entity hydrates and their digest rides the spawn packet, so a registration after that arrives too late to be agreed on and warns. Register inside [method Object._init].
 				[method comp_of] reads an id back, [method comp_node_of] reads the node, and [member comps_poisoned] says whether the ids are being honoured at all.
-			</description>
-		</method>
-		<method name="reparent_to">
-			<return type="void" />
-			<param index="0" name="new_parent" type="Node" />
-			<param index="1" name="opts" type="NetwReparentOpts" default="null" />
-			<description>
-				Moves [member owner] under [param new_parent] as a networked reparent, keeping this entity alive across the move.
-				[method Node.reparent] and a bare [method Node.remove_child] followed by [method Node.add_child] are moves too, and reach every peer the same way, because the move is detected where the owner lands rather than declared at the call. What this verb adds is [NetwReparentOpts] and, when the destination sits in another scene, the player's admission edge, which parenting alone does not carry. A move that leaves a player standing in a scene its peer was never admitted to is counted and named in the log, and [method NetwMultiplayer.scene_admit] is the verb that returns it.
-				Components re-register from [signal reparented], which reports once per settled move whichever way it was made. Several hops before one settle are one move, because the report states where the owner landed rather than what a caller asked for. The owner's [method Node._ready] does not run a second time.
-				[codeblock]
-				var opts := NetwReparentOpts.new()
-				opts.reason = &amp;"boarded"
-				entity.reparent_to(vehicle_seat, opts)
-				[/codeblock]
-				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="request_control">
@@ -384,7 +361,7 @@
 		</member>
 		<member name="peer_id" type="int" setter="set_peer_id" getter="get_peer_id" default="0">
 			The peer this entity represents, or [code]0[/code] for a server-owned entity such as an NPC, prop or world object.
-			A non-zero value drives [method NetwSceneHandle.add_player], [member NetwMultiplayer.local_player] tracking and an automatic [method despawn] when its peer disconnects. This is the source of the player test. See [member is_player].
+			A non-zero value drives [member NetwParticipant.players], the scene subscription a residing body grants, and an automatic [method despawn] when its peer disconnects. This is the source of the player test. See [member is_player].
 		</member>
 		<member name="persistence" type="NetwPersistenceEngine" setter="" getter="get_persistence">
 			The entity's [NetwPersistenceEngine], or [code]null[/code] when its archetype declared no [method Netw.configure_persistence]. The engine reads and writes the persisted columns on the live scene, so flush and hydrate operate on the same saved state. Resolves through the session, so it is [code]null[/code] before the owner is in a [MultiplayerTree] branch.
@@ -498,7 +475,7 @@
 		</signal>
 		<signal name="reparented">
 			<description>
-				Emitted once per settled move, after the session has made this entity's ancestry consistent, including a move made with [method Node.reparent] or a bare [method Node.remove_child] rather than [method reparent_to]. Standing up for the first time is not a move and reports nothing. Several hops before one settle are one move, reported at the parent the owner ended under. A component that unregisters in [code]_exit_tree[/code] reconnects its runtime service registration here, so a move self-heals without [method Node.request_ready].
+				Emitted once per settled move, after the session has made this entity's ancestry consistent, whether it was made with [method Node.reparent], with a bare [method Node.remove_child] followed by [method Node.add_child], or through [method NetwSceneHandle.move]. Standing up for the first time is not a move and reports nothing. Several hops before one settle are one move, reported at the parent the owner ended under. A component that unregisters in [code]_exit_tree[/code] reconnects its runtime service registration here, so a move self-heals without [method Node.request_ready].
 				The signal takes no argument. Its fact is that the owner has landed, so a listener reads the final parent or [member scene] off the live owner. What a move ASKED FOR is a command input, and it reaches an observer in the detail of [constant NetwMultiplayer.EVENT_REPARENTED] instead.
 				[code]_exit_tree[/code] fires on the first half of a move as well as on a real departure, and nothing readable at that moment tells them apart. So a PAIRED handler belongs there, because re-entry re-arms it, and a ONE-WAY teardown never does: hang that on [signal despawning] or [signal despawned], which fire for teardowns only, or on [signal hidden] for a body that may come back.
 				[codeblock]

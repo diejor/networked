@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		[method Netw.configure_join] declares the handler run once for each join its session accepts, and returns this config, which carries the packing that one declaration asks for. It belongs to that declaration: a second node declaring the same handler gets its own, and re-declaring on one node replaces it.
-		A client fills only the handler's parameters after the [NetwParticipant] the server supplies itself, and passes them as the [code]args[/code] of [method Netw.join]. So [member quantizers] lines up with that shorter list, and its position zero is the handler's second parameter.
+		A client fills only the handler's parameters after the [NetwParticipant] the server supplies itself, and passes them as the arguments of [method Netw.join] that follow the username. So [member quantizers] lines up with that shorter list, and its position zero is the handler's second parameter.
 		An author who declared nothing carries an empty [member quantizers], which sends every wire argument self-describing. A null slot inside a declared list does the same for that one argument, so a schema packs the fields worth packing and leaves the rest alone.
 		[codeblock]
 		func _init() -&gt; void:

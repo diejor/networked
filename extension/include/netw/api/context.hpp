@@ -72,7 +72,7 @@ public:
     static godot::Ref<NetwPromise> join(
         godot::Node *p_node,
         const godot::StringName &p_username,
-        const godot::Array &p_args = godot::Array()
+        const godot::Array &p_args
     );
     static godot::Ref<NetwSceneHandle> scene(
         godot::Node *p_node,

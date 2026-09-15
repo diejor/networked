@@ -12,8 +12,8 @@ namespace netw {
 
 namespace {
 
+const char *SIG_ENTITY_LIVE = "entity_live";
 const char *SIG_PARTICIPANT_VIEWPORT_CHANGED = "participant_viewport_changed";
-const char *SIG_SCENE_LOCAL_PLAYER_CHANGED = "scene_local_player_changed";
 const char *SIG_VIEW_ACTIVATED = "view_activated";
 
 } // namespace
@@ -41,10 +41,10 @@ void HostSceneView::attach() {
     if (!api->is_connected(SIG_PARTICIPANT_VIEWPORT_CHANGED, display)) {
         api->connect(SIG_PARTICIPANT_VIEWPORT_CHANGED, display);
     }
-    const Callable seated
-        = callable_mp(this, &HostSceneView::on_local_player_changed);
-    if (!api->is_connected(SIG_SCENE_LOCAL_PLAYER_CHANGED, seated)) {
-        api->connect(SIG_SCENE_LOCAL_PLAYER_CHANGED, seated);
+    const Callable roster
+        = callable_mp(this, &HostSceneView::on_roster_changed).unbind(2);
+    if (!api->is_connected(SIG_ENTITY_LIVE, roster)) {
+        api->connect(SIG_ENTITY_LIVE, roster);
     }
     on_display_changed(api->scene_participant_viewport());
 }
@@ -60,19 +60,24 @@ void HostSceneView::detach() {
     if (api->is_connected(SIG_PARTICIPANT_VIEWPORT_CHANGED, display)) {
         api->disconnect(SIG_PARTICIPANT_VIEWPORT_CHANGED, display);
     }
-    const Callable seated
-        = callable_mp(this, &HostSceneView::on_local_player_changed);
-    if (api->is_connected(SIG_SCENE_LOCAL_PLAYER_CHANGED, seated)) {
-        api->disconnect(SIG_SCENE_LOCAL_PLAYER_CHANGED, seated);
+    const Callable roster
+        = callable_mp(this, &HostSceneView::on_roster_changed).unbind(2);
+    if (api->is_connected(SIG_ENTITY_LIVE, roster)) {
+        api->disconnect(SIG_ENTITY_LIVE, roster);
     }
     api->service_unregister(this, nullptr);
 }
 
-void HostSceneView::on_local_player_changed(const Ref<NetwEntity> &) {
+void HostSceneView::on_roster_changed() {
+    if (announce_pending) {
+        return;
+    }
+    announce_pending = true;
     callable_mp(this, &HostSceneView::reannounce).call_deferred();
 }
 
 void HostSceneView::reannounce() {
+    announce_pending = false;
     NetwMultiplayer *api = session();
     if (suppressed || !is_inside_tree() || api == nullptr) {
         return;
@@ -111,22 +116,33 @@ void HostSceneView::announce(SubViewport *p_viewport) {
     if (p_viewport == nullptr || api == nullptr) {
         return;
     }
-    const Ref<NetwEntity> seated = api->scene_player_local();
-    if (seated.is_null()) {
-        return;
+    const TypedArray<NetwEntity> mine
+        = api->scene_get_local_players(api->scene_presented());
+    TypedArray<NetwEntity> drawn;
+    for (int at = 0; at < mine.size(); at++) {
+        const Ref<NetwEntity> player = mine[at];
+        Node *owner = player.is_valid() ? player->get_owner() : nullptr;
+        if (owner != nullptr && p_viewport->is_ancestor_of(owner)) {
+            drawn.push_back(player);
+        }
     }
-    Node *player = seated->get_owner();
-    if (player == nullptr || !p_viewport->is_ancestor_of(player)) {
-        return;
+    for (int at = 0; at < drawn.size(); at++) {
+        activate(drawn[at], drawn.size() == 1);
     }
-    if (!seated->has_connections(SIG_VIEW_ACTIVATED)) {
-        const Ref<NetwSceneHandle> scene = seated->get_scene();
+}
+
+void HostSceneView::activate(
+    const Ref<NetwEntity> &p_player,
+    bool p_adopts_camera
+) {
+    if (p_adopts_camera && !p_player->has_connections(SIG_VIEW_ACTIVATED)) {
+        const Ref<NetwSceneHandle> scene = p_player->get_scene();
         view::adopt_camera(
-            player,
+            p_player->get_owner(),
             scene.is_valid() ? scene->get_root() : nullptr
         );
     }
-    seated->emit_signal(SIG_VIEW_ACTIVATED);
+    p_player->emit_signal(SIG_VIEW_ACTIVATED);
 }
 
 void HostSceneView::_notification(int p_what) {

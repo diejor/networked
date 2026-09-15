@@ -305,6 +305,9 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
         entity->_go_live_if_armed();
         schedule_armed_flush(route);
     } else {
+        if (p_owner.is_valid()) {
+            armed_owners.insert(route, p_owner);
+        }
         connect_once(
             p_node,
             SIG_TREE_ENTERED,
@@ -314,6 +317,27 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
         );
     }
     return entity;
+}
+
+bool Pipeline::armed_owner_survives(int64_t p_route) {
+    const HashMap<int64_t, Ref<NetwParticipant>>::Iterator found
+        = armed_owners.find(p_route);
+    if (found == armed_owners.end()) {
+        return true;
+    }
+    const Ref<NetwParticipant> owner = found->value;
+    armed_owners.remove(found);
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || plane->participant_holds(owner)) {
+        return true;
+    }
+    NETW_ERROR(
+        sys::SPAWN,
+        "the spawn armed for participant '%s' is mounted after that "
+        "participant left, so its body is discarded rather than replicated",
+        String(owner->get_username())
+    );
+    return false;
 }
 
 Ref<NetwEntity> Pipeline::replicate(
@@ -587,6 +611,21 @@ void Pipeline::on_armed_tree_entered(int64_t p_route) {
     schedule_armed_flush(p_route);
 }
 
+void Pipeline::discard_armed_spawn(int64_t p_route) {
+    Record taken;
+    if (!spawn_book.take_armed(p_route, taken)) {
+        return;
+    }
+    Node *body = taken.node();
+    if (body == nullptr) {
+        return;
+    }
+    if (body->get_parent() != nullptr) {
+        body->get_parent()->remove_child(body);
+    }
+    body->queue_free();
+}
+
 void Pipeline::schedule_armed_flush(int64_t p_route) {
     NetwMultiplayer *plane = core();
     if (plane != nullptr) {
@@ -603,6 +642,10 @@ void Pipeline::flush_armed_spawn(int64_t p_route) {
     NETW_ZONE_VALUE(p_route);
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
+        return;
+    }
+    if (!armed_owner_survives(p_route)) {
+        discard_armed_spawn(p_route);
         return;
     }
     Record *record = plane->spawn_issue_armed(&spawn_book, p_route);
@@ -804,17 +847,6 @@ void Pipeline::send_reparent(Record *p_record, Node *p_node) {
     }
     if (!plane->is_online()) {
         return;
-    }
-    if (plane->scene_leaves_route_unadmitted(p_record->get_route())) {
-        moves_unadmitted += 1;
-        NETW_WARN(
-            sys::SPAWN,
-            "route %d moved into a scene its peer is not admitted to, and "
-            "parenting alone does not admit, so that peer sees nothing else "
-            "there. Move it with reparent_to or scene_move, or call "
-            "scene_admit",
-            int(p_record->get_route())
-        );
     }
     sweep_now();
     if (!plane->spawn_send_reparent(
@@ -2260,7 +2292,6 @@ Dictionary Pipeline::counters() const {
     out[StringName("drops_despawn_unknown")] = drops_despawn_unknown;
     out[StringName("drops_hide_unknown")] = drops_hide_unknown;
     out[StringName("spawn_deferrals")] = spawn_deferrals;
-    out[StringName("moves_unadmitted")] = moves_unadmitted;
     out[StringName("spawn_parked_cancelled")] = spawn_parked_cancelled;
     out[StringName("spawn_park_expired")] = spawn_park_expired;
     out[StringName("spawn_nested_published")] = spawn_nested_published;

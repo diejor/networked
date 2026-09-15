@@ -223,30 +223,6 @@ Array NetwSceneCore::retiring_scenes() const {
     return out;
 }
 
-void NetwSceneCore::set_current_scene(const RID &scene) {
-    current_scene = scene;
-}
-
-RID NetwSceneCore::get_current_scene() const {
-    return current_scene;
-}
-
-RID NetwSceneCore::resolve_current(bool presents, const RID &seat) const {
-    if (!presents) {
-        return RID();
-    }
-    if (seat.is_valid()) {
-        return seat;
-    }
-    for (uint32_t at = 0; at < live.size(); at++) {
-        const RID *canonical = named.getptr(live[at].stem);
-        if (canonical != nullptr && *canonical == live[at].scene) {
-            return live[at].scene;
-        }
-    }
-    return RID();
-}
-
 bool NetwSceneCore::is_live(const RID &scene) const {
     for (uint32_t index = 0; index < live.size(); ++index) {
         if (live[index].scene == scene) {
@@ -315,12 +291,16 @@ bool NetwSceneCore::transition_open() {
 void NetwSceneCore::transition_arm(
     const Variant &p_target,
     const Array &p_sources,
-    const Ref<NetwPromise> &p_promise
+    const Ref<NetwPromise> &p_promise,
+    int p_scope,
+    const PackedInt64Array &p_watchers
 ) {
     transition = Transition();
     transition.target = p_target;
     transition.sources = p_sources;
     transition.promise = p_promise;
+    transition.scope = p_scope;
+    transition.watchers = p_watchers;
 }
 
 Variant NetwSceneCore::transition_target() const {
@@ -329,6 +309,14 @@ Variant NetwSceneCore::transition_target() const {
 
 Array NetwSceneCore::transition_sources() const {
     return transition.sources;
+}
+
+int NetwSceneCore::transition_scope() const {
+    return transition.scope;
+}
+
+PackedInt64Array NetwSceneCore::transition_watchers() const {
+    return transition.watchers;
 }
 
 Variant NetwSceneCore::transition_next_mover(const Callable &p_roster_of) {

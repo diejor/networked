@@ -121,8 +121,7 @@ struct CarryRun {
     }
 
     void start() {
-        settling
-            = core->scene_move_entity(mover_handle, target_handle, Variant());
+        settling = core->scene_move_entity(mover_handle, target_handle);
     }
 
     void drop_mover() {

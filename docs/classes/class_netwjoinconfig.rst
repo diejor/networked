@@ -21,7 +21,7 @@ Description
 
 :ref:`Netw.configure_join()<class_Netw_method_configure_join>` declares the handler run once for each join its session accepts, and returns this config, which carries the packing that one declaration asks for. It belongs to that declaration: a second node declaring the same handler gets its own, and re-declaring on one node replaces it.
 
-A client fills only the handler's parameters after the :ref:`NetwParticipant<class_NetwParticipant>` the server supplies itself, and passes them as the ``args`` of :ref:`Netw.join()<class_Netw_method_join>`. So :godot:`RefCounted.quantizers <RefCounted#class_RefCounted_property_quantizers>` lines up with that shorter list, and its position zero is the handler's second parameter.
+A client fills only the handler's parameters after the :ref:`NetwParticipant<class_NetwParticipant>` the server supplies itself, and passes them as the arguments of :ref:`Netw.join()<class_Netw_method_join>` that follow the username. So :godot:`RefCounted.quantizers <RefCounted#class_RefCounted_property_quantizers>` lines up with that shorter list, and its position zero is the handler's second parameter.
 
 An author who declared nothing carries an empty :godot:`RefCounted.quantizers <RefCounted#class_RefCounted_property_quantizers>`, which sends every wire argument self-describing. A null slot inside a declared list does the same for that one argument, so a schema packs the fields worth packing and leaves the rest alone.
 

@@ -55,10 +55,8 @@ public:
     static godot::Ref<NetwPromise> scene_pending_request(
         NetwMultiplayer *session
     );
-    static void scene_sync_local_participant(NetwMultiplayer *session);
     static void scene_ensure_host_view(NetwMultiplayer *session);
     static void scene_release_host_view(NetwMultiplayer *session);
-    static void scene_refresh_current(NetwMultiplayer *session);
     static bool rpc_sender_admits(
         NetwMultiplayer *session,
         godot::Node *node,
@@ -70,11 +68,6 @@ public:
         NetwMultiplayer *session,
         const godot::RID &scene,
         int drain_pumps
-    );
-    static godot::Ref<NetwGroupPromise> scene_move_participants(
-        NetwMultiplayer *session,
-        const godot::RID &scene,
-        const godot::PackedInt32Array &peers
     );
     static display::Runtime *display_runtime_of(
         NetwMultiplayer *session,

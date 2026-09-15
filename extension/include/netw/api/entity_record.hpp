@@ -27,12 +27,7 @@ public:
         PART_MAX = 4,
     };
 
-    struct MoveReport {
-        godot::StringName reason;
-    };
-
 private:
-    MoveReport move_report;
     godot::RID handle;
     godot::StringName entity_id;
     int64_t peer_id = 0;
@@ -162,13 +157,6 @@ public:
 
     static bool declares_template(godot::Node *p_owner);
     static godot::StringName template_meta();
-
-    const MoveReport &get_move_report() const {
-        return move_report;
-    }
-    void set_move_report(const MoveReport &p_report) {
-        move_report = p_report;
-    }
 
     godot::Variant part(int64_t p_part, godot::Object *p_wrapper);
 

@@ -24,7 +24,8 @@ TEST_CASE(
 
     const Ref<netw::NetwPromise> promise = core->scene_request_send(
         String("res://arena.tscn"),
-        netw::NetwSceneCore::SCOPE_SESSION
+        netw::NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
 
     CHECK(promise.is_valid());
@@ -42,13 +43,15 @@ TEST_CASE(
 
     const Ref<netw::NetwPromise> first = core->scene_request_send(
         String("res://arena.tscn"),
-        netw::NetwSceneCore::SCOPE_SESSION
+        netw::NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int first_id = scenes->get_pending_request_id();
 
     const Ref<netw::NetwPromise> second = core->scene_request_send(
         String("res://annex.tscn"),
-        netw::NetwSceneCore::SCOPE_SESSION
+        netw::NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
 
     CHECK(first->get_is_settled());
@@ -67,12 +70,14 @@ TEST_CASE(
 
     const Ref<netw::NetwPromise> stale = core->scene_request_send(
         String("res://arena.tscn"),
-        netw::NetwSceneCore::SCOPE_SESSION
+        netw::NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int stale_id = scenes->get_pending_request_id();
     const Ref<netw::NetwPromise> live = core->scene_request_send(
         String("res://annex.tscn"),
-        netw::NetwSceneCore::SCOPE_SESSION
+        netw::NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
 
     core->scene_request_expire(stale_id);

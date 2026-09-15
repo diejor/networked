@@ -160,10 +160,6 @@ void MultiplayerTree::dispose() {
         return;
     }
     api->service_clear();
-    const Ref<NetwParticipant> local = api->participant_local();
-    if (local.is_valid()) {
-        api->participant_seat_move(local->get_peer_id(), RID());
-    }
     api->clear_roster();
 }
 
@@ -489,11 +485,6 @@ void MultiplayerTree::on_peer_disconnected(int64_t p_peer_id) {
     NETW_INFO(sys::SESSION, "peer disconnected: %d", p_peer_id);
     if (api.is_null()) {
         return;
-    }
-    const Ref<NetwParticipant> participant
-        = api->peer_get_participant(p_peer_id);
-    if (participant.is_valid()) {
-        api->participant_seat_move(participant->get_peer_id(), RID());
     }
     api->peer_forget(p_peer_id);
 }

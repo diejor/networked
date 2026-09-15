@@ -10,4 +10,3 @@ script = ExtResource("2_root")
 
 [node name="InLobby" parent="UI" instance=ExtResource("1_in")]
 unique_name_in_owner = true
-match_scene = "res://examples/bomber/game/world.tscn"

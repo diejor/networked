@@ -206,7 +206,7 @@ public:
         if (p_scenario.moves_through_the_node_verb) {
             mover->reparent(destination);
         } else {
-            entity->reparent_to(destination, Ref<netw::NetwReparentOpts>());
+            netw::NetwMultiplayer::entity_move(mover, destination);
         }
         rig.pump(10);
         if (p_scenario.holds_the_client) {
@@ -375,38 +375,6 @@ TEST_CASE(
             NETW_LAW_HOLDS(law, run);
         }
     }
-}
-
-TEST_CASE(
-    "[Networked][Spawn][Scene][SceneTree] the verb that seats a player in a "
-    "scene admits its peer there, and a scene that has released the peer "
-    "reports the entity standing in it"
-) {
-    LoopbackRig rig(1);
-    rig.mount();
-    const RID home = rig.declare_scene(StringName("Home"));
-    REQUIRE(home.is_valid());
-
-    const RID body = rig.declare_entity(
-        netw_test::EntityDecl().named(StringName("Alice"))
-    );
-    Node *owner = rig.node_of(body);
-    REQUIRE_MESSAGE(owner != nullptr, "the declared body has no node");
-    const Ref<netw::NetwEntity> entity = netw::NetwEntity::of(owner);
-    REQUIRE(entity.is_valid());
-    entity->set_peer_id(rig.peer_id(0));
-
-    rig.seat(body, home);
-    const int64_t route = entity->get_route();
-    REQUIRE(route > 0);
-
-    CHECK_FALSE(rig.server()->scene_leaves_route_unadmitted(route));
-
-    rig.server()->scene_release(home, rig.peer_id(0));
-    CHECK(rig.server()->scene_leaves_route_unadmitted(route));
-
-    entity->set_peer_id(0);
-    CHECK_FALSE(rig.server()->scene_leaves_route_unadmitted(route));
 }
 
 } // namespace TestSpawnReparentStreamLaws

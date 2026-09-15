@@ -60,6 +60,7 @@ const char *SIG_ENTITY_LINGERING = "entity_lingering";
 const char *SIG_ENTITY_LIVE = "entity_live";
 const char *SIG_PARTICIPANT_JOINED = "participant_joined";
 const char *SIG_PARTICIPANT_LOCAL_JOINED = "participant_local_joined";
+const char *SIG_PARTICIPANT_LEFT = "participant_left";
 const char *SIG_PARTICIPANT_VIEWPORT_CHANGED = "participant_viewport_changed";
 const char *SIG_PEER_AUTHENTICATING = "peer_authenticating";
 const char *SIG_PEER_AUTHENTICATION_FAILED = "peer_authentication_failed";
@@ -70,8 +71,7 @@ const char *SIG_SCENE_ACTIVATED = "scene_activated";
 const char *SIG_SCENE_DESPAWNED = "scene_despawned";
 const char *SIG_SCENE_ENTITY_MOVED = "scene_entity_moved";
 const char *SIG_SCENE_LIVE = "scene_live";
-const char *SIG_SCENE_LOCAL_CHANGED = "scene_local_changed";
-const char *SIG_SCENE_LOCAL_PLAYER_CHANGED = "scene_local_player_changed";
+const char *SIG_SCENE_PRESENTATION_CHANGED = "scene_presentation_changed";
 const char *SIG_SCENE_SPAWNED = "scene_spawned";
 const char *SIG_SCENE_STARTUP_SPAWNED = "scene_startup_spawned";
 const char *SIG_SERVICE_REGISTERED = "service_registered";
@@ -925,10 +925,6 @@ void NetwMultiplayer::_bind_methods() {
         PropertyInfo(Variant::OBJECT, "entity")
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_SCENE_LOCAL_PLAYER_CHANGED,
-        PropertyInfo(Variant::OBJECT, "player")
-    ));
-    ADD_SIGNAL(MethodInfo(
         SIG_PARTICIPANT_JOINED,
         PropertyInfo(Variant::OBJECT, "participant")
     ));
@@ -937,7 +933,11 @@ void NetwMultiplayer::_bind_methods() {
         PropertyInfo(Variant::OBJECT, "participant")
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_SCENE_LOCAL_CHANGED,
+        SIG_PARTICIPANT_LEFT,
+        PropertyInfo(Variant::OBJECT, "participant")
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_SCENE_PRESENTATION_CHANGED,
         PropertyInfo(Variant::OBJECT, "from"),
         PropertyInfo(Variant::OBJECT, "to")
     ));
@@ -1040,22 +1040,8 @@ void NetwMultiplayer::_bind_methods() {
         "participant_local"
     );
     ClassDB::bind_method(
-        D_METHOD("participant_seat", "peer"),
-        &NetwMultiplayer::participant_seat
-    );
-    ClassDB::bind_method(
-        D_METHOD("scene_player_local"),
-        &NetwMultiplayer::scene_player_local
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "local_player",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwEntity"
-        ),
-        "",
-        "scene_player_local"
+        D_METHOD("participant_players", "peer"),
+        &NetwMultiplayer::participant_players
     );
     BIND_ENUM_CONSTANT(SCENE_MOVE_REFUSED);
     BIND_ENUM_CONSTANT(SCENE_MOVE_ALREADY_THERE);
@@ -1128,7 +1114,7 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(SCENE_PARAM_LABEL);
     BIND_ENUM_CONSTANT(SCENE_PARAM_ISOLATION);
     BIND_ENUM_CONSTANT(SCENE_PARAM_PROCESSING);
-    BIND_ENUM_CONSTANT(SCENE_EVENT_PARTICIPANT);
+    BIND_ENUM_CONSTANT(SCENE_EVENT_VIEWER);
     BIND_ENUM_CONSTANT(SCENE_EVENT_PLAYER);
     BIND_ENUM_CONSTANT(SCENE_EVENT_ENTITY);
     BIND_ENUM_CONSTANT(SCENE_CHANGE_SESSION);
@@ -1244,10 +1230,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_reload_current,
         DEFVAL(SCENE_CHANGE_SESSION)
     );
-    ClassDB::bind_method(
-        D_METHOD("scene_set_carry_move", "carry"),
-        &NetwMultiplayer::scene_set_carry_move
-    );
     ClassDB::bind_static_method(
         "NetwMultiplayer",
         D_METHOD("property_path", "source", "property", "base"),
@@ -1309,16 +1291,16 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::entity_of
     );
     ClassDB::bind_method(
-        D_METHOD("scene_admit", "scene", "peer"),
-        &NetwMultiplayer::scene_admit
+        D_METHOD("scene_watch", "scene", "peer"),
+        &NetwMultiplayer::scene_watch
     );
     ClassDB::bind_method(
-        D_METHOD("scene_release", "scene", "peer"),
-        &NetwMultiplayer::scene_release
+        D_METHOD("scene_unwatch", "scene", "peer"),
+        &NetwMultiplayer::scene_unwatch
     );
     ClassDB::bind_method(
-        D_METHOD("scene_admits", "scene", "peer"),
-        &NetwMultiplayer::scene_admits
+        D_METHOD("scene_subscribes", "scene", "peer"),
+        &NetwMultiplayer::scene_subscribes
     );
     ClassDB::bind_method(
         D_METHOD("scene_is_declared", "entity"),
@@ -1346,8 +1328,9 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::liveness_poll_now
     );
     ClassDB::bind_method(
-        D_METHOD("session_set_join_resolver", "resolver"),
-        &NetwMultiplayer::session_set_join_resolver
+        D_METHOD("participant_kick", "participant", "reason"),
+        &NetwMultiplayer::participant_kick,
+        DEFVAL(String())
     );
     ClassDB::bind_method(
         D_METHOD("session_prepare_join", "username", "args"),
@@ -1704,9 +1687,8 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::entity_create
     );
     ClassDB::bind_method(
-        D_METHOD("scene_move", "entity", "destination", "opts"),
-        &NetwMultiplayer::scene_move,
-        DEFVAL(Ref<NetwReparentOpts>())
+        D_METHOD("scene_move", "entity", "destination"),
+        &NetwMultiplayer::scene_move
     );
     ClassDB::bind_method(
         D_METHOD(
@@ -1793,10 +1775,6 @@ void NetwMultiplayer::_bind_methods() {
             "value"
         ),
         &NetwMultiplayer::predict_island_set_member_param
-    );
-    ClassDB::bind_method(
-        D_METHOD("peer_get_accepted_join", "peer"),
-        &NetwMultiplayer::peer_get_accepted_join
     );
     ClassDB::bind_method(
         D_METHOD("peer_forget", "peer"),
@@ -1982,24 +1960,24 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_get_players
     );
     ClassDB::bind_method(
-        D_METHOD("scene_get_participants", "scene"),
-        &NetwMultiplayer::scene_get_participants
+        D_METHOD("scene_get_viewers", "scene"),
+        &NetwMultiplayer::scene_get_viewers
     );
     ClassDB::bind_method(
-        D_METHOD("scene_get_local_player", "scene"),
-        &NetwMultiplayer::scene_get_local_player
-    );
-    ClassDB::bind_method(
-        D_METHOD("scene_add_player", "scene", "player"),
-        &NetwMultiplayer::scene_add_player
+        D_METHOD("scene_get_local_players", "scene"),
+        &NetwMultiplayer::scene_get_local_players
     );
     ClassDB::bind_method(
         D_METHOD("scene_get_layer", "scene"),
         &NetwMultiplayer::scene_get_layer
     );
     ClassDB::bind_method(
-        D_METHOD("scene_get_current"),
-        &NetwMultiplayer::scene_get_current
+        D_METHOD("scene_present", "scene"),
+        &NetwMultiplayer::scene_present
+    );
+    ClassDB::bind_method(
+        D_METHOD("scene_presented"),
+        &NetwMultiplayer::scene_presented
     );
     ClassDB::bind_method(
         D_METHOD("scene_destroy", "scene"),

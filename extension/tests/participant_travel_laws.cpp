@@ -8,6 +8,7 @@
 #include "netw/api/participant.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/scene_handle.hpp"
+#include "support/joined_peer.h"
 
 namespace TestParticipantTravelLaws {
 
@@ -85,7 +86,8 @@ TEST_CASE(
         int(ERR_INVALID_PARAMETER)
     );
 
-    const Ref<NetwParticipant> traveller = rig.server()->participant_ensure(7);
+    const Ref<NetwParticipant> traveller
+        = netw_test::seated_peer(rig.server(), 7);
     REQUIRE(traveller.is_valid());
     NETW_CHECK_EQ(
         refusal_of(
@@ -105,7 +107,8 @@ TEST_CASE(
     LoopbackRig rig(0);
     rig.mount();
     const Destination absent = a_scene(rig, StringName("Elsewhere"), false);
-    const Ref<NetwParticipant> traveller = rig.server()->participant_ensure(7);
+    const Ref<NetwParticipant> traveller
+        = netw_test::seated_peer(rig.server(), 7);
 
     NETW_CHECK_EQ(
         refusal_of(rig.server()->participant_travel(traveller, absent.view)),
@@ -123,8 +126,9 @@ TEST_CASE(
     LoopbackRig rig(0);
     rig.mount();
     const Destination arena = a_scene(rig, StringName("Arena"), true);
-    const Ref<NetwParticipant> stranger
-        = rig.server()->participant_ensure(4242);
+    Ref<NetwParticipant> stranger;
+    stranger.instantiate();
+    rig.server()->participant_adopt(4242, stranger);
 
     NETW_CHECK_EQ(
         refusal_of(rig.server()->participant_travel(stranger, arena.view)),
@@ -142,7 +146,8 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     const Destination arena = a_scene(rig, StringName("Arena"), true);
-    const Ref<NetwParticipant> traveller = rig.client(0)->participant_ensure(7);
+    const Ref<NetwParticipant> traveller
+        = netw_test::seated_peer(rig.client(0), 7);
 
     NETW_CHECK_EQ(
         refusal_of(rig.client(0)->participant_travel(traveller, arena.view)),

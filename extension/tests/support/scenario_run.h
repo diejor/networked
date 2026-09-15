@@ -220,7 +220,7 @@ private:
     void seed_tracks(const Scenario &p_scenario);
     void settle_regime(const Scenario &p_scenario);
 #if defined(NETW_TIER_HOSTED)
-    static void admit_declared(
+    static void watch_declared(
         LoopbackRig &p_rig,
         const Scenario &p_scenario,
         const Scenario::Step &p_step,
@@ -1081,8 +1081,8 @@ inline ScenarioRun ScenarioRun::scenes(
             if (step.tick != tick) {
                 continue;
             }
-            if (step.verb == godot::StringName("seat")) {
-                p_rig.seat(
+            if (step.verb == godot::StringName("place")) {
+                p_rig.place(
                     p_rig.entity_of(step.subject),
                     p_rig.entity_of(godot::StringName(step.value))
                 );
@@ -1093,11 +1093,11 @@ inline ScenarioRun ScenarioRun::scenes(
                     p_rig.entity_of(godot::StringName(step.value))
                 );
                 run.judged += 1;
-            } else if (step.verb == godot::StringName("admit")) {
-                admit_declared(p_rig, p_scenario, step, p_plant);
+            } else if (step.verb == godot::StringName("watch")) {
+                watch_declared(p_rig, p_scenario, step, p_plant);
                 run.judged += 1;
-            } else if (step.verb == godot::StringName("release")) {
-                p_rig.server()->scene_release(
+            } else if (step.verb == godot::StringName("unwatch")) {
+                p_rig.server()->scene_unwatch(
                     p_rig.entity_of(step.subject),
                     p_rig.peer_id(int(step.value))
                 );
@@ -1120,14 +1120,14 @@ inline ScenarioRun ScenarioRun::scenes(
     return run;
 }
 
-inline void ScenarioRun::admit_declared(
+inline void ScenarioRun::watch_declared(
     LoopbackRig &p_rig,
     const Scenario &p_scenario,
     const Scenario::Step &p_step,
     Plant p_plant
 ) {
     const int peer = p_rig.peer_id(int(p_step.value));
-    p_rig.server()->scene_admit(p_rig.entity_of(p_step.subject), peer);
+    p_rig.server()->scene_watch(p_rig.entity_of(p_step.subject), peer);
     if (p_plant != PLANT_SHARED_ADMISSION) {
         return;
     }
@@ -1141,7 +1141,7 @@ inline void ScenarioRun::admit_declared(
     for (int index = 0; index < p_scenario.world.scene_count(); ++index) {
         const WorldDecl::SceneRow &row = p_scenario.world.scene_at(index);
         if (row.name != p_step.subject && row.stem == stem) {
-            p_rig.server()->scene_admit(p_rig.entity_of(row.name), peer);
+            p_rig.server()->scene_watch(p_rig.entity_of(row.name), peer);
         }
     }
 }
@@ -1188,8 +1188,8 @@ inline godot::Vector<Membership> ScenarioRun::read_scene_rows(
 
         row.boundary = p_rig.server()->scene_get_layer(scene).is_valid();
         for (int client = 0; client < p_rig.count(); ++client) {
-            if (p_rig.server()->scene_admits(scene, p_rig.peer_id(client))) {
-                row.admitted.push_back(client);
+            if (p_rig.server()->scene_subscribes(scene, p_rig.peer_id(client))) {
+                row.subscribed.push_back(client);
             }
         }
         rows.push_back(row);

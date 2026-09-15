@@ -23,6 +23,18 @@ Renders one field per key of the ``host_settings`` entry of :ref:`NetwConnectHan
 
 .. rst-class:: classref-reftable-group
 
+Properties
+----------
+
+.. table::
+   :widths: auto
+
+   +-------------------------------------------------------------------------------+------------------------------------------------------------------------+--------+
+   | :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] | :ref:`transport_defaults<class_HostPopup_property_transport_defaults>` | ``[]`` |
+   +-------------------------------------------------------------------------------+------------------------------------------------------------------------+--------+
+
+.. rst-class:: classref-reftable-group
+
 Methods
 -------
 
@@ -51,6 +63,25 @@ Signals
 .. container:: contribute
 
 	There is currently no description for this signal. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Property Descriptions
+---------------------
+
+.. _class_HostPopup_property_transport_defaults:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] **transport_defaults** = ``[]`` :ref:`🔗<class_HostPopup_property_transport_defaults>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-section-separator
 

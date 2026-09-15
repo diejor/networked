@@ -15,7 +15,6 @@ using netw::EventPlane;
 using netw::NetwEntity;
 using netw::NetwEntityRecord;
 using netw::NetwMultiplayer;
-using netw::NetwReparentOpts;
 
 constexpr int64_t REPORTED_ROUTE = 11;
 
@@ -93,9 +92,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted][SceneTree] EL2 a settled move reports the "
-    "reason that asked for it, because a mover and a watcher agree on why a "
-    "body changed parents only if the row carries the word the caller used"
+    "[Networked][Entity][Hosted][SceneTree] EL2 a settled move reports itself "
+    "on the mover's own route, carrying the entity it is about and nothing "
+    "the caller said, because the landing is the fact and the request is not"
 ) {
     Ref<NetwMultiplayer> core = a_watching_session();
     Node *root = netw::gd::scene_root();
@@ -108,23 +107,24 @@ TEST_CASE(
     REQUIRE(wrapper.is_valid());
     NetwEntityRecord *const record = wrapper->get_record();
     REQUIRE(record != nullptr);
+    record->set_entity_id(StringName("moved"));
+    record->set_peer_id(6);
     record->set_route(REPORTED_ROUTE);
 
-    NetwEntityRecord::MoveReport report;
-    report.reason = StringName("law_move");
-
-    core->entity_announce_reparented(wrapper, report);
+    core->entity_announce_reparented(wrapper);
 
     const Dictionary moved
         = row_of(core, REPORTED_ROUTE, EventPlane::REPARENTED);
     CHECK(!moved.is_empty());
     if (!moved.is_empty()) {
-        const Dictionary detail = moved[netw::event_key::detail()];
-        CHECK(
-            StringName(detail.get("reason", StringName()))
-            == StringName("law_move")
+        const StringName entity_id = moved[netw::event_key::entity_id()];
+        CHECK(entity_id == record->get_entity_id());
+        NETW_CHECK_EQ(
+            int64_t(moved[netw::event_key::peer()]),
+            record->get_peer_id()
         );
-        CHECK_FALSE(detail.has("moved"));
+        const Dictionary detail = moved[netw::event_key::detail()];
+        CHECK(detail.is_empty());
     }
 
     root->remove_child(owner);

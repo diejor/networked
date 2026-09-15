@@ -86,6 +86,7 @@ private:
 
     godot::HashMap<godot::StringName, godot::Callable> constructors;
     godot::HashMap<godot::StringName, godot::Array> constructor_schemas;
+    godot::HashMap<int64_t, godot::Ref<NetwParticipant>> armed_owners;
 
     int64_t drops_spawn_bad_sender = 0;
     int64_t drops_spawn_duplicate = 0;
@@ -95,7 +96,6 @@ private:
     int64_t drops_despawn_unknown = 0;
     int64_t drops_hide_unknown = 0;
     int64_t spawn_deferrals = 0;
-    int64_t moves_unadmitted = 0;
     int64_t spawn_parked_cancelled = 0;
     int64_t spawn_park_expired = 0;
     int64_t spawn_nested_published = 0;
@@ -148,6 +148,8 @@ private:
     void on_armed_tree_entered(int64_t p_route);
     void schedule_armed_flush(int64_t p_route);
     void flush_armed_spawn(int64_t p_route);
+    bool armed_owner_survives(int64_t p_route);
+    void discard_armed_spawn(int64_t p_route);
     static bool roots_published_entity(godot::Node *p_node);
     static void gather_nested_boundaries(
         godot::Node *p_root,

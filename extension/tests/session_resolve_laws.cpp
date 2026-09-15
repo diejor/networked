@@ -9,8 +9,8 @@
 #include "godot/script.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/nodes/lobby_directory.hpp"
-#include "netw/api/resolved_join.hpp"
 #include "support/declared_seams.h"
+#include "support/joined_peer.h"
 #include "support/minted_script.h"
 
 namespace TestNetwSessionResolve {
@@ -281,11 +281,7 @@ TEST_CASE(
     CHECK(loop->get_multiplayer().ptr() == installed.ptr());
     CHECK(installed->session_is_active());
 
-    Ref<netw::ResolvedJoin> seated;
-    seated.instantiate();
-    seated->set_peer_id(7);
-    seated->set_username(StringName("ana"));
-    installed->session_remember_join(seated);
+    netw_test::seated_peer(installed.ptr(), 7, StringName("ana"));
     NETW_CHECK_EQ(int(installed->session_accepted_joins().size()), 1);
 
     Ref<SceneMultiplayer> stock;

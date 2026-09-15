@@ -48,15 +48,17 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :godot:`bool`                                       | :ref:`hide_when_session_active<class_ConnectBrowser_property_hide_when_session_active>` | ``true`` |
-   +-----------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :godot:`String`                                     | :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>`                 | ``""``   |
-   +-----------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :godot:`bool`                                       | :ref:`use_url_fragment<class_ConnectBrowser_property_use_url_fragment>`                 | ``true`` |
-   +-----------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`debug_link<class_ConnectBrowser_property_debug_link>`                             |          |
-   +-----------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
+   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
+   | :godot:`bool`                                                                 | :ref:`hide_when_session_active<class_ConnectBrowser_property_hide_when_session_active>` | ``true`` |
+   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
+   | :godot:`String`                                                               | :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>`                 | ``""``   |
+   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
+   | :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] | :ref:`transport_defaults<class_ConnectBrowser_property_transport_defaults>`             | ``[]``   |
+   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
+   | :godot:`bool`                                                                 | :ref:`use_url_fragment<class_ConnectBrowser_property_use_url_fragment>`                 | ``true`` |
+   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>`                           | :ref:`debug_link<class_ConnectBrowser_property_debug_link>`                             |          |
+   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -136,7 +138,19 @@ When ``true``, hides this browser once the session comes online and shows it aga
 
 :godot:`String` **server_list_path** = ``""`` :ref:`🔗<class_ConnectBrowser_property_server_list_path>`
 
-:godot:`ConfigFile` path this browser reads its own bookmarks from and writes them back to. Empty picks :ref:`DEFAULT_SERVER_LIST_PATH<class_ConnectBrowser_constant_DEFAULT_SERVER_LIST_PATH>`, which is one file every browser in the project shares, so a scene that wants its own bookmarks names its own path here.  The file belongs to this browser and holds only the rows this browser authored. A row a directory published, or one another browser added to the same session, is drawn from live evidence and never written here.
+:godot:`ConfigFile` path this browser reads its own bookmarks from and writes them back to.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_transport_defaults:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] **transport_defaults** = ``[]`` :ref:`🔗<class_ConnectBrowser_property_transport_defaults>`
+
+Game-authored defaults for forms and discovery, consumed when binding.
 
 .. rst-class:: classref-item-separator
 
@@ -148,7 +162,7 @@ When ``true``, hides this browser once the session comes online and shows it aga
 
 :godot:`bool` **use_url_fragment** = ``true`` :ref:`🔗<class_ConnectBrowser_property_use_url_fragment>`
 
-When ``true`` on a web export, mirrors the hosted room code into the page URL's fragment and joins the room a fragment already names.  Hosting rewrites the address bar, so a host shares a link rather than reading a code aloud, and opening that link fills the join form. The fragment is the only part of a URL a page may rewrite without reloading.
+When ``true`` on a web export, mirrors the hosted room code into the page URL's fragment and joins the room a fragment already names.
 
 .. rst-class:: classref-item-separator
 
@@ -160,9 +174,7 @@ When ``true`` on a web export, mirrors the hosted room code into the page URL's 
 
 :ref:`NetwLinkConditions<class_NetwLinkConditions>` **debug_link** :ref:`🔗<class_ConnectBrowser_property_debug_link>`
 
-Latency and loss to impair every connection this browser starts with, for testing a build against a link the developer's own machine does not have.  It reaches the wire through :ref:`NetwLinkConditions.wrap_peer()<class_NetwLinkConditions_method_wrap_peer>`, which this browser applies to the peer IT built before assigning it, so the impairment lives exactly as long as that peer and a session the game brought up itself is never impaired by a browser the player merely opened. An impairment the session already consumed through :ref:`NetwSessionConfig.link_conditions<class_NetwSessionConfig_property_link_conditions>` wins and this field is ignored, because two authored impairments are a mistake rather than a sum. 
-
-Nothing here reaches a shipped build. :ref:`NetwLinkConditions.wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` gates the whole path and declines in a release export, so a scene saved with this authored is inert rather than slow.
+Latency and loss to impair every connection this browser starts with, for testing a build against a link the developer's own machine does not have.
 
 .. rst-class:: classref-section-separator
 
@@ -179,7 +191,9 @@ Method Descriptions
 
 |void| **bind**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\ ) :ref:`🔗<class_ConnectBrowser_method_bind>`
 
-Drives this browser from ``handle`` instead of resolving one from ancestry. Prefer this when the browser does not sit under the session.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -239,7 +253,7 @@ Builds a :godot:`Control` typed by ``value``'s :godot:`Variant` type, seeded wit
 
 :godot:`Variant` **value_from_control**\ (\ control\: :godot:`Control`, value_type\: :godot:`int`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_value_from_control>`
 
-Reads back ``control``'s value, cast to ``value_type``.  A type absent from this match reads back as the :godot:`String` a :godot:`LineEdit` holds, and every consumer that type-checks its settings then discards it, so the field draws as editable and does nothing. A case here and a case in :ref:`make_value_control()<class_ConnectBrowser_method_make_value_control>` are added together.
+Reads back ``control``'s value, cast to ``value_type``.
 
 .. rst-class:: classref-item-separator
 
@@ -251,7 +265,7 @@ Reads back ``control``'s value, cast to ``value_type``.  A type absent from this
 
 :godot:`bool` **can_author_value**\ (\ value\: :godot:`Variant`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_can_author_value>`
 
-Whether a settings entry seeded with ``value`` can be drawn as a field and read back from it.  An installation seam carries an object its caller supplies in code, and the ``signaler`` entry of the WebRTC transport's host settings is one: its default is null, so a form that draws it offers a control reading ``<null>`` that no typed text can ever satisfy. A form asks this before drawing a row rather than rendering a dead control.
+Whether a settings entry seeded with ``value`` can be drawn as a field and read back from it.
 
 .. rst-class:: classref-item-separator
 

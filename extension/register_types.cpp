@@ -16,7 +16,6 @@
 #include "netw/api/database.hpp"
 #include "netw/api/database_backend.hpp"
 #include "netw/api/debug_join_config.hpp"
-#include "netw/api/default_join.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/display_handle.hpp"
 #include "netw/api/entity.hpp"
@@ -58,13 +57,11 @@
 #include "netw/api/record.hpp"
 #include "netw/api/record_table.hpp"
 #include "netw/api/replication_core.hpp"
-#include "netw/api/resolved_join.hpp"
 #include "netw/api/scene_config.hpp"
 #include "netw/api/scene_handle.hpp"
 #include "netw/api/schema_model.hpp"
 #include "netw/api/server_info.hpp"
 #include "netw/api/session_config.hpp"
-#include "netw/api/spawn_slot.hpp"
 #include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -164,8 +161,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwInterestLayer);
     GDREGISTER_CLASS(netw::NetwPromise);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwAuthProtocol);
-    GDREGISTER_CLASS(netw::ResolvedJoin);
-    GDREGISTER_CLASS(netw::NetwDefaultJoin);
     GDREGISTER_CLASS(netw::NetwAction);
     GDREGISTER_CLASS(netw::NetwActionContext);
     GDREGISTER_CLASS(netw::NetwParticipant);
@@ -186,7 +181,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwInterestHandle);
     GDREGISTER_CLASS(netw::NetwSceneConfig);
     GDREGISTER_CLASS(netw::NetwSceneHandle);
-    GDREGISTER_CLASS(netw::SpawnSlot);
     GDREGISTER_CLASS(netw::NetwPropertySetColumn);
     GDREGISTER_CLASS(netw::NetwPropertySet);
     GDREGISTER_CLASS(netw::NetwPropertySetBinding);
@@ -238,7 +232,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwSessionConfig);
     GDREGISTER_CLASS(netw::NetwSchemaColumn);
     GDREGISTER_CLASS(netw::NetwSchema);
-    GDREGISTER_CLASS(netw::NetwReparentOpts);
     GDREGISTER_CLASS(netw::NetwControlRequest);
 
     GDREGISTER_CLASS(netw::LocalLinkConditions);

@@ -15,6 +15,7 @@
 #include "netw/api/entity_options.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_engine.hpp"
+#include "netw/api/participant.hpp"
 #include "netw/api/promise.hpp"
 
 namespace TestPersistenceSessionLaws {
@@ -305,6 +306,113 @@ TEST_CASE(
         )),
         1
     );
+}
+
+Node *build_saved_avatar() {
+    Node2D *body = memnew(Node2D);
+    body->set_name("Avatar");
+    NetwEntity::ensure(body)->set_entity_id(StringName("pilot"));
+    return body;
+}
+
+TEST_CASE(
+    "[Networked][Database][Session][SceneTree] SV9 a facade spawn whose "
+    "entity id is stamped by its spawn function hydrates that saved record "
+    "while its body is still an orphan, and a second spawn on a new route "
+    "reads the same address"
+) {
+    LoopbackRig rig(0);
+    rig.mount();
+    netw_test::DatabaseStand database;
+    database.declare(StringName("players"), position_columns());
+    NetwPersistenceEngine::forget_claims();
+    NetwPersistenceEngine::set_schema_declarer(
+        callable_mp_static(&declare_nothing)
+    );
+    Dictionary saved;
+    saved[StringName("position")] = Vector2(77, 88);
+    database.set_stored(saved);
+
+    NetwMultiplayer *server = rig.server();
+    Ref<netw::NetwParticipant> pilot;
+    pilot.instantiate();
+    server->participant_adopt(91, pilot);
+    server->participant_admit(91);
+    rig.register_constructor(
+        server,
+        StringName("saved_avatar"),
+        callable_mp_static(&build_saved_avatar),
+        Array()
+    );
+
+    Array addresses;
+    int routes[2] = { 0, 0 };
+    for (int pass = 0; pass < 2; pass++) {
+        const RID entity = server->spawn_registered(
+            StringName("saved_avatar"),
+            Array(),
+            pilot.ptr()
+        );
+        REQUIRE(entity.is_valid());
+        Node2D *body = Object::cast_to<Node2D>(server->entity_get_node(entity));
+        REQUIRE(body != nullptr);
+        routes[pass] = int(server->entity_get_route(entity));
+        const bool orphaned = !body->is_inside_tree();
+        CHECK(orphaned);
+
+        body->set_meta(
+            NetwPersistenceEngine::meta_columns(),
+            position_column(0.0)
+        );
+        body->set_meta(NetwPersistenceEngine::meta_database(), database.db);
+        body->set_meta(
+            NetwPersistenceEngine::meta_table(),
+            StringName("players")
+        );
+        const Ref<NetwEntity> held = NetwEntity::of(body);
+        const Ref<NetwPersistenceEngine> engine
+            = server->persistence_engine_for(held.ptr());
+        REQUIRE(engine.is_valid());
+        addresses.push_back(engine->record_id());
+
+        const Ref<NetwPromise> hydrated = engine->hydrate();
+        REQUIRE(hydrated.is_valid());
+        const bool settled = hydrated->get_is_settled();
+        CHECK(settled);
+        const bool landed_before_the_tree
+            = body->get_position() == Vector2(77, 88);
+        CHECK(landed_before_the_tree);
+
+        rig.branch(-1)->add_child(body);
+        rig.pump(6);
+        const bool survived_the_mount = body->get_position() == Vector2(77, 88);
+        CHECK(survived_the_mount);
+
+        body->get_parent()->remove_child(body);
+        memdelete(body);
+        NetwPersistenceEngine::forget_claims();
+    }
+
+    NETW_CHECK_EQ(int(routes[0] != routes[1]), 1);
+    NETW_CHECK_EQ(addresses.size(), 2);
+    const bool address_held
+        = StringName(addresses[0]) == StringName(addresses[1]);
+    CHECK(address_held);
+    const bool address_is_the_stamped_one
+        = StringName(addresses[0]) == StringName("pilot");
+    CHECK(address_is_the_stamped_one);
+
+    const Array reads = database.reads();
+    NETW_CHECK_EQ(reads.size(), 2);
+    const bool first_read_is_the_record
+        = StringName(reads[0]) == StringName("pilot");
+    const bool second_read_is_the_record
+        = StringName(reads[1]) == StringName("pilot");
+    CHECK(first_read_is_the_record);
+    CHECK(second_read_is_the_record);
+
+    NetwPersistenceEngine::set_schema_declarer(Callable());
+    NetwPersistenceEngine::forget_claims();
 }
 
 } // namespace TestPersistenceSessionLaws

@@ -95,7 +95,7 @@ RID NetwInterestHandle::layer_ensure(const StringName &p_layer_id) {
         return known;
     }
     const RID opened = session->layer_open(p_layer_id);
-    if (opened.is_valid() && session->interest_layer_view(opened).is_null()) {
+    if (opened.is_valid() && session->layer_record(opened).is_null()) {
         session->layer_close(opened);
         return RID();
     }
@@ -113,7 +113,7 @@ void NetwInterestHandle::layer_join_live(const StringName &p_layer_id) {
         return;
     }
     session->liveness_adopt(bound.ptr());
-    const Ref<NetwInterestLayer> record = session->interest_layer_view(layer);
+    const Ref<NetwInterestLayer> record = session->layer_record(layer);
     if (record.is_valid()) {
         record->add_entity(bound);
     }
@@ -125,7 +125,7 @@ void NetwInterestHandle::layer_leave_live(const StringName &p_layer_id) {
     if (session == nullptr || bound.is_null() || !is_authority()) {
         return;
     }
-    const Ref<NetwInterestLayer> record = session->interest_layer_view(
+    const Ref<NetwInterestLayer> record = session->layer_record(
         session->interest_layer_find(p_layer_id)
     );
     if (record.is_valid()) {

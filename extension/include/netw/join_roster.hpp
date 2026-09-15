@@ -5,7 +5,7 @@
 #include "godot/local_vector.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/resolved_join.hpp"
+#include "netw/session/frames.hpp"
 
 namespace netw {
 
@@ -18,32 +18,34 @@ public:
     };
 
 private:
-    godot::HashMap<int64_t, godot::Ref<ResolvedJoin>> accepted;
+    godot::HashMap<int64_t, session::AcceptFrame> accepted;
     godot::HashMap<int64_t, godot::String> refusals;
 
     godot::LocalVector<int64_t> peers_in_order() const;
 
 public:
-    bool remember(const godot::Ref<ResolvedJoin> &rj);
-    godot::Ref<ResolvedJoin> accepted_join(int64_t peer_id) const;
-    godot::Array accepted_joins() const;
+    bool remember(const session::AcceptFrame &p_entry);
+    bool has_accepted(int64_t p_peer) const;
+    session::AcceptFrame accepted_join(int64_t p_peer) const;
+    godot::LocalVector<session::AcceptFrame> accepted_joins() const;
     godot::PackedByteArray roster_frame() const;
+    godot::PackedByteArray accept_frame(int64_t p_peer) const;
 
     int name_verdict(
-        const godot::StringName &name,
-        const godot::PackedStringArray &taken,
-        bool renames_on_collision,
-        bool has_identity
+        const godot::StringName &p_name,
+        const godot::PackedStringArray &p_taken,
+        bool p_renames_on_collision,
+        bool p_has_identity
     ) const;
     godot::StringName free_name(
-        const godot::StringName &name,
-        const godot::PackedStringArray &taken
+        const godot::StringName &p_name,
+        const godot::PackedStringArray &p_taken
     ) const;
 
-    void refuse(int64_t peer_id, const godot::String &reason);
-    godot::String refusal(int64_t peer_id) const;
+    void refuse(int64_t p_peer, const godot::String &p_reason);
+    godot::String refusal(int64_t p_peer) const;
 
-    void forget(int64_t peer_id);
+    void forget(int64_t p_peer);
     void clear();
     int size() const;
 };

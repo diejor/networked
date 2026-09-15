@@ -232,6 +232,25 @@ func test_the_lobby_lists_every_waiting_player_before_the_match_opens() -> void:
 	assert_that(await client.await_player(&"luigi", 2.0)).is_not_null()
 
 
+func test_a_late_join_gets_a_car_on_the_other_team() -> void:
+	var host := await game.add_host("mario", false)
+	await begin_match(host)
+	await host.await_scene(&"Arena", 2.0)
+	var first := await host.await_player(&"mario", 2.0) as RocketCar
+	assert_int(first.team).is_equal(0)
+
+	var client := await game.add_client("luigi", false)
+	await client.await_scene(&"Arena", 2.0)
+	var late := await client.await_player(&"luigi", 2.0) as RocketCar
+	assert_that(client.local_player).override_failure_message(
+		"a peer joining a running match is given a car of its own",
+	).is_equal(late)
+	assert_int(late.team).override_failure_message(
+		"a late join takes the next grid slot, so it lands on the other team",
+	).is_equal(1)
+	assert_that(await host.await_player(&"luigi", 2.0)).is_not_null()
+
+
 func begin_match(host: NetwSceneRunner) -> void:
 	await host.await_scene(&"Lobby", 2.0)
 	in_lobby(host).on_start_pressed()

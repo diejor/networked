@@ -21,7 +21,6 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwReparentOpts;
 using netw::NetwTimeline;
 using netw_test::Carrier;
 
@@ -70,9 +69,7 @@ struct Travelled {
     }
 
     void move() {
-        Ref<NetwReparentOpts> opts;
-        opts.instantiate();
-        entity->reparent_to(away, opts);
+        NetwMultiplayer::entity_move(body, away);
         core()->session_flush_deferred();
     }
 };
@@ -144,9 +141,7 @@ TEST_CASE(
     rig.branch(-1)->add_child(body);
     NetwMultiplayer *core = flow_core(rig.server());
 
-    Ref<NetwReparentOpts> opts;
-    opts.instantiate();
-    entity->reparent_to(away, opts);
+    NetwMultiplayer::entity_move(body, away);
     const int at_reentry = body->reset_count();
 
     core->session_flush_deferred();
@@ -175,7 +170,7 @@ TEST_CASE(
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     body->set_global_position(Vector3(5, 6, 7));
 
-    entity->reparent_to(away, Ref<NetwReparentOpts>());
+    NetwMultiplayer::entity_move(body, away);
     flow_core(rig.server())->session_flush_deferred();
 
     CHECK(body->get_parent() == away);

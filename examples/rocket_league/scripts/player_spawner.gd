@@ -7,54 +7,26 @@ const CAR_SCENE := preload("res://examples/rocket_league/scenes/player_rb.tscn")
 
 
 func _ready() -> void:
-	spawn_function = spawn_car
-	if multiplayer.is_server():
-		arm_spawns.call_deferred()
+	spawn_function = make_car
 
 
-func arm_spawns() -> void:
-	var arena: NetwSceneHandle = NetwEntity.of(self).scene
-	arena.observe(
-		NetwMultiplayer.SCENE_EVENT_PARTICIPANT,
-		participant_edge.bind(true),
-	)
-	for participant: NetwParticipant in arena.participants:
-		add_car(participant)
-
-
-func participant_edge(
-		present: bool,
-		participant: NetwParticipant,
-		entered: bool,
-) -> bool:
-	if entered and present:
-		add_car(participant)
-	return false
-
-
-func add_car(participant: NetwParticipant) -> void:
-	if NetwEntity.find(car_root, participant) == null:
-		spawn_car_for(String(participant.username), participant.peer_id)
-
-
-func spawn_car_for(wanted_id: String, peer_id: int) -> void:
-	var taken := cars()
-	var team := taken.size() % 2
-	var slot := 0
-	for car: RocketCar in taken:
-		if car.team == team:
-			slot += 1
+func add_car(participant: NetwParticipant, grid_slot: int) -> void:
+	assert(multiplayer.is_server())
+	if NetwEntity.find(car_root, participant) != null:
+		return
+	@warning_ignore("integer_division")
+	var slot := grid_slot / 2
 	spawn(
 		{
-			entity_id = unique_id(wanted_id),
-			peer_id = peer_id,
-			team = team,
+			entity_id = unique_id(String(participant.username)),
+			peer_id = participant.peer_id,
+			team = grid_slot % 2,
 			slot = slot,
 		},
 	)
 
 
-func spawn_car(data: Dictionary) -> Node:
+func make_car(data: Dictionary) -> Node:
 	var car := CAR_SCENE.instantiate() as RocketCar
 	car.team = int(data.team)
 	car.slot = int(data.slot)

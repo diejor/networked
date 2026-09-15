@@ -1,7 +1,7 @@
 class_name InLobby
 extends Control
 
-@export_file("*.tscn") var match_scene: String
+signal start_pressed()
 
 @onready var member_list: ItemList = %MemberList
 @onready var start_btn: Button = %StartButton
@@ -12,25 +12,25 @@ extends Control
 
 
 func _ready() -> void:
-	lobby.observe(NetwMultiplayer.SCENE_EVENT_PARTICIPANT, membership_edge)
+	lobby.viewer_entered.connect(on_roster_changed)
+	lobby.viewer_left.connect(on_roster_changed)
 	start_btn.pressed.connect(on_start_pressed)
 	leave_btn.pressed.connect(session.leave)
 	refresh()
 
 
 func on_start_pressed() -> void:
-	Netw.change_scene_to_file(self, match_scene)
+	start_pressed.emit()
 
 
-func membership_edge(_present: bool, _participant: NetwParticipant) -> bool:
+func on_roster_changed(_participant: NetwParticipant) -> void:
 	refresh()
-	return false
 
 
 func refresh() -> void:
 	member_list.clear()
 	var local := session.local_participant
-	var participants := lobby.participants
+	var participants := lobby.viewers
 	participants.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id

@@ -901,18 +901,18 @@ public:
         return mirror;
     }
 
-    void seat(const godot::RID &p_entity, const godot::RID &p_scene) {
+    void place(const godot::RID &p_entity, const godot::RID &p_scene) {
         godot::Node *body = node_of(p_entity);
         godot::Node *level = content_of(p_scene);
-        REQUIRE_MESSAGE(body != nullptr, "a seated entity needs a body");
+        REQUIRE_MESSAGE(body != nullptr, "a placed entity needs a body");
         REQUIRE_MESSAGE(level != nullptr, "a scene needs a content root");
         if (body == nullptr || level == nullptr) {
             return;
         }
         const godot::Ref<netw::NetwEntity> record = netw::NetwEntity::of(body);
-        REQUIRE_MESSAGE(record.is_valid(), "a seated entity needs a record");
+        REQUIRE_MESSAGE(record.is_valid(), "a placed entity needs a record");
         if (record.is_valid()) {
-            record->reparent_to(level, godot::Ref<netw::NetwReparentOpts>());
+            netw::NetwMultiplayer::entity_move(record->get_owner(), level);
         }
         flush_interest();
     }
@@ -921,11 +921,8 @@ public:
         const godot::RID &p_entity,
         const godot::RID &p_destination
     ) {
-        const godot::Ref<netw::NetwPromise> settled = server()->scene_move(
-            p_entity,
-            p_destination,
-            godot::Ref<netw::NetwReparentOpts>()
-        );
+        const godot::Ref<netw::NetwPromise> settled
+            = server()->scene_move(p_entity, p_destination);
         REQUIRE_MESSAGE(settled.is_valid(), "scene_move returned no promise");
         NETW_CHECK_EQ(int(settled.is_valid() && settled->get_is_settled()), 1);
         NETW_CHECK_EQ(settled.is_valid() ? settled->get_code() : -1, 0);
@@ -978,7 +975,7 @@ public:
                 );
             }
             if (!row.scene.is_empty()) {
-                seat(entity, entity_of(row.scene));
+                place(entity, entity_of(row.scene));
             }
         }
         for (const WorldDecl::IslandRow &row : p_world.islands) {

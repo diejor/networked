@@ -19,19 +19,36 @@ The scene an entity belongs to, reached as :ref:`NetwEntity.scene<class_NetwEnti
 Description
 -----------
 
-The view a game holds for one scene: who is in it, who may enter it, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so ``==`` returns "the same scene" and a listener connected through any route hears every edge. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. Never ``null`` for an entity in a session: an entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` when the difference matters.
+The view a game holds for one scene. It answers who is in it, who it reaches, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so ``==`` returns "the same scene" and a listener connected through any route hears every edge. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. Never ``null`` for an entity in a session. An entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` when the difference matters.
+
+\ **A scene reaches a participant for a reason, and there are two of them.** A body of theirs residing here is one, so parenting a player in is the whole of it and no call follows. A :ref:`watch()<class_NetwSceneHandle_method_watch>` is the other, and it is the one for a participant with no body here at all. The two are independent and the scene keeps replicating until the last of them is gone, so :ref:`unwatch()<class_NetwSceneHandle_method_unwatch>` does not evict a player still standing in the room. A participant may hold as many scenes at once as the game gives them reasons for.
 
 ::
 
-    func _on_scene_live(track: NetwSceneHandle) -> void:
-        track.player_entered.connect(_on_car_entered)
-        track.player_left.connect(_on_car_left)
-        for participant in track.participants:
-            track.admit(participant)
+    lobby.watch(participant)
+    arena.add_child(Netw.spawn_player(participant, make_player))
+    lobby.unwatch(participant)
 
-\ A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree returns :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` ``false`` and every other member empty.
+\ Reaching a participant is scene-wide and it is not the last word on any one node. :ref:`NetwInterestLayer<class_NetwInterestLayer>` still filters entity by entity inside a scene this participant reaches, so a scene arriving does not mean everything in it arrived.
 
-\ :ref:`NetwMultiplayer<class_NetwMultiplayer>` keeps the same surface keyed by :godot:`RID` for callers that already hold one, and :ref:`entity<class_NetwSceneHandle_property_entity>` is the bridge to it: :ref:`NetwMultiplayer.scene_get_players()<class_NetwMultiplayer_method_scene_get_players>`, :ref:`NetwMultiplayer.scene_admit()<class_NetwMultiplayer_method_scene_admit>` and :ref:`NetwMultiplayer.scene_observe()<class_NetwMultiplayer_method_scene_observe>` are the flat spellings of :ref:`players<class_NetwSceneHandle_property_players>`, :ref:`admit()<class_NetwSceneHandle_method_admit>` and the signals here.
+\ **Putting a player somewhere**\ 
+
+Three calls move a body and they differ in what they answer, not in where the body lands. Only the last carries a :ref:`NetwPromise<class_NetwPromise>`.
+
+.. code:: text
+
+    arena.add_child(player)    a first placement. there is nothing to await
+    player.reparent(other)     an ordinary Godot move, taken here and
+                               replicated. it answers nothing
+    destination.move(entity)   the same move carrying a NetwPromise, which
+                               resolves only once the entity stands under
+                               this scene on every peer that has it
+
+\ Only :ref:`move()<class_NetwSceneHandle_method_move>` can be awaited, so a game that has to know the move landed everywhere takes that one and :ref:`NetwMultiplayer.scene_move()<class_NetwMultiplayer_method_scene_move>` holds its law, the carry window included.
+
+A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree returns :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` ``false`` and every other member empty.
+
+\ :ref:`NetwMultiplayer<class_NetwMultiplayer>` keeps the same surface keyed by :godot:`RID` for callers that already hold one, and :ref:`entity<class_NetwSceneHandle_property_entity>` is the bridge to it: :ref:`NetwMultiplayer.scene_get_players()<class_NetwMultiplayer_method_scene_get_players>`, :ref:`NetwMultiplayer.scene_watch()<class_NetwMultiplayer_method_scene_watch>` and :ref:`NetwMultiplayer.scene_observe()<class_NetwMultiplayer_method_scene_observe>` are the flat spellings of :ref:`players<class_NetwSceneHandle_property_players>`, :ref:`watch()<class_NetwSceneHandle_method_watch>` and the signals here.
 
 .. rst-class:: classref-reftable-group
 
@@ -41,25 +58,25 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]           | :ref:`entities<class_NetwSceneHandle_property_entities>`         | ``[]``    |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`RID`                                                    | :ref:`entity<class_NetwSceneHandle_property_entity>`             | ``RID()`` |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                                   | :ref:`is_declared<class_NetwSceneHandle_property_is_declared>`   | ``false`` |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                             | :ref:`label<class_NetwSceneHandle_property_label>`               | ``&""``   |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :ref:`NetwEntity<class_NetwEntity>`                             | :ref:`local_player<class_NetwSceneHandle_property_local_player>` |           |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] | :ref:`participants<class_NetwSceneHandle_property_participants>` | ``[]``    |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]           | :ref:`players<class_NetwSceneHandle_property_players>`           | ``[]``    |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`Node`                                                   | :ref:`root<class_NetwSceneHandle_property_root>`                 |           |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
-   | :godot:`Node`                                                   | :ref:`world<class_NetwSceneHandle_property_world>`               |           |
-   +-----------------------------------------------------------------+------------------------------------------------------------------+-----------+
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]           | :ref:`entities<class_NetwSceneHandle_property_entities>`           | ``[]``    |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`RID`                                                    | :ref:`entity<class_NetwSceneHandle_property_entity>`               | ``RID()`` |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                                   | :ref:`is_declared<class_NetwSceneHandle_property_is_declared>`     | ``false`` |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                                             | :ref:`label<class_NetwSceneHandle_property_label>`                 | ``&""``   |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]           | :ref:`local_players<class_NetwSceneHandle_property_local_players>` |           |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] | :ref:`viewers<class_NetwSceneHandle_property_viewers>`             | ``[]``    |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]           | :ref:`players<class_NetwSceneHandle_property_players>`             | ``[]``    |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`Node`                                                   | :ref:`root<class_NetwSceneHandle_property_root>`                   |           |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   | :godot:`Node`                                                   | :ref:`world<class_NetwSceneHandle_property_world>`                 |           |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -69,21 +86,19 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`add_player<class_NetwSceneHandle_method_add_player>`\ (\ player\: :ref:`NetwEntity<class_NetwEntity>`\ )                                                    |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`admit<class_NetwSceneHandle_method_admit>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ )                                               |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                         | :ref:`admits<class_NetwSceneHandle_method_admits>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |const|                                     |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`move<class_NetwSceneHandle_method_move>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, opts\: :ref:`NetwReparentOpts<class_NetwReparentOpts>` = null\ ) |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`observe<class_NetwSceneHandle_method_observe>`\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ )                                                    |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`release<class_NetwSceneHandle_method_release>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ )                                           |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`unobserve<class_NetwSceneHandle_method_unobserve>`\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ )                                                |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_watching<class_NetwSceneHandle_method_is_watching>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |const| |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`move<class_NetwSceneHandle_method_move>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ )                                      |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`observe<class_NetwSceneHandle_method_observe>`\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ )                          |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`unobserve<class_NetwSceneHandle_method_unobserve>`\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ )                      |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`unwatch<class_NetwSceneHandle_method_unwatch>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ )                 |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`watch<class_NetwSceneHandle_method_watch>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ )                     |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -94,25 +109,25 @@ Methods
 Signals
 -------
 
-.. _class_NetwSceneHandle_signal_participant_entered:
+.. _class_NetwSceneHandle_signal_viewer_entered:
 
 .. rst-class:: classref-signal
 
-**participant_entered**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_participant_entered>`
+**viewer_entered**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_viewer_entered>`
 
-Emitted when ``participant`` is seated in this scene, after the admission boundary is written, so a listener reading :ref:`participants<class_NetwSceneHandle_property_participants>` sees them.
+Emitted when this scene starts replicating to ``participant``, after the boundary is written, so a listener reading :ref:`viewers<class_NetwSceneHandle_property_viewers>` sees them.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwSceneHandle_signal_participant_left:
+.. _class_NetwSceneHandle_signal_viewer_left:
 
 .. rst-class:: classref-signal
 
-**participant_left**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_participant_left>`
+**viewer_left**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_viewer_left>`
 
-Emitted when ``participant`` leaves this scene, whether by moving to another or by leaving the session.
+Emitted when this scene stops replicating to ``participant``, whether the last body of theirs left it, a watch was withdrawn, or the membership ended.
 
 .. rst-class:: classref-item-separator
 
@@ -213,33 +228,33 @@ The name this scene was declared under, which is the name :ref:`Netw.scene()<cla
 
 ----
 
-.. _class_NetwSceneHandle_property_local_player:
+.. _class_NetwSceneHandle_property_local_players:
 
 .. rst-class:: classref-property
 
-:ref:`NetwEntity<class_NetwEntity>` **local_player** :ref:`🔗<class_NetwSceneHandle_property_local_player>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **local_players** :ref:`🔗<class_NetwSceneHandle_property_local_players>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwEntity<class_NetwEntity>` **get_local_player**\ (\ )
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_local_players**\ (\ )
 
-The player entity this peer represents in this scene, or ``null`` when this peer has none here.
+Every player entity in this scene that this peer represents, which is empty for a peer with no body here and holds more than one where a game gave it several.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwSceneHandle_property_participants:
+.. _class_NetwSceneHandle_property_viewers:
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] **participants** = ``[]`` :ref:`🔗<class_NetwSceneHandle_property_participants>`
+:godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] **viewers** = ``[]`` :ref:`🔗<class_NetwSceneHandle_property_viewers>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] **get_participants**\ (\ )
+- :godot:`Array`\[:ref:`NetwParticipant<class_NetwParticipant>`\] **get_viewers**\ (\ )
 
-Every participant seated in this scene. A participant is a person in the session; a player is the entity they steer, and :ref:`players<class_NetwSceneHandle_property_players>` returns those.
+Every participant this scene currently replicates to, whether a body of theirs stands here or a :ref:`watch()<class_NetwSceneHandle_method_watch>` put them here. A participant is a person in the session; a player is the entity they steer, and :ref:`players<class_NetwSceneHandle_property_players>` returns those.
 
 .. rst-class:: classref-item-separator
 
@@ -302,67 +317,15 @@ Only a :godot:`Viewport` owns a world in Godot, so :ref:`NetwSceneConfig.isolate
 Method Descriptions
 -------------------
 
-.. _class_NetwSceneHandle_method_add_player:
+.. _class_NetwSceneHandle_method_is_watching:
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **add_player**\ (\ player\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwSceneHandle_method_add_player>`
+:godot:`bool` **is_watching**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |const| :ref:`🔗<class_NetwSceneHandle_method_is_watching>`
 
-Seats ``player`` in this scene through :ref:`NetwMultiplayer.scene_add_player()<class_NetwMultiplayer_method_scene_add_player>`, which admits the player and parents its node under :ref:`root<class_NetwSceneHandle_property_root>`.
+Whether this scene currently replicates to ``participant``, for any reason at all.
 
-The one call that seats a freshly instantiated player: parenting alone makes it a member, because membership is ancestry, but its peer still has to be admitted before the subtree is replicated to it. Admission is flushed before the node enters the tree, so the spawn packets the subtree produces already target the peer about to receive them. Only authority admits; every peer still parents its own copy.
-
-::
-
-    var node := template.instantiate_player(participant)
-    NetwEntity.of(self).scene.add_player(NetwEntity.of(node))
-
-.. code:: text
-
-    Error
-    ┠╴OK                      parented, and admitted when this peer is authority
-    ┠╴ERR_INVALID_PARAMETER   peer_id 0, while admitting
-    ┠╴ERR_DOES_NOT_EXIST      this scene names no live node
-    ┖╴ERR_UNAVAILABLE         no player, no session, or admission failed
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSceneHandle_method_admit:
-
-.. rst-class:: classref-method
-
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **admit**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_method_admit>`
-
-Admits ``participant`` to this scene, which is what makes the scene's subtree replicate to that peer and what seats the participant here.
-
-Idempotent, so admitting a participant this scene already admits changes nothing.
-
-.. code:: text
-
-    Error
-    ┠╴OK                      admitted
-    ┠╴ERR_UNAUTHORIZED        this peer is not the server
-    ┠╴ERR_INVALID_PARAMETER   a null participant, outside a session, or a peer id of 0
-    ┠╴ERR_DOES_NOT_EXIST      this scene names no live node
-    ┖╴ERR_UNAVAILABLE         admission did not take, after everything else succeeded
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSceneHandle_method_admits:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **admits**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |const| :ref:`🔗<class_NetwSceneHandle_method_admits>`
-
-Whether this scene currently admits ``participant``. Reads the admission boundary rather than the seat, so it returns for a participant admitted before it was seated.
+A body of theirs residing here is a reason, and so is a watch :ref:`watch()<class_NetwSceneHandle_method_watch>` placed. This answers the effective question, so it stays ``true`` after :ref:`unwatch()<class_NetwSceneHandle_method_unwatch>` while a body of theirs is still standing in the scene.
 
 .. rst-class:: classref-item-separator
 
@@ -372,13 +335,13 @@ Whether this scene currently admits ``participant``. Reads the admission boundar
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **move**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, opts\: :ref:`NetwReparentOpts<class_NetwReparentOpts>` = null\ ) :ref:`🔗<class_NetwSceneHandle_method_move>`
+:ref:`NetwPromise<class_NetwPromise>` **move**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwSceneHandle_method_move>`
 
-Moves ``entity`` into THIS scene, returning the :ref:`NetwPromise<class_NetwPromise>` the settle carries. :ref:`NetwMultiplayer.scene_move()<class_NetwMultiplayer_method_scene_move>` holds the law, the carry window included; what differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
+Moves ``entity`` into this scene, returning the :ref:`NetwPromise<class_NetwPromise>` the settle carries. :ref:`NetwMultiplayer.scene_move()<class_NetwMultiplayer_method_scene_move>` holds the law, the carry window included. What differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
 
 ::
 
-    var moved := destination.move(NetwEntity.of(player), opts)
+    var moved := destination.move(NetwEntity.of(player))
     await moved.wait()
 
 \ Returns an already-settled :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` for a null ``entity`` or outside a session.
@@ -407,28 +370,7 @@ Calls ``callback`` whenever this scene gains or loses a subject of ``event``, on
             reshuffle(car)
             return false        # true drops the subscription
 
-\ :ref:`NetwMultiplayer.SCENE_EVENT_PARTICIPANT<class_NetwMultiplayer_constant_SCENE_EVENT_PARTICIPANT>` carries a :ref:`NetwParticipant<class_NetwParticipant>`; :ref:`NetwMultiplayer.SCENE_EVENT_PLAYER<class_NetwMultiplayer_constant_SCENE_EVENT_PLAYER>` and :ref:`NetwMultiplayer.SCENE_EVENT_ENTITY<class_NetwMultiplayer_constant_SCENE_EVENT_ENTITY>` carry a :ref:`NetwEntity<class_NetwEntity>`. Returning ``true`` from the callback withdraws it, exactly as the flat verb's does, and :ref:`unobserve()<class_NetwSceneHandle_method_unobserve>` withdraws it by name.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSceneHandle_method_release:
-
-.. rst-class:: classref-method
-
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **release**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_method_release>`
-
-Withdraws ``participant``'s admission, so the scene's subtree stops replicating to that peer.
-
-.. code:: text
-
-    Error
-    ┠╴OK                     the admission is withdrawn
-    ┠╴ERR_INVALID_PARAMETER  this handle has no session, or a null participant
-    ┖╴ERR_DOES_NOT_EXIST     the scene did not admit them
-
-\ **Server Only.**
+\ :ref:`NetwMultiplayer.SCENE_EVENT_VIEWER<class_NetwMultiplayer_constant_SCENE_EVENT_VIEWER>` carries a :ref:`NetwParticipant<class_NetwParticipant>`; :ref:`NetwMultiplayer.SCENE_EVENT_PLAYER<class_NetwMultiplayer_constant_SCENE_EVENT_PLAYER>` and :ref:`NetwMultiplayer.SCENE_EVENT_ENTITY<class_NetwMultiplayer_constant_SCENE_EVENT_ENTITY>` carry a :ref:`NetwEntity<class_NetwEntity>`. Returning ``true`` from the callback withdraws it, exactly as the flat verb's does, and :ref:`unobserve()<class_NetwSceneHandle_method_unobserve>` withdraws it by name.
 
 .. rst-class:: classref-item-separator
 
@@ -441,6 +383,61 @@ Withdraws ``participant``'s admission, so the scene's subtree stops replicating 
 |void| **unobserve**\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSceneHandle_method_unobserve>`
 
 Withdraws the ``callback`` a :ref:`observe()<class_NetwSceneHandle_method_observe>` call registered for ``event``. It must be the same :godot:`Callable` that was passed to :ref:`observe()<class_NetwSceneHandle_method_observe>`, because that is the name the relay is filed under; a fresh :godot:`Callable` over the same method is a different name and withdraws nothing.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSceneHandle_method_unwatch:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **unwatch**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_method_unwatch>`
+
+Withdraws the watch :ref:`watch()<class_NetwSceneHandle_method_watch>` placed, so this scene stops replicating to ``participant`` once nothing else keeps them here.
+
+A watch is one reason among several. Withdrawing it does not evict a participant whose player is still in this scene, which is what stops a lobby leaving a game to also blind the player it left behind.
+
+.. code:: text
+
+    Error
+    ┠╴OK                      the watch is withdrawn
+    ┠╴ERR_INVALID_PARAMETER   a null participant, or one this session no longer holds
+    ┖╴ERR_DOES_NOT_EXIST      this participant was not watching
+
+\ **Server Only.**
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSceneHandle_method_watch:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **watch**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) :ref:`🔗<class_NetwSceneHandle_method_watch>`
+
+Replicates this scene to ``participant`` for as long as the watch stands, without giving them a body in it.
+
+Watching is not exclusive and not a move. A participant may watch several scenes at once, and watching this one withdraws nothing elsewhere, which is what an avatarless lobby and a spectator both need.
+
+::
+
+    Netw.scene(lobby).watch(who)
+
+\ A scene nested inside another arrives with the scene roots it hangs from, because a watcher cannot hold a node whose parent it has never seen. Those roots arrive as structure alone. Their own content stays with the participants they already reach, so watching an inner scene never reveals what sits beside it in the outer one.
+
+Idempotent, and refused for a participant this session no longer holds, so a handle kept across a disconnect cannot seat whoever reconnected onto that peer id.
+
+.. code:: text
+
+    Error
+    ┠╴OK                      the watch stands
+    ┠╴ERR_UNAUTHORIZED        this peer is not the server
+    ┠╴ERR_INVALID_PARAMETER   a null participant, or one this session no longer holds
+    ┖╴ERR_DOES_NOT_EXIST      this scene names no live node
+
+\ **Server Only.**
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

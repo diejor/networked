@@ -32,7 +32,7 @@
 				 ┖╴ Level1World (SubViewport)   # what spawn returned
 				      ┖╴ Level1 (Node2D)        # the scene, what the callable built
 				[/codeblock]
-				A [SubViewport] renders to a texture, so whether an isolated scene reaches the screen is the game's decision. See [signal NetwMultiplayer.scene_local_changed] for the scene this peer is currently in.
+				A [SubViewport] renders to a texture, so whether an isolated scene reaches the screen is the game's decision. [method NetwSessionHandle.present] is where that decision is made.
 			</description>
 		</method>
 		<method name="labeled">

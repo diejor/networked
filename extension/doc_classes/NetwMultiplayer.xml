@@ -8,7 +8,7 @@
 		[codeblock]
 		var api := Netw.of(self)
 		api.entity_despawn(route)
-		api.scene_admit(scene, participant)
+		api.scene_watch(scene, peer_id)
 		[/codeblock]
 		Method prefixes identify their subsystem and related API class:
 		- [code]scene_*[/code]: [NetwSceneHandle]
@@ -367,7 +367,7 @@
 		<method name="clear_roster">
 			<return type="void" />
 			<description>
-				Drops everything this session holds about who is in it. That is every peer's bucket, identity and accepted [ResolvedJoin], and every participant row, clearing [member local_participant] with them.
+				Drops everything this session holds about who is in it. That is every peer's bucket, its identity and its accepted membership, and every participant row, clearing [member local_participant] with them.
 				The transport is untouched, so this empties the roster of a session that is going down rather than disconnecting anyone. [method peer_forget] is the same clearing for one peer.
 			</description>
 		</method>
@@ -1220,6 +1220,7 @@
 			<param index="0" name="name" type="StringName" />
 			<description>
 				Returns the [NetwInterestLayer] addressed by [param name], opening it in the session's interest engine on first use. A second call with the same [param name] returns a handle to the same layer, so declaring a layer twice never splits its membership.
+				A layer a live scene owns is answered as a null reference and reports the refusal, the same way [method interest_layer_named] does.
 			</description>
 		</method>
 		<method name="interest_layer_add_entity">
@@ -1289,6 +1290,7 @@
 			<param index="0" name="name" type="StringName" />
 			<description>
 				Returns the [NetwInterestLayer] already open under [param name], or a null reference if nothing has opened it yet. Unlike [method interest_layer] this never creates one, so it is the read a caller reaches for when opening a layer as a side effect would be wrong.
+				A layer a live scene owns is answered as a null reference and reports the refusal. A scene's members follow the settled tree and its viewers follow admission, so a write through the layer is either erased by the next settle or never reconciled at all. Reach the scene through [method Netw.scene] instead.
 			</description>
 		</method>
 		<method name="interest_layer_remove_viewer">
@@ -1334,6 +1336,7 @@
 			<description>
 				A read-only [NetwInterestLayer] over [param layer], or [code]null[/code] when the handle names no layer.
 				It is a view rather than a copy. It reads the live layer, so a caller holding one sees membership as it changes rather than as it stood when the view was taken.
+				A layer a live scene owns is answered as [code]null[/code] and reports the refusal, the same way [method interest_layer_named] does. Reach the scene through [method Netw.scene] instead.
 			</description>
 		</method>
 		<method name="interest_layers" qualifiers="const">
@@ -1698,11 +1701,29 @@
 				The session installed on [param node]'s branch, or [code]null[/code] when [param node] is outside the tree or on a branch no session returns for. It returns quietly either way, so a detached node becomes unreachable rather than raising.
 			</description>
 		</method>
-		<method name="participant_seat" qualifiers="const">
-			<return type="RID" />
+		<method name="participant_kick">
+			<return type="int" enum="Error" />
+			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="1" name="reason" type="String" default="&quot;&quot;" />
+			<description>
+				Ends [param participant]'s membership and turns their peer away carrying [param reason], announcing [signal participant_left] before the connection goes.
+				A membership rather than a connection is what this names, which is what separates it from [method peer_kick]. The membership is released first, so a handler on [signal participant_left] reads a session that no longer holds them.
+				[codeblock lang=text]
+				Error
+				┠╴OK                      the membership is ended and the peer is turned away
+				┠╴ERR_UNAUTHORIZED        this peer is not the server
+				┖╴ERR_INVALID_PARAMETER   a participant this session no longer holds, or the
+				                          local server's own, which leaves through
+				                          session_leave instead
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="participant_players">
+			<return type="NetwEntity[]" />
 			<param index="0" name="peer" type="int" />
 			<description>
-				The scene identity [param peer]'s participant is seated in, or an invalid [RID] when it holds no seat.
+				Every player entity the session currently holds for [param peer]'s participant, in no promised order. The flat spelling of [member NetwParticipant.players].
 			</description>
 		</method>
 		<method name="peer_ack" qualifiers="const">
@@ -1718,16 +1739,8 @@
 			<return type="void" />
 			<param index="0" name="peer" type="int" />
 			<description>
-				Drops everything this session holds for [param peer]. That is its buckets, its identity, the [ResolvedJoin] it was admitted on, and its participant row, clearing [member local_participant] when [param peer] is this peer's own.
+				Drops everything this session holds for [param peer]. That is its buckets, its identity, the membership it was admitted on, and its participant row, clearing [member local_participant] when [param peer] is this peer's own.
 				The transport connection is left alone, so this is bookkeeping for a peer already gone rather than a way to remove one. [method disconnect_peer] is what closes a connection.
-			</description>
-		</method>
-		<method name="peer_get_accepted_join" qualifiers="const">
-			<return type="ResolvedJoin" />
-			<param index="0" name="peer" type="int" />
-			<description>
-				The [ResolvedJoin] this session admitted [param peer] on, or [code]null[/code] before its join lands.
-				This is what separates a connected peer from a joined one. [method peer_get_participant] returns [code]null[/code] for exactly the peers this returns [code]null[/code] for, so a peer that has connected and not joined is watching rather than playing.
 			</description>
 		</method>
 		<method name="peer_get_bucket">
@@ -2254,48 +2267,32 @@
 				[b]Server Only.[/b]
 			</description>
 		</method>
-		<method name="scene_add_player">
-			<return type="int" enum="Error" />
-			<param index="0" name="scene" type="RID" />
-			<param index="1" name="player" type="RID" />
-			<description>
-				Seats [param player] at [param scene]. The server admits the player and parents its node under the scene's content root, so the node is where a visitor would look for it. The server then watches that node so the seat survives a re-admit, and flushes interest in the same act.
-				Rejects [constant @GlobalScope.ERR_UNAVAILABLE] when [param player] holds no node or [param scene] holds no content root to seat it under.
-				[codeblock lang=text]
-				Error
-				┠╴OK                     the seat was granted
-				┠╴ERR_UNAVAILABLE        player holds no node, scene holds no content root, or the admission did not take
-				┠╴ERR_DOES_NOT_EXIST     scene holds no live node to admit into
-				┖╴ERR_INVALID_PARAMETER  player's peer id is 0
-				[/codeblock]
-				[b]Server Only.[/b]
-			</description>
-		</method>
-		<method name="scene_admit">
+		<method name="scene_watch">
 			<return type="int" enum="Error" />
 			<param index="0" name="scene" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Admits [param peer] to [param scene], returning [constant @GlobalScope.OK] only once the admission has taken.
-				This is the guarded admission. It rejects peer zero, rejects a scene whose node is gone, and re-reads [method scene_admits] afterwards rather than trusting the write, so a caller is told what actually happened instead of what was attempted.
-				A successful admission calls [method interest_flush_now] in the same act, so the peer just admitted can see the scene without waiting for anything else to drive a flush. A rejected admission changes nothing.
+				Replicates [param scene] to [param peer] for as long as the watch stands, returning [constant @GlobalScope.OK] only once the peer actually reaches it. The flat spelling of [method NetwSceneHandle.watch].
+				This is the guarded write. It rejects peer zero, rejects a scene whose node is gone, and re-reads [method scene_subscribes] afterwards rather than trusting the write, so a caller is told what actually happened instead of what was attempted.
+				A successful watch calls [method interest_flush_now] in the same act, so the peer can see the scene without waiting for anything else to drive a flush. A rejected one changes nothing.
 				[codeblock lang=text]
 				Error
-				┠╴OK                     the peer was admitted
+				┠╴OK                     the peer reaches the scene
 				┠╴ERR_UNAUTHORIZED       called off server authority
 				┠╴ERR_INVALID_PARAMETER  peer is 0
 				┠╴ERR_DOES_NOT_EXIST     scene names no live node
-				┖╴ERR_UNAVAILABLE        the admission did not take
+				┖╴ERR_UNAVAILABLE        the write did not take
 				[/codeblock]
 				[b]Server Only.[/b]
 			</description>
 		</method>
-		<method name="scene_admits" qualifiers="const">
+		<method name="scene_subscribes" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="scene" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Whether [param scene] currently admits [param peer], read from the scene's [NetwInterestLayer] rather than from a list of its own, so an admission the layer revoked is not still reported here.
+				Whether [param scene] currently replicates to [param peer], read from the scene's [NetwInterestLayer] rather than from a list of its own, so a subscription the layer revoked is not still reported here.
+				True for any reason at all, a body of theirs residing in the scene included, which is what makes it the delivery question rather than the watch question.
 			</description>
 		</method>
 		<method name="scene_change_to_file">
@@ -2327,7 +2324,7 @@
 			<param index="0" name="recipe" type="Variant" />
 			<param index="1" name="isolation" type="int" enum="NetwMultiplayer.SceneIsolation" default="0" />
 			<description>
-				Spawns a scene from [param recipe] and declares it, returning the scene entity's [RID] or an invalid one when the spawn produced nothing. A [code]null[/code] [param recipe] builds an empty scene, which is somewhere to admit players and nothing more.
+				Spawns a scene from [param recipe] and declares it, returning the scene entity's [RID] or an invalid one when the spawn produced nothing. A [code]null[/code] [param recipe] builds an empty scene, which is somewhere to put players and nothing more.
 				[param isolation] declares whether this one scene hosts its own world, as a [enum SceneIsolation]. It rides the spawn, so two scenes in one session may differ.
 				[b]Server Only.[/b]
 			</description>
@@ -2336,7 +2333,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Makes [param entity] a scene, so it can admit players and hold the nodes that belong to it.
+				Makes [param entity] a scene, so it can hold the nodes that belong to it and replicate them to the participants it reaches.
 				Server authority may declare anything, and any peer may declare an entity whose route it already holds, because the server admitted that route. A client repeating a scene the server declared is following rather than inventing. A peer with neither authority nor a route returns [constant @GlobalScope.ERR_UNAUTHORIZED], because it would be inventing a scene the session never declared.
 				Declare this before the entity is armed. A bound entity returns [constant @GlobalScope.ERR_UNCONFIGURED]. If the entity has no record yet, the session stores the declaration until [method entity_bind_node] creates the record.
 				[codeblock]
@@ -2377,11 +2374,19 @@
 				Every live scene whose stem is [param stem], which is every instance of one level. The [method scene_list] reading narrowed to one stem's instances.
 			</description>
 		</method>
-		<method name="scene_get_current">
+		<method name="scene_present">
+			<return type="int" enum="Error" />
+			<param index="0" name="scene" type="RID" />
+			<description>
+				Names the scene this peer looks at, and an invalid [RID] names none. The flat spelling of [method NetwSessionHandle.present], where the guide lives.
+				Refuses a handle this session holds no live scene for with [constant @GlobalScope.ERR_UNAVAILABLE], leaving the standing choice alone, because a presentation that fell back to a scene the caller did not name would draw the wrong world silently.
+			</description>
+		</method>
+		<method name="scene_presented" qualifiers="const">
 			<return type="RID" />
 			<description>
-				The scene this peer presents while it still resolves to a mounted container, or an invalid [RID] once it does not, which is the session's one result to the question. A dedicated server presents nothing and always returns invalid.
-				The presentation is recomputed from what the session seats this peer in rather than written by whatever changed, so a scene arriving, leaving or re-seating this peer all settle here, and the mounted check means a caller is never handed a detached scene to pass onward.
+				The scene [method scene_present] last named, or an invalid [RID] while this peer presents none, which is the session's one answer to the question.
+				Nothing computes it. A session presents nothing until a game names a scene, and a scene leaving the live book clears the choice rather than replacing it.
 			</description>
 		</method>
 		<method name="scene_get_entities">
@@ -2405,11 +2410,11 @@
 				The [NetwInterestLayer] that decides who sees [param scene]. A layer the session has declared is created on the spot if it is not live yet, so a caller adding viewers to a scene's layer never needs a second call. A layer the session never declared returns an invalid [RID] rather than being invented.
 			</description>
 		</method>
-		<method name="scene_get_local_player">
-			<return type="RID" />
+		<method name="scene_get_local_players">
+			<return type="NetwEntity[]" />
 			<param index="0" name="scene" type="RID" />
 			<description>
-				This peer's own player entity while it is seated at [param scene], or an invalid [RID] when this peer presents some other scene or presents none. The per-scene slice of [member local_player].
+				Every player entity inside [param scene] that this peer represents, which is empty for a peer with no body there. The flat spelling of [member NetwSceneHandle.local_players].
 			</description>
 		</method>
 		<method name="scene_get_node" qualifiers="const">
@@ -2427,11 +2432,11 @@
 				Reads one [enum SceneParam] knob off [param scene]. A scene the session never bound returns [code]null[/code] rather than rejecting, and a knob that holds no value returns [code]null[/code] too, because an absent knob and an unset one are the same question here.
 			</description>
 		</method>
-		<method name="scene_get_participants">
+		<method name="scene_get_viewers">
 			<return type="NetwParticipant[]" />
 			<param index="0" name="scene" type="RID" />
 			<description>
-				The participants seated at [param scene], read from the scene's interest layer. The roster row behind each seated peer, rather than the peer id itself.
+				The participants [param scene] currently replicates to, read from the scene's interest layer. The roster row behind each of those peers, rather than the peer id itself.
 			</description>
 		</method>
 		<method name="scene_get_players">
@@ -2458,7 +2463,6 @@
 			<return type="NetwPromise" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="destination" type="RID" />
-			<param index="2" name="opts" type="NetwReparentOpts" default="null" />
 			<description>
 				Moves [param entity] under [param destination]'s container, returning the [NetwPromise] the settle carries. The mover is reparented on every peer by the same carry rules, so the promise resolves [constant @GlobalScope.OK] only once the entity stands under its new scene everywhere it exists.
 				A carry masks the mover off the physics server before the parent swap and restores it after, spending two [signal SceneTree.physics_frame]s on each side. The physics server drops a body from an [Area2D]'s or [Area3D]'s overlap tracking only on a step, and a body still tracked re-emits [signal Area2D.body_entered] out of its own [signal Node.tree_entered] as the swap remounts it. That signal fires while the body is in the tree and its children are not, so a handler reading a child of the body sees an orphan. The window is what stops it, and a mover with no [member CollisionObject2D.collision_layer] or [member CollisionObject2D.collision_mask] skips the window because it has nothing to evict.
@@ -2490,22 +2494,19 @@
 		<method name="scene_participant_viewport">
 			<return type="SubViewport" />
 			<description>
-				The [SubViewport] holding the world this peer's participant sees, or [code]null[/code] when it sees none. Only a listen host resolves one, because a client's world is mounted under its own window and a dedicated server renders nothing.
-				It is resolved in this order, and the first match wins.
-				- the scene the local player is seated in, so a host standing in a world draws the world it stands in
-				- [method scene_get_current], so a host between players draws the scene it was admitted to rather than an arbitrary live one
-				- the first live scene that owns its world and whose level still runs, which is what a spectator sees
-				A scene declaring [constant SCENE_ISOLATION_OWN_WORLD] is the only kind mounted in a [SubViewport], so a scene sharing the session's world is passed over at every step. [signal participant_viewport_changed] announces a turn-over, and [HostSceneView] is the stock consumer of both.
+				The [SubViewport] holding the world this peer draws, or [code]null[/code] when it draws none. It is the world of [method scene_presented] and of nothing else, so a host presenting nothing answers [code]null[/code] however many live worlds stand beside it.
+				Only a listen host resolves one, because a client's world is mounted under its own window and a dedicated server renders nothing. A scene declaring [constant SCENE_ISOLATION_OWN_WORLD] is the only kind mounted in a [SubViewport], so presenting a scene that shares the session's world also answers [code]null[/code] rather than offering an isolated one instead.
+				[signal participant_viewport_changed] announces a turn-over, and [HostSceneView] is the stock consumer of both.
 			</description>
 		</method>
-		<method name="scene_release">
+		<method name="scene_unwatch">
 			<return type="bool" />
 			<param index="0" name="scene" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Removes [param peer] from [param scene], returning whether anything was done.
-				The peer is told before the seat is taken away, while it still holds the seat that names what it is losing. A client learns its membership from the scene entity, so a peer released the other way round would keep presenting a scene it no longer belongs to.
-				A successful release calls [method interest_flush_now], as [method scene_admit] does, so the peer stops receiving the scene in the same act.
+				Withdraws the watch [method scene_watch] placed on [param scene] for [param peer], returning whether the call reached a live scene at all.
+				A watch is one reason among several, so this evicts nobody whose body still stands in the scene. The release notice is sent only when the watch was the last reason, and it goes out while the peer still subscribes, so a client is told which scene it is losing before it loses it.
+				A successful call reaches [method interest_flush_now], as [method scene_watch] does, so the peer stops receiving the scene in the same act.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -2525,14 +2526,6 @@
 				Asks server authority to move the local player to the scene file at [param path]. A label cannot be requested, because [method Netw.scene] is what resolves a live scene by label and a change names a path.
 				The promise rejects with [constant @GlobalScope.ERR_UNAUTHORIZED] when policy rejects, [constant @GlobalScope.ERR_SKIP] when a newer request supersedes it, and [constant @GlobalScope.ERR_TIMEOUT] when authority never returns within ten seconds.
 				[b]Player request.[/b]
-			</description>
-		</method>
-		<method name="scene_set_carry_move">
-			<return type="void" />
-			<param index="0" name="carry" type="Callable" />
-			<description>
-				Replaces the physics-guarded carry that [method scene_move] runs when it moves an entity between scenes. [param carry] receives [code](mover, destination_node, opts, promise)[/code] and owns everything from the guard to settling [code]promise[/code], which is why it is handed the promise rather than returning a value.
-				With none installed the session carries the move itself. Install one to guard a body this session cannot know how to suppress, or to watch what a move is handed.
 			</description>
 		</method>
 		<method name="scene_set_host_view_factory" qualifiers="static">
@@ -2945,13 +2938,6 @@
 			<description>
 				The display name of [param role], with the [enum Role] constants' [code]ROLE_[/code] prefix dropped, so [constant ROLE_LISTEN_SERVER] returns [code]"LISTEN_SERVER"[/code]. A role outside [enum Role] returns the empty string rather than a made-up name, because a label is only ever shown and must not invent a role that does not exist.
 				This is the spelling every debug surface reports a role under, so a reader comparing a snapshot, a session event and the editor panel sees one vocabulary.
-			</description>
-		</method>
-		<method name="session_set_join_resolver">
-			<return type="void" />
-			<param index="0" name="resolver" type="Callable" />
-			<description>
-				Sets the join resolver. It is called as [code]resolver(username, args, sender)[/code] and returns a [ResolvedJoin] to admit or [code]null[/code] to reject. Without a resolver, the session accepts the claimed username.
 			</description>
 		</method>
 		<method name="session_set_role">
@@ -3470,8 +3456,8 @@
 			The value lives on the wrapped [MultiplayerAPI] rather than here, so a session wrapping nothing reads zero and a write goes nowhere. Whatever runs the authentication is what counts the deadline, and a second copy here could disagree with it.
 		</member>
 		<member name="connected_participants" type="NetwParticipant[]" setter="" getter="participant_all" default="[]">
-			Every connected peer as a roster row, joined or not, in peer order.
-			A row exists from the moment a peer connects. Its join adds a [ResolvedJoin] to that row, which is what moves it into [member participants]. This is the whole roster, including peers that have connected and not yet joined.
+			Every membership this session holds a row for, in peer order.
+			A row exists from the acceptance that minted it, so this and [member participants] name the same players. They differ only while a membership is being torn down, when a row this still reports has already left [member participants].
 		</member>
 		<member name="inner" type="SceneMultiplayer" setter="session_set_inner" getter="session_get_inner">
 			The wrapped [SceneMultiplayer]. It owns the [MultiplayerPeer], the connection lifecycle, [method SceneMultiplayer.send_bytes], and the auth protocol, and this session wraps it rather than reimplementing peer transport.
@@ -3494,9 +3480,8 @@
 		<member name="local_participant" type="NetwParticipant" setter="" getter="participant_local">
 			The accepted [NetwParticipant] for this peer, or [code]null[/code] before its join is accepted.
 		</member>
-		<member name="local_player" type="NetwEntity" setter="" getter="scene_player_local">
-			The entity this peer is represented by, or [code]null[/code] when none represents it.
-			The session holds this entity directly rather than looking it up by route, because retiring an entity has to ask whether that entity is this peer's own, and asking by route returns yes for every entity that has one. A scene change spawns the replacement before retiring the original, so a route-keyed test would drop a local player that had already moved on.
+		<member name="presented_scene" type="RID" setter="" getter="scene_presented">
+			The scene this peer looks at, or an invalid [RID] while it looks at none. [method scene_present] is the verb that names it and [method NetwSessionHandle.present] is where its guide lives.
 		</member>
 		<member name="max_delta_packet_size" type="int" setter="set_max_delta_packet_size" getter="get_max_delta_packet_size" default="65535">
 			The largest packet [member inner] builds for its delta-compressed state synchronization, carrying [SceneMultiplayer]'s spelling for the reason [member allow_object_decoding] gives.
@@ -3508,7 +3493,7 @@
 		</member>
 		<member name="participants" type="NetwParticipant[]" setter="" getter="participant_joined_all" default="[]">
 			Every accepted participant known by this peer.
-			A participant appears here once its peer has an accepted [ResolvedJoin], so a connected peer that has not joined yet is absent. [member connected_participants] is the roster row that exists from the moment a peer connects.
+			A participant appears here once the session has accepted its membership, so a connected peer that has not joined yet is absent.
 		</member>
 		<member name="players" type="NetwEntity[]" setter="" getter="scene_players_all" default="[]">
 			Every player entity across every live scene.
@@ -3694,6 +3679,13 @@
 				Emitted for every peer the session admits, this one included. A peer with no roster row has not been admitted and is never announced.
 			</description>
 		</signal>
+		<signal name="participant_left">
+			<param index="0" name="participant" type="Object" />
+			<description>
+				Emitted when a membership ends, whether its peer disconnected or [method participant_kick] ended it. A peer that connected and never joined held no membership and is never announced.
+				The membership is released before this is emitted, so [member NetwParticipant.is_active] reads [code]false[/code] inside the handler and every participant-taking verb refuses them. A game erasing its own roster row here is reading the last honest handle for that player.
+			</description>
+		</signal>
 		<signal name="participant_local_joined">
 			<param index="0" name="participant" type="Object" />
 			<description>
@@ -3775,18 +3767,12 @@
 				Emitted for the scene a newly live route belongs to. The handle is the scene's own, so a node coming live inside a scene announces the scene and not itself.
 			</description>
 		</signal>
-		<signal name="scene_local_changed">
+		<signal name="scene_presentation_changed">
 			<param index="0" name="from" type="Object" />
 			<param index="1" name="to" type="Object" />
 			<description>
-				Republishes the scene change of the participant this session decided is the local peer, bound when that row joins and released when the roster drops it. Another peer changing scene is not this session changing scene.
-				A participant raises its own [code]scene_changed[/code] when the session takes or empties its seat while admitting or releasing it. A seat never moves on its own, so a game calls [method scene_admit] and [method scene_release] and the seat follows.
-			</description>
-		</signal>
-		<signal name="scene_local_player_changed">
-			<param index="0" name="player" type="Object" />
-			<description>
-				Emitted when the entity representing this peer changes, including to [code]null[/code] when the route carrying it retires. Decided where a route goes live, because that is the only moment the result can change, and read off the entity's own record rather than through the wrapper. A session with no transport represents nobody, which an offline session returning unique id 1 would otherwise look like.
+				Emitted when [method scene_present] changes what this peer looks at, carrying the [NetwSceneHandle] left and the one taken, either of which may be [code]null[/code]. Relayed to a game as [signal NetwSessionHandle.presentation_changed].
+				Spent on a change and never on a repeat. A scene leaving the live book clears the choice and announces that, naming [code]null[/code] as the destination rather than choosing another scene.
 			</description>
 		</signal>
 		<signal name="scene_spawned">
@@ -4262,8 +4248,8 @@
 		<constant name="SCENE_PARAM_PROCESSING" value="2" enum="SceneParam">
 			[bool] gating whether the scene's subtree processes. Freeze and resume.
 		</constant>
-		<constant name="SCENE_EVENT_PARTICIPANT" value="0" enum="SceneEvent">
-			A participant was admitted or released, and [code]subject[/code] is its peer id. Every [method scene_observe] callback takes [code](present: bool, subject: Variant)[/code], so one registration hears both directions and a caller that only wants arrivals ignores the rest.
+		<constant name="SCENE_EVENT_VIEWER" value="0" enum="SceneEvent">
+			The scene started or stopped replicating to a participant, and [code]subject[/code] is its peer id. Every [method scene_observe] callback takes [code](present: bool, subject: Variant)[/code], so one registration hears both directions and a caller that only wants arrivals ignores the rest.
 		</constant>
 		<constant name="SCENE_EVENT_PLAYER" value="1" enum="SceneEvent">
 			A player entity entered or left, and [code]subject[/code] is its entity RID.

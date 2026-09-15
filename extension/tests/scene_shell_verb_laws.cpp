@@ -86,14 +86,14 @@ int64_t declared_channel_id(const char *p_name) {
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SV1 the boundary write reports its own "
-    "participant edge, once per change and never for a repeat, so every path "
-    "that admits somebody announces it without each caller remembering to"
+    "viewer edge, once per change and never for a repeat, so every path "
+    "that seats somebody announces it without each caller remembering to"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog seen;
     core->set_interest_flush(seen.callable("flush"));
-    core->set_scene_participant_edge(seen.callable("edge"));
+    core->set_scene_viewer_edge(seen.callable("edge"));
     const DeclaredScene arena = declare_scene(core, "Arena");
 
     REQUIRE(core->scene_admit_peer(arena.handle, 7));
@@ -152,8 +152,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SV3 the release is told to a peer whose seat "
-    "names the scene and to nobody else, and this peer is told through the "
+    "[Networked][Scene][Hosted] SV3 the release is told to a peer subscribed "
+    "to the scene and to nobody else, and this peer is told through the "
     "channel's own protocol handler rather than over the wire"
 ) {
     Ref<NetwMultiplayer> core;
@@ -177,19 +177,13 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(seen.count("released"), 0);
 
-    REQUIRE(core->participant_take_seat(
-        int64_t(core->get_unique_id()),
-        annex.handle
-    ));
+    REQUIRE(core->scene_admit_peer(annex.handle, core->get_unique_id()));
     CHECK_FALSE(
         core->scene_notify_released(arena.handle, core->get_unique_id())
     );
     NETW_CHECK_EQ(seen.count("released"), 0);
 
-    REQUIRE(core->participant_take_seat(
-        int64_t(core->get_unique_id()),
-        arena.handle
-    ));
+    REQUIRE(core->scene_admit_peer(arena.handle, core->get_unique_id()));
     CHECK(core->scene_notify_released(arena.handle, core->get_unique_id()));
     NETW_CHECK_EQ(seen.count("released"), 1);
     const Array told = seen.args("released", 0);
@@ -221,7 +215,7 @@ TEST_CASE(
 
     const RID bodiless = core->get_liveness_core()->entity_create();
     const Ref<NetwPromise> unheld
-        = core->scene_move_entity(bodiless, arena.handle, Variant());
+        = core->scene_move_entity(bodiless, arena.handle);
     REQUIRE(unheld.is_valid());
     CHECK(unheld->get_is_failed());
     NETW_CHECK_EQ(unheld->get_code(), int(ERR_UNAVAILABLE));
@@ -230,22 +224,22 @@ TEST_CASE(
     core->scene_set_carry_move(seen.callable("carry"));
 
     const Ref<NetwPromise> nowhere
-        = core->scene_move_entity(pawn.handle, RID(), Variant());
+        = core->scene_move_entity(pawn.handle, RID());
     REQUIRE(nowhere.is_valid());
     CHECK(nowhere->get_is_failed());
     NETW_CHECK_EQ(nowhere->get_code(), int(ERR_UNAVAILABLE));
     NETW_CHECK_EQ(seen.count("carry"), 0);
 
     const Ref<NetwPromise> moving
-        = core->scene_move_entity(pawn.handle, arena.handle, Variant());
+        = core->scene_move_entity(pawn.handle, arena.handle);
     REQUIRE(moving.is_valid());
     CHECK_FALSE(moving->get_is_settled());
     NETW_CHECK_EQ(seen.count("carry"), 1);
     const Array handed = seen.args("carry", 0);
-    NETW_CHECK_EQ(int(handed.size()), 4);
+    NETW_CHECK_EQ(int(handed.size()), 3);
     CHECK(Object::cast_to<Object>(handed[0]) == pawn.wrapper.ptr());
     CHECK(Object::cast_to<Node>(handed[1]) == arena.owner);
-    CHECK(Object::cast_to<NetwPromise>(handed[3]) == moving.ptr());
+    CHECK(Object::cast_to<NetwPromise>(handed[2]) == moving.ptr());
 
     memdelete(root);
 }

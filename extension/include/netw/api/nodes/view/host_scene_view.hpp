@@ -12,14 +12,19 @@ class HostSceneView : public ParticipantView {
 
     godot::ObjectID session_id;
     bool suppressed = false;
+    bool announce_pending = false;
 
     NetwMultiplayer *session() const;
     void attach();
     void detach();
     void on_display_changed(godot::SubViewport *p_viewport);
-    void on_local_player_changed(const godot::Ref<NetwEntity> &p_player);
+    void on_roster_changed();
     void reannounce();
     void announce(godot::SubViewport *p_viewport);
+    void activate(
+        const godot::Ref<NetwEntity> &p_player,
+        bool p_adopts_camera
+    );
 
 protected:
     static void _bind_methods();

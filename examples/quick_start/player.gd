@@ -10,20 +10,32 @@ var pressed := {
 }
 
 @onready var teleport: TPComponent = %TPComponent
+@onready var entity := NetwEntity.of(self)
 
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	var entity := Netw.configure_entity(self)
-	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
-	entity.interpolation.visual_root = ^"Icon"
-	entity.prediction.consume_buffer_ticks = 0
+	var declared := Netw.configure_entity(self)
+	declared.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+	declared.interpolation.visual_root = ^"Icon"
+	declared.prediction.consume_buffer_ticks = 0
 
 	Netw.configure_persistence(self) \
 			.database(preload("res://examples/quick_start/quick_start_database.tres")) \
 			.table(&"players")
 	Netw.configure_property(self, &"position").persisted().on_spawn() \
 			.interpolate(NetwInterpolate.new().lerp())
+
+
+func _ready() -> void:
+	if not is_multiplayer_authority():
+		return
+	entity.reparented.connect(present_own_scene)
+	present_own_scene()
+
+
+func present_own_scene() -> void:
+	Netw.session(self).present(entity.scene)
 
 
 func _unhandled_input(event: InputEvent) -> void:

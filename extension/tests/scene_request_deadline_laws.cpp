@@ -30,7 +30,8 @@ TEST_CASE(
     const Ref<NetwPromise> promise = core->scene_request_open(
         String("res://arena.tscn"),
         NetwSceneCore::SCOPE_SESSION,
-        2.5
+        2.5,
+        RID()
     );
 
     CHECK(promise.is_valid());
@@ -53,13 +54,15 @@ TEST_CASE(
     const Ref<NetwPromise> stale = core->scene_request_open(
         String("res://arena.tscn"),
         NetwSceneCore::SCOPE_SESSION,
-        2.5
+        2.5,
+        RID()
     );
     const int stale_id = core->scene_request_armed_id();
     const Ref<NetwPromise> live = core->scene_request_open(
         String("res://annex.tscn"),
         NetwSceneCore::SCOPE_SESSION,
-        2.5
+        2.5,
+        RID()
     );
     const int live_id = core->scene_request_armed_id();
 
@@ -87,7 +90,8 @@ TEST_CASE(
     const Ref<NetwPromise> none = core->scene_request_open(
         String("res://arena.tscn"),
         NetwSceneCore::SCOPE_SESSION,
-        0.0
+        0.0,
+        RID()
     );
 
     CHECK(none.is_valid());
@@ -98,7 +102,8 @@ TEST_CASE(
     const Ref<NetwPromise> negative = core->scene_request_open(
         String("res://annex.tscn"),
         NetwSceneCore::SCOPE_SESSION,
-        -1.0
+        -1.0,
+        RID()
     );
 
     CHECK_FALSE(negative->get_is_settled());
@@ -116,7 +121,8 @@ TEST_CASE(
     const Ref<NetwPromise> promise = core->scene_request_open(
         String("res://arena.tscn"),
         NetwSceneCore::SCOPE_SESSION,
-        2.5
+        2.5,
+        RID()
     );
 
     CHECK(promise.is_valid());
@@ -135,7 +141,8 @@ TEST_CASE(
 
     const Ref<NetwPromise> bare = core->scene_request_send(
         String("res://annex.tscn"),
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
     const int bare_id = scenes->get_pending_request_id();
 
@@ -145,7 +152,8 @@ TEST_CASE(
     const Ref<NetwPromise> armed = core->scene_request_open(
         String("res://annex.tscn"),
         NetwSceneCore::SCOPE_SESSION,
-        2.5
+        2.5,
+        RID()
     );
 
     NETW_CHECK_EQ(bare->get_code(), ERR_SKIP);
@@ -170,7 +178,8 @@ TEST_CASE(
 
     const Ref<NetwPromise> promise = core->scene_request_send(
         String("res://arena.tscn"),
-        NetwSceneCore::SCOPE_SESSION
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
     );
 
     CHECK(promise.is_valid());

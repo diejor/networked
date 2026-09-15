@@ -19,7 +19,6 @@ class NetwPredictJudgement;
 class NetwPredictRecovery;
 class NetwPredictionEngine;
 class NetwPredictSlotEngine;
-class NetwReparentOpts;
 
 class NetwPredictionHandle : public godot::RefCounted {
     GDCLASS(NetwPredictionHandle, godot::RefCounted)

@@ -10,7 +10,6 @@ using godot::Ref;
 using godot::StringName;
 using netw::NetwControlRequest;
 using netw::NetwDespawnOpts;
-using netw::NetwReparentOpts;
 
 TEST_CASE(
     "[Networked][Entity][Hosted] O1 a fresh despawn record carries the "
@@ -39,17 +38,6 @@ TEST_CASE(
     NETW_CHECK_CLOSE(opts->linger_seconds, 1.0, 1e-9);
 
     CHECK(NetwDespawnOpts::create(StringName())->reason == StringName());
-}
-
-TEST_CASE(
-    "[Networked][Entity][Hosted] O3 a reparent option carries its reason"
-) {
-    Ref<NetwReparentOpts> opts;
-    opts.instantiate();
-
-    CHECK(opts->reason == StringName());
-    opts->set_reason(StringName("boarded"));
-    CHECK(opts->reason == StringName("boarded"));
 }
 
 TEST_CASE(

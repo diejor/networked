@@ -57,6 +57,8 @@ Methods
    :widths: auto
 
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`transport_set_browse_settings<class_NetwConnectHandle_method_transport_set_browse_settings>`\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary`\ )                                                                                       |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`cancel_peer_creation<class_NetwConnectHandle_method_cancel_peer_creation>`\ (\ ticket\: :godot:`RID`\ )                                                                                                                                                |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                          | :ref:`create_peer<class_NetwConnectHandle_method_create_peer>`\ (\ transport\: :godot:`Variant`, mode\: :godot:`int`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ ) |
@@ -194,6 +196,38 @@ Every row this session knows how to reach, as endpoint snapshots. Equivalent to 
 
 Method Descriptions
 -------------------
+
+.. _class_NetwConnectHandle_method_transport_set_browse_settings:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transport_set_browse_settings**\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwConnectHandle_method_transport_set_browse_settings>`
+
+Sets discovery settings for ``transport`` before
+
+\ :ref:`endpoint_refresh()<class_NetwConnectHandle_method_endpoint_refresh>`. Invalid settings return
+
+\ :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>`. After discovery
+
+starts, identical settings return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`\ 
+
+and changed settings return
+
+\ :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>`. Peer creation
+
+settings are independent. The WebRTC transport accepts the
+
+following settings.
+
+.. code:: text
+
+    Dictionary
+    ┠╴trackers             PackedStringArray  WebSocket tracker URLs
+    ┖╴signaling_namespace  String             namespace of listed rooms
+
+.. rst-class:: classref-item-separator
+
+----
 
 .. _class_NetwConnectHandle_method_cancel_peer_creation:
 

@@ -11,8 +11,9 @@
 #include "netw/api/join_config.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/quantize.hpp"
-#include "netw/api/resolved_join.hpp"
+#include "netw/session/frames.hpp"
 #include "netw/session_decl.hpp"
+#include "support/joined_peer.h"
 #include "support/declared_seams.h"
 #include "support/loopback_rig.h"
 #include "support/minted_script.h"
@@ -159,7 +160,8 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(client_scenes->scene_list().size()), 1);
     CHECK(client_scenes->scene_find(StringName("Arena")).is_valid());
-    CHECK(seated->get_current_scene().is_null());
+    CHECK(seated->get_players().is_empty());
+    CHECK_FALSE(client_scenes->scene_presented().is_valid());
 }
 
 TEST_CASE(
@@ -231,9 +233,9 @@ TEST_CASE(
         = rig.declare_entity(EntityDecl().named("Crate").on_route(72));
     const RID guard
         = rig.declare_entity(EntityDecl().named("Guard").on_route(73));
-    rig.seat(pawn, rig.entity_of(StringName("Arena")));
-    rig.seat(crate, rig.entity_of(StringName("Arena")));
-    rig.seat(guard, rig.entity_of(StringName("Annex")));
+    rig.place(pawn, rig.entity_of(StringName("Arena")));
+    rig.place(crate, rig.entity_of(StringName("Arena")));
+    rig.place(guard, rig.entity_of(StringName("Annex")));
 
     const Ref<netw::NetwEntity> seated_pawn
         = netw::NetwEntity::of(rig.node_of(pawn));
@@ -290,8 +292,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session] a join handler seats its synchronous answer before "
-    "the announcement and its suspended answer after the announcement"
+    "[Networked][Session] the membership announcement precedes the join "
+    "handler whether the handler answers synchronously or suspends, so a "
+    "participant_joined listener never observes a member the handler has "
+    "not yet seen"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -302,7 +306,6 @@ TEST_CASE(
     Node *arena_node = memnew(Node);
     NETW_CHECK_GT(core->entity_admit(arena), 0);
     NETW_CHECK_EQ(int(core->entity_bind_node(arena, arena_node)), int(OK));
-    CHECK(core->scene_of(core->entity_of(arena_node)) == arena);
     const Ref<Script> script
         = netw_test::script_from(netw_test::gdsrc::JOIN_HANDLERS);
     REQUIRE(script.is_valid());
@@ -314,13 +317,10 @@ TEST_CASE(
         announced.callable("joined")
     );
 
-    Ref<netw::ResolvedJoin> immediate;
-    immediate.instantiate();
-    immediate->set_peer_id(7);
-    immediate->set_username(StringName("now"));
-    Array immediate_args;
-    immediate_args.push_back(arena_node);
-    immediate->set_arg_values(immediate_args);
+    Array carried;
+    carried.push_back(arena_node);
+    const netw::session::AcceptFrame immediate
+        = netw_test::accepted_row(core.ptr(), 7, StringName("now"));
     core->session_set_join_override(
         Callable(handler.ptr(), StringName("immediate")),
         Array()
@@ -329,15 +329,14 @@ TEST_CASE(
     core->session_admit(immediate);
 
     NETW_CHECK_EQ(announced.count("joined"), 1);
-    CHECK(core->participant_seat(7) == arena);
+    NETW_CHECK_EQ(int(handler->get(StringName("calls"))), 0);
 
-    Ref<netw::ResolvedJoin> suspended;
-    suspended.instantiate();
-    suspended->set_peer_id(8);
-    suspended->set_username(StringName("later"));
-    Array suspended_args;
-    suspended_args.push_back(arena_node);
-    suspended->set_arg_values(suspended_args);
+    core->session_run_join_handler(immediate, carried);
+
+    NETW_CHECK_EQ(int(handler->get(StringName("calls"))), 1);
+
+    const netw::session::AcceptFrame suspended
+        = netw_test::accepted_row(core.ptr(), 8, StringName("later"));
     core->session_set_join_override(
         Callable(handler.ptr(), StringName("suspended")),
         Array()
@@ -346,12 +345,13 @@ TEST_CASE(
     core->session_admit(suspended);
 
     NETW_CHECK_EQ(announced.count("joined"), 2);
-    CHECK_FALSE(core->participant_seat(8).is_valid());
+    NETW_CHECK_EQ(int(handler->get(StringName("calls"))), 1);
+
+    core->session_run_join_handler(suspended, carried);
+
+    NETW_CHECK_EQ(int(handler->get(StringName("calls"))), 2);
 
     handler->emit_signal(StringName("released"), arena_node);
-
-    CHECK(core->participant_seat(8) == arena);
-    NETW_CHECK_EQ(int(handler->get(StringName("calls"))), 2);
 
     memdelete(arena_node);
 }
@@ -474,27 +474,26 @@ TEST_CASE(
         Array()
     );
 
-    Ref<netw::ResolvedJoin> bare;
-    bare.instantiate();
-    bare->set_peer_id(11);
-    bare->set_username(StringName("ada"));
+    const netw::session::AcceptFrame bare
+        = netw_test::accepted_row(core.ptr(), 11, StringName("ada"));
+    CHECK(core->session_preflight_join(bare, Array()));
     core->session_admit(bare);
+    core->session_run_join_handler(bare, Array());
 
     NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 1);
 
-    SUBCASE("a handler that declared one stays skipped when none arrived") {
+    SUBCASE("a handler that declared one refuses the join when none arrived") {
         core->session_set_join_override(
             Callable(handler.ptr(), StringName("seat_with")),
             Array()
         );
 
-        Ref<netw::ResolvedJoin> starved;
-        starved.instantiate();
-        starved->set_peer_id(12);
-        starved->set_username(StringName("grace"));
-        core->session_admit(starved);
+        const netw::session::AcceptFrame starved
+            = netw_test::accepted_row(core.ptr(), 12, StringName("grace"));
+        CHECK_FALSE(core->session_preflight_join(starved, Array()));
 
         NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 1);
+        CHECK_FALSE(core->participant_has(12));
     }
 
     core->embed_dispose();
@@ -528,29 +527,11 @@ Node *mounted_branch(const char *p_name) {
     return branch;
 }
 
-RID a_declared_scene(
-    const Ref<NetwMultiplayer> &p_api,
-    Node *p_parent,
-    const char *p_stem
-) {
-    const RID scene = p_api->entity_create();
-    REQUIRE(scene.is_valid());
-    NETW_CHECK_EQ(int(p_api->scene_declare(scene)), int(OK));
-    Node *level = memnew(Node);
-    level->set_name(StringName(p_stem));
-    p_parent->add_child(level);
-    NETW_CHECK_GT(int(p_api->entity_admit(scene)), 0);
-    NETW_CHECK_EQ(int(p_api->entity_bind_node(scene, level)), int(OK));
-    CHECK(p_api->scene_is_declared(scene));
-    return scene;
-}
-
 void admit_one(const Ref<NetwMultiplayer> &p_api, int p_peer) {
-    Ref<netw::ResolvedJoin> joining;
-    joining.instantiate();
-    joining->set_peer_id(p_peer);
-    joining->set_username(StringName("ada"));
+    const netw::session::AcceptFrame joining
+        = netw_test::accepted_row(p_api.ptr(), p_peer, StringName("ada"));
     p_api->session_admit(joining);
+    p_api->session_run_join_handler(joining, Array());
 }
 
 TEST_CASE(
@@ -689,17 +670,25 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][SceneTree] a session with no declared join handler resolves "
-    "the built-in one, which is what keeps an unconfigured game playable"
+    "[Networked][SceneTree] a session with no declared join handler accepts "
+    "the join and places nobody, which is what keeps an unconfigured game "
+    "playable"
 ) {
     Node *branch = mounted_branch("JoinScopeAbsent");
     const Ref<NetwMultiplayer> api = branch_session(branch);
 
     const NetwMultiplayer::JoinPlan plan = api->session_resolve_join();
     CHECK(plan.available);
-    CHECK(plan.handler.is_valid());
+    CHECK_FALSE(plan.handler.is_valid());
     CHECK_FALSE(plan.declared);
     CHECK(plan.quantizers.is_empty());
+
+    admit_one(api, 51);
+
+    CHECK(api->participant_has(51));
+    CHECK(api->participant_is_active(51, api->participant_incarnation(51)));
+    CHECK(api->participant_players(51).is_empty());
+    CHECK(api->scene_players_all().is_empty());
 
     api->embed_dispose();
     release_branch(branch);
@@ -819,51 +808,12 @@ TEST_CASE(
 
     const NetwMultiplayer::JoinPlan plan = api->session_resolve_join();
     CHECK(plan.available);
-    CHECK(plan.handler.is_valid());
+    CHECK_FALSE(plan.handler.is_valid());
     CHECK_FALSE(plan.declared);
 
     const Callable opaque = holder->call(StringName("opaque"));
     CHECK(netw::Netw::configure_join(holder, opaque).is_valid());
     CHECK(api->session_resolve_join().handler == opaque);
-
-    api->embed_dispose();
-    release_branch(branch);
-}
-
-TEST_CASE(
-    "[Networked][SceneTree] a join handler that answers a scene admits the "
-    "player to it as well as seating them, because a seat alone leaves them "
-    "holding a scene they are not a viewer of, so its entities never reach "
-    "them and its roster never learns they arrived"
-) {
-    Node *branch = mounted_branch("JoinSeats");
-    const Ref<NetwMultiplayer> api = branch_session(branch);
-    const RID arena = a_declared_scene(api, branch, "Arena");
-    const StringName layer = api->scene_layer_id(arena);
-    REQUIRE(!layer.is_empty());
-
-    const Ref<Script> shape = shape_of(
-        "extends RefCounted\n"
-        "var destination\n"
-        "func seat(_rj):\n"
-        "\treturn destination\n"
-    );
-    REQUIRE(shape.is_valid());
-    const Ref<RefCounted> handler = shape->call("new");
-    REQUIRE(handler.is_valid());
-    handler->set(StringName("destination"), api->scene_handle_of(arena));
-    api->session_set_join_override(
-        Callable(handler.ptr(), StringName("seat")),
-        Array()
-    );
-
-    CHECK_FALSE(api->interest_plane().layer_has_viewer(layer, 31));
-
-    admit_one(api, 31);
-
-    CHECK(api->participant_seat(31) == arena);
-    CHECK(api->interest_plane().layer_has_viewer(layer, 31));
-    NETW_CHECK_EQ(int(api->scene_get_participants(arena).size()), 1);
 
     api->embed_dispose();
     release_branch(branch);

@@ -6,13 +6,12 @@
 #endif
 
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/resolved_join.hpp"
+#include "support/joined_peer.h"
 
 namespace TestNetwPeerBucket {
 
 using namespace godot;
 using netw::NetwMultiplayer;
-using netw::ResolvedJoin;
 
 Ref<NetwMultiplayer> make_session() {
     Ref<NetwMultiplayer> session;
@@ -21,11 +20,11 @@ Ref<NetwMultiplayer> make_session() {
 }
 
 void admit(const Ref<NetwMultiplayer> &p_session, int64_t p_peer) {
-    Ref<ResolvedJoin> join;
-    join.instantiate();
-    join->set_peer_id(p_peer);
-    join->set_username(StringName(String("peer") + String::num_int64(p_peer)));
-    p_session->session_remember_join(join);
+    netw_test::seated_peer(
+        p_session.ptr(),
+        p_peer,
+        StringName(String("peer") + String::num_int64(p_peer))
+    );
 }
 
 bool same_row(const Ref<RefCounted> &p_a, const Ref<RefCounted> &p_b) {

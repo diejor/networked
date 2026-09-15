@@ -87,7 +87,7 @@ TEST_CASE(
     client->session_set_role(NetwMultiplayer::ROLE_CLIENT);
 
     const Ref<NetwPromise> answered
-        = client->scene_move(RID(), RID(), Ref<netw::NetwReparentOpts>());
+        = client->scene_move(RID(), RID());
     CHECK(answered.is_valid());
     CHECK(answered->get_is_failed());
     NETW_CHECK_EQ(answered->get_code(), ERR_UNAUTHORIZED);

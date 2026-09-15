@@ -53,8 +53,12 @@ Gdscript
     class_addpopup
     class_connectbrowser
     class_connectbrowserrow
+    class_connectenetconfig
     class_connectfieldlist
+    class_connecticeserverconfig
     class_connectingpopup
+    class_connecttransportconfig
+    class_connectwebrtcconfig
     class_detailitem
     class_hostpopup
     class_joindirectpopup
@@ -105,7 +109,6 @@ Other classes
     class_netwcontrolrequest
     class_netwdatabase
     class_netwdatabasebackend
-    class_netwdefaultjoin
     class_netwdespawnconfig
     class_netwdespawnopts
     class_netwdisplayhandle
@@ -148,7 +151,6 @@ Other classes
     class_netwquantizetransform3d
     class_netwrecord
     class_netwrecordtable
-    class_netwreparentopts
     class_netwringbuffer
     class_netwsceneconfig
     class_netwscenehandle
@@ -165,9 +167,7 @@ Other classes
     class_participantview
     class_participantviewport
     class_participantwindow
-    class_resolvedjoin
     class_serde
-    class_spawnslot
     class_warmpolicy
     class_warmrequest
 

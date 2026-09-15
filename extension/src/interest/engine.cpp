@@ -317,6 +317,21 @@ void Engine::mark_layer_members_dirty(const StringName &id) {
     for (uint32_t index = 0; index < members.size(); ++index) {
         mark_entity_tree_dirty(members[index]);
     }
+    for (const KeyValue<int64_t, StringName> &root : scene_roots) {
+        if (root.value != id) {
+            continue;
+        }
+        int64_t above = entities.has(root.key)
+            ? entities.find(root.key)->value.parent
+            : 0;
+        for (uint32_t guard = 0; guard <= entities.size() && above != 0;
+             ++guard) {
+            dirty_entities.insert(above);
+            const HashMap<int64_t, Record>::ConstIterator held
+                = entities.find(above);
+            above = held != entities.end() ? held->value.parent : 0;
+        }
+    }
 }
 
 void Engine::mark_entity_tree_dirty(int64_t root) {
@@ -692,6 +707,69 @@ bool Engine::set_scene_membership(int64_t key, const StringName &id) {
     }
     scene_memberships.insert(key, id);
     return true;
+}
+
+bool Engine::set_scene_root(int64_t key, const StringName &id) {
+    const HashMap<int64_t, StringName>::Iterator found = scene_roots.find(key);
+    if (id.is_empty()) {
+        if (!found) {
+            return false;
+        }
+        scene_roots.remove(found);
+        mark_entity_tree_dirty(key);
+        return true;
+    }
+    if (found) {
+        if (found->value == id) {
+            return false;
+        }
+        found->value = id;
+        mark_entity_tree_dirty(key);
+        return true;
+    }
+    scene_roots.insert(key, id);
+    mark_entity_tree_dirty(key);
+    return true;
+}
+
+StringName Engine::scene_root_layer(int64_t key) const {
+    const HashMap<int64_t, StringName>::ConstIterator found
+        = scene_roots.find(key);
+    return found ? found->value : StringName();
+}
+
+bool Engine::descends_from(int64_t key, int64_t ancestor) const {
+    int64_t at = key;
+    for (uint32_t guard = 0; guard <= entities.size(); ++guard) {
+        const HashMap<int64_t, Record>::ConstIterator found = entities.find(at);
+        if (found == entities.end() || found->value.parent == 0) {
+            return false;
+        }
+        at = found->value.parent;
+        if (at == ancestor) {
+            return true;
+        }
+    }
+    return false;
+}
+
+PackedInt64Array Engine::nested_scene_residency(
+    int64_t key,
+    const HashMap<StringName, PackedInt64Array> &rows_by_layer
+) const {
+    PackedInt64Array grant;
+    for (const KeyValue<int64_t, StringName> &row : scene_roots) {
+        if (row.key == key || !descends_from(row.key, key)) {
+            continue;
+        }
+        const HashMap<StringName, PackedInt64Array>::ConstIterator found
+            = rows_by_layer.find(row.value);
+        if (found == rows_by_layer.end()) {
+            continue;
+        }
+        grant = BitSet::union_of(grant, found->value);
+    }
+    return grant;
 }
 
 int64_t Engine::transitions_total() const {
@@ -1131,6 +1209,10 @@ PackedInt64Array Engine::compute_entity_row(
     }
     if (!record.intent_all) {
         grant = BitSet::intersect(grant, record.intent);
+    }
+    if (scene_roots.has(key)) {
+        grant
+            = BitSet::union_of(grant, nested_scene_residency(key, rows_by_layer));
     }
     if (record.parent != 0) {
         const HashMap<int64_t, PackedInt64Array>::ConstIterator pending

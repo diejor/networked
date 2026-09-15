@@ -716,85 +716,6 @@ TEST_CASE("[Networked][Multiplayer][Hosted] watching an unarmed key refuses") {
     );
 }
 
-static Ref<netw::NetwParticipant> a_seated_peer(
-    const Ref<NetwMultiplayer> &p_core,
-    int64_t p_peer
-) {
-    Ref<netw::NetwParticipant> row;
-    row.instantiate();
-    p_core->participant_adopt(p_peer, row);
-    return row;
-}
-
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] P6 a seat answers as an identity: "
-    "re-seating where a peer already sits announces the change exactly once, "
-    "and a peer holding no row has no seat to take"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    const RID scene = core->get_liveness_core()->entity_create();
-    a_seated_peer(core, 7);
-
-    NETW_CHECK_EQ(core->participant_seat(7).is_valid(), false);
-    NETW_CHECK_EQ(core->participant_take_seat(7, scene), true);
-    NETW_CHECK_EQ(core->participant_seat(7) == scene, true);
-
-    NETW_CHECK_EQ(core->participant_take_seat(7, scene), false);
-
-    NETW_CHECK_EQ(core->participant_take_seat(9, scene), false);
-    NETW_CHECK_EQ(core->participant_seat(9).is_valid(), false);
-}
-
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] P7 a move reassigns a peer's seat "
-    "before the scene it left can release it, so a release clears only its "
-    "own seat"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    const RID left = core->get_liveness_core()->entity_create();
-    const RID arrived = core->get_liveness_core()->entity_create();
-    a_seated_peer(core, 7);
-    core->participant_take_seat(7, left);
-
-    core->participant_take_seat(7, arrived);
-
-    NETW_CHECK_EQ(core->participant_leave_seat(7, left), false);
-    NETW_CHECK_EQ(core->participant_seat(7) == arrived, true);
-
-    NETW_CHECK_EQ(core->participant_leave_seat(7, arrived), true);
-    NETW_CHECK_EQ(core->participant_seat(7).is_valid(), false);
-    NETW_CHECK_EQ(core->participant_leave_seat(7, arrived), false);
-}
-
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] P8 the seat rides the row, so a "
-    "forgotten peer leaves no seat and a new peer at the same id inherits "
-    "nothing"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    const RID scene = core->get_liveness_core()->entity_create();
-    a_seated_peer(core, 7);
-    a_seated_peer(core, 3);
-    core->participant_take_seat(7, scene);
-    core->participant_take_seat(3, scene);
-
-    NETW_CHECK_EQ(core->participant_seated_in(scene).size(), 2);
-    NETW_CHECK_EQ(core->participant_seated_in(scene)[0], 3);
-    NETW_CHECK_EQ(core->participant_seated_in(scene)[1], 7);
-
-    core->participant_forget(7);
-
-    NETW_CHECK_EQ(core->participant_seat(7).is_valid(), false);
-    a_seated_peer(core, 7);
-    NETW_CHECK_EQ(core->participant_seat(7).is_valid(), false);
-    NETW_CHECK_EQ(core->participant_seated_in(scene).size(), 1);
-
-    NETW_CHECK_EQ(core->participant_seated_in(RID()).size(), 0);
-}
-
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] the send gate refuses an entity that is "
     "not live, whoever is asking, and the server is exempt from interest but "
@@ -1418,7 +1339,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] a session wires its own scene machine, "
-    "so the participant and reclaim edges reach it with nothing installed"
+    "so the reclaim edge reaches it with nothing installed and takes the "
+    "presentation down with the session that held it"
 ) {
     Ref<NetwMultiplayer> session;
     session.instantiate();
@@ -1427,15 +1349,11 @@ TEST_CASE(
 
     Ref<netw::NetwParticipant> local;
     local.instantiate();
-    local->seat_at(session.ptr(), 7);
+    local->bind_to(session.ptr(), 7);
     session->participant_adopt(7, local);
-    const RID arena = session->get_liveness_core()->entity_create();
-    session->participant_seat_move(7, arena);
-    session->emit_signal("participant_local_joined", local);
-    NETW_CHECK_GT(session->settle_pending(), 0);
 
     session->emit_signal("session_reclaimed");
-    CHECK(local->get_current_scene().is_null());
+    CHECK_FALSE(session->scene_presented().is_valid());
 }
 
 TEST_CASE(
@@ -2358,146 +2276,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] the local player is the route that "
-    "represents this peer: a route the local peer does not own changes "
-    "nothing, and once the owning route retires it represents nobody until "
-    "another route says otherwise"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Ref<netw::LocalMultiplayerPeer> peer;
-    peer.instantiate();
-    peer->create_server();
-    core->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
-    const int64_t mine = core->get_unique_id();
-    Recorder session(
-        core.ptr(),
-        Vector<StringName>({"scene_local_player_changed"})
-    );
-
-    const RID theirs = core->get_liveness_core()->entity_create();
-    const int64_t their_route = core->get_liveness_core()->reserve_route();
-    netw_test::RecordBox their_seat;
-    netw_test::RecordBox our_seat;
-    core->liveness_bind(
-        theirs,
-        their_route,
-        an_identity_only_wrapper(),
-        a_record_holding_peer_and_route(their_seat, mine + 1, their_route),
-        nullptr
-    );
-    core->liveness_publish_live(their_route);
-    core->liveness_settle_local_player(their_route);
-
-    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 0);
-    NETW_CHECK_EQ(core->scene_player_local().is_valid(), false);
-
-    const RID ours = core->get_liveness_core()->entity_create();
-    const int64_t our_route = core->get_liveness_core()->reserve_route();
-    const Ref<netw::NetwEntity> wrapper = an_identity_only_wrapper();
-    core->liveness_bind(
-        ours,
-        our_route,
-        wrapper,
-        a_record_holding_peer_and_route(our_seat, mine, our_route),
-        nullptr
-    );
-    core->liveness_publish_live(our_route);
-    core->liveness_settle_local_player(our_route);
-
-    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 1);
-    NETW_CHECK_EQ(core->scene_player_local().ptr(), wrapper.ptr());
-
-    core->liveness_retire(our_route);
-
-    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 2);
-    NETW_CHECK_EQ(core->scene_player_local().is_valid(), false);
-}
-
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a peerless session represents "
-    "nobody, even for a record carrying peer 1, the unique id an offline "
-    "session answers, which would look local to a check that skipped the "
-    "transport"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Recorder session(
-        core.ptr(),
-        Vector<StringName>({"scene_local_player_changed"})
-    );
-    const RID entity = core->get_liveness_core()->entity_create();
-    const int64_t route = core->get_liveness_core()->reserve_route();
-    netw_test::RecordBox seated;
-
-    core->liveness_bind(
-        entity,
-        route,
-        an_identity_only_wrapper(),
-        a_record_holding_peer_and_route(seated, 1, route),
-        nullptr
-    );
-    core->liveness_publish_live(route);
-    core->liveness_settle_local_player(route);
-
-    NETW_CHECK_EQ(core->has_multiplayer_peer(), false);
-    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 0);
-    NETW_CHECK_EQ(core->scene_player_local().is_valid(), false);
-}
-
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a replacement outlives the entity it "
-    "replaced: a scene change binds the replacement BEFORE retiring the "
-    "original, so the entity that died is not asked by identity for "
-    "whether it represents this peer, which would answer yes for every "
-    "entity that has one and drop a local player that had already moved on"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Ref<netw::LocalMultiplayerPeer> peer;
-    peer.instantiate();
-    peer->create_server();
-    core->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
-    const int64_t mine = core->get_unique_id();
-
-    const RID before = core->get_liveness_core()->entity_create();
-    const int64_t before_route = core->get_liveness_core()->reserve_route();
-    netw_test::RecordBox before_seat;
-    netw_test::RecordBox after_seat;
-    core->liveness_bind(
-        before,
-        before_route,
-        an_identity_only_wrapper(),
-        a_record_holding_peer_and_route(before_seat, mine, before_route),
-        nullptr
-    );
-    core->liveness_publish_live(before_route);
-    core->liveness_settle_local_player(before_route);
-
-    const RID after = core->get_liveness_core()->entity_create();
-    const int64_t after_route = core->get_liveness_core()->reserve_route();
-    const Ref<RefCounted> replacement = an_identity_only_wrapper();
-    core->liveness_bind(
-        after,
-        after_route,
-        replacement,
-        a_record_holding_peer_and_route(after_seat, mine, after_route),
-        nullptr
-    );
-    core->liveness_publish_live(after_route);
-    core->liveness_settle_local_player(after_route);
-    Recorder session(
-        core.ptr(),
-        Vector<StringName>({"scene_local_player_changed"})
-    );
-
-    core->liveness_retire(before_route);
-
-    NETW_CHECK_EQ(session.count("scene_local_player_changed"), 0);
-    NETW_CHECK_EQ(core->scene_player_local().ptr(), replacement.ptr());
-}
-
-TEST_CASE(
     "[Networked][Multiplayer][Hosted] a route names one entity, and a "
     "wrapper arriving on a standing one is refused; the bind is what "
     "stamps the route onto the record, so a caller never reads a route "
@@ -2718,51 +2496,6 @@ TEST_CASE(
     core->participant_clear();
 
     NETW_CHECK_EQ(core->participant_all().size(), 0);
-}
-
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] only the local participant's scene "
-    "change is the session's, never another peer's, and the published "
-    "edge names WHICH participant moved because each row names itself as "
-    "the scene it moved to"
-) {
-    Ref<NetwMultiplayer> core = peered_core();
-    const int64_t mine = core->get_unique_id();
-    const Ref<netw::NetwParticipant> ours = a_row();
-    const Ref<netw::NetwParticipant> theirs = a_row();
-    core->participant_adopt(mine, ours);
-    core->participant_adopt(mine + 1, theirs);
-    core->participant_publish_joined(mine);
-    core->participant_publish_joined(mine + 1);
-    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
-
-    theirs->emit_signal("scene_changed", Variant(), theirs);
-    ours->emit_signal("scene_changed", Variant(), ours);
-
-    NETW_CHECK_EQ(session.count("scene_local_changed"), 1);
-    REQUIRE(session.args("scene_local_changed").size() == 2);
-    NETW_CHECK_EQ(
-        Object::cast_to<Object>(session.args("scene_local_changed")[1]),
-        ours.ptr()
-    );
-}
-
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a forgotten participant stops "
-    "speaking for the session, because a row the roster dropped is no "
-    "longer this peer"
-) {
-    Ref<NetwMultiplayer> core = peered_core();
-    const int64_t mine = core->get_unique_id();
-    const Ref<netw::NetwParticipant> ours = a_row();
-    core->participant_adopt(mine, ours);
-    core->participant_publish_joined(mine);
-    Recorder session(core.ptr(), Vector<StringName>({"scene_local_changed"}));
-
-    core->participant_forget(mine);
-    ours->emit_signal("scene_changed", Variant(), ours);
-
-    NETW_CHECK_EQ(session.count("scene_local_changed"), 0);
 }
 
 } // namespace TestNetwMultiplayerParticipants
@@ -3089,32 +2822,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a reparent crosses a boundary only "
-    "when a player changes scene: a destination already inside the "
-    "player's scene is not re-sent an admission edge it already holds, a "
-    "destination under no declared scene has no boundary to admit to, and "
-    "a server-owned entity is admitted nowhere because admission is a "
-    "peer's"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Node *root = memnew(Node);
-    const Bound here = bind_under(core, root, true, true);
-    const Bound there = bind_under(core, root, true, true);
-    const Bound plain = bind_under(core, root, true, false);
-    const Bound player = bind_under(core, here.owner, true, false, 7);
-
-    CHECK(core->entity_reparent_crosses(player.handle, there.handle));
-
-    CHECK_FALSE(core->entity_reparent_crosses(player.handle, here.handle));
-    CHECK_FALSE(core->entity_reparent_crosses(player.handle, plain.handle));
-    const Bound prop = bind_under(core, here.owner, true, false, 0);
-    CHECK_FALSE(core->entity_reparent_crosses(prop.handle, there.handle));
-
-    memdelete(root);
-}
-
-TEST_CASE(
     "[Networked][Multiplayer][Hosted] a move outside the tree is the two steps "
     "the engine would refuse to take as one"
 ) {
@@ -3125,9 +2832,7 @@ TEST_CASE(
     Node *destination = memnew(Node);
     root->add_child(destination);
 
-    Ref<netw::NetwReparentOpts> opts;
-    opts.instantiate();
-    core->entity_reparent(inside.record, inside.owner, destination, opts);
+    NetwMultiplayer::entity_move(inside.owner, destination);
 
     NETW_CHECK_EQ(inside.owner->get_parent(), destination);
 
@@ -3136,7 +2841,7 @@ TEST_CASE(
         const Bound orphan = bind_under(core, nullptr, true);
         REQUIRE(orphan.owner->get_parent() == nullptr);
 
-        core->entity_reparent(orphan.record, orphan.owner, orphan_target, opts);
+        NetwMultiplayer::entity_move(orphan.owner, orphan_target);
 
         NETW_CHECK_EQ(orphan.owner->get_parent(), orphan_target);
         memdelete(orphan_target);
@@ -3154,11 +2859,9 @@ TEST_CASE(
     core.instantiate();
     Node *root = memnew(Node);
     const Bound bound = bind_under(core, root, true);
-    Ref<netw::NetwReparentOpts> opts;
-    opts.instantiate();
 
     ERR_PRINT_OFF;
-    core->entity_reparent(bound.record, bound.owner, nullptr, opts);
+    NetwMultiplayer::entity_move(bound.owner, nullptr);
     ERR_PRINT_ON;
 
     NETW_CHECK_EQ(bound.owner->get_parent(), root);

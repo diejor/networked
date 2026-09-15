@@ -1,102 +1,93 @@
-## Bomber pre-session shell: owns the server browser and a status overlay.
-##
-## In-session UI ships inside its own scene (the lobby roster lives in
-## lobby_level.tscn), so the shell only decides whether the pre-session
-## [ConnectBrowser] is shown, keyed on the local participant's scene membership.
 extends CanvasLayer
 
-@onready var _status: Label = %StatusLabel
-@onready var _browser: ConnectBrowser = %ConnectBrowser
+@onready var status: Label = %StatusLabel
+@onready var browser: ConnectBrowser = %ConnectBrowser
 @onready var session: NetwSessionHandle = Netw.session(self)
 
-var _activity: DiscordActivityService
+var activity: DiscordActivityService
 
 
 func _ready() -> void:
-	# The browser self-resolves the mounted session by ancestry and builds its
-	# own browse model over it, so no bind() is needed here.
-	session.local_scene_changed.connect(_on_local_scene_changed)
-	session.disconnecting.connect(_on_server_disconnecting)
-	session.disconnected.connect(_on_server_disconnected)
+	session.presentation_changed.connect(on_presentation_changed)
+	session.disconnecting.connect(on_server_disconnecting)
+	session.disconnected.connect(on_server_disconnected)
 
 	var gamestate := Netw.service(self, BomberGamestate) as BomberGamestate
-	gamestate.game_error.connect(_on_game_error)
+	gamestate.game_error.connect(on_game_error)
 
-	_status.visible = false
+	status.visible = false
 
-	var activity := Netw.service(self, DiscordActivityService) \
+	var discord := Netw.service(self, DiscordActivityService) \
 			as DiscordActivityService
-	if activity != null and activity.in_discord():
-		_activity = activity
+	if discord != null and discord.in_discord():
+		activity = discord
 		@warning_ignore("missing_await")
-		_enter_discord_activity(activity)
+		enter_discord_activity(discord)
 		return
 
-	_show_browser()
+	show_browser()
 
 
-# The shell shows the browser only when the local participant is in no scene.
-# Every scene ships its own UI, so the browser steps aside on admission.
-func _on_local_scene_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
-	_browser.visible = to == null
+func on_presentation_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
+	browser.visible = to == null
 	if to != null:
-		_set_status("")
+		set_status("")
 
 
-func _show_browser() -> void:
-	_browser.visible = true
+func show_browser() -> void:
+	browser.visible = true
 
 
-func _enter_discord_activity(activity: DiscordActivityService) -> void:
-	_browser.visible = false
-	_set_status("Connecting to Discord Activity...")
+func enter_discord_activity(discord: DiscordActivityService) -> void:
+	browser.visible = false
+	set_status("Connecting to Discord Activity...")
 
-	activity.session_lost.connect(_on_activity_session_lost)
+	discord.session_lost.connect(on_activity_session_lost)
 
-	if not await activity.start():
-		_set_status("Discord handshake failed.")
+	if not await discord.start():
+		set_status("Discord handshake failed.")
 		return
-	await activity.authenticate()
+	await discord.authenticate()
 
-	var err := await activity.connect_activity(
-		StringName(_discord_username(activity)),
+	var err := await discord.connect_activity(
+		StringName(discord_username(discord)),
 	)
 	if err != OK:
-		_set_status("Activity connect failed: %s" % error_string(err))
+		set_status("Activity connect failed: %s" % error_string(err))
 
 
-func _discord_username(activity: DiscordActivityService) -> String:
-	if activity.user != null and not activity.user.global_name.is_empty():
-		return activity.user.global_name
-	var did := activity.device_id()
+func discord_username(discord: DiscordActivityService) -> String:
+	if discord.user != null and not discord.user.global_name.is_empty():
+		return discord.user.global_name
+	var did := discord.device_id()
 	return did if not did.is_empty() else "Player"
 
 
-func _on_server_disconnecting(_reason: String) -> void:
-	if _activity != null:
+func on_server_disconnecting(_reason: String) -> void:
+	if activity != null:
 		return
-	_show_browser()
+	show_browser()
 
 
-func _on_server_disconnected() -> void:
-	if _activity != null:
+func on_server_disconnected() -> void:
+	if activity != null:
 		return
-	_show_browser()
+	show_browser()
 
 
-func _on_activity_session_lost(reason: String) -> void:
-	_set_status("Host left (%s). Reconnecting..." % reason)
-	var err := await _activity.reconnect()
+func on_activity_session_lost(reason: String) -> void:
+	set_status("Host left (%s). Reconnecting..." % reason)
+	var err := await activity.reconnect()
 	if err != OK:
-		_set_status("Reconnect failed: %s" % error_string(err))
+		set_status("Reconnect failed: %s" % error_string(err))
 
 
-func _on_game_error(text: String) -> void:
-	_set_status(text)
+func on_game_error(text: String) -> void:
+	set_status(text)
 	if not session.is_online:
-		_show_browser()
+		show_browser()
 
 
-func _set_status(text: String) -> void:
-	_status.text = text
-	_status.visible = not text.is_empty()
+func set_status(text: String) -> void:
+	status.text = text
+	status.visible = not text.is_empty()

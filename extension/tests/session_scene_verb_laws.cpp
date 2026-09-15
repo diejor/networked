@@ -61,7 +61,7 @@ TEST_CASE(
     CHECK_FALSE(session->scene_find(StringName("arena")).is_valid());
     NETW_CHECK_EQ(session->scene_find_all(StringName("arena")).size(), 0);
     NETW_CHECK_EQ(session->scene_list().size(), 0);
-    CHECK_FALSE(session->scene_get_current().is_valid());
+    CHECK_FALSE(session->scene_presented().is_valid());
 }
 
 TEST_CASE(

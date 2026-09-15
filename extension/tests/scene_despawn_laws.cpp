@@ -68,7 +68,6 @@ TEST_CASE(
     const Mounted arena = mount(core, root, StringName("Arena"));
 
     core->get_scene_core()->scene_retire(arena.scene, 3);
-    core->scene_settle_refresh();
 
     NETW_CHECK_EQ(arena.container->get_parent(), root);
     const Array retiring = core->get_scene_core()->retiring_scenes();

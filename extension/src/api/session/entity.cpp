@@ -247,48 +247,7 @@ Ref<NetwSceneHandle> NetwMultiplayer::entity_scene_facet(
     return p_record->part(NetwEntityRecord::PART_SCENE, p_wrapper);
 }
 
-bool NetwMultiplayer::entity_reparent_crosses(
-    const RID &p_entity,
-    const RID &p_destination
-) {
-    NetwEntityRecord *const *record = wrapper_records.getptr(p_entity.get_id());
-    if (record == nullptr || (*record)->get_peer_id() == 0) {
-        return false;
-    }
-    const RID destination_scene = scene_of(p_destination);
-    if (!destination_scene.is_valid()) {
-        return false;
-    }
-    return destination_scene != scene_of(p_entity);
-}
-
-void NetwMultiplayer::entity_reparent(
-    NetwEntityRecord *p_record,
-    Node *p_owner,
-    Node *p_new_parent,
-    const Ref<NetwReparentOpts> &p_opts
-) {
-    NetwEntityRecord *record = p_record;
-    Node *owner = p_owner;
-    const RID destination = entity_at_or_above(p_new_parent);
-    if (record != nullptr
-        && entity_reparent_crosses(record->get_handle(), destination)) {
-        NETW_TRACE(
-            sys::ENTITY,
-            "reparent carries peer %d across a scene boundary",
-            int(record->get_peer_id())
-        );
-        scene_admit(scene_of(destination), record->get_peer_id());
-    }
-    entity_move(record, owner, p_new_parent, p_opts);
-}
-
-void NetwMultiplayer::entity_move(
-    NetwEntityRecord *p_record,
-    Node *p_owner,
-    Node *p_new_parent,
-    const Ref<NetwReparentOpts> &p_opts
-) {
+void NetwMultiplayer::entity_move(Node *p_owner, Node *p_new_parent) {
     Node *owner = p_owner;
     Node *parent = p_new_parent;
     NETW_ERR_COND(
@@ -297,11 +256,6 @@ void NetwMultiplayer::entity_move(
         "a reparent needs an owner and a destination parent"
     );
     NETW_TRACE(sys::ENTITY, "moving an entity under %s", parent->get_name());
-    NetwEntityRecord::MoveReport report;
-    report.reason = p_opts.is_valid() ? p_opts->get_reason() : StringName();
-    if (p_record != nullptr) {
-        p_record->set_move_report(report);
-    }
     if (owner->is_inside_tree()) {
         owner->reparent(parent);
     } else {
@@ -309,9 +263,6 @@ void NetwMultiplayer::entity_move(
             owner->get_parent()->remove_child(owner);
         }
         parent->add_child(owner);
-    }
-    if (p_record != nullptr) {
-        p_record->set_move_report(NetwEntityRecord::MoveReport());
     }
 }
 
@@ -810,43 +761,6 @@ Node *NetwMultiplayer::entity_spawn_copy_under(
     );
 }
 
-Node *NetwMultiplayer::entity_instantiate_player(
-    Node *p_owner,
-    Object *p_participant
-) {
-    Node *owner = p_owner;
-    if (owner == nullptr || p_participant == nullptr) {
-        return nullptr;
-    }
-    const Variant join = p_participant->get(StringName("join"));
-    if (join.get_type() == Variant::NIL) {
-        return nullptr;
-    }
-    Node *copy = entity_instantiate_from(owner, Callable());
-    if (copy == nullptr) {
-        return nullptr;
-    }
-    wrapper_bind(
-        copy,
-        p_participant->get(StringName("username")),
-        p_participant->get(StringName("peer_id"))
-    );
-    return copy;
-}
-
-Node *NetwMultiplayer::entity_spawn_player(
-    Node *p_owner,
-    NetwParticipant *p_participant,
-    NetwSceneHandle *p_scene
-) {
-    Node *copy = entity_instantiate_player(p_owner, p_participant);
-    if (copy == nullptr || p_scene == nullptr) {
-        return copy;
-    }
-    p_scene->add_player(wrapper_at(copy));
-    return copy;
-}
-
 Dictionary NetwMultiplayer::entity_describe(int64_t p_route) const {
     Dictionary out;
     const RID entity = liveness_core->rid_from_route(int(p_route));
@@ -891,8 +805,7 @@ void NetwMultiplayer::entity_note_stage(
 }
 
 void NetwMultiplayer::entity_announce_reparented(
-    const Ref<NetwEntity> &p_wrapper,
-    const NetwEntityRecord::MoveReport &p_report
+    const Ref<NetwEntity> &p_wrapper
 ) {
     if (p_wrapper.is_null()) {
         return;
@@ -904,12 +817,10 @@ void NetwMultiplayer::entity_announce_reparented(
     NetwEntityRecord *const record = p_wrapper->get_record();
     const int64_t route = record != nullptr ? record->get_route() : 0;
     if (plane.wants(EventPlane::REPARENTED, route)) {
-        Dictionary detail;
-        detail["reason"] = p_report.reason;
         event_emit(
             EventPlane::REPARENTED,
             route,
-            detail,
+            Dictionary(),
             record != nullptr ? record->get_entity_id() : StringName(),
             record != nullptr ? record->get_peer_id() : 0,
             OK,
@@ -1064,20 +975,6 @@ void NetwMultiplayer::liveness_publish_live(int64_t p_route) {
     emit_signal(SIG_ENTITY_LIVE, p_route, wrapper);
 }
 
-void NetwMultiplayer::liveness_settle_local_player(int64_t p_route) {
-    if (!has_multiplayer_peer()) {
-        return;
-    }
-    const RID entity = liveness_core->rid_from_route(int(p_route));
-    const int64_t id = entity.get_id();
-    NetwEntityRecord *const *record = wrapper_records.getptr(id);
-    if (record == nullptr || (*record)->get_peer_id() == 0
-        || (*record)->get_peer_id() != get_unique_id()) {
-        return;
-    }
-    set_local_player(entity_get_view(entity), id);
-}
-
 bool NetwMultiplayer::liveness_linger(const RID &p_entity) {
     if (!liveness_core
              ->set_state(p_entity, NetwLivenessCore::STATE_LINGERING)) {
@@ -1101,11 +998,7 @@ void NetwMultiplayer::liveness_unindex_wrapper(const RID &p_entity) {
 }
 
 void NetwMultiplayer::liveness_forget_wrapper(const RID &p_entity) {
-    const int64_t id = p_entity.get_id();
-    if (local_player_id == id) {
-        set_local_player(Ref<NetwEntity>(), 0);
-    }
-    wrapper_records.erase(id);
+    wrapper_records.erase(p_entity.get_id());
 }
 
 void NetwMultiplayer::liveness_release(int64_t p_route) {
@@ -1401,12 +1294,8 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
                 = plane->get_spawn_pipeline()->holds_received_route(row.route);
         }
     }
-    if (NetwEntityRecord *const record = entity->get_record()) {
-        const NetwEntityRecord::MoveReport &asked = record->get_move_report();
-        row.report.reason = asked.reason;
-    }
     entity_capture_persistence(row);
-    entity_capture_seat(row, entity);
+    entity_capture_residency(row, entity);
     if (standing == nullptr) {
         entity_departures.insert(instance, row);
     }
@@ -1427,7 +1316,7 @@ void NetwMultiplayer::entity_capture_persistence(EntityDeparture &r_row) {
     r_row.saved_write = engine->capture_write();
 }
 
-void NetwMultiplayer::entity_capture_seat(
+void NetwMultiplayer::entity_capture_residency(
     EntityDeparture &r_row,
     NetwEntity *p_entity
 ) {
@@ -1439,15 +1328,16 @@ void NetwMultiplayer::entity_capture_seat(
     if (!leaving.is_valid() || leaving == r_row.entity) {
         return;
     }
-    for (uint32_t at = 0; at < r_row.seats.size(); at++) {
-        if (r_row.seats[at].scene == leaving && r_row.seats[at].peer == peer) {
+    for (uint32_t at = 0; at < r_row.residencies.size(); at++) {
+        if (r_row.residencies[at].scene == leaving
+            && r_row.residencies[at].peer == peer) {
             return;
         }
     }
-    DepartedSeat seat;
-    seat.scene = leaving;
-    seat.peer = peer;
-    r_row.seats.push_back(seat);
+    DepartedResidency resided;
+    resided.scene = leaving;
+    resided.peer = peer;
+    r_row.residencies.push_back(resided);
 }
 
 entity::Outcome NetwMultiplayer::entity_departure_outcome(
@@ -1475,6 +1365,9 @@ void NetwMultiplayer::entity_settle_departure(int64_t p_instance) {
     }
     const EntityDeparture row = *standing;
     entity_departures.erase(instance);
+#if defined(NETW_TESTS)
+    membership_audit_held += 1;
+#endif
     switch (entity_departure_outcome(row)) {
         case entity::Outcome::MOVE:
             entity_commit_move(row);
@@ -1486,31 +1379,34 @@ void NetwMultiplayer::entity_settle_departure(int64_t p_instance) {
             entity_commit_hide(row);
             break;
     }
+#if defined(NETW_TESTS)
+    membership_audit_held -= 1;
+    membership_audit();
+#endif
     if (SyncPipeline *pipeline = sync_pipeline()) {
         pipeline->reconcile_dropped_state_timelines();
     }
 }
 
-void NetwMultiplayer::entity_release_seats(
+void NetwMultiplayer::entity_release_residencies(
     const EntityDeparture &p_row,
     const RID &p_keep
 ) {
-    for (uint32_t at = 0; at < p_row.seats.size(); at++) {
-        const DepartedSeat &seat = p_row.seats[at];
-        if (seat.scene == p_keep) {
+    for (uint32_t at = 0; at < p_row.residencies.size(); at++) {
+        const DepartedResidency &resided = p_row.residencies[at];
+        if (resided.scene == p_keep) {
             continue;
         }
         scene_release_departed(
-            seat.scene,
+            resided.scene,
             p_row.entity,
             p_row.wrapper.is_valid() && p_row.wrapper->get_owner() != nullptr,
-            seat.peer
+            resided.peer
         );
     }
 }
 
 void NetwMultiplayer::entity_commit_move(const EntityDeparture &p_row) {
-    entity_release_seats(p_row, scene_of(p_row.entity));
     if (p_row.route > 0) {
         if (ReplicationCore *plane = get_replication_plane()) {
             plane->get_spawn_pipeline()->settle_move(p_row.route);
@@ -1521,7 +1417,7 @@ void NetwMultiplayer::entity_commit_move(const EntityDeparture &p_row) {
         clock_engine().get_configured() ? clock_engine().get_tick() : 0
     );
     entity_refresh_moved_body(p_row.entity, p_row.route);
-    entity_announce_reparented(p_row.wrapper, p_row.report);
+    entity_announce_reparented(p_row.wrapper);
 }
 
 void NetwMultiplayer::entity_relocate_spatial_state(
@@ -1565,7 +1461,7 @@ void NetwMultiplayer::entity_commit_death(const EntityDeparture &p_row) {
     if (p_row.saved.is_valid() && p_row.saved_write.is_addressed()) {
         p_row.saved->submit(p_row.saved_write);
     }
-    entity_release_seats(p_row, RID());
+    entity_release_residencies(p_row, RID());
     entity_release_body(p_row.entity, p_row.wrapper, p_row.route, false);
     if (p_row.wrapper.is_valid()) {
         NetwEntityRecord *const record = p_row.wrapper->get_record();
@@ -1586,6 +1482,7 @@ void NetwMultiplayer::entity_release_body(
     bool p_owner_live
 ) {
     persistence.engines.drop(p_entity);
+    membership_drop_body(p_wrapper);
     interest_release_body(p_wrapper);
     unregister_prediction(p_wrapper);
     lagcomp_timeline_undeclare(p_entity);
@@ -1921,6 +1818,14 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
     if (p_record == nullptr || p_node == nullptr) {
         return Ref<NetwEntity>();
     }
+    NETW_ERR_COND_V(
+        p_owner.is_valid() && !participant_holds(p_owner),
+        Ref<NetwEntity>(),
+        sys::SPAWN,
+        "a spawn names participant '%s', which is not one this session "
+        "currently holds, so nothing is armed",
+        String(p_owner->get_username())
+    );
     const Ref<NetwEntity> entity = NetwEntity::ensure(p_node);
     if (entity.is_null()) {
         return entity;
@@ -2160,6 +2065,7 @@ spawn::Record *NetwMultiplayer::spawn_issue_armed(
         above.is_valid() ? liveness_route_of(above.ptr()) : 0
     );
     interest_sync_scene_membership(NetwEntity::of(node));
+    membership_place_body(NetwEntity::of(node));
     return p_book->issue(armed);
 }
 
@@ -2490,6 +2396,7 @@ void NetwMultiplayer::spawn_refresh_anchor(
         above.is_valid() ? liveness_route_of(above.ptr()) : 0
     );
     interest_sync_scene_membership(NetwEntity::of(p_node));
+    membership_place_body(NetwEntity::of(p_node));
     spawn_reanchor(p_record, p_node, p_roster);
 }
 

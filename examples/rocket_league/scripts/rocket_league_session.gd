@@ -1,11 +1,14 @@
 extends Node
 
 const LOBBY := preload("res://examples/rocket_league/scenes/lobby_level.tscn")
+const ARENA := "res://examples/rocket_league/scenes/arena.tscn"
 
 @onready var browser: ConnectBrowser = %ConnectBrowser
+@onready var session: NetwSessionHandle = Netw.session(self)
 
 var stepped := false
 var level: Node
+var roster: Array[NetwParticipant] = []
 
 
 func _init() -> void:
@@ -17,9 +20,9 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	var session: NetwSessionHandle = Netw.session(self)
 	session.scene_live.connect(on_scene_live)
-	session.local_scene_changed.connect(on_local_scene_changed)
+	session.presentation_changed.connect(on_presentation_changed)
+	session.participant_left.connect(leave_match)
 	session.ended.connect(show_browser)
 	session.disconnected.connect(show_browser)
 
@@ -35,12 +38,36 @@ func open_lobby() -> void:
 	add_child(level)
 
 
-func enter_lobby(_participant: NetwParticipant) -> NetwSceneHandle:
+func enter_lobby(participant: NetwParticipant) -> void:
+	roster.append(participant)
 	var arena: NetwSceneHandle = Netw.scene(self, &"Arena")
 	if arena != null:
-		return arena
+		arena.watch(participant)
+		car_spawner(arena).add_car(participant, roster.size() - 1)
+		return
 	open_lobby()
-	return Netw.scene(level)
+	Netw.scene(level).watch(participant)
+
+
+func leave_match(participant: NetwParticipant) -> void:
+	roster.erase(participant)
+
+
+func start_match() -> void:
+	Netw.change_scene_to_file(self, ARENA)
+
+
+func car_spawner(arena: NetwSceneHandle) -> RocketPlayerSpawner:
+	return arena.root.get_node(^"PlayerSpawner")
+
+
+func open_match(arena: NetwSceneHandle) -> void:
+	if not arena.root.is_node_ready():
+		arena.root.ready.connect(open_match.bind(arena), CONNECT_ONE_SHOT)
+		return
+	var spawner := car_spawner(arena)
+	for slot in roster.size():
+		spawner.add_car(roster[slot], slot)
 
 
 func on_scene_live(scene: NetwSceneHandle) -> void:
@@ -49,11 +76,13 @@ func on_scene_live(scene: NetwSceneHandle) -> void:
 		scene.observe(NetwMultiplayer.SCENE_EVENT_PLAYER, car_edge.bind(scene))
 		declare_islands(scene)
 
-	if not multiplayer.is_server():
-		return
-	for participant: NetwParticipant in Netw.session(self).participants:
-		if participant.current_scene == null:
-			scene.admit(participant)
+	if scene.label == &"Lobby":
+		var in_lobby: InLobby = scene.root.find_child("InLobby", true, false)
+		in_lobby.start_pressed.connect(start_match)
+
+	session.present(scene)
+	if scene.label == &"Arena" and multiplayer.is_server():
+		open_match(scene)
 
 
 func install_stepper(root: Node3D, arena: NetwSceneHandle) -> void:
@@ -97,7 +126,7 @@ func simulated_bodies(arena: NetwSceneHandle) -> Array[NetwEntity]:
 	return out
 
 
-func on_local_scene_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
+func on_presentation_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
 	browser.visible = to == null
 
 

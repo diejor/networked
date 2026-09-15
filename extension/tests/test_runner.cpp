@@ -26,6 +26,7 @@
 #include "netw/predict/frames.hpp"
 #include "netw/profile.hpp"
 #include "netw/property_set_builder.hpp"
+#include "netw/scene_membership.hpp"
 #include "netw/schema_core.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
@@ -174,6 +175,11 @@ public:
             failures += test_case.failure ? 1 : 0;
             errors += test_case.error ? 1 : 0;
         }
+        const residency_audit::Ledger &audited = residency_audit::ledger();
+        const bool diverged = audited.divergences > 0;
+        const unsigned int reported
+            = stats.numTestCasesPassingFilters + (diverged ? 1u : 0u);
+        failures += diverged ? 1 : 0;
         FILE *output = std::fopen(options.out.c_str(), "wb");
         if (output == nullptr) {
             return;
@@ -182,17 +188,33 @@ public:
         std::fprintf(
             output,
             "<testsuites tests=\"%u\" failures=\"%d\">\n",
-            stats.numTestCasesPassingFilters,
+            reported,
             failures
         );
         std::fprintf(
             output,
             "  <testsuite name=\"networked-native\" tests=\"%u\" "
             "failures=\"%d\" errors=\"%d\">\n",
-            stats.numTestCasesPassingFilters,
+            reported,
             failures,
             errors
         );
+        if (diverged) {
+            std::fprintf(
+                output,
+                "    <testcase classname=\"scene_residency_laws.cpp\" "
+                "name=\"JR0 every body reason names a body that resides in "
+                "that scene, and every resident body holds one, in every case "
+                "the run executed\" time=\"0.0\"><failure>%lld of %lld "
+                "readings disagreed. first membership %lld scene %lld body "
+                "%lld</failure></testcase>\n",
+                (long long)audited.divergences,
+                (long long)audited.observations,
+                (long long)audited.member_of_first,
+                (long long)audited.scene_of_first,
+                (long long)audited.body_of_first
+            );
+        }
         for (const Case &test_case : cases) {
             const std::string file = escape_xml(test_case.file.c_str());
             const std::string name = escape_xml(test_case.name.c_str());
@@ -316,6 +338,18 @@ int run_native_tests(
         context.setOption("test-case", filter_text.get_data());
     }
     const int code = context.run();
+    const residency_audit::Ledger &audited = residency_audit::ledger();
+    std::printf(
+        "NETW_MEMBERSHIP observations %lld divergences %lld entered %lld "
+        "left %lld first member %lld scene %lld body %lld\n",
+        (long long)audited.observations,
+        (long long)audited.divergences,
+        (long long)audited.entered,
+        (long long)audited.left,
+        (long long)audited.member_of_first,
+        (long long)audited.scene_of_first,
+        (long long)audited.body_of_first
+    );
     if (!cells_path.is_empty()) {
         const CharString cells = ProjectSettings::get_singleton()
                                      ->globalize_path(cells_path)
@@ -377,11 +411,6 @@ void NetwNativeTests::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
-        D_METHOD("scene_sync_local_participant", "session"),
-        &NetwNativeTests::scene_sync_local_participant
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
         D_METHOD("scene_ensure_host_view", "session"),
         &NetwNativeTests::scene_ensure_host_view
     );
@@ -392,11 +421,6 @@ void NetwNativeTests::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
-        D_METHOD("scene_refresh_current", "session"),
-        &NetwNativeTests::scene_refresh_current
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
         D_METHOD("scene_container_meta"),
         &NetwNativeTests::scene_container_meta
     );
@@ -404,11 +428,6 @@ void NetwNativeTests::_bind_methods() {
         "NetwNativeTests",
         D_METHOD("scene_retire", "session", "scene", "drain_pumps"),
         &NetwNativeTests::scene_retire
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
-        D_METHOD("scene_move_participants", "session", "scene", "peers"),
-        &NetwNativeTests::scene_move_participants
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
@@ -600,12 +619,6 @@ Ref<NetwPromise> NetwNativeTests::scene_pending_request(
                               : Ref<NetwPromise>();
 }
 
-void NetwNativeTests::scene_sync_local_participant(NetwMultiplayer *session) {
-    if (session != nullptr) {
-        session->scene_sync_local_participant();
-    }
-}
-
 void NetwNativeTests::scene_ensure_host_view(NetwMultiplayer *session) {
     if (session != nullptr) {
         session->scene_ensure_host_view();
@@ -615,12 +628,6 @@ void NetwNativeTests::scene_ensure_host_view(NetwMultiplayer *session) {
 void NetwNativeTests::scene_release_host_view(NetwMultiplayer *session) {
     if (session != nullptr) {
         session->scene_release_host_view();
-    }
-}
-
-void NetwNativeTests::scene_refresh_current(NetwMultiplayer *session) {
-    if (session != nullptr) {
-        session->scene_refresh_current();
     }
 }
 
@@ -657,18 +664,6 @@ void NetwNativeTests::scene_retire(
         return;
     }
     session->get_scene_core()->scene_retire(p_scene, p_drain_pumps);
-    session->scene_settle_refresh();
-}
-
-Ref<NetwGroupPromise> NetwNativeTests::scene_move_participants(
-    NetwMultiplayer *session,
-    const RID &p_scene,
-    const PackedInt32Array &p_peers
-) {
-    if (session == nullptr) {
-        return Ref<NetwGroupPromise>();
-    }
-    return session->scene_move_participants(p_scene, p_peers);
 }
 
 display::Runtime *NetwNativeTests::display_runtime_of(

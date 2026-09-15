@@ -52,8 +52,8 @@ Placed place(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SV1 admitting names the scene's node, so a "
-    "scene whose node is gone refuses rather than admitting a peer to a "
+    "[Networked][Scene][Hosted] SV1 watching names the scene's node, so a "
+    "scene whose node is gone refuses rather than seating a watch on a "
     "boundary nothing stands behind"
 ) {
     Ref<NetwMultiplayer> core;
@@ -65,22 +65,22 @@ TEST_CASE(
 
     REQUIRE(core->is_server());
     NETW_CHECK_EQ(
-        int(core->scene_admit(arena.handle, 0)),
+        int(core->scene_watch(arena.handle, 0)),
         int(ERR_INVALID_PARAMETER)
     );
-    NETW_CHECK_EQ(int(core->scene_admit(RID(), 7)), int(ERR_DOES_NOT_EXIST));
-    CHECK_FALSE(core->scene_admits(arena.handle, 7));
+    NETW_CHECK_EQ(int(core->scene_watch(RID(), 7)), int(ERR_DOES_NOT_EXIST));
+    CHECK_FALSE(core->scene_subscribes(arena.handle, 7));
 
-    NETW_CHECK_EQ(int(core->scene_admit(arena.handle, 7)), int(OK));
-    CHECK(core->scene_admits(arena.handle, 7));
+    NETW_CHECK_EQ(int(core->scene_watch(arena.handle, 7)), int(OK));
+    CHECK(core->scene_subscribes(arena.handle, 7));
 
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SV2 releasing tells the peer before it takes "
-    "the seat away, because a client learns membership from the seat that "
-    "names what it is being released from"
+    "[Networked][Scene][Hosted] SV2 unwatching tells the peer before it takes "
+    "the subscription away, because a client learns from the notice which "
+    "scene it is being released from"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -88,14 +88,14 @@ TEST_CASE(
     core->set_interest_flush(flushed.callable("flush"));
     Node *root = memnew(Node);
     const Placed arena = place(core, root, true);
-    REQUIRE(int(core->scene_admit(arena.handle, 7)) == int(OK));
-    REQUIRE(core->scene_admits(arena.handle, 7));
+    REQUIRE(int(core->scene_watch(arena.handle, 7)) == int(OK));
+    REQUIRE(core->scene_subscribes(arena.handle, 7));
 
-    CHECK(core->scene_release(arena.handle, 7));
+    CHECK(core->scene_unwatch(arena.handle, 7));
 
-    CHECK_FALSE(core->scene_admits(arena.handle, 7));
+    CHECK_FALSE(core->scene_subscribes(arena.handle, 7));
 
-    CHECK_FALSE(core->scene_release(RID(), 7));
+    CHECK_FALSE(core->scene_unwatch(RID(), 7));
 
     memdelete(root);
 }
@@ -171,8 +171,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SV6 an admission commits the interest matrix "
-    "in the same act, so the peer it just admitted can see the scene without "
+    "[Networked][Scene][Hosted] SV6 a watch commits the interest matrix "
+    "in the same act, so the peer it just seated can see the scene without "
     "waiting for a settle nobody is obliged to drive"
 ) {
     Ref<NetwMultiplayer> core;
@@ -182,12 +182,12 @@ TEST_CASE(
     Node *root = memnew(Node);
     const Placed arena = place(core, root, true);
 
-    REQUIRE(int(core->scene_admit(arena.handle, 7)) == int(OK));
+    REQUIRE(int(core->scene_watch(arena.handle, 7)) == int(OK));
     CHECK_FALSE(core->interest_flush_pending());
 
-    SUBCASE("a refused admission leaves nothing pending either") {
+    SUBCASE("a refused watch leaves nothing pending either") {
         NETW_CHECK_EQ(
-            int(core->scene_admit(RID(), 9)),
+            int(core->scene_watch(RID(), 9)),
             int(ERR_DOES_NOT_EXIST)
         );
         CHECK_FALSE(core->interest_flush_pending());
