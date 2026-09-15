@@ -400,6 +400,19 @@ void NetwConnectHandle::endpoint_probe(
     }
 }
 
+Error NetwConnectHandle::transport_set_browse_settings(
+    const Variant &p_transport,
+    const Dictionary &p_settings
+) {
+    NetwMultiplayer *api = session();
+    if (api == nullptr) {
+        return ERR_UNCONFIGURED;
+    }
+    return api->transport_set_browse_settings(
+        resolve_transport(p_transport), p_settings
+    );
+}
+
 void NetwConnectHandle::endpoint_refresh() {
     NetwMultiplayer *api = session();
     if (api != nullptr) {
@@ -481,6 +494,10 @@ void NetwConnectHandle::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("endpoint_probe", "transport", "address"),
         &NetwConnectHandle::endpoint_probe
+    );
+    ClassDB::bind_method(
+        D_METHOD("transport_set_browse_settings", "transport", "settings"),
+        &NetwConnectHandle::transport_set_browse_settings
     );
     ClassDB::bind_method(
         D_METHOD("endpoint_refresh"),

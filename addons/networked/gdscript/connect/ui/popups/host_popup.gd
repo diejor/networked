@@ -14,6 +14,7 @@ signal submitted(
 		join_args: Array,
 )
 
+var transport_defaults: Array[ConnectTransportConfig] = []
 var _connection: NetwConnectHandle
 var _transports: Array[Dictionary] = []
 var _settings := ConnectFieldList.new()
@@ -76,7 +77,10 @@ func _selected_transport() -> Dictionary:
 	var idx := maxi(0, _backend_picker.selected)
 	if idx >= _transports.size():
 		return { }
-	return _transports[idx]
+	return ConnectTransportConfig.apply_to(
+		_transports[idx],
+		transport_defaults,
+	)
 
 
 func _on_backend_changed(_index: int) -> void:

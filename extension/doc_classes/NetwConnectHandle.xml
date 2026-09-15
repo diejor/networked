@@ -19,6 +19,26 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="transport_set_browse_settings">
+			<return type="int" enum="Error" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="settings" type="Dictionary" />
+			<description>
+				Sets discovery settings for [param transport] before
+				[method endpoint_refresh]. Invalid settings return
+				[constant @GlobalScope.ERR_INVALID_PARAMETER]. After discovery
+				starts, identical settings return [constant @GlobalScope.OK]
+				and changed settings return
+				[constant @GlobalScope.ERR_ALREADY_IN_USE]. Peer creation
+				settings are independent. The WebRTC transport accepts the
+				following settings.
+				[codeblock lang=text]
+				Dictionary
+				┠╴trackers             PackedStringArray  WebSocket tracker URLs
+				┖╴signaling_namespace  String             namespace of listed rooms
+				[/codeblock]
+			</description>
+		</method>
 		<method name="cancel_peer_creation">
 			<return type="void" />
 			<param index="0" name="ticket" type="RID" />

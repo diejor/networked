@@ -100,6 +100,10 @@ public:
     }
     godot::RID register_transport(const godot::Ref<godot::Script> &p_type);
     godot::Error unregister_transport(const godot::RID &p_transport);
+    godot::Error set_browse_settings(
+        const godot::RID &p_transport,
+        const godot::Dictionary &p_settings
+    );
     void refresh();
 
     ProbeClient *probe_client() const {
@@ -113,6 +117,8 @@ private:
     TransportRegistry registrations;
     godot::LocalVector<Transport *> browsers;
     ProbeClient *prober = nullptr;
+    godot::Dictionary browse_settings;
+    bool browsing_started = false;
 
     godot::LocalVector<godot::RID> creations;
     godot::LocalVector<godot::RID> starts;

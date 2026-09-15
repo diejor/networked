@@ -235,6 +235,8 @@ void ConnectCore::bind_session(NetwMultiplayer *p_session) {
 }
 
 void ConnectCore::dispose() {
+    browse_settings.clear();
+    browsing_started = false;
     while (!creations.is_empty()) {
         discard_creation(creations[creations.size() - 1]);
     }
@@ -901,6 +903,32 @@ void ConnectCore::publish_targets(
     }
 }
 
+Error ConnectCore::set_browse_settings(
+    const RID &p_transport,
+    const Dictionary &p_settings
+) {
+    const TransportSlot *slot = transport_slot(p_transport);
+    if (slot == nullptr) {
+        return ERR_DOES_NOT_EXIST;
+    }
+    const StringName named = slot->peer_class;
+    const Dictionary previous = browse_settings.get(named, Dictionary());
+    if (browsing_started) {
+        return previous == p_settings ? OK : ERR_ALREADY_IN_USE;
+    }
+    Transport *made = make_transport(*slot);
+    if (made == nullptr) {
+        return ERR_UNAVAILABLE;
+    }
+    const Error error = made->set_browse_settings(p_settings);
+    delete made;
+    if (error != OK) {
+        return error;
+    }
+    browse_settings[named] = p_settings.duplicate(true);
+    return OK;
+}
+
 void ConnectCore::open_browsers() {
     Array classes = registrations.peer_classes();
     const Array stock = TransportBook::shared().peer_classes();
@@ -930,7 +958,10 @@ void ConnectCore::open_browsers() {
         if (made == nullptr) {
             continue;
         }
-        if (!made->can_browse()) {
+        const Dictionary settings
+            = browse_settings.get(named, Dictionary());
+        if (made->set_browse_settings(settings) != OK
+            || !made->can_browse()) {
             delete made;
             continue;
         }
@@ -951,6 +982,7 @@ void ConnectCore::drop_browsers() {
 }
 
 void ConnectCore::refresh() {
+    browsing_started = true;
     open_browsers();
     rows.enqueue_caller_rows();
     RID target;

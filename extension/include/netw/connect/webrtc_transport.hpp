@@ -36,6 +36,9 @@ public:
     ) override;
 
     bool can_browse() const override;
+    godot::Error set_browse_settings(
+        const godot::Dictionary &p_settings
+    ) override;
     void browse() override;
     void poll(double p_delta) override;
     godot::String join_address() const override;

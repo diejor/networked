@@ -63,6 +63,11 @@ public:
     virtual void cancel_peer_creation() {
     }
     virtual void probe(const godot::String &p_address);
+    virtual godot::Error set_browse_settings(
+        const godot::Dictionary &p_settings
+    ) {
+        return p_settings.is_empty() ? godot::OK : godot::ERR_UNAVAILABLE;
+    }
     virtual void browse() {
     }
     virtual godot::Ref<godot::MultiplayerPeer> make_probe_peer(

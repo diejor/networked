@@ -52,9 +52,6 @@ Array WebRTCTransport::default_ice_servers() {
 }
 
 bool WebRTCTransport::servers_differ_from_default(const Array &p_servers) {
-    if (p_servers.is_empty()) {
-        return false;
-    }
     return JSON::stringify(p_servers) != JSON::stringify(default_ice_servers());
 }
 
@@ -611,12 +608,45 @@ bool WebRTCTransport::can_browse() const {
     return !trackers.is_empty() && may_reach_public_trackers();
 }
 
+Error WebRTCTransport::set_browse_settings(const Dictionary &p_settings) {
+    const Array keys = p_settings.keys();
+    for (int64_t at = 0; at < keys.size(); at++) {
+        if (keys[at].get_type() != Variant::STRING
+            && keys[at].get_type() != Variant::STRING_NAME) {
+            return ERR_INVALID_PARAMETER;
+        }
+        const String key = keys[at];
+        const Variant value = p_settings[key];
+        if (key == "signaling_namespace") {
+            if (value.get_type() != Variant::STRING) {
+                return ERR_INVALID_PARAMETER;
+            }
+        } else if (key == "trackers") {
+            if (value.get_type() != Variant::PACKED_STRING_ARRAY) {
+                return ERR_INVALID_PARAMETER;
+            }
+            const PackedStringArray urls = value;
+            for (int64_t url = 0; url < urls.size(); url++) {
+                if (!urls[url].begins_with("wss://")
+                    && !urls[url].begins_with("ws://")) {
+                    return ERR_INVALID_PARAMETER;
+                }
+            }
+        } else {
+            return ERR_INVALID_PARAMETER;
+        }
+    }
+    apply_settings(p_settings);
+    return OK;
+}
+
 void WebRTCTransport::browse() {
     board_backed = can_browse();
     if (!board_backed) {
         return;
     }
     rooms.set_trackers(trackers);
+    rooms.signaling_namespace = signaling_namespace;
     rooms.browse();
 }
 

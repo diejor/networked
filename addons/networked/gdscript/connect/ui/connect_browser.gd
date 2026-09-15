@@ -87,38 +87,18 @@ const DEFAULT_SERVER_LIST_PATH := "user://netw_servers.cfg"
 @export var hide_when_session_active: bool = true
 
 ## [ConfigFile] path this browser reads its own bookmarks from and writes
-## them back to. Empty picks [constant DEFAULT_SERVER_LIST_PATH], which is
-## one file every browser in the project shares, so a scene that wants its
-## own bookmarks names its own path here.
-##
-## The file belongs to this browser and holds only the rows this browser
-## authored. A row a directory published, or one another browser added to
-## the same session, is drawn from live evidence and never written here.
+## them back to.
 @export var server_list_path: String = ""
+
+## Game-authored defaults for forms and discovery, consumed when binding.
+@export var transport_defaults: Array[ConnectTransportConfig] = []
 
 ## When [code]true[/code] on a web export, mirrors the hosted room code into
 ## the page URL's fragment and joins the room a fragment already names.
-##
-## Hosting rewrites the address bar, so a host shares a link rather than
-## reading a code aloud, and opening that link fills the join form. The
-## fragment is the only part of a URL a page may rewrite without reloading.
 @export var use_url_fragment: bool = true
 
 ## Latency and loss to impair every connection this browser starts with, for
 ## testing a build against a link the developer's own machine does not have.
-##
-## It reaches the wire through [method NetwLinkConditions.wrap_peer], which
-## this browser applies to the peer IT built before assigning it, so the
-## impairment lives exactly as long as that peer and a session the game brought
-## up itself is never impaired by a browser the player merely opened. An
-## impairment the session already consumed through
-## [member NetwSessionConfig.link_conditions] wins and this field is ignored,
-## because two authored impairments are a mistake rather than a sum.
-## [br][br]
-## Nothing here reaches a shipped build.
-## [method NetwLinkConditions.wrap_peer] gates the whole path and declines in
-## a release export, so a scene saved with this authored is inert rather than
-## slow.
 @export var debug_link: NetwLinkConditions
 
 var _add_popup: AddPopup
@@ -128,38 +108,20 @@ var _join_direct_popup: JoinDirectPopup
 var _connecting_popup: ConnectingPopup
 var _row_menu: Menu
 
-var _rows: Dictionary = { } # endpoint key -> ConnectBrowserRow
-# The bookmarks this browser owns, in file order. Each entry is
-# { peer_class: StringName, address: String, display_name: String }.
+var _rows: Dictionary = { }
 var _records: Array[Dictionary] = []
-# endpoint key -> the entry of _records it was minted from. An endpoint
-# absent here belongs to a directory or to another browser on the same
-# session.
 var _mine: Dictionary = { }
 var _selected_row: ConnectBrowserRow
 var _selected_peer_class: StringName = &""
 var _selected_address: String = ""
 var _last_username: String = "Player"
 
-# The creation ticket of the setup this browser is running, invalid when none
-# is. Cancellation consumes it and the completion callback retires it.
 var _ticket: RID
-# Counts the setups this browser has started. A completion carrying a stale
-# count belongs to a setup that was cancelled or superseded, and declines the
-# offer by returning without assigning.
 var _setup: int = 0
-# The exact peer this browser last assigned. Cancellation clears the session's
-# peer only while it is still this reference, so a peer the game assigned in
-# the meantime is never cleared by a browser the player merely closed.
 var _assigned: MultiplayerPeer
-# The transport the running setup asked for, which is what names the address
-# the room bar shows: an ENet host is looking at an IP and a signalled one at
-# a room code, and only the transport knows which.
 var _active_peer_class: StringName = &""
 
-# The handle passed to bind(), taking priority over ancestry resolution.
 var _bound_connection: NetwConnectHandle
-# Guards _setup_session against running twice: bind() then the deferred path.
 var _session_ready: bool = false
 
 @onready var _refresh_button: Button = %RefreshButton
@@ -228,16 +190,19 @@ func _ready() -> void:
 	_details_join_button.pressed.connect(_on_details_join_pressed)
 	_room_copy_button.pressed.connect(_on_room_copy_pressed)
 
+	for popup: PopupPanel in [
+		_add_popup,
+		_host_popup,
+		_join_popup,
+		_join_direct_popup,
+	]:
+		popup.set("transport_defaults", transport_defaults)
+
 	_clear_selection()
 
-	# Fallback path: if no parent calls bind() this frame, self-resolve once
-	# parent _ready() has had a chance to attach the session ancestry.
 	_setup_session.call_deferred()
 
 
-# A browser being freed withdraws the creation it started and nothing else.
-# It never touches an assigned peer, because a game that is already in a match
-# does not lose it by closing the window it found the match in.
 func _exit_tree() -> void:
 	if _ticket.is_valid():
 		if _connection != null:
@@ -248,16 +213,12 @@ func _exit_tree() -> void:
 	_unbind_session_signals()
 
 
-## Drives this browser from [param handle] instead of resolving one from
-## ancestry. Prefer this when the browser does not sit under the session.
 func bind(handle: NetwConnectHandle) -> void:
 	_bound_connection = handle
 	if is_inside_tree():
 		_setup_session()
 
 
-# Resolves the handle (bind() then ancestry), wires its signals, and pulls
-# the first list. Runs at most once.
 func _setup_session() -> void:
 	if _session_ready:
 		return
@@ -269,14 +230,28 @@ func _setup_session() -> void:
 	_session = Netw.session(self)
 	if _connection == null:
 		return
+	var configured: Dictionary = { }
+	for config: ConnectTransportConfig in transport_defaults:
+		if config == null:
+			continue
+		var peer_class := config.peer_class()
+		if configured.has(peer_class):
+			_show_banner("Duplicate transport defaults for %s" % peer_class)
+			return
+		configured[peer_class] = true
+		var settings := config.browse_settings()
+		if settings.is_empty():
+			continue
+		var error := _connection.transport_set_browse_settings(peer_class, settings)
+		if error != OK:
+			_show_banner("Discovery settings rejected. %s" % error_string(error))
+			return
 	_session_ready = true
 	_bind_session_signals()
 	_rebuild_from_session()
 	_load_records()
 	_publish_records()
 	_connection.endpoint_refresh()
-	# Catch up when the session entered before this browser bound, e.g. a
-	# debug auto-connect: it is already online, so apply its effect now.
 	if _session != null and _session.is_online:
 		_on_session_entered()
 	else:
@@ -326,9 +301,6 @@ func _list_path() -> String:
 	return DEFAULT_SERVER_LIST_PATH
 
 
-# A local Dictionary key for one endpoint, never spelled onto the session or
-# any published surface. It exists only so this browser can index its own
-# rows and bookmarks by the pair an endpoint actually is.
 func _key(peer_class: StringName, address: String) -> String:
 	return "%s|%s" % [String(peer_class), address]
 
@@ -371,7 +343,10 @@ func _save_records() -> void:
 		var settings: Dictionary = record.get("settings", { })
 		if not settings.is_empty():
 			config.set_value(section, "settings", settings)
-	var err := config.save(_list_path())
+	var path := ProjectSettings.globalize_path(_list_path())
+	var err := DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	if err == OK:
+		err = config.save(path)
 	if err != OK:
 		push_warning(
 			"ConnectBrowser: could not write %s (%s)"
@@ -379,8 +354,6 @@ func _save_records() -> void:
 		)
 
 
-# A record naming a transport this build does not carry stays in _records, so
-# it survives the next save, and contributes no row.
 func _publish_records() -> void:
 	for record: Dictionary in _records:
 		_publish_record(record)
@@ -406,9 +379,6 @@ func _forget_record(peer_class: StringName, address: String) -> void:
 	_save_records()
 
 
-# Starts one setup, the provider builds a peer, this browser prepares the
-# player it collected, and it assigns the peer. Every step belongs to this
-# browser, so nothing else has to be asked what the player pressed.
 func _begin_setup(
 		peer_class: StringName,
 		mode: NetwMultiplayer.TransportMode,
@@ -473,16 +443,12 @@ func _on_creation_progress(
 	_connecting_popup.update_progress(message, ratio)
 
 
-# The only place a banner is raised, so what the player sees is what the
-# thing they pressed did.
 func _fail_setup(error: Error, detail: String) -> void:
 	var reason := error_string(error)
 	_show_banner(reason)
 	_connecting_popup.show_failed(reason, detail)
 
 
-# Wraps the peer this browser had built, so the impairment lives exactly as
-# long as the peer the setup assigned and needs nothing taken back afterwards.
 func _shaped(peer: MultiplayerPeer) -> MultiplayerPeer:
 	if debug_link == null or peer == null or _session == null:
 		return peer
@@ -499,9 +465,6 @@ func _shaped(peer: MultiplayerPeer) -> MultiplayerPeer:
 	return wrapped
 
 
-# Abandons the setup in flight, if any. It cancels only work this browser
-# owns: the ticket it minted, and the peer it assigned while that peer is
-# still the one installed.
 func _cancel_setup() -> void:
 	_setup += 1
 	if _ticket.is_valid():
@@ -543,8 +506,6 @@ func _is_available(endpoint: Dictionary) -> bool:
 	return bool(endpoint.get("is_available", false))
 
 
-# A direct address has no endpoint record, so platform support is asked of
-# the transport rather than of a row that will never exist.
 func _transport_is_available(peer_class: StringName) -> bool:
 	var transport := _connection.transport(peer_class)
 	if transport.is_empty():
@@ -766,9 +727,6 @@ func _open_edit_for_selected() -> void:
 	)
 
 
-# A bookmark the player never gave settings to has none, which is not the same
-# as one whose settings are the defaults: an absent entry follows whatever the
-# transport's defaults become, and a saved one holds what was typed.
 func _authored_settings(
 		peer_class: StringName,
 		address: String,
@@ -783,9 +741,6 @@ func _remove_selected() -> void:
 	_forget_record(_selected_peer_class, _selected_address)
 
 
-# An edit that only renames keeps the row and its probe evidence, because the
-# session already answers for that endpoint. A changed endpoint is a different
-# row, so the old one is forgotten and a new one is bookmarked.
 func _on_endpoint_submitted(
 		peer_class: StringName,
 		address: String,
@@ -865,8 +820,6 @@ func _on_join_submitted(
 	)
 
 
-# A direct join is a one-shot endpoint, not a bookmark, so it is never
-# recorded and the file is not rewritten.
 func _on_join_direct_submitted(
 		peer_class: StringName,
 		address: String,
@@ -878,10 +831,6 @@ func _on_join_direct_submitted(
 	_join_with_preflight(peer_class, address, settings, username, join_args)
 
 
-# Entering is what the player pressed Join or Host for, so the setup is over
-# and the peer stops being this browser's to withdraw. A cancel after this
-# point is a cancel of nothing, which is what keeps a closing browser from
-# ending a live match.
 func _on_session_entered() -> void:
 	_ticket = RID()
 	_assigned = null
@@ -903,9 +852,6 @@ func _on_session_left() -> void:
 		show()
 
 
-# The fragment is the only part of a URL a page rewrites without reloading.
-# Calling replaceState rather than an assignment keeps the back button
-# working without pushing a history entry that returns to an ended room.
 func _write_url_fragment(room: String) -> void:
 	if not OS.has_feature("web"):
 		return
@@ -937,9 +883,6 @@ func url_room() -> String:
 	return String(window.location.hash).trim_prefix("#").strip_edges()
 
 
-# A link names a room and nothing else, so the browser opens the direct join
-# form on it rather than dialling: the player still owes a name, and a form
-# they can cancel is what makes an unreachable room recoverable.
 func _offer_url_room() -> void:
 	var room := url_room()
 	if room.is_empty() or _connection == null:
@@ -951,9 +894,6 @@ func _offer_url_room() -> void:
 	_join_direct_popup.preset(peer_class, room)
 
 
-# The installed transport that takes a room code rather than an address. A
-# link carries no transport, so the browser picks the one whose host settings
-# declare a signaling namespace.
 func _rendezvous_peer_class() -> StringName:
 	for entry in _connection.transports():
 		var settings: Dictionary = entry.get("host_settings", { })
@@ -962,18 +902,12 @@ func _rendezvous_peer_class() -> StringName:
 	return &""
 
 
-# The identifier a joining player needs, which only the host can read: a
-# client already knows the address it dialled, and a transport that needs no
-# rendezvous answers with nothing. Every transport answers in its own terms,
-# an ENet host with its address and a signalled one with its room code.
 func _hosted_room() -> String:
 	if _connection == null or _api == null or not _api.is_server():
 		return ""
 	return _connection.join_address
 
 
-# What the host is looking at is what a joiner would type, so the bar borrows
-# the label the join form puts over that same field.
 func _hosted_room_label() -> String:
 	if _connection == null or _active_peer_class.is_empty():
 		return "Room"
@@ -1004,8 +938,6 @@ func _on_room_copy_pressed() -> void:
 		_room_copy_button.text = "Copy"
 
 
-# On the web a room is reachable as a link, so that is what a player wants on
-# their clipboard. Everywhere else the code is the whole of it.
 func _shareable(room: String) -> String:
 	if not use_url_fragment or not OS.has_feature("web"):
 		return room
@@ -1177,11 +1109,6 @@ static func make_value_control(
 
 
 ## Reads back [param control]'s value, cast to [param value_type].
-##
-## A type absent from this match reads back as the [String] a [LineEdit]
-## holds, and every consumer that type-checks its settings then discards it,
-## so the field draws as editable and does nothing. A case here and a case in
-## [method make_value_control] are added together.
 static func value_from_control(control: Control, value_type: int) -> Variant:
 	match value_type:
 		TYPE_BOOL:
@@ -1206,9 +1133,6 @@ static func value_from_control(control: Control, value_type: int) -> Variant:
 		TYPE_ARRAY:
 			if control.has_method(&"get_value"):
 				return control.call(&"get_value")
-			# JSON.parse_string raises an engine error on malformed input,
-			# which every half-typed field is. The instance parser reports
-			# the same fault by return value instead.
 			var text := (control as LineEdit).text.strip_edges()
 			var reader := JSON.new()
 			if reader.parse(text) == OK and reader.data is Array:
@@ -1221,12 +1145,6 @@ static func value_from_control(control: Control, value_type: int) -> Variant:
 
 ## Whether a settings entry seeded with [param value] can be drawn as a field
 ## and read back from it.
-##
-## An installation seam carries an object its caller supplies in code, and the
-## [code]signaler[/code] entry of the WebRTC transport's host settings is one:
-## its default is null, so a form that draws it offers a control reading
-## [code]<null>[/code] that no typed text can ever satisfy. A form asks this
-## before drawing a row rather than rendering a dead control.
 static func can_author_value(value: Variant) -> bool:
 	match typeof(value):
 		TYPE_NIL, TYPE_OBJECT, TYPE_CALLABLE, TYPE_SIGNAL, TYPE_RID:

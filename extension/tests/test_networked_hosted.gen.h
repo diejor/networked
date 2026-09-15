@@ -21,6 +21,7 @@
 #include "configure_session_laws.cpp"
 #include "connect_book_laws.cpp"
 #include "connect_browse_laws.cpp"
+#include "connect_browse_settings_laws.cpp"
 #include "connect_room_board_laws.cpp"
 #include "connect_signaler_laws.cpp"
 #include "connect_tracker_laws.cpp"

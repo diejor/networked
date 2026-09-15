@@ -12,6 +12,7 @@ signal submitted(
 		join_args: Array,
 )
 
+var transport_defaults: Array[ConnectTransportConfig] = []
 var _connection: NetwConnectHandle
 var _authored: Dictionary = { }
 var _settings := ConnectFieldList.new()
@@ -53,7 +54,10 @@ func open_join(
 func _populate_settings(peer_class: StringName) -> void:
 	var defaults: Dictionary = { }
 	if _connection != null and not peer_class.is_empty():
-		var transport := _connection.transport(peer_class)
+		var transport := ConnectTransportConfig.apply_to(
+			_connection.transport(peer_class),
+			transport_defaults,
+		)
 		defaults = transport.get("client_settings", { })
 	var seeded: Dictionary = defaults.duplicate(true)
 	for key: Variant in _authored.keys():

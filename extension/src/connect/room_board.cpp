@@ -325,7 +325,8 @@ void RoomBoard::read_packet(const Dictionary &p_data) {
 }
 
 void RoomBoard::collect(const RoomCard &p_card) {
-    if (p_card.filter_uid != filter_uid) {
+    if (p_card.filter_uid != filter_uid
+        || p_card.signaling_namespace != signaling_namespace) {
         return;
     }
     for (int64_t at = 0; at < int64_t(collected.size()); at++) {

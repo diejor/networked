@@ -90,6 +90,10 @@ public:
         const godot::Variant &p_transport,
         const godot::String &p_address
     );
+    godot::Error transport_set_browse_settings(
+        const godot::Variant &p_transport,
+        const godot::Dictionary &p_settings
+    );
     void endpoint_refresh();
 };
 

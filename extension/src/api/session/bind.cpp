@@ -369,6 +369,10 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::endpoint_probe
     );
     ClassDB::bind_method(
+        D_METHOD("transport_set_browse_settings", "transport", "settings"),
+        &NetwMultiplayer::transport_set_browse_settings
+    );
+    ClassDB::bind_method(
         D_METHOD("endpoint_refresh"),
         &NetwMultiplayer::endpoint_refresh
     );

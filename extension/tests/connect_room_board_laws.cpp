@@ -136,6 +136,7 @@ TEST_CASE(
 ) {
     RoomBoard board;
     board.filter_uid = "networked";
+    board.signaling_namespace = "my_game";
     RoomBoardProbe::arm(board);
     RoomBoardProbe::collecting(board, true);
 
@@ -171,6 +172,7 @@ TEST_CASE(
 ) {
     RoomBoard board;
     board.filter_uid = "networked";
+    board.signaling_namespace = "my_game";
     RoomBoardProbe::arm(board);
     RoomBoardProbe::collecting(board, true);
     const String hash = RoomBoardProbe::hash_of(board);
@@ -206,6 +208,7 @@ TEST_CASE(
 ) {
     RoomBoard board;
     board.filter_uid = "networked";
+    board.signaling_namespace = "my_game";
     RoomBoardProbe::arm(board);
     RoomBoardProbe::collecting(board, true);
     const String hash = RoomBoardProbe::hash_of(board);
@@ -248,6 +251,34 @@ TEST_CASE(
     CHECK(board.take_listing(once));
     LocalVector<TargetRow> again;
     CHECK(!board.take_listing(again));
+}
+
+TEST_CASE(
+    "[Networked][Connect][Hosted] room discovery selects its signaling "
+    "namespace"
+) {
+    RoomBoard board;
+    board.signaling_namespace = "game-a";
+    RoomBoardProbe::arm(board);
+    RoomBoardProbe::collecting(board, true);
+    RoomCard accepted = card_of("room00000000000000ab", "networked", 1);
+    accepted.signaling_namespace = "game-a";
+    RoomCard excluded = card_of("room00000000000000cd", "networked", 1);
+    excluded.signaling_namespace = "game-b";
+    const String hash = RoomBoardProbe::hash_of(board);
+    RoomBoardProbe::feed(
+        board,
+        packet_of(hash, "bbbbbbbbbbbbbbbbbbbb", accepted.to_dictionary())
+    );
+    RoomBoardProbe::feed(
+        board,
+        packet_of(hash, "cccccccccccccccccccc", excluded.to_dictionary())
+    );
+    RoomBoardProbe::ready(board);
+    LocalVector<TargetRow> listed;
+    REQUIRE(board.take_listing(listed));
+    NETW_CHECK_EQ(int(listed.size()), 1);
+    CHECK(listed[0].address == accepted.room_hash);
 }
 
 } // namespace TestNetwConnectRoomBoard

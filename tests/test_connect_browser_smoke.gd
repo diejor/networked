@@ -93,9 +93,10 @@ func test_a_join_form_offers_what_the_transport_lets_a_client_author() -> void:
 
 
 func test_a_bookmarked_setting_survives_the_file_it_is_saved_to() -> void:
-	var temp_path := "user://_test_connect_browser_saved_%d.cfg" % (
+	var temp_dir := "user://_test_connect_browser_saved_%d" % (
 			Time.get_ticks_usec()
 	)
+	var temp_path := temp_dir.path_join("servers.cfg")
 	var tree := MultiplayerTree.new()
 	add_child(tree)
 	var connection := Netw.connection(tree)
@@ -116,6 +117,13 @@ func test_a_bookmarked_setting_survives_the_file_it_is_saved_to() -> void:
 	)
 	await get_tree().process_frame
 
+	browser.queue_free()
+	tree.queue_free()
+	await get_tree().process_frame
+	tree = MultiplayerTree.new()
+	add_child(tree)
+	connection = Netw.connection(tree)
+
 	var reopened: ConnectBrowser = _BROWSER_SCENE.instantiate()
 	reopened.server_list_path = temp_path
 	reopened.bind(connection)
@@ -129,10 +137,10 @@ func test_a_bookmarked_setting_survives_the_file_it_is_saved_to() -> void:
 		),
 	).is_equal({ "port": 40000 })
 
-	browser.queue_free()
 	reopened.queue_free()
 	tree.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_dir))
 
 
 func test_direct_join_needs_no_endpoint_record() -> void:

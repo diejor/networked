@@ -3265,6 +3265,10 @@ public:
         EndpointState p_state
     );
     void endpoint_probe(const godot::RID &p_endpoint);
+    godot::Error transport_set_browse_settings(
+        const godot::RID &p_transport,
+        const godot::Dictionary &p_settings
+    );
     void endpoint_refresh();
     godot::RID transport_create_peer(
         const godot::RID &p_transport,

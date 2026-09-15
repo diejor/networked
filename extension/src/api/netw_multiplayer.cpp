@@ -2942,6 +2942,16 @@ void NetwMultiplayer::endpoint_probe(const RID &p_endpoint) {
     connect_core.probe_target(p_endpoint);
 }
 
+Error NetwMultiplayer::transport_set_browse_settings(
+    const RID &p_transport,
+    const Dictionary &p_settings
+) {
+    if (transport_held(p_transport) == nullptr) {
+        return ERR_DOES_NOT_EXIST;
+    }
+    return connect_core.set_browse_settings(p_transport, p_settings);
+}
+
 void NetwMultiplayer::endpoint_refresh() {
     connect_core.refresh();
 }
