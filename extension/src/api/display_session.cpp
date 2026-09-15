@@ -130,6 +130,14 @@ void NetwMultiplayer::display_release_route(int64_t p_route) {
     display_book->drop_route(p_route);
 }
 
+void NetwMultiplayer::display_retire_route(int64_t p_route) {
+    display::Runtime *runtime = display_book->runtime_at(p_route);
+    if (runtime != nullptr) {
+        display_release_hooks(runtime);
+    }
+    display_book->drop_route(p_route);
+}
+
 void NetwMultiplayer::display_clear_runtimes() {
     const LocalVector<display::Runtime *> runtimes = display_book->runtimes();
     for (int at = 0; at < runtimes.size(); ++at) {

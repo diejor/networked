@@ -1640,6 +1640,7 @@ public:
     );
     void display_on_entity_live(int64_t p_route, godot::Object *p_entity);
     void display_release_route(int64_t p_route);
+    void display_retire_route(int64_t p_route);
     void display_release_hooks(display::Runtime *p_runtime);
     void display_clear_runtimes();
     void display_on_control_changed(
@@ -4256,7 +4257,8 @@ private:
     void entity_release_body(
         const godot::RID &p_entity,
         const godot::Ref<NetwEntity> &p_wrapper,
-        int64_t p_route
+        int64_t p_route,
+        bool p_owner_live = false
     );
 
 public:

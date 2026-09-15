@@ -1118,7 +1118,7 @@ void NetwMultiplayer::liveness_release(int64_t p_route) {
 void NetwMultiplayer::liveness_announce_dead(int64_t p_route) {
     const RID entity = liveness_core->rid_from_route(int(p_route));
     replication_clear_route(p_route);
-    display_release_route(p_route);
+    display_retire_route(p_route);
     event_emit(
         EventPlane::DESPAWNED,
         p_route,
@@ -1151,7 +1151,7 @@ bool NetwMultiplayer::liveness_hide(int64_t p_route) {
             held->disconnect(StringName("despawning"), despawning);
         }
     }
-    entity_release_body(entity, wrapper, p_route);
+    entity_release_body(entity, wrapper, p_route, true);
     liveness_unindex_wrapper(entity);
     event_emit(
         EventPlane::HIDDEN,
@@ -1566,7 +1566,7 @@ void NetwMultiplayer::entity_commit_death(const EntityDeparture &p_row) {
         p_row.saved->submit(p_row.saved_write);
     }
     entity_release_seats(p_row, RID());
-    entity_release_body(p_row.entity, p_row.wrapper, p_row.route);
+    entity_release_body(p_row.entity, p_row.wrapper, p_row.route, false);
     if (p_row.wrapper.is_valid()) {
         NetwEntityRecord *const record = p_row.wrapper->get_record();
         const int64_t from = record->get_stage();
@@ -1582,7 +1582,8 @@ void NetwMultiplayer::entity_commit_death(const EntityDeparture &p_row) {
 void NetwMultiplayer::entity_release_body(
     const RID &p_entity,
     const Ref<NetwEntity> &p_wrapper,
-    int64_t p_route
+    int64_t p_route,
+    bool p_owner_live
 ) {
     persistence.engines.drop(p_entity);
     interest_release_body(p_wrapper);
@@ -1590,7 +1591,11 @@ void NetwMultiplayer::entity_release_body(
     lagcomp_timeline_undeclare(p_entity);
     if (p_route > 0) {
         replication_clear_route(p_route);
-        display_release_route(p_route);
+        if (p_owner_live) {
+            display_release_route(p_route);
+        } else {
+            display_retire_route(p_route);
+        }
     }
 }
 
@@ -1604,7 +1609,7 @@ void NetwMultiplayer::entity_commit_hide(const EntityDeparture &p_row) {
     if (ReplicationCore *plane = get_replication_plane()) {
         plane->get_spawn_pipeline()->settle_absence(p_row.route);
     }
-    entity_release_body(p_row.entity, p_row.wrapper, p_row.route);
+    entity_release_body(p_row.entity, p_row.wrapper, p_row.route, true);
     liveness_hide(p_row.route);
 }
 
