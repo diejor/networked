@@ -9,6 +9,7 @@ namespace netw::auth {
 inline constexpr uint8_t PROTOCOL_VERSION = 4;
 inline constexpr int HELLO_HEADER_LEN = 14;
 inline constexpr int PROBE_HEADER_LEN = 6;
+inline constexpr int HELLO_BEARS_CREDENTIAL = 1 << 0;
 
 enum class Kind : int {
     UNKNOWN = 0,

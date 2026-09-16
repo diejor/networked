@@ -22,6 +22,10 @@ sources.hold_determinism_floor(
 if env["builtin_enet"]:
     env_networked.Prepend(CPPPATH=["#thirdparty/enet"])
 
+if env["tests"]:
+    env.Append(CPPDEFINES=[sources.TESTS])
+    env_networked.Append(CPPDEFINES=[sources.TESTS])
+
 if env["profiler"] == "tracy":
     env_networked.Append(CPPDEFINES=[sources.PROFILING])
     profiler_path = Path(env["profiler_path"])

@@ -74,7 +74,7 @@
 		[/codeblock]
 		[NetwPropertyConfig] is everything a field can be told about how it travels, and [enum NetwPropertySet.Record] is where [method NetwPropertyConfig.state], [method NetwPropertyConfig.input] and [method NetwPropertyConfig.broadcast] are compared.
 		[b]RPCs, requests and signals[/b]
-		A call is addressed by [member NetwEntity.route] rather than by a node path, so it never errors on a node that has not spawned yet, and it reaches only the peers that see the entity. Godot's [code]@rpc[/code] supplies the authority mode and the transport. [method configure_rpc] registers the method and declares what the annotation has no spelling for, such as a [method NetwMemberConfig.controller] write policy or a [NetwQuantize] per argument.
+		A call is addressed by [member NetwEntity.route] rather than by a node path, so it never errors on a node that has not spawned yet. A call to every peer is narrowed by the interest the issuing peer itself declares, so only one issued from session authority is bounded by the committed interest rows. Treat interest as a bandwidth choice on a call rather than as a rule about who may learn it. Godot's [code]@rpc[/code] supplies the authority mode and the transport. [method configure_rpc] registers the method and declares what the annotation has no spelling for, such as a [method NetwMemberConfig.controller] write policy or a [NetwQuantize] per argument.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_rpc(self.aim).controller().quantize(

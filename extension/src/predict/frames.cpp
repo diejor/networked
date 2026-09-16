@@ -525,19 +525,19 @@ godot::Error admit_frame(
     }
     switch (decl->direction) {
         case wire::Direction::OWNER_TO_SERVER:
-            if (!p_origin.receiver_is_server
+            if (!p_origin.receiver_is_authority
                 || p_origin.sender != p_origin.controller) {
                 return godot::Error::ERR_UNAUTHORIZED;
             }
             break;
         case wire::Direction::CLIENT_TO_SERVER:
-            if (!p_origin.receiver_is_server) {
+            if (!p_origin.receiver_is_authority) {
                 return godot::Error::ERR_UNAUTHORIZED;
             }
             break;
         case wire::Direction::SERVER_TO_CLIENT:
         case wire::Direction::SERVER_TO_OWNER:
-            if (p_origin.sender != SERVER_PEER) {
+            if (p_origin.sender != p_origin.authority) {
                 return godot::Error::ERR_UNAUTHORIZED;
             }
             break;

@@ -625,6 +625,13 @@ Ref<NetwPromise> NetwDatabase::find_all(
 }
 
 Ref<NetwPromise> NetwDatabase::transaction(const Callable &p_body) {
+    return transaction_fenced(p_body, persist::WriteFence());
+}
+
+Ref<NetwPromise> NetwDatabase::transaction_fenced(
+    const Callable &p_body,
+    const persist::WriteFence &p_authority
+) {
     initialize_backend();
     if (backend.is_null()) {
         NETW_ERROR(sys::TABLE, "the transaction is refused, no backend is set");
@@ -645,17 +652,36 @@ Ref<NetwPromise> NetwDatabase::transaction(const Callable &p_body) {
     }
 
     const Ref<NetwPromise> written = backend->commit(rows);
-    written->then(callable_mp(this, &NetwDatabase::announce_committed)
-                      .bind(touched.size(), rows.size()));
+    written->then(
+        callable_mp(this, &NetwDatabase::announce_committed)
+            .bind(
+                touched.size(),
+                rows.size(),
+                int64_t(uint64_t(p_authority.session)),
+                p_authority.authority,
+                p_authority.armed
+            )
+    );
     return written;
 }
 
 void NetwDatabase::announce_committed(
     const Variant &p_outcome,
     int p_table_count,
-    int p_row_count
+    int p_row_count,
+    int64_t p_issuer_session,
+    int64_t p_issuer_authority,
+    bool p_issuer_armed
 ) {
     if (int64_t(p_outcome) != OK) {
+        return;
+    }
+    const persist::WriteFence issuer{
+        ObjectID(uint64_t(p_issuer_session)),
+        p_issuer_authority,
+        p_issuer_armed
+    };
+    if (!persist::write_fence_holds(issuer)) {
         return;
     }
     emit_signal(SIG_TRANSACTION_COMMITTED, p_table_count, p_row_count);
@@ -680,7 +706,7 @@ Ref<NetwPromise> NetwDatabase::table_flush(
     const PackedStringArray &p_ids
 ) {
     NetwMultiplayer *core = core_of(p_session);
-    if (core == nullptr || !p_session->is_server()) {
+    if (core == nullptr || !core->is_host()) {
         NETW_ERROR(sys::TABLE, "table_flush is server-only");
         return NetwPromise::resolved(int64_t(ERR_UNCONFIGURED));
     }
@@ -721,9 +747,15 @@ Ref<NetwPromise> NetwDatabase::table_flush(
     }
 
     declare_table(p_into, names_of(values));
-    return transaction(
+    const persist::WriteFence issuer{
+        gd::instance_id(core),
+        core->session_authority_peer(),
+        true
+    };
+    return transaction_fenced(
         callable_mp(this, &NetwDatabase::queue_table_record)
-            .bind(p_into, core->schema_get_name(declared), values)
+            .bind(p_into, core->schema_get_name(declared), values),
+        issuer
     );
 }
 
@@ -749,7 +781,7 @@ Ref<NetwPromise> NetwDatabase::table_hydrate(
     empty[KEY_IDS] = PackedStringArray();
 
     NetwMultiplayer *core = core_of(p_session);
-    if (core == nullptr || !p_session->is_server()) {
+    if (core == nullptr || !core->is_host()) {
         NETW_ERROR(sys::TABLE, "table_hydrate is server-only");
         return NetwPromise::resolved(empty);
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "godot/class_db.hpp"
+#include "godot/hash_map.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/auth_flow.hpp"
@@ -20,6 +21,8 @@ class NetwTestAuthFlow : public netw::NetwAuthFlow {
     godot::Array minted_for;
     godot::Ref<netw::NetwPromise> prepared;
     godot::Ref<netw::NetwIdentity> host;
+    godot::HashMap<int64_t, godot::Ref<netw::AuthResult>> per_peer_verdict;
+    godot::HashMap<int64_t, godot::PackedByteArray> per_peer_payload;
     int verify_calls = 0;
     int prepare_calls = 0;
     int credential_calls = 0;
@@ -51,13 +54,28 @@ public:
         return credential_calls;
     }
 
+    void set_verdict_for(
+        int64_t p_peer,
+        const godot::Ref<netw::AuthResult> &p_verdict
+    ) {
+        per_peer_verdict[p_peer] = p_verdict;
+    }
+
     godot::Ref<netw::AuthResult> verify(
-        int64_t,
+        int64_t p_peer,
         const godot::PackedByteArray &p_data
     ) override {
         verify_calls += 1;
         verified_payload = p_data;
-        return verdict;
+        per_peer_payload[p_peer] = p_data;
+        const auto found = per_peer_verdict.find(p_peer);
+        return found != per_peer_verdict.end() ? found->value : verdict;
+    }
+
+    godot::PackedByteArray payload_of(int64_t p_peer) const {
+        const auto found = per_peer_payload.find(p_peer);
+        return found != per_peer_payload.end() ? found->value
+                                              : godot::PackedByteArray();
     }
 
     void set_prepared(const godot::Ref<netw::NetwPromise> &p_prepared) {

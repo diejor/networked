@@ -33,31 +33,44 @@ struct SetRow {
     int64_t audience = SET_AUDIENCE_PUBLIC;
 };
 
+bool record_authors(
+    int64_t p_record,
+    int64_t p_policy,
+    bool p_holds_session_authority,
+    int64_t p_local_id,
+    int64_t p_node_authority,
+    int64_t p_controller
+);
+
 bool row_authors(
     const SetRow &p_row,
     int64_t p_local_id,
-    bool p_node_authority,
-    int64_t p_controller
+    int64_t p_node_authority,
+    int64_t p_controller,
+    int64_t p_coordinator
 );
 
 godot::PackedInt32Array row_recipients(
     const SetRow &p_row,
     int64_t p_local_id,
-    const godot::PackedInt32Array &p_live
+    const godot::PackedInt32Array &p_live,
+    int64_t p_coordinator
 );
 
 godot::PackedInt32Array event_recipients(
     bool p_is_host,
     int64_t p_local_id,
     int64_t p_exclude,
-    const godot::PackedInt32Array &p_live
+    const godot::PackedInt32Array &p_live,
+    int64_t p_coordinator
 );
 
 bool row_admits_sender(
     const SetRow &p_row,
     int64_t p_sender,
     int64_t p_node_authority,
-    int64_t p_controller
+    int64_t p_controller,
+    int64_t p_coordinator
 );
 
 class SetModel {

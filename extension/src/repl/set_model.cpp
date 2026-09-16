@@ -24,35 +24,52 @@ bool names(
 
 } // namespace
 
+bool record_authors(
+    int64_t p_record,
+    int64_t p_policy,
+    bool p_holds_session_authority,
+    int64_t p_local_id,
+    int64_t p_node_authority,
+    int64_t p_controller
+) {
+    if (p_record == SET_RECORD_STATE) {
+        return p_holds_session_authority;
+    }
+    return entity::Control::policy_admits(
+        int(p_policy),
+        p_local_id,
+        p_node_authority,
+        p_controller
+    );
+}
+
 bool row_authors(
     const SetRow &p_row,
     int64_t p_local_id,
-    bool p_node_authority,
-    int64_t p_controller
+    int64_t p_node_authority,
+    int64_t p_controller,
+    int64_t p_coordinator
 ) {
-    if (p_row.record == SET_RECORD_STATE) {
-        return p_local_id == 1;
-    }
-    switch (entity::Control::WritePolicy(p_row.policy)) {
-        case entity::Control::WritePolicy::AUTHORITY:
-            return p_node_authority;
-        case entity::Control::WritePolicy::CONTROLLER:
-            return p_local_id == p_controller;
-        case entity::Control::WritePolicy::ANY_PEER:
-            return true;
-    }
-    return false;
+    return record_authors(
+        p_row.record,
+        p_row.policy,
+        p_local_id == p_coordinator,
+        p_local_id,
+        p_node_authority,
+        p_controller
+    );
 }
 
 PackedInt32Array row_recipients(
     const SetRow &p_row,
     int64_t p_local_id,
-    const PackedInt32Array &p_live
+    const PackedInt32Array &p_live,
+    int64_t p_coordinator
 ) {
     PackedInt32Array out;
     if (p_row.audience == SET_AUDIENCE_SERVER_ONLY) {
-        if (p_local_id != 1) {
-            out.push_back(1);
+        if (p_local_id != p_coordinator) {
+            out.push_back(int32_t(p_coordinator));
         }
         return out;
     }
@@ -69,12 +86,13 @@ PackedInt32Array event_recipients(
     bool p_is_host,
     int64_t p_local_id,
     int64_t p_exclude,
-    const PackedInt32Array &p_live
+    const PackedInt32Array &p_live,
+    int64_t p_coordinator
 ) {
     PackedInt32Array out;
     if (!p_is_host) {
-        if (p_local_id != 1 && p_exclude != 1) {
-            out.push_back(1);
+        if (p_local_id != p_coordinator && p_exclude != p_coordinator) {
+            out.push_back(int32_t(p_coordinator));
         }
         return out;
     }
@@ -91,9 +109,10 @@ bool row_admits_sender(
     const SetRow &p_row,
     int64_t p_sender,
     int64_t p_node_authority,
-    int64_t p_controller
+    int64_t p_controller,
+    int64_t p_coordinator
 ) {
-    if (p_sender == 1) {
+    if (p_sender == p_coordinator) {
         return true;
     }
     if (p_row.record == SET_RECORD_STATE) {

@@ -1,6 +1,11 @@
 #include "support/netw_test.h"
 
+#include "netw/api/entity.hpp"
+#include "netw/api/entity_record.hpp"
+#include "netw/api/interest_layer.hpp"
+#include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/interest/relay.hpp"
 
 namespace TestNetwInterestReads {
 
@@ -55,6 +60,92 @@ TEST_CASE(
 
     CHECK_FALSE(core->interest_is_filtered(entity));
     NETW_CHECK_EQ(core->interest_membership_ids(entity).size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] IR3 a listen host takes a seat in its own "
+    "audience under its own peer id, so a host running as peer 7 is the "
+    "observer 7 rather than the observer 1 nobody there is"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+    core->session_set_desired_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
+
+    Ref<netw::LocalMultiplayerPeer> peer;
+    peer.instantiate();
+    REQUIRE(peer->create_server(7) == OK);
+    core->set("multiplayer_peer", peer);
+
+    REQUIRE(core->session_get_role() == NetwMultiplayer::ROLE_LISTEN_SERVER);
+    NETW_CHECK_EQ(core->get_unique_id(), 7);
+    NETW_CHECK_EQ(core->interest_local_participant(), int64_t(7));
+
+    core->interest_sync_live_peers();
+    const PackedInt64Array seated = core->interest_known_peers();
+
+    CHECK(seated.has(int64_t(7)));
+    CHECK_FALSE(seated.has(int64_t(1)));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] IR4 awareness is admitted from the peer "
+    "this session asks for authority and from nobody else, so a batch minted "
+    "by transport peer 1 under a coordinator of 7 reaches no route"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+
+    Array rows;
+    rows.push_back(
+        netw::interest::Awareness::layer_edge(
+            4,
+            StringName("zone"),
+            netw::interest::Awareness::ENTER
+        )
+            .to_array()
+    );
+    const PackedByteArray batch = netw::interest::awareness_encode(rows);
+
+    core->interest_receive_awareness(batch, 1);
+
+    NETW_CHECK_EQ(core->liveness_pending_live_count(), int64_t(0));
+
+    core->interest_receive_awareness(batch, 7);
+
+    NETW_CHECK_EQ(core->liveness_pending_live_count(), int64_t(1));
+}
+
+TEST_CASE(
+    "[Networked][Interest][Hosted] IR5 a listen host at peer 7 admits an "
+    "entity into a layer, because a layer asks whether this session holds "
+    "authority rather than whether it holds the socket"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+    core->session_set_desired_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
+
+    Ref<netw::LocalMultiplayerPeer> peer;
+    peer.instantiate();
+    REQUIRE(peer->create_server(7) == OK);
+    core->set("multiplayer_peer", peer);
+
+    REQUIRE(core->is_host());
+    CHECK_FALSE(core->is_server());
+
+    const RID handle = entity_of(core);
+    Ref<netw::NetwEntity> wrapper;
+    wrapper.instantiate();
+    wrapper->get_record()->adopt_handle(handle);
+
+    const Ref<NetwInterestLayer> layer
+        = core->interest_layer(StringName("zone"));
+    REQUIRE(layer.is_valid());
+
+    CHECK(layer->add_entity(wrapper));
+    CHECK(layer->remove_entity(wrapper));
 }
 
 TEST_CASE(

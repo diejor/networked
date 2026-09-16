@@ -156,4 +156,36 @@ TEST_CASE(
     NETW_CHECK_EQ(int(core->stats_get_verdict_count(ERR_UNAUTHORIZED)), 0);
 }
 
+TEST_CASE(
+    "[Networked][Scene][Hosted] SF5 a session that asked coordinator 7 settles "
+    "on 7's answer and refuses the same answer from transport peer 1, so the "
+    "peer that happens to run the socket cannot decide another peer's scene"
+) {
+    const Ref<NetwMultiplayer> core = asking_core();
+    core->session_set_authority_peer(7);
+    const Ref<NetwSceneCore> scenes = core->get_scene_core();
+
+    const Ref<NetwPromise> asked = core->scene_request_send(
+        String("res://arena.tscn"),
+        NetwSceneCore::SCOPE_SESSION,
+        RID()
+    );
+    const int request_id = scenes->get_pending_request_id();
+
+    NETW_CHECK_EQ(scenes->get_pending_request_destination(), int64_t(7));
+
+    CHECK_FALSE(
+        core->scene_receive_result_frame(result_frame(request_id, OK), 1)
+    );
+
+    CHECK_FALSE(asked->get_is_settled());
+    CHECK(scenes->is_current(request_id));
+    NETW_CHECK_EQ(int(core->stats_get_verdict_count(ERR_UNAUTHORIZED)), 1);
+
+    CHECK(core->scene_receive_result_frame(result_frame(request_id, OK), 7));
+
+    NETW_CHECK_EQ(asked->get_code(), OK);
+    NETW_CHECK_EQ(int(core->stats_get_verdict_count(ERR_UNAUTHORIZED)), 1);
+}
+
 } // namespace TestNetwSceneResultFrameLaws

@@ -20,7 +20,7 @@ TEST_CASE(
 ) {
     Park park;
 
-    CHECK(park.park(31, frame(7), Park::WAIT_ROUTE, 0));
+    CHECK(park.park(31, frame(7), Park::WAIT_ROUTE, 0, 7));
     CHECK(park.has(31));
     NETW_CHECK_EQ(park.size(), 1);
 
@@ -35,9 +35,9 @@ TEST_CASE(
     "it parked with"
 ) {
     Park park;
-    park.park(31, frame(7), Park::WAIT_ROUTE, 0);
+    park.park(31, frame(7), Park::WAIT_ROUTE, 0, 7);
 
-    CHECK_FALSE(park.park(31, frame(9), Park::WAIT_SCENE, 500));
+    CHECK_FALSE(park.park(31, frame(9), Park::WAIT_SCENE, 500, 9));
 
     NETW_CHECK_EQ(park.size(), 1);
     CHECK(park.take(31) == frame(7));
@@ -48,7 +48,7 @@ TEST_CASE(
     "despawn arriving mid-park"
 ) {
     Park park;
-    park.park(31, frame(7), Park::WAIT_ROUTE, 0);
+    park.park(31, frame(7), Park::WAIT_ROUTE, 0, 7);
 
     CHECK(park.cancel(31));
     CHECK_FALSE(park.cancel(31));
@@ -60,9 +60,9 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] what a row waits on decides who retries it"
 ) {
     Park park;
-    park.park(31, frame(1), Park::WAIT_ROUTE, 0);
-    park.park(32, frame(2), Park::WAIT_SCENE, 500);
-    park.park(33, frame(3), Park::WAIT_SCENE, 900);
+    park.park(31, frame(1), Park::WAIT_ROUTE, 0, 7);
+    park.park(32, frame(2), Park::WAIT_SCENE, 500, 7);
+    park.park(33, frame(3), Park::WAIT_SCENE, 900, 7);
 
     PackedInt64Array on_route;
     on_route.push_back(31);
@@ -75,9 +75,9 @@ TEST_CASE(
     "wall clock, and a route wait carries none because its waiter bounds it"
 ) {
     Park park;
-    park.park(31, frame(1), Park::WAIT_ROUTE, 0);
-    park.park(32, frame(2), Park::WAIT_SCENE, 500);
-    park.park(33, frame(3), Park::WAIT_ADOPT, 700);
+    park.park(31, frame(1), Park::WAIT_ROUTE, 0, 7);
+    park.park(32, frame(2), Park::WAIT_SCENE, 500, 7);
+    park.park(33, frame(3), Park::WAIT_ADOPT, 700, 7);
 
     CHECK_FALSE(park.is_expired(32, 499));
     CHECK(park.is_expired(32, 500));
@@ -95,11 +95,11 @@ TEST_CASE(
     "that does not land keeps the deadline it was parked under"
 ) {
     Park park;
-    park.park(31, frame(7), Park::WAIT_ADOPT, 500);
+    park.park(31, frame(7), Park::WAIT_ADOPT, 500, 7);
 
     CHECK(park.peek(31) == frame(7));
     CHECK(park.has(31));
-    CHECK_FALSE(park.park(31, frame(9), Park::WAIT_ADOPT, 9000));
+    CHECK_FALSE(park.park(31, frame(9), Park::WAIT_ADOPT, 9000, 9));
     CHECK(park.is_expired(31, 500));
 
     CHECK(park.peek(404).is_empty());
@@ -107,8 +107,8 @@ TEST_CASE(
 
 TEST_CASE("[Networked][Spawn][Hosted] a cleared park is waiting for nothing") {
     Park park;
-    park.park(31, frame(1), Park::WAIT_ROUTE, 0);
-    park.park(32, frame(2), Park::WAIT_SCENE, 500);
+    park.park(31, frame(1), Park::WAIT_ROUTE, 0, 7);
+    park.park(32, frame(2), Park::WAIT_SCENE, 500, 7);
 
     park.clear();
 

@@ -180,7 +180,8 @@ void NetwMultiplayer::action_send_request(
     if (!lagcomp_is_configured()) {
         return;
     }
-    const bool is_remote = has_multiplayer_peer() && !is_server();
+    const bool is_remote = has_multiplayer_peer() && !is_host();
+    const int64_t destination = session_authority_peer();
     const Ref<NetwEntity> entity
         = NetwEntity::of(node_from_tree_path(p_target_path));
     int64_t route = 0;
@@ -224,7 +225,7 @@ void NetwMultiplayer::action_send_request(
     body.key = p_key;
     body.timing = p_timing_mode;
     plane->send_to(
-        MultiplayerPeer::TARGET_PEER_SERVER,
+        destination,
         route,
         wire::builtin_channel("ACTION"),
         session::frame_write(body),

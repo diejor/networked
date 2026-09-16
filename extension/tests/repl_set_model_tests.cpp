@@ -267,8 +267,9 @@ SetRow gated(int64_t p_record, int64_t p_policy, int64_t p_audience) {
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] a state row is server-authored whatever "
-    "its policy says"
+    "[Networked][Repl][Hosted] a state row is coordinator-authored whatever "
+    "its policy says, and transport peer 1 is an ordinary non-authority "
+    "actor when it holds no coordinator seat"
 ) {
     const SetRow row = gated(
         netw::repl::SET_RECORD_STATE,
@@ -276,8 +277,8 @@ TEST_CASE(
         SET_AUDIENCE_PUBLIC
     );
 
-    CHECK(netw::repl::row_authors(row, 1, false, 7));
-    CHECK_FALSE(netw::repl::row_authors(row, 7, true, 7));
+    CHECK(netw::repl::row_authors(row, 7, 9, 7, 7));
+    CHECK_FALSE(netw::repl::row_authors(row, 1, 9, 7, 7));
 }
 
 TEST_CASE("[Networked][Repl][Hosted] a non-state row follows its policy") {
@@ -297,16 +298,17 @@ TEST_CASE("[Networked][Repl][Hosted] a non-state row follows its policy") {
         SET_AUDIENCE_PUBLIC
     );
 
-    CHECK(netw::repl::row_authors(by_authority, 7, true, 0));
-    CHECK_FALSE(netw::repl::row_authors(by_authority, 7, false, 7));
-    CHECK(netw::repl::row_authors(by_controller, 7, false, 7));
-    CHECK_FALSE(netw::repl::row_authors(by_controller, 7, true, 8));
-    CHECK(netw::repl::row_authors(by_anyone, 7, false, 0));
+    CHECK(netw::repl::row_authors(by_authority, 7, 7, 0, 1));
+    CHECK_FALSE(netw::repl::row_authors(by_authority, 7, 9, 7, 1));
+    CHECK(netw::repl::row_authors(by_controller, 7, 9, 7, 1));
+    CHECK_FALSE(netw::repl::row_authors(by_controller, 7, 7, 8, 1));
+    CHECK(netw::repl::row_authors(by_anyone, 7, 9, 0, 1));
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] a server-only row reaches the server "
-    "alone, and nobody when the server authors it"
+    "[Networked][Repl][Hosted] a server-only row reaches the coordinator "
+    "alone, transport peer 1 included when it is not the coordinator, and "
+    "nobody when the coordinator authors it"
 ) {
     const SetRow row = gated(
         netw::repl::SET_RECORD_INPUT,
@@ -318,14 +320,14 @@ TEST_CASE(
     live.push_back(7);
     live.push_back(8);
 
-    const godot::PackedInt32Array from_client
-        = netw::repl::row_recipients(row, 7, live);
-    const godot::PackedInt32Array from_server
-        = netw::repl::row_recipients(row, 1, live);
+    const godot::PackedInt32Array from_peer_one
+        = netw::repl::row_recipients(row, 1, live, 7);
+    const godot::PackedInt32Array from_coordinator
+        = netw::repl::row_recipients(row, 7, live, 7);
 
-    NETW_CHECK_EQ(int64_t(from_client.size()), int64_t(1));
-    NETW_CHECK_EQ(int64_t(from_client[0]), int64_t(1));
-    NETW_CHECK_EQ(int64_t(from_server.size()), int64_t(0));
+    NETW_CHECK_EQ(int64_t(from_peer_one.size()), int64_t(1));
+    NETW_CHECK_EQ(int64_t(from_peer_one[0]), int64_t(7));
+    NETW_CHECK_EQ(int64_t(from_coordinator.size()), int64_t(0));
 }
 
 TEST_CASE(
@@ -343,7 +345,7 @@ TEST_CASE(
     live.push_back(8);
 
     const godot::PackedInt32Array out
-        = netw::repl::row_recipients(row, 1, live);
+        = netw::repl::row_recipients(row, 1, live, 7);
 
     NETW_CHECK_EQ(int64_t(out.size()), int64_t(2));
     NETW_CHECK_EQ(int64_t(out[0]), int64_t(7));
@@ -369,22 +371,23 @@ TEST_CASE(
     godot::PackedInt32Array live;
     live.push_back(7);
 
-    CHECK(model.authors(ROUTE, 0, 7, true, 7));
-    CHECK_FALSE(model.authors(ROUTE, 1, 7, true, 7));
-    CHECK_FALSE(model.authors(ROUTE + 1, 0, 7, true, 7));
+    CHECK(model.authors(ROUTE, 0, 7, 7, 7, 1));
+    CHECK_FALSE(model.authors(ROUTE, 1, 7, 7, 7, 1));
+    CHECK_FALSE(model.authors(ROUTE + 1, 0, 7, 7, 7, 1));
     NETW_CHECK_EQ(
-        int64_t(model.recipients(ROUTE, 1, 1, live).size()),
+        int64_t(model.recipients(ROUTE, 1, 1, live, 1).size()),
         int64_t(0)
     );
     NETW_CHECK_EQ(
-        int64_t(model.recipients(ROUTE, 0, 1, live).size()),
+        int64_t(model.recipients(ROUTE, 0, 1, live, 1).size()),
         int64_t(1)
     );
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] a received state row accepts the server "
-    "alone, whatever its policy says"
+    "[Networked][Repl][Hosted] a received state row accepts the "
+    "coordinator alone, whatever its policy says, and denies transport "
+    "peer 1 when it is not the coordinator"
 ) {
     const SetRow row = gated(
         netw::repl::SET_RECORD_STATE,
@@ -392,13 +395,13 @@ TEST_CASE(
         SET_AUDIENCE_PUBLIC
     );
 
-    CHECK(netw::repl::row_admits_sender(row, 1, 7, 7));
-    CHECK_FALSE(netw::repl::row_admits_sender(row, 7, 7, 7));
+    CHECK(netw::repl::row_admits_sender(row, 7, 7, 7, 7));
+    CHECK_FALSE(netw::repl::row_admits_sender(row, 1, 7, 7, 7));
 }
 
 TEST_CASE(
     "[Networked][Repl][Hosted] a received non-state row trusts the "
-    "server and then its own policy"
+    "coordinator and then its own policy"
 ) {
     const SetRow by_authority = gated(
         netw::repl::SET_RECORD_BROADCAST,
@@ -411,11 +414,11 @@ TEST_CASE(
         SET_AUDIENCE_SERVER_ONLY
     );
 
-    CHECK(netw::repl::row_admits_sender(by_authority, 1, 8, 0));
-    CHECK(netw::repl::row_admits_sender(by_authority, 7, 7, 0));
-    CHECK_FALSE(netw::repl::row_admits_sender(by_authority, 7, 8, 7));
-    CHECK(netw::repl::row_admits_sender(by_controller, 7, 8, 7));
-    CHECK_FALSE(netw::repl::row_admits_sender(by_controller, 7, 7, 8));
+    CHECK(netw::repl::row_admits_sender(by_authority, 7, 8, 0, 7));
+    CHECK(netw::repl::row_admits_sender(by_authority, 7, 7, 0, 1));
+    CHECK_FALSE(netw::repl::row_admits_sender(by_authority, 7, 8, 7, 1));
+    CHECK(netw::repl::row_admits_sender(by_controller, 7, 8, 7, 1));
+    CHECK_FALSE(netw::repl::row_admits_sender(by_controller, 7, 7, 8, 1));
 }
 
 TEST_CASE(
@@ -500,7 +503,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Repl][Hosted] an on-demand event fans out from the "
-    "host and funnels to the server from a client"
+    "host and funnels to the coordinator from a client, transport peer 1 "
+    "included when it holds no coordinator seat"
 ) {
     godot::PackedInt32Array live;
     live.push_back(1);
@@ -508,13 +512,13 @@ TEST_CASE(
     live.push_back(8);
 
     const godot::PackedInt32Array from_host
-        = netw::repl::event_recipients(true, 1, 0, live);
+        = netw::repl::event_recipients(true, 1, 0, live, 7);
     const godot::PackedInt32Array from_client
-        = netw::repl::event_recipients(false, 7, 0, live);
+        = netw::repl::event_recipients(false, 9, 0, live, 7);
 
     NETW_CHECK_EQ(int64_t(from_host.size()), int64_t(3));
     NETW_CHECK_EQ(int64_t(from_client.size()), int64_t(1));
-    NETW_CHECK_EQ(int64_t(from_client[0]), int64_t(1));
+    NETW_CHECK_EQ(int64_t(from_client[0]), int64_t(7));
 }
 
 TEST_CASE(
@@ -527,7 +531,7 @@ TEST_CASE(
     live.push_back(8);
 
     const godot::PackedInt32Array out
-        = netw::repl::event_recipients(true, 1, 7, live);
+        = netw::repl::event_recipients(true, 1, 7, live, 1);
 
     NETW_CHECK_EQ(int64_t(out.size()), int64_t(2));
     NETW_CHECK_EQ(int64_t(out[0]), int64_t(1));
@@ -535,18 +539,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] the server itself sends no on-demand "
-    "event to the server"
+    "[Networked][Repl][Hosted] the coordinator itself sends no on-demand "
+    "event to the coordinator"
 ) {
     godot::PackedInt32Array live;
-    live.push_back(1);
+    live.push_back(7);
 
     NETW_CHECK_EQ(
-        int64_t(netw::repl::event_recipients(false, 1, 0, live).size()),
+        int64_t(netw::repl::event_recipients(false, 7, 0, live, 7).size()),
         int64_t(0)
     );
     NETW_CHECK_EQ(
-        int64_t(netw::repl::event_recipients(false, 7, 1, live).size()),
+        int64_t(netw::repl::event_recipients(false, 9, 7, live, 7).size()),
         int64_t(0)
     );
 }
@@ -710,7 +714,7 @@ TEST_CASE(
         int64_t(WritePolicy::ANY_PEER)
     );
 
-    CHECK(model.admit_row(ROUTE, -1, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, -1, 7, 7, 7).is_null());
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("drops_no_set")]), 1);
     memdelete(node);
 }
@@ -726,20 +730,20 @@ TEST_CASE(
         int64_t(WritePolicy::ANY_PEER)
     );
 
-    CHECK(model.admit_row(ROUTE, 1, 7, 7).is_null());
-    CHECK(model.admit_row(ROUTE + 1, 0, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 1, 7, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE + 1, 0, 7, 7, 7).is_null());
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("drops_no_set")]), 2);
 
-    REQUIRE(model.admit_row(ROUTE, 0, 7, 7).is_valid());
+    REQUIRE(model.admit_row(ROUTE, 0, 7, 7, 7).is_valid());
 
     memdelete(node);
-    CHECK(model.admit_row(ROUTE, 0, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7).is_null());
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("drops_no_set")]), 3);
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] a sender the row does not admit is refused as "
-    "a sender, not as a missing set"
+    "[Networked][Repl][Hosted] a state row admits its coordinator as sender "
+    "and refuses everyone else, transport peer 1 included"
 ) {
     Node *node = memnew(Node);
     node->set_multiplayer_authority(1, false);
@@ -749,12 +753,12 @@ TEST_CASE(
         int64_t(WritePolicy::AUTHORITY)
     );
 
-    CHECK(model.admit_row(ROUTE, 0, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 0, 1, 7, 7).is_null());
     const Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_bad_sender")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_no_set")]), 0);
 
-    CHECK(model.admit_row(ROUTE, 0, 1, 7).is_valid());
+    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7).is_valid());
     memdelete(node);
 }
 
@@ -772,7 +776,7 @@ TEST_CASE(
     noted[int64_t(0)] = int64_t(8);
     model.note_descriptors(ROUTE, noted);
 
-    CHECK(model.admit_row(ROUTE, 0, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7).is_null());
     const Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_schema")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_bad_sender")]), 0);
@@ -791,7 +795,7 @@ TEST_CASE(
     );
 
     const Ref<netw::NetwPropertySetBinding> admitted
-        = model.admit_row(ROUTE, 0, 7, 7);
+        = model.admit_row(ROUTE, 0, 7, 7, 7);
     CHECK(admitted == model.binding_of(ROUTE, 0));
 
     Dictionary stats = model.stats();
@@ -824,13 +828,13 @@ TEST_CASE(
     live.push_back(7);
     live.push_back(8);
 
-    CHECK(model.offer_row(ROUTE, 0, 1, false, 7, live).is_empty());
+    CHECK(model.offer_row(ROUTE, 0, 1, false, 7, live, 1).is_empty());
     Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_not_author")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_no_recipients")]), 0);
 
     NETW_CHECK_EQ(
-        int64_t(model.offer_row(ROUTE, 0, 1, true, 7, live).size()),
+        int64_t(model.offer_row(ROUTE, 0, 1, true, 7, live, 1).size()),
         2
     );
     stats = model.stats();
@@ -855,7 +859,9 @@ TEST_CASE(
         SET_AUDIENCE_PUBLIC
     );
 
-    CHECK(model.offer_row(ROUTE, 0, 1, true, 7, PackedInt32Array()).is_empty());
+    CHECK(
+        model.offer_row(ROUTE, 0, 1, true, 7, PackedInt32Array(), 1).is_empty()
+    );
     const Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_no_recipients")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_not_author")]), 0);
@@ -869,7 +875,7 @@ TEST_CASE(
     PackedInt32Array live;
     live.push_back(7);
 
-    CHECK(model.offer_row(ROUTE, 0, 1, true, 7, live).is_empty());
+    CHECK(model.offer_row(ROUTE, 0, 1, true, 7, live, 1).is_empty());
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("skips_not_author")]), 1);
 }
 

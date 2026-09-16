@@ -765,7 +765,10 @@ Ref<NetwPromise> Netw::request(
     const Callable &p_callable,
     const Array &p_args
 ) {
-    return request_id(1, p_callable, p_args);
+    NetwMultiplayer *api = rpc_interface(p_callable);
+    const int64_t coordinator
+        = api != nullptr ? api->session_authority_peer() : 1;
+    return request_id(coordinator, p_callable, p_args);
 }
 
 Ref<NetwGroupPromise> Netw::request_all(

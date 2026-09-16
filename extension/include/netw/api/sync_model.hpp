@@ -62,22 +62,25 @@ public:
         int64_t p_route,
         int64_t p_ordinal,
         int64_t p_local_id,
-        bool p_node_authority,
-        int64_t p_controller
+        int64_t p_node_authority,
+        int64_t p_controller,
+        int64_t p_coordinator
     ) const;
 
     godot::PackedInt32Array recipients(
         int64_t p_route,
         int64_t p_ordinal,
         int64_t p_local_id,
-        const godot::PackedInt32Array &p_live
+        const godot::PackedInt32Array &p_live,
+        int64_t p_coordinator
     ) const;
 
     static godot::PackedInt32Array event_recipients(
         bool p_is_host,
         int64_t p_local_id,
         int64_t p_exclude,
-        const godot::PackedInt32Array &p_live
+        const godot::PackedInt32Array &p_live,
+        int64_t p_coordinator
     );
 
     bool admits_sender(
@@ -85,7 +88,8 @@ public:
         int64_t p_ordinal,
         int64_t p_sender,
         int64_t p_node_authority,
-        int64_t p_controller
+        int64_t p_controller,
+        int64_t p_coordinator
     ) const;
 
     void note_descriptors(int64_t p_route, const godot::Dictionary &p_noted);
@@ -116,7 +120,8 @@ public:
         int64_t p_route,
         int64_t p_ordinal,
         int64_t p_sender,
-        int64_t p_controller
+        int64_t p_controller,
+        int64_t p_coordinator
     );
 
     void note_row_applied();
@@ -127,7 +132,8 @@ public:
         int64_t p_local_id,
         bool p_node_authority,
         int64_t p_controller,
-        const godot::PackedInt32Array &p_live
+        const godot::PackedInt32Array &p_live,
+        int64_t p_coordinator
     );
 
     godot::Dictionary stats() const;

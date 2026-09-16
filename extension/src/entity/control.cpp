@@ -45,9 +45,10 @@ bool Control::script_admits(
     const StringName &p_name,
     bool p_is_signal,
     int64_t p_sender,
-    int64_t p_controller
+    int64_t p_controller,
+    int64_t p_coordinator
 ) {
-    if (p_sender == 1) {
+    if (p_sender == p_coordinator) {
         return true;
     }
     Node *node = Object::cast_to<Node>(p_node);

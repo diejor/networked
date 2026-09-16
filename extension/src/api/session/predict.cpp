@@ -60,7 +60,8 @@ Error NetwMultiplayer::predict_admit_frame_default(
             int(p_channel),
             int(p_sender),
             entity.is_valid() ? int(entity->get_controller()) : 0,
-            is_server(),
+            session_authority_peer(),
+            is_host(),
             p_payload.is_empty(),
             int(entity_frame_verdict(p_route))
         )
@@ -660,7 +661,7 @@ void NetwMultiplayer::predict_history_record(
     bool p_include_unregistered
 ) {
     NETW_ZONE_NC("predict history record", colors::PREDICTION);
-    if (!lagcomp_configured || !is_server()) {
+    if (!lagcomp_configured || !is_host()) {
         return;
     }
     const Dictionary timelines = lagcomp_core.timeline_entities();
@@ -871,7 +872,7 @@ void NetwMultiplayer::predict_relay_command_frame(
     const PackedByteArray &p_payload,
     int64_t p_author
 ) {
-    if (!is_server() || p_entity.is_null()) {
+    if (!is_host() || p_entity.is_null()) {
         return;
     }
     const RID handle = p_entity->get_rid_handle();
@@ -920,7 +921,7 @@ void NetwMultiplayer::action_receive_carrier(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
-    if (!lagcomp_configured || !is_server() || p_entity.is_null()) {
+    if (!lagcomp_configured || !is_host() || p_entity.is_null()) {
         return;
     }
     session::ActionRequest body;

@@ -134,6 +134,57 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Rpc] a session whose coordinator is not peer 1 admits its "
+    "coordinator over any rpc mode check, and denies transport peer 1 the "
+    "same bypass once it is an ordinary non-authority actor"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+    Node *probe = a_probe();
+    CHECK(probe != nullptr);
+    if (probe == nullptr) {
+        return;
+    }
+    probe->set_multiplayer_authority(5, false);
+
+    CHECK(
+        NetwNativeTests::rpc_sender_admits(
+            core.ptr(),
+            probe,
+            StringName(PROBE_METHOD),
+            7
+        )
+    );
+    CHECK(
+        NetwNativeTests::rpc_sender_admits(
+            core.ptr(),
+            probe,
+            StringName(PROBE_METHOD),
+            5
+        )
+    );
+    CHECK_FALSE(
+        NetwNativeTests::rpc_sender_admits(
+            core.ptr(),
+            probe,
+            StringName(PROBE_METHOD),
+            1
+        )
+    );
+    CHECK_FALSE(
+        NetwNativeTests::rpc_sender_admits(
+            core.ptr(),
+            probe,
+            StringName(PROBE_METHOD),
+            6
+        )
+    );
+
+    memdelete(probe);
+}
+
+TEST_CASE(
     "[Networked][Rpc] a peer that leaves is dropped from every group it was "
     "owed by, so a request waiting only on the departed settles instead of "
     "waiting out its deadline"

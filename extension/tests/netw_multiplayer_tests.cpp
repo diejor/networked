@@ -17,6 +17,7 @@
 #include "netw/api/scene_handle.hpp"
 #include "netw/api/session_config.hpp"
 #include "netw/carrier_frame.hpp"
+#include "netw/predict/frames.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/wire/registry.hpp"
 #include "support/entity_facets.h"
@@ -1749,6 +1750,94 @@ TEST_CASE(
     core->sync_note_sent_default(1, 1);
 }
 
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] the spawn gate answers the "
+    "coordinator, not the literal peer 1, so a transport peer 1 present "
+    "under a coordinator of 7 is refused on every gated channel while the "
+    "coordinator itself is admitted"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+    const GateIds ids = gate_ids();
+
+    NETW_CHECK_EQ(
+        core->spawn_admit_frame_default(1, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
+        ERR_UNAUTHORIZED
+    );
+    NETW_CHECK_EQ(
+        core->spawn_admit_frame_default(
+            1,
+            PRE_ADMIT_ROUTE,
+            ids.reparent,
+            body(4)
+        ),
+        ERR_UNAUTHORIZED
+    );
+
+    NETW_CHECK_EQ(
+        core->spawn_admit_frame_default(7, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
+        OK
+    );
+    NETW_CHECK_EQ(
+        core->spawn_admit_frame_default(
+            7,
+            PRE_ADMIT_ROUTE,
+            ids.reparent,
+            body(4)
+        ),
+        OK
+    );
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted][SceneTree] the predict gate answers "
+    "the coordinator, not the literal peer 1, so an owner's command is "
+    "admitted, an ack from the coordinator settles, and the same ack from "
+    "transport peer 1 present under a coordinator of 7 is refused"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+
+    Node *owner = memnew(Node);
+    netw::gd::scene_root()->add_child(owner);
+    const Ref<netw::NetwEntity> wrapper = netw::NetwEntity::ensure(owner);
+    wrapper->set_controller(42);
+    REQUIRE(core->liveness_bind_route(51, wrapper.ptr()));
+    REQUIRE(int(core->entity_frame_verdict(51)) == int(OK));
+
+    NETW_CHECK_EQ(
+        core->predict_admit_frame_default(
+            42,
+            51,
+            netw::predict::CHANNEL_COMMAND,
+            body(4)
+        ),
+        OK
+    );
+    NETW_CHECK_EQ(
+        core->predict_admit_frame_default(
+            7,
+            51,
+            netw::predict::CHANNEL_ACK,
+            body(4)
+        ),
+        OK
+    );
+    NETW_CHECK_EQ(
+        core->predict_admit_frame_default(
+            1,
+            51,
+            netw::predict::CHANNEL_ACK,
+            body(4)
+        ),
+        ERR_UNAUTHORIZED
+    );
+
+    owner->queue_free();
+}
+
 } // namespace TestNetwMultiplayerGateDefaults
 
 namespace TestNetwMultiplayerPumpEdges {
@@ -1814,9 +1903,9 @@ TEST_CASE(
     core->table_write_column(table, 0, values);
     core->table_commit(table);
 
-    core->table_publish(table);
+    core->table_announce(table);
 
-    core->table_publish_intake();
+    core->table_announce_intake();
 
     NETW_CHECK_EQ(session.count("table_received"), 1);
     REQUIRE(session.args("table_received").size() == 2);

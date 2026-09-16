@@ -48,10 +48,18 @@ void commit_batch(
     const Variant &p_result,
     const PackedInt32Array &p_batch,
     const Array &p_engines,
-    const Array &p_due_rows
+    const Array &p_due_rows,
+    int64_t p_issuer_session,
+    int64_t p_issuer_authority,
+    bool p_issuer_armed
 ) {
     const int64_t code = p_result;
-    if (code != int64_t(OK)) {
+    const WriteFence issuer{
+        ObjectID(uint64_t(p_issuer_session)),
+        p_issuer_authority,
+        p_issuer_armed
+    };
+    if (code != int64_t(OK) || !write_fence_holds(issuer)) {
         return;
     }
     for (int at = 0; at < p_batch.size(); ++at) {
@@ -67,8 +75,13 @@ void commit_batch(
 
 } // namespace
 
-void snapshot_tick(Book &r_book, double p_delta, bool p_is_server) {
-    if (!p_is_server) {
+void snapshot_tick(
+    Book &r_book,
+    double p_delta,
+    bool p_may_issue,
+    const WriteFence &p_issuer
+) {
+    if (!p_may_issue) {
         return;
     }
     NETW_ZONE_NC("persistence snapshot tick", colors::TABLE);
@@ -101,7 +114,15 @@ void snapshot_tick(Book &r_book, double p_delta, bool p_is_server) {
             callable_mp_static(&queue_batch).bind(batch, due_rows)
         );
         written->then(
-            callable_mp_static(&commit_batch).bind(batch, engines, due_rows)
+            callable_mp_static(&commit_batch)
+                .bind(
+                    batch,
+                    engines,
+                    due_rows,
+                    int64_t(uint64_t(p_issuer.session)),
+                    p_issuer.authority,
+                    p_issuer.armed
+                )
         );
     }
     NETW_TRACE(
@@ -112,8 +133,8 @@ void snapshot_tick(Book &r_book, double p_delta, bool p_is_server) {
     );
 }
 
-void flush_all(Book &r_book, bool p_is_server) {
-    if (!p_is_server) {
+void flush_all(Book &r_book, bool p_may_issue) {
+    if (!p_may_issue) {
         return;
     }
     NETW_ZONE_NC("persistence flush all", colors::TABLE);
@@ -127,9 +148,9 @@ void flush_all(Book &r_book, bool p_is_server) {
     }
 }
 
-void owner_exiting(Book &r_book, const RID &p_entity, bool p_is_server) {
+void owner_exiting(Book &r_book, const RID &p_entity, bool p_may_issue) {
     const Ref<RefCounted> engine = r_book.engine_of(p_entity);
-    if (engine.is_valid() && p_is_server) {
+    if (engine.is_valid() && p_may_issue) {
         engine->call("flush");
     }
     r_book.drop(p_entity);

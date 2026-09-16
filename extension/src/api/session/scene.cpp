@@ -187,7 +187,7 @@ Array NetwMultiplayer::scene_request_frame_row(
     int p_sender,
     int64_t p_now_msec
 ) {
-    if (!is_server() || scene_request_flooded(p_sender, p_now_msec)) {
+    if (!is_host() || scene_request_flooded(p_sender, p_now_msec)) {
         return Array();
     }
     session::SceneRequest frame;
@@ -207,7 +207,8 @@ RID NetwMultiplayer::scene_released_scene(
     const PackedByteArray &p_payload,
     int p_sender
 ) {
-    if (p_sender != 1 || participant_admitted_local().is_null()) {
+    if (int64_t(p_sender) != session_authority_peer()
+        || participant_admitted_local().is_null()) {
         return RID();
     }
     session::SceneReleased frame;
@@ -643,7 +644,7 @@ void NetwMultiplayer::scene_dispose() {
 }
 
 void NetwMultiplayer::scene_on_session_entered() {
-    if (is_server()) {
+    if (is_host()) {
         callable_mp(this, &NetwMultiplayer::scene_announce_startup)
             .call_deferred();
     }
@@ -986,7 +987,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_front_door_change(
             String("a scene change needs a live session and a scene path")
         );
     }
-    if (!is_server()) {
+    if (!is_host()) {
         return scene_request_open(
             p_path,
             p_scope,
@@ -1197,7 +1198,7 @@ void NetwMultiplayer::scene_adopt_entity(const RID &p_entity) {
     if (!destination.is_valid() || destination == p_entity) {
         return;
     }
-    if (wrapper->get_peer_id() != 0 && is_server()) {
+    if (wrapper->get_peer_id() != 0 && is_host()) {
         scene_watch(destination, wrapper->get_peer_id());
     }
 }
@@ -1205,7 +1206,7 @@ void NetwMultiplayer::scene_adopt_entity(const RID &p_entity) {
 Error NetwMultiplayer::scene_watch(const RID &p_scene, int64_t p_peer) {
     NETW_ZONE_NC("NetwMultiplayer scene_watch", colors::SCENE);
     NETW_ERR_COND_V(
-        !is_server(),
+        !is_host(),
         ERR_UNAUTHORIZED,
         sys::SCENE,
         "scene_watch is server-only, and peer %d asked",
@@ -1241,13 +1242,13 @@ Error NetwMultiplayer::scene_watch(const RID &p_scene, int64_t p_peer) {
 bool NetwMultiplayer::scene_unwatch(const RID &p_scene, int64_t p_peer) {
     NETW_ZONE_NC("NetwMultiplayer scene_unwatch", colors::SCENE);
     NETW_ERR_COND_V(
-        !is_server(),
+        !is_host(),
         false,
         sys::SCENE,
         "scene_unwatch is server-only, and peer %d asked",
         int(p_peer)
     );
-    if (!is_server() || scene_entity_node(p_scene) == nullptr) {
+    if (!is_host() || scene_entity_node(p_scene) == nullptr) {
         return false;
     }
     const bool last_reason = scene_membership.watches(p_peer, p_scene)
@@ -1629,7 +1630,7 @@ bool NetwMultiplayer::scene_release_departed(
     bool p_mover_live,
     int64_t p_peer
 ) {
-    if (!is_server()) {
+    if (!is_host()) {
         return false;
     }
     if (p_mover_live && scene_of(p_subject) == p_scene) {
@@ -1877,7 +1878,7 @@ Ref<NetwPromise> NetwMultiplayer::participant_travel(
             String("travel names no participant")
         );
     }
-    if (!is_server()) {
+    if (!is_host()) {
         return NetwPromise::rejected(
             ERR_UNAUTHORIZED,
             String(
@@ -2079,7 +2080,7 @@ void NetwMultiplayer::scene_open_admission(Node *p_container) {
         return;
     }
     scene_admission_layers.insert(scene, Ref<NetwInterestLayer>());
-    if (is_server()) {
+    if (is_host()) {
         const PackedInt32Array peers = scene_get_peers(scene);
         for (int i = 0; i < peers.size(); i++) {
             scene_report_viewer(scene, peers[i], true);
@@ -2258,7 +2259,8 @@ Ref<NetwPromise> NetwMultiplayer::scene_request_send(
     int p_scope,
     const RID &p_source
 ) {
-    const Ref<NetwPromise> promise = scene_core->request_open();
+    const int64_t destination = session_authority_peer();
+    const Ref<NetwPromise> promise = scene_core->request_open(destination);
     session::SceneRequest frame;
     frame.request_id = uint64_t(scene_core->get_pending_request_id());
     frame.path = p_path;
@@ -2268,7 +2270,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_request_send(
         ? liveness_route_epoch(frame.source_route)
         : 0;
     send_to(
-        MultiplayerPeer::TARGET_PEER_SERVER,
+        destination,
         0,
         scene_request_channel,
         session::frame_write(frame),
@@ -2352,7 +2354,8 @@ bool NetwMultiplayer::scene_receive_result_frame(
     const PackedByteArray &p_payload,
     int p_sender
 ) {
-    if (p_sender != 1) {
+    const int64_t asked = scene_core->get_pending_request_destination();
+    if (asked != 0 && int64_t(p_sender) != asked) {
         warn_verdict(ERR_UNAUTHORIZED, 0);
     }
     return scene_core->receive_result_frame(p_payload, p_sender);
@@ -2897,9 +2900,7 @@ RID NetwMultiplayer::scene_create(
     if (node == nullptr) {
         return RID();
     }
-    const RID entity = entity_of(node);
-    scene_declare(entity);
-    return entity;
+    return entity_of(node);
 }
 
 } // namespace netw

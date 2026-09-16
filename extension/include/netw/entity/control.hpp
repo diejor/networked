@@ -67,7 +67,8 @@ public:
         const godot::StringName &p_name,
         bool p_is_signal,
         int64_t p_sender,
-        int64_t p_controller
+        int64_t p_controller,
+        int64_t p_coordinator
     );
 
     bool set_controller(int64_t p_controller);

@@ -351,21 +351,17 @@ void NetwMultiplayer::entity_enter_tree(
     }
 
     if (is_reparent) {
-        p_record->apply_control(p_wrapper, owner, p_is_authority);
+        p_record->apply_control(
+            p_wrapper,
+            owner,
+            p_is_authority,
+            p_session != nullptr ? p_session->session_authority_peer() : 1
+        );
     }
 
     const Callable ready(p_wrapper, StringName("_on_owner_ready"));
     if (!owner->is_connected(StringName("ready"), ready)) {
         owner->connect(StringName("ready"), ready);
-    }
-    const int64_t steering
-        = p_record->get_control()->resolve(p_record->get_peer_id());
-    Ref<MultiplayerAPI> api = owner->get_multiplayer();
-    if ((p_record->get_peer_id() != 0 || steering != 0) && api.is_valid()) {
-        const Callable dropped(p_wrapper, StringName("_on_peer_disconnected"));
-        if (!api->is_connected(StringName("peer_disconnected"), dropped)) {
-            api->connect(StringName("peer_disconnected"), dropped);
-        }
     }
 
     if (!is_reparent) {
@@ -863,6 +859,19 @@ Ref<NetwEntity> NetwMultiplayer::wrapper_for_id(int64_t p_id) const {
         found = retired_wrappers.getptr(p_id);
     }
     return found ? *found : Ref<NetwEntity>();
+}
+
+void NetwMultiplayer::entity_settle_peer_departure(int64_t p_peer) {
+    LocalVector<Ref<NetwEntity>> settling;
+    settling.reserve(live_wrappers.size());
+    for (const KeyValue<int64_t, Ref<NetwEntity>> &pair : live_wrappers) {
+        settling.push_back(pair.value);
+    }
+    for (uint32_t at = 0; at < settling.size(); at++) {
+        if (settling[at].is_valid()) {
+            settling[at]->_on_peer_disconnected(p_peer);
+        }
+    }
 }
 
 TypedArray<Object> NetwMultiplayer::wrapper_live() const {
@@ -1654,9 +1663,6 @@ void NetwMultiplayer::entity_grant_control(
     const RID &p_entity,
     int64_t p_peer
 ) {
-    if (!is_host()) {
-        return;
-    }
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
     if (wrapper.is_valid()) {
         wrapper->grant_control(p_peer);
@@ -1688,7 +1694,7 @@ Error NetwMultiplayer::spawn_admit_frame_default(
     const PackedByteArray &p_payload
 ) {
     (void)p_route;
-    if (p_sender != 1) {
+    if (p_sender != session_authority_peer()) {
         return ERR_UNAUTHORIZED;
     }
     if (p_channel != gate_channels.spawn && p_channel != gate_channels.despawn

@@ -260,11 +260,11 @@ void initialize_networked_module(ModuleInitializationLevel level) {
 #if defined(NETW_GDEXTENSION)
     GDREGISTER_CLASS(netw_test::Carrier);
     GDREGISTER_CLASS(netw_test::SpawnIdentityProbe);
+    GDREGISTER_CLASS(netw::NetwNativeTests);
 #endif
     GDREGISTER_CLASS(netw_test::NetwTestPersistenceEngine);
     GDREGISTER_CLASS(netw_test::NetwTestAuthFlow);
     GDREGISTER_CLASS(netw_test::RecordingStepper);
-    GDREGISTER_CLASS(netw::NetwNativeTests);
 #endif
     netw::NetwEntityRecord::set_part_factory(
         netw::NetwEntityRecord::PART_DISPLAY,

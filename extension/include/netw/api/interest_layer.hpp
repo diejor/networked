@@ -25,7 +25,7 @@ private:
 
     NetwMultiplayer *host();
     godot::Ref<NetwEntity> entity_for(int64_t p_slot);
-    bool server_authority();
+    bool holds_authority();
     int64_t local_peer_id();
     void dispatch_enter(
         const godot::Ref<NetwEntity> &p_entity,

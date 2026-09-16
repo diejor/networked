@@ -552,7 +552,7 @@ TEST_CASE(
     Node *owner = memnew(Node);
 
     record->get_control()->set_controller(7);
-    record->apply_control(wrapper.ptr(), owner, true);
+    record->apply_control(wrapper.ptr(), owner, true, 1);
 
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
     NETW_CHECK_EQ(log.count("moved"), 1);
@@ -562,14 +562,21 @@ TEST_CASE(
 
     SUBCASE("the server takes the engine's own name for itself") {
         record->get_control()->set_controller(0);
-        record->apply_control(wrapper.ptr(), owner, true);
+        record->apply_control(wrapper.ptr(), owner, true, 1);
         NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
         NETW_CHECK_EQ(log.count("moved"), 2);
     }
 
     SUBCASE("a re-apply that moves nothing announces nothing") {
-        record->apply_control(wrapper.ptr(), owner, true);
+        record->apply_control(wrapper.ptr(), owner, true, 1);
         NETW_CHECK_EQ(log.count("moved"), 1);
+    }
+
+    SUBCASE("the controller-zero fallback names the session coordinator, "
+            "not the literal peer 1") {
+        record->get_control()->set_controller(0);
+        record->apply_control(wrapper.ptr(), owner, true, 7);
+        NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
     }
 
     memdelete(owner);
@@ -600,7 +607,7 @@ TEST_CASE(
     owner->add_child(child);
 
     record->get_control()->set_controller(4);
-    record->apply_control(nullptr, owner, true);
+    record->apply_control(nullptr, owner, true, 1);
 
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 4);
     NETW_CHECK_EQ(child->get_multiplayer_authority(), 4);

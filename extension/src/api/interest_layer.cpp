@@ -74,15 +74,18 @@ Ref<NetwEntity> NetwInterestLayer::entity_for(int64_t p_slot) {
     );
 }
 
-bool NetwInterestLayer::server_authority() {
+bool NetwInterestLayer::holds_authority() {
     NetwMultiplayer *owner = host();
-    return owner == nullptr || owner->is_server();
+    return owner == nullptr || owner->is_host();
 }
 
 int64_t NetwInterestLayer::local_peer_id() {
     NetwMultiplayer *owner = host();
-    if (owner == nullptr || !owner->has_multiplayer_peer()) {
+    if (owner == nullptr) {
         return 1;
+    }
+    if (!owner->has_multiplayer_peer()) {
+        return owner->session_authority_peer();
     }
     return owner->get_unique_id();
 }
@@ -273,7 +276,7 @@ bool NetwInterestLayer::add_entity(const Ref<NetwEntity> &p_entity) {
         "layer %s was asked to admit no entity",
         String(layer_id)
     );
-    if (!server_authority()) {
+    if (!holds_authority()) {
         return false;
     }
     if (!engine->roster_add(layer_id, slot_of(p_entity))) {
@@ -292,7 +295,7 @@ bool NetwInterestLayer::remove_entity(const Ref<NetwEntity> &p_entity) {
         "layer %s was asked to drop no entity",
         String(layer_id)
     );
-    if (!server_authority()) {
+    if (!holds_authority()) {
         return false;
     }
     if (!engine->roster_remove(layer_id, slot_of(p_entity))) {

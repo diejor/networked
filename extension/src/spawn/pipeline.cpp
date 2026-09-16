@@ -111,7 +111,7 @@ void Pipeline::set_repl_seams(
 
 bool Pipeline::is_server_authority() const {
     NetwMultiplayer *plane = core();
-    return plane != nullptr ? plane->is_server() : true;
+    return plane != nullptr ? plane->is_host() : true;
 }
 
 bool Pipeline::has_peer() const {
@@ -907,7 +907,8 @@ LocalVector<call_args::Slot> Pipeline::read_fn_args(
 Variant Pipeline::resolve_spawn_args(
     const LocalVector<call_args::Slot> &p_slots,
     const PackedByteArray &p_payload,
-    int64_t p_route
+    int64_t p_route,
+    int64_t p_sender
 ) {
     NetwMultiplayer *plane = core();
     Array args;
@@ -921,7 +922,7 @@ Variant Pipeline::resolve_spawn_args(
             && Park::anchor_parks(
                 plane->liveness_route_state(slot.node.route)
             )) {
-            park_spawn(p_payload, slot.node.route, p_route);
+            park_spawn(p_payload, slot.node.route, p_route, p_sender);
             return Variant();
         }
         Node *arg_node = nullptr;
@@ -1453,7 +1454,9 @@ bool Pipeline::admits_frame(
         verdict = plane->spawn_admit_frame(p_sender, 0, p_channel, p_payload);
     }
     if (stage_verdict(EventPlane::GATE_SPAWN, verdict, 0) != OK) {
-        if (p_sender != 1) {
+        const int64_t coordinator
+            = plane != nullptr ? plane->session_authority_peer() : 0;
+        if (p_sender != coordinator) {
             drops_spawn_bad_sender += 1;
         }
         return false;
@@ -1468,10 +1471,35 @@ void Pipeline::handle_spawn_frame(
     if (!admits_frame(p_sender, channel_spawn, p_payload)) {
         return;
     }
-    try_apply_spawn(p_payload);
+    try_apply_spawn(p_payload, p_sender);
 }
 
-void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
+void Pipeline::apply_parked(
+    int64_t p_route,
+    const PackedByteArray &p_payload,
+    int64_t p_sender
+) {
+    if (p_payload.is_empty()) {
+        return;
+    }
+    if (!admits_frame(p_sender, channel_spawn, p_payload)) {
+        spawn_park_refused += 1;
+        NETW_WARN(
+            sys::SPAWN,
+            "SPAWN for route %d waited on an anchor and peer %d no longer "
+            "holds the authority to apply it",
+            int(p_route),
+            int(p_sender)
+        );
+        return;
+    }
+    try_apply_spawn(p_payload, p_sender);
+}
+
+void Pipeline::try_apply_spawn(
+    const PackedByteArray &p_payload,
+    int64_t p_sender
+) {
     NetwMultiplayer *plane = core();
     Object *shell = api();
     if (plane == nullptr) {
@@ -1507,7 +1535,7 @@ void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
             = int64_t(parent_anchor[StringName("route")]);
         if (parent_route > 0
             && Park::anchor_parks(plane->liveness_route_state(parent_route))) {
-            park_spawn(p_payload, parent_route, route);
+            park_spawn(p_payload, parent_route, route, p_sender);
             return;
         }
     }
@@ -1524,7 +1552,7 @@ void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
                 .bind(adopt_parent, node_name)
         );
         if (node == nullptr) {
-            park_spawn_for_adopt(p_payload, route);
+            park_spawn_for_adopt(p_payload, route, p_sender);
             return;
         }
         adopted = true;
@@ -1553,14 +1581,14 @@ void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
             = int64_t(spawner_anchor[StringName("route")]);
         if (spawner_route > 0
             && Park::anchor_parks(plane->liveness_route_state(spawner_route))) {
-            park_spawn(p_payload, spawner_route, route);
+            park_spawn(p_payload, spawner_route, route, p_sender);
             return;
         }
         recv_spawner = Object::cast_to<MultiplayerSpawner>(
             plane->anchor_resolve(spawner_anchor)
         );
         if (recv_spawner == nullptr) {
-            park_spawn_for_scene(p_payload, route);
+            park_spawn_for_scene(p_payload, route, p_sender);
             return;
         }
         const int64_t scene_index = frame.scene_index;
@@ -1624,7 +1652,8 @@ void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
         }
         const LocalVector<call_args::Slot> encoded
             = read_fn_args(frame.args, schema);
-        const Variant resolved = resolve_spawn_args(encoded, p_payload, route);
+        const Variant resolved
+            = resolve_spawn_args(encoded, p_payload, route, p_sender);
         if (resolved.get_type() == Variant::NIL) {
             return;
         }
@@ -1647,7 +1676,7 @@ void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
         const int64_t host_route = int64_t(host_anchor[StringName("route")]);
         if (host_route > 0
             && Park::anchor_parks(plane->liveness_route_state(host_route))) {
-            park_spawn(p_payload, host_route, route);
+            park_spawn(p_payload, host_route, route, p_sender);
             return;
         }
         Node *host = plane->anchor_resolve(host_anchor);
@@ -1676,7 +1705,8 @@ void Pipeline::try_apply_spawn(const PackedByteArray &p_payload) {
         }
         const LocalVector<call_args::Slot> encoded
             = read_fn_args(frame.args, schema);
-        const Variant resolved = resolve_spawn_args(encoded, p_payload, route);
+        const Variant resolved
+            = resolve_spawn_args(encoded, p_payload, route, p_sender);
         if (resolved.get_type() == Variant::NIL) {
             return;
         }
@@ -1971,7 +2001,7 @@ void Pipeline::handle_reparent_frame(
         plane->liveness_when_live(
             anchor_route,
             callable_mp(plane, &NetwMultiplayer::spawn_handle_reparent_frame)
-                .bind(p_payload, int64_t(1)),
+                .bind(p_payload, p_sender),
             park_timeout_ticks(),
             Callable()
         );
@@ -2037,14 +2067,15 @@ int64_t Pipeline::park_timeout_ticks() const {
 void Pipeline::park_spawn(
     const PackedByteArray &p_payload,
     int64_t p_dep_route,
-    int64_t p_route
+    int64_t p_route,
+    int64_t p_sender
 ) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
         return;
     }
     spawn_deferrals += 1;
-    park.park(p_route, p_payload, Park::WAIT_ROUTE, 0);
+    park.park(p_route, p_payload, Park::WAIT_ROUTE, 0, p_sender);
     plane->liveness_when_live(
         p_dep_route,
         callable_mp(plane, &NetwMultiplayer::spawn_retry_parked).bind(p_route),
@@ -2054,10 +2085,8 @@ void Pipeline::park_spawn(
 }
 
 void Pipeline::retry_parked(int64_t p_route) {
-    const PackedByteArray parked = park.take(p_route);
-    if (!parked.is_empty()) {
-        try_apply_spawn(parked);
-    }
+    const int64_t sender = park.sender_of(p_route);
+    apply_parked(p_route, park.take(p_route), sender);
 }
 
 void Pipeline::expire_parked(int64_t p_route) {
@@ -2068,7 +2097,8 @@ void Pipeline::expire_parked(int64_t p_route) {
 
 void Pipeline::park_spawn_for_scene(
     const PackedByteArray &p_payload,
-    int64_t p_route
+    int64_t p_route,
+    int64_t p_sender
 ) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
@@ -2083,7 +2113,8 @@ void Pipeline::park_spawn_for_scene(
         p_route,
         p_payload,
         Park::WAIT_SCENE,
-        now + int64_t(park_timeout_seconds * 1000.0)
+        now + int64_t(park_timeout_seconds * 1000.0),
+        p_sender
     );
     connect_once(
         plane,
@@ -2101,6 +2132,7 @@ void Pipeline::retry_scene_parked_spawns(int64_t, const Ref<NetwEntity> &) {
     for (int at = 0; at < waiting.size(); ++at) {
         const int64_t parked_route = waiting[at];
         const bool expired = park.is_expired(parked_route, now);
+        const int64_t sender = park.sender_of(parked_route);
         const PackedByteArray parked = park.take(parked_route);
         if (expired) {
             spawn_park_expired += 1;
@@ -2112,7 +2144,7 @@ void Pipeline::retry_scene_parked_spawns(int64_t, const Ref<NetwEntity> &) {
             );
             continue;
         }
-        try_apply_spawn(parked);
+        apply_parked(parked_route, parked, sender);
     }
     if (park.waiting_on(Park::WAIT_SCENE).is_empty()) {
         drop_scene_park_retry();
@@ -2121,7 +2153,8 @@ void Pipeline::retry_scene_parked_spawns(int64_t, const Ref<NetwEntity> &) {
 
 void Pipeline::park_spawn_for_adopt(
     const PackedByteArray &p_payload,
-    int64_t p_route
+    int64_t p_route,
+    int64_t p_sender
 ) {
     const Time *reading = Time::get_singleton();
     const int64_t now
@@ -2130,7 +2163,8 @@ void Pipeline::park_spawn_for_adopt(
             p_route,
             p_payload,
             Park::WAIT_ADOPT,
-            now + int64_t(park_timeout_seconds * 1000.0)
+            now + int64_t(park_timeout_seconds * 1000.0),
+            p_sender
         )) {
         spawn_deferrals += 1;
     }
@@ -2158,7 +2192,11 @@ void Pipeline::retry_adopt_parked() {
             );
             continue;
         }
-        try_apply_spawn(park.peek(parked_route));
+        apply_parked(
+            parked_route,
+            park.peek(parked_route),
+            park.sender_of(parked_route)
+        );
         if (spawn_book.is_recv(parked_route)) {
             park.cancel(parked_route);
         }
@@ -2294,6 +2332,7 @@ Dictionary Pipeline::counters() const {
     out[StringName("spawn_deferrals")] = spawn_deferrals;
     out[StringName("spawn_parked_cancelled")] = spawn_parked_cancelled;
     out[StringName("spawn_park_expired")] = spawn_park_expired;
+    out[StringName("spawn_park_refused")] = spawn_park_refused;
     out[StringName("spawn_nested_published")] = spawn_nested_published;
     out[StringName("spawn_book_armed")] = spawn_book.armed_count();
     out[StringName("spawn_book_spawned")] = spawn_book.spawned_count();

@@ -25,12 +25,18 @@ public:
         ROLE_LISTEN_SERVER = 3,
     };
 
+    struct AuthorityState {
+        int64_t coordinator = 1;
+        bool available = true;
+    };
+
 private:
     State state = STATE_OFFLINE;
     Role role = ROLE_NONE;
     Role desired_role = ROLE_LISTEN_SERVER;
     NetwMultiplayer *host = nullptr;
     uint64_t generation = 1;
+    AuthorityState authority;
 
     RateWindow join_window;
 
@@ -48,6 +54,8 @@ public:
     Role get_role() const;
     void set_desired_role(Role value);
     Role get_desired_role() const;
+    void set_authority_coordinator(int64_t value);
+    int64_t get_authority_coordinator() const;
 
     void transition(State next);
 

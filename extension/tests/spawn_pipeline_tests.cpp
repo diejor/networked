@@ -105,7 +105,7 @@ TEST_CASE(
 
     PackedByteArray payload;
     payload.push_back(7);
-    pipeline->park_spawn_for_scene(payload, 9001);
+    pipeline->park_spawn_for_scene(payload, 9001, 1);
 
     CHECK(core->is_connected("entity_live", retry));
     CHECK(pipeline->get_park().has(9001));
@@ -134,7 +134,7 @@ TEST_CASE(
 
     PackedByteArray payload;
     payload.push_back(7);
-    pipeline->park_spawn_for_scene(payload, 9002);
+    pipeline->park_spawn_for_scene(payload, 9002, 1);
     CHECK(core->is_connected("entity_live", retry));
 
     pipeline->clear_session();
@@ -154,7 +154,7 @@ TEST_CASE(
 
     PackedByteArray payload;
     payload.push_back(7);
-    pipeline->park_spawn_for_scene(payload, 9003);
+    pipeline->park_spawn_for_scene(payload, 9003, 1);
     pipeline->retry_scene_parked_spawns(0, Ref<netw::NetwEntity>());
 
     NETW_CHECK_EQ(
@@ -162,6 +162,112 @@ TEST_CASE(
         int64_t(1)
     );
     CHECK_FALSE(pipeline->get_park().has(9003));
+}
+
+struct ParkedRelease {
+    Ref<NetwMultiplayer> core;
+    Pipeline *pipeline = nullptr;
+
+    ParkedRelease() {
+        core.instantiate();
+        core->session_set_authority_peer(7);
+        pipeline = core->spawn_plane();
+    }
+
+    PackedByteArray frame() const {
+        PackedByteArray payload;
+        payload.push_back(7);
+        return payload;
+    }
+
+    void follow(int64_t p_coordinator) {
+        core->session_set_authority_peer(p_coordinator);
+    }
+
+    int64_t counted(const char *p_name) const {
+        return int64_t(pipeline->counters()[StringName(p_name)]);
+    }
+};
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted] a refused frame counts as a bad sender only "
+    "when it did not come from the peer this session follows, so a "
+    "coordinator of 7 and transport peer 1 swap places in the tally"
+) {
+    ParkedRelease world;
+    PackedByteArray payload;
+    payload.push_back(7);
+
+    world.pipeline->handle_spawn_frame(payload, 1);
+    NETW_CHECK_EQ(world.counted("drops_spawn_bad_sender"), int64_t(1));
+
+    world.pipeline->handle_spawn_frame(PackedByteArray(), 7);
+    NETW_CHECK_EQ(world.counted("drops_spawn_bad_sender"), int64_t(1));
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted] a spawn waiting for its consumed spawner's "
+    "scene is admitted again when the wait releases, so a sender the session "
+    "no longer follows applies nothing"
+) {
+    ParkedRelease stale;
+    stale.pipeline->park_spawn_for_scene(stale.frame(), 9101, 7);
+    stale.follow(11);
+    stale.pipeline->retry_scene_parked_spawns(0, Ref<netw::NetwEntity>());
+
+    NETW_CHECK_EQ(stale.counted("spawn_park_refused"), int64_t(1));
+    NETW_CHECK_EQ(stale.counted("drops_spawn_truncated"), int64_t(0));
+
+    ParkedRelease current;
+    current.pipeline->park_spawn_for_scene(current.frame(), 9101, 7);
+    current.pipeline->retry_scene_parked_spawns(0, Ref<netw::NetwEntity>());
+
+    NETW_CHECK_EQ(current.counted("spawn_park_refused"), int64_t(0));
+    NETW_CHECK_EQ(current.counted("drops_spawn_truncated"), int64_t(1));
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted] a spawn waiting for the node it adopts is "
+    "admitted again when the wait releases, so a sender the session no longer "
+    "follows applies nothing"
+) {
+    ParkedRelease stale;
+    stale.pipeline->park_spawn_for_adopt(stale.frame(), 9102, 7);
+    stale.follow(11);
+    stale.pipeline->retry_adopt_parked();
+
+    NETW_CHECK_EQ(stale.counted("spawn_park_refused"), int64_t(1));
+    NETW_CHECK_EQ(stale.counted("drops_spawn_truncated"), int64_t(0));
+
+    ParkedRelease current;
+    current.pipeline->park_spawn_for_adopt(current.frame(), 9102, 7);
+    current.pipeline->retry_adopt_parked();
+
+    NETW_CHECK_EQ(current.counted("spawn_park_refused"), int64_t(0));
+    NETW_CHECK_EQ(current.counted("drops_spawn_truncated"), int64_t(1));
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted] a spawn waiting for the route it anchors to "
+    "is admitted again when the wait releases, so a sender the session no "
+    "longer follows applies nothing"
+) {
+    ParkedRelease stale;
+    stale.pipeline->get_park()
+        .park(9103, stale.frame(), Park::WAIT_ROUTE, 0, 7);
+    stale.follow(11);
+    stale.core->spawn_retry_parked(9103);
+
+    NETW_CHECK_EQ(stale.counted("spawn_park_refused"), int64_t(1));
+    NETW_CHECK_EQ(stale.counted("drops_spawn_truncated"), int64_t(0));
+
+    ParkedRelease current;
+    current.pipeline->get_park()
+        .park(9103, current.frame(), Park::WAIT_ROUTE, 0, 7);
+    current.core->spawn_retry_parked(9103);
+
+    NETW_CHECK_EQ(current.counted("spawn_park_refused"), int64_t(0));
+    NETW_CHECK_EQ(current.counted("drops_spawn_truncated"), int64_t(1));
 }
 
 TEST_CASE(

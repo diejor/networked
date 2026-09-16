@@ -483,7 +483,7 @@ TEST_CASE(
     "answered, and only it"
 ) {
     Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> promise = core->request_open();
+    const Ref<netw::NetwPromise> promise = core->request_open(1);
     const int opened = core->get_pending_request_id();
     REQUIRE(promise.is_valid());
 
@@ -507,10 +507,10 @@ TEST_CASE(
     "in flight, and an answer resolves rather than rejects"
 ) {
     Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> first = core->request_open();
+    const Ref<netw::NetwPromise> first = core->request_open(1);
     first->catch_error(Callable());
 
-    const Ref<netw::NetwPromise> second = core->request_open();
+    const Ref<netw::NetwPromise> second = core->request_open(1);
 
     CHECK(first->get_is_failed());
     NETW_CHECK_EQ(first->get_code(), int(ERR_SKIP));
@@ -521,7 +521,7 @@ TEST_CASE(
     CHECK(second->get_is_completed());
     NETW_CHECK_EQ(second->get_code(), int(OK));
 
-    const Ref<netw::NetwPromise> third = core->request_open();
+    const Ref<netw::NetwPromise> third = core->request_open(1);
     core->request_abandon(int(ERR_UNAVAILABLE));
     CHECK(third->get_is_failed());
     NETW_CHECK_EQ(third->get_code(), int(ERR_UNAVAILABLE));
@@ -529,11 +529,11 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] N19 only the server authors a scene result, "
-    "and only a well-formed one settles"
+    "[Networked][Scene][Hosted] N19 the peer a request was addressed to is the "
+    "only peer whose answer settles it, and only a well-formed answer settles"
 ) {
     Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> promise = core->request_open();
+    const Ref<netw::NetwPromise> promise = core->request_open(7);
     const int opened = core->get_pending_request_id();
 
     netw::session::SceneResult answer;
@@ -542,18 +542,19 @@ TEST_CASE(
     const PackedByteArray payload = netw::session::frame_write(answer);
 
     CHECK_FALSE(core->receive_result_frame(payload, 2));
+    CHECK_FALSE(core->receive_result_frame(payload, 1));
     CHECK_FALSE(promise->get_is_settled());
     NETW_CHECK_EQ(core->get_pending_request_id(), opened);
 
     CHECK_FALSE(
-        core->receive_result_frame(payload.slice(0, payload.size() - 1), 1)
+        core->receive_result_frame(payload.slice(0, payload.size() - 1), 7)
     );
     PackedByteArray extended = payload;
     extended.push_back(0x00);
-    CHECK_FALSE(core->receive_result_frame(extended, 1));
+    CHECK_FALSE(core->receive_result_frame(extended, 7));
     CHECK_FALSE(promise->get_is_settled());
 
-    CHECK(core->receive_result_frame(payload, 1));
+    CHECK(core->receive_result_frame(payload, 7));
     CHECK(promise->get_is_failed());
     NETW_CHECK_EQ(promise->get_code(), int(ERR_UNAUTHORIZED));
 }

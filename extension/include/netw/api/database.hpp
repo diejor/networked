@@ -13,6 +13,7 @@
 #include "netw/api/promise.hpp"
 #include "netw/api/record_table.hpp"
 #include "netw/api/warm_policy.hpp"
+#include "netw/persist/write_fence.hpp"
 
 namespace netw {
 
@@ -89,7 +90,14 @@ private:
     void announce_committed(
         const godot::Variant &outcome,
         int table_count,
-        int row_count
+        int row_count,
+        int64_t issuer_session,
+        int64_t issuer_authority,
+        bool issuer_armed
+    );
+    godot::Ref<NetwPromise> transaction_fenced(
+        const godot::Callable &body,
+        const persist::WriteFence &authority
     );
     void queue_table_record(
         const godot::Ref<NetwTransaction> &transaction,

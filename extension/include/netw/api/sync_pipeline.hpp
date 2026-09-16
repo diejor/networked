@@ -191,6 +191,14 @@ public:
     int64_t sealed_schema_identity() const;
     void unregister_derived(godot::Node *p_node);
     godot::TypedArray<NetwPropertySetBinding> derived_group(int64_t p_route);
+#if defined(NETW_TESTS)
+    void reconcile_state_timeline_for_test(godot::Node *p_node) {
+        reconcile_state_timeline(p_node);
+    }
+    void reconcile_dropped_state_timelines_for_test() {
+        reconcile_dropped_state_timelines();
+    }
+#endif
 
     void pump(int64_t p_tick);
     void open_carrier_batch(

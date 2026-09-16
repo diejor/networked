@@ -901,9 +901,9 @@ void ReplicationCore::pump_tables(int64_t p_tick) {
     if (plane == nullptr || shell == nullptr || table == nullptr) {
         return;
     }
-    plane->table_publish_intake();
+    plane->table_announce_intake();
 
-    if (!plane->is_server() || plane->session_get_inner().is_null()
+    if (!plane->table_publishes() || plane->session_get_inner().is_null()
         || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
         return;
     }
@@ -930,7 +930,7 @@ void ReplicationCore::pump_tables(int64_t p_tick) {
             table->is_reliable(id)
         );
         table->clear_dirty(id);
-        plane->table_publish(id);
+        plane->table_announce(id);
     }
 }
 
@@ -1010,7 +1010,7 @@ void ReplicationCore::replay_tables(int64_t p_peer_id) {
 #else
     netw::table::Core *table = Object::cast_to<netw::table::Core>(table_core());
 #endif
-    if (plane == nullptr || table == nullptr || !plane->is_server()
+    if (plane == nullptr || table == nullptr || !plane->table_publishes()
         || plane->session_get_inner().is_null()
         || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
         return;

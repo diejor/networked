@@ -98,6 +98,7 @@ private:
     int64_t spawn_deferrals = 0;
     int64_t spawn_parked_cancelled = 0;
     int64_t spawn_park_expired = 0;
+    int64_t spawn_park_refused = 0;
     int64_t spawn_nested_published = 0;
 
 #ifdef NETW_TESTS
@@ -186,7 +187,8 @@ private:
     godot::Variant resolve_spawn_args(
         const godot::LocalVector<call_args::Slot> &p_slots,
         const godot::PackedByteArray &p_payload,
-        int64_t p_route
+        int64_t p_route,
+        int64_t p_sender
     );
 
     godot::Node *run_construct_stage(const godot::Callable &p_constructor);
@@ -215,7 +217,15 @@ private:
         int64_t p_channel,
         const godot::PackedByteArray &p_payload
     );
-    void try_apply_spawn(const godot::PackedByteArray &p_payload);
+    void try_apply_spawn(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    void apply_parked(
+        int64_t p_route,
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
     void free_despawned(int64_t p_route);
     void free_route_node(int64_t p_route, godot::Node *p_node);
 
@@ -223,7 +233,8 @@ private:
     void park_spawn(
         const godot::PackedByteArray &p_payload,
         int64_t p_dep_route,
-        int64_t p_route
+        int64_t p_route,
+        int64_t p_sender
     );
     void retry_parked(int64_t p_route);
     void expire_parked(int64_t p_route);
@@ -279,7 +290,8 @@ public:
 
     void park_spawn_for_scene(
         const godot::PackedByteArray &p_payload,
-        int64_t p_route
+        int64_t p_route,
+        int64_t p_sender
     );
     void retry_scene_parked_spawns(
         int64_t p_route,
@@ -288,7 +300,8 @@ public:
 
     void park_spawn_for_adopt(
         const godot::PackedByteArray &p_payload,
-        int64_t p_route
+        int64_t p_route,
+        int64_t p_sender
     );
     void retry_adopt_parked();
 

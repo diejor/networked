@@ -725,6 +725,7 @@
 			<description>
 				Records [param level] as the default single scene a scoped embedding offers, consumed by the next [method embed_settle].
 				The embedding captures it synchronously, so a node dropped in afterwards never becomes the candidate. A root install offers nothing and passes [code]null[/code].
+				A level that declares a multiplayer scene is freed by the settle. The peer holding authority spawns the scene again from the file [param level] came from, and a peer holding none presents the world that authority sends it instead. A declared level naming no [code].tscn[/code] under [code]res://[/code] is kept and reported rather than adopted, because replacing it with nothing would leave the session presenting no world at all.
 			</description>
 		</method>
 		<method name="embed_phase" qualifiers="const">
@@ -923,7 +924,7 @@
 			<param index="3" name="args" type="Array" />
 			<param index="4" name="peer" type="int" />
 			<description>
-				Calls [param method] on [param entity]'s [param comp] component over the wire, addressed the way [method rpc_call] addresses anything. It goes by route to [param peer], or to every peer that may see the entity when [param peer] is zero.
+				Calls [param method] on [param entity]'s [param comp] component over the wire, addressed the way [method rpc_call] addresses anything. It goes by route to [param peer], or to the audience [method rpc_call] broadcasts to when [param peer] is zero, which carries that method's interest caveat unchanged.
 				Each rejection has a distinct result and occurs before anything is sent. Rejected calls are not counted as dropped packets.
 				[codeblock lang=text]
 				Error
@@ -1436,7 +1437,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="entity" type="NetwEntity" />
 			<description>
-				Whether traffic for [param entity] may reach [param peer_id], short-circuiting [code]true[/code] for [constant MultiplayerPeer.TARGET_PEER_SERVER] because server authority always knows every entity it holds. Every other peer falls through to [method interest_participant_sees]. Replication and spawn gating call this rather than [method interest_participant_sees], because a wire gate that hid the server's own entities from itself would stall authority rather than protect it.
+				Whether traffic for [param entity] may reach [param peer_id], short-circuiting [code]true[/code] for the peer holding session authority, which is peer 1 in an ordinary star and the declared coordinator elsewhere, because that peer always knows every entity it holds. Every other peer falls through to [method interest_participant_sees]. Replication and spawn gating call this rather than [method interest_participant_sees], because a wire gate that hid the server's own entities from itself would stall authority rather than protect it.
 			</description>
 		</method>
 		<method name="lagcomp_deny_action">
@@ -2194,7 +2195,8 @@
 			<param index="1" name="args" type="Array" />
 			<param index="2" name="peer" type="int" />
 			<description>
-				Calls [param callable] with [param args] on [param peer], where zero is every peer that may currently see the target and any other value is that one peer.
+				Calls [param callable] with [param args] on [param peer], where zero is every peer [method rpc_get_recipients] answers for the target and any other value is that one peer.
+				The audience for zero is narrowed by the interest this peer itself declares, which is authoritative membership only when this peer holds session authority. A call a client addresses to zero can therefore reach a peer an interest layer hides the target from, so interest bounds what a call costs rather than who may learn it.
 				[param callable]'s object must be a node an entity governs, because a remote call is addressed by [member NetwEntity.route] and a node no entity holds has none. A node with no entity at all and a node whose route is not live are counted apart and both drop the call. Neither is an error, because a call issued in the frame an entity is despawning is ordinary rather than a defect.
 				A method the target's script neither annotates nor registers is rejected with a warning and nothing is sent, so a typo does not become a silent no-op on every peer.
 				A local dispatch happens before anything is sent, when the method is [code]call_local[/code] and [param peer] is zero or this peer. [member relay_sender] reads this peer for the length of that call and is restored afterwards. A [code]call_remote[/code] method addressed at this peer alone is an error rather than a send. An entity passed in [param args] is encoded as its route rather than as an object, which is what lets the receiving peer resolve it to its own node.
@@ -3169,12 +3171,12 @@
 			<param index="2" name="payload" type="PackedByteArray" />
 			<description>
 				The stock verdict on one inbound table frame, and what an override of [method _table_admit_frame] narrows rather than replaces.
-				It takes no route because a table frame is route-0 addressed and the routes it carries are knowable only mid-decode, so everything it judges is in the header. That is who sent it, which table it names, and whether that table's sealed schema agrees. A frame from a peer other than the server is counted as well as rejected, because the count is what separates a rejected sender from a table nobody is publishing.
+				It takes no route because a table frame is route-0 addressed and the routes it carries are knowable only mid-decode, so everything it judges is in the header. That is who sent it, which table it names, and whether that table's sealed schema agrees. The one sender it admits is the peer this session follows for authority, which is peer 1 in an ordinary star and the declared coordinator elsewhere. A frame from any other peer is counted as well as rejected, because the count is what separates a rejected sender from a table nobody is publishing.
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the frame is admitted
 				┠╴ERR_INVALID_DATA    payload or header is empty, an unimplemented flag is set, or the schema hash disagrees
-				┠╴ERR_UNAUTHORIZED    sender is not the server
+				┠╴ERR_UNAUTHORIZED    sender is not the peer this session follows for authority
 				┖╴ERR_DOES_NOT_EXIST  the header names a table this session does not hold
 				[/codeblock]
 			</description>
@@ -3185,6 +3187,7 @@
 			<description>
 				Fixes [param table]'s written routes and columns as the applied state readers compare against.
 				Stamped with the session's own tick, because a commit is what fixes the frame a reader dates itself against and two clocks would date it twice.
+				Any peer commits its own rows and hears [signal table_received] for them. Only the peer holding authority sends the wave to the others, so a commit on a peer that holds none stays local.
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the wave was applied
@@ -3716,7 +3719,7 @@
 			<param index="1" name="target_id" type="int" />
 			<param index="2" name="reason" type="String" />
 			<description>
-				Emitted when a client asks for a peer to be kicked. Heard only by a session holding peer id 1. A request that does not carry a target and a reason is dropped rather than announced against a default target.
+				Emitted when a client asks for a peer to be kicked. Heard only by the peer holding session authority, which is peer 1 in an ordinary star and the declared coordinator elsewhere. A request that does not carry a target and a reason is dropped rather than announced against a default target.
 			</description>
 		</signal>
 		<signal name="peer_kicked">
@@ -3802,7 +3805,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="reason" type="String" />
 			<description>
-				Emitted when a client asks to leave. Heard only by a session holding peer id 1, and [param peer_id] is who actually sent the request rather than anything the request claims.
+				Emitted when a client asks to leave. Heard only by the peer holding session authority, which is peer 1 in an ordinary star and the declared coordinator elsewhere, and [param peer_id] is who actually sent the request rather than anything the request claims.
 			</description>
 		</signal>
 		<signal name="session_ended">
@@ -4109,6 +4112,7 @@
 		</constant>
 		<constant name="DISPLAY_ROLE_AUTO" value="0" enum="DisplayRole">
 			Resolve from [NetwEntity] control and [member Node.multiplayer_authority]. The default, and correct for almost every entity.
+			A peer holding node authority over a body it also controls locally resolves to [constant DISPLAY_ROLE_DISABLED], because its own solver already writes that node every step and there is nothing left for a display to drive. [constant DISPLAY_ROLE_AUTHORITY] is what an authoring peer resolves to when it does not run that body's control itself.
 		</constant>
 		<constant name="DISPLAY_ROLE_REMOTE" value="1" enum="DisplayRole">
 			Interpolate replicated snapshots. What a peer uses for somebody else's entity.
@@ -4120,7 +4124,7 @@
 			No smoothing. The node is left alone for the game to drive.
 		</constant>
 		<constant name="DISPLAY_ROLE_AUTHORITY" value="4" enum="DisplayRole">
-			Sample the locally authored simulation each tick and play it back, so the server sees its own world smoothed the same way.
+			Sample the locally authored simulation each tick and play it back, so an authoring peer sees its own world smoothed the same way. A body whose control the same peer runs locally takes [constant DISPLAY_ROLE_DISABLED] instead.
 		</constant>
 		<constant name="DISPLAY_PUMP_UNRESOLVED" value="-1" enum="DisplayPump">
 			No pump has been chosen yet. A runtime starts here and resolves to one of the other values the first time its role is settled.

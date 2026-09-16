@@ -182,7 +182,8 @@ bool NetwEntityRecord::control_recurses(
 void NetwEntityRecord::apply_control(
     Object *p_wrapper,
     Node *p_owner,
-    bool p_is_authority
+    bool p_is_authority,
+    int64_t p_coordinator
 ) {
     Node *owner = p_owner;
     if (owner == nullptr) {
@@ -190,7 +191,7 @@ void NetwEntityRecord::apply_control(
     }
     const int64_t previous = owner->get_multiplayer_authority();
     const int64_t peer = control.get_controller();
-    const int64_t authority = peer != 0 ? peer : 1;
+    const int64_t authority = peer != 0 ? peer : p_coordinator;
     owner->set_multiplayer_authority(
         int(authority),
         control_recurses(
@@ -199,7 +200,7 @@ void NetwEntityRecord::apply_control(
             netw::gd::node_ready(owner)
         )
     );
-    const int64_t was = previous == 1 ? 0 : previous;
+    const int64_t was = previous == p_coordinator ? 0 : previous;
     if (was != peer && p_wrapper != nullptr) {
         NETW_TRACE(
             sys::ENTITY,

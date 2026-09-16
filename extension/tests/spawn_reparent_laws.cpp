@@ -147,4 +147,109 @@ TEST_CASE(
     memdelete(root);
 }
 
+constexpr int64_t COORDINATOR = 7;
+
+PackedByteArray reparent_frame(
+    NetwMultiplayer *p_core,
+    int64_t p_route,
+    int64_t p_anchor
+) {
+    netw::wire::WriteStream writer;
+    REQUIRE(p_core->verb_head_write(writer, p_route));
+    bool entity_relative = true;
+    uint64_t anchor = uint64_t(p_anchor);
+    String subpath(".");
+    REQUIRE(writer.bool1(entity_relative));
+    REQUIRE(writer.varuint(anchor, 5));
+    REQUIRE(netw::wire::string_field(writer, subpath));
+    return writer.to_bytes();
+}
+
+struct DeferredMove {
+    Ref<NetwMultiplayer> core;
+    Node *root = nullptr;
+    Node *origin = nullptr;
+    Node *mover = nullptr;
+    Node *destination = nullptr;
+    int64_t route = 0;
+    int64_t anchor = 0;
+
+    DeferredMove() {
+        core.instantiate();
+        core->session_set_authority_peer(COORDINATOR);
+        root = named("session-root");
+        netw::gd::scene_root()->add_child(root);
+        core->session_set_root(Callable(root, "get_node").bind(NodePath(".")));
+
+        origin = named("origin");
+        root->add_child(origin);
+        mover = named("mover");
+        origin->add_child(mover);
+        destination = named("destination");
+        root->add_child(destination);
+
+        const PackedInt64Array minted = core->liveness_claim_routes(1);
+        REQUIRE(minted.size() == 1);
+        route = minted[0];
+        const Ref<NetwEntity> moving = NetwEntity::ensure(mover);
+        REQUIRE(moving.is_valid());
+        REQUIRE(core->liveness_bind_route(route, moving.ptr()));
+
+        anchor = core->liveness_reserve_route() + 4;
+    }
+
+    ~DeferredMove() {
+        netw::gd::scene_root()->remove_child(root);
+        memdelete(root);
+    }
+
+    void release_anchor() {
+        const Ref<NetwEntity> anchored = NetwEntity::ensure(destination);
+        REQUIRE(anchored.is_valid());
+        REQUIRE(core->liveness_bind_route(anchor, anchored.ptr()));
+    }
+};
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted][SceneTree] SP4 a reparent that waits for its "
+    "anchor is released under the peer that sent it, so coordinator 7's move "
+    "applies once when the anchor arrives"
+) {
+    DeferredMove world;
+    const PackedByteArray frame
+        = reparent_frame(world.core.ptr(), world.route, world.anchor);
+
+    world.core->spawn_handle_reparent_frame(frame, COORDINATOR);
+    NETW_CHECK_EQ(
+        int64_t(
+            world.core->spawn_plane()->counters()[StringName("spawn_deferrals")]
+        ),
+        int64_t(1)
+    );
+
+    world.release_anchor();
+
+    NETW_CHECK_EQ(world.mover->get_parent(), world.destination);
+    NETW_CHECK_EQ(world.destination->get_child_count(), 1);
+    NETW_CHECK_EQ(world.origin->get_child_count(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted][SceneTree] SP5 a reparent from a peer holding "
+    "no authority never waits on an anchor at all, so transport peer 1 cannot "
+    "move a node on a session whose coordinator is 7"
+) {
+    DeferredMove world;
+    const PackedByteArray frame
+        = reparent_frame(world.core.ptr(), world.route, world.anchor);
+
+    world.core->spawn_handle_reparent_frame(frame, 1);
+    NETW_CHECK_EQ(world.mover->get_parent(), world.origin);
+
+    world.release_anchor();
+
+    NETW_CHECK_EQ(world.mover->get_parent(), world.origin);
+    NETW_CHECK_EQ(world.destination->get_child_count(), 0);
+}
+
 } // namespace TestNetwSpawnReparent

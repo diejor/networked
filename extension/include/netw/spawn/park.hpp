@@ -20,6 +20,7 @@ private:
         godot::PackedByteArray payload;
         int32_t wait = WAIT_ROUTE;
         int64_t deadline = 0;
+        int64_t sender = 0;
     };
 
     godot::HashMap<int64_t, Row> rows;
@@ -29,7 +30,8 @@ public:
         int64_t route,
         const godot::PackedByteArray &payload,
         Wait wait,
-        int64_t deadline
+        int64_t deadline,
+        int64_t sender
     );
 
     bool has(int64_t route) const;
@@ -37,6 +39,8 @@ public:
     godot::PackedByteArray take(int64_t route);
 
     godot::PackedByteArray peek(int64_t route) const;
+
+    int64_t sender_of(int64_t route) const;
 
     bool cancel(int64_t route);
 

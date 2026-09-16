@@ -4,6 +4,7 @@
 #include "godot/multiplayer.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/context.hpp"
+#include "netw/api/loopback.hpp"
 #include "netw/api/netw_identity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/auth_protocol.hpp"
@@ -282,7 +283,9 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] H12 a join is renamed to the identity the "
-    "server verified, and keeps its claim when nothing verified one"
+    "server verified, keeps its claim when nothing verified one, and is "
+    "renamed for transport peer 1 exactly as for any other peer, because "
+    "holding peer id 1 verifies nothing about who is playing"
 ) {
     const Ref<NetwMultiplayer> session = tagged_session();
     session->auth_set_flow(flow_answering(accepting_as("ana")));
@@ -301,11 +304,156 @@ TEST_CASE(
     session->auth_resolve_identity(77, unverified);
     check_text(String(unverified.username), String("claimed"));
 
-    netw::JoinRequest hosting;
-    hosting.username = StringName("claimed");
+    netw::JoinRequest transport_server;
+    transport_server.username = StringName("claimed");
+    session->auth_resolve_identity(1, transport_server);
+    check_text(String(transport_server.username), String("claimed"));
+
+    netw::JoinRequest named;
+    named.username = StringName("claimed");
     session->peer_set_identity(1, verified);
-    session->auth_resolve_identity(1, hosting);
-    check_text(String(hosting.username), String("claimed"));
+    session->auth_resolve_identity(1, named);
+    check_text(String(named.username), String("ana"));
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] H15 the host seats its own verified "
+    "identity against the peer id it actually holds, so a host that is not "
+    "peer 1 is the one named and peer 1 is left nameless"
+) {
+    Ref<netw::LocalMultiplayerPeer> hosting;
+    hosting.instantiate();
+    NETW_CHECK_EQ(int(hosting->create_client(7)), int(OK));
+
+    const Ref<NetwMultiplayer> session = tagged_session();
+    session->NETW_API_VIRTUAL(set_multiplayer_peer)(hosting);
+    NETW_CHECK_EQ(int64_t(session->NETW_API_VIRTUAL(get_unique_id)()), 7);
+
+    const Ref<NetwTestAuthFlow> flow = flow_answering(accepting_as("ana"));
+    Ref<NetwIdentity> host;
+    host.instantiate();
+    host->set_username("hosting");
+    flow->set_host(host);
+    session->auth_set_flow(flow);
+
+    session->auth_seat_host_identity();
+
+    const Ref<NetwIdentity> seated = session->peer_get_identity(7);
+    const bool held = seated.is_valid();
+    CHECK(held);
+    if (held) {
+        check_text(String(seated->get_username()), String("hosting"));
+    }
+    const bool nameless = session->peer_get_identity(1).is_null();
+    CHECK(nameless);
+
+    session->embed_dispose();
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] H16 a hello carries the player credential "
+    "only on the link to the coordinator, because a credential handed to a "
+    "neighbour is a credential given away"
+) {
+    const Ref<NetwMultiplayer> session = tagged_session();
+    session->session_set_authority_peer(7);
+    const Ref<NetwTestAuthFlow> flow = flow_answering(accepting_as("ana"));
+    flow->set_prepared(netw::NetwPromise::resolved(OK));
+    session->auth_set_flow(flow);
+    session->session_prepare_join(StringName("ana"), Array());
+
+    session->auth_send_hello(9);
+    NETW_CHECK_EQ(flow->credential_count(), 0);
+
+    session->auth_send_hello(7);
+    NETW_CHECK_EQ(flow->credential_count(), 1);
+
+    session->embed_dispose();
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] H17 every link whose hello waits on the "
+    "join preparation is remembered by its own peer id, so all of them go "
+    "out when the preparation settles rather than only the last one asked"
+) {
+    const Ref<NetwMultiplayer> session = tagged_session();
+    session->session_set_authority_peer(7);
+    const Ref<NetwTestAuthFlow> flow = flow_answering(accepting_as("ana"));
+    Ref<netw::NetwPromise> preparing;
+    preparing.instantiate();
+    flow->set_prepared(preparing);
+    session->auth_set_flow(flow);
+    session->session_prepare_join(StringName("ana"), Array());
+
+    session->auth_send_hello(9);
+    session->auth_send_hello(7);
+    CHECK(session->auth_link_waits_on_preparation(9));
+    CHECK(session->auth_link_waits_on_preparation(7));
+    NETW_CHECK_EQ(flow->credential_count(), 0);
+
+    preparing->resolve(OK);
+
+    CHECK_FALSE(session->auth_link_waits_on_preparation(9));
+    CHECK_FALSE(session->auth_link_waits_on_preparation(7));
+    NETW_CHECK_EQ(flow->credential_count(), 1);
+
+    session->embed_dispose();
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] H18 a link lost while its hello waits is "
+    "forgotten, so a preparation that settles afterwards sends nothing down "
+    "the endpoint that is already gone"
+) {
+    const Ref<NetwMultiplayer> session = tagged_session();
+    session->session_set_authority_peer(7);
+    const Ref<NetwTestAuthFlow> flow = flow_answering(accepting_as("ana"));
+    Ref<netw::NetwPromise> preparing;
+    preparing.instantiate();
+    flow->set_prepared(preparing);
+    session->auth_set_flow(flow);
+    session->session_prepare_join(StringName("ana"), Array());
+
+    session->auth_send_hello(7);
+    REQUIRE(session->auth_link_waits_on_preparation(7));
+
+    session->session_settle_peer_loss(7);
+    CHECK_FALSE(session->auth_link_waits_on_preparation(7));
+
+    preparing->resolve(OK);
+    NETW_CHECK_EQ(flow->credential_count(), 0);
+
+    session->embed_dispose();
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] H19 a session that admits nobody "
+    "authenticates the link and never reads the credential a hello carried, "
+    "because verifying a player is the coordinator's act"
+) {
+    const Ref<NetwMultiplayer> session = tagged_session();
+    session->session_set_authority_peer(7);
+    session->session_set_desired_role(NetwMultiplayer::ROLE_CLIENT);
+    session->session_peer_assigned(true, true, 9);
+    REQUIRE_FALSE(session->is_host());
+
+    const Ref<NetwTestAuthFlow> flow = flow_answering(accepting_as("ana"));
+    session->auth_set_flow(flow);
+
+    PackedByteArray proof;
+    proof.push_back(7);
+    session->auth_receive_hello(
+        PEER,
+        auth::encode_client_hello(proof, APP_TAG, auth::HELLO_BEARS_CREDENTIAL)
+    );
+
+    NETW_CHECK_EQ(flow->verify_count(), 0);
+    const bool nameless = session->peer_get_identity(PEER).is_null();
+    CHECK(nameless);
+    check_text(String(session->session_refusal(PEER)), String());
+    CHECK(session->auth_link_is_completed(PEER));
+
+    session->embed_dispose();
 }
 
 Node *auth_branch(const char *p_name) {

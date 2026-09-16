@@ -10,7 +10,8 @@ bool Park::park(
     int64_t route,
     const PackedByteArray &payload,
     Wait wait,
-    int64_t deadline
+    int64_t deadline,
+    int64_t sender
 ) {
     if (rows.has(route)) {
         return false;
@@ -19,6 +20,7 @@ bool Park::park(
     row.payload = payload;
     row.wait = wait;
     row.deadline = deadline;
+    row.sender = sender;
     rows.insert(route, row);
     return true;
 }
@@ -40,6 +42,11 @@ PackedByteArray Park::take(int64_t route) {
 PackedByteArray Park::peek(int64_t route) const {
     const HashMap<int64_t, Row>::ConstIterator found = rows.find(route);
     return found ? found->value.payload : PackedByteArray();
+}
+
+int64_t Park::sender_of(int64_t route) const {
+    const HashMap<int64_t, Row>::ConstIterator found = rows.find(route);
+    return found ? found->value.sender : 0;
 }
 
 bool Park::cancel(int64_t route) {

@@ -68,8 +68,9 @@ bool NetwSyncModel::authors(
     int64_t p_route,
     int64_t p_ordinal,
     int64_t p_local_id,
-    bool p_node_authority,
-    int64_t p_controller
+    int64_t p_node_authority,
+    int64_t p_controller,
+    int64_t p_coordinator
 ) const {
     const repl::SetRow *found = impl.row(p_route, p_ordinal);
     if (found == nullptr) {
@@ -79,7 +80,8 @@ bool NetwSyncModel::authors(
         *found,
         p_local_id,
         p_node_authority,
-        p_controller
+        p_controller,
+        p_coordinator
     );
 }
 
@@ -87,22 +89,30 @@ PackedInt32Array NetwSyncModel::recipients(
     int64_t p_route,
     int64_t p_ordinal,
     int64_t p_local_id,
-    const PackedInt32Array &p_live
+    const PackedInt32Array &p_live,
+    int64_t p_coordinator
 ) const {
     const repl::SetRow *found = impl.row(p_route, p_ordinal);
     if (found == nullptr) {
         return PackedInt32Array();
     }
-    return repl::row_recipients(*found, p_local_id, p_live);
+    return repl::row_recipients(*found, p_local_id, p_live, p_coordinator);
 }
 
 PackedInt32Array NetwSyncModel::event_recipients(
     bool p_is_host,
     int64_t p_local_id,
     int64_t p_exclude,
-    const PackedInt32Array &p_live
+    const PackedInt32Array &p_live,
+    int64_t p_coordinator
 ) {
-    return repl::event_recipients(p_is_host, p_local_id, p_exclude, p_live);
+    return repl::event_recipients(
+        p_is_host,
+        p_local_id,
+        p_exclude,
+        p_live,
+        p_coordinator
+    );
 }
 
 bool NetwSyncModel::admits_sender(
@@ -110,7 +120,8 @@ bool NetwSyncModel::admits_sender(
     int64_t p_ordinal,
     int64_t p_sender,
     int64_t p_node_authority,
-    int64_t p_controller
+    int64_t p_controller,
+    int64_t p_coordinator
 ) const {
     const repl::SetRow *found = impl.row(p_route, p_ordinal);
     if (found == nullptr) {
@@ -120,7 +131,8 @@ bool NetwSyncModel::admits_sender(
         *found,
         p_sender,
         p_node_authority,
-        p_controller
+        p_controller,
+        p_coordinator
     );
 }
 
@@ -237,7 +249,8 @@ Ref<NetwPropertySetBinding> NetwSyncModel::admit_row(
     int64_t p_route,
     int64_t p_ordinal,
     int64_t p_sender,
-    int64_t p_controller
+    int64_t p_controller,
+    int64_t p_coordinator
 ) {
     if (p_ordinal < 0) {
         ++drops_no_set;
@@ -258,7 +271,8 @@ Ref<NetwPropertySetBinding> NetwSyncModel::admit_row(
             p_ordinal,
             p_sender,
             node->get_multiplayer_authority(),
-            p_controller
+            p_controller,
+            p_coordinator
         )) {
         ++drops_bad_sender;
         return Ref<NetwPropertySetBinding>();
@@ -276,7 +290,8 @@ PackedInt32Array NetwSyncModel::offer_row(
     int64_t p_local_id,
     bool p_node_authority,
     int64_t p_controller,
-    const PackedInt32Array &p_live
+    const PackedInt32Array &p_live,
+    int64_t p_coordinator
 ) {
     NETW_ZONE_NC("Sync model offer row", colors::WIRE);
     if (!authors(
@@ -284,13 +299,14 @@ PackedInt32Array NetwSyncModel::offer_row(
             p_ordinal,
             p_local_id,
             p_node_authority,
-            p_controller
+            p_controller,
+            p_coordinator
         )) {
         ++skips_not_author;
         return PackedInt32Array();
     }
     const PackedInt32Array out
-        = recipients(p_route, p_ordinal, p_local_id, p_live);
+        = recipients(p_route, p_ordinal, p_local_id, p_live, p_coordinator);
     if (out.is_empty()) {
         ++skips_no_recipients;
     }

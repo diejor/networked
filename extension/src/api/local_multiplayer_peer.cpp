@@ -17,9 +17,9 @@ constexpr int MAX_PACKET_SIZE = 16777215;
 
 } // namespace
 
-Error LocalMultiplayerPeer::create_server() {
+Error LocalMultiplayerPeer::create_server(int p_unique_id) {
     reset_state();
-    unique_id = 1;
+    unique_id = p_unique_id;
     server_side = true;
     status = CONNECTION_CONNECTED;
     NETW_INFO(sys::TRANSPORT, "peer is the server id=%d", unique_id);
@@ -46,9 +46,7 @@ void LocalMultiplayerPeer::force_connect_peer(
     links.insert(p_peer_id, gd::instance_id(p_peer));
     NETW_TRACE(sys::TRANSPORT, "linked to peer=%d", p_peer_id);
 
-    if (server_side) {
-        peers_to_emit_connected.push_back(p_peer_id);
-    }
+    peers_to_emit_connected.push_back(p_peer_id);
 }
 
 bool LocalMultiplayerPeer::is_linked_to(int p_peer_id) const {
@@ -112,7 +110,7 @@ Error LocalMultiplayerPeer::send_packet(const PackedByteArray &p_buffer) {
         return Error::OK;
     }
 
-    if (!server_side && target_peer != 1) {
+    if (!server_side && !links.has(target_peer)) {
         return send_to_peer(1, p_buffer);
     }
 
@@ -246,7 +244,6 @@ void LocalMultiplayerPeer::NETW_PEER_VIRTUAL(poll)() {
     NETW_ZONE_NC("LocalMultiplayerPeer poll", colors::TRANSPORT);
     if (!server_side && status == CONNECTION_CONNECTING) {
         status = CONNECTION_CONNECTED;
-        peers_to_emit_connected.push_back(1);
     }
 
     while (has_link_listener() && !peers_to_emit_connected.is_empty()) {
@@ -282,8 +279,10 @@ void LocalMultiplayerPeer::NETW_PEER_VIRTUAL(close)() {
     }
 
     if (!server_side) {
-        purge_packets_from(1);
-        peers_to_emit_disconnected.push_back(1);
+        for (const int peer_id : peers) {
+            purge_packets_from(peer_id);
+            peers_to_emit_disconnected.push_back(peer_id);
+        }
     }
 
     for (const int peer_id : peers) {

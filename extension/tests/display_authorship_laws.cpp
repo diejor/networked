@@ -3,9 +3,12 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "support/loopback_rig.h"
+#include "support/mesh_stand.h"
 #include "support/netw_cells.h"
 
 #include "godot/node.hpp"
+#include "godot/physics_body.hpp"
+#include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/templates.hpp"
 #include "netw/api/context.hpp"
@@ -31,6 +34,7 @@ using netw::NetwInterpolate;
 using netw::NetwMultiplayer;
 using netw::NetwPropertyConfig;
 using netw::NetwPropertySet;
+using netw_test::MeshStand;
 namespace property_set_builder = netw::property_set_builder;
 using netw_test::law_broken;
 using netw_test::law_held;
@@ -337,6 +341,145 @@ TEST_CASE(
     const AuthorshipRun run(scenario, PLANT_THE_SERVER_CONTROLS_IT);
     NETW_CELL(L_AUTHORSHIP, scenario);
     NETW_LAW_BREAKS(L_AUTHORSHIP, run);
+}
+
+constexpr int COORDINATOR = 7;
+constexpr int TRANSPORT_SERVER = 1;
+
+Node *mount_under_root(const char *p_name) {
+    Node *mount = memnew(Node);
+    mount->set_name(StringName(p_name));
+    netw::gd::scene_root()->add_child(mount);
+    return mount;
+}
+
+void drop(Node *p_mount) {
+    netw::gd::scene_root()->remove_child(p_mount);
+    memdelete(p_mount);
+}
+
+RigidBody2D *a_state_body(
+    NetwMultiplayer *p_core,
+    Node *p_branch,
+    double p_x
+) {
+    RigidBody2D *body = memnew(RigidBody2D);
+    body->set_name("StateBody");
+    body->set_freeze_enabled(false);
+    body->set_freeze_mode(RigidBody2D::FREEZE_MODE_STATIC);
+    body->set_position(Vector2(real_t(p_x), 0.0));
+    body->set_multiplayer_authority(COORDINATOR);
+    const Ref<NetwEntity> entity = NetwEntity::ensure(body);
+    p_branch->add_child(body);
+
+    Ref<NetwPropertyConfig> config
+        = Netw::configure_property(body, StringName("position"), true);
+    Ref<NetwInterpolate> spec;
+    spec.instantiate();
+    config->interpolate(
+        netw::gd::array_of(
+            spec->lerp()->smooth(0.0)->to(StringName("position"))
+        )
+    );
+    config->state();
+    Dictionary configs;
+    configs[StringName("position")] = config;
+    const Ref<NetwPropertySet> set
+        = property_set_builder::from_property_configs(
+            configs,
+            NetwPropertySet::RECORD_STATE
+        );
+    REQUIRE(set.is_valid());
+    set->set_sealed(true);
+    NETW_CHECK_EQ(
+        int(p_core->sync_pipeline()->register_property_set(body, set)),
+        int(OK)
+    );
+    p_core->liveness_bind_route(SUBJECT_ROUTE, entity.ptr());
+    p_core->display_mark_dirty(
+        entity->get_rid_handle(),
+        netw::display::DIRT_ROLE
+    );
+    p_core->session_flush_deferred();
+    return body;
+}
+
+int64_t display_role_of(NetwMultiplayer *p_core, Node *p_body) {
+    return int64_t(p_core->display_get_track_stat(
+        NetwEntity::of(p_body)->get_rid_handle(),
+        StringName(),
+        StringName("role")
+    ));
+}
+
+TEST_CASE(
+    "[Networked][Display][SceneTree] DA1 the peer holding session authority "
+    "writes a state stream and the peer receiving it draws it, so a "
+    "coordinator of 7 keeps its own solver running while transport peer 1 "
+    "freezes its body kinematically for the display to drive"
+) {
+    MeshStand stand;
+    stand.seat_coordinator(COORDINATOR);
+    stand.seat_member(TRANSPORT_SERVER);
+    stand.wire(COORDINATOR, TRANSPORT_SERVER);
+    stand.pump(4);
+
+    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *guest = stand.session_of(TRANSPORT_SERVER);
+    REQUIRE(host != nullptr);
+    REQUIRE(guest != nullptr);
+    NETW_CHECK_EQ(int(host->is_host()), 1);
+    NETW_CHECK_EQ(int(guest->is_host()), 0);
+    NETW_CHECK_EQ(int(guest->is_server()), 1);
+
+    Node *held = mount_under_root("DA1Host");
+    Node *seen = mount_under_root("DA1Member");
+    stand.mount(COORDINATOR, held);
+    stand.mount(TRANSPORT_SERVER, seen);
+
+    RigidBody2D *authored = a_state_body(host, held, 12.0);
+    RigidBody2D *received = a_state_body(guest, seen, 12.0);
+
+    NETW_CHECK_EQ(
+        int(host->display_default_authors_streams(
+            NetwEntity::of(authored)->get_rid_handle()
+        )),
+        1
+    );
+    NETW_CHECK_EQ(
+        int(guest->display_default_authors_streams(
+            NetwEntity::of(received)->get_rid_handle()
+        )),
+        0
+    );
+
+    NETW_CHECK_EQ(
+        int(display_role_of(host, authored)),
+        int(NetwMultiplayer::DISPLAY_ROLE_AUTHORITY)
+    );
+    NETW_CHECK_EQ(
+        int(display_role_of(guest, received)),
+        int(NetwMultiplayer::DISPLAY_ROLE_REMOTE)
+    );
+
+    NETW_CHECK_EQ(int(authored->is_freeze_enabled()), 0);
+    NETW_CHECK_EQ(int(received->is_freeze_enabled()), 1);
+    NETW_CHECK_EQ(
+        int(received->get_freeze_mode()),
+        int(RigidBody2D::FREEZE_MODE_KINEMATIC)
+    );
+
+    const Dictionary standing = NetwEntity::of(authored)
+                                    ->get_state_binding()
+                                    ->snapshot_payload();
+    NETW_CHECK_CLOSE(
+        double(Vector2(standing[StringName("position")]).x),
+        12.0,
+        0.001
+    );
+
+    drop(seen);
+    drop(held);
 }
 
 } // namespace TestNetwDisplayAuthorshipLaws

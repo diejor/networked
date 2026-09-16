@@ -172,7 +172,7 @@ void NetwMultiplayer::interest_release_body(const Ref<NetwEntity> &p_entity) {
         if (exiting.is_null()) {
             continue;
         }
-        if (is_server()) {
+        if (is_host()) {
             exiting->remove_entity(p_entity);
         } else {
             exiting->client_untrack_entity(p_entity);
@@ -197,7 +197,7 @@ void NetwMultiplayer::interest_refresh_perception(
     }
     const RID handle = p_entity->get_rid_handle();
     const int64_t slot = handle.get_id();
-    if (is_server()) {
+    if (is_host()) {
         if (!interest_engine.has_entity(slot)) {
             return;
         }
@@ -313,7 +313,7 @@ void NetwMultiplayer::interest_receive_awareness(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
-    if (p_sender != MultiplayerPeer::TARGET_PEER_SERVER) {
+    if (p_sender != session_authority_peer()) {
         return;
     }
     LocalVector<interest::Awareness> events;
@@ -452,7 +452,7 @@ void NetwMultiplayer::interest_queue_layer_awareness(
     int64_t p_observer_peer,
     int p_kind
 ) {
-    if (!is_server() || p_entity.is_null()) {
+    if (!is_host() || p_entity.is_null()) {
         return;
     }
     Node *owner = p_entity->get_owner();
@@ -481,7 +481,7 @@ void NetwMultiplayer::interest_queue_observer_awareness(
         "NetwMultiplayer observer awareness echo gate",
         colors::INTEREST
     );
-    if (!is_server() || p_entity.is_null()) {
+    if (!is_host() || p_entity.is_null()) {
         return;
     }
     const int64_t owner_peer = p_entity->get_peer_id();
@@ -568,13 +568,11 @@ int64_t NetwMultiplayer::interest_local_participant() {
     if (!is_local_client()) {
         return 0;
     }
-    if (session_get_role() == ROLE_LISTEN_SERVER) {
-        return MultiplayerPeer::TARGET_PEER_SERVER;
-    }
     if (has_multiplayer_peer()) {
         return get_unique_id();
     }
-    return 0;
+    return session_get_role() == ROLE_LISTEN_SERVER ? session_authority_peer()
+                                                    : 0;
 }
 
 Array NetwMultiplayer::perception_layers_for(
@@ -680,7 +678,7 @@ bool NetwMultiplayer::interest_participant_sees(
         return false;
     }
     const int64_t slot = p_entity->get_rid_handle().get_id();
-    if (!is_server()) {
+    if (!is_host()) {
         return interest_engine.projection_admits(
             slot,
             interest_decl_on(p_entity)
@@ -722,7 +720,7 @@ Array NetwMultiplayer::interest_resolved_layer_ids(
     }
     const int64_t slot = p_entity->get_rid_handle().get_id();
     Array named = interest_engine.memberships(slot);
-    if (named.is_empty() && !is_server()) {
+    if (named.is_empty() && !is_host()) {
         interest::Decl *decl = interest_decl_on(p_entity);
         named = decl != nullptr ? decl->labels() : Array();
     }
@@ -758,7 +756,7 @@ TypedArray<Object> NetwMultiplayer::interest_shared_entities(
             found.push_back(candidate);
         }
     }
-    if (found.is_empty() && !is_server()) {
+    if (found.is_empty() && !is_host()) {
         HashSet<StringName> asked;
         for (int at = 0; at < wanted.size(); ++at) {
             asked.insert(wanted[at]);
@@ -823,7 +821,7 @@ bool NetwMultiplayer::interest_wire_admits(
     int64_t p_peer_id,
     const Ref<NetwEntity> &p_entity
 ) {
-    if (p_peer_id == MultiplayerPeer::TARGET_PEER_SERVER) {
+    if (p_peer_id == session_authority_peer()) {
         return true;
     }
     return interest_participant_sees(p_peer_id, p_entity);
@@ -893,7 +891,7 @@ bool NetwMultiplayer::interest_entity_has_filter(
     if (p_entity.is_null()) {
         return false;
     }
-    if (!is_server()) {
+    if (!is_host()) {
         interest::Decl *decl = interest_decl_on(p_entity);
         return decl != nullptr && !decl->labels().is_empty();
     }
@@ -938,7 +936,7 @@ void NetwMultiplayer::interest_clear_session() {
 void NetwMultiplayer::interest_sync_scene_membership(
     const Ref<NetwEntity> &p_entity
 ) {
-    if (!is_server() || p_entity.is_null()
+    if (!is_host() || p_entity.is_null()
         || p_entity->get_owner() == nullptr) {
         return;
     }
@@ -999,8 +997,9 @@ void NetwMultiplayer::interest_sync_live_peers() {
             live.insert(peers[at]);
         }
     }
-    if (session_get_role() == ROLE_LISTEN_SERVER) {
-        live.insert(MultiplayerPeer::TARGET_PEER_SERVER);
+    const int64_t local_participant = interest_local_participant();
+    if (session_get_role() == ROLE_LISTEN_SERVER && local_participant > 0) {
+        live.insert(local_participant);
     }
     const PackedInt64Array viewers = interest_engine.viewer_peers();
     for (int at = 0; at < int(viewers.size()); ++at) {
@@ -1018,7 +1017,7 @@ void NetwMultiplayer::interest_sync_live_peers() {
 
 Error NetwMultiplayer::interest_recompute() {
     NETW_ZONE_NC("NetwMultiplayer interest recompute", colors::INTEREST);
-    if (!is_server()) {
+    if (!is_host()) {
         interest_pending = interest::Delta();
         interest_pending_live = false;
         return OK;
@@ -1101,7 +1100,7 @@ void NetwMultiplayer::interest_send_awareness(
 
 void NetwMultiplayer::interest_relay_awareness() {
     const Array drained = interest_awareness_drain();
-    if (!is_server() || !interest_awareness_send.is_valid()) {
+    if (!is_host() || !interest_awareness_send.is_valid()) {
         return;
     }
     for (int at = 0; at < drained.size(); ++at) {
@@ -1752,7 +1751,7 @@ void NetwMultiplayer::interest_join(
             return;
         }
     }
-    if (is_server() && layer.is_valid()) {
+    if (is_host() && layer.is_valid()) {
         liveness_adopt(entity.ptr());
         const Ref<NetwInterestLayer> record = layer_record(layer);
         if (record.is_valid()) {
@@ -1770,7 +1769,7 @@ void NetwMultiplayer::interest_leave(
     if (facet == nullptr || entity.is_null() || !facet->leave(p_layer_id)) {
         return;
     }
-    if (is_server()) {
+    if (is_host()) {
         const Ref<NetwInterestLayer> record
             = layer_record(interest_layer_find(p_layer_id));
         if (record.is_valid()) {
@@ -1835,7 +1834,7 @@ void NetwMultiplayer::interest_on_perception_policy(
 }
 
 bool NetwMultiplayer::interest_is_filtered(const RID &p_entity) {
-    if (!is_server()) {
+    if (!is_host()) {
         interest::Decl *decl = interest_decl_of(p_entity);
         return decl != nullptr && !decl->labels().is_empty();
     }
@@ -1846,7 +1845,7 @@ Array NetwMultiplayer::interest_membership_ids(const RID &p_entity) {
     LocalVector<StringName> ordered;
     const Array committed = interest_engine.memberships(p_entity.get_id());
     Array source = committed;
-    if (committed.is_empty() && !is_server()) {
+    if (committed.is_empty() && !is_host()) {
         interest::Decl *decl = interest_decl_of(p_entity);
         source = decl != nullptr ? decl->labels() : Array();
     }

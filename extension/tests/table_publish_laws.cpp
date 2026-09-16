@@ -256,10 +256,10 @@ TEST_CASE(
         plane->apply_frame(frame);
     }
 
-    stand.core->table_publish_intake();
+    stand.core->table_announce_intake();
     NETW_CHECK_EQ(recorder.count(StringName("table_received")), 1);
 
-    stand.core->table_publish_intake();
+    stand.core->table_announce_intake();
     NETW_CHECK_EQ(recorder.count(StringName("table_received")), 1);
 }
 

@@ -833,8 +833,14 @@ private:
     bool clock_pump_attached = false;
     std::optional<JoinRequest> prepared_join;
     godot::Ref<NetwPromise> preparing_join;
-    int64_t held_hello_peer = 0;
+
+    struct LinkHandshake {
+        bool waits_on_preparation = false;
+        bool completed = false;
+    };
+    godot::HashMap<int64_t, LinkHandshake> link_handshakes;
     std::optional<JoinRequest> resubmit_join;
+    int64_t resubmit_authority = 0;
     bool join_awaiting_admission = false;
     int64_t missing_local_join_warnings = 0;
     display::Hooks display_hooks;
@@ -2467,6 +2473,8 @@ public:
     bool is_online() const;
     bool is_host() const;
     bool has_server_role() const;
+    int64_t session_authority_peer() const;
+    void session_set_authority_peer(int64_t p_peer);
     bool is_local_client() const;
 
     void count_sent(int64_t p_bytes);
@@ -2620,13 +2628,15 @@ public:
     } repl_drops;
 
     godot::HashSet<int64_t> unreachable_peers;
-    godot::HashSet<int64_t> announced_departures;
+    godot::HashSet<int64_t> settled_peer_departures;
 
     godot::Node *session_root() const;
     int64_t linger_pumps(double p_seconds) const;
     void session_relay_peer_connected(int64_t p_peer);
     void session_relay_peer_disconnected(int64_t p_peer);
     void session_clear_disconnected_peer(int64_t p_peer);
+    void session_teardown_online();
+    void session_settle_peer_loss(int64_t p_peer);
     void embed_adopt_inner(const godot::Ref<godot::SceneMultiplayer> &p_inner);
     void embed_dispose();
 
@@ -2988,9 +2998,11 @@ public:
     ) const;
     int64_t table_get_tick(const godot::RID &p_table) const;
 
-    void table_publish_intake();
+    void table_announce_intake();
 
-    void table_publish(const godot::RID &p_table);
+    void table_announce(const godot::RID &p_table);
+
+    bool table_publishes() const;
 
     bool session_publish_control(
         int64_t p_channel,
@@ -3149,7 +3161,14 @@ public:
     void auth_resolve_identity(int64_t p_peer, JoinRequest &r_join);
     void auth_receive(int64_t p_peer, const godot::PackedByteArray &p_data);
     void auth_send_hello(int64_t p_peer);
-    void auth_release_hello();
+    void auth_release_held_hellos();
+    void auth_clear_held_hellos();
+    godot::Error auth_complete_link(int64_t p_peer);
+    void auth_forget_link(int64_t p_peer);
+#if defined(NETW_TESTS)
+    bool auth_link_is_completed(int64_t p_peer) const;
+    bool auth_link_waits_on_preparation(int64_t p_peer) const;
+#endif
     void discovery_probe_authenticating(int64_t p_peer_id);
     void discovery_probe_auth_received(
         int64_t p_peer_id,
@@ -3391,7 +3410,7 @@ public:
     void session_clear_prepared_join();
     void session_dispose();
     void session_submit_prepared_join();
-    void session_resubmit_join_on_server_peer(int64_t p_peer);
+    void session_resubmit_join_on_authority_peer(int64_t p_peer);
     godot::Ref<NetwPromise> session_prepare_join(
         const godot::StringName &p_username,
         const godot::Array &p_args
@@ -3409,7 +3428,10 @@ public:
         const godot::Array &p_args,
         const godot::Ref<NetwPromise> &p_prepared
     );
-    void session_submit_request(const JoinRequest &p_request);
+    void session_submit_request(
+        const JoinRequest &p_request,
+        int64_t p_coordinator
+    );
 
     godot::Ref<NetwPromise> session_leave();
     void session_settle_leave(const godot::Ref<NetwPromise> &p_left);
@@ -3966,6 +3988,8 @@ public:
     godot::Ref<NetwEntity> wrapper_for_route(int64_t p_route) const;
 
     godot::Ref<NetwEntity> wrapper_for_id(int64_t p_id) const;
+
+    void entity_settle_peer_departure(int64_t p_peer);
 
     godot::TypedArray<godot::Object> wrapper_live() const;
 

@@ -379,7 +379,7 @@ bool NetwMultiplayer::send_admits(
         != int64_t(NetwLivenessCore::STATE_LIVE)) {
         return false;
     }
-    if (p_peer_id == 1) {
+    if (p_peer_id == session_authority_peer()) {
         return true;
     }
     if (!interest_entity_has_filter(p_entity)) {
@@ -1338,7 +1338,7 @@ bool NetwMultiplayer::rpc_sender_allowed(
     Node *p_node,
     int64_t p_sender
 ) const {
-    if (p_sender == 1) {
+    if (p_sender == session_authority_peer()) {
         return true;
     }
     if (p_options.is_valid() && p_options->get_is_controller_only()) {
@@ -1532,7 +1532,7 @@ void NetwMultiplayer::rpc_handle_call(
             );
             return;
         }
-        if (is_server() && arg_entity.is_valid()
+        if (is_host() && arg_entity.is_valid()
             && !send_admits(p_sender, arg_entity)) {
             if (warn_verdict(ERR_UNAUTHORIZED, slot.node.route)) {
                 NETW_WARN(
@@ -1561,60 +1561,16 @@ void NetwMultiplayer::rpc_handle_call(
         options.is_valid() ? options->get_interpolators() : Array()
     );
 
-    const bool is_server_peer = is_server();
-    const int64_t route = p_entity->get_route();
-
-    if (txn > 0 && target_peer != 1 && is_server_peer && p_sender != 1) {
-        const Ref<NetwPromise> relayed = rpc_request_call(
-            target_peer,
-            Callable(p_comp_node, method),
-            args
+    if (target_type != CALL_TARGET_EVERYONE
+        && target_peer != get_unique_id()) {
+        NETW_WARN(
+            sys::TRANSPORT,
+            "a call for '%s' addressed peer %d and arrived at %d",
+            String(method),
+            int(target_peer),
+            int(get_unique_id())
         );
-        if (relayed.is_valid()) {
-            rpc_reply_when_settled(relayed, p_sender, route, txn);
-        }
         return;
-    }
-
-    const int64_t comp = p_entity->comp_of(p_comp_node);
-    const String comp_path = p_entity->comp_path_of(p_comp_node);
-    const bool reliable
-        = netw::script::model::get_method_reliable(script, method);
-
-    if (txn == 0 && target_peer != 1 && is_server_peer && p_sender != 1) {
-        if (target_peer == 0) {
-            PackedInt32Array recipients = rpc_get_recipients(p_entity);
-            const int at = recipients.find(int32_t(p_sender));
-            if (at >= 0) {
-                recipients.remove_at(at);
-            }
-            for (int i = 0; i < recipients.size(); ++i) {
-                send_to(
-                    recipients[i],
-                    route,
-                    wire::builtin_channel("CALL"),
-                    p_payload,
-                    reliable,
-                    comp,
-                    comp_path,
-                    false
-                );
-            }
-        } else if (send_admits(target_peer, p_entity)) {
-            send_to(
-                target_peer,
-                route,
-                wire::builtin_channel("CALL"),
-                p_payload,
-                reliable,
-                comp,
-                comp_path,
-                false
-            );
-        }
-        if (target_peer != 0) {
-            return;
-        }
     }
 
     if (options.is_valid()

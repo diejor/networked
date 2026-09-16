@@ -94,6 +94,7 @@ private:
 
     int32_t next_request_id = 1;
     int32_t pending_request_id = 0;
+    int64_t pending_request_destination = 0;
     godot::Ref<NetwPromise> pending_request;
     godot::Callable request_handler;
 
@@ -171,8 +172,9 @@ public:
     bool is_current(int request_id) const;
     void close_request();
 
-    godot::Ref<NetwPromise> request_open();
+    godot::Ref<NetwPromise> request_open(int64_t destination);
     godot::Ref<NetwPromise> get_pending_request() const;
+    int64_t get_pending_request_destination() const;
     bool request_settle(int request_id, int code);
     void request_abandon(int code);
     bool receive_result_frame(

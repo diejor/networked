@@ -34,8 +34,6 @@ constexpr uint8_t CHANNEL_ACK = 36;
 constexpr uint8_t CHANNEL_RELAY = 37;
 constexpr uint8_t CHANNEL_RELAY_REQUEST = 38;
 
-constexpr int64_t SERVER_PEER = 1;
-
 bool is_lane(uint8_t p_channel);
 
 constexpr uint8_t ACK_SUBSTITUTED = 1U << 0;
@@ -131,11 +129,11 @@ bool decode_relay_request(
     bool &r_subscribed
 );
 
-// `controller` is the peer the addressed entity answers to.
 struct FrameOrigin {
     int64_t sender = 0;
     int64_t controller = 0;
-    bool receiver_is_server = false;
+    int64_t authority = 0;
+    bool receiver_is_authority = false;
 };
 
 /* Whether one inbound prediction frame may be admitted.

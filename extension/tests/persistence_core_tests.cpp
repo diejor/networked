@@ -4,7 +4,9 @@
 
 #include <memory>
 
+#include "godot/callable.hpp"
 #include "godot/rid.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/liveness_core.hpp"
 #include "netw/persist/book.hpp"
 #include "netw/persist/loop.hpp"
@@ -13,6 +15,8 @@ namespace TestNetwPersistenceCore {
 
 using namespace godot;
 using netw::persist::Book;
+using netw::persist::WriteFence;
+using netw::persist::write_fence_holds;
 using netw_test::DatabaseStand;
 using netw_test::NetwTestPersistenceEngine;
 
@@ -83,7 +87,7 @@ TEST_CASE(
     book.enroll(ids[1], engine_on(owner.ptr(), due_row(lone, "b", 2)));
     book.enroll(ids[2], engine_on(owner.ptr(), due_row(shared, "c", 3)));
 
-    netw::persist::snapshot_tick(book, 0.25, true);
+    netw::persist::snapshot_tick(book, 0.25, true, WriteFence());
 
     NETW_CHECK_EQ(shared->transaction_count(), 1);
     NETW_CHECK_EQ(int(shared->upserts().size()), 2);
@@ -107,7 +111,7 @@ TEST_CASE(
     book.enroll(ids[0], dead);
     book.enroll(ids[1], live);
 
-    netw::persist::snapshot_tick(book, 0.5, true);
+    netw::persist::snapshot_tick(book, 0.5, true, WriteFence());
 
     NETW_CHECK_EQ(dead->tick_count(), 0);
     NETW_CHECK_EQ(book.size(), 1);
@@ -132,7 +136,7 @@ TEST_CASE(
     book.enroll(ids[0], quiet);
     book.enroll(ids[1], due);
 
-    netw::persist::snapshot_tick(book, 0.5, true);
+    netw::persist::snapshot_tick(book, 0.5, true, WriteFence());
 
     NETW_CHECK_EQ(quiet->tick_count(), 1);
     NETW_CHECK_CLOSE(quiet->advanced_by(), 0.5, 1e-9);
@@ -157,7 +161,7 @@ TEST_CASE(
     Book book = fresh_book();
     book.enroll(entity, engine);
 
-    netw::persist::snapshot_tick(book, 1.0, false);
+    netw::persist::snapshot_tick(book, 1.0, false, WriteFence());
 
     NETW_CHECK_EQ(engine->tick_count(), 0);
     NETW_CHECK_EQ(database->transaction_count(), 0);
@@ -180,7 +184,7 @@ TEST_CASE(
     book.enroll(ids[0], first);
     book.enroll(ids[1], second);
 
-    netw::persist::snapshot_tick(book, 0.1, true);
+    netw::persist::snapshot_tick(book, 0.1, true, WriteFence());
 
     NETW_CHECK_EQ(int(first->committed().size()), 1);
     NETW_CHECK_EQ(score_of(first->committed(), 0), 11);
@@ -202,7 +206,7 @@ TEST_CASE(
     Book book = fresh_book();
     book.enroll(entity, engine);
 
-    netw::persist::snapshot_tick(book, 0.1, true);
+    netw::persist::snapshot_tick(book, 0.1, true, WriteFence());
 
     NETW_CHECK_EQ(int(database->upserts().size()), 1);
     NETW_CHECK_EQ(int(engine->committed().size()), 0);
@@ -269,6 +273,31 @@ TEST_CASE(
     NETW_CHECK_EQ(on_server->flush_count(), 1);
     NETW_CHECK_EQ(on_client->flush_count(), 0);
     NETW_CHECK_EQ(book.size(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Database][Hosted] a completion checks the session it was "
+    "issued under still exists and still holds the authority it held at "
+    "issue, so a reassigned coordinator and a session that is gone both "
+    "refuse a late completion rather than applying it"
+) {
+    WriteFence issuer;
+
+    {
+        Ref<netw::NetwMultiplayer> session;
+        session.instantiate();
+        session->session_set_authority_peer(7);
+        issuer.session = netw::gd::instance_id(session.ptr());
+        issuer.authority = session->session_authority_peer();
+        issuer.armed = true;
+
+        CHECK(write_fence_holds(issuer));
+
+        session->session_set_authority_peer(1);
+        CHECK_FALSE(write_fence_holds(issuer));
+    }
+
+    CHECK_FALSE(write_fence_holds(issuer));
 }
 
 } // namespace TestNetwPersistenceCore

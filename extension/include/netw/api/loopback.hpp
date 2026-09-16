@@ -122,7 +122,7 @@ protected:
     static void _bind_methods();
 
 public:
-    godot::Error create_server();
+    godot::Error create_server(int p_unique_id = 1);
     godot::Error create_client(int p_client_id);
 
     void force_connect_peer(int p_peer_id, LocalMultiplayerPeer *p_peer);

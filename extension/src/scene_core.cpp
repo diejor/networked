@@ -411,20 +411,31 @@ void NetwSceneCore::settle_pending(int code) {
     }
     pending_request = Ref<NetwPromise>();
     pending_request_id = 0;
+    pending_request_destination = 0;
 }
 
-Ref<NetwPromise> NetwSceneCore::request_open() {
+Ref<NetwPromise> NetwSceneCore::request_open(int64_t destination) {
     if (pending_request.is_valid() && !pending_request->get_is_settled()) {
         settle_pending(int(ERR_SKIP));
     }
     open_request();
+    pending_request_destination = destination;
     pending_request.instantiate();
-    NETW_TRACE(sys::SCENE, "opened scene request %d", pending_request_id);
+    NETW_TRACE(
+        sys::SCENE,
+        "opened scene request %d for peer %d",
+        pending_request_id,
+        int(destination)
+    );
     return pending_request;
 }
 
 Ref<NetwPromise> NetwSceneCore::get_pending_request() const {
     return pending_request;
+}
+
+int64_t NetwSceneCore::get_pending_request_destination() const {
+    return pending_request_destination;
 }
 
 bool NetwSceneCore::request_settle(int request_id, int code) {
@@ -449,8 +460,14 @@ bool NetwSceneCore::receive_result_frame(
     const PackedByteArray &payload,
     int sender
 ) {
-    if (sender != 1) {
-        NETW_WARN(sys::SCENE, "rejected a scene result from peer %d", sender);
+    if (pending_request_destination != 0
+        && int64_t(sender) != pending_request_destination) {
+        NETW_WARN(
+            sys::SCENE,
+            "rejected a scene result from peer %d, because peer %d was asked",
+            sender,
+            int(pending_request_destination)
+        );
         return false;
     }
     netw::session::SceneResult frame;
@@ -621,6 +638,7 @@ void NetwSceneCore::clear() {
     retiring.clear();
     named.clear();
     pending_request_id = 0;
+    pending_request_destination = 0;
     pending_request = Ref<NetwPromise>();
     transition = Transition();
 }

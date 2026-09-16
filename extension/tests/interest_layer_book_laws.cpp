@@ -1,7 +1,10 @@
 #include "support/netw_test.h"
 
+#include "godot/multiplayer.hpp"
 #include "godot/node.hpp"
+#include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/loopback.hpp"
 #include "netw/api/interest_handle.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -199,6 +202,51 @@ TEST_CASE(
     );
     CHECK(int(plane[StringName("layers")]) >= 1);
     CHECK(int(plane[StringName("transitions_total")]) >= 1);
+}
+
+TEST_CASE(
+    "[Networked][Interest][SceneTree] IB5 a listen host at peer 7 joins the "
+    "layer its own entity declared, because a live join asks whether this "
+    "session holds authority rather than whether it holds the socket"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+    core->session_set_desired_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
+    Ref<netw::LocalMultiplayerPeer> peer;
+    peer.instantiate();
+    REQUIRE(peer->create_server(7) == OK);
+    core->set("multiplayer_peer", peer);
+    REQUIRE(core->is_host());
+    CHECK_FALSE(core->is_server());
+
+    SceneTree *tree = netw::gd::scene_tree();
+    Node *root = netw::gd::scene_root();
+    REQUIRE(tree != nullptr);
+    REQUIRE(root != nullptr);
+    Node *host = memnew(Node);
+    host->set_name("ListenHost");
+    root->add_child(host);
+    tree->set_multiplayer(
+        Ref<MultiplayerAPI>(Object::cast_to<MultiplayerAPI>(core.ptr())),
+        host->get_path()
+    );
+
+    Node *body = memnew(Node);
+    body->set_name("Watcher");
+    const Ref<NetwEntity> watcher = NetwEntity::ensure(body);
+    REQUIRE(watcher.is_valid());
+    watcher->get_interest()->join(StringName("zone"));
+    host->add_child(body);
+
+    NETW_CHECK_EQ(
+        core->interest_membership_ids(watcher->get_rid_handle()).size(),
+        1
+    );
+
+    tree->set_multiplayer(Ref<MultiplayerAPI>(), host->get_path());
+    root->remove_child(host);
+    memdelete(host);
 }
 
 } // namespace TestNetwInterestLayerBook

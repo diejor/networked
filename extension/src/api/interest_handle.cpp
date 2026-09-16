@@ -82,7 +82,7 @@ interest::Decl *NetwInterestHandle::declaration() {
 
 bool NetwInterestHandle::is_authority() const {
     NetwMultiplayer *session = core();
-    return session != nullptr && session->is_server();
+    return session != nullptr && session->is_host();
 }
 
 RID NetwInterestHandle::layer_ensure(const StringName &p_layer_id) {

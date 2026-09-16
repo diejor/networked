@@ -122,7 +122,8 @@ public:
     void apply_control(
         godot::Object *p_wrapper,
         godot::Node *p_owner,
-        bool p_is_authority
+        bool p_is_authority,
+        int64_t p_coordinator
     );
 
     static bool control_recurses(

@@ -4,6 +4,7 @@
 
 #include "netw/api/participant.hpp"
 
+#include "godot/callable.hpp"
 #include "godot/class_db.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
@@ -32,6 +33,7 @@
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
+#include "netw/repl/set_model.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
 #include "netw/sync_authoring.hpp"
@@ -453,16 +455,20 @@ void NetwMultiplayer::report_event(
     );
 }
 
-void NetwMultiplayer::table_publish_intake() {
+void NetwMultiplayer::table_announce_intake() {
     const TypedArray<RID> touched = table_core->touched_tables();
     for (int index = 0; index < touched.size(); index++) {
-        table_publish(touched[index]);
+        table_announce(touched[index]);
     }
     table_core->begin_intake();
 }
 
-void NetwMultiplayer::table_publish(const RID &p_table) {
+void NetwMultiplayer::table_announce(const RID &p_table) {
     emit_signal(SIG_TABLE_RECEIVED, p_table, table_core->tick_of(p_table));
+}
+
+bool NetwMultiplayer::table_publishes() const {
+    return is_host();
 }
 
 Error NetwMultiplayer::table_admit_frame_default(
@@ -473,7 +479,7 @@ Error NetwMultiplayer::table_admit_frame_default(
     if (p_channel != gate_channels.table) {
         return ERR_INVALID_DATA;
     }
-    if (p_sender != 1) {
+    if (p_sender != session_authority_peer()) {
         table_core->count_bad_sender();
         return ERR_UNAUTHORIZED;
     }
@@ -661,7 +667,8 @@ LocalVector<repl::RowOffer> NetwMultiplayer::sync_pump_offers(
             int64_t(get_unique_id()),
             node->is_inside_tree() && node->is_multiplayer_authority(),
             entity->get_controller(),
-            rpc_get_recipients(entity)
+            rpc_get_recipients(entity),
+            session_authority_peer()
         );
         if (recipients.is_empty()) {
             continue;
@@ -1326,14 +1333,14 @@ bool NetwMultiplayer::display_default_authors_streams(const RID &p_entity) {
             || !set_feeds_runtime(p_runtime, set)) {
             continue;
         }
-        const bool authored = set->get_record() == NetwPropertySet::RECORD_STATE
-            ? get_unique_id() == 1
-            : netw::entity::Control::policy_admits(
-                  set->get_policy(),
-                  get_unique_id(),
-                  node->get_multiplayer_authority(),
-                  entity->get_controller()
-              );
+        const bool authored = netw::repl::record_authors(
+            set->get_record(),
+            set->get_policy(),
+            is_host(),
+            get_unique_id(),
+            node->get_multiplayer_authority(),
+            entity->get_controller()
+        );
         if (!authored) {
             return false;
         }
@@ -1391,7 +1398,7 @@ void NetwMultiplayer::display_absorb_recovery(
 }
 
 bool NetwMultiplayer::persistence_serves() {
-    return !has_multiplayer_peer() || is_server();
+    return is_host();
 }
 
 void NetwMultiplayer::persistence_arm_quit_guard() {
@@ -1455,7 +1462,17 @@ void NetwMultiplayer::persist_pump(double p_delta) {
 }
 
 void NetwMultiplayer::persist_tick_default(double p_delta) {
-    persist::snapshot_tick(persistence.engines, p_delta, persistence_serves());
+    const persist::WriteFence issuer{
+        gd::instance_id(this),
+        session_authority_peer(),
+        true
+    };
+    persist::snapshot_tick(
+        persistence.engines,
+        p_delta,
+        persistence_serves(),
+        issuer
+    );
 }
 
 void NetwMultiplayer::persistence_flush_all() {

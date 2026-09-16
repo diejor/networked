@@ -400,7 +400,7 @@ String SyncPipeline::missing_prediction_component_message(
 
 void SyncPipeline::register_state_timeline(Node *p_node) {
     NetwMultiplayer *plane = core();
-    if (plane == nullptr || plane->get_unique_id() != 1) {
+    if (plane == nullptr || !plane->is_host()) {
         return;
     }
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
@@ -424,7 +424,7 @@ bool SyncPipeline::holds_state_binding(const Ref<NetwEntity> &p_entity) const {
 
 void SyncPipeline::reconcile_state_timeline(Node *p_node) {
     NetwMultiplayer *plane = core();
-    if (plane == nullptr || plane->get_unique_id() != 1) {
+    if (plane == nullptr || !plane->is_host()) {
         return;
     }
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
@@ -436,7 +436,7 @@ void SyncPipeline::reconcile_state_timeline(Node *p_node) {
 
 void SyncPipeline::reconcile_dropped_state_timelines() {
     NetwMultiplayer *plane = core();
-    if (plane == nullptr || plane->get_unique_id() != 1) {
+    if (plane == nullptr || !plane->is_host()) {
         state_binding_dropped.clear();
         return;
     }
@@ -804,7 +804,8 @@ void SyncPipeline::send_entity_event(
         plane->has_server_role(),
         plane->get_unique_id(),
         0,
-        plane->rpc_get_recipients(entity)
+        plane->rpc_get_recipients(entity),
+        plane->session_authority_peer()
     );
     for (int at = 0; at < recipients.size(); ++at) {
         plane->send_to(
@@ -862,7 +863,8 @@ void SyncPipeline::send_property(Node *p_node, const StringName &p_property) {
         : Ref<NetwPropertyConfig>();
     if (opt.is_null()) {
         const int64_t local_id = plane->get_unique_id();
-        if (local_id != 1 && local_id != p_node->get_multiplayer_authority()) {
+        if (!plane->is_host()
+            && local_id != p_node->get_multiplayer_authority()) {
             NETW_WARN(
                 sys::WIRE,
                 "sync_property: Non-authority peer cannot sync unregistered "
@@ -964,7 +966,8 @@ void SyncPipeline::send_signal(
         call_local = opt->get_is_call_local();
     } else {
         const int64_t local_id = plane->get_unique_id();
-        if (local_id != 1 && local_id != p_node->get_multiplayer_authority()) {
+        if (!plane->is_host()
+            && local_id != p_node->get_multiplayer_authority()) {
             NETW_WARN(
                 sys::WIRE,
                 "send_signal: Non-authority peer cannot emit unregistered "
@@ -1127,7 +1130,8 @@ void SyncPipeline::apply_row(
         route,
         p_ordinal,
         p_sender,
-        p_entity->get_controller()
+        p_entity->get_controller(),
+        plane->session_authority_peer()
     );
     if (binding.is_null()) {
         plane->attribution_note_refusal(
@@ -1529,7 +1533,7 @@ void SyncPipeline::handle_property_sync(
     }
     const Variant value = decoded[0];
 
-    if (p_sender != 1 && opt.is_null()) {
+    if (p_sender != plane->session_authority_peer() && opt.is_null()) {
         return;
     }
     if (!entity::Control::script_admits(
@@ -1537,7 +1541,8 @@ void SyncPipeline::handle_property_sync(
             prop,
             false,
             p_sender,
-            p_entity->get_controller()
+            p_entity->get_controller(),
+            plane->session_authority_peer()
         )) {
         NETW_WARN(
             sys::WIRE,
@@ -1590,7 +1595,8 @@ void SyncPipeline::handle_property_sync(
             true,
             plane->get_unique_id(),
             p_sender,
-            plane->rpc_get_recipients(p_entity)
+            plane->rpc_get_recipients(p_entity),
+            plane->session_authority_peer()
         );
         for (int at = 0; at < recipients.size(); ++at) {
             plane->send_to(
@@ -1653,7 +1659,7 @@ void SyncPipeline::handle_signal(
         return;
     }
 
-    if (p_sender != 1 && opt.is_null()) {
+    if (p_sender != plane->session_authority_peer() && opt.is_null()) {
         return;
     }
     if (!entity::Control::script_admits(
@@ -1661,7 +1667,8 @@ void SyncPipeline::handle_signal(
             signal_name,
             true,
             p_sender,
-            p_entity->get_controller()
+            p_entity->get_controller(),
+            plane->session_authority_peer()
         )) {
         NETW_WARN(
             sys::WIRE,
@@ -1685,7 +1692,8 @@ void SyncPipeline::handle_signal(
             true,
             plane->get_unique_id(),
             p_sender,
-            plane->rpc_get_recipients(p_entity)
+            plane->rpc_get_recipients(p_entity),
+            plane->session_authority_peer()
         );
         for (int at = 0; at < recipients.size(); ++at) {
             plane->send_to(

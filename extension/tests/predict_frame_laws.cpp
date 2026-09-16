@@ -26,6 +26,7 @@ using netw::wire::WirePlan;
 using netw::wire::WireRegistry;
 
 constexpr int64_t OWNER_PEER = 7;
+constexpr int64_t AUTHORITY_PEER = 1;
 
 WirePlan input_plan() {
     SchemaRecord record;
@@ -530,11 +531,12 @@ bool lane_named(
     return decl != nullptr && decl->name == godot::StringName(p_name);
 }
 
-netw::predict::FrameOrigin from(int64_t p_sender, bool p_server) {
+netw::predict::FrameOrigin from(int64_t p_sender, bool p_receiver_holds) {
     netw::predict::FrameOrigin origin;
     origin.sender = p_sender;
     origin.controller = OWNER_PEER;
-    origin.receiver_is_server = p_server;
+    origin.authority = AUTHORITY_PEER;
+    origin.receiver_is_authority = p_receiver_holds;
     return origin;
 }
 
@@ -603,7 +605,7 @@ TEST_CASE(
                 admit_frame(
                     registry,
                     channel,
-                    from(netw::predict::SERVER_PEER, false),
+                    from(AUTHORITY_PEER, false),
                     false,
                     LIVE
                 ),
@@ -678,7 +680,7 @@ TEST_CASE(
         admit_frame(
             registry,
             1,
-            from(netw::predict::SERVER_PEER, true),
+            from(AUTHORITY_PEER, true),
             false,
             LIVE
         ),

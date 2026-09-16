@@ -65,21 +65,40 @@ void NetwMultiplayer::scene_adopt_bare_level(Node *p_level) {
         );
         return;
     }
-    const String path = gd::ensure_path(p_level->get_scene_file_path());
+    const bool spawns_the_authority_scene = is_host();
+    const String path = NetwSceneCore::verify_requested_path(
+        gd::ensure_path(p_level->get_scene_file_path())
+    );
+    if (spawns_the_authority_scene && path.is_empty()) {
+        NETW_ERR(
+            sys::SCENE,
+            "'%s' declares a multiplayer scene and names no .tscn under "
+            "res:// to spawn it from, so adopting it would leave this "
+            "session with no world at all. Save the level as its own scene.",
+            String(p_level->get_name())
+        );
+    }
     Node *parent = p_level->get_parent();
     if (parent != nullptr) {
         parent->remove_child(p_level);
     }
     memdelete(p_level);
-    if (!is_server()) {
+    if (!spawns_the_authority_scene) {
         NETW_TRACE(
             sys::SCENE,
-            "a bare level was offered to a client, which receives the "
-            "authority's scene instead of spawning its own"
+            "a bare level was offered to a peer holding no scene authority, "
+            "which receives the authority's scene instead of spawning its own"
         );
         return;
     }
-    scene_spawn(path, SceneIsolation(decl.isolation));
+    if (scene_spawn(path, SceneIsolation(decl.isolation)) == nullptr) {
+        NETW_ERROR(
+            sys::SCENE,
+            "the declared level at '%s' loads no scene, so this session "
+            "presents nothing and its peers receive nothing.",
+            path
+        );
+    }
 }
 
 Error NetwMultiplayer::embed_settle() {

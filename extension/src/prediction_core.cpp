@@ -878,7 +878,8 @@ int prediction_core::admit_frame(
     int channel,
     int sender,
     int controller,
-    bool receiver_is_server,
+    int64_t authority,
+    bool receiver_is_authority,
     bool payload_empty,
     int route_verdict
 ) {
@@ -887,7 +888,8 @@ int prediction_core::admit_frame(
     predict::FrameOrigin origin;
     origin.sender = sender;
     origin.controller = controller;
-    origin.receiver_is_server = receiver_is_server;
+    origin.authority = authority;
+    origin.receiver_is_authority = receiver_is_authority;
     return int(predict::admit_frame(
         registry,
         uint8_t(channel),

@@ -354,17 +354,6 @@ ReplicationCore *NetwEntity::get_replication_plane() const {
 }
 
 void NetwEntity::set_controller_internal(int64_t p_value) {
-    Node *owner = get_owner();
-    if (p_value != 0 && owner != nullptr && get_is_authority()) {
-        const Ref<MultiplayerAPI> api = owner->is_inside_tree()
-            ? owner->get_multiplayer()
-            : Ref<MultiplayerAPI>();
-        const Callable dropped(this, StringName("_on_peer_disconnected"));
-        if (api.is_valid()
-            && !api->is_connected(StringName("peer_disconnected"), dropped)) {
-            api->connect(StringName("peer_disconnected"), dropped);
-        }
-    }
     const int64_t was = control()->get_controller();
     if (!record->set_controller(this, p_value)) {
         return;
@@ -388,7 +377,15 @@ void NetwEntity::set_controller_internal(int64_t p_value) {
 }
 
 void NetwEntity::apply_control() {
-    record->apply_control(this, get_owner(), get_is_authority());
+    NetwMultiplayer *api = session_core();
+    const int64_t coordinator
+        = api != nullptr ? api->session_authority_peer() : 1;
+    record->apply_control(
+        this,
+        get_owner(),
+        get_is_authority(),
+        coordinator
+    );
 }
 
 int64_t NetwEntity::resolve_initial_controller() const {
@@ -397,9 +394,13 @@ int64_t NetwEntity::resolve_initial_controller() const {
         return resolved;
     }
     Node *owner = get_owner();
-    const int64_t claimed
-        = owner != nullptr ? int64_t(owner->get_multiplayer_authority()) : 1;
-    return claimed != 1 ? claimed : 0;
+    NetwMultiplayer *api = session_core();
+    const int64_t coordinator
+        = api != nullptr ? api->session_authority_peer() : 1;
+    const int64_t claimed = owner != nullptr
+        ? int64_t(owner->get_multiplayer_authority())
+        : coordinator;
+    return claimed != 1 && claimed != coordinator ? claimed : 0;
 }
 
 void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
@@ -509,7 +510,7 @@ bool NetwEntity::get_is_authority() const {
     if (api == nullptr) {
         return true;
     }
-    return api->is_server();
+    return api->is_host();
 }
 
 Ref<NetwParticipant> NetwEntity::get_participant() const {
