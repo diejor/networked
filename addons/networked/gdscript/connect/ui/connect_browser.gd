@@ -485,7 +485,7 @@ func _rebuild_from_session() -> void:
 	if _connection == null:
 		_update_counter()
 		return
-	for endpoint: Dictionary in _connection.endpoints():
+	for endpoint: Dictionary in _connection.endpoints:
 		_add_row(endpoint)
 	_update_counter()
 

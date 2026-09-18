@@ -1,0 +1,69 @@
+name: C# Bindings
+
+on:
+  workflow_call:
+    inputs:
+      sharp-version:
+        description: GodotSharp version or NuGet range. Empty reads the dump.
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      sharp-version:
+        description: GodotSharp version or NuGet range. Empty reads the dump.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: csharp-${{ github.event.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  bindings:
+    name: "Generated bindings"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/build-native
+        with:
+          cell: linux:x86_64:template_debug
+          platform: linux
+          suffix: .linux.template_debug.x86_64
+
+      - name: Install The Engine
+        id: engine
+        shell: bash
+        run: python3 ci/engine.py install
+
+      - name: Install The .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run The Generator Fixtures
+        shell: bash
+        run: python3 -m unittest discover -s ci/tests -t ci -q
+
+      - name: Check The Bindings Against The Addon
+        shell: bash
+        run: |
+          python3 ci/test.py --godot "${{ steps.engine.outputs.binary }}" \
+            csharp ${{ inputs.sharp-version && format('--sharp-version {0}', inputs.sharp-version) || '' }}
+
+      - name: Upload The Dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-extension-api
+          path: ci/cache/extension_api.json
+          if-no-files-found: warn
+          retention-days: 7

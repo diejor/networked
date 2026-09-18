@@ -12,8 +12,8 @@ var grid: Array[NetwParticipant] = []
 
 func _init() -> void:
 	Netw.configure_spawn(spawn_track)
-	Netw.configure_session(self).app_id(&"netw-example-racing")
-	Netw.configure_clock(self).tickrate(60)
+	Netw.configure_session(self).app(&"netw-example-racing")
+	Netw.configure_clock(self).ticks_per_second(60)
 	Netw.configure_join(self, enter_race)
 
 

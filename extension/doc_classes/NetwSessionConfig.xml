@@ -19,28 +19,28 @@
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="app_id">
+		<method name="app">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="app_id" type="StringName" />
 			<description>
 				Sets [member app_id] and returns this same draft, so a declaration reads as one chained expression.
 			</description>
 		</method>
-		<method name="desired_role">
-			<return type="NetwSessionConfig" />
-			<param index="0" name="desired_role" type="int" />
-			<description>
-				Sets [member desired_role] and returns this same draft, so a declaration reads as one chained expression.
-			</description>
-		</method>
-		<method name="link_conditions">
+		<method name="link">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="link_conditions" type="NetwLinkConditions" />
 			<description>
 				Sets [member link_conditions] and returns this same draft, so a declaration reads as one chained expression.
 			</description>
 		</method>
-		<method name="server_info">
+		<method name="role">
+			<return type="NetwSessionConfig" />
+			<param index="0" name="desired_role" type="int" />
+			<description>
+				Sets [member desired_role] and returns this same draft, so a declaration reads as one chained expression.
+			</description>
+		</method>
+		<method name="server">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="server_info" type="NetwServerInfo" />
 			<description>

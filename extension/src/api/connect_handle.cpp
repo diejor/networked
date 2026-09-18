@@ -468,7 +468,10 @@ void NetwConnectHandle::_bind_methods() {
         &NetwConnectHandle::join_schema
     );
 
-    ClassDB::bind_method(D_METHOD("endpoints"), &NetwConnectHandle::endpoints);
+    ClassDB::bind_method(
+        D_METHOD("get_endpoints"),
+        &NetwConnectHandle::endpoints
+    );
     ClassDB::bind_method(
         D_METHOD("endpoint", "transport", "address"),
         &NetwConnectHandle::endpoint
@@ -530,7 +533,11 @@ void NetwConnectHandle::_bind_methods() {
         "",
         "get_join_address"
     );
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "endpoints"), "", "endpoints");
+    ADD_PROPERTY(
+        PropertyInfo(Variant::ARRAY, "endpoints"),
+        "",
+        "get_endpoints"
+    );
 }
 
 } // namespace netw

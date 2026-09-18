@@ -112,7 +112,7 @@ class ClockPumpScenario final : public netw_test::FrameScenario {
     }
 
     void declare_clock(Node *p_branch) {
-        netw::Netw::configure_clock(p_branch)->tickrate(TICKRATE);
+        netw::Netw::configure_clock(p_branch)->ticks_per_second(TICKRATE);
     }
 
     int open_host() {

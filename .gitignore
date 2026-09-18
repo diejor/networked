@@ -9,6 +9,8 @@
 
 /.scons_cache/
 
+/ci/cache/
+
 /dist/
 
 /.engines/

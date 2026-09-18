@@ -58,7 +58,7 @@ TEST_CASE(
     branch.tree->set_desired_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
 
     Netw::configure_session(child_named(branch.tree, "Session"))
-        ->app_id(StringName("from-the-declaration"));
+        ->app(StringName("from-the-declaration"));
 
     branch.api()->config_settle();
 
@@ -95,7 +95,7 @@ TEST_CASE(
 ) {
     Mounted branch("CS3Tree");
     Netw::configure_session(child_named(branch.tree, "Session"))
-        ->app_id(StringName("tagged-arena"));
+        ->app(StringName("tagged-arena"));
 
     branch.api()->config_settle();
 
@@ -112,7 +112,7 @@ TEST_CASE(
 ) {
     Mounted branch("CS4Tree");
     Netw::configure_session(child_named(branch.tree, "Session"))
-        ->desired_role(NetwMultiplayer::ROLE_CLIENT);
+        ->role(NetwMultiplayer::ROLE_CLIENT);
     branch.api()->session_constrain_role(
         NetwMultiplayer::ROLE_DEDICATED_SERVER
     );
@@ -133,7 +133,7 @@ TEST_CASE(
 ) {
     Mounted branch("CS5Tree");
     Netw::configure_session(child_named(branch.tree, "Session"))
-        ->app_id(StringName("still-authoring"));
+        ->app(StringName("still-authoring"));
 
     Ref<netw::LocalMultiplayerPeer> offered;
     offered.instantiate();

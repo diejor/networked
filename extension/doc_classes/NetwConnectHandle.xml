@@ -230,8 +230,8 @@
 		</method>
 	</methods>
 	<members>
-		<member name="endpoints" type="Array" setter="" getter="endpoints" default="[]">
-			Every row this session knows how to reach, as endpoint snapshots. Equivalent to [method endpoints].
+		<member name="endpoints" type="Array" setter="" getter="get_endpoints" default="[]">
+			Every row this session knows how to reach, as endpoint snapshots.
 		</member>
 		<member name="join_address" type="String" setter="" getter="get_join_address" default="&quot;&quot;">
 			[method NetwMultiplayer.peer_join_address]: the address another player would use to reach this session.

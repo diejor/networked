@@ -8,8 +8,8 @@ var api: NetwMultiplayer:
 
 
 func _init() -> void:
-	Netw.configure_session(self).app_id(&"7x283tsfmy1xpr4")
+	Netw.configure_session(self).app(&"7x283tsfmy1xpr4")
 
 
 func _enter_tree() -> void:
-	Netw.configure_clock(self, clock_settings).tickrate(15)
+	Netw.configure_clock(self, clock_settings).ticks_per_second(15)

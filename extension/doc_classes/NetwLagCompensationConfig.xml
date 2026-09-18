@@ -17,14 +17,14 @@
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="input_gate_deadline_ticks">
+		<method name="input_gate_deadline">
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
 				Sets [member input_gate_deadline_ticks] and returns this same config, so a declaration reads as one chained expression.
 			</description>
 		</method>
-		<method name="max_future_action_ticks">
+		<method name="max_future_action">
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>

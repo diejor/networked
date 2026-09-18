@@ -160,10 +160,10 @@ public:
         return values.tickrate_mismatch_action;
     }
 
-    godot::Ref<NetwClockConfig> tickrate(int64_t p_value);
-    godot::Ref<NetwClockConfig> display_offset(int64_t p_value);
+    godot::Ref<NetwClockConfig> ticks_per_second(int64_t p_value);
+    godot::Ref<NetwClockConfig> display_offset_ticks(int64_t p_value);
     godot::Ref<NetwClockConfig> physics_interpolation(bool p_value);
-    godot::Ref<NetwClockConfig> sync_mode(int64_t p_value);
+    godot::Ref<NetwClockConfig> sync(int64_t p_value);
 
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);

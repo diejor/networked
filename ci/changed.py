@@ -30,6 +30,12 @@ LANES: dict[str, tuple[str, ...]] = {
         ".github/workflows/module.yml",
         ".github/workflows/ci.yml",
     ),
+    "csharp": (
+        "extension/**",
+        "addons/networked/native_api/**",
+        "ci/**",
+        ".github/**",
+    ),
     "gdscript": (
         "addons/networked/**",
         "tests/**",

@@ -79,20 +79,20 @@ void NetwSessionConfig::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("app_id", "app_id"),
-        &NetwSessionConfig::app_id
+        D_METHOD("app", "app_id"),
+        &NetwSessionConfig::app
     );
     ClassDB::bind_method(
-        D_METHOD("desired_role", "desired_role"),
-        &NetwSessionConfig::desired_role
+        D_METHOD("role", "desired_role"),
+        &NetwSessionConfig::role
     );
     ClassDB::bind_method(
-        D_METHOD("link_conditions", "link_conditions"),
-        &NetwSessionConfig::link_conditions
+        D_METHOD("link", "link_conditions"),
+        &NetwSessionConfig::link
     );
     ClassDB::bind_method(
-        D_METHOD("server_info", "server_info"),
-        &NetwSessionConfig::server_info
+        D_METHOD("server", "server_info"),
+        &NetwSessionConfig::server
     );
 }
 
@@ -102,24 +102,24 @@ void NetwSessionConfig::set_desired_role(int64_t p_role) {
     }
 }
 
-Ref<NetwSessionConfig> NetwSessionConfig::app_id(const StringName &p_app_id) {
+Ref<NetwSessionConfig> NetwSessionConfig::app(const StringName &p_app_id) {
     set_app_id(p_app_id);
     return Ref<NetwSessionConfig>(this);
 }
 
-Ref<NetwSessionConfig> NetwSessionConfig::desired_role(int64_t p_role) {
+Ref<NetwSessionConfig> NetwSessionConfig::role(int64_t p_role) {
     set_desired_role(p_role);
     return Ref<NetwSessionConfig>(this);
 }
 
-Ref<NetwSessionConfig> NetwSessionConfig::link_conditions(
+Ref<NetwSessionConfig> NetwSessionConfig::link(
     const Ref<NetwLinkConditions> &p_conditions
 ) {
     set_link_conditions(p_conditions);
     return Ref<NetwSessionConfig>(this);
 }
 
-Ref<NetwSessionConfig> NetwSessionConfig::server_info(
+Ref<NetwSessionConfig> NetwSessionConfig::server(
     const Ref<NetwServerInfo> &p_info
 ) {
     set_server_info(p_info);

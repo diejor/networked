@@ -54,6 +54,8 @@ public:
         SCENE_ISOLATION_OWN_WORLD = NetwSceneCore::ISOLATION_OWN_WORLD,
     };
 
+    static godot::Dictionary native_api();
+
     static godot::Ref<NetwMultiplayer> of(godot::Node *p_node);
     static godot::Ref<NetwConnectHandle> connection(godot::Node *p_node);
     static godot::Ref<NetwSessionHandle> session(godot::Node *p_node);

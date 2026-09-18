@@ -36,7 +36,7 @@ struct Branch {
         Node *scope = memnew(Node);
         scope->set_name("ClockScope");
         tree->add_child(scope);
-        netw::Netw::configure_clock(scope)->tickrate(p_tickrate);
+        netw::Netw::configure_clock(scope)->ticks_per_second(p_tickrate);
         return scope;
     }
 

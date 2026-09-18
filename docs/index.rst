@@ -116,6 +116,13 @@ Until then the :ref:`class reference <toc-class-ref>` is the documentation,
 generated from the same XML the in-editor help serves. Start at
 :ref:`Netw <class_Netw>` and :ref:`NetwMultiplayer <class_NetwMultiplayer>`.
 
+Writing in C#
+-------------
+
+A C# game reaches the same surface. The addon ships generated bindings under
+``addons/networked/native_api/cs/``, so installing it is the whole install and
+the project's ``.csproj`` needs nothing added.
+
 .. toctree::
    :maxdepth: 1
    :caption: Contributing

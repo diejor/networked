@@ -16,7 +16,7 @@
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="display_offset">
+		<method name="display_offset_ticks">
 			<return type="NetwClockConfig" />
 			<param index="0" name="display_offset" type="int" />
 			<description>
@@ -30,14 +30,14 @@
 				Sets [member use_physics_interpolation] and returns this same draft, so a declaration reads as one chained expression.
 			</description>
 		</method>
-		<method name="sync_mode">
+		<method name="sync">
 			<return type="NetwClockConfig" />
 			<param index="0" name="sync_mode" type="int" />
 			<description>
 				Sets [member sync_mode] and returns this same draft, so a declaration reads as one chained expression.
 			</description>
 		</method>
-		<method name="tickrate">
+		<method name="ticks_per_second">
 			<return type="NetwClockConfig" />
 			<param index="0" name="tickrate" type="int" />
 			<description>

@@ -82,6 +82,7 @@
 #include "loopback_transport_tests.cpp"
 #include "member_config_tests.cpp"
 #include "multiplayer_tree_laws.cpp"
+#include "native_api_laws.cpp"
 #include "netw_identity_tests.cpp"
 #include "netw_multiplayer_tests.cpp"
 #include "participant_admission_laws.cpp"

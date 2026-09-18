@@ -289,10 +289,13 @@ void NetwMultiplayer::_bind_methods() {
         D_METHOD("session_get_role"),
         &NetwMultiplayer::session_get_role
     );
-    ClassDB::bind_method(D_METHOD("is_online"), &NetwMultiplayer::is_online);
-    ClassDB::bind_method(D_METHOD("is_host"), &NetwMultiplayer::is_host);
     ClassDB::bind_method(
-        D_METHOD("is_local_client"),
+        D_METHOD("get_is_online"),
+        &NetwMultiplayer::is_online
+    );
+    ClassDB::bind_method(D_METHOD("get_is_host"), &NetwMultiplayer::is_host);
+    ClassDB::bind_method(
+        D_METHOD("get_is_local_client"),
         &NetwMultiplayer::is_local_client
     );
     ClassDB::bind_method(
@@ -716,12 +719,12 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(TABLE_PARAM_RELIABLE);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "state"), "", "session_get_state");
     ADD_PROPERTY(PropertyInfo(Variant::INT, "role"), "", "session_get_role");
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_online"), "", "is_online");
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_host"), "", "is_host");
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_online"), "", "get_is_online");
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_host"), "", "get_is_host");
     ADD_PROPERTY(
         PropertyInfo(Variant::BOOL, "is_local_client"),
         "",
-        "is_local_client"
+        "get_is_local_client"
     );
     ADD_SIGNAL(
         MethodInfo("endpoint_added", PropertyInfo(Variant::RID, "endpoint"))

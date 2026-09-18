@@ -46,23 +46,25 @@ void NetwLagCompensationConfig::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("max_future_action_ticks", "ticks"),
-        &NetwLagCompensationConfig::max_future_action_ticks
+        D_METHOD("max_future_action", "ticks"),
+        &NetwLagCompensationConfig::max_future_action
     );
     ClassDB::bind_method(
-        D_METHOD("input_gate_deadline_ticks", "ticks"),
-        &NetwLagCompensationConfig::input_gate_deadline_ticks
+        D_METHOD("input_gate_deadline", "ticks"),
+        &NetwLagCompensationConfig::input_gate_deadline
     );
 }
 
-Ref<NetwLagCompensationConfig> NetwLagCompensationConfig::
-    max_future_action_ticks(int64_t p_ticks) {
+Ref<NetwLagCompensationConfig> NetwLagCompensationConfig::max_future_action(
+    int64_t p_ticks
+) {
     set_max_future_action_ticks(p_ticks);
     return Ref<NetwLagCompensationConfig>(this);
 }
 
-Ref<NetwLagCompensationConfig> NetwLagCompensationConfig::
-    input_gate_deadline_ticks(int64_t p_ticks) {
+Ref<NetwLagCompensationConfig> NetwLagCompensationConfig::input_gate_deadline(
+    int64_t p_ticks
+) {
     set_input_gate_deadline_ticks(p_ticks);
     return Ref<NetwLagCompensationConfig>(this);
 }

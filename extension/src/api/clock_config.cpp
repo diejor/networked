@@ -262,29 +262,29 @@ void NetwClockConfig::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("tickrate", "tickrate"),
-        &NetwClockConfig::tickrate
+        D_METHOD("ticks_per_second", "tickrate"),
+        &NetwClockConfig::ticks_per_second
     );
     ClassDB::bind_method(
-        D_METHOD("display_offset", "display_offset"),
-        &NetwClockConfig::display_offset
+        D_METHOD("display_offset_ticks", "display_offset"),
+        &NetwClockConfig::display_offset_ticks
     );
     ClassDB::bind_method(
         D_METHOD("physics_interpolation", "use_physics_interpolation"),
         &NetwClockConfig::physics_interpolation
     );
     ClassDB::bind_method(
-        D_METHOD("sync_mode", "sync_mode"),
-        &NetwClockConfig::sync_mode
+        D_METHOD("sync", "sync_mode"),
+        &NetwClockConfig::sync
     );
 }
 
-Ref<NetwClockConfig> NetwClockConfig::tickrate(int64_t p_value) {
+Ref<NetwClockConfig> NetwClockConfig::ticks_per_second(int64_t p_value) {
     set_tickrate(p_value);
     return Ref<NetwClockConfig>(this);
 }
 
-Ref<NetwClockConfig> NetwClockConfig::display_offset(int64_t p_value) {
+Ref<NetwClockConfig> NetwClockConfig::display_offset_ticks(int64_t p_value) {
     set_display_offset(p_value);
     return Ref<NetwClockConfig>(this);
 }
@@ -294,7 +294,7 @@ Ref<NetwClockConfig> NetwClockConfig::physics_interpolation(bool p_value) {
     return Ref<NetwClockConfig>(this);
 }
 
-Ref<NetwClockConfig> NetwClockConfig::sync_mode(int64_t p_value) {
+Ref<NetwClockConfig> NetwClockConfig::sync(int64_t p_value) {
     set_sync_mode(p_value);
     return Ref<NetwClockConfig>(this);
 }

@@ -63,12 +63,12 @@ public:
         return values.server_info;
     }
 
-    godot::Ref<NetwSessionConfig> app_id(const godot::StringName &p_app_id);
-    godot::Ref<NetwSessionConfig> desired_role(int64_t p_role);
-    godot::Ref<NetwSessionConfig> link_conditions(
+    godot::Ref<NetwSessionConfig> app(const godot::StringName &p_app_id);
+    godot::Ref<NetwSessionConfig> role(int64_t p_role);
+    godot::Ref<NetwSessionConfig> link(
         const godot::Ref<NetwLinkConditions> &p_conditions
     );
-    godot::Ref<NetwSessionConfig> server_info(
+    godot::Ref<NetwSessionConfig> server(
         const godot::Ref<NetwServerInfo> &p_info
     );
 

@@ -118,8 +118,8 @@ TEST_CASE(
     Node *scope = child_named(branch.node, "Session");
 
     Netw::configure_lagcomp(scope)
-        ->max_future_action_ticks(21)
-        ->input_gate_deadline_ticks(33);
+        ->max_future_action(21)
+        ->input_gate_deadline(33);
 
     branch.api->config_settle();
 
@@ -144,7 +144,7 @@ TEST_CASE(
     branch.api->config_settle();
 
     draft->set_max_future_action_ticks(2);
-    draft->input_gate_deadline_ticks(2);
+    draft->input_gate_deadline(2);
 
     NETW_CHECK_EQ(int(draft->get_max_future_action_ticks()), 13);
     NETW_CHECK_EQ(int(draft->get_input_gate_deadline_ticks()), 19);

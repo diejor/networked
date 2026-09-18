@@ -40,12 +40,8 @@ public:
         return values.input_gate_deadline_ticks;
     }
 
-    godot::Ref<NetwLagCompensationConfig> max_future_action_ticks(
-        int64_t p_ticks
-    );
-    godot::Ref<NetwLagCompensationConfig> input_gate_deadline_ticks(
-        int64_t p_ticks
-    );
+    godot::Ref<NetwLagCompensationConfig> max_future_action(int64_t p_ticks);
+    godot::Ref<NetwLagCompensationConfig> input_gate_deadline(int64_t p_ticks);
 
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);

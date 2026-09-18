@@ -14,8 +14,8 @@ var roster: Array[NetwParticipant] = []
 func _init() -> void:
 	Netw.configure_spawn(spawn_lobby)
 	Netw.configure_lagcomp(self)
-	Netw.configure_session(self).app_id(&"netw-example-rocket-league")
-	Netw.configure_clock(self).tickrate(60)
+	Netw.configure_session(self).app(&"netw-example-rocket-league")
+	Netw.configure_clock(self).ticks_per_second(60)
 	Netw.configure_join(self, enter_lobby)
 
 

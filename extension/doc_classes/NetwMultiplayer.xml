@@ -3466,17 +3466,17 @@
 			The wrapped [SceneMultiplayer]. It owns the [MultiplayerPeer], the connection lifecycle, [method SceneMultiplayer.send_bytes], and the auth protocol, and this session wraps it rather than reimplementing peer transport.
 			Never [code]null[/code]. A session with none assigned makes its own at [code]/root[/code], because an empty root path is an error rather than an unset value. Assigning a new one re-binds everything this session listens to.
 		</member>
-		<member name="is_host" type="bool" setter="" getter="is_host" default="true">
+		<member name="is_host" type="bool" setter="" getter="get_is_host" default="true">
 			Whether this peer holds server authority. A dedicated server, a listen server, and a session with no connection at all all return [code]true[/code].
 			A session that has connected to nothing is its own authority, which is what lets a single-player game admit its own entities, claim its own routes and create its own scenes with no network, exactly as [MultiplayerSpawner] and [MultiplayerSynchronizer] do. An ended session returns to that state.
 			Authority is withheld the moment a session declares itself something else. [method session_set_role] with [constant ROLE_CLIENT] returns [code]false[/code] before any connection exists, so a client waiting to connect never acts as a server.
 			An authority with no session has no peers, so every broadcast it authorizes reaches nobody. A caller that needs a live hosted session reads [member is_online] as well.
 		</member>
-		<member name="is_local_client" type="bool" setter="" getter="is_local_client" default="false">
+		<member name="is_local_client" type="bool" setter="" getter="get_is_local_client" default="false">
 			Whether this peer has a player of its own. True at [constant ROLE_CLIENT] and [constant ROLE_LISTEN_SERVER], and false at [constant ROLE_NONE] and [constant ROLE_DEDICATED_SERVER].
 			A listen server returns [code]true[/code] here and [code]true[/code] to [member is_host] at once, because it is both this session's authority and one of its own players. [member is_host] returns authority and this returns whether a local player exists, and the two questions are independent.
 		</member>
-		<member name="is_online" type="bool" setter="" getter="is_online" default="false">
+		<member name="is_online" type="bool" setter="" getter="get_is_online" default="false">
 			Whether [member state] reads [constant SESSION_STATE_ONLINE], meaning the session carries traffic rather than attempting or leaving a connection.
 			[member is_host] can hold with no live session at all, since a session with no role and no connection is its own authority. A caller that needs a hosted session with peers connected, rather than one merely allowed to act as a server, reads this alongside it.
 		</member>

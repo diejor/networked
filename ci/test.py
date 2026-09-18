@@ -9,7 +9,8 @@ import shutil
 import sys
 from pathlib import Path
 
-from common import ROOT, fail, main, run
+import csharp
+from common import CI_DIR, ROOT, fail, main, run
 
 REPORTS = ROOT / "reports"
 TMP = ROOT / "tmp"
@@ -218,6 +219,24 @@ def lane_consumer(godot: str, *, archive: Path, workspace: Path, timeout: float)
     return 0
 
 
+def lane_csharp(
+    godot: str, *, dump: Path, sharp_version: str | None, timeout: float
+) -> int:
+    """The committed C# bindings are what the installed addon publishes, and
+    they compile against GodotSharp."""
+    csharp.dump_api(godot, dump, timeout)
+    report = csharp.check_tree(dump, csharp.OUTPUT_DIR)
+    version = sharp_version or csharp.sharp_range(dump)
+    csharp.compile_tree(
+        csharp.OUTPUT_DIR, ROOT / "dist" / "bindings", version, timeout
+    )
+    print(
+        "CSHARP classes=%d skipped=%d sharp=%s"
+        % (len(report["written"]), len(report["skipped"]), version)
+    )
+    return 0
+
+
 def lane_parse(godot: str, roots: list[str], *, timeout: float) -> int:
     """Load every script under `roots` and report parse failures."""
     quoted = ", ".join('"%s"' % (root if root.startswith("res://") else "res://" + root.lstrip("/")) for root in roots)
@@ -347,6 +366,12 @@ def build_parser() -> argparse.ArgumentParser:
     consumer.add_argument("--zip-glob", dest="archive_glob", help="Resolve the archive by pattern, newest first.")
     consumer.add_argument("--workspace", type=Path, default=ROOT / "dist" / "consumer")
 
+    sharp = sub.add_parser("csharp")
+    sharp.add_argument(
+        "--dump", type=Path, default=CI_DIR / "cache" / csharp.DUMP_NAME
+    )
+    sharp.add_argument("--sharp-version")
+
     parse = sub.add_parser("parse")
     parse.add_argument("roots", nargs="*", default=["res://tests", "res://addons/networked"])
 
@@ -382,6 +407,13 @@ def run_cli(argv: list[str] | None = None) -> int:
             args.godot,
             archive=archive,
             workspace=args.workspace,
+            timeout=args.timeout,
+        )
+    if args.lane == "csharp":
+        return lane_csharp(
+            args.godot,
+            dump=args.dump,
+            sharp_version=args.sharp_version,
             timeout=args.timeout,
         )
     if args.lane == "parse":

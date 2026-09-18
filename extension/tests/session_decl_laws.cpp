@@ -106,7 +106,7 @@ TEST_CASE(
     Branch branch("HD2");
     const CallLog log;
     Node *scope = child_named(branch.node, "Session");
-    Netw::configure_session(scope)->app_id(StringName("HD2App"));
+    Netw::configure_session(scope)->app(StringName("HD2App"));
     branch.api->config_settle();
 
     Netw::configure_server_info(scope, provider(log, "info"));

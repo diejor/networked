@@ -7,6 +7,7 @@
 #include "godot/utility.hpp"
 #include "godot/vararg.hpp"
 #include "netw/api/entity_record.hpp"
+#include "netw/api/native_api.hpp"
 #include "netw/api/link_conditions.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -338,6 +339,10 @@ void warn_late(Node *p_node, const char *p_door, const StringName &p_member) {
 }
 
 } // namespace
+
+Dictionary Netw::native_api() {
+    return native_api_table();
+}
 
 Ref<NetwMultiplayer> Netw::of(Node *p_node) {
     return NetwMultiplayer::core_of(p_node);
@@ -1070,6 +1075,11 @@ Ref<NetwSceneConfig> Netw::configure_multiplayer_scene(Node *p_node) {
 }
 
 void Netw::_bind_methods() {
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("_native_api"),
+        &Netw::native_api
+    );
     ClassDB::bind_static_method("Netw", D_METHOD("of", "node"), &Netw::of);
     ClassDB::bind_static_method(
         "Netw",

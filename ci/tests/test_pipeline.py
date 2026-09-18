@@ -336,6 +336,18 @@ class Lanes(unittest.TestCase):
 
         self.assertTrue(changed.lanes_for(["ci/engines.json"])["module"])
 
+    def test_a_binding_change_reaches_the_csharp_lane(self):
+        import changed
+
+        lanes = changed.lanes_for(["addons/networked/native_api/cs/Netw.cs"])
+        self.assertTrue(lanes["csharp"])
+        self.assertFalse(lanes["module"])
+
+    def test_a_documentation_change_leaves_the_csharp_lane_alone(self):
+        import changed
+
+        self.assertFalse(changed.lanes_for(["docs/index.rst"])["csharp"])
+
 
 if __name__ == "__main__":
     unittest.main()

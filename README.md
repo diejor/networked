@@ -160,6 +160,11 @@ dance when moving nodes around.
   [Tube](https://github.com/koopmyers/tube/).
 - The wire architecture is based on
   [yojimbo](https://github.com/mas-bandwidth/yojimbo).
+- Thanks to
+  [godot_debug_draw_3d](https://github.com/DmitriySalnikov/godot_debug_draw_3d)
+  for the approach the C# bindings use. The addon exports C function pointers
+  and the generated C# loads and calls through them, rather than asking
+  GodotSharp to bind the classes.
 - *Multiplayer Game Programming. Architecting Networked Games* by Joshua
   Glazer and Sanjay Madhav was insightful reading for general netcode
   architecture.

@@ -40,6 +40,7 @@ jobs:
       native: ${{ steps.lanes.outputs.native }}
       hosted: ${{ steps.lanes.outputs.hosted }}
       module: ${{ steps.lanes.outputs.module }}
+      csharp: ${{ steps.lanes.outputs.csharp }}
       gdscript: ${{ steps.lanes.outputs.gdscript }}
       examples: ${{ steps.lanes.outputs.examples }}
       docs: ${{ steps.lanes.outputs.docs }}
@@ -146,6 +147,12 @@ jobs:
     uses: ./.github/workflows/module.yml
     with:
       profiler: none
+
+  csharp:
+    name: "C# Bindings"
+    needs: changes
+    if: needs.changes.outputs.csharp == 'true'
+    uses: ./.github/workflows/csharp.yml
 
   doc-drift:
     name: "Doc Drift"
@@ -319,6 +326,7 @@ jobs:
       - native
       - hosted
       - module
+      - csharp
       - doc-drift
       - gdscript-tests
       - gdscript-examples
