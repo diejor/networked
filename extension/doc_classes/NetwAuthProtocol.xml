@@ -85,7 +85,7 @@
 		</method>
 		<method name="encode_probe_reply" qualifiers="static">
 			<return type="PackedByteArray" />
-			<param index="0" name="status" type="int" />
+			<param index="0" name="status" type="int" enum="NetwAuthProtocol.ProbeStatus" />
 			<param index="1" name="payload" type="PackedByteArray" default="PackedByteArray()" />
 			<description>
 				Wraps [param payload] in a probe-reply header stamped with [param status], one of [enum ProbeStatus].

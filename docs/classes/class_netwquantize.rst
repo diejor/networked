@@ -38,19 +38,19 @@ Each behaviour has two spellings. A subclass overrides :ref:`_encode()<class_Net
 
     extends NetwQuantize
 
-    func _supports_type(type: int) -> bool:
+    func _supports_type(type: Variant.Type) -> bool:
         return type == TYPE_VECTOR2
 
-    func _bit_width(_type: int) -> int:
+    func _bit_width(_type: Variant.Type) -> int:
         return 10
 
-    func _stride(_type: int) -> int:
+    func _stride(_type: Variant.Type) -> int:
         return 2
 
     func _encode(value: Variant, element: int) -> int:
         return roundi((value as Vector2)[element]) & 0x3ff
 
-    func _decode(codes: PackedInt64Array, _type: int) -> Variant:
+    func _decode(codes: PackedInt64Array, _type: Variant.Type) -> Variant:
         return Vector2(float(codes[0]), float(codes[1]))
 
 .. rst-class:: classref-reftable-group

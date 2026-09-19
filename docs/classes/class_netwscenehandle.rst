@@ -86,17 +86,17 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                         | :ref:`is_watching<class_NetwSceneHandle_method_is_watching>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) |const| |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`observe<class_NetwSceneHandle_method_observe>`\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ )           |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`unobserve<class_NetwSceneHandle_method_unobserve>`\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ )       |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`unwatch<class_NetwSceneHandle_method_unwatch>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ )                 |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`watch<class_NetwSceneHandle_method_watch>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ )                     |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_watching<class_NetwSceneHandle_method_is_watching>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) |const|                                 |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`observe<class_NetwSceneHandle_method_observe>`\ (\ event\: :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`, callback\: :godot:`Callable`\ )     |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`unobserve<class_NetwSceneHandle_method_unobserve>`\ (\ event\: :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`, callback\: :godot:`Callable`\ ) |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`unwatch<class_NetwSceneHandle_method_unwatch>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ )                                                 |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`watch<class_NetwSceneHandle_method_watch>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ )                                                     |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -114,6 +114,8 @@ Signals
 **viewer_entered**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_viewer_entered>`
 
 Emitted when this scene starts replicating to ``player``, after the boundary is written, so a listener reading :ref:`viewers<class_NetwSceneHandle_property_viewers>` sees them.
+
+This reports delivery, not arrival. A body standing here and a :ref:`watch()<class_NetwSceneHandle_method_watch>` both raise it and it cannot say which, so a game that spawns players uses :ref:`NetwSessionHandle.scene_changed<class_NetwSessionHandle_signal_scene_changed>` instead.
 
 .. rst-class:: classref-item-separator
 
@@ -268,7 +270,7 @@ Every player this scene currently replicates to, whether a body of theirs stands
 
 - :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_bodies**\ (\ )
 
-Every body in this scene, in no declared order.
+Every body in this scene, in no declared order. A body leaves this array in the call that despawned it, not in the frame its node is freed.
 
 .. rst-class:: classref-item-separator
 
@@ -333,7 +335,7 @@ A body of theirs residing here is a reason, and so is a watch :ref:`watch()<clas
 
 .. rst-class:: classref-method
 
-|void| **observe**\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSceneHandle_method_observe>`
+|void| **observe**\ (\ event\: :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`, callback\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSceneHandle_method_observe>`
 
 Calls ``callback`` whenever this scene gains or loses a subject of ``event``, one of :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`. Registering the same ``callback`` for the same ``event`` twice does nothing.
 
@@ -357,7 +359,7 @@ Calls ``callback`` whenever this scene gains or loses a subject of ``event``, on
 
 .. rst-class:: classref-method
 
-|void| **unobserve**\ (\ event\: :godot:`int`, callback\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSceneHandle_method_unobserve>`
+|void| **unobserve**\ (\ event\: :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`, callback\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSceneHandle_method_unobserve>`
 
 Withdraws the ``callback`` a :ref:`observe()<class_NetwSceneHandle_method_observe>` call registered for ``event``. It must be the same :godot:`Callable` that was passed to :ref:`observe()<class_NetwSceneHandle_method_observe>`, because that is the name the relay is filed under; a fresh :godot:`Callable` over the same method is a different name and withdraws nothing.
 

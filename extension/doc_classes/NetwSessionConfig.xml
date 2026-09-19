@@ -10,7 +10,7 @@
 		func _init() -&gt; void:
 		    Netw.configure_session(self) \
 		        .app_id(&amp;"bomber-v2") \
-		        .desired_role(NetwMultiplayer.Role.LISTEN_SERVER)
+		        .role(NetwMultiplayer.Role.LISTEN_SERVER)
 		[/codeblock]
 		A preset handed to that verb is copied rather than kept, so one [code].tres[/code] may seed several scenes and editing it afterwards reaches none of them. Nested [NetwLinkConditions] and [NetwServerInfo] values are copied too.
 		[method NetwMultiplayer.session_get_config] returns a detached snapshot of the running values, freshly copied nested objects included. Editing what it returns is a way to read the session, never a way to configure it.
@@ -35,7 +35,7 @@
 		</method>
 		<method name="role">
 			<return type="NetwSessionConfig" />
-			<param index="0" name="desired_role" type="int" />
+			<param index="0" name="desired_role" type="int" enum="NetwMultiplayer.Role" />
 			<description>
 				Sets [member desired_role] and returns this same draft, so a declaration reads as one chained expression.
 			</description>
@@ -54,7 +54,7 @@
 			A joining peer whose tag differs is rejected during authentication before it reaches [method MultiplayerAPI.get_peers]. Leave this empty to disable the check. The session derives one auth tag from this value.
 			It also names the space a signalled transport creates its room codes in, and is what makes a code short enough to read out. See [member MultiplayerTree.app_id].
 		</member>
-		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" default="3">
+		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
 			The [enum NetwMultiplayer.Role] the local peer intends to play once a session starts.
 			The live [member NetwMultiplayer.role] is only assigned when the session reaches [constant NetwMultiplayer.SessionState.ONLINE]. This is the intent the assignment edge reads to pick the server role. A value outside the enum is rejected and the previous role stands.
 			An embedded server is constructed with a dedicated-server role that constrains the effective role after consumption, whichever declaration supplied the other values.

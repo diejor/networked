@@ -75,10 +75,10 @@ public:
     void set_latency_ms(int64_t p_latency_ms) {
         latency_ms = p_latency_ms;
     }
-    int64_t get_visibility() const {
-        return visibility;
+    Visibility get_visibility() const {
+        return (Visibility)visibility;
     }
-    void set_visibility(int64_t p_visibility) {
+    void set_visibility(Visibility p_visibility) {
         visibility = p_visibility;
     }
     bool get_is_local_listener() const {

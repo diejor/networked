@@ -100,7 +100,7 @@
 			</description>
 		</method>
 		<method name="get_column_type" qualifiers="const">
-			<return type="int" />
+			<return type="int" enum="NetwMultiplayer.ColumnType" />
 			<param index="0" name="table" type="StringName" />
 			<param index="1" name="column" type="StringName" />
 			<description>

@@ -50,19 +50,19 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`int`        | :ref:`default_leave_policy<class_NetwInterestLayer_property_default_leave_policy>`           | ``0``   |
-   +---------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`int`        | :ref:`default_perception_policy<class_NetwInterestLayer_property_default_perception_policy>` | ``0``   |
-   +---------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`Dictionary` | :ref:`entities<class_NetwInterestLayer_property_entities>`                                   | ``{}``  |
-   +---------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`StringName` | :ref:`layer_id<class_NetwInterestLayer_property_layer_id>`                                   | ``&""`` |
-   +---------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`int`        | :ref:`policy<class_NetwInterestLayer_property_policy>`                                       | ``0``   |
-   +---------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`Dictionary` | :ref:`viewers<class_NetwInterestLayer_property_viewers>`                                     | ``{}``  |
-   +---------------------+----------------------------------------------------------------------------------------------+---------+
+   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
+   | :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>`           | :ref:`default_leave_policy<class_NetwInterestLayer_property_default_leave_policy>`           | ``0``   |
+   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
+   | :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` | :ref:`default_perception_policy<class_NetwInterestLayer_property_default_perception_policy>` | ``0``   |
+   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
+   | :godot:`Dictionary`                                            | :ref:`entities<class_NetwInterestLayer_property_entities>`                                   | ``{}``  |
+   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
+   | :godot:`StringName`                                            | :ref:`layer_id<class_NetwInterestLayer_property_layer_id>`                                   | ``&""`` |
+   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
+   | :ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>`           | :ref:`policy<class_NetwInterestLayer_property_policy>`                                       | ``0``   |
+   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
+   | :godot:`Dictionary`                                            | :ref:`viewers<class_NetwInterestLayer_property_viewers>`                                     | ``{}``  |
+   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
 
 .. rst-class:: classref-reftable-group
 
@@ -220,12 +220,12 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`int` **default_leave_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_leave_policy>`
+:ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` **default_leave_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_leave_policy>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_default_leave_policy**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_default_leave_policy**\ (\ )
+- |void| **set_default_leave_policy**\ (\ value\: :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>`\ )
+- :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` **get_default_leave_policy**\ (\ )
 
 What happens to a peer's copy when this layer stops admitting an entity, for an entity that declared nothing of its own. It is a :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` value.
 
@@ -237,12 +237,12 @@ What happens to a peer's copy when this layer stops admitting an entity, for an 
 
 .. rst-class:: classref-property
 
-:godot:`int` **default_perception_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_perception_policy>`
+:ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` **default_perception_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_perception_policy>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_default_perception_policy**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_default_perception_policy**\ (\ )
+- |void| **set_default_perception_policy**\ (\ value\: :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>`\ )
+- :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` **get_default_perception_policy**\ (\ )
 
 Whether a kept copy is still drawn when this layer stops admitting an entity, for an entity that declared nothing of its own. It is a :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` value.
 
@@ -289,12 +289,12 @@ The stable id this layer is addressed by. Setting it declares the layer in the s
 
 .. rst-class:: classref-property
 
-:godot:`int` **policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_policy>`
+:ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>` **policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_policy>`
 
 .. rst-class:: classref-property-setget
 
 - :godot:`bool` **set_policy**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_policy**\ (\ )
+- :ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>` **get_policy**\ (\ )
 
 How :ref:`viewers<class_NetwInterestLayer_property_viewers>` composes into the per-peer verdict. See :godot:`Policy <@GlobalScope#enum_@globalscope_Policy>`.
 

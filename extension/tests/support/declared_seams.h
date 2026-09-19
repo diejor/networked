@@ -14,7 +14,10 @@ func _timeout_hint() -> float:
 	return -1.0
 
 func _make_peer(
-	_ticket: RID, _mode: int, _address: String, _settings: Dictionary
+	_ticket: RID,
+	_mode: NetwMultiplayer.TransportMode,
+	_address: String,
+	_settings: Dictionary,
 ) -> void:
 	pass
 )";
@@ -28,7 +31,10 @@ func _display_name() -> String:
 	return "Prompt"
 
 func _make_peer(
-	ticket: RID, _mode: int, _address: String, _settings: Dictionary
+	ticket: RID,
+	_mode: NetwMultiplayer.TransportMode,
+	_address: String,
+	_settings: Dictionary,
 ) -> void:
 	var peer := LocalMultiplayerPeer.new()
 	peer.create_client(9)
@@ -45,7 +51,10 @@ func _display_name() -> String:
 	return "Rival"
 
 func _make_peer(
-	_ticket: RID, _mode: int, _address: String, _settings: Dictionary
+	_ticket: RID,
+	_mode: NetwMultiplayer.TransportMode,
+	_address: String,
+	_settings: Dictionary,
 ) -> void:
 	pass
 )";

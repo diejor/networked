@@ -276,7 +276,7 @@ func _list_lobbies() -> void:
 
 ## Returns the [enum LobbyDirectory.Capability] flags this directory honors:
 ## browse and persona resolution.
-func _capabilities() -> int:
+func _capabilities() -> LobbyDirectory.Capability:
 	return (
 			LobbyDirectory.CAPABILITY_BROWSE
 			| LobbyDirectory.CAPABILITY_FRIEND_NAMES

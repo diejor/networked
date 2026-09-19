@@ -204,14 +204,28 @@ void apply_prediction(Object *p_sync, const Ref<NetwEntity> &p_entity) {
         );
     }
     if (declared(p_sync, KEY_CORRECTION_MODE)) {
-        predict->set_recovery_policy(-1);
-        predict->set_correction_mode(int(whole(p_sync, KEY_CORRECTION_MODE)));
+        predict->set_recovery_policy(
+            static_cast<NetwPredict::RecoveryPolicy>(-1)
+        );
+        predict->set_correction_mode(
+            static_cast<NetwPredict::CorrectionMode>(
+                int(whole(p_sync, KEY_CORRECTION_MODE))
+            )
+        );
     }
     if (declared(p_sync, KEY_SNAP_RESTORE)) {
-        predict->set_snap_restore(int(whole(p_sync, KEY_SNAP_RESTORE)));
+        predict->set_snap_restore(
+            static_cast<NetwPredict::RestoreMode>(
+                int(whole(p_sync, KEY_SNAP_RESTORE))
+            )
+        );
     }
     if (declared(p_sync, KEY_MISSING_POLICY)) {
-        predict->set_missing_policy(int(whole(p_sync, KEY_MISSING_POLICY)));
+        predict->set_missing_policy(
+            static_cast<NetwPredict::MissingInput>(
+                int(whole(p_sync, KEY_MISSING_POLICY))
+            )
+        );
     }
     if (declared(p_sync, KEY_MAX_RESTORE_TICKS)) {
         predict->set_max_restore_ticks(

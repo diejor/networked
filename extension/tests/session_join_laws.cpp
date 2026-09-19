@@ -576,8 +576,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][SceneTree] Netw.join routes on the state its session is "
-    "already in, so a caller never chooses between preparing and submitting "
+    "[Networked][SceneTree] Netw.prepare_join routes on the state its "
+    "session is already in, so a caller never chooses between preparing "
+    "and submitting "
     "and cannot choose wrong: offline it prepares, which is what holds the "
     "join for the authentication phase to carry, and online it submits at once"
 ) {
@@ -594,7 +595,7 @@ TEST_CASE(
 
     SUBCASE("an offline session prepares, and nothing goes out yet") {
         const Ref<netw::NetwPromise> asked
-            = netw::Netw::join(seat, StringName("ana"), Array());
+            = netw::Netw::prepare_join(seat, StringName("ana"), Array());
         REQUIRE(asked.is_valid());
         NETW_CHECK_EQ(int(asked->get_result()), int(OK));
         REQUIRE(api->session_prepared_join().has_value());
@@ -605,7 +606,7 @@ TEST_CASE(
     SUBCASE("an online session submits at once and holds nothing back") {
         api->session_set_state(NetwMultiplayer::SESSION_STATE_ONLINE);
         const Ref<netw::NetwPromise> asked
-            = netw::Netw::join(seat, StringName("ana"), Array());
+            = netw::Netw::prepare_join(seat, StringName("ana"), Array());
         REQUIRE(asked.is_valid());
         NETW_CHECK_EQ(int(asked->get_result()), int(OK));
         NETW_CHECK_EQ(log.count("submitted"), 1);
@@ -614,12 +615,14 @@ TEST_CASE(
 
     SUBCASE("an empty username joins nothing on either route") {
         NETW_CHECK_EQ(
-            int(netw::Netw::join(seat, StringName(), Array())->get_result()),
+            int(netw::Netw::prepare_join(seat, StringName(), Array())
+                    ->get_result()),
             int(ERR_INVALID_PARAMETER)
         );
         api->session_set_state(NetwMultiplayer::SESSION_STATE_ONLINE);
         NETW_CHECK_EQ(
-            int(netw::Netw::join(seat, StringName(), Array())->get_result()),
+            int(netw::Netw::prepare_join(seat, StringName(), Array())
+                    ->get_result()),
             int(ERR_INVALID_PARAMETER)
         );
         NETW_CHECK_EQ(log.count("submitted"), 0);

@@ -119,9 +119,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] PT3 travel moves a peer this session has ADMITTED, "
+    "[Networked][Scene] PT3 travel seats a peer this session has ADMITTED, "
     "so a peer it never admitted is refused rather than given a seat by the "
-    "act of being moved"
+    "act of being pointed somewhere"
 ) {
     LoopbackRig rig(0);
     rig.mount();
@@ -140,7 +140,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene] PT4 travel is an authority operation, so a client "
-    "calling it directly is refused rather than moving a seat only its own "
+    "calling it directly is refused rather than seating a watch only its own "
     "peer would ever believe"
 ) {
     LoopbackRig rig(1);

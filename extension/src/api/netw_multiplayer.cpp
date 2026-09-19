@@ -1286,7 +1286,7 @@ Error NetwMultiplayer::session_admits_join(
     Array arguments;
     arguments.push_back(p_peer);
     arguments.push_back(p_username);
-    arguments.push_back(p_args);
+    arguments.append_array(p_args);
     bool called = false;
     const Variant verdict
         = gd::call_checked(declared.callable, arguments, called);
@@ -1294,8 +1294,7 @@ Error NetwMultiplayer::session_admits_join(
         NETW_ERROR(
             sys::SESSION,
             "join: peer %d is refused because this session's admission "
-            "handler could not be called. Declare it as 'func admit(peer_id: "
-            "int, username: StringName, args: Array) -> Error'.",
+            "handler could not be called.",
             int(p_peer)
         );
         return ERR_UNAUTHORIZED;

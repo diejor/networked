@@ -44,7 +44,8 @@ namespace Networked;
 /// <code>
 /// extends NetwMultiplayer
 ///
-/// func _predict_consume(depth: int, buffer: int) -&gt; int:
+/// func _predict_consume(
+///         depth: int, buffer: int) -&gt; NetwPredict.ConsumeAction:
 ///     if depth &gt; 8:
 ///         return NetwPredict.CONSUME_ACTION_REPLAY
 ///     return predict_consume_default(depth, buffer)
@@ -927,21 +928,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public enum SceneChange : long
     {
         /// <summary>
-        /// Every player converges on the destination and every other live scene
-        /// retires. Isolation, the number of live scenes, and whether authority
-        /// also holds a local player do not change what this means.
+        /// Every admitted player watches the destination, and every other live
+        /// scene retires with the entities standing in it. Isolation, the
+        /// number of live scenes, and whether authority also holds a local
+        /// player do not change what this means.
         /// </summary>
         Session = 0,
         /// <summary>
-        /// One player travels with the bodies it is enrolled in, and every
-        /// world keeps running. A change at this scope with no player to
-        /// resolve is rejected rather than widened to the session.
+        /// One player watches the destination and stops watching everything
+        /// else. The bodies that player left behind are despawned, and no scene
+        /// retires. A change at this scope with no player to resolve is
+        /// rejected rather than widened to the session.
         /// </summary>
         Player = 1,
         /// <summary>
-        /// The occupants of the caller's own world travel and that world
-        /// retires, leaving other worlds untouched. A change at this scope with
-        /// no source world to resolve is rejected.
+        /// Everyone in the caller's own scene watches the destination, and that
+        /// scene alone retires with the entities standing in it. A change at
+        /// this scope with no source scene to resolve is rejected.
         /// </summary>
         Scene = 2,
     }
@@ -1941,6 +1944,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// <see cref="NetwMultiplayer.Stat.SentBytes"/>.
         /// </summary>
         AttributionDroppedOut = 96,
+        /// <summary>
+        /// Counter. Rows a pass offered that the bandwidth budget did not
+        /// admit, so they wait for a later pass. Read it beside
+        /// <see cref="NetwMultiplayer.PeerLinkStats"/>, whose
+        /// <c>budget_bits</c> is what they were measured against. A count
+        /// rising while that budget reads halved is the send governor holding
+        /// the lane back rather than a fault in the rows themselves.
+        /// </summary>
+        RowFramesDeferred = 97,
     }
 
     public enum SessionState : long
@@ -3297,8 +3309,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// session reads its bodies by asking every scene rather than keeping a
     /// second roster that could disagree with
     /// <see cref="NetwMultiplayer.SceneGetBodies"/>. Scenes partition the
-    /// bodies, so a name is unique across this whole array and never merely
-    /// within one scene.
+    /// bodies, so one pass over this array reaches every one of them wherever
+    /// it stands. Two bodies may carry one <see cref="NetwEntity.EntityId"/>,
+    /// so a game looking for a particular body says which scene it means.
     /// </summary>
     public Godot.Collections.Array Bodies
     {
@@ -3911,7 +3924,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "scene_request", 4150322833UL);
 
     /// <summary>
-    /// Asks server authority to move the local player to the scene file at
+    /// Asks server authority to make the local player watch the scene file at
     /// <paramref name="path"/>. A label cannot be requested, because
     /// <see cref="Netw.Scene"/> is what resolves a live scene by label and a
     /// change names a path. The promise rejects with
@@ -7338,14 +7351,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
             1446861317UL);
 
     /// <summary>
-    /// Changes to the file-backed scene at <paramref name="path"/>, mirroring
-    /// <see cref="SceneTree.ChangeSceneToFile"/> while keeping the change under
-    /// server authority. <paramref name="scope"/> says who the change is for
-    /// and nothing infers it, so the same call means the same thing on a listen
-    /// host and on a dedicated server. <paramref name="requester"/> names the
-    /// node the change is asked from, which resolves the player a
-    /// <see cref="NetwMultiplayer.SceneChange.Player"/> change moves and the
-    /// source world a <see cref="NetwMultiplayer.SceneChange.Scene"/> change
+    /// Opens the file-backed scene at <paramref name="path"/> and makes players
+    /// watch it, under server authority. No entity moves, so spawn the arrivals
+    /// from <c>scene_changed</c>. <paramref name="scope"/> says who the change
+    /// is for and nothing infers it, so the same call means the same thing on a
+    /// listen host and on a dedicated server. <paramref name="requester"/>
+    /// names the node the change is asked from, which resolves the player a
+    /// <see cref="NetwMultiplayer.SceneChange.Player"/> change acts on and the
+    /// source scene a <see cref="NetwMultiplayer.SceneChange.Scene"/> change
     /// replaces. A scope that needs one and finds none is rejected rather than
     /// widened. On authority the change applies directly. On a client it
     /// becomes a <see cref="NetwMultiplayer.SceneRequest"/> whose result
@@ -8577,7 +8590,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindPredictConsume =
-        NetwApi.MethodBind("NetwMultiplayer", "predict_consume", 50157827UL);
+        NetwApi.MethodBind("NetwMultiplayer", "predict_consume", 2224220256UL);
 
     /// <summary>
     /// Whether authority replays a queued transition, waits, or has no
@@ -8592,18 +8605,18 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// and the next drive spans two, which is the quantum fault
     /// <see cref="NetwPredictStats.QuantumFaults"/> counts.
     /// </summary>
-    public int PredictConsume(int depth, int buffer)
+    public NetwPredict.ConsumeAction PredictConsume(int depth, int buffer)
     {
         int slot0 = depth;
         int slot1 = buffer;
-        int answered = default;
-        NetwThunks.Ptrcall2_Int_Int_Int(
+        long answered = default;
+        NetwThunks.Ptrcall2_Int_Int_Long(
             _bindPredictConsume,
             Checked,
             in slot0,
             in slot1,
             ref answered);
-        return answered;
+        return (NetwPredict.ConsumeAction)answered;
     }
 
     private static readonly IntPtr _bindPredictDriveDefault =
@@ -8643,7 +8656,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_consume_default",
-            50157827UL);
+            2224220256UL);
 
     /// <summary>
     /// The consume verdict <see cref="NetwMultiplayer.PredictConsume"/> returns
@@ -8653,18 +8666,20 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// behaviour. An override that handles some depths and wants the default
     /// result for the rest returns this rather than reimplementing it.
     /// </summary>
-    public int PredictConsumeDefault(int depth, int buffer)
+    public NetwPredict.ConsumeAction PredictConsumeDefault(
+        int depth,
+        int buffer)
     {
         int slot0 = depth;
         int slot1 = buffer;
-        int answered = default;
-        NetwThunks.Ptrcall2_Int_Int_Int(
+        long answered = default;
+        NetwThunks.Ptrcall2_Int_Int_Long(
             _bindPredictConsumeDefault,
             Checked,
             in slot0,
             in slot1,
             ref answered);
-        return answered;
+        return (NetwPredict.ConsumeAction)answered;
     }
 
     private static readonly IntPtr _bindPredictEvaluateDefault =
@@ -9308,6 +9323,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <paramref name="body"/> still performs the rewind and restore with
     /// nothing run in between. The rewind and the restore always pair within
     /// one call, so a caller never observes the world left in a rewound state.
+    /// <see cref="Netw.Rewind"/> takes the same set as <see cref="NetwEntity"/>
+    /// handles and finds the session from <paramref name="body"/> itself.
     /// </summary>
     public void LagcompRewind(
         Godot.Collections.Array entities,

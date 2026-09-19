@@ -29,35 +29,35 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                     | :ref:`carry_channel<class_NetwPropertySetColumn_property_carry_channel>`                     | ``&""``   |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float`                          | :ref:`converge_stiffness<class_NetwPropertySetColumn_property_converge_stiffness>`           | ``0.0``   |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                            | :ref:`delta_mode<class_NetwPropertySetColumn_property_delta_mode>`                           | ``0``     |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float`                          | :ref:`epsilon_override<class_NetwPropertySetColumn_property_epsilon_override>`               | ``-1.0``  |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                           | :ref:`explicit_reconcile_only<class_NetwPropertySetColumn_property_explicit_reconcile_only>` | ``false`` |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                           | :ref:`explicit_teleport_only<class_NetwPropertySetColumn_property_explicit_teleport_only>`   | ``false`` |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                     | :ref:`key<class_NetwPropertySetColumn_property_key>`                                         | ``&""``   |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                            | :ref:`lane<class_NetwPropertySetColumn_property_lane>`                                       | ``0``     |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                            | :ref:`property_class<class_NetwPropertySetColumn_property_property_class>`                   | ``0``     |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :ref:`NetwQuantize<class_NetwQuantize>` | :ref:`quantizer<class_NetwPropertySetColumn_property_quantizer>`                             |           |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                            | :ref:`schema_column<class_NetwPropertySetColumn_property_schema_column>`                     | ``-1``    |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float`                          | :ref:`teleport_at_override<class_NetwPropertySetColumn_property_teleport_at_override>`       | ``-1.0``  |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                            | :ref:`type<class_NetwPropertySetColumn_property_type>`                                       | ``15``    |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                           | :ref:`watch<class_NetwPropertySetColumn_property_watch>`                                     | ``false`` |
-   +-----------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                                | :ref:`carry_channel<class_NetwPropertySetColumn_property_carry_channel>`                     | ``&""``   |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                     | :ref:`converge_stiffness<class_NetwPropertySetColumn_property_converge_stiffness>`           | ``0.0``   |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :ref:`Delta<enum_NetwPropertySetColumn_Delta>`     | :ref:`delta_mode<class_NetwPropertySetColumn_property_delta_mode>`                           | ``0``     |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                     | :ref:`epsilon_override<class_NetwPropertySetColumn_property_epsilon_override>`               | ``-1.0``  |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                      | :ref:`explicit_reconcile_only<class_NetwPropertySetColumn_property_explicit_reconcile_only>` | ``false`` |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                      | :ref:`explicit_teleport_only<class_NetwPropertySetColumn_property_explicit_teleport_only>`   | ``false`` |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                                | :ref:`key<class_NetwPropertySetColumn_property_key>`                                         | ``&""``   |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                       | :ref:`lane<class_NetwPropertySetColumn_property_lane>`                                       | ``0``     |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                       | :ref:`property_class<class_NetwPropertySetColumn_property_property_class>`                   | ``0``     |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :ref:`NetwQuantize<class_NetwQuantize>`            | :ref:`quantizer<class_NetwPropertySetColumn_property_quantizer>`                             |           |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                       | :ref:`schema_column<class_NetwPropertySetColumn_property_schema_column>`                     | ``-1``    |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                     | :ref:`teleport_at_override<class_NetwPropertySetColumn_property_teleport_at_override>`       | ``-1.0``  |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` | :ref:`type<class_NetwPropertySetColumn_property_type>`                                       | ``15``    |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                      | :ref:`watch<class_NetwPropertySetColumn_property_watch>`                                     | ``false`` |
+   +----------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -67,9 +67,9 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` | :ref:`create<class_NetwPropertySetColumn_method_create>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, watch\: :godot:`bool` = false, type\: :godot:`int` = 15\ ) |static| |
-   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` | :ref:`create<class_NetwPropertySetColumn_method_create>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, watch\: :godot:`bool` = false, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` = 15\ ) |static| |
+   +-----------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -157,12 +157,12 @@ How firmly a restored value is pulled toward the authoritative one instead of be
 
 .. rst-class:: classref-property
 
-:godot:`int` **delta_mode** = ``0`` :ref:`🔗<class_NetwPropertySetColumn_property_delta_mode>`
+:ref:`Delta<enum_NetwPropertySetColumn_Delta>` **delta_mode** = ``0`` :ref:`🔗<class_NetwPropertySetColumn_property_delta_mode>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_delta_mode**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_delta_mode**\ (\ )
+- |void| **set_delta_mode**\ (\ value\: :ref:`Delta<enum_NetwPropertySetColumn_Delta>`\ )
+- :ref:`Delta<enum_NetwPropertySetColumn_Delta>` **get_delta_mode**\ (\ )
 
 Whether the column spends a per-element selector to write a signed step from the baseline its frame names, or writes its whole code every time.
 
@@ -334,11 +334,11 @@ The column's own teleport-tier distance, or a negative value to inherit the enti
 
 .. rst-class:: classref-property
 
-:godot:`int` **type** = ``15`` :ref:`🔗<class_NetwPropertySetColumn_property_type>`
+:ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **type** = ``15`` :ref:`🔗<class_NetwPropertySetColumn_property_type>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_type**\ (\ )
+- :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **get_type**\ (\ )
 
 The declared :ref:`NetwMultiplayer<class_NetwMultiplayer>` column type fixed into the schema.
 
@@ -372,7 +372,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` **create**\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, watch\: :godot:`bool` = false, type\: :godot:`int` = 15\ ) |static| :ref:`🔗<class_NetwPropertySetColumn_method_create>`
+:ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` **create**\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, watch\: :godot:`bool` = false, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` = 15\ ) |static| :ref:`🔗<class_NetwPropertySetColumn_method_create>`
 
 Builds a member whose shape is a fresh single-column declaration.
 

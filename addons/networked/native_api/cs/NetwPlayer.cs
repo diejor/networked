@@ -93,12 +93,12 @@ public sealed class NetwPlayer : NetwRefCounted
     /// The username this membership was accepted under, and the conventional
     /// save key a game reads back. Stamped at acceptance and never re-read, so
     /// it survives the membership ending and never reports a later player's
-    /// name. No two live memberships in one session hold the same username. A
-    /// join claiming a name a member already joined under is turned away with
-    /// <c>Username 'ana' is already in use</c>, which reaches the client as the
-    /// reason on <see cref="NetwConnectHandle.JoinFailed"/>. The name is never
-    /// altered to fit, because a game that saves against it would load the
-    /// wrong save.
+    /// name. A session admits every name a join claims, so two players may hold
+    /// one username. Each is still its own membership, and each body stamps the
+    /// name as its <see cref="NetwEntity.EntityId"/>, so a game keying
+    /// persistence or prediction on the name reads and writes one row for the
+    /// pair. A game that wants one player per name says so in the handler it
+    /// installs with <see cref="Netw.ConfigureAdmission"/>.
     /// </summary>
     public StringName UserName
     {
@@ -118,7 +118,8 @@ public sealed class NetwPlayer : NetwRefCounted
     /// <summary>
     /// Every body the session currently holds for this membership, in no
     /// promised order. Answered live from the session rather than stored, so a
-    /// body that despawned is gone from the next read. A player nothing has
+    /// body is gone from the read that follows the <see cref="Netw.Despawn"/>
+    /// call rather than from the frame its node is freed. A player nothing has
     /// spawned for answers an empty array, which is the honest reading for a
     /// spectator and for a player whose join handler has not placed it yet.
     /// Several bodies at once is ordinary, so a game that means one body reads

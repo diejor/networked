@@ -30,8 +30,8 @@
 		<method name="join">
 			<return type="NetwInterestHandle" />
 			<param index="0" name="layer_id" type="StringName" />
-			<param index="1" name="leave_policy" type="int" default="-1" />
-			<param index="2" name="perception_policy" type="int" default="-1" />
+			<param index="1" name="leave_policy" type="int" enum="NetwMultiplayer.LeavePolicy" default="-1" />
+			<param index="2" name="perception_policy" type="int" enum="NetwMultiplayer.PerceptionPolicy" default="-1" />
 			<description>
 				Adds the entity to [param layer_id] and returns this handle. Idempotent.
 				[param leave_policy] is one of [enum NetwMultiplayer.LeavePolicy] and [param perception_policy] one of [enum NetwMultiplayer.PerceptionPolicy], each declared in passing for the layer being joined. [code]-1[/code] declares neither and leaves whatever [method on_leave_policy] and [method on_perception_policy] already set, which are also the door for the [code]CUSTOM[/code] rows because those need a callback.

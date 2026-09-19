@@ -12,6 +12,7 @@ var answered := false
 var answered_code: Error = OK
 var answered_detail: String = ""
 var revealing := false
+var covering := false
 var presented: NetwSceneHandle
 
 
@@ -70,7 +71,6 @@ func open(scene_path: String) -> NetwPromise:
 	answered = false
 	pending_scene = scene_path
 	pending = NetwPromise.new()
-	teleport_out.call_deferred()
 	return pending
 
 
@@ -84,7 +84,7 @@ func answer(code: Error, detail: String) -> void:
 
 
 func reveal_when_presented() -> void:
-	if pending == null or revealing or not answered:
+	if pending == null or revealing or not answered or covering:
 		return
 	if answered_code == OK and not presents(pending_scene):
 		return
@@ -121,4 +121,7 @@ func teleport_in() -> void:
 
 
 func teleport_out() -> void:
+	covering = true
 	await teleport_animation(transition_anim.play.bind("tp"))
+	covering = false
+	reveal_when_presented()

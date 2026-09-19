@@ -79,16 +79,14 @@ public sealed class NetwConnectHandle : NetwRefCounted
     /// so a game shows it where it asked, beside its username field rather than
     /// in a lobby-lost banner. A server rejects when the handler declared
     /// through <see cref="Netw.ConfigureAdmission"/> turns the join down, when
-    /// a member of the session already joined under the
-    /// <see cref="NetwPlayer.UserName"/> claimed, when the handler declared
-    /// through <see cref="Netw.ConfigureJoin"/> is unavailable, when the join
-    /// carried no arguments a declared handler needs, or when that handler
-    /// returned something that is not a placement.
+    /// the handler declared through <see cref="Netw.ConfigureJoin"/> is
+    /// unavailable, when the join carried no arguments a declared handler
+    /// needs, or when that handler returned something that is not a placement.
     /// <code>
     /// func _ready() -&gt; void:
     ///     Netw.connection(self).join_failed.connect(show_refusal)
     ///
-    /// func show_refusal(_error: int, reason: String) -&gt; void:
+    /// func show_refusal(_error: Error, reason: String) -&gt; void:
     ///     status.text = reason
     /// </code>
     /// </summary>

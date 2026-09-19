@@ -108,7 +108,7 @@ Emitted when the promise resolves, carrying :ref:`result<class_NetwPromise_prope
 
 .. rst-class:: classref-signal
 
-**failed**\ (\ code\: :godot:`int`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwPromise_signal_failed>`
+**failed**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwPromise_signal_failed>`
 
 Emitted when the promise is rejected, carrying the settle ``code`` and its human-readable ``detail``.
 

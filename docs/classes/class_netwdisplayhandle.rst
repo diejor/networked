@@ -37,31 +37,31 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`    | :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>`                         | ``0.0``          |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`      | :ref:`display_role<class_NetwDisplayHandle_property_display_role>`                       | ``0``            |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`bool`     | :ref:`enable_smart_dilation<class_NetwDisplayHandle_property_enable_smart_dilation>`     | ``false``        |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`    | :ref:`floor_smoothing<class_NetwDisplayHandle_property_floor_smoothing>`                 | ``0.0``          |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`    | :ref:`lag_adapt_rate<class_NetwDisplayHandle_property_lag_adapt_rate>`                   | ``0.0``          |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`    | :ref:`max_extra_dilation<class_NetwDisplayHandle_property_max_extra_dilation>`           | ``0.0``          |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`      | :ref:`predicted_mode<class_NetwDisplayHandle_property_predicted_mode>`                   | ``0``            |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`    | :ref:`predicted_smooth_time<class_NetwDisplayHandle_property_predicted_smooth_time>`     | ``0.0``          |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`      | :ref:`starvation_grace_frames<class_NetwDisplayHandle_property_starvation_grace_frames>` | ``0``            |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`    | :ref:`starvation_growth<class_NetwDisplayHandle_property_starvation_growth>`             | ``0.0``          |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`      | :ref:`trace_interval<class_NetwDisplayHandle_property_trace_interval>`                   | ``0``            |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`NodePath` | :ref:`visual_root<class_NetwDisplayHandle_property_visual_root>`                         | ``NodePath("")`` |
-   +-------------------+------------------------------------------------------------------------------------------+------------------+
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                           | :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>`                         | ``0.0``          |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>`     | :ref:`display_role<class_NetwDisplayHandle_property_display_role>`                       | ``0``            |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`bool`                                            | :ref:`enable_smart_dilation<class_NetwDisplayHandle_property_enable_smart_dilation>`     | ``false``        |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                           | :ref:`floor_smoothing<class_NetwDisplayHandle_property_floor_smoothing>`                 | ``0.0``          |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                           | :ref:`lag_adapt_rate<class_NetwDisplayHandle_property_lag_adapt_rate>`                   | ``0.0``          |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                           | :ref:`max_extra_dilation<class_NetwDisplayHandle_property_max_extra_dilation>`           | ``0.0``          |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>` | :ref:`predicted_mode<class_NetwDisplayHandle_property_predicted_mode>`                   | ``0``            |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                           | :ref:`predicted_smooth_time<class_NetwDisplayHandle_property_predicted_smooth_time>`     | ``0.0``          |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`int`                                             | :ref:`starvation_grace_frames<class_NetwDisplayHandle_property_starvation_grace_frames>` | ``0``            |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                           | :ref:`starvation_growth<class_NetwDisplayHandle_property_starvation_growth>`             | ``0.0``          |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`int`                                             | :ref:`trace_interval<class_NetwDisplayHandle_property_trace_interval>`                   | ``0``            |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`NodePath`                                        | :ref:`visual_root<class_NetwDisplayHandle_property_visual_root>`                         | ``NodePath("")`` |
+   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -110,12 +110,12 @@ Read-only extra display delay in ticks measured by smart dilation.
 
 .. rst-class:: classref-property
 
-:godot:`int` **display_role** = ``0`` :ref:`🔗<class_NetwDisplayHandle_property_display_role>`
+:ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>` **display_role** = ``0`` :ref:`🔗<class_NetwDisplayHandle_property_display_role>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_display_role**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_display_role**\ (\ )
+- |void| **set_display_role**\ (\ value\: :ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>`\ )
+- :ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>` **get_display_role**\ (\ )
 
 How this entity is drawn. :ref:`NetwMultiplayer.DISPLAY_ROLE_AUTO<class_NetwMultiplayer_constant_DISPLAY_ROLE_AUTO>` works it out from who controls the entity, which is right for almost every one.
 
@@ -195,12 +195,12 @@ Maximum extra ticks that display lag can grow while starving.
 
 .. rst-class:: classref-property
 
-:godot:`int` **predicted_mode** = ``0`` :ref:`🔗<class_NetwDisplayHandle_property_predicted_mode>`
+:ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>` **predicted_mode** = ``0`` :ref:`🔗<class_NetwDisplayHandle_property_predicted_mode>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_predicted_mode**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_predicted_mode**\ (\ )
+- |void| **set_predicted_mode**\ (\ value\: :ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>`\ )
+- :ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>` **get_predicted_mode**\ (\ )
 
 Predicted display filter used for local prediction.
 

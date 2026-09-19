@@ -123,7 +123,7 @@ Emitted as each awaited peer resolves, before the group itself settles.
 
 .. rst-class:: classref-signal
 
-**failed**\ (\ code\: :godot:`int`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwGroupPromise_signal_failed>`
+**failed**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwGroupPromise_signal_failed>`
 
 Emitted when the group is rejected by a timeout or a failure.
 

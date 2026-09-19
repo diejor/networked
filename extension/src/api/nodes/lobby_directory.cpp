@@ -20,7 +20,7 @@ void LobbyDirectory::deliver(const Ref<MultiplayerPeer> &p_peer) {
     emit_signal(StringName(SIG_PEER_READY), p_peer);
 }
 
-void LobbyDirectory::fail(int64_t p_error, const String &p_message) {
+void LobbyDirectory::fail(Error p_error, const String &p_message) {
     emit_signal(StringName(SIG_FAILED), p_error, p_message);
 }
 
@@ -32,16 +32,16 @@ void LobbyDirectory::publish_lobbies(
     emit_signal(StringName(SIG_LIST_PUBLISHED), p_addresses, p_names, p_infos);
 }
 
-bool LobbyDirectory::supports(int64_t p_capability) {
-    return (capabilities() & p_capability) != 0;
+bool LobbyDirectory::supports(Capability p_capability) {
+    return (int64_t(capabilities()) & int64_t(p_capability)) != 0;
 }
 
-int64_t LobbyDirectory::capabilities() {
+LobbyDirectory::Capability LobbyDirectory::capabilities() {
     int64_t answered = 0;
     if (GDVIRTUAL_CALL(_capabilities, answered)) {
-        return answered;
+        return Capability(answered);
     }
-    return 0;
+    return Capability(0);
 }
 
 StringName LobbyDirectory::peer_class() {
@@ -245,7 +245,14 @@ void LobbyDirectory::_bind_methods() {
     ));
     ADD_SIGNAL(MethodInfo(
         SIG_FAILED,
-        PropertyInfo(Variant::INT, "error"),
+        PropertyInfo(
+            Variant::INT,
+            "error",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Error"
+        ),
         PropertyInfo(Variant::STRING, "message")
     ));
     ADD_SIGNAL(MethodInfo(

@@ -67,6 +67,7 @@ const char *SIG_PEER_KICKED = "peer_kicked";
 const char *SIG_PEER_KICK_REQUESTED = "peer_kick_requested";
 const char *SIG_PEER_PACKET = "peer_packet";
 const char *SIG_SCENE_ACTIVATED = "scene_activated";
+const char *SIG_SCENE_CHANGED = "scene_changed";
 const char *SIG_SCENE_DESPAWNED = "scene_despawned";
 const char *SIG_SCENE_ENTITY_MOVED = "scene_entity_moved";
 const char *SIG_SCENE_LIVE = "scene_live";
@@ -938,6 +939,11 @@ void NetwMultiplayer::_bind_methods() {
     ADD_SIGNAL(
         MethodInfo(SIG_SCENE_LIVE, PropertyInfo(Variant::OBJECT, "scene"))
     );
+    ADD_SIGNAL(MethodInfo(
+        SIG_SCENE_CHANGED,
+        PropertyInfo(Variant::OBJECT, "scene"),
+        PropertyInfo(Variant::ARRAY, "arrived")
+    ));
     ClassDB::bind_method(
         D_METHOD("session_is_active"),
         &NetwMultiplayer::session_is_active

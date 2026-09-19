@@ -453,7 +453,9 @@ void NetwInterestLayer::_bind_methods() {
             Variant::INT,
             "policy",
             PROPERTY_HINT_ENUM,
-            "Hide From Outsiders,Hide From Insiders"
+            "Hide From Outsiders,Hide From Insiders",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.LayerPolicy"
         ),
         "set_policy",
         "get_policy"
@@ -468,7 +470,14 @@ void NetwInterestLayer::_bind_methods() {
         &NetwInterestLayer::get_default_leave_policy
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "default_leave_policy"),
+        PropertyInfo(
+            Variant::INT,
+            "default_leave_policy",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.LeavePolicy"
+        ),
         "set_default_leave_policy",
         "get_default_leave_policy"
     );
@@ -482,7 +491,14 @@ void NetwInterestLayer::_bind_methods() {
         &NetwInterestLayer::get_default_perception_policy
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "default_perception_policy"),
+        PropertyInfo(
+            Variant::INT,
+            "default_perception_policy",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.PerceptionPolicy"
+        ),
         "set_default_perception_policy",
         "get_default_perception_policy"
     );

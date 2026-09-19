@@ -22,6 +22,7 @@ const char *SIG_DISCONNECTING = "disconnecting";
 const char *SIG_PLAYER_JOINED = "player_joined";
 const char *SIG_LOCAL_JOINED = "local_joined";
 const char *SIG_SCENE_LIVE = "scene_live";
+const char *SIG_SCENE_CHANGED = "scene_changed";
 const char *SIG_PRESENTATION_CHANGED = "presentation_changed";
 const char *SIG_PLAYER_LEFT = "player_left";
 const char *SIG_JOIN_FAILED = "join_failed";
@@ -72,6 +73,10 @@ void NetwSessionHandle::bind_session(NetwMultiplayer *p_session) {
     p_session->connect(
         StringName("scene_live"),
         callable_mp(this, &NetwSessionHandle::relay_scene_live)
+    );
+    p_session->connect(
+        StringName("scene_changed"),
+        callable_mp(this, &NetwSessionHandle::relay_scene_changed)
     );
     p_session->connect(
         StringName("scene_presentation_changed"),
@@ -129,6 +134,13 @@ Error NetwSessionHandle::kick(
 
 void NetwSessionHandle::relay_scene_live(const Ref<NetwSceneHandle> &p_scene) {
     emit_signal(StringName(SIG_SCENE_LIVE), p_scene);
+}
+
+void NetwSessionHandle::relay_scene_changed(
+    const Ref<NetwSceneHandle> &p_scene,
+    const TypedArray<NetwPlayer> &p_arrived
+) {
+    emit_signal(StringName(SIG_SCENE_CHANGED), p_scene, p_arrived);
 }
 
 void NetwSessionHandle::relay_presentation_changed(
@@ -415,6 +427,21 @@ void NetwSessionHandle::_bind_methods() {
             "scene",
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwSceneHandle"
+        )
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_SCENE_CHANGED,
+        PropertyInfo(
+            Variant::OBJECT,
+            "scene",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwSceneHandle"
+        ),
+        PropertyInfo(
+            Variant::ARRAY,
+            "arrived",
+            PROPERTY_HINT_ARRAY_TYPE,
+            "NetwPlayer"
         )
     ));
     ADD_SIGNAL(MethodInfo(

@@ -34,11 +34,11 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`bind_tree<class_NakamaAuth_method_bind_tree>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ )                   |
-   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`admit<class_NakamaAuth_method_admit>`\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array`\ ) |
-   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`bind_tree<class_NakamaAuth_method_bind_tree>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ )                        |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`admit<class_NakamaAuth_method_admit>`\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array` = []\ ) |
+   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -65,7 +65,7 @@ Binds the :ref:`MultiplayerTree<class_MultiplayerTree>` whose relay presence att
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **admit**\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array`\ ) :ref:`🔗<class_NakamaAuth_method_admit>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **admit**\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array` = []\ ) :ref:`🔗<class_NakamaAuth_method_admit>`
 
 Admits ``peer_id`` only under the username Nakama attests for it.  
 

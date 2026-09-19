@@ -40,11 +40,11 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+------------------------------------------------------------+---------+
-   | :godot:`int`        | :ref:`isolation<class_NetwSceneConfig_property_isolation>` | ``0``   |
-   +---------------------+------------------------------------------------------------+---------+
-   | :godot:`StringName` | :ref:`label<class_NetwSceneConfig_property_label>`         | ``&""`` |
-   +---------------------+------------------------------------------------------------+---------+
+   +-------------------------------------------------+------------------------------------------------------------+---------+
+   | :ref:`SceneIsolation<enum_Netw_SceneIsolation>` | :ref:`isolation<class_NetwSceneConfig_property_isolation>` | ``0``   |
+   +-------------------------------------------------+------------------------------------------------------------+---------+
+   | :godot:`StringName`                             | :ref:`label<class_NetwSceneConfig_property_label>`         | ``&""`` |
+   +-------------------------------------------------+------------------------------------------------------------+---------+
 
 .. rst-class:: classref-reftable-group
 
@@ -73,11 +73,11 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`int` **isolation** = ``0`` :ref:`🔗<class_NetwSceneConfig_property_isolation>`
+:ref:`SceneIsolation<enum_Netw_SceneIsolation>` **isolation** = ``0`` :ref:`🔗<class_NetwSceneConfig_property_isolation>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_isolation**\ (\ )
+- :ref:`SceneIsolation<enum_Netw_SceneIsolation>` **get_isolation**\ (\ )
 
 :ref:`Netw.SCENE_ISOLATION_OWN_WORLD<class_Netw_constant_SCENE_ISOLATION_OWN_WORLD>` once :ref:`isolated()<class_NetwSceneConfig_method_isolated>` is declared, and :ref:`Netw.SCENE_ISOLATION_NONE<class_Netw_constant_SCENE_ISOLATION_NONE>` otherwise.
 

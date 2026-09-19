@@ -39,7 +39,7 @@
 		</method>
 		<method name="observe">
 			<return type="void" />
-			<param index="0" name="event" type="int" />
+			<param index="0" name="event" type="int" enum="NetwMultiplayer.SceneEvent" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
 				Calls [param callback] whenever this scene gains or loses a subject of [param event], one of [enum NetwMultiplayer.SceneEvent]. Registering the same [param callback] for the same [param event] twice does nothing.
@@ -56,7 +56,7 @@
 		</method>
 		<method name="unobserve">
 			<return type="void" />
-			<param index="0" name="event" type="int" />
+			<param index="0" name="event" type="int" enum="NetwMultiplayer.SceneEvent" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
 				Withdraws the [param callback] a [method observe] call registered for [param event]. It must be the same [Callable] that was passed to [method observe], because that is the name the relay is filed under; a fresh [Callable] over the same method is a different name and withdraws nothing.
@@ -120,7 +120,7 @@
 			Every player this scene currently replicates to, whether a body of theirs stands here or a [method watch] put them here. A player is a person in the session; a body is the entity they steer, and [member bodies] returns those.
 		</member>
 		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies" default="[]">
-			Every body in this scene, in no declared order.
+			Every body in this scene, in no declared order. A body leaves this array in the call that despawned it, not in the frame its node is freed.
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
 			The authored node this scene was declared on, which is the scene's own identity, or [code]null[/code] outside a session.
@@ -136,6 +136,7 @@
 			<param index="0" name="player" type="NetwPlayer" />
 			<description>
 				Emitted when this scene starts replicating to [param player], after the boundary is written, so a listener reading [member viewers] sees them.
+				This reports delivery, not arrival. A body standing here and a [method watch] both raise it and it cannot say which, so a game that spawns players uses [signal NetwSessionHandle.scene_changed] instead.
 			</description>
 		</signal>
 		<signal name="viewer_left">

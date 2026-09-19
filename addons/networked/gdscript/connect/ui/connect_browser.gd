@@ -15,9 +15,9 @@
 ## [br][br]
 ## Pressing Host or Join runs one setup the browser composes itself, out of
 ## three ordinary steps: [method NetwConnectHandle.create_peer] asks the
-## provider for a peer, [method Netw.join] arranges the player the form
-## collected, and the peer is assigned. The assignment
-## happens inside the creation callback, which is the only window the seam
+## provider for a peer, [method Netw.prepare_join] arranges the player the
+## form collected, and the peer is assigned. The assignment happens inside
+## the creation callback, which is the only window the seam
 ## offers, and progress comes from that one operation rather than from
 ## anything session-wide. Success is [signal NetwMultiplayer.session_entered],
 ## which is the event the player was actually waiting for.
@@ -423,7 +423,7 @@ func _on_peer_created(
 		_fail_setup(error if error != OK else ERR_CANT_CREATE, detail)
 		return
 	if not String(username).is_empty():
-		var submit: Callable = Netw.join
+		var submit: Callable = Netw.prepare_join
 		submit.callv([self, username] + join_args)
 	var shaped := _shaped(peer)
 	_api.multiplayer_peer = shaped

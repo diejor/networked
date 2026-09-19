@@ -61,39 +61,39 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`       | :ref:`is_ready<class_SteamLobbyDirectory_method_is_ready>`\ (\ )                                               |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`        | :ref:`_capabilities<class_SteamLobbyDirectory_private_method__capabilities>`\ (\ )                             |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`        | :ref:`get_lobby_id<class_SteamLobbyDirectory_method_get_lobby_id>`\ (\ )                                       |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`get_persona_name<class_SteamLobbyDirectory_method_get_persona_name>`\ (\ )                               |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`_member_name<class_SteamLobbyDirectory_private_method__member_name>`\ (\ peer_id\: :godot:`int`\ )       |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`_local_member_name<class_SteamLobbyDirectory_private_method__local_member_name>`\ (\ )                   |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`_display_name<class_SteamLobbyDirectory_private_method__display_name>`\ (\ )                             |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`       | :ref:`_is_available<class_SteamLobbyDirectory_private_method__is_available>`\ (\ )                             |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`_address_label<class_SteamLobbyDirectory_private_method__address_label>`\ (\ )                           |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`_address_help<class_SteamLobbyDirectory_private_method__address_help>`\ (\ )                             |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|              | :ref:`_list_lobbies<class_SteamLobbyDirectory_private_method__list_lobbies>`\ (\ )                             |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|              | :ref:`_leave_lobby<class_SteamLobbyDirectory_private_method__leave_lobby>`\ (\ )                               |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName` | :ref:`_peer_class<class_SteamLobbyDirectory_private_method__peer_class>`\ (\ )                                 |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`_join_address<class_SteamLobbyDirectory_private_method__join_address>`\ (\ )                             |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|              | :ref:`_host_lobby<class_SteamLobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|              | :ref:`_join_lobby<class_SteamLobbyDirectory_private_method__join_lobby>`\ (\ address\: :godot:`String`\ )      |
-   +---------------------+----------------------------------------------------------------------------------------------------------------+
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                     | :ref:`is_ready<class_SteamLobbyDirectory_method_is_ready>`\ (\ )                                               |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :ref:`Capability<enum_LobbyDirectory_Capability>` | :ref:`_capabilities<class_SteamLobbyDirectory_private_method__capabilities>`\ (\ )                             |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                                      | :ref:`get_lobby_id<class_SteamLobbyDirectory_method_get_lobby_id>`\ (\ )                                       |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                   | :ref:`get_persona_name<class_SteamLobbyDirectory_method_get_persona_name>`\ (\ )                               |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                   | :ref:`_member_name<class_SteamLobbyDirectory_private_method__member_name>`\ (\ peer_id\: :godot:`int`\ )       |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                   | :ref:`_local_member_name<class_SteamLobbyDirectory_private_method__local_member_name>`\ (\ )                   |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                   | :ref:`_display_name<class_SteamLobbyDirectory_private_method__display_name>`\ (\ )                             |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                     | :ref:`_is_available<class_SteamLobbyDirectory_private_method__is_available>`\ (\ )                             |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                   | :ref:`_address_label<class_SteamLobbyDirectory_private_method__address_label>`\ (\ )                           |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                   | :ref:`_address_help<class_SteamLobbyDirectory_private_method__address_help>`\ (\ )                             |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | |void|                                            | :ref:`_list_lobbies<class_SteamLobbyDirectory_private_method__list_lobbies>`\ (\ )                             |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | |void|                                            | :ref:`_leave_lobby<class_SteamLobbyDirectory_private_method__leave_lobby>`\ (\ )                               |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`StringName`                               | :ref:`_peer_class<class_SteamLobbyDirectory_private_method__peer_class>`\ (\ )                                 |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                   | :ref:`_join_address<class_SteamLobbyDirectory_private_method__join_address>`\ (\ )                             |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | |void|                                            | :ref:`_host_lobby<class_SteamLobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   | |void|                                            | :ref:`_join_lobby<class_SteamLobbyDirectory_private_method__join_lobby>`\ (\ address\: :godot:`String`\ )      |
+   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -259,7 +259,7 @@ Returns ``true`` if Steam initialized successfully.
 
 .. rst-class:: classref-method
 
-:godot:`int` **_capabilities**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__capabilities>`
+:ref:`Capability<enum_LobbyDirectory_Capability>` **_capabilities**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__capabilities>`
 
 Steam backs every lobby tier: browse, friends-only visibility, overlay invites, and persona resolution.
 

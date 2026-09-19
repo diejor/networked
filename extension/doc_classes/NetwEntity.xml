@@ -246,7 +246,7 @@
 			Whether this entity's component ids are being honoured. The digest of the registered structure rides the spawn packet, and a client that computes a different one has a different structure, so the ids cannot be trusted to mean the same node on both sides.
 			A poisoned entity is not a broken one: every routed frame falls back to string paths and names, which both peers resolve for themselves, so the cost is bytes rather than correctness. [method comp_of] returns [code]255[/code] for everything but the root while this holds.
 		</member>
-		<member name="control_kind" type="int" setter="" getter="get_control_kind">
+		<member name="control_kind" type="int" setter="" getter="get_control_kind" enum="NetwEntity.ControlKind">
 			Derived from [member controller]. See [enum ControlKind].
 		</member>
 		<member name="controller" type="int" setter="set_controller" getter="get_controller" default="0">
@@ -274,7 +274,7 @@
 			The stable display, save and debug label for this entity, and what identifies it across peers.
 			An entity a game authors into a scene sets it in [method Object._init], before the node enters the tree, because an entity carrying none never activates. A spawn leaves it to [method Netw.spawn_player], which stamps the player's [member NetwPlayer.username] onto the body it was spawned for. A game handing one player several bodies stamps a distinct id on each.
 		</member>
-		<member name="initial_controller" type="int" setter="set_initial_controller" getter="get_initial_controller" default="0">
+		<member name="initial_controller" type="int" setter="set_initial_controller" getter="get_initial_controller" enum="NetwEntity.InitialController" default="0">
 			The spawn-time control rule, as an [enum InitialController].
 			An archetype config field, written while the record is [constant STAGE_UNBOUND] and consumed once at [method arm]. The serialization-safe home is the entity root's own [code]_init[/code], which re-runs on every instantiate so a packed scene carries the rule without a marker node or metadata.
 			[codeblock]
@@ -309,13 +309,13 @@
 			The [NetwMultiplayer] session this entity belongs to, or [code]null[/code] when it has none, which is an offline rig or an orphan before activation.
 			Mirrors [member Node.multiplayer] on the entity root once live, but handed over by the creator rather than re-discovered: stamped once at [method arm] when the spawn pipeline holds the api, or at first tree entry for an entity a game authored into a scene. Immutable afterward, since an entity changes sessions only by despawn and respawn. Every session-derived member resolves through this one handle, so "no session" is the single condition [code]multiplayer == null[/code].
 		</member>
-		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" default="0">
+		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" enum="NetwEntity.DisconnectRule" default="0">
 			The lifetime rule for an entity whose controller disconnects, as a [enum DisconnectRule]. It applies only when the disconnected peer controls the entity without being represented by it: player representation still despawns through [member peer_id].
 		</member>
 		<member name="owner" type="Node" setter="set_owner" getter="get_owner">
 			The root [Node] that holds this entity, or [code]null[/code] once the tree has freed it.
 		</member>
-		<member name="ownership" type="int" setter="" getter="get_ownership">
+		<member name="ownership" type="int" setter="" getter="get_ownership" enum="NetwEntity.Ownership">
 			Derived from [member peer_id]. See [enum Ownership].
 		</member>
 		<member name="player" type="NetwPlayer" setter="" getter="get_player">
@@ -352,7 +352,7 @@
 			    apply_damage()
 			[/codeblock]
 		</member>
-		<member name="scene_isolation" type="int" setter="" getter="get_scene_isolation" default="0">
+		<member name="scene_isolation" type="int" setter="" getter="get_scene_isolation" enum="NetwMultiplayer.SceneIsolation" default="0">
 			Whether this scene hosts its own world, as a [enum NetwMultiplayer.SceneIsolation].
 			Write-once while the record is [constant STAGE_UNBOUND], the same discipline as [member initial_controller], because it selects the container the spawn recipe builds on every peer. A later write is rejected rather than producing two peers that disagree about the container.
 		</member>
@@ -360,7 +360,7 @@
 			The non-unique stem naming this scene's archetype, empty when [member declares_scene] is [code]false[/code].
 			Identity is the [member rid], never this string. Two live instances of one arena share a stem and own separate admission boundaries, so [method NetwMultiplayer.scene_find] returns "an instance of this stem" rather than "the arena". The stem is declared once per script through [method Netw.configure_multiplayer_scene] and read back through the script whenever no instance wrote its own, so it is correct on an orphan, on a spawned instance and on a client that decoded it off the SPAWN packet alike.
 		</member>
-		<member name="stage" type="int" setter="" getter="get_stage">
+		<member name="stage" type="int" setter="" getter="get_stage" enum="NetwEntity.Stage">
 			The entity's current lifecycle position, as a [enum Stage]. Read-only, and moved only along an edge the stage table admits, so a rejected move leaves it where it was.
 		</member>
 		<member name="state_binding" type="NetwPropertySetBinding" setter="" getter="get_state_binding">
@@ -370,7 +370,7 @@
 			The entity's per-entity tick-keyed [NetwTimeline] of state and input snapshots, published by [NetwMultiplayer], or [code]null[/code]. Held by instance id, so it clears when the timeline frees.
 			A move keeps the registration and invalidates what it holds: the samples describe a coordinate frame the owner has left, so the timeline's floor advances past them and a rewind resumes from the first capture taken after the move. Only the last state binding going away, an explicit undeclare, a hide or a death unregisters the timeline itself.
 		</member>
-		<member name="transfer" type="int" setter="set_transfer" getter="get_transfer" default="0">
+		<member name="transfer" type="int" setter="set_transfer" getter="get_transfer" enum="NetwEntity.Transfer" default="0">
 			The player request policy for control transfer, as a [enum Transfer]. An archetype config field written in the entity root's [code]_init[/code] alongside [member initial_controller] and read while the record is [constant STAGE_UNBOUND]. [constant TRANSFER_REQUESTABLE] lets peers call [method request_control], and the server emits [signal control_requested] before granting.
 		</member>
 	</members>

@@ -252,33 +252,39 @@ void NetwPredictionHandle::set_schedule(NetwPredict::Schedule p_value) {
     reconfigure();
 }
 
-void NetwPredictionHandle::set_correction_mode(int p_value) {
+void NetwPredictionHandle::set_correction_mode(
+    NetwPredict::CorrectionMode p_value
+) {
     correction_value = p_value;
     reconfigure();
 }
 
-void NetwPredictionHandle::set_snap_restore(int p_value) {
+void NetwPredictionHandle::set_snap_restore(NetwPredict::RestoreMode p_value) {
     restore_value = p_value;
     reconfigure();
 }
 
-void NetwPredictionHandle::set_input_source(int p_value) {
+void NetwPredictionHandle::set_input_source(NetwPredict::InputSource p_value) {
     input_source_value = p_value;
 }
 
-void NetwPredictionHandle::set_sim_mode(int p_value) {
+void NetwPredictionHandle::set_sim_mode(NetwPredict::SimMode p_value) {
     sim_mode_value = p_value;
 }
 
-void NetwPredictionHandle::set_recovery_policy(int p_value) {
+void NetwPredictionHandle::set_recovery_policy(
+    NetwPredict::RecoveryPolicy p_value
+) {
     recovery_policy_value = p_value;
-    set_correction_mode(
+    set_correction_mode(static_cast<NetwPredict::CorrectionMode>(
         NetwPredictionEngine::correction_for_recovery_policy(p_value)
-    );
+    ));
     rewire();
 }
 
-void NetwPredictionHandle::set_breach_response(int p_value) {
+void NetwPredictionHandle::set_breach_response(
+    NetwPredict::BreachResponse p_value
+) {
     breach_response_value = p_value;
     NetwPredictionEngine *held = pool();
     if (held != nullptr) {
@@ -350,7 +356,9 @@ void NetwPredictionHandle::set_sleeping(bool p_value) {
     sleeping_value = p_value;
 }
 
-void NetwPredictionHandle::set_missing_policy(int p_value) {
+void NetwPredictionHandle::set_missing_policy(
+    NetwPredict::MissingInput p_value
+) {
     missing_policy_value = p_value;
 }
 
@@ -379,7 +387,7 @@ void NetwPredictionHandle::set_divergence_epsilon(double p_value) {
     reconfigure();
 }
 
-void NetwPredictionHandle::set_reconcile_mode(int p_value) {
+void NetwPredictionHandle::set_reconcile_mode(NetwPredict::Reconcile p_value) {
     reconcile_value = p_value;
     reconfigure();
 }
@@ -393,10 +401,16 @@ void NetwPredictionHandle::set_archetype(NetwPredict::Archetype p_value) {
     set_schedule(
         static_cast<NetwPredict::Schedule>(int(axes[StringName("schedule")]))
     );
-    set_missing_policy(int(axes[StringName("missing_policy")]));
-    set_recovery_policy(int(axes[StringName("recovery_policy")]));
+    set_missing_policy(static_cast<NetwPredict::MissingInput>(
+        int(axes[StringName("missing_policy")])
+    ));
+    set_recovery_policy(static_cast<NetwPredict::RecoveryPolicy>(
+        int(axes[StringName("recovery_policy")])
+    ));
     if (bool(axes[StringName("declares_snap_restore")])) {
-        set_snap_restore(int(axes[StringName("snap_restore")]));
+        set_snap_restore(static_cast<NetwPredict::RestoreMode>(
+            int(axes[StringName("snap_restore")])
+        ));
     }
     if (bool(axes[StringName("declares_teleport_threshold")])) {
         set_teleport_threshold(double(axes[StringName("teleport_threshold")]));
@@ -438,10 +452,13 @@ int64_t NetwPredictionHandle::get_acknowledged_tick() const {
     return int64_t(counters->get(StringName("ack_confirmed")));
 }
 
-int NetwPredictionHandle::get_last_attribution() const {
+NetwPredictJournal::Attribution NetwPredictionHandle::get_last_attribution()
+    const {
     NetwPredictionEngine *held = pool();
-    return held == nullptr ? int(Attribution::UNKNOWN)
-                           : held->attribution_of(slot());
+    return held == nullptr ? NetwPredictJournal::UNKNOWN
+                           : static_cast<NetwPredictJournal::Attribution>(
+                               held->attribution_of(slot())
+                           );
 }
 
 int64_t NetwPredictionHandle::get_last_attributed_transition() const {
@@ -942,7 +959,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_schedule
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "schedule"),
+        PropertyInfo(
+            Variant::INT,
+            "schedule",
+            PROPERTY_HINT_ENUM,
+            "Tick,TickAndFrame,Frame,TickPrepass",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.Schedule"
+        ),
         "set_schedule",
         "get_schedule"
     );
@@ -955,7 +979,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_correction_mode
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "correction_mode"),
+        PropertyInfo(
+            Variant::INT,
+            "correction_mode",
+            PROPERTY_HINT_ENUM,
+            "None,Continuous,Velocity,Transform,Physics,Custom",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.CorrectionMode"
+        ),
         "set_correction_mode",
         "get_correction_mode"
     );
@@ -968,7 +999,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_snap_restore
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "snap_restore"),
+        PropertyInfo(
+            Variant::INT,
+            "snap_restore",
+            PROPERTY_HINT_ENUM,
+            "None,Pose,Physics",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.RestoreMode"
+        ),
         "set_snap_restore",
         "get_snap_restore"
     );
@@ -981,7 +1019,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_input_source
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "input_source"),
+        PropertyInfo(
+            Variant::INT,
+            "input_source",
+            PROPERTY_HINT_ENUM,
+            "Local,Received,Predicted,None",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.InputSource"
+        ),
         "set_input_source",
         "get_input_source"
     );
@@ -994,7 +1039,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_sim_mode
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "sim_mode"),
+        PropertyInfo(
+            Variant::INT,
+            "sim_mode",
+            PROPERTY_HINT_ENUM,
+            "Tick,Frame,Custom",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.SimMode"
+        ),
         "set_sim_mode",
         "get_sim_mode"
     );
@@ -1007,7 +1059,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_recovery_policy
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "recovery_policy"),
+        PropertyInfo(
+            Variant::INT,
+            "recovery_policy",
+            PROPERTY_HINT_ENUM,
+            "None,Snap,Resimulate,Replay,Pacing",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.RecoveryPolicy"
+        ),
         "set_recovery_policy",
         "get_recovery_policy"
     );
@@ -1020,7 +1079,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_breach_response
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "breach_response"),
+        PropertyInfo(
+            Variant::INT,
+            "breach_response",
+            PROPERTY_HINT_ENUM,
+            "Discard,Fallback,Trace",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.BreachResponse"
+        ),
         "set_breach_response",
         "get_breach_response"
     );
@@ -1152,7 +1218,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_missing_policy
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "missing_policy"),
+        PropertyInfo(
+            Variant::INT,
+            "missing_policy",
+            PROPERTY_HINT_ENUM,
+            "None,RepeatLast,Extrapolate,Custom",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.MissingInput"
+        ),
         "set_missing_policy",
         "get_missing_policy"
     );
@@ -1243,7 +1316,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_reconcile_mode
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "reconcile_mode"),
+        PropertyInfo(
+            Variant::INT,
+            "reconcile_mode",
+            PROPERTY_HINT_ENUM,
+            "Replay,State,Custom",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.Reconcile"
+        ),
         "set_reconcile_mode",
         "get_reconcile_mode"
     );
@@ -1344,7 +1424,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::get_last_attribution
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "last_attribution"),
+        PropertyInfo(
+            Variant::INT,
+            "last_attribution",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredictJournal.Attribution"
+        ),
         godot::String(),
         "get_last_attribution"
     );
@@ -1367,7 +1454,14 @@ void NetwPredictionHandle::_bind_methods() {
     ADD_SIGNAL(MethodInfo(
         "divergence_detected",
         PropertyInfo(Variant::INT, "entry"),
-        PropertyInfo(Variant::INT, "attribution")
+        PropertyInfo(
+            Variant::INT,
+            "attribution",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredictJournal.Attribution"
+        )
     ));
     ADD_SIGNAL(MethodInfo(
         "episode_opened",
@@ -1386,7 +1480,14 @@ void NetwPredictionHandle::_bind_methods() {
         PropertyInfo(Variant::INT, "entry"),
         PropertyInfo(Variant::DICTIONARY, "deltas"),
         PropertyInfo(Variant::BOOL, "teleported"),
-        PropertyInfo(Variant::INT, "attribution")
+        PropertyInfo(
+            Variant::INT,
+            "attribution",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredictJournal.Attribution"
+        )
     ));
     ADD_SIGNAL(MethodInfo(
         "state_evaluated",

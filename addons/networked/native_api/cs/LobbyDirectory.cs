@@ -104,7 +104,7 @@ public sealed class LobbyDirectory : NetwService
     /// Emitted by <see cref="LobbyDirectory.Fail"/> with the reason the request
     /// in flight was rejected.
     /// </summary>
-    public event Action<long, string> LobbyFailed
+    public event Action<Error, string> LobbyFailed
     {
         add => Connect("lobby_failed", Callable.From(value));
         remove => Disconnect("lobby_failed", Callable.From(value));
@@ -163,14 +163,14 @@ public sealed class LobbyDirectory : NetwService
     }
 
     private static readonly IntPtr _bindFail =
-        NetwApi.MethodBind("LobbyDirectory", "fail", 501894301UL);
+        NetwApi.MethodBind("LobbyDirectory", "fail", 3642839351UL);
 
     /// <summary>
     /// Reports that the request in flight cannot be completed.
     /// <paramref name="message"/> is shown to a player, so it names what the
     /// provider rejected rather than restating <paramref name="error"/>.
     /// </summary>
-    public void Fail(long error, string message)
+    public void Fail(Error error, string message)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)error);
         godot_variant slot1 = VariantUtils.CreateFromString(message);
@@ -218,16 +218,16 @@ public sealed class LobbyDirectory : NetwService
     }
 
     private static readonly IntPtr _bindSupports =
-        NetwApi.MethodBind("LobbyDirectory", "supports", 3067735520UL);
+        NetwApi.MethodBind("LobbyDirectory", "supports", 1766254199UL);
 
     /// <summary>
     /// Returns whether <c>_capabilities</c> includes
     /// <paramref name="capability"/>, which is how a browser hides controls the
     /// provider cannot honor.
     /// </summary>
-    public bool Supports(long capability)
+    public bool Supports(LobbyDirectory.Capability capability)
     {
-        long slot0 = capability;
+        long slot0 = (long)capability;
         byte answered = default;
         NetwThunks.Ptrcall1_Long_Byte(
             _bindSupports,

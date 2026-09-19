@@ -28,7 +28,7 @@ This resource carries only the facts the wire and the session machine own. What 
     func _init() -> void:
         Netw.configure_session(self) \
             .app_id(&"bomber-v2") \
-            .desired_role(NetwMultiplayer.Role.LISTEN_SERVER)
+            .role(NetwMultiplayer.Role.LISTEN_SERVER)
 
 \ A preset handed to that verb is copied rather than kept, so one ``.tres`` may seed several scenes and editing it afterwards reaches none of them. Nested :ref:`NetwLinkConditions<class_NetwLinkConditions>` and :ref:`NetwServerInfo<class_NetwServerInfo>` values are copied too.
 
@@ -47,7 +47,7 @@ Properties
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
    | :godot:`StringName`                                 | :ref:`app_id<class_NetwSessionConfig_property_app_id>`                   | ``&""`` |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
-   | :godot:`int`                                        | :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`       | ``3``   |
+   | :ref:`Role<enum_NetwMultiplayer_Role>`              | :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`       | ``3``   |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
    | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` |         |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
@@ -67,7 +67,7 @@ Methods
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`link<class_NetwSessionConfig_method_link>`\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`role<class_NetwSessionConfig_method_role>`\ (\ desired_role\: :godot:`int`\ )                                           |
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`role<class_NetwSessionConfig_method_role>`\ (\ desired_role\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )                 |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`server<class_NetwSessionConfig_method_server>`\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )         |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
@@ -106,12 +106,12 @@ It also names the space a signalled transport creates its room codes in, and is 
 
 .. rst-class:: classref-property
 
-:godot:`int` **desired_role** = ``3`` :ref:`🔗<class_NetwSessionConfig_property_desired_role>`
+:ref:`Role<enum_NetwMultiplayer_Role>` **desired_role** = ``3`` :ref:`🔗<class_NetwSessionConfig_property_desired_role>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_desired_role**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_desired_role**\ (\ )
+- |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )
+- :ref:`Role<enum_NetwMultiplayer_Role>` **get_desired_role**\ (\ )
 
 The :ref:`Role<enum_NetwMultiplayer_Role>` the local peer intends to play once a session starts.
 
@@ -203,7 +203,7 @@ Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` an
 
 .. rst-class:: classref-method
 
-:ref:`NetwSessionConfig<class_NetwSessionConfig>` **role**\ (\ desired_role\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionConfig_method_role>`
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **role**\ (\ desired_role\: :ref:`Role<enum_NetwMultiplayer_Role>`\ ) :ref:`🔗<class_NetwSessionConfig_method_role>`
 
 Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and returns this same draft, so a declaration reads as one chained expression.
 

@@ -386,7 +386,7 @@
 			A preset is a starting point. Writing it applies that set's schedule and recovery settings outright, and anything written afterwards refines them. A scene declaring prediction on its [MultiplayerSynchronizer] therefore applies its archetype first and writes only the values it actually moved, so a value left at its default cannot overwrite the preset it was meant to refine.
 			No preset sets [member breach_response], because it is the one recovery setting that changes [member sim_mode], stopping speculation at a witnessed contact and following authority until the entity is reseeded. A game that wants that says so itself.
 		</member>
-		<member name="breach_response" type="int" setter="set_breach_response" getter="get_breach_response" default="0">
+		<member name="breach_response" type="int" setter="set_breach_response" getter="get_breach_response" enum="NetwPredict.BreachResponse" default="0">
 			What this entity does the moment it touches something it was not predicted to touch. It is armed only when [member witness_contacts] declares how contacts are observed. [constant NetwPredict.BREACH_RESPONSE_DEMOTE] follows authority from then on while the entity keeps sending its input.
 		</member>
 		<member name="collision_cooldown_ticks" type="int" setter="set_collision_cooldown_ticks" getter="get_collision_cooldown_ticks" default="6">
@@ -402,7 +402,7 @@
 			[/codeblock]
 			Every tick of depth costs a tick of input latency, and a hold delays one input by one step. A value of [code]0[/code] consumes inputs as they arrive, with no slack to absorb any drift.
 		</member>
-		<member name="correction_mode" type="int" setter="set_correction_mode" getter="get_correction_mode" default="0">
+		<member name="correction_mode" type="int" setter="set_correction_mode" getter="get_correction_mode" enum="NetwPredict.CorrectionMode" default="0">
 			How a correction is applied, a [enum NetwPredict.CorrectionMode] value.
 		</member>
 		<member name="divergence_epsilon" type="float" setter="set_divergence_epsilon" getter="get_divergence_epsilon" default="0.01">
@@ -422,7 +422,7 @@
 			A row like that one triggers nearly every recovery, is withheld from nearly every one, and the few writes it did get made it no smaller, so nothing is repairing it.
 			Inside the comparison a correction is decided by fingerprint rather than by tolerance, so [member NetwPredictFieldRecovery.triggered] names the fields that were also past their tolerance rather than the ones that decided it. A field declared [method NetwPropertyConfig.reconcile_only] never counts a trigger at all.
 		</member>
-		<member name="input_source" type="int" setter="set_input_source" getter="get_input_source" default="3">
+		<member name="input_source" type="int" setter="set_input_source" getter="get_input_source" enum="NetwPredict.InputSource" default="3">
 			Where this peer's copy of the entity gets its input, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
 			This and [member sim_mode] are the two values combined by [enum NetwPredict.Role]. Read them separately when only one axis matters.
 		</member>
@@ -445,7 +445,7 @@
 		<member name="last_attributed_transition" type="int" setter="" getter="get_last_attributed_transition" default="-1">
 			The transition [member last_attribution] describes, or [code]-1[/code] while no divergence has been blamed on anything.
 		</member>
-		<member name="last_attribution" type="int" setter="" getter="get_last_attribution" default="0">
+		<member name="last_attribution" type="int" setter="" getter="get_last_attribution" enum="NetwPredictJournal.Attribution" default="0">
 			What the most recent divergence was blamed on, as a [enum NetwPredictJournal.Attribution] value. It means nothing until [member last_attributed_transition] is no longer [code]-1[/code].
 			[constant NetwPredictJournal.Attribution.UNKNOWN] means the evidence needed to return was not there. Every other value names the first thing the two runs disagreed about.
 		</member>
@@ -500,13 +500,13 @@
 		<member name="max_restore_ticks" type="int" setter="set_max_restore_ticks" getter="get_max_restore_ticks" default="6">
 			How far a [constant NetwPredict.RESTORE_MODE_EXTRAPOLATED] restore may project forward, in ticks. It projects across [member ack_age_ticks], and a straight-line projection over a long span can land a body a long way off a curved path. This caps that span the way [constant NetwMultiplayer.DISPLAY_PARAM_MAX_FORECAST_TICKS] caps the display forecast, so an old acknowledgement never launches the body, and it defaults to the same [code]6[/code].
 		</member>
-		<member name="missing_policy" type="int" setter="set_missing_policy" getter="get_missing_policy" default="0">
+		<member name="missing_policy" type="int" setter="set_missing_policy" getter="get_missing_policy" enum="NetwPredict.MissingInput" default="0">
 			What the server does about an input tick that never arrived, as a [enum NetwPredict.MissingInput] value.
 		</member>
-		<member name="reconcile_mode" type="int" setter="set_reconcile_mode" getter="get_reconcile_mode" default="0">
+		<member name="reconcile_mode" type="int" setter="set_reconcile_mode" getter="get_reconcile_mode" enum="NetwPredict.Reconcile" default="0">
 			Whether this entity is corrected on its own or together with the rest of its [member island], as a [enum NetwPredict.Reconcile] value.
 		</member>
-		<member name="recovery_policy" type="int" setter="set_recovery_policy" getter="get_recovery_policy" default="-1">
+		<member name="recovery_policy" type="int" setter="set_recovery_policy" getter="get_recovery_policy" enum="NetwPredict.RecoveryPolicy" default="-1">
 			The [enum NetwPredict.RecoveryPolicy] this entity recovers under, or [code]-1[/code] while none has been declared, in which case [method resolved_recovery_policy] works one out from [member correction_mode].
 		</member>
 		<member name="replay_buffer_depth" type="int" setter="set_replay_buffer_depth" getter="get_replay_buffer_depth" default="0">
@@ -528,7 +528,7 @@
 			Each sampler is called once before each drive and recorded with it, which is what lets a divergence be blamed on the world rather than left unexplained. [method sensor] reads the sample back. A sampler that cannot be called is skipped when it would have been sampled rather than rejected here, so the record describes exactly the facts the drive ran against.
 			Declaring a sensor says where a divergence came from and claims nothing about exactness, so declaring them alone leaves every transition [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN].
 		</member>
-		<member name="sim_mode" type="int" setter="set_sim_mode" getter="get_sim_mode" default="2">
+		<member name="sim_mode" type="int" setter="set_sim_mode" getter="get_sim_mode" enum="NetwPredict.SimMode" default="2">
 			What this peer's simulation of the entity counts for, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
 		</member>
 		<member name="simulate" type="Callable" setter="set_simulate" getter="get_simulate" default="Callable()">
@@ -537,7 +537,7 @@
 		<member name="sleeping" type="bool" setter="set_sleeping" getter="get_sleeping" default="false">
 			True while the authoritative body is asleep. Corrections pause while it is, so a sleeping body is never nudged awake by one. A game writes it when its own body sleeps and wakes.
 		</member>
-		<member name="snap_restore" type="int" setter="set_snap_restore" getter="get_snap_restore" default="0">
+		<member name="snap_restore" type="int" setter="set_snap_restore" getter="get_snap_restore" enum="NetwPredict.RestoreMode" default="0">
 			How a [constant NetwPredict.CORRECTION_MODE_SNAP] restore lands on the body, as a [enum NetwPredict.RestoreMode] value. [constant NetwPredict.RESTORE_MODE_EXTRAPOLATED] carries each field that declares a [member NetwInterpolate.project_channel] forward to the present tick, and the default [constant NetwPredict.RESTORE_MODE_EXACT] writes what arrived.
 			It is ignored under [constant NetwPredict.CORRECTION_MODE_REPLAY], because replaying the inputs already brings the body up to the present.
 		</member>
@@ -563,13 +563,13 @@
 	<signals>
 		<signal name="divergence_detected">
 			<param index="0" name="entry" type="int" />
-			<param index="1" name="attribution" type="int" />
+			<param index="1" name="attribution" type="int" enum="NetwPredictJournal.Attribution" />
 			<description>
 				Emitted when a transition is found to disagree with authority, before anything is done about it, naming the transition and what the disagreement is blamed on.
 				It is emitted whether or not the disagreement is then corrected, so a game that only watches hears about one exactly as loudly as a game that corrects.
 				[codeblock]
 				entity.prediction.divergence_detected.connect(
-				    func(entry, attribution):
+				    func(entry: int, attribution: NetwPredictJournal.Attribution):
 				        if attribution == NetwPredictJournal.CLOSURE:
 				            push_warning("transition %d diverged" % entry)
 				)
@@ -598,7 +598,7 @@
 			<param index="0" name="entry" type="int" />
 			<param index="1" name="deltas" type="Dictionary" />
 			<param index="2" name="teleported" type="bool" />
-			<param index="3" name="attribution" type="int" />
+			<param index="3" name="attribution" type="int" enum="NetwPredictJournal.Attribution" />
 			<description>
 				Emitted after a recovery wrote the body. It names the transition it went back to, how far each field moved as [code]after - before[/code], whether the move was large enough to be a teleport, and what the divergence was blamed on. An angle's change is given as the shorter way around.
 				A recovery is one write, so this fires once per recovery and [param deltas] is the whole of it. A game does not have to absorb them by hand. Under [constant NetwMultiplayer.PREDICTED_MODE_CHASE] the smoothing already turns each one into an offset that decays away, reset for each recovery and snapped through on a teleport.

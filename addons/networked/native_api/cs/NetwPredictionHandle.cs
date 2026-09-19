@@ -62,13 +62,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// as loudly as a game that corrects.
     /// <code>
     /// entity.prediction.divergence_detected.connect(
-    ///     func(entry, attribution):
+    ///     func(entry: int, attribution: NetwPredictJournal.Attribution):
     ///         if attribution == NetwPredictJournal.CLOSURE:
     ///             push_warning("transition %d diverged" % entry)
     /// )
     /// </code>
     /// </summary>
-    public event Action<long, long> DivergenceDetected
+    public event Action<long, NetwPredictJournal.Attribution> DivergenceDetected
     {
         add => Connect("divergence_detected", Callable.From(value));
         remove => Disconnect("divergence_detected", Callable.From(value));
@@ -139,7 +139,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         long,
         Godot.Collections.Dictionary,
         bool,
-        long> Recovered
+        NetwPredictJournal.Attribution> Recovered
     {
         add => Connect("recovered", Callable.From(value));
         remove => Disconnect("recovered", Callable.From(value));
@@ -259,34 +259,34 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_correction_mode",
-            3905245786UL);
+            1786907001UL);
 
     private static readonly IntPtr _bindSetCorrectionMode =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_correction_mode",
-            1286410249UL);
+            3840740725UL);
 
     /// <summary>
     /// How a correction is applied, a <see cref="NetwPredict.CorrectionMode"/>
     /// value.
     /// </summary>
-    public int CorrectionMode
+    public NetwPredict.CorrectionMode CorrectionMode
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
                 _bindGetCorrectionMode,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwPredict.CorrectionMode)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetCorrectionMode,
                 Checked,
                 in slot0,
@@ -298,13 +298,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_snap_restore",
-            3905245786UL);
+            1360701347UL);
 
     private static readonly IntPtr _bindSetSnapRestore =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_snap_restore",
-            1286410249UL);
+            1045755608UL);
 
     /// <summary>
     /// How a <see cref="NetwPredict.CorrectionMode.Snap"/> restore lands on the
@@ -316,19 +316,22 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// ignored under <see cref="NetwPredict.CorrectionMode.Replay"/>, because
     /// replaying the inputs already brings the body up to the present.
     /// </summary>
-    public int SnapRestore
+    public NetwPredict.RestoreMode SnapRestore
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(_bindGetSnapRestore, Checked, ref answered);
-            return answered;
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
+                _bindGetSnapRestore,
+                Checked,
+                ref answered);
+            return (NetwPredict.RestoreMode)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetSnapRestore,
                 Checked,
                 in slot0,
@@ -340,13 +343,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_input_source",
-            3905245786UL);
+            963609079UL);
 
     private static readonly IntPtr _bindSetInputSource =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_input_source",
-            1286410249UL);
+            3264658430UL);
 
     /// <summary>
     /// Where this peer's copy of the entity gets its input, decided when the
@@ -356,19 +359,22 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// by <see cref="NetwPredict.Role"/>. Read them separately when only one
     /// axis matters.
     /// </summary>
-    public int InputSource
+    public NetwPredict.InputSource InputSource
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(_bindGetInputSource, Checked, ref answered);
-            return answered;
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
+                _bindGetInputSource,
+                Checked,
+                ref answered);
+            return (NetwPredict.InputSource)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetInputSource,
                 Checked,
                 in slot0,
@@ -380,32 +386,32 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_sim_mode",
-            3905245786UL);
+            3359152365UL);
 
     private static readonly IntPtr _bindSetSimMode =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_sim_mode",
-            1286410249UL);
+            1376646081UL);
 
     /// <summary>
     /// What this peer's simulation of the entity counts for, decided when the
     /// entity is set up. It is read-only, because who has authority and who is
     /// controlling the entity decide it.
     /// </summary>
-    public int SimMode
+    public NetwPredict.SimMode SimMode
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(_bindGetSimMode, Checked, ref answered);
-            return answered;
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetSimMode, Checked, ref answered);
+            return (NetwPredict.SimMode)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetSimMode,
                 Checked,
                 in slot0,
@@ -417,13 +423,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_recovery_policy",
-            3905245786UL);
+            4095437614UL);
 
     private static readonly IntPtr _bindSetRecoveryPolicy =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_recovery_policy",
-            1286410249UL);
+            46739939UL);
 
     /// <summary>
     /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity recovers under,
@@ -431,22 +437,22 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/> works one out
     /// from <see cref="NetwPredictionHandle.CorrectionMode"/>.
     /// </summary>
-    public int RecoveryPolicy
+    public NetwPredict.RecoveryPolicy RecoveryPolicy
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
                 _bindGetRecoveryPolicy,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwPredict.RecoveryPolicy)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetRecoveryPolicy,
                 Checked,
                 in slot0,
@@ -458,13 +464,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_breach_response",
-            3905245786UL);
+            1786104493UL);
 
     private static readonly IntPtr _bindSetBreachResponse =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_breach_response",
-            1286410249UL);
+            3443898135UL);
 
     /// <summary>
     /// What this entity does the moment it touches something it was not
@@ -473,22 +479,22 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// are observed. <see cref="NetwPredict.BreachResponse.Demote"/> follows
     /// authority from then on while the entity keeps sending its input.
     /// </summary>
-    public int BreachResponse
+    public NetwPredict.BreachResponse BreachResponse
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
                 _bindGetBreachResponse,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwPredict.BreachResponse)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetBreachResponse,
                 Checked,
                 in slot0,
@@ -892,34 +898,34 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_missing_policy",
-            3905245786UL);
+            402856015UL);
 
     private static readonly IntPtr _bindSetMissingPolicy =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_missing_policy",
-            1286410249UL);
+            4277099358UL);
 
     /// <summary>
     /// What the server does about an input tick that never arrived, as a
     /// <see cref="NetwPredict.MissingInput"/> value.
     /// </summary>
-    public int MissingPolicy
+    public NetwPredict.MissingInput MissingPolicy
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
                 _bindGetMissingPolicy,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwPredict.MissingInput)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetMissingPolicy,
                 Checked,
                 in slot0,
@@ -1232,35 +1238,35 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_reconcile_mode",
-            3905245786UL);
+            1377451985UL);
 
     private static readonly IntPtr _bindSetReconcileMode =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "set_reconcile_mode",
-            1286410249UL);
+            3859961898UL);
 
     /// <summary>
     /// Whether this entity is corrected on its own or together with the rest of
     /// its <see cref="NetwPredictionHandle.Island"/>, as a
     /// <see cref="NetwPredict.Reconcile"/> value.
     /// </summary>
-    public int ReconcileMode
+    public NetwPredict.Reconcile ReconcileMode
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
                 _bindGetReconcileMode,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwPredict.Reconcile)answered;
         }
         set
         {
-            int slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
+            NetwThunks.Ptrcall1_Long_Long(
                 _bindSetReconcileMode,
                 Checked,
                 in slot0,
@@ -1581,7 +1587,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPredictionHandle",
             "get_last_attribution",
-            3905245786UL);
+            1861079057UL);
 
     /// <summary>
     /// What the most recent divergence was blamed on, as a
@@ -1591,16 +1597,16 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// means the evidence needed to return was not there. Every other value
     /// names the first thing the two runs disagreed about.
     /// </summary>
-    public int LastAttribution
+    public NetwPredictJournal.Attribution LastAttribution
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
                 _bindGetLastAttribution,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwPredictJournal.Attribution)answered;
         }
     }
 

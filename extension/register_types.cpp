@@ -106,6 +106,7 @@
 
 #include "netw/api/clock_handle.hpp"
 #include "netw/api/connect_handle.hpp"
+#include "netw/api/table_handle.hpp"
 #include "netw/api/link_conditions.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_transport.hpp"
@@ -178,6 +179,7 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwPropertySet);
     GDREGISTER_CLASS(netw::NetwPropertySetBinding);
     GDREGISTER_CLASS(netw::NetwChannel);
+    GDREGISTER_CLASS(netw::NetwTableHandle);
     GDREGISTER_CLASS(netw::NetwPersistenceEngine);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwQuantize);
     GDREGISTER_CLASS(netw::NetwQuantizeScalar);

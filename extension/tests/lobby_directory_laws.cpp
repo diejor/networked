@@ -21,7 +21,7 @@ public:
     StringName peer_class() override {
         return announced;
     }
-    int64_t capabilities() override {
+    Capability capabilities() override {
         return CAPABILITY_BROWSE;
     }
     void join_lobby(const String &p_address) override {

@@ -37,7 +37,7 @@ namespace Networked;
 /// <see cref="NetwSessionHandle.LocalJoined"/>,
 /// <see cref="NetwSessionHandle.PlayerLeft"/>,
 /// <see cref="NetwSessionHandle.JoinFailed"/>,
-/// <see cref="NetwSessionHandle.SceneLive"/> and
+/// <see cref="NetwSessionHandle.SceneLive"/>, <c>scene_changed</c> and
 /// <see cref="NetwSessionHandle.PresentationChanged"/>, all relayed from the
 /// session that created it. One handle exists per session for the life of that
 /// session, so a game may hold it across an await.
@@ -51,9 +51,9 @@ namespace Networked;
 /// ordinary Godot way, by assigning a <see cref="MultiplayerPeer"/> to
 /// <see cref="MultiplayerApi.MultiplayerPeer"/>, the connect plane is
 /// <see cref="NetwConnectHandle"/> reached as <see cref="Netw.Connection"/>,
-/// and joining is <see cref="Netw.Join"/>, which routes prepare against submit
-/// off session state. This object is what a session already up admits, reports,
-/// and tears down.
+/// and joining is <see cref="Netw.PrepareJoin"/>, which routes prepare against
+/// submit off session state. This object is what a session already up admits,
+/// reports, and tears down.
 /// </para>
 /// </remarks>
 public sealed class NetwSessionHandle : NetwRefCounted
@@ -159,8 +159,8 @@ public sealed class NetwSessionHandle : NetwRefCounted
     /// <see cref="NetwMultiplayer.SessionJoinFailed"/>. No membership was
     /// created, so <see cref="NetwSessionHandle.LocalPlayer"/> is still
     /// <c>null</c> and <see cref="NetwSessionHandle.LocalJoined"/> never fires
-    /// for that attempt. <see cref="Netw.Join"/>'s promise reports only that
-    /// the request went out, so this is where a refusal arrives.
+    /// for that attempt. <see cref="Netw.PrepareJoin"/>'s promise reports only
+    /// that the request went out, so this is where a refusal arrives.
     /// </summary>
     public event Action<long, string> JoinFailed
     {

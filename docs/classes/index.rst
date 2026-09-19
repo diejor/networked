@@ -157,6 +157,7 @@ Other classes
     class_netwservice
     class_netwsessionconfig
     class_netwsessionhandle
+    class_netwtablehandle
     class_netwtimeline
     class_netwtransaction
     class_netwtransport

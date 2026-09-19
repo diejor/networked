@@ -8,8 +8,8 @@
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_lagcomp(self) \
-		            .input_gate_deadline_ticks(16) \
-		            .max_future_action_ticks(4)
+		            .input_gate_deadline(16) \
+		            .max_future_action(4)
 		[/codeblock]
 		Declaring this does not turn lag compensation on. The recording starts itself as soon as a predicted node or a [NetwAction] needs it, so a game that predicts declares nothing here and a game that predicts nothing pays for nothing. Declare one to move a number off its default.
 		Once the session has read these values they are its own, so freeing the node that declared them stops nothing, and there is no way to take them back. A value written afterwards is reported and changes nothing.

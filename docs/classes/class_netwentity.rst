@@ -103,7 +103,7 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`bool`                                               | :ref:`comps_poisoned<class_NetwEntity_property_comps_poisoned>`                     | ``false``            |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`control_kind<class_NetwEntity_property_control_kind>`                         |                      |
+   | :ref:`ControlKind<enum_NetwEntity_ControlKind>`             | :ref:`control_kind<class_NetwEntity_property_control_kind>`                         |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`controller<class_NetwEntity_property_controller>`                             | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -113,7 +113,7 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`StringName`                                         | :ref:`entity_id<class_NetwEntity_property_entity_id>`                               | ``&""``              |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`initial_controller<class_NetwEntity_property_initial_controller>`             | ``0``                |
+   | :ref:`InitialController<enum_NetwEntity_InitialController>` | :ref:`initial_controller<class_NetwEntity_property_initial_controller>`             | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPropertySetBinding<class_NetwPropertySetBinding>` | :ref:`input_binding<class_NetwEntity_property_input_binding>`                       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -131,11 +131,11 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`MultiplayerAPI`                                     | :ref:`multiplayer<class_NetwEntity_property_multiplayer>`                           |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`on_controller_disconnect<class_NetwEntity_property_on_controller_disconnect>` | ``0``                |
+   | :ref:`DisconnectRule<enum_NetwEntity_DisconnectRule>`       | :ref:`on_controller_disconnect<class_NetwEntity_property_on_controller_disconnect>` | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`Node`                                               | :ref:`owner<class_NetwEntity_property_owner>`                                       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`ownership<class_NetwEntity_property_ownership>`                               |                      |
+   | :ref:`Ownership<enum_NetwEntity_Ownership>`                 | :ref:`ownership<class_NetwEntity_property_ownership>`                               |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPlayer<class_NetwPlayer>`                         | :ref:`player<class_NetwEntity_property_player>`                                     |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -151,17 +151,17 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwSceneHandle<class_NetwSceneHandle>`               | :ref:`scene<class_NetwEntity_property_scene>`                                       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`scene_isolation<class_NetwEntity_property_scene_isolation>`                   | ``0``                |
+   | :ref:`SceneIsolation<enum_NetwMultiplayer_SceneIsolation>`  | :ref:`scene_isolation<class_NetwEntity_property_scene_isolation>`                   | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`StringName`                                         | :ref:`scene_label<class_NetwEntity_property_scene_label>`                           | ``&""``              |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`stage<class_NetwEntity_property_stage>`                                       |                      |
+   | :ref:`Stage<enum_NetwEntity_Stage>`                         | :ref:`stage<class_NetwEntity_property_stage>`                                       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPropertySetBinding<class_NetwPropertySetBinding>` | :ref:`state_binding<class_NetwEntity_property_state_binding>`                       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwTimeline<class_NetwTimeline>`                     | :ref:`timeline<class_NetwEntity_property_timeline>`                                 |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`transfer<class_NetwEntity_property_transfer>`                                 | ``0``                |
+   | :ref:`Transfer<enum_NetwEntity_Transfer>`                   | :ref:`transfer<class_NetwEntity_property_transfer>`                                 | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
 
 .. rst-class:: classref-reftable-group
@@ -689,11 +689,11 @@ A poisoned entity is not a broken one: every routed frame falls back to string p
 
 .. rst-class:: classref-property
 
-:godot:`int` **control_kind** :ref:`🔗<class_NetwEntity_property_control_kind>`
+:ref:`ControlKind<enum_NetwEntity_ControlKind>` **control_kind** :ref:`🔗<class_NetwEntity_property_control_kind>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_control_kind**\ (\ )
+- :ref:`ControlKind<enum_NetwEntity_ControlKind>` **get_control_kind**\ (\ )
 
 Derived from :ref:`controller<class_NetwEntity_property_controller>`. See :ref:`ControlKind<enum_NetwEntity_ControlKind>`.
 
@@ -790,12 +790,12 @@ An entity a game authors into a scene sets it in :godot:`Object._init() <Object#
 
 .. rst-class:: classref-property
 
-:godot:`int` **initial_controller** = ``0`` :ref:`🔗<class_NetwEntity_property_initial_controller>`
+:ref:`InitialController<enum_NetwEntity_InitialController>` **initial_controller** = ``0`` :ref:`🔗<class_NetwEntity_property_initial_controller>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_initial_controller**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_initial_controller**\ (\ )
+- |void| **set_initial_controller**\ (\ value\: :ref:`InitialController<enum_NetwEntity_InitialController>`\ )
+- :ref:`InitialController<enum_NetwEntity_InitialController>` **get_initial_controller**\ (\ )
 
 The spawn-time control rule, as an :ref:`InitialController<enum_NetwEntity_InitialController>`.
 
@@ -947,12 +947,12 @@ Mirrors :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` on the 
 
 .. rst-class:: classref-property
 
-:godot:`int` **on_controller_disconnect** = ``0`` :ref:`🔗<class_NetwEntity_property_on_controller_disconnect>`
+:ref:`DisconnectRule<enum_NetwEntity_DisconnectRule>` **on_controller_disconnect** = ``0`` :ref:`🔗<class_NetwEntity_property_on_controller_disconnect>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_on_controller_disconnect**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_on_controller_disconnect**\ (\ )
+- |void| **set_on_controller_disconnect**\ (\ value\: :ref:`DisconnectRule<enum_NetwEntity_DisconnectRule>`\ )
+- :ref:`DisconnectRule<enum_NetwEntity_DisconnectRule>` **get_on_controller_disconnect**\ (\ )
 
 The lifetime rule for an entity whose controller disconnects, as a :ref:`DisconnectRule<enum_NetwEntity_DisconnectRule>`. It applies only when the disconnected peer controls the entity without being represented by it: player representation still despawns through :ref:`peer_id<class_NetwEntity_property_peer_id>`.
 
@@ -981,11 +981,11 @@ The root :godot:`Node` that holds this entity, or ``null`` once the tree has fre
 
 .. rst-class:: classref-property
 
-:godot:`int` **ownership** :ref:`🔗<class_NetwEntity_property_ownership>`
+:ref:`Ownership<enum_NetwEntity_Ownership>` **ownership** :ref:`🔗<class_NetwEntity_property_ownership>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_ownership**\ (\ )
+- :ref:`Ownership<enum_NetwEntity_Ownership>` **get_ownership**\ (\ )
 
 Derived from :ref:`peer_id<class_NetwEntity_property_peer_id>`. See :ref:`Ownership<enum_NetwEntity_Ownership>`.
 
@@ -1131,11 +1131,11 @@ One scene has one handle, so two entities in the same scene read the same object
 
 .. rst-class:: classref-property
 
-:godot:`int` **scene_isolation** = ``0`` :ref:`🔗<class_NetwEntity_property_scene_isolation>`
+:ref:`SceneIsolation<enum_NetwMultiplayer_SceneIsolation>` **scene_isolation** = ``0`` :ref:`🔗<class_NetwEntity_property_scene_isolation>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_scene_isolation**\ (\ )
+- :ref:`SceneIsolation<enum_NetwMultiplayer_SceneIsolation>` **get_scene_isolation**\ (\ )
 
 Whether this scene hosts its own world, as a :ref:`SceneIsolation<enum_NetwMultiplayer_SceneIsolation>`.
 
@@ -1167,11 +1167,11 @@ Identity is the :ref:`rid<class_NetwEntity_property_rid>`, never this string. Tw
 
 .. rst-class:: classref-property
 
-:godot:`int` **stage** :ref:`🔗<class_NetwEntity_property_stage>`
+:ref:`Stage<enum_NetwEntity_Stage>` **stage** :ref:`🔗<class_NetwEntity_property_stage>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_stage**\ (\ )
+- :ref:`Stage<enum_NetwEntity_Stage>` **get_stage**\ (\ )
 
 The entity's current lifecycle position, as a :ref:`Stage<enum_NetwEntity_Stage>`. Read-only, and moved only along an edge the stage table admits, so a rejected move leaves it where it was.
 
@@ -1218,12 +1218,12 @@ A move keeps the registration and invalidates what it holds: the samples describ
 
 .. rst-class:: classref-property
 
-:godot:`int` **transfer** = ``0`` :ref:`🔗<class_NetwEntity_property_transfer>`
+:ref:`Transfer<enum_NetwEntity_Transfer>` **transfer** = ``0`` :ref:`🔗<class_NetwEntity_property_transfer>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_transfer**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_transfer**\ (\ )
+- |void| **set_transfer**\ (\ value\: :ref:`Transfer<enum_NetwEntity_Transfer>`\ )
+- :ref:`Transfer<enum_NetwEntity_Transfer>` **get_transfer**\ (\ )
 
 The player request policy for control transfer, as a :ref:`Transfer<enum_NetwEntity_Transfer>`. An archetype config field written in the entity root's ``_init`` alongside :ref:`initial_controller<class_NetwEntity_property_initial_controller>` and read while the record is :ref:`STAGE_UNBOUND<class_NetwEntity_constant_STAGE_UNBOUND>`. :ref:`TRANSFER_REQUESTABLE<class_NetwEntity_constant_TRANSFER_REQUESTABLE>` lets peers call :ref:`request_control()<class_NetwEntity_method_request_control>`, and the server emits :ref:`control_requested<class_NetwEntity_signal_control_requested>` before granting.
 

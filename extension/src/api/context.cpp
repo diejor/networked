@@ -420,7 +420,7 @@ void Netw::service_unregister(Node *p_node, Object *p_service, Object *p_type) {
     }
 }
 
-Ref<NetwPromise> Netw::join(
+Ref<NetwPromise> Netw::prepare_join(
     Node *p_node,
     const StringName &p_username,
     const Array &p_args
@@ -430,8 +430,8 @@ Ref<NetwPromise> Netw::join(
         api.is_null(),
         NetwPromise::resolved(ERR_UNCONFIGURED),
         sys::SESSION,
-        "Netw.join: this node reaches no session, so there is nothing to "
-        "join. Call it from a node on the multiplayer branch."
+        "Netw.prepare_join: this node reaches no session, so there is "
+        "nothing to join. Call it from a node on the multiplayer branch."
     );
     if (!api->is_online()) {
         return api->session_prepare_join(p_username, p_args);
@@ -440,7 +440,7 @@ Ref<NetwPromise> Netw::join(
         String(p_username).is_empty(),
         NetwPromise::resolved(ERR_INVALID_PARAMETER),
         sys::SESSION,
-        "Netw.join: username is empty."
+        "Netw.prepare_join: username is empty."
     );
     api->session_submit_join(p_username, p_args);
     return NetwPromise::resolved(OK);
@@ -865,6 +865,10 @@ Ref<NetwChannel> Netw::channel(Node *p_node, int64_t p_channel_id) {
     return NetwChannel::of(p_node, p_channel_id);
 }
 
+Ref<NetwTableHandle> Netw::table(Node *p_node, const StringName &p_name) {
+    return NetwTableHandle::of(p_node, p_name);
+}
+
 Ref<NetwEntity> Netw::replicate(
     Node *p_node,
     const Ref<NetwPlayer> &p_owner
@@ -999,7 +1003,7 @@ Ref<DictionaryRecord> Netw::sample(
 }
 
 void Netw::rewind(
-    const TypedArray<RID> &p_entities,
+    const TypedArray<NetwEntity> &p_entities,
     int64_t p_tick,
     const Callable &p_body
 ) {
@@ -1020,7 +1024,7 @@ void Netw::rewind(
         );
         return;
     }
-    api->lagcomp_rewind(p_entities, p_tick, p_body);
+    api->lagcomp_rewind_of(p_entities, p_tick, p_body);
 }
 
 Ref<NetwPromise> Netw::change_scene_to_file(
@@ -1172,8 +1176,8 @@ void Netw::_bind_methods() {
     );
     gd::bind_static_vararg(
         "Netw",
-        D_METHOD("join", "node", "username"),
-        &Netw::join
+        D_METHOD("prepare_join", "node", "username"),
+        &Netw::prepare_join
     );
     ClassDB::bind_static_method(
         "Netw",
@@ -1308,6 +1312,11 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("channel", "node", "channel_id"),
         &Netw::channel
+    );
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("table", "node", "name"),
+        &Netw::table
     );
 
     ClassDB::bind_static_method(

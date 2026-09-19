@@ -15,11 +15,11 @@ namespace Networked;
 /// declaring the same handler gets its own, and re-declaring on one node
 /// replaces it. A client fills only the handler's parameters after the
 /// <see cref="NetwPlayer"/> the server supplies itself, and passes them as the
-/// arguments of <see cref="Netw.Join"/> that follow the username. So the list
-/// <see cref="NetwJoinConfig.Quantize"/> takes lines up with that shorter list,
-/// and its position zero is the handler's second parameter. An author who never
-/// calls <see cref="NetwJoinConfig.Quantize"/> declares no packing at all,
-/// which sends every wire argument self-describing. A null slot inside a
+/// arguments of <see cref="Netw.PrepareJoin"/> that follow the username. So the
+/// list <see cref="NetwJoinConfig.Quantize"/> takes lines up with that shorter
+/// list, and its position zero is the handler's second parameter. An author who
+/// never calls <see cref="NetwJoinConfig.Quantize"/> declares no packing at
+/// all, which sends every wire argument self-describing. A null slot inside a
 /// declared list does the same for that one argument, so a schema packs the
 /// fields worth packing and leaves the rest alone.
 /// <code>

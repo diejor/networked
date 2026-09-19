@@ -54,11 +54,11 @@ public sealed class DebugJoinConfig : NetwRefCounted
     /// <summary>
     /// Display name for the auto connected player, submitted alongside
     /// <see cref="DebugJoinConfig.JoinArgs"/>. Left at its default, the name
-    /// actually submitted carries this process's id after it, so two runs of
-    /// one build join as two players. A <see cref="NetwPlayer.UserName"/> is
-    /// unique among the memberships a session holds, and a dev loop launching
-    /// the same build twice would otherwise have its second run turned away.
-    /// Write a name here and it is submitted exactly as written.
+    /// actually submitted carries this process's id after it, so a dev loop
+    /// launching the same build twice joins as two players holding two save
+    /// keys rather than as one <see cref="NetwPlayer.UserName"/> read and
+    /// written from both windows. Write a name here and it is submitted exactly
+    /// as written.
     /// </summary>
     public StringName UserName
     {

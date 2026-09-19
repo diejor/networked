@@ -13,9 +13,9 @@
 		for player: NetwPlayer in s.players:
 		        scoreboard.add(player)
 		[/codeblock]
-		[b]What this object buys over the flat surface is its signals.[/b] [Netw] is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: [signal entered], [signal ended], [signal disconnected], [signal disconnecting], [signal player_joined], [signal local_joined], [signal player_left], [signal join_failed], [signal scene_live] and [signal presentation_changed], all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
+		[b]What this object buys over the flat surface is its signals.[/b] [Netw] is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: [signal entered], [signal ended], [signal disconnected], [signal disconnecting], [signal player_joined], [signal local_joined], [signal player_left], [signal join_failed], [signal scene_live], [signal scene_changed] and [signal presentation_changed], all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
 		[signal disconnected] is the one member that relays a signal this framework does not own. [signal MultiplayerAPI.server_disconnected] is Godot's and stays reachable on [code]multiplayer[/code]; it is re-emitted here so one object returns every cause a session has to end, which is what a game pairing it with [signal ended] under one handler actually wants.
-		Bringing a session UP is not on this object. A session comes online the ordinary Godot way, by assigning a [MultiplayerPeer] to [member MultiplayerAPI.multiplayer_peer], the connect plane is [NetwConnectHandle] reached as [method Netw.connection], and joining is [method Netw.join], which routes prepare against submit off session state. This object is what a session already up admits, reports, and tears down.
+		Bringing a session UP is not on this object. A session comes online the ordinary Godot way, by assigning a [MultiplayerPeer] to [member MultiplayerAPI.multiplayer_peer], the connect plane is [NetwConnectHandle] reached as [method Netw.connection], and joining is [method Netw.prepare_join], which routes prepare against submit off session state. This object is what a session already up admits, reports, and tears down.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -54,7 +54,7 @@
 		<method name="request_scene">
 			<return type="NetwPromise" />
 			<param index="0" name="path" type="String" />
-			<param index="1" name="scope" type="int" default="0" />
+			<param index="1" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
 			<description>
 				[method NetwMultiplayer.scene_request]: asks server authority for the scene at [param path] over [param scope], one of [enum NetwMultiplayer.SceneChange], returning the promise that resolves when the scene is live or rejects when authority declines.
 				A scene already live is reached by [method Netw.scene] and read through its own [NetwSceneHandle]; this verb is the asking.
@@ -98,7 +98,7 @@
 		<member name="players" type="NetwPlayer[]" setter="" getter="get_players" default="[]">
 			Every [NetwPlayer] that has joined, including rows whose peer has since gone, which is what [member NetwMultiplayer.players] returns and is the roster a scoreboard wants. The rows still CONNECTED are [member NetwMultiplayer.connected_players].
 		</member>
-		<member name="role" type="int" setter="" getter="get_role" default="0">
+		<member name="role" type="int" setter="" getter="get_role" enum="NetwMultiplayer.Role" default="0">
 			What this peer is in the session, one of [enum NetwMultiplayer.Role]. [member NetwMultiplayer.role].
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
@@ -135,11 +135,11 @@
 			</description>
 		</signal>
 		<signal name="join_failed">
-			<param index="0" name="code" type="int" />
+			<param index="0" name="code" type="int" enum="Error" />
 			<param index="1" name="reason" type="String" />
 			<description>
 				This peer's own join was turned down, carrying the [param code] and the [param reason] the server gave. Relayed from [signal NetwMultiplayer.session_join_failed].
-				No membership was created, so [member local_player] is still [code]null[/code] and [signal local_joined] never fires for that attempt. [method Netw.join]'s promise reports only that the request went out, so this is where a refusal arrives.
+				No membership was created, so [member local_player] is still [code]null[/code] and [signal local_joined] never fires for that attempt. [method Netw.prepare_join]'s promise reports only that the request went out, so this is where a refusal arrives.
 			</description>
 		</signal>
 		<signal name="local_joined">
@@ -167,6 +167,23 @@
 			<description>
 				A [NetwPlayer]'s membership has ended, whether their peer disconnected or [method kick] ended it. Relayed from [signal NetwMultiplayer.player_left], which carries the ordering.
 				[member NetwPlayer.is_active] already reads [code]false[/code] here, so this is the last edge at which a game can read the handle it filed that player under and erase its own row for them.
+			</description>
+		</signal>
+		<signal name="scene_changed">
+			<param index="0" name="scene" type="NetwSceneHandle" />
+			<param index="1" name="arrived" type="NetwPlayer[]" />
+			<description>
+				A [method Netw.change_scene_to_file] has landed. [param scene] is the destination and [param arrived] holds the players it brought there. Relayed from [signal NetwMultiplayer.scene_changed].
+				A change carries no body, so this is where the server gives the arrivals one. A player already watching the destination is not in [param arrived], so a repeated change announces nobody and the spawn happens once.
+				[codeblock]
+				func _on_scene_changed(
+				        scene: NetwSceneHandle,
+				        arrived: Array[NetwPlayer]) -&gt; void:
+				    for who in arrived:
+				        scene.root.add_child(
+				                Netw.spawn_player(who, make_player))
+				[/codeblock]
+				[b]Server Only.[/b]
 			</description>
 		</signal>
 		<signal name="scene_live">

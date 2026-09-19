@@ -21,7 +21,7 @@ func _init() -> void:
 	declared.prediction.consume_buffer_ticks = 0
 
 	Netw.configure_persistence(self) \
-			.database(preload("res://examples/quick_start/quick_start_database.tres")) \
+			.database(preload("res://examples/multiple_levels/multiple_levels_database.tres")) \
 			.table(&"players")
 	Netw.configure_property(self, &"position").persisted().on_spawn() \
 			.interpolate(NetwInterpolate.new().lerp())

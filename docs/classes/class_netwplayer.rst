@@ -107,7 +107,7 @@ The transport peer this membership is currently reachable on. A routing detail r
 
 Every body the session currently holds for this membership, in no promised order.
 
-Answered live from the session rather than stored, so a body that despawned is gone from the next read. A player nothing has spawned for answers an empty array, which is the honest reading for a spectator and for a player whose join handler has not placed it yet.
+Answered live from the session rather than stored, so a body is gone from the read that follows the :ref:`Netw.despawn()<class_Netw_method_despawn>` call rather than from the frame its node is freed. A player nothing has spawned for answers an empty array, which is the honest reading for a spectator and for a player whose join handler has not placed it yet.
 
 Several bodies at once is ordinary, so a game that means one body reads the array and says which one it means.
 

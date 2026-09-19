@@ -276,4 +276,33 @@ TEST_CASE(
     memdelete(root);
 }
 
+TEST_CASE(
+    "[Networked][Scene][Hosted] SS11 a body drops out of every roster in the "
+    "call that despawned it rather than in the frame the node is freed, so a "
+    "game that opens the next round immediately still reads an empty hand"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    const CallLog flushed;
+    core->set_interest_flush(flushed.callable("flush"));
+    Node *root = memnew(Node);
+    const Bound arena = mount_scene(core, root, "Arena");
+    const Bound pawn = bind_entity(core, arena.owner, false);
+
+    open_player(core, 7);
+    const Ref<netw::NetwPlayer> player = core->player_of(7);
+    pawn.record->set_peer_id(7);
+    pawn.record->set_player_id(player->player_id());
+    NETW_CHECK_EQ(int(player->get_bodies().size()), 1);
+    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 1);
+
+    core->entity_despawn(pawn.handle, Ref<netw::NetwDespawnOpts>());
+
+    CHECK(player->get_bodies().is_empty());
+    CHECK(core->player_bodies(7).is_empty());
+    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 0);
+
+    memdelete(root);
+}
+
 } // namespace TestNetwSceneMembershipWindowLaws

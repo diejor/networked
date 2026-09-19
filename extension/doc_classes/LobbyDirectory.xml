@@ -78,7 +78,7 @@
 			</description>
 		</method>
 		<method name="_capabilities" qualifiers="virtual">
-			<return type="int" />
+			<return type="int" enum="LobbyDirectory.Capability" />
 			<description>
 				The [enum Capability] flags this directory can honor, which is what [method supports] reads. Defaults to none.
 			</description>
@@ -176,7 +176,7 @@
 		</method>
 		<method name="fail">
 			<return type="void" />
-			<param index="0" name="error" type="int" />
+			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="message" type="String" />
 			<description>
 				Reports that the request in flight cannot be completed.
@@ -210,7 +210,7 @@
 		</method>
 		<method name="supports">
 			<return type="bool" />
-			<param index="0" name="capability" type="int" />
+			<param index="0" name="capability" type="int" enum="LobbyDirectory.Capability" />
 			<description>
 				Returns whether [method _capabilities] includes [param capability], which is how a browser hides controls the provider cannot honor.
 			</description>
@@ -225,7 +225,7 @@
 			</description>
 		</signal>
 		<signal name="lobby_failed">
-			<param index="0" name="error" type="int" />
+			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="message" type="String" />
 			<description>
 				Emitted by [method fail] with the reason the request in flight was rejected.

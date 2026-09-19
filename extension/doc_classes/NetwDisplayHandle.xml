@@ -46,7 +46,7 @@
 		<member name="display_lag" type="float" setter="" getter="get_display_lag" default="0.0">
 			Read-only extra display delay in ticks measured by smart dilation.
 		</member>
-		<member name="display_role" type="int" setter="set_display_role" getter="get_display_role" default="0">
+		<member name="display_role" type="int" setter="set_display_role" getter="get_display_role" enum="NetwMultiplayer.DisplayRole" default="0">
 			How this entity is drawn. [constant NetwMultiplayer.DISPLAY_ROLE_AUTO] works it out from who controls the entity, which is right for almost every one.
 		</member>
 		<member name="enable_smart_dilation" type="bool" setter="set_enable_smart_dilation" getter="get_enable_smart_dilation" default="false">
@@ -61,7 +61,7 @@
 		<member name="max_extra_dilation" type="float" setter="set_max_extra_dilation" getter="get_max_extra_dilation" default="0.0">
 			Maximum extra ticks that display lag can grow while starving.
 		</member>
-		<member name="predicted_mode" type="int" setter="set_predicted_mode" getter="get_predicted_mode" default="0">
+		<member name="predicted_mode" type="int" setter="set_predicted_mode" getter="get_predicted_mode" enum="NetwMultiplayer.PredictedMode" default="0">
 			Predicted display filter used for local prediction.
 		</member>
 		<member name="predicted_smooth_time" type="float" setter="set_predicted_smooth_time" getter="get_predicted_smooth_time" default="0.0">

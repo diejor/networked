@@ -125,7 +125,7 @@
 			</description>
 		</signal>
 		<signal name="failed">
-			<param index="0" name="code" type="int" />
+			<param index="0" name="code" type="int" enum="Error" />
 			<param index="1" name="detail" type="String" />
 			<description>
 				Emitted when the group is rejected by a timeout or a failure.

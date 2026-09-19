@@ -32,7 +32,7 @@
 		</method>
 		<method name="sync">
 			<return type="NetwClockConfig" />
-			<param index="0" name="sync_mode" type="int" />
+			<param index="0" name="sync_mode" type="int" enum="NetwMultiplayer.SyncMode" />
 			<description>
 				Sets [member sync_mode] and returns this same draft, so a declaration reads as one chained expression.
 			</description>
@@ -76,13 +76,13 @@
 		<member name="stretch_nudge_factor" type="float" setter="set_stretch_nudge_factor" getter="get_stretch_nudge_factor" default="0.05">
 			Fraction of the remaining divergence the [constant NetwMultiplayer.SyncMode.SYNC_MODE_STRETCH] clock closes each frame.
 		</member>
-		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" default="1">
+		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" enum="NetwMultiplayer.SyncMode" default="1">
 			Strategy used to align the local clock with the server, one of [enum NetwMultiplayer.SyncMode].
 		</member>
 		<member name="tickrate" type="int" setter="set_tickrate" getter="get_tickrate" default="30">
 			How many simulation ticks to run per second.
 		</member>
-		<member name="tickrate_mismatch_action" type="int" setter="set_tickrate_mismatch_action" getter="get_tickrate_mismatch_action" default="0">
+		<member name="tickrate_mismatch_action" type="int" setter="set_tickrate_mismatch_action" getter="get_tickrate_mismatch_action" enum="NetwMultiplayer.MismatchAction" default="0">
 			What this session does when a peer reports a different tickrate: warn, disconnect it, or raise [signal NetwMultiplayer.clock_tickrate_mismatch] and leave the choice to the game.
 		</member>
 		<member name="use_physics_interpolation" type="bool" setter="set_use_physics_interpolation" getter="get_use_physics_interpolation" default="true">

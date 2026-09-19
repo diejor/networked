@@ -76,7 +76,7 @@ Methods
    +-----------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` | :ref:`bind<class_NetwPropertySet_method_bind>`\ (\ column\: :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>`\ )                                                                       |
    +-----------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                              | :ref:`column_type_for<class_NetwPropertySet_method_column_type_for>`\ (\ script\: :godot:`Script`, node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static|                            |
+   | :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`        | :ref:`column_type_for<class_NetwPropertySet_method_column_type_for>`\ (\ script\: :godot:`Script`, node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static|                            |
    +-----------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                    | :ref:`compile_against<class_NetwPropertySet_method_compile_against>`\ (\ node\: :godot:`Node`\ )                                                                                               |
    +-----------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -626,7 +626,7 @@ Appends ``column`` to the schema and to the membership, returning it. The column
 
 .. rst-class:: classref-method
 
-:godot:`int` **column_type_for**\ (\ script\: :godot:`Script`, node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static| :ref:`🔗<class_NetwPropertySet_method_column_type_for>`
+:ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **column_type_for**\ (\ script\: :godot:`Script`, node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static| :ref:`🔗<class_NetwPropertySet_method_column_type_for>`
 
 Returns the :ref:`NetwMultiplayer<class_NetwMultiplayer>` column type ``property`` compiles to on ``script``, reflected through ``node`` when the script's own property list does not carry it.
 

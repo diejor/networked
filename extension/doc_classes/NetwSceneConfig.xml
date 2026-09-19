@@ -45,7 +45,7 @@
 		</method>
 	</methods>
 	<members>
-		<member name="isolation" type="int" setter="" getter="get_isolation" default="0">
+		<member name="isolation" type="int" setter="" getter="get_isolation" enum="Netw.SceneIsolation" default="0">
 			[constant Netw.SCENE_ISOLATION_OWN_WORLD] once [method isolated] is declared, and [constant Netw.SCENE_ISOLATION_NONE] otherwise.
 		</member>
 		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">

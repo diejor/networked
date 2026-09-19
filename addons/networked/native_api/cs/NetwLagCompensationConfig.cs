@@ -15,8 +15,8 @@ namespace Networked;
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_lagcomp(self) \
-///             .input_gate_deadline_ticks(16) \
-///             .max_future_action_ticks(4)
+///             .input_gate_deadline(16) \
+///             .max_future_action(4)
 /// </code>
 /// <para>
 /// Declaring this does not turn lag compensation on. The recording starts

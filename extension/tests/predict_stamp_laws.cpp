@@ -1324,7 +1324,7 @@ TEST_CASE(
     handle->set_schedule(
         static_cast<netw::NetwPredict::Schedule>(int(netw::Schedule::TICK))
     );
-    handle->set_snap_restore(int(netw::RestoreMode::EXTRAPOLATED));
+    handle->set_snap_restore(netw::NetwPredict::RESTORE_MODE_EXTRAPOLATED);
     handle->set_max_restore_ticks(9);
     handle->set_divergence_epsilon(0.75);
     handle->set_teleport_threshold(3.5);
@@ -1449,7 +1449,7 @@ TEST_CASE(
     );
 
     handle->set_recovery_policy(
-        int(netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED)
+        netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
     );
     pool->resolve_axes(slot, handle);
     NETW_CHECK_EQ(
@@ -1524,7 +1524,7 @@ TEST_CASE(
     );
 
     handle->set_recovery_policy(
-        int(netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED)
+        netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
     );
     NETW_CHECK_EQ(
         pool->resolve_axes(slot, handle),

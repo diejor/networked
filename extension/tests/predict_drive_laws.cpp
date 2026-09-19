@@ -1105,10 +1105,10 @@ TEST_CASE(
 
     const Ref<netw::NetwPredictionHandle> declared = theirs->get_prediction();
     REQUIRE(declared.is_valid());
-    declared->set_sim_mode(int(netw::NetwPredict::SIM_MODE_SPECULATIVE));
+    declared->set_sim_mode(netw::NetwPredict::SIM_MODE_SPECULATIVE);
     CHECK_FALSE(pool->contact_breaches_boundary(slot, peer, String(), joined));
 
-    declared->set_sim_mode(int(netw::NetwPredict::SIM_MODE_DISPLAY));
+    declared->set_sim_mode(netw::NetwPredict::SIM_MODE_DISPLAY);
     CHECK(pool->contact_breaches_boundary(slot, peer, String(), joined));
 
     CHECK_FALSE(pool->contact_breaches_boundary(

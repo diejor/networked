@@ -530,13 +530,13 @@ TEST_CASE(
         );
 
         mirrored->set_reconcile_mode(
-            int(netw::NetwPredict::RECONCILE_INDEPENDENT)
+            netw::NetwPredict::RECONCILE_INDEPENDENT
         );
         decoded.set_epoch(decoded.epoch() + 1);
         pool->admit_relayed_payload(relayed_to, decoded.to_bytes());
         const int64_t alone = pool->joint_epoch_floor_of(relayed_to);
 
-        mirrored->set_reconcile_mode(int(netw::NetwPredict::RECONCILE_JOINT));
+        mirrored->set_reconcile_mode(netw::NetwPredict::RECONCILE_JOINT);
         decoded.set_epoch(decoded.epoch() + 1);
         pool->admit_relayed_payload(relayed_to, decoded.to_bytes());
         NETW_CHECK_GT(pool->joint_epoch_floor_of(relayed_to), alone);
@@ -655,7 +655,7 @@ TEST_CASE(
     CHECK(pool->slot_is_steppable(slot));
 
     SUBCASE("and a member this peer only displays never steps at all") {
-        handle->set_sim_mode(int(netw::NetwPredict::SIM_MODE_DISPLAY));
+        handle->set_sim_mode(netw::NetwPredict::SIM_MODE_DISPLAY);
         CHECK_FALSE(pool->slot_is_steppable(slot));
     }
 

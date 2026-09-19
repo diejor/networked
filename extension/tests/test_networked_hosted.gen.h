@@ -181,7 +181,7 @@
 #include "scene_session_verb_laws.cpp"
 #include "scene_shell_verb_laws.cpp"
 #include "scene_transition_landing_laws.cpp"
-#include "scene_transition_walk_laws.cpp"
+#include "scene_transition_slot_laws.cpp"
 #include "scene_watch_verb_laws.cpp"
 #include "schema_core_tests.cpp"
 #include "schema_declaration_model_laws.cpp"

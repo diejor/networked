@@ -32,7 +32,7 @@ func bind_tree(tree: MultiplayerTree) -> void:
 ## Admits [param peer_id] only under the username Nakama attests for it.
 ##
 ## [br][br][b]Server Only.[/b]
-func admit(peer_id: int, username: StringName, _args: Array) -> Error:
+func admit(peer_id: int, username: StringName, _args: Array = []) -> Error:
 	var wrapper := _active_wrapper()
 	if wrapper == null:
 		push_error(

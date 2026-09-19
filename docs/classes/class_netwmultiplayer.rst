@@ -71,7 +71,8 @@ Methods beginning with an underscore are virtual extension points. Override one 
 
     extends NetwMultiplayer
 
-    func _predict_consume(depth: int, buffer: int) -> int:
+    func _predict_consume(
+            depth: int, buffer: int) -> NetwPredict.ConsumeAction:
         if depth > 8:
             return NetwPredict.CONSUME_ACTION_REPLAY
         return predict_consume_default(depth, buffer)
@@ -147,7 +148,7 @@ Methods
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`_predict_admit_frame<class_NetwMultiplayer_private_method__predict_admit_frame>`\ (\ sender\: :godot:`int`, route\: :godot:`int`, channel\: :godot:`int`, payload\: :godot:`PackedByteArray`\ ) |virtual|                                                                                                                                                                                                                                                                                                                    |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                                        | :ref:`_predict_consume<class_NetwMultiplayer_private_method__predict_consume>`\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) |virtual|                                                                                                                                                                                                                                                                                                                                                                                        |
+   | :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>`                | :ref:`_predict_consume<class_NetwMultiplayer_private_method__predict_consume>`\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) |virtual|                                                                                                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPredictFold<class_NetwPredictFold>`                       | :ref:`_predict_drive<class_NetwMultiplayer_private_method__predict_drive>`\ (\ latest_input_tick\: :godot:`int`, last_driven_input_tick\: :godot:`int`, frame_tick\: :godot:`int`\ ) |virtual|                                                                                                                                                                                                                                                                                                                                     |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -503,9 +504,9 @@ Methods
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`predict_admit_frame_default<class_NetwMultiplayer_method_predict_admit_frame_default>`\ (\ sender\: :godot:`int`, route\: :godot:`int`, channel\: :godot:`int`, payload\: :godot:`PackedByteArray`\ )                                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                                        | :ref:`predict_consume<class_NetwMultiplayer_method_predict_consume>`\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ )                                                                                                                                                                                                                                                                                                                                                                                                            |
+   | :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>`                | :ref:`predict_consume<class_NetwMultiplayer_method_predict_consume>`\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ )                                                                                                                                                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                                        | :ref:`predict_consume_default<class_NetwMultiplayer_method_predict_consume_default>`\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ )                                                                                                                                                                                                                                                                                                                                                                                            |
+   | :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>`                | :ref:`predict_consume_default<class_NetwMultiplayer_method_predict_consume_default>`\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ )                                                                                                                                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`predict_declare<class_NetwMultiplayer_method_predict_declare>`\ (\ entity\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                                                                  |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -783,7 +784,7 @@ Methods
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`transport_cancel_peer_creation<class_NetwMultiplayer_method_transport_cancel_peer_creation>`\ (\ ticket\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                                    |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`RID`                                                        | :ref:`transport_create_peer<class_NetwMultiplayer_method_transport_create_peer>`\ (\ transport\: :godot:`RID`, mode\: :godot:`int`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ )                                                                                                                                                                                                                                                         |
+   | :godot:`RID`                                                        | :ref:`transport_create_peer<class_NetwMultiplayer_method_transport_create_peer>`\ (\ transport\: :godot:`RID`, mode\: :ref:`TransportMode<enum_NetwMultiplayer_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ )                                                                                                                                                                                                             |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`transport_find<class_NetwMultiplayer_method_transport_find>`\ (\ peer_class\: :godot:`StringName`\ )                                                                                                                                                                                                                                                                                                                                                                                                                         |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -946,7 +947,7 @@ Neither other action announces it. :ref:`MISMATCH_ACTION_WARN<class_NetwMultipla
 
 .. rst-class:: classref-signal
 
-**embed_phase_changed**\ (\ phase\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_signal_embed_phase_changed>`
+**embed_phase_changed**\ (\ phase\: :ref:`EmbedPhase<enum_NetwMultiplayer_EmbedPhase>`\ ) :ref:`🔗<class_NetwMultiplayer_signal_embed_phase_changed>`
 
 Emitted when :ref:`embed_phase()<class_NetwMultiplayer_method_embed_phase>` advances, carrying the phase just entered. The installing embedding is the only caller that advances it, through :ref:`embed_settle()<class_NetwMultiplayer_method_embed_settle>`.
 
@@ -1172,7 +1173,7 @@ Emitted for a datagram this session did not frame, so a game's own byte traffic 
 
 .. rst-class:: classref-signal
 
-**predict_owner_divergence**\ (\ peer\: :godot:`int`, entry\: :godot:`int`, attribution\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_signal_predict_owner_divergence>`
+**predict_owner_divergence**\ (\ peer\: :godot:`int`, entry\: :godot:`int`, attribution\: :ref:`Attribution<enum_NetwPredictJournal_Attribution>`\ ) :ref:`🔗<class_NetwMultiplayer_signal_predict_owner_divergence>`
 
 Announced on server authority when an owner's claimed post-state for a transition disagrees with the state authority itself reached, so a diagnostic sink hears the disagreement the tick it is judged rather than reading a counter later. ``peer`` is the controller of the entity seated in the slot, ``entry`` is the transition judged, and ``attribution`` is the :ref:`Attribution<enum_NetwPredictJournal_Attribution>` the comparison charged the divergence to.
 
@@ -1213,6 +1214,20 @@ Emitted for a scene the session has dropped, after its rows are gone and everyth
 **scene_entity_moved**\ (\ entity\: :godot:`Object`, from\: :godot:`Object`, to\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_signal_scene_entity_moved>`
 
 Emitted for a move that completed, after the mover's membership and saved rows have settled and before the move's :ref:`NetwPromise<class_NetwPromise>` resolves, so a listener and an awaiting caller read the same session. A rejected move never arrives and is never announced.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_signal_scene_changed:
+
+.. rst-class:: classref-signal
+
+**scene_changed**\ (\ scene\: :godot:`Object`, arrived\: :godot:`Array`\ ) :ref:`🔗<class_NetwMultiplayer_signal_scene_changed>`
+
+Emitted on server authority once a :ref:`scene_change_to_file()<class_NetwMultiplayer_method_scene_change_to_file>` has landed. ``scene`` is the destination and ``arrived`` holds the :ref:`NetwPlayer<class_NetwPlayer>` rows it brought there.
+
+A player already watching the destination is not in ``arrived``, so a repeated change announces nobody.
 
 .. rst-class:: classref-item-separator
 
@@ -1334,7 +1349,7 @@ Announced by the session machine on reaching :ref:`SESSION_STATE_ONLINE<class_Ne
 
 .. rst-class:: classref-signal
 
-**session_join_failed**\ (\ error\: :godot:`int`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwMultiplayer_signal_session_join_failed>`
+**session_join_failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwMultiplayer_signal_session_join_failed>`
 
 This peer's own join was rejected and no player was seated for it. A game connects through :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>` on :ref:`Netw.connection()<class_Netw_method_connection>` rather than here.
 
@@ -1398,7 +1413,7 @@ Emitted when the server announces it is going away. A notice from anyone but the
 
 .. rst-class:: classref-signal
 
-**session_state_changed**\ (\ old_state\: :godot:`int`, new_state\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_signal_session_state_changed>`
+**session_state_changed**\ (\ old_state\: :ref:`SessionState<enum_NetwMultiplayer_SessionState>`, new_state\: :ref:`SessionState<enum_NetwMultiplayer_SessionState>`\ ) :ref:`🔗<class_NetwMultiplayer_signal_session_state_changed>`
 
 Announced by the session machine on every legal edge. An edge it rejects is not a transition, so it is not published.
 
@@ -2691,7 +2706,7 @@ enum **SceneChange**: :ref:`🔗<enum_NetwMultiplayer_SceneChange>`
 
 :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` **SCENE_CHANGE_SESSION** = ``0``
 
-Every player converges on the destination and every other live scene retires. Isolation, the number of live scenes, and whether authority also holds a local player do not change what this means.
+Every admitted player watches the destination, and every other live scene retires with the entities standing in it. Isolation, the number of live scenes, and whether authority also holds a local player do not change what this means.
 
 .. _class_NetwMultiplayer_constant_SCENE_CHANGE_PLAYER:
 
@@ -2699,7 +2714,7 @@ Every player converges on the destination and every other live scene retires. Is
 
 :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` **SCENE_CHANGE_PLAYER** = ``1``
 
-One player travels with the bodies it is enrolled in, and every world keeps running. A change at this scope with no player to resolve is rejected rather than widened to the session.
+One player watches the destination and stops watching everything else. The bodies that player left behind are despawned, and no scene retires. A change at this scope with no player to resolve is rejected rather than widened to the session.
 
 .. _class_NetwMultiplayer_constant_SCENE_CHANGE_SCENE:
 
@@ -2707,7 +2722,7 @@ One player travels with the bodies it is enrolled in, and every world keeps runn
 
 :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` **SCENE_CHANGE_SCENE** = ``2``
 
-The occupants of the caller's own world travel and that world retires, leaving other worlds untouched. A change at this scope with no source world to resolve is rejected.
+Everyone in the caller's own scene watches the destination, and that scene alone retires with the entities standing in it. A change at this scope with no source scene to resolve is rejected.
 
 .. rst-class:: classref-item-separator
 
@@ -4941,7 +4956,7 @@ The override point for the prediction admission gate. With no override this retu
 
 .. rst-class:: classref-method
 
-:godot:`int` **_predict_consume**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__predict_consume>`
+:ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` **_predict_consume**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwMultiplayer_private_method__predict_consume>`
 
 The override point for what authority does with a command queue that is ``depth`` transitions deep against a ``buffer`` it was asked to hold. With no override this returns :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`.
 
@@ -7143,6 +7158,8 @@ Rewinds every entity in ``entities`` to what its lag-compensation timeline held 
 
 The rewind and the restore always pair within one call, so a caller never observes the world left in a rewound state.
 
+\ :ref:`Netw.rewind()<class_Netw_method_rewind>` takes the same set as :ref:`NetwEntity<class_NetwEntity>` handles and finds the session from ``body`` itself.
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -7720,7 +7737,7 @@ Whether this peer returns as server decides which channels are admissible in whi
 
 .. rst-class:: classref-method
 
-:godot:`int` **predict_consume**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_consume>`
+:ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` **predict_consume**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_consume>`
 
 Whether authority replays a queued transition, waits, or has no transition. Uses :ref:`_predict_consume()<class_NetwMultiplayer_private_method__predict_consume>` when overridden; otherwise uses :ref:`predict_consume_default()<class_NetwMultiplayer_method_predict_consume_default>`.
 
@@ -7736,7 +7753,7 @@ Declining a transition is not free. A frame that holds still solves, so the worl
 
 .. rst-class:: classref-method
 
-:godot:`int` **predict_consume_default**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_consume_default>`
+:ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` **predict_consume_default**\ (\ depth\: :godot:`int`, buffer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_consume_default>`
 
 The consume verdict :ref:`predict_consume()<class_NetwMultiplayer_method_predict_consume>` returns when nothing overrides :ref:`_predict_consume()<class_NetwMultiplayer_private_method__predict_consume>`, reachable so an override can defer to it.
 
@@ -8258,9 +8275,9 @@ True for any reason at all, a body of theirs residing in the scene included, whi
 
 :ref:`NetwPromise<class_NetwPromise>` **scene_change_to_file**\ (\ requester\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_change_to_file>`
 
-Changes to the file-backed scene at ``path``, mirroring :godot:`SceneTree.change_scene_to_file() <SceneTree#class_SceneTree_method_change_scene_to_file>` while keeping the change under server authority.
+Opens the file-backed scene at ``path`` and makes players watch it, under server authority. No entity moves, so spawn the arrivals from :ref:`scene_changed<class_NetwMultiplayer_signal_scene_changed>`.
 
-\ ``scope`` says who the change is for and nothing infers it, so the same call means the same thing on a listen host and on a dedicated server. ``requester`` names the node the change is asked from, which resolves the player a :ref:`SCENE_CHANGE_PLAYER<class_NetwMultiplayer_constant_SCENE_CHANGE_PLAYER>` change moves and the source world a :ref:`SCENE_CHANGE_SCENE<class_NetwMultiplayer_constant_SCENE_CHANGE_SCENE>` change replaces. A scope that needs one and finds none is rejected rather than widened.
+\ ``scope`` says who the change is for and nothing infers it, so the same call means the same thing on a listen host and on a dedicated server. ``requester`` names the node the change is asked from, which resolves the player a :ref:`SCENE_CHANGE_PLAYER<class_NetwMultiplayer_constant_SCENE_CHANGE_PLAYER>` change acts on and the source scene a :ref:`SCENE_CHANGE_SCENE<class_NetwMultiplayer_constant_SCENE_CHANGE_SCENE>` change replaces. A scope that needs one and finds none is rejected rather than widened.
 
 On authority the change applies directly. On a client it becomes a :ref:`scene_request()<class_NetwMultiplayer_method_scene_request>` whose result settles the returned :ref:`NetwPromise<class_NetwPromise>`.
 
@@ -8591,7 +8608,7 @@ Re-enters the file-backed scene this peer currently presents, mirroring :godot:`
 
 :ref:`NetwPromise<class_NetwPromise>` **scene_request**\ (\ path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_request>`
 
-Asks server authority to move the local player to the scene file at ``path``. A label cannot be requested, because :ref:`Netw.scene()<class_Netw_method_scene>` is what resolves a live scene by label and a change names a path.
+Asks server authority to make the local player watch the scene file at ``path``. A label cannot be requested, because :ref:`Netw.scene()<class_Netw_method_scene>` is what resolves a live scene by label and a change names a path.
 
 The promise rejects with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` when policy rejects, :godot:`@GlobalScope.ERR_SKIP <@GlobalScope#class_@GlobalScope_constant_ERR_SKIP>` when a newer request supersedes it, and :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` when authority never returns within ten seconds.
 
@@ -9854,7 +9871,7 @@ Cancellation succeeds until the result is committed. It has no effect after the 
 
 .. rst-class:: classref-method
 
-:godot:`RID` **transport_create_peer**\ (\ transport\: :godot:`RID`, mode\: :godot:`int`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_create_peer>`
+:godot:`RID` **transport_create_peer**\ (\ transport\: :godot:`RID`, mode\: :ref:`TransportMode<enum_NetwMultiplayer_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_create_peer>`
 
 Asks ``transport`` to build one :godot:`MultiplayerPeer` and returns a cancellation ticket. ``mode`` picks :ref:`TRANSPORT_MODE_HOST<class_NetwMultiplayer_constant_TRANSPORT_MODE_HOST>` or :ref:`TRANSPORT_MODE_CLIENT<class_NetwMultiplayer_constant_TRANSPORT_MODE_CLIENT>`, ``address`` is what a client joins, and ``settings`` is what a host is built from. ``settings`` is copied on the way in, nested containers and all, so a caller may reuse the dictionary immediately.
 

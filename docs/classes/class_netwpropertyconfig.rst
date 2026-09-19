@@ -86,7 +86,7 @@ Properties
    +----------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
    | :godot:`bool`                                            | :ref:`set_masked<class_NetwPropertyConfig_property_set_masked>`                           | ``false`` |
    +----------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                                             | :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>`                         | ``-1``    |
+   | :ref:`Trigger<enum_NetwPropertySet_Trigger>`             | :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>`                         | ``-1``    |
    +----------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
    | :godot:`int`                                             | :ref:`set_window<class_NetwPropertyConfig_property_set_window>`                           | ``-1``    |
    +----------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
@@ -485,12 +485,12 @@ The script set's :ref:`NetwPropertySet.masked<class_NetwPropertySet_property_mas
 
 .. rst-class:: classref-property
 
-:godot:`int` **set_trigger** = ``-1`` :ref:`🔗<class_NetwPropertyConfig_property_set_trigger>`
+:ref:`Trigger<enum_NetwPropertySet_Trigger>` **set_trigger** = ``-1`` :ref:`🔗<class_NetwPropertyConfig_property_set_trigger>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_set_trigger**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_set_trigger**\ (\ )
+- |void| **set_set_trigger**\ (\ value\: :ref:`Trigger<enum_NetwPropertySet_Trigger>`\ )
+- :ref:`Trigger<enum_NetwPropertySet_Trigger>` **get_set_trigger**\ (\ )
 
 The script set's :ref:`NetwPropertySet.trigger<class_NetwPropertySet_property_trigger>`, or :ref:`UNSET<class_NetwPropertyConfig_constant_UNSET>`. Written by :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>` and :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, and by all three kind marks.
 

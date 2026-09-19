@@ -40,6 +40,7 @@
 #include "netw/api/session_handle.hpp"
 #include "netw/api/session_stats.hpp"
 #include "netw/api/sync_model.hpp"
+#include "netw/api/table_handle.hpp"
 #include "netw/call_park.hpp"
 #include "netw/carrier_buffers.hpp"
 #include "netw/carrier_frame.hpp"
@@ -711,6 +712,7 @@ private:
     bool scene_constructor_registered = false;
     godot::HashMap<godot::StringName, godot::RID> table_by_name;
     godot::HashMap<int64_t, godot::RID> table_schema;
+    godot::HashMap<int64_t, godot::Ref<NetwTableHandle>> table_handles;
 
     struct ServiceRow {
         godot::ObjectID type;
@@ -1113,13 +1115,16 @@ public:
         int64_t p_last_driven_input_tick,
         int64_t p_frame_tick
     );
-    int predict_consume(int p_depth, int p_buffer);
+    NetwPredict::ConsumeAction predict_consume(int p_depth, int p_buffer);
     godot::Ref<NetwPredictFold> predict_drive_default(
         int64_t p_latest_input_tick,
         int64_t p_last_driven_input_tick,
         int64_t p_frame_tick
     );
-    int predict_consume_default(int p_depth, int p_buffer);
+    NetwPredict::ConsumeAction predict_consume_default(
+        int p_depth,
+        int p_buffer
+    );
     godot::Ref<NetwPredictJudgement> predict_evaluate(
         NetwPredictJournal::Domain p_domain,
         NetwPredict::ExactVerdict p_verdict,
@@ -1168,7 +1173,7 @@ public:
         int64_t,
         int64_t
     )
-    GDVIRTUAL2R(int, _predict_consume, int, int)
+    GDVIRTUAL2R(NetwPredict::ConsumeAction, _predict_consume, int, int)
     GDVIRTUAL6R(
         godot::Ref<NetwPredictJudgement>,
         _predict_evaluate,
@@ -2944,6 +2949,7 @@ public:
     godot::Ref<table::Core> get_table_core() const;
 
     godot::RID table_create(const godot::RID &p_schema);
+    godot::Ref<NetwTableHandle> get_table_handle(const godot::RID &p_table);
     godot::RID table_get_schema(const godot::RID &p_table) const;
     void table_set_param(
         const godot::RID &p_table,
@@ -3100,6 +3106,11 @@ public:
     int64_t arm_rewind_timeline(const godot::Ref<NetwEntity> &p_entity);
     void lagcomp_rewind(
         const godot::TypedArray<godot::RID> &p_entities,
+        int64_t p_tick,
+        const godot::Callable &p_body
+    );
+    void lagcomp_rewind_of(
+        const godot::TypedArray<NetwEntity> &p_entities,
         int64_t p_tick,
         const godot::Callable &p_body
     );
@@ -3807,24 +3818,18 @@ public:
     godot::Node *scene_activate(const godot::Variant &p_destination);
     godot::Node *announce_scene_activated(godot::Node *p_active);
     godot::Node *scene_resolve_destination(const godot::Variant &p_destination);
-    godot::TypedArray<NetwEntity> scene_bodies_in(godot::Node *p_container);
     godot::Ref<NetwSceneHandle> scene_handle_for(godot::Node *p_container);
     static double scene_request_deadline();
-    godot::Ref<NetwPromise> scene_move_entity_to(
-        const godot::Ref<NetwEntity> &p_mover,
-        godot::Node *p_target
-    );
     godot::Ref<NetwPromise> scene_replace_sources(
         const godot::Variant &p_destination,
         const godot::Array &p_sources,
         int p_scope
     );
-    void scene_carry_transition();
-    void scene_resume_transition(
-        const godot::Ref<NetwEntity> &p_mover,
-        const godot::Ref<NetwPromise> &p_moving
-    );
     void scene_land_transition();
+    void scene_announce_changed(
+        const godot::RID &p_destination,
+        const godot::PackedInt64Array &p_peers
+    );
     godot::PackedInt64Array scene_transition_every_member() const;
     godot::Array scene_sources_for_scope(int p_scope, godot::Node *p_source);
     godot::Ref<NetwPromise> scene_apply_change(
@@ -4151,20 +4156,15 @@ public:
     );
 
     godot::TypedArray<NetwEntity> scene_bodies_of(int64_t p_peer);
-    godot::TypedArray<NetwEntity> scene_travel_roots(int64_t p_peer);
+    godot::TypedArray<NetwEntity> scene_body_roots_of(int64_t p_peer);
     godot::Ref<NetwPromise> player_travel(
         const godot::Ref<NetwPlayer> &p_player,
         const godot::Ref<NetwSceneHandle> &p_destination
     );
-    void scene_travel_land(
+    void scene_leave_everything_but(
         int64_t p_peer,
-        const godot::RID &p_destination,
-        const godot::Array &p_pending,
-        int p_at,
-        const godot::Ref<NetwPromise> &p_settled,
-        bool p_bodiless
+        const godot::RID &p_destination
     );
-    godot::HashSet<int64_t> scene_travel_reserved;
 
     godot::Node *liveness_node_of(int64_t p_route) const;
     godot::TypedArray<godot::Object> liveness_get_entities() const;

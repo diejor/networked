@@ -103,7 +103,11 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// <summary>
     /// Emitted when this scene starts replicating to <c>player</c>, after the
     /// boundary is written, so a listener reading
-    /// <see cref="NetwSceneHandle.Viewers"/> sees them.
+    /// <see cref="NetwSceneHandle.Viewers"/> sees them. This reports delivery,
+    /// not arrival. A body standing here and a
+    /// <see cref="NetwSceneHandle.Watch"/> both raise it and it cannot say
+    /// which, so a game that spawns players uses
+    /// <c>NetwSessionHandle.scene_changed</c> instead.
     /// </summary>
     public event Action<Variant> ViewerEntered
     {
@@ -236,7 +240,8 @@ public sealed class NetwSceneHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSceneHandle", "get_bodies", 3995934104UL);
 
     /// <summary>
-    /// Every body in this scene, in no declared order.
+    /// Every body in this scene, in no declared order. A body leaves this array
+    /// in the call that despawned it, not in the frame its node is freed.
     /// </summary>
     public Godot.Collections.Array Bodies
     {

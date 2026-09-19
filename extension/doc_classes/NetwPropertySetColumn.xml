@@ -14,7 +14,7 @@
 			<param index="0" name="key" type="StringName" />
 			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
 			<param index="2" name="watch" type="bool" default="false" />
-			<param index="3" name="type" type="int" default="15" />
+			<param index="3" name="type" type="int" enum="NetwMultiplayer.ColumnType" default="15" />
 			<description>
 				Builds a member whose shape is a fresh single-column declaration.
 				A set compiled from a declaration passes its column through [member schema_column] instead, so this form is for a set assembled by hand with no schema of its own.
@@ -28,7 +28,7 @@
 		<member name="converge_stiffness" type="float" setter="set_converge_stiffness" getter="get_converge_stiffness" default="0.0">
 			How firmly a restored value is pulled toward the authoritative one instead of being written to it, or [code]0.0[/code] to write it outright.
 		</member>
-		<member name="delta_mode" type="int" setter="set_delta_mode" getter="get_delta_mode" default="0">
+		<member name="delta_mode" type="int" setter="set_delta_mode" getter="get_delta_mode" enum="NetwPropertySetColumn.Delta" default="0">
 			Whether the column spends a per-element selector to write a signed step from the baseline its frame names, or writes its whole code every time.
 			[constant DELTA_AUTO] derives the result from the declaration, and the derivation is the measured one. A ladder pays 39 to 71 percent on a value a solver integrates and costs 12.5 percent on one a player authors or one that wraps, so it is taken only for a quantized column wider than eight bits on a set whose [member NetwPropertySet.record] is [constant NetwPropertySet.RECORD_STATE], and never for a [NetwQuantizeAngle].
 			Override it where the declaration cannot see what the value does. An integrated column on a set that is not state is one such case, and an authored one whose declaration looks integrated is the other.
@@ -62,7 +62,7 @@
 		<member name="teleport_at_override" type="float" setter="set_teleport_at_override" getter="get_teleport_at_override" default="-1.0">
 			The column's own teleport-tier distance, or a negative value to inherit the entity's default.
 		</member>
-		<member name="type" type="int" setter="" getter="get_type" default="15">
+		<member name="type" type="int" setter="" getter="get_type" enum="NetwMultiplayer.ColumnType" default="15">
 			The declared [NetwMultiplayer] column type fixed into the schema.
 		</member>
 		<member name="watch" type="bool" setter="set_watch" getter="get_watch" default="false">

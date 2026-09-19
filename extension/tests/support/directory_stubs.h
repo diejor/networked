@@ -35,7 +35,7 @@ public:
         return godot::String("Stub Lobbies");
     }
 
-    int64_t capabilities() override {
+    Capability capabilities() override {
         return CAPABILITY_BROWSE;
     }
 

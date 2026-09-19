@@ -21,7 +21,7 @@ namespace Networked;
 /// func _init() -&gt; void:
 ///     Netw.configure_session(self) \
 ///         .app_id(&amp;"bomber-v2") \
-///         .desired_role(NetwMultiplayer.Role.LISTEN_SERVER)
+///         .role(NetwMultiplayer.Role.LISTEN_SERVER)
 /// </code>
 /// <para>
 /// A preset handed to that verb is copied rather than kept, so one <c>.tres</c>

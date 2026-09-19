@@ -1,6 +1,6 @@
-## Law: the arguments after the username in [method Netw.join] reach the
-## [method Netw.configure_join] handler one for one, and an Array among them
-## stays one argument.
+## Law: the arguments after the username in [method Netw.prepare_join] reach
+## the [method Netw.configure_join] handler one for one, and an Array among
+## them stays one argument.
 class_name TestNetwJoinVarargs
 extends NetwTestSuite
 
@@ -48,7 +48,7 @@ func after_test() -> void:
 
 func test_an_array_argument_stays_one_argument() -> void:
 	var payload: Array = [1, 2]
-	Netw.join(declarer, &"ana", &"red", payload)
+	Netw.prepare_join(declarer, &"ana", &"red", payload)
 	await _bring_host_online()
 	await _pump_until(func() -> bool: return declarer.calls > 0)
 
@@ -60,7 +60,7 @@ func test_an_array_argument_stays_one_argument() -> void:
 
 
 func test_a_username_alone_passes_no_arguments() -> void:
-	Netw.join(declarer, &"ana")
+	Netw.prepare_join(declarer, &"ana")
 	await _bring_host_online()
 	await _pump_until(func() -> bool: return tree.api.is_online)
 
@@ -69,7 +69,7 @@ func test_a_username_alone_passes_no_arguments() -> void:
 
 func test_a_collected_list_submits_through_a_callable() -> void:
 	var collected: Array = [&"blue", [7]]
-	var submit: Callable = Netw.join
+	var submit: Callable = Netw.prepare_join
 	submit.callv([declarer, &"ana"] + collected)
 	await _bring_host_online()
 	await _pump_until(func() -> bool: return declarer.calls > 0)

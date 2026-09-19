@@ -75,7 +75,11 @@ Ref<NetwServerInfo> NetwServerInfo::from_payload(
     Ref<NetwServerInfo> info;
     info.instantiate();
     info->set_motd(row.get(KEY_MOTD, String()));
-    info->set_visibility(row.get(KEY_VISIBILITY, int64_t(0)));
+    info->set_visibility(
+        NetwServerInfo::Visibility(
+            int64_t(row.get(KEY_VISIBILITY, int64_t(0)))
+        )
+    );
     info->set_players(int64_t(row.get(KEY_PLAYERS, 0)));
     info->set_max_players(int64_t(row.get(KEY_MAX_PLAYERS, 0)));
     info->set_game_mode(StringName(row.get(KEY_GAME_MODE, String())));
@@ -214,7 +218,9 @@ void NetwServerInfo::_bind_methods() {
             Variant::INT,
             "visibility",
             PROPERTY_HINT_ENUM,
-            "Public,Friends Only,Private"
+            "Public,Friends Only,Private",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwServerInfo.Visibility"
         ),
         "set_visibility",
         "get_visibility"

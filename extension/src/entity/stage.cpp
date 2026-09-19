@@ -27,4 +27,8 @@ bool stage_can_begin_despawn(int64_t p_stage) {
         || p_stage == int(Stage::LIVE);
 }
 
+bool stage_is_leaving(int64_t p_stage) {
+    return p_stage >= int(Stage::DESPAWNING);
+}
+
 } // namespace netw::entity

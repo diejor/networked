@@ -83,7 +83,7 @@ Running examples
 
 The repository includes example scenes that exercise the addon directly:
 
-- ``examples/quick_start/Main.tscn`` shows spawning, saving, and teleporting.
+- ``examples/multiple_levels/Main.tscn`` shows spawning, saving, and teleporting.
 - ``examples/bomber/main.tscn`` shows a lobby, multiple players, and gameplay
   over a backend.
 

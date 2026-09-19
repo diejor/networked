@@ -1,13 +1,13 @@
-class_name TestQuickStartGameHarness
+class_name TestMultipleLevelsGameHarness
 extends NetwTestSuite
 
-const MAIN := preload("res://examples/quick_start/Main.tscn")
-const LEVEL_1 := preload("res://examples/quick_start/Level1.tscn")
-const LEVEL_2 := preload("res://examples/quick_start/Level2.tscn")
-const PLAYER := preload("res://examples/quick_start/Player.tscn")
-const DATABASE := preload("res://examples/quick_start/quick_start_database.tres")
-const _LEVEL_1_PATH := "res://examples/quick_start/Level1.tscn"
-const _LEVEL_2_PATH := "res://examples/quick_start/Level2.tscn"
+const MAIN := preload("res://examples/multiple_levels/Main.tscn")
+const LEVEL_1 := preload("res://examples/multiple_levels/Level1.tscn")
+const LEVEL_2 := preload("res://examples/multiple_levels/Level2.tscn")
+const PLAYER := preload("res://examples/multiple_levels/Player.tscn")
+const DATABASE := preload("res://examples/multiple_levels/multiple_levels_database.tres")
+const _LEVEL_1_PATH := "res://examples/multiple_levels/Level1.tscn"
+const _LEVEL_2_PATH := "res://examples/multiple_levels/Level2.tscn"
 const _TP_MARKER := ^"%Teleporter/Marker2D"
 
 var game: NetwGameHarness
@@ -17,7 +17,7 @@ var saves := 0
 func before_test() -> void:
 	saves += 1
 	var fs := DATABASE.backend as FileSystemDatabase
-	fs.base_dir = create_temp_dir("quick_start_saves/%d" % saves)
+	fs.base_dir = create_temp_dir("multiple_levels_saves/%d" % saves)
 	game = make_game_harness(MAIN)
 	await game.setup()
 	game.show_views()
@@ -171,7 +171,12 @@ func test_host_scene_request_keeps_camera_current() -> void:
 	assert_that(promise.is_settled).is_true()
 	assert_that(promise.code).is_equal(OK)
 	assert_that(level_2).is_not_null()
-	assert_that(player.get_viewport().get_camera_2d()).is_equal(camera)
+
+	var arrived := await _wait_for_body_in(valeria, &"valeria", &"Level2")
+	assert_that(arrived).is_not_null()
+	var arrived_camera := arrived.get_node("Camera2D") as Camera2D
+	assert_that(arrived_camera).is_not_null()
+	assert_that(arrived.get_viewport().get_camera_2d()).is_equal(arrived_camera)
 
 
 func test_clients_still_see_each_other_after_scene_change() -> void:
@@ -194,10 +199,13 @@ func test_clients_still_see_each_other_after_scene_change() -> void:
 	for runner in [valeria, jose, maria]:
 		assert_that(await runner.await_scene(&"Level2", 2.0)).is_not_null()
 
-	var maria_local := maria.local_player as Node2D
-	var maria_on_valeria: Node2D = await valeria.await_player(&"maria", 2.0)
-	var maria_on_jose: Node2D = await jose.await_player(&"maria", 2.0)
+	var maria_local := await _wait_for_body_in(maria, &"maria", &"Level2")
+	var maria_on_valeria := await _wait_for_body_in(valeria, &"maria", &"Level2")
+	var maria_on_jose := await _wait_for_body_in(jose, &"maria", &"Level2")
+	assert_that(maria_local).is_not_null()
+	assert_that(maria_on_valeria).is_not_null()
 	assert_that(maria_on_jose).is_not_null()
+	await game.sync_ticks(8)
 
 	var local_start := maria_local.position.x
 	var host_start := maria_on_valeria.position.x
@@ -479,6 +487,19 @@ func _teleport_without_bridge(
 	assert_bool(promise.is_completed) \
 			.override_failure_message("teleport to %s never completed" % scene_path) \
 			.is_true()
+
+
+func _wait_for_body_in(
+		participant: NetwSceneRunner,
+		player_username: StringName,
+		label: StringName,
+) -> Node2D:
+	for _i in 180:
+		var body := participant.find_player(player_username) as Node2D
+		if body != null and Netw.scene(body).label == label:
+			return body
+		await game.sync_ticks(1)
+	return null
 
 
 func _wait_for_transition(participant: NetwSceneRunner) -> void:

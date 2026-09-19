@@ -114,12 +114,12 @@ public:
 
     void set_simulate(const godot::Callable &p_value);
     void set_schedule(NetwPredict::Schedule p_value);
-    void set_correction_mode(int p_value);
-    void set_snap_restore(int p_value);
-    void set_input_source(int p_value);
-    void set_sim_mode(int p_value);
-    void set_recovery_policy(int p_value);
-    void set_breach_response(int p_value);
+    void set_correction_mode(NetwPredict::CorrectionMode p_value);
+    void set_snap_restore(NetwPredict::RestoreMode p_value);
+    void set_input_source(NetwPredict::InputSource p_value);
+    void set_sim_mode(NetwPredict::SimMode p_value);
+    void set_recovery_policy(NetwPredict::RecoveryPolicy p_value);
+    void set_breach_response(NetwPredict::BreachResponse p_value);
     void set_island(const godot::Ref<NetwPredictIsland> &p_value);
     void set_sensors(const godot::Dictionary &p_value);
     void set_epoch(int64_t p_value);
@@ -129,14 +129,14 @@ public:
     void set_teleport_threshold(double p_value);
     void set_collision_cooldown_ticks(int p_value);
     void set_sleeping(bool p_value);
-    void set_missing_policy(int p_value);
+    void set_missing_policy(NetwPredict::MissingInput p_value);
     void set_max_consume_per_tick(int p_value);
     void set_consume_buffer_ticks(int p_value);
     void set_replay_buffer_depth(int p_value);
     void set_max_consume_lag_ticks(int p_value);
     void set_ack_age_ticks(int p_value);
     void set_divergence_epsilon(double p_value);
-    void set_reconcile_mode(int p_value);
+    void set_reconcile_mode(NetwPredict::Reconcile p_value);
     void set_archetype(NetwPredict::Archetype p_value);
 
     godot::Callable get_simulate() const {
@@ -147,28 +147,28 @@ public:
         return schedule_value;
     }
 
-    int get_correction_mode() const {
-        return correction_value;
+    NetwPredict::CorrectionMode get_correction_mode() const {
+        return static_cast<NetwPredict::CorrectionMode>(correction_value);
     }
 
-    int get_snap_restore() const {
-        return restore_value;
+    NetwPredict::RestoreMode get_snap_restore() const {
+        return static_cast<NetwPredict::RestoreMode>(restore_value);
     }
 
-    int get_input_source() const {
-        return input_source_value;
+    NetwPredict::InputSource get_input_source() const {
+        return static_cast<NetwPredict::InputSource>(input_source_value);
     }
 
-    int get_sim_mode() const {
-        return sim_mode_value;
+    NetwPredict::SimMode get_sim_mode() const {
+        return static_cast<NetwPredict::SimMode>(sim_mode_value);
     }
 
-    int get_recovery_policy() const {
-        return recovery_policy_value;
+    NetwPredict::RecoveryPolicy get_recovery_policy() const {
+        return static_cast<NetwPredict::RecoveryPolicy>(recovery_policy_value);
     }
 
-    int get_breach_response() const {
-        return breach_response_value;
+    NetwPredict::BreachResponse get_breach_response() const {
+        return static_cast<NetwPredict::BreachResponse>(breach_response_value);
     }
 
     godot::Ref<NetwPredictIsland> get_island() const {
@@ -207,8 +207,8 @@ public:
         return sleeping_value;
     }
 
-    int get_missing_policy() const {
-        return missing_policy_value;
+    NetwPredict::MissingInput get_missing_policy() const {
+        return static_cast<NetwPredict::MissingInput>(missing_policy_value);
     }
 
     int get_max_consume_per_tick() const {
@@ -235,8 +235,8 @@ public:
         return epsilon_value;
     }
 
-    int get_reconcile_mode() const {
-        return reconcile_value;
+    NetwPredict::Reconcile get_reconcile_mode() const {
+        return static_cast<NetwPredict::Reconcile>(reconcile_value);
     }
 
     NetwPredict::Archetype get_archetype() const {
@@ -254,7 +254,7 @@ public:
     int get_last_verdict_reason() const;
     bool get_is_reconciling() const;
     int64_t get_acknowledged_tick() const;
-    int get_last_attribution() const;
+    NetwPredictJournal::Attribution get_last_attribution() const;
     int64_t get_last_attributed_transition() const;
 
     godot::Variant sensor(

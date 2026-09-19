@@ -8,6 +8,7 @@
 #include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/server_info.hpp"
 #include "netw/connect/probe_client.hpp"
@@ -112,7 +113,7 @@ public:
 
     virtual void make_peer(
         const godot::RID &p_ticket,
-        int p_mode,
+        NetwMultiplayer::TransportMode p_mode,
         const godot::String &p_address,
         const godot::Dictionary &p_settings
     );
@@ -156,7 +157,7 @@ public:
     GDVIRTUAL4(
         _make_peer,
         godot::RID,
-        int64_t,
+        NetwMultiplayer::TransportMode,
         godot::String,
         godot::Dictionary
     )

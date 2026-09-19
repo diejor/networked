@@ -14,6 +14,14 @@ namespace netw {
 class LobbyDirectory : public NetwService {
     GDCLASS(LobbyDirectory, NetwService)
 
+public:
+    enum Capability {
+        CAPABILITY_BROWSE = 1,
+        CAPABILITY_FRIENDS_ONLY_SUPPORT = 2,
+        CAPABILITY_INVITES = 4,
+        CAPABILITY_FRIEND_NAMES = 8,
+    };
+
 protected:
     static void _bind_methods();
 
@@ -39,23 +47,16 @@ protected:
     GDVIRTUAL1(_join_lobby, const godot::String &)
 
 public:
-    enum Capability {
-        CAPABILITY_BROWSE = 1,
-        CAPABILITY_FRIENDS_ONLY_SUPPORT = 2,
-        CAPABILITY_INVITES = 4,
-        CAPABILITY_FRIEND_NAMES = 8,
-    };
-
     void deliver(const godot::Ref<godot::MultiplayerPeer> &p_peer);
-    void fail(int64_t p_error, const godot::String &p_message);
+    void fail(godot::Error p_error, const godot::String &p_message);
     void publish_lobbies(
         const godot::PackedStringArray &p_addresses,
         const godot::PackedStringArray &p_names,
         const godot::TypedArray<NetwServerInfo> &p_infos
     );
-    bool supports(int64_t p_capability);
+    bool supports(Capability p_capability);
 
-    virtual int64_t capabilities();
+    virtual Capability capabilities();
     virtual godot::StringName peer_class();
     virtual godot::String display_name();
     virtual bool is_available();

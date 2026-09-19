@@ -50,7 +50,7 @@
 		<method name="create_peer">
 			<return type="RID" />
 			<param index="0" name="transport" type="Variant" />
-			<param index="1" name="mode" type="int" />
+			<param index="1" name="mode" type="int" enum="NetwMultiplayer.TransportMode" />
 			<param index="2" name="address" type="String" />
 			<param index="3" name="settings" type="Dictionary" />
 			<param index="4" name="completed" type="Callable" />
@@ -260,7 +260,7 @@
 			</description>
 		</signal>
 		<signal name="join_failed">
-			<param index="0" name="error" type="int" />
+			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="reason" type="String" />
 			<description>
 				This peer's own join was rejected, locally or by the server, and no player was seated for it. [param reason] is the server's own words where the rejection came from one, and [param error] is why.
@@ -269,7 +269,7 @@
 				func _ready() -&gt; void:
 				    Netw.connection(self).join_failed.connect(show_refusal)
 
-				func show_refusal(_error: int, reason: String) -&gt; void:
+				func show_refusal(_error: Error, reason: String) -&gt; void:
 				    status.text = reason
 				[/codeblock]
 			</description>

@@ -58,13 +58,13 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                                        | :ref:`monitor<class_NetwClockHandle_method_monitor>`\ (\ monitor\: :godot:`int`\ ) |const|                     |
-   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                      | :ref:`param<class_NetwClockHandle_method_param>`\ (\ param\: :godot:`int`\ ) |const|                           |
-   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`set_param<class_NetwClockHandle_method_set_param>`\ (\ param\: :godot:`int`, value\: :godot:`Variant`\ ) |
-   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`float`                                        | :ref:`monitor<class_NetwClockHandle_method_monitor>`\ (\ monitor\: :ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>`\ ) |const|                 |
+   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                      | :ref:`param<class_NetwClockHandle_method_param>`\ (\ param\: :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`\ ) |const|                           |
+   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`set_param<class_NetwClockHandle_method_set_param>`\ (\ param\: :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`, value\: :godot:`Variant`\ ) |
+   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -177,7 +177,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:godot:`float` **monitor**\ (\ monitor\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwClockHandle_method_monitor>`
+:godot:`float` **monitor**\ (\ monitor\: :ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>`\ ) |const| :ref:`🔗<class_NetwClockHandle_method_monitor>`
 
 :ref:`NetwMultiplayer.clock_get_monitor()<class_NetwMultiplayer_method_clock_get_monitor>`: the live reading named by ``monitor``, one of :ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>`. Returns ``0.0`` for a clock that has measured nothing yet.
 
@@ -189,7 +189,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:godot:`Variant` **param**\ (\ param\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwClockHandle_method_param>`
+:godot:`Variant` **param**\ (\ param\: :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`\ ) |const| :ref:`🔗<class_NetwClockHandle_method_param>`
 
 :ref:`NetwMultiplayer.clock_get_param()<class_NetwMultiplayer_method_clock_get_param>`: the setting named by ``param``, one of :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`.
 
@@ -201,7 +201,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **set_param**\ (\ param\: :godot:`int`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwClockHandle_method_set_param>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **set_param**\ (\ param\: :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwClockHandle_method_set_param>`
 
 :ref:`NetwMultiplayer.clock_set_param()<class_NetwMultiplayer_method_clock_set_param>`. Writes the setting named by ``param`` at runtime, returning :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` for a param the declaration owns rather than silently keeping the old value.
 

@@ -141,7 +141,7 @@ TEST_CASE(
 
     SUBCASE("TICK re-admits within a tick") {
         handle->set_reconcile_mode(
-            int(netw::NetwPredict::RECONCILE_INDEPENDENT)
+            netw::NetwPredict::RECONCILE_INDEPENDENT
         );
         rig.step_ticks(4);
         NETW_CHECK_EQ(
@@ -163,7 +163,7 @@ TEST_CASE(
         );
 
         handle->set_reconcile_mode(
-            int(netw::NetwPredict::RECONCILE_INDEPENDENT)
+            netw::NetwPredict::RECONCILE_INDEPENDENT
         );
         rig.step_ticks(4);
         NETW_CHECK_EQ(

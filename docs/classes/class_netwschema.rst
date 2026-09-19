@@ -21,7 +21,7 @@ Description
 
 A schema is both the chain a ``static var`` initializer runs and the data that chain leaves behind, because a game that had to terminate the chain to get the data was making a distinction it never wanted. :ref:`columns<class_NetwSchema_property_columns>` is the address order, and it is the address order every adopting session seals in, so two peers built from the same scripts agree on layout without negotiating it.
 
-Column methods return an :godot:`int` index because schema declarations have no session state. Each session creates its own :godot:`RID` for the schema. Use :ref:`NetwMultiplayer.table_find()<class_NetwMultiplayer_method_table_find>` to retrieve it.
+Column methods return an :godot:`int` index because schema declarations have no session state. That index is the wire address a writer and a reader both name the column by. Each session builds its own table from the declaration, and :ref:`Netw.table()<class_Netw_method_table>` is how a game reaches one.
 
 ::
 
@@ -34,8 +34,7 @@ Column methods return an :godot:`int` index because schema declarations have no 
         static var vel := schema.vector3(&"vel")   # unquantized, the memcpy path
         static var hp  := schema.u16(&"hp")
 
-    func _ready() -> void:
-        mobs = Netw.of(self).table_find(Mobs.schema.schema_name)
+    @onready var mobs := Netw.table(self, Mobs.schema.schema_name)
 
 \ A column with no quantizer crosses the wire as a raw little-endian copy of its buffer, which is the cheapest path in both directions. A quantizer buys bandwidth by paying per element, so reach for one on the columns a link actually cares about.
 

@@ -32,8 +32,9 @@ namespace Networked;
 /// func _host_settings() -&gt; Dictionary:
 ///     return {region = "eu"}
 ///
-/// func _make_peer(ticket: RID, mode: int, address: String,
-///         settings: Dictionary) -&gt; void:
+/// func _make_peer(
+///         ticket: RID, mode: NetwMultiplayer.TransportMode,
+///         address: String, settings: Dictionary) -&gt; void:
 ///     report(ticket, &amp;"handshake", "Reaching the relay...", 0.5)
 ///     var peer := RelayMultiplayerPeer.new()
 ///     var err: Error = await peer.connect_async(address, settings.region)

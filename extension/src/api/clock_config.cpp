@@ -91,7 +91,9 @@ void NetwClockConfig::_bind_methods() {
             Variant::INT,
             "sync_mode",
             PROPERTY_HINT_ENUM,
-            "Snap,Stretch"
+            "Snap,Stretch",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.SyncMode"
         ),
         "set_sync_mode",
         "get_sync_mode"
@@ -255,7 +257,9 @@ void NetwClockConfig::_bind_methods() {
             Variant::INT,
             "tickrate_mismatch_action",
             PROPERTY_HINT_ENUM,
-            "Warn,Disconnect,Signal"
+            "Warn,Disconnect,Signal",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.MismatchAction"
         ),
         "set_tickrate_mismatch_action",
         "get_tickrate_mismatch_action"

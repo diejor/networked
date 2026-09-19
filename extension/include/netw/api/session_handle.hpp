@@ -34,6 +34,10 @@ class NetwSessionHandle : public godot::RefCounted {
     void relay_player_left(const godot::Ref<NetwPlayer> &p_who);
     void relay_join_failed(int64_t p_code, const godot::String &p_reason);
     void relay_scene_live(const godot::Ref<NetwSceneHandle> &p_scene);
+    void relay_scene_changed(
+        const godot::Ref<NetwSceneHandle> &p_scene,
+        const godot::TypedArray<NetwPlayer> &p_arrived
+    );
     void relay_presentation_changed(
         const godot::Ref<NetwSceneHandle> &p_from,
         const godot::Ref<NetwSceneHandle> &p_to

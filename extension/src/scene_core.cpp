@@ -293,14 +293,14 @@ void NetwSceneCore::transition_arm(
     const Array &p_sources,
     const Ref<NetwPromise> &p_promise,
     int p_scope,
-    const PackedInt64Array &p_watchers
+    const PackedInt64Array &p_arrivals
 ) {
     transition = Transition();
     transition.target = p_target;
     transition.sources = p_sources;
     transition.promise = p_promise;
     transition.scope = p_scope;
-    transition.watchers = p_watchers;
+    transition.arrivals = p_arrivals;
 }
 
 Variant NetwSceneCore::transition_target() const {
@@ -315,46 +315,8 @@ int NetwSceneCore::transition_scope() const {
     return transition.scope;
 }
 
-PackedInt64Array NetwSceneCore::transition_watchers() const {
-    return transition.watchers;
-}
-
-Variant NetwSceneCore::transition_next_mover(const Callable &p_roster_of) {
-    while (transition.roster_index >= int64_t(transition.roster.size())) {
-        if (transition.source_index >= int64_t(transition.sources.size())) {
-            return Variant();
-        }
-        const Variant source = transition.sources[int(transition.source_index)];
-        transition.source_index += 1;
-        const Variant answered
-            = p_roster_of.is_valid() ? p_roster_of.call(source) : Variant();
-        transition.roster = Array();
-        if (answered.get_type() == Variant::ARRAY) {
-            transition.roster = answered;
-        }
-        transition.roster_index = 0;
-    }
-    const Variant mover = transition.roster[int(transition.roster_index)];
-    transition.roster_index += 1;
-    return mover;
-}
-
-bool NetwSceneCore::transition_accept(int p_code, int64_t p_peer) {
-    if (p_code != OK) {
-        NETW_TRACE(
-            sys::SCENE,
-            "a transition mover answered %d, so the walk aborts",
-            p_code
-        );
-        transition_fail(int(ERR_UNAVAILABLE));
-        return false;
-    }
-    transition.moved.insert(p_peer);
-    return true;
-}
-
-bool NetwSceneCore::transition_moved(int64_t p_peer) const {
-    return transition.moved.has(p_peer);
+PackedInt64Array NetwSceneCore::transition_arrivals() const {
+    return transition.arrivals;
 }
 
 void NetwSceneCore::transition_fail(int p_code) {

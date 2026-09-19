@@ -27,7 +27,7 @@ Drop this scene anywhere under a session and players can browse saved servers, w
 
 \ The browser finds its handle in two steps, first wins: an explicit :ref:`bind()<class_ConnectBrowser_method_bind>`, then :ref:`Netw.connection()<class_Netw_method_connection>` over its own ancestry. Drop it under a session for zero config. 
 
-Pressing Host or Join runs one setup the browser composes itself, out of three ordinary steps: :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>` asks the provider for a peer, :ref:`Netw.join()<class_Netw_method_join>` arranges the player the form collected, and the peer is assigned. The assignment happens inside the creation callback, which is the only window the seam offers, and progress comes from that one operation rather than from anything session-wide. Success is :ref:`NetwMultiplayer.session_entered<class_NetwMultiplayer_signal_session_entered>`, which is the event the player was actually waiting for.
+Pressing Host or Join runs one setup the browser composes itself, out of three ordinary steps: :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>` asks the provider for a peer, :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` arranges the player the form collected, and the peer is assigned. The assignment happens inside the creation callback, which is the only window the seam offers, and progress comes from that one operation rather than from anything session-wide. Success is :ref:`NetwMultiplayer.session_entered<class_NetwMultiplayer_signal_session_entered>`, which is the event the player was actually waiting for.
 
 ::
 

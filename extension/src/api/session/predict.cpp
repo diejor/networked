@@ -146,9 +146,21 @@ void NetwMultiplayer::lagcomp_rewind(
     int64_t p_tick,
     const Callable &p_body
 ) {
+    TypedArray<NetwEntity> wrappers;
+    for (int at = 0; at < p_entities.size(); at++) {
+        wrappers.push_back(entity_get_view(p_entities[at]));
+    }
+    lagcomp_rewind_of(wrappers, p_tick, p_body);
+}
+
+void NetwMultiplayer::lagcomp_rewind_of(
+    const TypedArray<NetwEntity> &p_entities,
+    int64_t p_tick,
+    const Callable &p_body
+) {
     PackedInt64Array slots;
     for (int at = 0; at < p_entities.size(); at++) {
-        const Ref<NetwEntity> wrapper = entity_get_view(p_entities[at]);
+        const Ref<NetwEntity> wrapper = p_entities[at];
         if (wrapper.is_null()) {
             continue;
         }
@@ -412,16 +424,24 @@ Ref<NetwPredictFold> NetwMultiplayer::predict_drive_default(
     );
 }
 
-int NetwMultiplayer::predict_consume(int p_depth, int p_buffer) {
-    int answered = 0;
+NetwPredict::ConsumeAction NetwMultiplayer::predict_consume(
+    int p_depth,
+    int p_buffer
+) {
+    NetwPredict::ConsumeAction answered = NetwPredict::CONSUME_ACTION_REPLAY;
     if (GDVIRTUAL_CALL(_predict_consume, p_depth, p_buffer, answered)) {
         return answered;
     }
     return predict_consume_default(p_depth, p_buffer);
 }
 
-int NetwMultiplayer::predict_consume_default(int p_depth, int p_buffer) {
-    return prediction_core::consume_action(p_depth, p_buffer);
+NetwPredict::ConsumeAction NetwMultiplayer::predict_consume_default(
+    int p_depth,
+    int p_buffer
+) {
+    return NetwPredict::ConsumeAction(
+        prediction_core::consume_action(p_depth, p_buffer)
+    );
 }
 
 Ref<NetwPredictJudgement> NetwMultiplayer::predict_evaluate(
@@ -1370,19 +1390,29 @@ void NetwMultiplayer::predict_set_param(
                 static_cast<NetwPredict::Schedule>(int(p_value))
             );
         case PREDICT_PARAM_MISSING_POLICY:
-            return handle->set_missing_policy(int(p_value));
+            return handle->set_missing_policy(
+                static_cast<NetwPredict::MissingInput>(int(p_value))
+            );
         case PREDICT_PARAM_RECOVERY_POLICY:
-            return handle->set_recovery_policy(int(p_value));
+            return handle->set_recovery_policy(
+                static_cast<NetwPredict::RecoveryPolicy>(int(p_value))
+            );
         case PREDICT_PARAM_SNAP_RESTORE:
-            return handle->set_snap_restore(int(p_value));
+            return handle->set_snap_restore(
+                static_cast<NetwPredict::RestoreMode>(int(p_value))
+            );
         case PREDICT_PARAM_CORRECTION_MODE:
-            return handle->set_correction_mode(int(p_value));
+            return handle->set_correction_mode(
+                static_cast<NetwPredict::CorrectionMode>(int(p_value))
+            );
         case PREDICT_PARAM_TELEPORT_THRESHOLD:
             return handle->set_teleport_threshold(double(p_value));
         case PREDICT_PARAM_DIVERGENCE_EPSILON:
             return handle->set_divergence_epsilon(double(p_value));
         case PREDICT_PARAM_BREACH_RESPONSE:
-            return handle->set_breach_response(int(p_value));
+            return handle->set_breach_response(
+                static_cast<NetwPredict::BreachResponse>(int(p_value))
+            );
         case PREDICT_PARAM_MAX_RESTORE_TICKS:
             return handle->set_max_restore_ticks(int(p_value));
         case PREDICT_PARAM_COLLISION_COOLDOWN_TICKS:

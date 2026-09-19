@@ -119,7 +119,7 @@
 			</description>
 		</signal>
 		<signal name="failed">
-			<param index="0" name="code" type="int" />
+			<param index="0" name="code" type="int" enum="Error" />
 			<param index="1" name="detail" type="String" />
 			<description>
 				Emitted when the promise is rejected, carrying the settle [param code] and its human-readable [param detail].

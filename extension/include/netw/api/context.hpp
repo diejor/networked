@@ -31,6 +31,7 @@
 #include "netw/api/scene_config.hpp"
 #include "netw/api/scene_handle.hpp"
 #include "netw/api/schema_model.hpp"
+#include "netw/api/table_handle.hpp"
 #include "netw/scene_core.hpp"
 #include "netw/scene_decl.hpp"
 
@@ -71,7 +72,7 @@ public:
         godot::Object *p_service,
         godot::Object *p_type
     );
-    static godot::Ref<NetwPromise> join(
+    static godot::Ref<NetwPromise> prepare_join(
         godot::Node *p_node,
         const godot::StringName &p_username,
         const godot::Array &p_args
@@ -174,6 +175,10 @@ public:
         godot::Node *p_node,
         int64_t p_channel_id
     );
+    static godot::Ref<NetwTableHandle> table(
+        godot::Node *p_node,
+        const godot::StringName &p_name
+    );
 
     static godot::Ref<NetwEntity> replicate(
         godot::Node *p_node,
@@ -203,7 +208,7 @@ public:
         int64_t p_tick
     );
     static void rewind(
-        const godot::TypedArray<godot::RID> &p_entities,
+        const godot::TypedArray<NetwEntity> &p_entities,
         int64_t p_tick,
         const godot::Callable &p_body
     );

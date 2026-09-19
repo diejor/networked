@@ -178,7 +178,7 @@ func is_ready() -> bool:
 
 ## Steam backs every lobby tier: browse, friends-only visibility, overlay
 ## invites, and persona resolution.
-func _capabilities() -> int:
+func _capabilities() -> LobbyDirectory.Capability:
 	return (
 			LobbyDirectory.CAPABILITY_BROWSE
 			| LobbyDirectory.CAPABILITY_FRIENDS_ONLY_SUPPORT

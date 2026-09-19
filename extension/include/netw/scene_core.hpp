@@ -73,13 +73,9 @@ private:
     struct Transition {
         godot::Variant target;
         godot::Array sources;
-        int64_t source_index = 0;
-        godot::Array roster;
-        int64_t roster_index = 0;
-        godot::HashSet<int64_t> moved;
         godot::Ref<NetwPromise> promise;
         int scope = SCOPE_SESSION;
-        godot::PackedInt64Array watchers;
+        godot::PackedInt64Array arrivals;
     };
 
     Transition transition;
@@ -155,15 +151,12 @@ public:
         const godot::Array &sources,
         const godot::Ref<NetwPromise> &promise,
         int scope,
-        const godot::PackedInt64Array &watchers
+        const godot::PackedInt64Array &arrivals
     );
     godot::Variant transition_target() const;
     godot::Array transition_sources() const;
     int transition_scope() const;
-    godot::PackedInt64Array transition_watchers() const;
-    godot::Variant transition_next_mover(const godot::Callable &roster_of);
-    bool transition_accept(int code, int64_t peer);
-    bool transition_moved(int64_t peer) const;
+    godot::PackedInt64Array transition_arrivals() const;
     void transition_fail(int code);
     void transition_land();
     void transition_close();

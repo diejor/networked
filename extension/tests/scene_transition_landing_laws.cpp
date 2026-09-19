@@ -75,6 +75,35 @@ Array one_source(Node *p_source) {
     return out;
 }
 
+Declared place_body(
+    const Ref<NetwMultiplayer> &p_core,
+    Node *p_parent,
+    int64_t p_peer
+) {
+    Declared made;
+    made.owner = memnew(Node);
+    made.owner->set_name("Pawn");
+    p_parent->add_child(made.owner);
+    made.wrapper.instantiate();
+    made.handle = p_core->get_liveness_core()->entity_create();
+    made.wrapper->get_record()->adopt_handle(made.handle);
+    REQUIRE(p_core->liveness_bind(
+        made.handle,
+        p_core->get_liveness_core()->reserve_route(),
+        made.wrapper,
+        made.wrapper->get_record(),
+        made.owner
+    ));
+    made.wrapper->set_owner(made.owner);
+    made.wrapper->get_record()->set_peer_id(p_peer);
+    made.wrapper->get_record()->set_player_id(
+        p_core->player_incarnation(p_peer)
+    );
+    made.owner->set_meta(NetwMultiplayer::wrapper_meta(), made.wrapper);
+    p_core->membership_place_body(made.wrapper);
+    return made;
+}
+
 TEST_CASE(
     "[Networked][Scene][Hosted] TL1 a session-scoped landing seats every "
     "accepted player on the destination, including one that was "
@@ -358,5 +387,109 @@ TEST_CASE(
 }
 
 #endif
+
+TEST_CASE(
+    "[Networked][Scene][Hosted] TL8 a change carries no body into the "
+    "destination, so an entity standing in the source is left where it "
+    "stands and the destination is reached by the watch alone"
+) {
+    const Ref<NetwMultiplayer> core = peered_core();
+    const CallLog flushed;
+    core->set_interest_flush(flushed.callable("flush"));
+    Node *root = memnew(Node);
+    const Declared source = declare_scene(core, root, "Source");
+    const Declared target = declare_scene(core, root, "Target");
+    adopt(core, 7);
+    const Declared pawn = place_body(core, source.owner, 7);
+    REQUIRE(int(core->scene_get_bodies(source.handle).size()) == 1);
+
+    core->scene_replace_sources(
+        target.owner,
+        one_source(source.owner),
+        NetwMultiplayer::SCENE_CHANGE_SCENE
+    );
+
+    CHECK(core->scene_subscribes(target.handle, 7));
+    NETW_CHECK_EQ(int(core->scene_get_bodies(target.handle).size()), 0);
+    CHECK(bool(pawn.owner->get_parent() == source.owner));
+
+    source.owner->remove_child(pawn.owner);
+    memdelete(pawn.owner);
+    memdelete(source.owner);
+    memdelete(root);
+}
+
+TEST_CASE(
+    "[Networked][Scene][Hosted] TL9 a source releases its players before the "
+    "destination admits them, so a handler that spawns on arrival reads a "
+    "roster the retiring scene has already left"
+) {
+    const Ref<NetwMultiplayer> core = peered_core();
+    const CallLog flushed;
+    core->set_interest_flush(flushed.callable("flush"));
+    Node *root = memnew(Node);
+    const Declared source = declare_scene(core, root, "Source");
+    const Declared target = declare_scene(core, root, "Target");
+    adopt(core, 7);
+    REQUIRE(core->scene_watch(source.handle, 7) == OK);
+
+    const CallLog seen;
+    core->scene_handle_of(source.handle)
+        ->connect(StringName("viewer_left"), seen.callable("left"));
+    core->scene_handle_of(target.handle)
+        ->connect(StringName("viewer_entered"), seen.callable("entered"));
+
+    core->scene_replace_sources(
+        target.owner,
+        one_source(source.owner),
+        NetwMultiplayer::SCENE_CHANGE_SCENE
+    );
+
+    const Vector<StringName> order = seen.order();
+    REQUIRE(order.size() == 2);
+    CHECK(bool(order[0] == StringName("left")));
+    CHECK(bool(order[1] == StringName("entered")));
+
+    memdelete(root);
+}
+
+TEST_CASE(
+    "[Networked][Scene][Hosted] TL10 a landed change announces the players it "
+    "brought and no others, so a second change to a world they already watch "
+    "announces nobody and a game spawning from it spawns once"
+) {
+    const Ref<NetwMultiplayer> core = peered_core();
+    const CallLog flushed;
+    core->set_interest_flush(flushed.callable("flush"));
+    Node *root = memnew(Node);
+    const Declared source = declare_scene(core, root, "Source");
+    const Declared target = declare_scene(core, root, "Target");
+    adopt(core, 7);
+    adopt(core, 9);
+    REQUIRE(core->scene_watch(source.handle, 7) == OK);
+    REQUIRE(core->scene_watch(target.handle, 9) == OK);
+
+    const CallLog announced;
+    core->connect(
+        StringName("scene_changed"),
+        announced.callable("changed")
+    );
+
+    core->scene_replace_sources(
+        target.owner,
+        one_source(source.owner),
+        NetwMultiplayer::SCENE_CHANGE_SESSION
+    );
+
+    NETW_CHECK_EQ(announced.count(StringName("changed")), 1);
+    const TypedArray<netw::NetwPlayer> arrived
+        = announced.args(StringName("changed"), 0)[1];
+    NETW_CHECK_EQ(int(arrived.size()), 1);
+    const Ref<netw::NetwPlayer> only = arrived[0];
+    REQUIRE(only.is_valid());
+    NETW_CHECK_EQ(int(only->get_peer_id()), 7);
+
+    memdelete(root);
+}
 
 } // namespace TestNetwSceneTransitionLandingLaws

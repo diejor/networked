@@ -10,10 +10,10 @@ var layer: TPLayer
 
 var is_moving: bool:
 	get:
-		return layer.is_moving()
+		return layer != null and layer.is_moving()
 
 @onready var entity := NetwEntity.of(owner)
-@onready var game: QuickStartSession = Netw.service(self, QuickStartSession)
+@onready var game: MultipleLevelsSession = Netw.service(self, MultipleLevelsSession)
 
 
 func _init() -> void:
@@ -32,11 +32,20 @@ func _ready() -> void:
 
 
 func teleport(target_scene: String, target_marker: NodePath) -> NetwPromise:
-	if layer.is_moving():
+	if is_moving:
 		return layer.pending
-	var opened := layer.open(target_scene)
-	request_teleport.rpc_id(1, target_scene, target_marker)
+	var opened := layer.open(target_scene) if layer else NetwPromise.new()
+	@warning_ignore("missing_await")
+	cover_and_request(target_scene, target_marker)
 	return opened
+
+
+func cover_and_request(target_scene: String, target_marker: NodePath) -> void:
+	if layer:
+		await layer.teleport_out()
+	if not is_multiplayer_authority():
+		return
+	request_teleport.rpc_id(1, target_scene, target_marker)
 
 
 @rpc("authority", "call_local", "reliable")

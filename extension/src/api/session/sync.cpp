@@ -463,7 +463,12 @@ void NetwMultiplayer::table_announce_intake() {
 }
 
 void NetwMultiplayer::table_announce(const RID &p_table) {
-    emit_signal(SIG_TABLE_RECEIVED, p_table, table_core->tick_of(p_table));
+    const int64_t tick = table_core->tick_of(p_table);
+    emit_signal(SIG_TABLE_RECEIVED, p_table, tick);
+    if (const Ref<NetwTableHandle> *handle
+        = table_handles.getptr(int64_t(p_table.get_id()))) {
+        (*handle)->announce(tick);
+    }
 }
 
 bool NetwMultiplayer::table_publishes() const {
@@ -1757,6 +1762,18 @@ RID NetwMultiplayer::table_create(const RID &p_schema) {
     }
     table_by_name[record->name] = minted;
     table_schema[int64_t(minted.get_id())] = p_schema;
+    return minted;
+}
+
+Ref<NetwTableHandle> NetwMultiplayer::get_table_handle(const RID &p_table) {
+    const int64_t key = int64_t(p_table.get_id());
+    if (const Ref<NetwTableHandle> *held = table_handles.getptr(key)) {
+        return *held;
+    }
+    const Ref<NetwTableHandle> minted = NetwTableHandle::over(p_table, this);
+    if (minted.is_valid()) {
+        table_handles[key] = minted;
+    }
     return minted;
 }
 

@@ -16,8 +16,9 @@
 		func _host_settings() -&gt; Dictionary:
 		    return {region = "eu"}
 
-		func _make_peer(ticket: RID, mode: int, address: String,
-		        settings: Dictionary) -&gt; void:
+		func _make_peer(
+		        ticket: RID, mode: NetwMultiplayer.TransportMode,
+		        address: String, settings: Dictionary) -&gt; void:
 		    report(ticket, &amp;"handshake", "Reaching the relay...", 0.5)
 		    var peer := RelayMultiplayerPeer.new()
 		    var err: Error = await peer.connect_async(address, settings.region)
@@ -165,7 +166,7 @@
 		<method name="_make_peer" qualifiers="virtual">
 			<return type="void" />
 			<param index="0" name="ticket" type="RID" />
-			<param index="1" name="mode" type="int" />
+			<param index="1" name="mode" type="int" enum="NetwMultiplayer.TransportMode" />
 			<param index="2" name="address" type="String" />
 			<param index="3" name="settings" type="Dictionary" />
 			<description>

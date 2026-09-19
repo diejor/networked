@@ -21,14 +21,18 @@ constexpr const char *GATE = R"(extends Node
 var calls := 0
 var seen_peer := 0
 var seen_name := StringName()
-var seen_args: Array = []
+var seen_team := StringName()
 var verdict := OK
 
-func admit(peer_id: int, username: StringName, args: Array) -> Error:
+func admit(
+	peer_id: int,
+	username: StringName,
+	team: StringName = StringName()
+) -> Error:
 	calls += 1
 	seen_peer = peer_id
 	seen_name = username
-	seen_args = args
+	seen_team = team
 	return verdict
 
 func seat(_who, _team: StringName) -> void:
@@ -39,7 +43,7 @@ constexpr const char *GATE_ANSWERING_NO_ERROR = R"(extends Node
 
 var calls := 0
 
-func admit(_peer_id: int, _username: StringName, _args: Array):
+func admit(_peer_id: int, _username: StringName):
 	calls += 1
 	return "admitted"
 )";
@@ -179,7 +183,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][SceneTree] G4 the handler is handed the joining "
-    "peer, the username it claimed and the join's own arguments as one Array"
+    "peer, the username it claimed and the join's own arguments unflattened"
 ) {
     Node *branch = mounted_branch("AdmitG4");
     const Ref<NetwMultiplayer> host = branch_session(branch);
@@ -203,11 +207,8 @@ TEST_CASE(
     );
     CHECK(StringName(gate->get(StringName("seen_name")))
           == StringName("ana"));
-    const Array seen = gate->get(StringName("seen_args"));
-    NETW_CHECK_EQ(int64_t(seen.size()), int64_t(1));
-    const StringName team = seen.size() == 1 ? StringName(seen[0])
-                                             : StringName();
-    CHECK(team == StringName("red"));
+    CHECK(StringName(gate->get(StringName("seen_team")))
+          == StringName("red"));
 
     release_branch(host, branch);
 }

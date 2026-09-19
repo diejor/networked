@@ -60,7 +60,7 @@ func connect_session(role: String, port: int) -> Error:
 		err = peer.create_client("127.0.0.1", port)
 	if err != OK:
 		return err
-	Netw.join(session, username)
+	Netw.prepare_join(session, username)
 	api.multiplayer_peer = peer
 	if api.multiplayer_peer != peer:
 		return ERR_CANT_CONNECT

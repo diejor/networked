@@ -504,14 +504,14 @@ Dictionary NetwTransport::client_settings_default() {
 
 void NetwTransport::make_peer(
     const RID &p_ticket,
-    int p_mode,
+    NetwMultiplayer::TransportMode p_mode,
     const String &p_address,
     const Dictionary &p_settings
 ) {
     if (GDVIRTUAL_CALL(
             _make_peer,
             p_ticket,
-            int64_t(p_mode),
+            p_mode,
             p_address,
             p_settings
         )) {

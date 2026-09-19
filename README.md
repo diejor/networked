@@ -26,7 +26,7 @@ existing `@rpc`, `MultiplayerSynchronizer`, `MultiplayerSpawner` code keeps work
 
 ## Demos
 
-[`examples/bomber`](examples/bomber) · [`examples/racing`](examples/racing) · [`examples/rocket_league`](examples/rocket_league) · [`examples/quick_start`](examples/quick_start)
+[`examples/bomber`](examples/bomber) · [`examples/racing`](examples/racing) · [`examples/rocket_league`](examples/rocket_league) · [`examples/multiple_levels`](examples/multiple_levels)
 
 ## Replicate a property
 

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://vj1s4e7rbmsn"]
 
-[ext_resource type="Script" uid="uid://dfloy6o50whju" path="res://examples/quick_start/tp_layer.gd" id="1_jetau"]
+[ext_resource type="Script" uid="uid://dfloy6o50whju" path="res://examples/multiple_levels/tp_layer.gd" id="1_jetau"]
 
 [sub_resource type="Gradient" id="Gradient_uei8g"]
 colors = PackedColorArray(0.9019608, 0.9019608, 0.9019608, 1, 0.50980395, 0.7058824, 0.87058824, 1)

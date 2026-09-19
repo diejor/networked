@@ -33,7 +33,8 @@
 		[codeblock]
 		extends NetwMultiplayer
 
-		func _predict_consume(depth: int, buffer: int) -&gt; int:
+		func _predict_consume(
+		        depth: int, buffer: int) -&gt; NetwPredict.ConsumeAction:
 		    if depth &gt; 8:
 		        return NetwPredict.CONSUME_ACTION_REPLAY
 		    return predict_consume_default(depth, buffer)
@@ -92,7 +93,7 @@
 			</description>
 		</method>
 		<method name="_predict_consume" qualifiers="virtual">
-			<return type="int" />
+			<return type="int" enum="NetwPredict.ConsumeAction" />
 			<param index="0" name="depth" type="int" />
 			<param index="1" name="buffer" type="int" />
 			<description>
@@ -1521,6 +1522,7 @@
 			<description>
 				Rewinds every entity in [param entities] to what its lag-compensation timeline held at [param tick], runs [param body] with the world in that rewound state, then restores each entity to the pose it held before the call. An entity with no timeline slot, no bound owner, or nothing recorded at [param tick] is skipped rather than rewound, and an invalid [param body] still performs the rewind and restore with nothing run in between.
 				The rewind and the restore always pair within one call, so a caller never observes the world left in a rewound state.
+				[method Netw.rewind] takes the same set as [NetwEntity] handles and finds the session from [param body] itself.
 			</description>
 		</method>
 		<method name="lagcomp_sample" qualifiers="const">
@@ -1878,7 +1880,7 @@
 			</description>
 		</method>
 		<method name="predict_consume">
-			<return type="int" />
+			<return type="int" enum="NetwPredict.ConsumeAction" />
 			<param index="0" name="depth" type="int" />
 			<param index="1" name="buffer" type="int" />
 			<description>
@@ -1888,7 +1890,7 @@
 			</description>
 		</method>
 		<method name="predict_consume_default">
-			<return type="int" />
+			<return type="int" enum="NetwPredict.ConsumeAction" />
 			<param index="0" name="depth" type="int" />
 			<param index="1" name="buffer" type="int" />
 			<description>
@@ -2253,8 +2255,8 @@
 			<param index="1" name="path" type="String" />
 			<param index="2" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
 			<description>
-				Changes to the file-backed scene at [param path], mirroring [method SceneTree.change_scene_to_file] while keeping the change under server authority.
-				[param scope] says who the change is for and nothing infers it, so the same call means the same thing on a listen host and on a dedicated server. [param requester] names the node the change is asked from, which resolves the player a [constant SCENE_CHANGE_PLAYER] change moves and the source world a [constant SCENE_CHANGE_SCENE] change replaces. A scope that needs one and finds none is rejected rather than widened.
+				Opens the file-backed scene at [param path] and makes players watch it, under server authority. No entity moves, so spawn the arrivals from [signal scene_changed].
+				[param scope] says who the change is for and nothing infers it, so the same call means the same thing on a listen host and on a dedicated server. [param requester] names the node the change is asked from, which resolves the player a [constant SCENE_CHANGE_PLAYER] change acts on and the source scene a [constant SCENE_CHANGE_SCENE] change replaces. A scope that needs one and finds none is rejected rather than widened.
 				On authority the change applies directly. On a client it becomes a [method scene_request] whose result settles the returned [NetwPromise].
 				[codeblock]
 				var promise := session.scene_change_to_file(self, "res://arena.tscn")
@@ -2455,7 +2457,7 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
 			<description>
-				Asks server authority to move the local player to the scene file at [param path]. A label cannot be requested, because [method Netw.scene] is what resolves a live scene by label and a change names a path.
+				Asks server authority to make the local player watch the scene file at [param path]. A label cannot be requested, because [method Netw.scene] is what resolves a live scene by label and a change names a path.
 				The promise rejects with [constant @GlobalScope.ERR_UNAUTHORIZED] when policy rejects, [constant @GlobalScope.ERR_SKIP] when a newer request supersedes it, and [constant @GlobalScope.ERR_TIMEOUT] when authority never returns within ten seconds.
 				[b]Player request.[/b]
 			</description>
@@ -3268,7 +3270,7 @@
 		<method name="transport_create_peer">
 			<return type="RID" />
 			<param index="0" name="transport" type="RID" />
-			<param index="1" name="mode" type="int" />
+			<param index="1" name="mode" type="int" enum="NetwMultiplayer.TransportMode" />
 			<param index="2" name="address" type="String" />
 			<param index="3" name="settings" type="Dictionary" />
 			<param index="4" name="completed" type="Callable" />
@@ -3539,7 +3541,7 @@
 			</description>
 		</signal>
 		<signal name="embed_phase_changed">
-			<param index="0" name="phase" type="int" />
+			<param index="0" name="phase" type="int" enum="NetwMultiplayer.EmbedPhase" />
 			<description>
 				Emitted when [method embed_phase] advances, carrying the phase just entered. The installing embedding is the only caller that advances it, through [method embed_settle].
 			</description>
@@ -3661,7 +3663,7 @@
 		<signal name="predict_owner_divergence">
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="entry" type="int" />
-			<param index="2" name="attribution" type="int" />
+			<param index="2" name="attribution" type="int" enum="NetwPredictJournal.Attribution" />
 			<description>
 				Announced on server authority when an owner's claimed post-state for a transition disagrees with the state authority itself reached, so a diagnostic sink hears the disagreement the tick it is judged rather than reading a counter later. [param peer] is the controller of the entity seated in the slot, [param entry] is the transition judged, and [param attribution] is the [enum NetwPredictJournal.Attribution] the comparison charged the divergence to.
 				A claim that matched is counted and not announced, and so is one the comparison could charge to nothing, which leaves [constant NetwPredictJournal.UNKNOWN] out of this signal's vocabulary. Both are counted either way, through [member NetwPredictStats.client_fp_verified] and [member NetwPredictStats.client_mismatches].
@@ -3685,6 +3687,14 @@
 			<param index="2" name="to" type="Object" />
 			<description>
 				Emitted for a move that completed, after the mover's membership and saved rows have settled and before the move's [NetwPromise] resolves, so a listener and an awaiting caller read the same session. A rejected move never arrives and is never announced.
+			</description>
+		</signal>
+		<signal name="scene_changed">
+			<param index="0" name="scene" type="Object" />
+			<param index="1" name="arrived" type="Array" />
+			<description>
+				Emitted on server authority once a [method scene_change_to_file] has landed. [param scene] is the destination and [param arrived] holds the [NetwPlayer] rows it brought there.
+				A player already watching the destination is not in [param arrived], so a repeated change announces nobody.
 			</description>
 		</signal>
 		<signal name="scene_live">
@@ -3743,7 +3753,7 @@
 			</description>
 		</signal>
 		<signal name="session_join_failed">
-			<param index="0" name="error" type="int" />
+			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="reason" type="String" />
 			<description>
 				This peer's own join was rejected and no player was seated for it. A game connects through [signal NetwConnectHandle.join_failed] on [method Netw.connection] rather than here.
@@ -3776,8 +3786,8 @@
 			</description>
 		</signal>
 		<signal name="session_state_changed">
-			<param index="0" name="old_state" type="int" />
-			<param index="1" name="new_state" type="int" />
+			<param index="0" name="old_state" type="int" enum="NetwMultiplayer.SessionState" />
+			<param index="1" name="new_state" type="int" enum="NetwMultiplayer.SessionState" />
 			<description>
 				Announced by the session machine on every legal edge. An edge it rejects is not a transition, so it is not published.
 			</description>
@@ -4186,13 +4196,13 @@
 			Any tracked entity entered or left, and [code]subject[/code] is its entity RID. Bodies report here too, so a caller wanting only them reads [constant SCENE_EVENT_BODY] instead.
 		</constant>
 		<constant name="SCENE_CHANGE_SESSION" value="0" enum="SceneChange">
-			Every player converges on the destination and every other live scene retires. Isolation, the number of live scenes, and whether authority also holds a local player do not change what this means.
+			Every admitted player watches the destination, and every other live scene retires with the entities standing in it. Isolation, the number of live scenes, and whether authority also holds a local player do not change what this means.
 		</constant>
 		<constant name="SCENE_CHANGE_PLAYER" value="1" enum="SceneChange">
-			One player travels with the bodies it is enrolled in, and every world keeps running. A change at this scope with no player to resolve is rejected rather than widened to the session.
+			One player watches the destination and stops watching everything else. The bodies that player left behind are despawned, and no scene retires. A change at this scope with no player to resolve is rejected rather than widened to the session.
 		</constant>
 		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
-			The occupants of the caller's own world travel and that world retires, leaving other worlds untouched. A change at this scope with no source world to resolve is rejected.
+			Everyone in the caller's own scene watches the destination, and that scene alone retires with the entities standing in it. A change at this scope with no source scene to resolve is rejected.
 		</constant>
 		<constant name="SCENE_ISOLATION_NONE" value="0" enum="SceneIsolation">
 			The scene shares the session's world and its root is a plain [Node]. Each scene chooses its own isolation, so one session can hold a shared lobby and several isolated match worlds at once.

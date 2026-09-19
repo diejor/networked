@@ -28,6 +28,7 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
+#include "netw/entity/stage.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -53,6 +54,7 @@ const char *SIG_PLAYER_JOINED = "player_joined";
 const char *SIG_PLAYER_LOCAL_JOINED = "player_local_joined";
 const char *SIG_PHYSICS_FRAME = "physics_frame";
 const char *SIG_SCENE_ACTIVATED = "scene_activated";
+const char *SIG_SCENE_CHANGED = "scene_changed";
 const char *SIG_SCENE_DESPAWNED = "scene_despawned";
 const char *SIG_SCENE_ENTITY_MOVED = "scene_entity_moved";
 const char *SIG_SCENE_LIVE = "scene_live";
@@ -788,11 +790,6 @@ Node *NetwMultiplayer::scene_resolve_destination(const Variant &p_destination) {
     return existing != nullptr ? existing : scene_activate(p_destination);
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::scene_bodies_in(Node *p_container) {
-    return p_container != nullptr ? scene_get_bodies(entity_of(p_container))
-                                  : TypedArray<NetwEntity>();
-}
-
 Ref<NetwSceneHandle> NetwMultiplayer::scene_handle_for(Node *p_container) {
     const Ref<NetwEntity> record = NetwEntity::of(p_container);
     return record.is_valid() ? record->get_scene() : Ref<NetwSceneHandle>();
@@ -800,20 +797,6 @@ Ref<NetwSceneHandle> NetwMultiplayer::scene_handle_for(Node *p_container) {
 
 double NetwMultiplayer::scene_request_deadline() {
     return 10.0;
-}
-
-Ref<NetwPromise> NetwMultiplayer::scene_move_entity_to(
-    const Ref<NetwEntity> &p_mover,
-    Node *p_target
-) {
-    if (p_mover.is_null()) {
-        NETW_TRACE(sys::SCENE, "scene_move: the mover is unreachable");
-        return NetwPromise::rejected(
-            ERR_UNAVAILABLE,
-            String("scene_move: the mover is unreachable")
-        );
-    }
-    return scene_move_entity(p_mover->get_rid_handle(), entity_of(p_target));
 }
 
 Ref<NetwPromise> NetwMultiplayer::scene_replace_sources(
@@ -826,12 +809,11 @@ Ref<NetwPromise> NetwMultiplayer::scene_replace_sources(
     if (!scene_core->transition_open()) {
         NETW_TRACE(
             sys::SCENE,
-            "refused a scene change: another transition is already moving "
-            "the roster"
+            "refused a scene change: another change is already open"
         );
         promise->reject(
             ERR_BUSY,
-            String("a scene change is already moving the roster")
+            String("a scene change is already open")
         );
         return promise;
     }
@@ -845,12 +827,12 @@ Ref<NetwPromise> NetwMultiplayer::scene_replace_sources(
         scene_core->transition_close();
         promise->reject(
             ERR_UNAVAILABLE,
-            String("a scene change found no destination to move into")
+            String("a scene change found no destination to watch")
         );
         return promise;
     }
     Array sources;
-    PackedInt64Array watchers;
+    PackedInt64Array arriving;
     for (int at = 0; at < p_sources.size(); at++) {
         Node *source = Object::cast_to<Node>(p_sources[at]);
         if (source == nullptr || source == target) {
@@ -858,57 +840,16 @@ Ref<NetwPromise> NetwMultiplayer::scene_replace_sources(
         }
         sources.push_back(source);
         const PackedInt64Array held
-            = scene_membership.watchers_of(entity_of(source));
+            = scene_membership.members_of(entity_of(source));
         for (int who = 0; who < held.size(); who++) {
-            if (!watchers.has(held[who])) {
-                watchers.push_back(held[who]);
+            if (!arriving.has(held[who])) {
+                arriving.push_back(held[who]);
             }
         }
     }
-    scene_core->transition_arm(target, sources, promise, p_scope, watchers);
-    scene_carry_transition();
-    return promise;
-}
-
-void NetwMultiplayer::scene_carry_transition() {
-    NETW_ZONE_NC("session scene carry transition", colors::SCENE);
-    Node *target = Object::cast_to<Node>(scene_core->transition_target());
-    const Callable roster
-        = callable_mp(this, &NetwMultiplayer::scene_bodies_in);
-    Ref<NetwEntity> mover = scene_core->transition_next_mover(roster);
-    while (mover.is_valid()) {
-        const Ref<NetwPromise> moving = scene_move_entity_to(mover, target);
-        if (!moving->get_is_settled()) {
-            moving->connect(
-                StringName("settled"),
-                callable_mp(this, &NetwMultiplayer::scene_resume_transition)
-                    .bind(mover, moving),
-                Object::CONNECT_ONE_SHOT
-            );
-            return;
-        }
-        if (!scene_core->transition_accept(
-                moving->get_code(),
-                mover->get_peer_id()
-            )) {
-            return;
-        }
-        mover = scene_core->transition_next_mover(roster);
-    }
+    scene_core->transition_arm(target, sources, promise, p_scope, arriving);
     scene_land_transition();
-}
-
-void NetwMultiplayer::scene_resume_transition(
-    const Ref<NetwEntity> &p_mover,
-    const Ref<NetwPromise> &p_moving
-) {
-    if (p_mover.is_null() || p_moving.is_null()) {
-        return;
-    }
-    if (scene_core
-            ->transition_accept(p_moving->get_code(), p_mover->get_peer_id())) {
-        scene_carry_transition();
-    }
+    return promise;
 }
 
 void NetwMultiplayer::scene_land_transition() {
@@ -923,29 +864,46 @@ void NetwMultiplayer::scene_land_transition() {
     const PackedInt64Array arriving = scene_core->transition_scope()
             == SCENE_CHANGE_SESSION
         ? scene_transition_every_member()
-        : scene_core->transition_watchers();
+        : scene_core->transition_arrivals();
+    for (int at = 0; at < sources.size(); at++) {
+        Node *source = Object::cast_to<Node>(sources[at]);
+        if (source == nullptr) {
+            continue;
+        }
+        const RID leaving = entity_of(source);
+        for (int who = 0; who < arriving.size(); who++) {
+            scene_unwatch(leaving, arriving[who]);
+        }
+        scene_destroy(leaving);
+    }
+    PackedInt64Array arrived;
     for (int at = 0; at < arriving.size(); at++) {
+        if (!scene_subscribes(destination, arriving[at])) {
+            arrived.push_back(arriving[at]);
+        }
         const Error watching = scene_watch(destination, arriving[at]);
         if (watching != OK) {
             scene_core->transition_fail(watching);
             return;
         }
     }
-    if (scene_core->transition_scope() == SCENE_CHANGE_SCENE) {
-        for (int at = 0; at < sources.size(); at++) {
-            const RID source = entity_of(Object::cast_to<Node>(sources[at]));
-            for (int who = 0; who < arriving.size(); who++) {
-                scene_unwatch(source, arriving[who]);
-            }
-        }
-    }
-    for (int at = 0; at < sources.size(); at++) {
-        Node *source = Object::cast_to<Node>(sources[at]);
-        if (source != nullptr) {
-            scene_destroy(entity_of(source));
-        }
-    }
+    interest_request_flush();
     scene_core->transition_land();
+    scene_announce_changed(destination, arrived);
+}
+
+void NetwMultiplayer::scene_announce_changed(
+    const RID &p_destination,
+    const PackedInt64Array &p_peers
+) {
+    TypedArray<NetwPlayer> arrived;
+    for (int at = 0; at < p_peers.size(); at++) {
+        const Ref<NetwPlayer> row = player_admitted_of(p_peers[at]);
+        if (row.is_valid()) {
+            arrived.push_back(row);
+        }
+    }
+    emit_signal(SIG_SCENE_CHANGED, scene_handle_of(p_destination), arrived);
 }
 
 PackedInt64Array NetwMultiplayer::scene_transition_every_member() const {
@@ -2011,36 +1969,48 @@ Ref<NetwPromise> NetwMultiplayer::player_travel(
             String("travel names a peer this session has not admitted")
         );
     }
-    if (scene_travel_reserved.has(peer)) {
+    scene_leave_everything_but(peer, destination);
+    PackedInt64Array arrived;
+    if (!scene_subscribes(destination, peer)) {
+        arrived.push_back(peer);
+    }
+    const Error watching = scene_watch(destination, peer);
+    if (watching != OK) {
         return NetwPromise::rejected(
-            ERR_BUSY,
-            String("this player is already travelling")
+            watching,
+            String("travel could not seat the watch it arrived with")
         );
     }
-    const TypedArray<NetwEntity> travellers = scene_travel_roots(peer);
-    scene_travel_reserved.insert(peer);
-    Array pending;
-    for (int at = 0; at < travellers.size(); at++) {
-        const Ref<NetwEntity> player = travellers[at];
-        if (player.is_null()) {
-            continue;
-        }
-        pending.push_back(scene_move_entity_to(player, target));
-    }
-    Ref<NetwPromise> settled;
-    settled.instantiate();
-    scene_travel_land(
-        peer,
-        destination,
-        pending,
-        0,
-        settled,
-        travellers.is_empty()
-    );
-    return settled;
+    interest_request_flush();
+    scene_announce_changed(destination, arrived);
+    return NetwPromise::resolved(int(OK));
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::scene_travel_roots(int64_t p_peer) {
+void NetwMultiplayer::scene_leave_everything_but(
+    int64_t p_peer,
+    const RID &p_destination
+) {
+    const TypedArray<NetwEntity> leaving = scene_body_roots_of(p_peer);
+    for (int at = 0; at < leaving.size(); at++) {
+        const Ref<NetwEntity> body = leaving[at];
+        if (body.is_null()) {
+            continue;
+        }
+        if (scene_of(body->get_rid_handle()) == p_destination) {
+            continue;
+        }
+        entity_despawn(body->get_rid_handle(), Ref<NetwDespawnOpts>());
+    }
+    LocalVector<RID> held;
+    scene_membership.scenes_of(p_peer, held);
+    for (uint32_t at = 0; at < held.size(); at++) {
+        if (held[at] != p_destination) {
+            scene_unwatch(held[at], p_peer);
+        }
+    }
+}
+
+TypedArray<NetwEntity> NetwMultiplayer::scene_body_roots_of(int64_t p_peer) {
     const TypedArray<NetwEntity> owned = scene_bodies_of(p_peer);
     TypedArray<NetwEntity> roots;
     for (int at = 0; at < owned.size(); at++) {
@@ -2061,64 +2031,6 @@ TypedArray<NetwEntity> NetwMultiplayer::scene_travel_roots(int64_t p_peer) {
         }
     }
     return roots;
-}
-
-void NetwMultiplayer::scene_travel_land(
-    int64_t p_peer,
-    const RID &p_destination,
-    const Array &p_pending,
-    int p_at,
-    const Ref<NetwPromise> &p_settled,
-    bool p_bodiless
-) {
-    for (int at = p_at; at < p_pending.size(); at++) {
-        const Ref<NetwPromise> carrying = p_pending[at];
-        if (carrying.is_null()) {
-            continue;
-        }
-        if (!carrying->get_is_settled()) {
-            carrying->when_settled(
-                callable_mp(this, &NetwMultiplayer::scene_travel_land)
-                    .bind(
-                        p_peer,
-                        p_destination,
-                        p_pending,
-                        at + 1,
-                        p_settled,
-                        p_bodiless
-                    )
-            );
-            return;
-        }
-        if (carrying->get_code() != OK) {
-            scene_travel_reserved.erase(p_peer);
-            p_settled->reject(
-                Error(carrying->get_code()),
-                String("travel could not carry every player entity")
-            );
-            return;
-        }
-    }
-    scene_travel_reserved.erase(p_peer);
-    if (!scene_core->is_live(p_destination)) {
-        p_settled->reject(
-            ERR_UNAVAILABLE,
-            String("the destination retired while travel was preparing")
-        );
-        return;
-    }
-    if (p_bodiless) {
-        const Error watching = scene_watch(p_destination, p_peer);
-        if (watching != OK) {
-            p_settled->reject(
-                watching,
-                String("travel could not seat the watch it arrived with")
-            );
-            return;
-        }
-    }
-    interest_request_flush();
-    p_settled->resolve(OK);
 }
 
 Node *NetwMultiplayer::scene_node_of(const RID &p_scene) const {
@@ -2923,7 +2835,8 @@ TypedArray<NetwEntity> NetwMultiplayer::scene_get_bodies(const RID &p_scene) {
         const Ref<NetwEntity> record
             = Object::cast_to<NetwEntity>(entity_get_view(members[at]).ptr());
         if (record.is_valid() && record->get_owner() != nullptr
-            && record->get_peer_id() != 0) {
+            && record->get_peer_id() != 0
+            && !entity::stage_is_leaving(record->get_stage())) {
             out.push_back(record);
         }
     }

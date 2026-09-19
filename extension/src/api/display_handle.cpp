@@ -226,7 +226,9 @@ void NetwDisplayHandle::_bind_methods() {
             Variant::INT,
             "display_role",
             PROPERTY_HINT_ENUM,
-            "Auto,Remote,Predicted,Disabled,Authority"
+            "Auto,Remote,Predicted,Disabled,Authority",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.DisplayRole"
         ),
         "set_display_role",
         "get_display_role"
@@ -244,7 +246,9 @@ void NetwDisplayHandle::_bind_methods() {
             Variant::INT,
             "predicted_mode",
             PROPERTY_HINT_ENUM,
-            "Chase,Bracketed"
+            "Chase,Bracketed",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.PredictedMode"
         ),
         "set_predicted_mode",
         "get_predicted_mode"

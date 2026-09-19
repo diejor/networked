@@ -81,7 +81,7 @@ func bring_up(
 			)
 			return
 		if not String(username).is_empty():
-			var submit: Callable = Netw.join
+			var submit: Callable = Netw.prepare_join
 			submit.callv([tree, username] + join_args)
 		api.multiplayer_peer = peer
 		if api.multiplayer_peer != peer:

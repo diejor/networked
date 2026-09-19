@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		A schema is both the chain a [code]static var[/code] initializer runs and the data that chain leaves behind, because a game that had to terminate the chain to get the data was making a distinction it never wanted. [member columns] is the address order, and it is the address order every adopting session seals in, so two peers built from the same scripts agree on layout without negotiating it.
-		Column methods return an [int] index because schema declarations have no session state. Each session creates its own [RID] for the schema. Use [method NetwMultiplayer.table_find] to retrieve it.
+		Column methods return an [int] index because schema declarations have no session state. That index is the wire address a writer and a reader both name the column by. Each session builds its own table from the declaration, and [method Netw.table] is how a game reaches one.
 		[codeblock]
 		class Mobs:
 		    static var schema := Netw.configure_schema(&amp;"Mob")
@@ -16,8 +16,7 @@
 		    static var vel := schema.vector3(&amp;"vel")   # unquantized, the memcpy path
 		    static var hp  := schema.u16(&amp;"hp")
 
-		func _ready() -&gt; void:
-		    mobs = Netw.of(self).table_find(Mobs.schema.schema_name)
+		@onready var mobs := Netw.table(self, Mobs.schema.schema_name)
 		[/codeblock]
 		A column with no quantizer crosses the wire as a raw little-endian copy of its buffer, which is the cheapest path in both directions. A quantizer buys bandwidth by paying per element, so reach for one on the columns a link actually cares about.
 		One schema serves three consumers, so a declaration that only wants the database says so with [method replicated] and creates no table at all. [method NetwDatabase.declare_table] takes this object directly. [method variant] is the tier a table rejects and the other two accept.

@@ -3169,36 +3169,36 @@ int NetwPredictionEngine::resolve_axes(
     const bool is_server = row->axes.authority;
     const bool delay_closed = row->latches.fallback_latched
         || p_handle->get_recovery_policy()
-            == int(NetwPredict::RECOVERY_POLICY_DELAY_CLOSED);
+            == NetwPredict::RECOVERY_POLICY_DELAY_CLOSED;
     if (row->axes.inputless) {
         const bool dragged = simulation_subject_count(p_slot) > 0;
-        p_handle->set_input_source(int(NetwPredict::INPUT_SOURCE_NONE));
+        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_NONE);
         p_handle->set_sim_mode(
-            is_server ? int(NetwPredict::SIM_MODE_AUTHORITATIVE)
+            is_server ? NetwPredict::SIM_MODE_AUTHORITATIVE
                 : dragged && !delay_closed
-                ? int(NetwPredict::SIM_MODE_SPECULATIVE)
-                : int(NetwPredict::SIM_MODE_DISPLAY)
+                ? NetwPredict::SIM_MODE_SPECULATIVE
+                : NetwPredict::SIM_MODE_DISPLAY
         );
     } else if (row->axes.controlled_locally) {
-        p_handle->set_input_source(int(NetwPredict::INPUT_SOURCE_LOCAL));
+        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_LOCAL);
         p_handle->set_sim_mode(
-            is_server          ? int(NetwPredict::SIM_MODE_AUTHORITATIVE)
-                : delay_closed ? int(NetwPredict::SIM_MODE_DISPLAY)
-                               : int(NetwPredict::SIM_MODE_SPECULATIVE)
+            is_server          ? NetwPredict::SIM_MODE_AUTHORITATIVE
+                : delay_closed ? NetwPredict::SIM_MODE_DISPLAY
+                               : NetwPredict::SIM_MODE_SPECULATIVE
         );
     } else if (is_server) {
-        p_handle->set_input_source(int(NetwPredict::INPUT_SOURCE_RECEIVED));
-        p_handle->set_sim_mode(int(NetwPredict::SIM_MODE_AUTHORITATIVE));
+        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_RECEIVED);
+        p_handle->set_sim_mode(NetwPredict::SIM_MODE_AUTHORITATIVE);
     } else if (simulation_subject_count(p_slot) > 0) {
-        p_handle->set_input_source(int(NetwPredict::INPUT_SOURCE_PREDICTED));
-        p_handle->set_sim_mode(int(NetwPredict::SIM_MODE_SPECULATIVE));
+        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_PREDICTED);
+        p_handle->set_sim_mode(NetwPredict::SIM_MODE_SPECULATIVE);
     } else {
-        p_handle->set_input_source(int(NetwPredict::INPUT_SOURCE_NONE));
-        p_handle->set_sim_mode(int(NetwPredict::SIM_MODE_DISPLAY));
+        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_NONE);
+        p_handle->set_sim_mode(NetwPredict::SIM_MODE_DISPLAY);
     }
     return NetwPredictionHandle::role_for_axes(
-        static_cast<NetwPredict::InputSource>(p_handle->get_input_source()),
-        static_cast<NetwPredict::SimMode>(p_handle->get_sim_mode())
+        p_handle->get_input_source(),
+        p_handle->get_sim_mode()
     );
 }
 
@@ -4494,7 +4494,8 @@ void NetwPredictionEngine::follow_relay_subscription(
 }
 
 void NetwPredictionEngine::admit_reconcile_mode(int64_t p_slot) {
-    const int admitted = admitted_reconcile_mode(p_slot);
+    const NetwPredict::Reconcile admitted
+        = static_cast<NetwPredict::Reconcile>(admitted_reconcile_mode(p_slot));
     NetwPredictionHandle *handle
         = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
     if (handle != nullptr) {

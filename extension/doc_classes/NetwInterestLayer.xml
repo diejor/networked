@@ -161,10 +161,10 @@
 		</method>
 	</methods>
 	<members>
-		<member name="default_leave_policy" type="int" setter="set_default_leave_policy" getter="get_default_leave_policy" default="0">
+		<member name="default_leave_policy" type="int" setter="set_default_leave_policy" getter="get_default_leave_policy" enum="NetwMultiplayer.LeavePolicy" default="0">
 			What happens to a peer's copy when this layer stops admitting an entity, for an entity that declared nothing of its own. It is a [enum NetwMultiplayer.LeavePolicy] value.
 		</member>
-		<member name="default_perception_policy" type="int" setter="set_default_perception_policy" getter="get_default_perception_policy" default="0">
+		<member name="default_perception_policy" type="int" setter="set_default_perception_policy" getter="get_default_perception_policy" enum="NetwMultiplayer.PerceptionPolicy" default="0">
 			Whether a kept copy is still drawn when this layer stops admitting an entity, for an entity that declared nothing of its own. It is a [enum NetwMultiplayer.PerceptionPolicy] value.
 		</member>
 		<member name="entities" type="Dictionary" setter="" getter="get_entities" default="{}">
@@ -174,7 +174,7 @@
 		<member name="layer_id" type="StringName" setter="set_layer_id" getter="get_layer_id" default="&amp;&quot;&quot;">
 			The stable id this layer is addressed by. Setting it declares the layer in the session's interest engine, so a layer taken from the session already carries its id.
 		</member>
-		<member name="policy" type="int" setter="set_policy" getter="get_policy" default="0">
+		<member name="policy" type="int" setter="set_policy" getter="get_policy" enum="NetwMultiplayer.LayerPolicy" default="0">
 			How [member viewers] composes into the per-peer verdict. See [enum Policy].
 		</member>
 		<member name="viewers" type="Dictionary" setter="" getter="get_viewers" default="{}">

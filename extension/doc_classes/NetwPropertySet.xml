@@ -20,7 +20,7 @@
 			</description>
 		</method>
 		<method name="column_type_for" qualifiers="static">
-			<return type="int" />
+			<return type="int" enum="NetwMultiplayer.ColumnType" />
 			<param index="0" name="script" type="Script" />
 			<param index="1" name="node" type="Node" />
 			<param index="2" name="property" type="StringName" />

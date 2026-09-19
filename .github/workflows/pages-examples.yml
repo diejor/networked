@@ -113,6 +113,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends brotli
           python3 ci/export.py cloudflare --dir build/site
+          echo "/quick-start/* /multiple-levels/:splat 301" >> build/site/_redirects
+          echo "/quick-start /multiple-levels/ 301" >> build/site/_redirects
           cat build/site/_redirects
 
       - name: Mount The Credential Function

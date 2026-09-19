@@ -67,7 +67,18 @@ void NetwSceneConfig::_bind_methods() {
         D_METHOD("get_isolation"),
         &NetwSceneConfig::get_isolation
     );
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "isolation"), "", "get_isolation");
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "isolation",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Netw.SceneIsolation"
+        ),
+        "",
+        "get_isolation"
+    );
 }
 
 } // namespace netw

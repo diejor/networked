@@ -111,7 +111,12 @@ void ScriptTransport::make_peer(
         return;
     }
     seam->arm(armed_ticket, outcome);
-    seam->make_peer(armed_ticket, p_mode, p_address, p_settings);
+    seam->make_peer(
+        armed_ticket,
+        NetwMultiplayer::TransportMode(p_mode),
+        p_address,
+        p_settings
+    );
 }
 
 void ScriptTransport::cancel_peer_creation() {

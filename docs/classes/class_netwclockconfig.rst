@@ -40,35 +40,35 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`   | :ref:`display_offset<class_NetwClockConfig_property_display_offset>`                         | ``2``     |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`  | :ref:`enable_drift_logging<class_NetwClockConfig_property_enable_drift_logging>`             | ``false`` |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`jitter_multiplier<class_NetwClockConfig_property_jitter_multiplier>`                   | ``2.0``   |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`jitter_stability_threshold<class_NetwClockConfig_property_jitter_stability_threshold>` | ``0.05``  |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`   | :ref:`jitter_window<class_NetwClockConfig_property_jitter_window>`                           | ``16``    |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`   | :ref:`max_ticks_per_frame<class_NetwClockConfig_property_max_ticks_per_frame>`               | ``8``     |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`   | :ref:`panic_snap_threshold<class_NetwClockConfig_property_panic_snap_threshold>`             | ``20``    |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`ping_interval<class_NetwClockConfig_property_ping_interval>`                           | ``0.1``   |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`stall_threshold<class_NetwClockConfig_property_stall_threshold>`                       | ``1.0``   |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`stretch_nudge_factor<class_NetwClockConfig_property_stretch_nudge_factor>`             | ``0.05``  |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`   | :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>`                                   | ``1``     |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`   | :ref:`tickrate<class_NetwClockConfig_property_tickrate>`                                     | ``30``    |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`   | :ref:`tickrate_mismatch_action<class_NetwClockConfig_property_tickrate_mismatch_action>`     | ``0``     |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`  | :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_interpolation>`   | ``true``  |
-   +----------------+----------------------------------------------------------------------------------------------+-----------+
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                               | :ref:`display_offset<class_NetwClockConfig_property_display_offset>`                         | ``2``     |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                              | :ref:`enable_drift_logging<class_NetwClockConfig_property_enable_drift_logging>`             | ``false`` |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                             | :ref:`jitter_multiplier<class_NetwClockConfig_property_jitter_multiplier>`                   | ``2.0``   |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                             | :ref:`jitter_stability_threshold<class_NetwClockConfig_property_jitter_stability_threshold>` | ``0.05``  |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                               | :ref:`jitter_window<class_NetwClockConfig_property_jitter_window>`                           | ``16``    |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                               | :ref:`max_ticks_per_frame<class_NetwClockConfig_property_max_ticks_per_frame>`               | ``8``     |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                               | :ref:`panic_snap_threshold<class_NetwClockConfig_property_panic_snap_threshold>`             | ``20``    |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                             | :ref:`ping_interval<class_NetwClockConfig_property_ping_interval>`                           | ``0.1``   |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                             | :ref:`stall_threshold<class_NetwClockConfig_property_stall_threshold>`                       | ``1.0``   |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`float`                                             | :ref:`stretch_nudge_factor<class_NetwClockConfig_property_stretch_nudge_factor>`             | ``0.05``  |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`             | :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>`                                   | ``1``     |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                               | :ref:`tickrate<class_NetwClockConfig_property_tickrate>`                                     | ``30``    |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :ref:`MismatchAction<enum_NetwMultiplayer_MismatchAction>` | :ref:`tickrate_mismatch_action<class_NetwClockConfig_property_tickrate_mismatch_action>`     | ``0``     |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                              | :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_interpolation>`   | ``true``  |
+   +------------------------------------------------------------+----------------------------------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -83,7 +83,7 @@ Methods
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`physics_interpolation<class_NetwClockConfig_method_physics_interpolation>`\ (\ use_physics_interpolation\: :godot:`bool`\ ) |
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`sync<class_NetwClockConfig_method_sync>`\ (\ sync_mode\: :godot:`int`\ )                                                    |
+   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`sync<class_NetwClockConfig_method_sync>`\ (\ sync_mode\: :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`\ )                  |
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`ticks_per_second<class_NetwClockConfig_method_ticks_per_second>`\ (\ tickrate\: :godot:`int`\ )                             |
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
@@ -271,12 +271,12 @@ Fraction of the remaining divergence the :godot:`NetwMultiplayer.SyncMode.SYNC_M
 
 .. rst-class:: classref-property
 
-:godot:`int` **sync_mode** = ``1`` :ref:`🔗<class_NetwClockConfig_property_sync_mode>`
+:ref:`SyncMode<enum_NetwMultiplayer_SyncMode>` **sync_mode** = ``1`` :ref:`🔗<class_NetwClockConfig_property_sync_mode>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_sync_mode**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_sync_mode**\ (\ )
+- |void| **set_sync_mode**\ (\ value\: :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`\ )
+- :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>` **get_sync_mode**\ (\ )
 
 Strategy used to align the local clock with the server, one of :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`.
 
@@ -305,12 +305,12 @@ How many simulation ticks to run per second.
 
 .. rst-class:: classref-property
 
-:godot:`int` **tickrate_mismatch_action** = ``0`` :ref:`🔗<class_NetwClockConfig_property_tickrate_mismatch_action>`
+:ref:`MismatchAction<enum_NetwMultiplayer_MismatchAction>` **tickrate_mismatch_action** = ``0`` :ref:`🔗<class_NetwClockConfig_property_tickrate_mismatch_action>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_tickrate_mismatch_action**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_tickrate_mismatch_action**\ (\ )
+- |void| **set_tickrate_mismatch_action**\ (\ value\: :ref:`MismatchAction<enum_NetwMultiplayer_MismatchAction>`\ )
+- :ref:`MismatchAction<enum_NetwMultiplayer_MismatchAction>` **get_tickrate_mismatch_action**\ (\ )
 
 What this session does when a peer reports a different tickrate: warn, disconnect it, or raise :ref:`NetwMultiplayer.clock_tickrate_mismatch<class_NetwMultiplayer_signal_clock_tickrate_mismatch>` and leave the choice to the game.
 
@@ -368,7 +368,7 @@ Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_
 
 .. rst-class:: classref-method
 
-:ref:`NetwClockConfig<class_NetwClockConfig>` **sync**\ (\ sync_mode\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_sync>`
+:ref:`NetwClockConfig<class_NetwClockConfig>` **sync**\ (\ sync_mode\: :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`\ ) :ref:`🔗<class_NetwClockConfig_method_sync>`
 
 Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this same draft, so a declaration reads as one chained expression.
 

@@ -25,8 +25,8 @@ Two numbers, both optional. :ref:`Netw.configure_lagcomp()<class_Netw_method_con
 
     func _init() -> void:
         Netw.configure_lagcomp(self) \
-                .input_gate_deadline_ticks(16) \
-                .max_future_action_ticks(4)
+                .input_gate_deadline(16) \
+                .max_future_action(4)
 
 \ Declaring this does not turn lag compensation on. The recording starts itself as soon as a predicted node or a :ref:`NetwAction<class_NetwAction>` needs it, so a game that predicts declares nothing here and a game that predicts nothing pays for nothing. Declare one to move a number off its default.
 

@@ -1,8 +1,8 @@
 class_name TestNakamaReplication
 extends NetwTestSuite
 
-const MAIN := preload("res://examples/quick_start/Main.tscn")
-const DATABASE := preload("res://examples/quick_start/quick_start_database.tres")
+const MAIN := preload("res://examples/multiple_levels/Main.tscn")
+const DATABASE := preload("res://examples/multiple_levels/multiple_levels_database.tres")
 const _TIMEOUT := 10.0
 
 var _trees: Array = []
@@ -15,11 +15,11 @@ func before(
 		do_skip = NakamaTestSupport.skip_reason(MAIN) != "",
 		skip_reason = NakamaTestSupport.skip_reason(MAIN),
 ) -> void:
-	# The quick_start SaveComponents persist into the repo-local saves dir.
+	# The multiple_levels SaveComponents persist into the repo-local saves dir.
 	# Redirect the shared database resource to a gdUnit temp dir so a stale
 	# save (for example valeria parked in Level2) can't shape this run's spawns.
 	var fs := DATABASE.backend as FileSystemDatabase
-	fs.base_dir = create_temp_dir("quick_start_saves")
+	fs.base_dir = create_temp_dir("multiple_levels_saves")
 
 
 func after_test() -> void:
@@ -30,7 +30,7 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_quick_start_players_spawn_and_replicate() -> void:
+func test_multiple_levels_players_spawn_and_replicate() -> void:
 	var host := await NakamaTestSupport.host_scene(self, MAIN, "valeria")
 	var host_tree := host.tree as MultiplayerTree
 	_track(host_tree)
@@ -53,7 +53,7 @@ func test_quick_start_players_spawn_and_replicate() -> void:
 	await _await(
 		func() -> bool:
 			return _all_players_spawned(host_tree, jose_tree, mia_tree),
-		"all quick start players to spawn on all peers",
+		"all multiple levels players to spawn on all peers",
 	)
 
 	var host_valeria := _find_player(host_tree, "valeria") as Node2D

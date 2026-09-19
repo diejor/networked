@@ -45,19 +45,19 @@ namespace Networked;
 /// <code>
 /// extends NetwQuantize
 ///
-/// func _supports_type(type: int) -&gt; bool:
+/// func _supports_type(type: Variant.Type) -&gt; bool:
 ///     return type == TYPE_VECTOR2
 ///
-/// func _bit_width(_type: int) -&gt; int:
+/// func _bit_width(_type: Variant.Type) -&gt; int:
 ///     return 10
 ///
-/// func _stride(_type: int) -&gt; int:
+/// func _stride(_type: Variant.Type) -&gt; int:
 ///     return 2
 ///
 /// func _encode(value: Variant, element: int) -&gt; int:
 ///     return roundi((value as Vector2)[element]) &amp; 0x3ff
 ///
-/// func _decode(codes: PackedInt64Array, _type: int) -&gt; Variant:
+/// func _decode(codes: PackedInt64Array, _type: Variant.Type) -&gt; Variant:
 ///     return Vector2(float(codes[0]), float(codes[1]))
 /// </code>
 /// </para>

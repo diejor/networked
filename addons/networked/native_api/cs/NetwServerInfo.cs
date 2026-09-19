@@ -349,10 +349,10 @@ public sealed class NetwServerInfo : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetVisibility =
-        NetwApi.MethodBind("NetwServerInfo", "get_visibility", 3905245786UL);
+        NetwApi.MethodBind("NetwServerInfo", "get_visibility", 3386729697UL);
 
     private static readonly IntPtr _bindSetVisibility =
-        NetwApi.MethodBind("NetwServerInfo", "set_visibility", 1286410249UL);
+        NetwApi.MethodBind("NetwServerInfo", "set_visibility", 2733874028UL);
 
     /// <summary>
     /// How widely the host asked to be listed, as a
@@ -361,17 +361,17 @@ public sealed class NetwServerInfo : NetwRefCounted
     /// to that directory: this says what the host asked for, not what any
     /// service enforces.
     /// </summary>
-    public long Visibility
+    public NetwServerInfo.VisibilityEnum Visibility
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetVisibility, Checked, ref answered);
-            return answered;
+            return (NetwServerInfo.VisibilityEnum)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetVisibility,

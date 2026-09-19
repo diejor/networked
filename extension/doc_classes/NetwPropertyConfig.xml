@@ -375,7 +375,7 @@
 		<member name="set_masked" type="bool" setter="set_set_masked" getter="get_set_masked" default="false">
 			The script set's [member NetwPropertySet.masked]. Written by [method masked].
 		</member>
-		<member name="set_trigger" type="int" setter="set_set_trigger" getter="get_set_trigger" default="-1">
+		<member name="set_trigger" type="int" setter="set_set_trigger" getter="get_set_trigger" enum="NetwPropertySet.Trigger" default="-1">
 			The script set's [member NetwPropertySet.trigger], or [constant UNSET]. Written by [method every_tick] and [method on_change], and by all three kind marks.
 		</member>
 		<member name="set_window" type="int" setter="set_set_window" getter="get_set_window" default="-1">
