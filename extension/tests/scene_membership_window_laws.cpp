@@ -22,8 +22,8 @@ struct Bound {
     Node *owner = nullptr;
 };
 
-Ref<netw::NetwParticipant> a_participant_row() {
-    Ref<netw::NetwParticipant> row;
+Ref<netw::NetwPlayer> a_player_row() {
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
     return row;
 }
@@ -68,9 +68,9 @@ Bound mount_scene(
     return made;
 }
 
-void open_participant(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
-    p_core->participant_adopt(p_peer, a_participant_row());
-    REQUIRE(p_core->participant_has(p_peer));
+void open_player(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
+    p_core->player_adopt(p_peer, a_player_row());
+    REQUIRE(p_core->player_has(p_peer));
 }
 
 TEST_CASE(
@@ -88,7 +88,7 @@ TEST_CASE(
     const Bound arena = mount_scene(core, root, "Arena");
     const Bound pawn = bind_entity(core, arena.owner, false);
     const int64_t peer = 7;
-    open_participant(core, peer);
+    open_player(core, peer);
     pawn.record->set_peer_id(peer);
 
     REQUIRE(core->is_server());
@@ -125,7 +125,7 @@ TEST_CASE(
     const Bound arena = mount_scene(core, root, "Arena");
     const Bound pawn = bind_entity(core, arena.owner, false);
     const int64_t peer = 7;
-    open_participant(core, peer);
+    open_player(core, peer);
     pawn.record->set_peer_id(peer);
 
     core->membership_place_body(pawn.wrapper);
@@ -172,7 +172,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SS8 a watch and a body are separate reasons "
-    "for one scene, so a participant watching a lobby while a body of theirs "
+    "for one scene, so a player watching a lobby while a body of theirs "
     "resides in an arena subscribes to both, and losing either leaves the "
     "other standing"
 ) {
@@ -185,7 +185,7 @@ TEST_CASE(
     const Bound arena = mount_scene(core, root, "Arena");
     const Bound pawn = bind_entity(core, arena.owner, false);
     const int64_t peer = 7;
-    open_participant(core, peer);
+    open_player(core, peer);
     pawn.record->set_peer_id(peer);
 
     REQUIRE(core->is_server());
@@ -212,7 +212,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SS9 a participant answers the bodies it owns "
+    "[Networked][Scene][Hosted] SS9 a player answers the bodies it owns "
     "and no others, so two players standing in one scene read as one body "
     "each rather than as everything the scene holds"
 ) {
@@ -224,20 +224,54 @@ TEST_CASE(
     const Bound arena = mount_scene(core, root, "Arena");
     const Bound mine = bind_entity(core, arena.owner, false);
     const Bound theirs = bind_entity(core, arena.owner, false);
-    open_participant(core, 7);
-    open_participant(core, 9);
+    open_player(core, 7);
+    open_player(core, 9);
     mine.record->set_peer_id(7);
+    mine.record->set_player_id(core->player_incarnation(7));
     theirs.record->set_peer_id(9);
+    theirs.record->set_player_id(core->player_incarnation(9));
 
-    NETW_CHECK_EQ(int(core->scene_get_players(arena.handle).size()), 2);
+    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 2);
 
-    const TypedArray<netw::NetwEntity> ours = core->participant_players(7);
+    const TypedArray<netw::NetwEntity> ours = core->player_bodies(7);
     NETW_CHECK_EQ(int(ours.size()), 1);
     const Ref<netw::NetwEntity> only = ours[0];
     CHECK(only == mine.wrapper);
 
-    NETW_CHECK_EQ(int(core->participant_players(9).size()), 1);
-    CHECK(core->participant_players(11).is_empty());
+    NETW_CHECK_EQ(int(core->player_bodies(9).size()), 1);
+    CHECK(core->player_bodies(11).is_empty());
+
+    memdelete(root);
+}
+
+TEST_CASE(
+    "[Networked][Scene][Hosted] SS10 a body outliving the membership it was "
+    "spawned for stays with that membership, so the next player to connect "
+    "onto the same peer id reads an empty hand rather than a dead player's "
+    "bodies"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    const CallLog flushed;
+    core->set_interest_flush(flushed.callable("flush"));
+    Node *root = memnew(Node);
+    const Bound arena = mount_scene(core, root, "Arena");
+    const Bound abandoned = bind_entity(core, arena.owner, false);
+
+    open_player(core, 7);
+    const Ref<netw::NetwPlayer> departed = core->player_of(7);
+    abandoned.record->set_peer_id(7);
+    abandoned.record->set_player_id(departed->player_id());
+    NETW_CHECK_EQ(int(departed->get_bodies().size()), 1);
+
+    core->player_release_id(departed);
+    open_player(core, 7);
+    const Ref<netw::NetwPlayer> arrived = core->player_of(7);
+    CHECK(arrived->player_id() != departed->player_id());
+
+    CHECK(arrived->get_bodies().is_empty());
+    CHECK(core->player_bodies(7).is_empty());
+    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 1);
 
     memdelete(root);
 }

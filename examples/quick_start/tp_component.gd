@@ -13,7 +13,7 @@ var is_moving: bool:
 		return layer.is_moving()
 
 @onready var entity := NetwEntity.of(owner)
-@onready var session: NetwSessionHandle = Netw.session(self)
+@onready var game: QuickStartSession = Netw.service(self, QuickStartSession)
 
 
 func _init() -> void:
@@ -29,20 +29,12 @@ func _notification(what: int) -> void:
 func _ready() -> void:
 	entity.reparented.connect(apply_arrival_marker)
 	layer = Netw.service(self, TPLayer)
-	if is_multiplayer_authority():
-		layer.placed()
-
-
-func is_settling() -> bool:
-	return layer.is_settling()
 
 
 func teleport(target_scene: String, target_marker: NodePath) -> NetwPromise:
 	if layer.is_moving():
 		return layer.pending
-	if layer.is_settling():
-		return NetwPromise.resolved(OK)
-	var opened := layer.open(target_scene, target_marker)
+	var opened := layer.open(target_scene)
 	request_teleport.rpc_id(1, target_scene, target_marker)
 	return opened
 
@@ -52,8 +44,7 @@ func request_teleport(scene_path: String, marker_path: NodePath) -> void:
 	if not multiplayer.is_server():
 		return
 	var mover := owner.get_multiplayer_authority()
-	var recipe := load(scene_path) as PackedScene
-	var destination: NetwSceneHandle = session.activate_scene(recipe)
+	var destination := game.open_level(scene_path)
 	var marker := destination.root.get_node_or_null(marker_path) as Node2D
 	if marker == null:
 		complete_teleport.rpc_id(
@@ -65,7 +56,7 @@ func request_teleport(scene_path: String, marker_path: NodePath) -> void:
 	current_scene_path = scene_path
 	prepare_teleport.rpc(marker_path)
 	apply_marker(marker)
-	var moved := destination.move(entity)
+	var moved := Netw.reparent(owner, destination.root)
 	moved.then(
 		func(_value: Variant) -> void:
 			complete_teleport.rpc_id(mover)
@@ -89,10 +80,6 @@ func apply_arrival_marker() -> void:
 
 func apply_marker(marker: Node2D) -> void:
 	(owner as Node2D).global_position = marker.global_position
-	entity.interpolation.reset()
-	owner.reset_physics_interpolation()
-	if is_multiplayer_authority():
-		layer.placed()
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -101,7 +88,6 @@ func complete_teleport(code: Error = OK, detail: String = "") -> void:
 		return
 	if code == OK:
 		apply_arrival_marker()
-		Netw.sync_property(owner, &"position")
 		finish_teleport.rpc()
 	else:
 		arrival_marker = NodePath()

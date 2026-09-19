@@ -42,7 +42,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] the view watches and unwatches a participant "
+    "[Networked][Scene] the view watches and unwatches a player "
     "and reports what it reaches, so a game never keys a watch by peer id"
 ) {
     LoopbackRig rig(1);
@@ -58,8 +58,8 @@ TEST_CASE(
     REQUIRE(view.is_valid());
 
     netw_test::seated_peer(api, 7);
-    CHECK(api->participant_has(7));
-    const Ref<netw::NetwParticipant> joiner = api->participant_of(7);
+    CHECK(api->player_has(7));
+    const Ref<netw::NetwPlayer> joiner = api->player_of(7);
     REQUIRE(joiner.is_valid());
     NETW_CHECK_EQ(int(joiner->get_peer_id()), 7);
 
@@ -69,7 +69,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(view->unwatch(joiner)), int(OK));
     CHECK_FALSE(view->is_watching(joiner));
 
-    const Ref<netw::NetwParticipant> nobody;
+    const Ref<netw::NetwPlayer> nobody;
     NETW_CHECK_EQ(int(view->watch(nobody)), int(ERR_INVALID_PARAMETER));
     CHECK_FALSE(view->is_watching(nobody));
 
@@ -98,8 +98,8 @@ TEST_CASE(
     view->connect(StringName("viewer_left"), heard.callable("left"));
 
     netw_test::seated_peer(api, 7);
-    CHECK(api->participant_has(7));
-    const Ref<netw::NetwParticipant> joiner = api->participant_of(7);
+    CHECK(api->player_has(7));
+    const Ref<netw::NetwPlayer> joiner = api->player_of(7);
     REQUIRE(joiner.is_valid());
     NETW_CHECK_EQ(int(joiner->get_peer_id()), 7);
 
@@ -142,7 +142,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene] an observer the view registers is handed the "
-    "participant rather than the peer id the flat dispatch carries, so the "
+    "player rather than the peer id the flat dispatch carries, so the "
     "internal never reaches the game's own callback signature"
 ) {
     LoopbackRig rig(1);
@@ -162,8 +162,8 @@ TEST_CASE(
     view->observe(netw::NetwMultiplayer::SCENE_EVENT_VIEWER, watcher);
 
     netw_test::seated_peer(api, 7);
-    CHECK(api->participant_has(7));
-    const Ref<netw::NetwParticipant> joiner = api->participant_of(7);
+    CHECK(api->player_has(7));
+    const Ref<netw::NetwPlayer> joiner = api->player_of(7);
     REQUIRE(joiner.is_valid());
     NETW_CHECK_EQ(int(view->watch(joiner)), int(OK));
 
@@ -171,7 +171,7 @@ TEST_CASE(
     const Array carried = heard.args("edge");
     REQUIRE(carried.size() == 2);
     CHECK(bool(carried[0]));
-    const Ref<netw::NetwParticipant> subject = carried[1];
+    const Ref<netw::NetwPlayer> subject = carried[1];
     CHECK(subject == joiner);
 
     SUBCASE("unobserving the same callback stops the edges") {

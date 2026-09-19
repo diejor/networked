@@ -23,21 +23,21 @@ func on_start_pressed() -> void:
 	start_pressed.emit()
 
 
-func on_roster_changed(_participant: NetwParticipant) -> void:
+func on_roster_changed(_player: NetwPlayer) -> void:
 	refresh()
 
 
 func refresh() -> void:
 	member_list.clear()
-	var local := session.local_participant
-	var participants := lobby.viewers
-	participants.sort_custom(
-		func(a: NetwParticipant, b: NetwParticipant) -> bool:
+	var local := session.local_player
+	var viewers := lobby.viewers
+	viewers.sort_custom(
+		func(a: NetwPlayer, b: NetwPlayer) -> bool:
 			return a.peer_id < b.peer_id
 	)
-	for participant: NetwParticipant in participants:
-		var suffix := "   (you)" if participant == local else ""
-		member_list.add_item("%s%s" % [participant.username, suffix])
+	for player: NetwPlayer in viewers:
+		var suffix := "   (you)" if player == local else ""
+		member_list.add_item("%s%s" % [player.username, suffix])
 
 	var host := session.role == NetwMultiplayer.ROLE_LISTEN_SERVER
 	start_btn.visible = host

@@ -11,11 +11,11 @@ using namespace godot;
 
 namespace netw {
 
-NetwMultiplayer *NetwParticipant::core() const {
+NetwMultiplayer *NetwPlayer::core() const {
     return Object::cast_to<NetwMultiplayer>(gd::instance_from_id(core_id));
 }
 
-void NetwParticipant::bind_to(
+void NetwPlayer::bind_to(
     NetwMultiplayer *p_core,
     int64_t p_peer,
     int64_t p_incarnation,
@@ -31,49 +31,44 @@ void NetwParticipant::bind_to(
     }
 }
 
-void NetwParticipant::rebind_peer(int64_t p_peer) {
+void NetwPlayer::rebind_peer(int64_t p_peer) {
     peer_id = p_peer;
 }
 
-bool NetwParticipant::get_is_active() const {
+bool NetwPlayer::get_is_active() const {
     NetwMultiplayer *held = core();
-    return held != nullptr && held->participant_is_active(peer_id, incarnation);
+    return held != nullptr && held->player_is_active(peer_id, incarnation);
 }
 
-int64_t NetwParticipant::get_peer_id() const {
+int64_t NetwPlayer::get_peer_id() const {
     return peer_id;
 }
 
-int64_t NetwParticipant::membership() const {
+int64_t NetwPlayer::player_id() const {
     return incarnation;
 }
 
-Ref<NetwIdentity> NetwParticipant::get_identity() const {
-    NetwMultiplayer *held = core();
-    return held == nullptr ? Ref<NetwIdentity>()
-                           : held->participant_identity(peer_id);
-}
-
-StringName NetwParticipant::get_username() const {
+StringName NetwPlayer::get_username() const {
     return username;
 }
 
-TypedArray<NetwEntity> NetwParticipant::get_players() const {
-    NETW_ZONE_NC("NetwParticipant players", colors::SESSION);
+TypedArray<NetwEntity> NetwPlayer::get_bodies() const {
+    NETW_ZONE_NC("NetwPlayer bodies", colors::SESSION);
     NetwMultiplayer *held = core();
-    return held == nullptr ? TypedArray<NetwEntity>()
-                           : held->participant_players(peer_id);
+    return held == nullptr
+        ? TypedArray<NetwEntity>()
+        : held->player_bodies_held(peer_id, incarnation);
 }
 
-void NetwParticipant::_bind_methods() {
+void NetwPlayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("get_peer_id"),
-        &NetwParticipant::get_peer_id
+        &NetwPlayer::get_peer_id
     );
     ADD_PROPERTY(PropertyInfo(Variant::INT, "peer_id"), "", "get_peer_id");
     ClassDB::bind_method(
         D_METHOD("get_is_active"),
-        &NetwParticipant::get_is_active
+        &NetwPlayer::get_is_active
     );
     ADD_PROPERTY(
         PropertyInfo(Variant::BOOL, "is_active"),
@@ -81,22 +76,8 @@ void NetwParticipant::_bind_methods() {
         "get_is_active"
     );
     ClassDB::bind_method(
-        D_METHOD("get_identity"),
-        &NetwParticipant::get_identity
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "identity",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwIdentity"
-        ),
-        "",
-        "get_identity"
-    );
-    ClassDB::bind_method(
         D_METHOD("get_username"),
-        &NetwParticipant::get_username
+        &NetwPlayer::get_username
     );
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING_NAME, "username"),
@@ -104,18 +85,18 @@ void NetwParticipant::_bind_methods() {
         "get_username"
     );
     ClassDB::bind_method(
-        D_METHOD("get_players"),
-        &NetwParticipant::get_players
+        D_METHOD("get_bodies"),
+        &NetwPlayer::get_bodies
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "players",
+            "bodies",
             PROPERTY_HINT_ARRAY_TYPE,
             "NetwEntity"
         ),
         "",
-        "get_players"
+        "get_bodies"
     );
 }
 

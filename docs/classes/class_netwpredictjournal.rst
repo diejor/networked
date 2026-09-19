@@ -536,7 +536,7 @@ Method Descriptions
 
 Returns the :ref:`Attribution<enum_NetwPredictJournal_Attribution>` charged to ``transition``, or
 
-\ :godot:`Attribution.UNKNOWN <Attribution#class_Attribution_constant_UNKNOWN>` when nothing charged it or the row
+\ :ref:`UNKNOWN<class_NetwPredictJournal_constant_UNKNOWN>` when nothing charged it or the row
 
 has fallen out of the ring.
 
@@ -628,7 +628,7 @@ unambiguous.
 
 Returns the :ref:`Domain<enum_NetwPredictJournal_Domain>` recorded for ``transition``, or
 
-\ :godot:`Domain.OUT_OF_DOMAIN <Domain#class_Domain_constant_OUT_OF_DOMAIN>` when the row has fallen out of
+\ :ref:`OUT_OF_DOMAIN<class_NetwPredictJournal_constant_OUT_OF_DOMAIN>` when the row has fallen out of
 
 the ring.
 

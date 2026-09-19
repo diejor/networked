@@ -18,9 +18,9 @@ class JoinDeclarer:
 	var calls := 0
 
 	func _init() -> void:
-		Netw.configure_join(self, accepted)
+		Netw.configure_join(accepted)
 
-	func accepted(who: NetwParticipant, tag: StringName, payload: Array) -> void:
+	func accepted(who: NetwPlayer, tag: StringName, payload: Array) -> void:
 		calls += 1
 		seen = [who, tag, payload]
 
@@ -54,7 +54,7 @@ func test_an_array_argument_stays_one_argument() -> void:
 
 	assert_int(declarer.calls).is_equal(1)
 	assert_int(declarer.seen.size()).is_equal(3)
-	assert_object(declarer.seen[0]).is_instanceof(NetwParticipant)
+	assert_object(declarer.seen[0]).is_instanceof(NetwPlayer)
 	assert_that(declarer.seen[1]).is_equal(&"red")
 	assert_that(declarer.seen[2]).is_equal([1, 2])
 

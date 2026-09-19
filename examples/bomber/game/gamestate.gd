@@ -9,9 +9,6 @@ signal game_error(what: String)
 
 @onready var session: NetwSessionHandle = Netw.session(self)
 
-var roster: Array[NetwParticipant] = []
-var spawner: BomberPlayerSpawner
-
 var world: NetwSceneHandle:
 	get:
 		return Netw.scene(self, &"World")
@@ -23,13 +20,13 @@ var lobby: NetwSceneHandle:
 
 func _init() -> void:
 	Netw.configure_spawn(spawn_lobby)
-	Netw.configure_join(self, place_player)
+	Netw.configure_spawn(spawn_world)
+	Netw.configure_join(place_player)
 
 
 func _ready() -> void:
-	session.participant_left.connect(leave_game)
+	session.entered.connect(open_lobby)
 	session.disconnected.connect(on_server_disconnected)
-	session.scene_live.connect(on_scene_live)
 
 
 func spawn_lobby() -> Node:
@@ -37,77 +34,59 @@ func spawn_lobby() -> Node:
 	return packed.instantiate()
 
 
-func open_lobby() -> NetwSceneHandle:
-	var waiting := lobby
-	if waiting != null:
-		return waiting
-	var level: Node = Netw.spawn(spawn_lobby)
-	get_parent().add_child(level)
-	return Netw.scene(level)
+func spawn_world() -> Node:
+	var packed: PackedScene = load(WORLD_SCENE)
+	return packed.instantiate()
 
 
-func place_player(participant: NetwParticipant) -> void:
-	roster.append(participant)
-	var running := world
-	if running == null:
-		open_lobby().watch(participant)
+func open_lobby() -> void:
+	if not multiplayer.is_server():
 		return
-	running.watch(participant)
-	spawner.spawn_participant(participant, roster.size() - 1)
+	get_parent().add_child(Netw.spawn(spawn_lobby))
 
 
-func leave_game(participant: NetwParticipant) -> void:
-	roster.erase(participant)
+func place_player(player: NetwPlayer) -> void:
+	lobby.watch(player)
 
 
 func on_server_disconnected() -> void:
 	game_error.emit("Server disconnected")
-	end_game()
+	game_ended.emit()
 
 
-func begin_game() -> NetwPromise:
+func begin_game() -> void:
 	assert(multiplayer.is_server())
-	return Netw.change_scene_to_file(self, WORLD_SCENE)
+	get_parent().add_child(Netw.spawn(spawn_world))
 
 
 func end_game() -> void:
-	var mp := multiplayer.multiplayer_peer
-	var peer_active := mp != null \
-			and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
-	if peer_active and multiplayer.is_server() and world != null:
-		release_players()
-		spawner = null
-		Netw.change_scene_to_file(self, LOBBY_SCENE)
+	if multiplayer.is_server() and world != null:
+		close_match(world)
 
 	game_ended.emit()
 
 
-func release_players() -> void:
-	for player: NetwEntity in world.players:
-		player.owner.queue_free()
+func open_match(running: NetwSceneHandle) -> void:
+	var players: Node = running.root.get_node(^"Players")
+	for player: NetwPlayer in session.players:
+		if player.is_active:
+			players.add_child(
+				Netw.spawn_player(
+					player,
+					running.root.spawn_player,
+					player.username,
+					player.peer_id,
+					players.get_child_count(),
+				)
+			)
+			lobby.unwatch(player)
 
 
-func on_scene_live(arrived: NetwSceneHandle) -> void:
-	session.present(arrived)
-	if arrived.label == &"Lobby":
-		var in_lobby: InLobby = arrived.root.find_child("InLobby", true, false)
-		in_lobby.start_pressed.connect(begin_game)
-		return
-	if arrived.label != &"World" or not multiplayer.is_server():
-		return
-	open_match(arrived)
-
-
-func open_match(world_scene: NetwSceneHandle) -> void:
-	if not world_scene.root.is_node_ready():
-		world_scene.root.ready.connect(
-			open_match.bind(world_scene),
-			CONNECT_ONE_SHOT,
-		)
-		return
-	spawner = world_scene.root.get_node(^"PlayerSpawner")
-	for slot in roster.size():
-		spawner.spawn_participant(roster[slot], slot)
+func close_match(running: NetwSceneHandle) -> void:
+	for player: NetwPlayer in session.players:
+		if player.is_active:
+			lobby.watch(player)
+	Netw.despawn(running.root)
 
 
 func get_player_color(p_name: String) -> Color:

@@ -15,7 +15,7 @@ radius = 1.0
 radius = 1.0
 height = 2.0
 
-[node name="ball|0" type="RigidBody3D"]
+[node name="ball" type="RigidBody3D"]
 collision_layer = 4
 collision_mask = 13
 mass = 0.4

@@ -20,9 +20,10 @@ struct ArmedNode {
 
     ArmedNode(const char *p_id, int64_t p_peer, int p_initial) {
         owner = memnew(Node);
-        NetwEntity::bind(owner, p_id, p_peer);
-        entity = NetwEntity::of(owner);
+        entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
+        entity->set_entity_id(p_id);
+        entity->set_peer_id(p_peer);
         entity->set_initial_controller(p_initial);
         entity->arm(godot::Ref<netw::NetwMultiplayer>());
     }
@@ -133,9 +134,10 @@ TEST_CASE(
     REQUIRE(session->is_host());
 
     Node *owner = memnew(Node);
-    NetwEntity::bind(owner, "valeria", 0);
-    Ref<NetwEntity> entity = NetwEntity::of(owner);
+    Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     REQUIRE(entity.is_valid());
+    entity->set_entity_id("valeria");
+    entity->set_peer_id(0);
     entity->set_initial_controller(
         int(netw::entity::Control::InitialController::SERVER)
     );
@@ -156,9 +158,10 @@ TEST_CASE(
     Ref<NetwMultiplayer> session = a_coordinated_session(7);
 
     Node *owner = memnew(Node);
-    NetwEntity::bind(owner, "driftwood", 42);
-    Ref<NetwEntity> entity = NetwEntity::of(owner);
+    Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     REQUIRE(entity.is_valid());
+    entity->set_entity_id("driftwood");
+    entity->set_peer_id(42);
     entity->set_initial_controller(
         int(netw::entity::Control::InitialController::REPRESENTED_PEER)
     );

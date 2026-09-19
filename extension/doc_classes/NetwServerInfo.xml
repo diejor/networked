@@ -8,7 +8,7 @@
 		A session with no declared provider returns [method from_session]. A game that wants more declares one through [method Netw.configure_server_info], and is handed that same base record to edit rather than an API to read.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_server_info(self, server_info)
+		    Netw.configure_server_info(server_info)
 
 		func server_info(info: NetwServerInfo) -&gt; NetwServerInfo:
 		    info.motd = "Ranked, no friendly fire"
@@ -32,7 +32,7 @@
 			<return type="NetwServerInfo" />
 			<param index="0" name="api" type="NetwMultiplayer" />
 			<description>
-				The default probe reply: a copy of [member NetwSessionConfig.server_info] with the live fields overlaid, which are the connected participant count as [member players] and [member NetwSessionConfig.app_id]. [member is_local_listener] is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than returned, so replying to a probe can never write back into what the game authored.
+				The default probe reply: a copy of [member NetwSessionConfig.server_info] with the live fields overlaid, which are the connected player count as [member players] and [member NetwSessionConfig.app_id]. [member is_local_listener] is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than returned, so replying to a probe can never write back into what the game authored.
 				This is what a probe returns when no [method Netw.configure_server_info] declaration governs the session, and it is also the record a declared provider is handed.
 			</description>
 		</method>
@@ -67,7 +67,7 @@
 			The message the host shows in a browser row. Unset by the built-in provider.
 		</member>
 		<member name="players" type="int" setter="set_players" getter="get_players" default="0">
-			The live participant count at the moment the reply was built.
+			The live player count at the moment the reply was built.
 		</member>
 		<member name="version" type="String" setter="set_version" getter="get_version" default="&quot;&quot;">
 			The build string the game publishes. Unset by the built-in provider.

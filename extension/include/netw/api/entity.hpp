@@ -90,20 +90,6 @@ public:
         int64_t p_route,
         const godot::Ref<NetwMultiplayer> &p_api
     );
-    static godot::StringName parse_entity(const godot::String &p_node_name);
-    static int64_t parse_peer(const godot::String &p_node_name);
-    static godot::String name_for(
-        const godot::Ref<NetwParticipant> &p_participant
-    );
-    static godot::Node *find(
-        godot::Node *p_root,
-        const godot::Ref<NetwParticipant> &p_participant
-    );
-    static godot::Node *bind(
-        godot::Node *p_node,
-        const godot::StringName &p_entity_id,
-        int64_t p_peer_id
-    );
     static godot::Node *instantiate_from(
         godot::Node *p_template,
         const godot::Callable &p_configure
@@ -122,6 +108,8 @@ public:
     void set_entity_id(const godot::StringName &p_entity_id);
     int64_t get_peer_id() const;
     void set_peer_id(int64_t p_peer_id);
+    int64_t get_player_id() const;
+    void set_player_id(int64_t p_player_id);
     int64_t get_route() const;
     void set_route(int64_t p_route);
     godot::RID get_rid_handle() const;
@@ -148,7 +136,7 @@ public:
     void set_controller(int64_t p_value);
     int64_t get_control_kind() const;
     bool get_is_controlled_locally() const;
-    godot::Ref<NetwParticipant> get_controller_participant() const;
+    godot::Ref<NetwPlayer> get_controller_player() const;
     int64_t get_action_spawn_tick() const {
         return action_spawn_tick;
     }
@@ -167,7 +155,7 @@ public:
     void revoke_control();
 
     bool get_is_authority() const;
-    godot::Ref<NetwParticipant> get_participant() const;
+    godot::Ref<NetwPlayer> get_player() const;
     int64_t get_ownership() const;
     bool get_is_player() const;
 

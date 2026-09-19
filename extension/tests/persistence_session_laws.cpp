@@ -334,10 +334,10 @@ TEST_CASE(
     database.set_stored(saved);
 
     NetwMultiplayer *server = rig.server();
-    Ref<netw::NetwParticipant> pilot;
+    Ref<netw::NetwPlayer> pilot;
     pilot.instantiate();
-    server->participant_adopt(91, pilot);
-    server->participant_admit(91);
+    server->player_adopt(91, pilot);
+    server->player_admit(91);
     rig.register_constructor(
         server,
         StringName("saved_avatar"),

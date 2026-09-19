@@ -81,7 +81,7 @@
 				Returns a [Signal] on the [signal ready] channel that is safe to [code]await[/code] whether or not the batch has already settled, carrying [method answer].
 				This is the idiom. Awaiting [signal completed] directly is a race the caller cannot win: a batch whose peers all resolved before the wait has already emitted it, and the caller waits forever. An already-settled batch defers its emission here, so the [code]await[/code] subscribes before the answer is delivered.
 				[codeblock]
-				await destination.move_participants(peers).wait()
+				await destination.move_players(peers).wait()
 				[/codeblock]
 				This never re-emits [signal completed], [signal failed] or [signal settled], so an earlier subscriber is notified exactly once no matter how late anyone waits.
 			</description>

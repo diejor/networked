@@ -5,49 +5,36 @@
 	</brief_description>
 	<description>
 		The view a game holds for one scene. It answers who is in it, who it reaches, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so [code]==[/code] returns "the same scene" and a listener connected through any route hears every edge. Reach it with [method Netw.scene] or [member NetwEntity.scene]. Never [code]null[/code] for an entity in a session. An entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask [member is_declared] when the difference matters.
-		[b]A scene reaches a participant for a reason, and there are two of them.[/b] A body of theirs residing here is one, so parenting a player in is the whole of it and no call follows. A [method watch] is the other, and it is the one for a participant with no body here at all. The two are independent and the scene keeps replicating until the last of them is gone, so [method unwatch] does not evict a player still standing in the room. A participant may hold as many scenes at once as the game gives them reasons for.
+		[b]A scene reaches a player for a reason, and there are two of them.[/b] A body of theirs residing here is one, so parenting a player in is the whole of it and no call follows. A [method watch] is the other, and it is the one for a player with no body here at all. The two are independent and the scene keeps replicating until the last of them is gone, so [method unwatch] does not evict a player still standing in the room. A player may hold as many scenes at once as the game gives them reasons for.
 		[codeblock]
-		lobby.watch(participant)
-		arena.add_child(Netw.spawn_player(participant, make_player))
-		lobby.unwatch(participant)
+		lobby.watch(player)
+		arena.add_child(Netw.spawn_player(player, make_player))
+		lobby.unwatch(player)
 		[/codeblock]
-		Reaching a participant is scene-wide and it is not the last word on any one node. [NetwInterestLayer] still filters entity by entity inside a scene this participant reaches, so a scene arriving does not mean everything in it arrived.
-		[b]Putting a player somewhere[/b]
+		Reaching a player is scene-wide and it is not the last word on any one node. [NetwInterestLayer] still filters entity by entity inside a scene this player reaches, so a scene arriving does not mean everything in it arrived.
+		[b]Putting a body somewhere[/b]
 		Three calls move a body and they differ in what they answer, not in where the body lands. Only the last carries a [NetwPromise].
 		[codeblock lang=text]
-		arena.add_child(player)    a first placement. there is nothing to await
-		player.reparent(other)     an ordinary Godot move, taken here and
+		arena.add_child(body)      a first placement. there is nothing to await
+		body.reparent(other)       an ordinary Godot move, taken here and
 		                           replicated. it answers nothing
-		destination.move(entity)   the same move carrying a NetwPromise, which
-		                           resolves only once the entity stands under
-		                           this scene on every peer that has it
+		Netw.reparent(body, other) the same move carrying a NetwPromise, which
+		                           resolves only once the body stands under
+		                           its new parent on every peer that has it
 		[/codeblock]
-		Only [method move] can be awaited, so a game that has to know the move landed everywhere takes that one and [method NetwMultiplayer.scene_move] holds its law, the carry window included.
+		Only [method Netw.reparent] can be awaited, so a game that has to know the move landed everywhere takes that one, and it holds the law with the carry window included.
 		A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree returns [member is_declared] [code]false[/code] and every other member empty.
-		[NetwMultiplayer] keeps the same surface keyed by [RID] for callers that already hold one, and [member entity] is the bridge to it: [method NetwMultiplayer.scene_get_players], [method NetwMultiplayer.scene_watch] and [method NetwMultiplayer.scene_observe] are the flat spellings of [member players], [method watch] and the signals here.
+		[NetwMultiplayer] keeps the same surface keyed by [RID] for callers that already hold one, and [member entity] is the bridge to it: [method NetwMultiplayer.scene_get_bodies], [method NetwMultiplayer.scene_watch] and [method NetwMultiplayer.scene_observe] are the flat spellings of [member bodies], [method watch] and the signals here.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
 		<method name="is_watching" qualifiers="const">
 			<return type="bool" />
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Whether this scene currently replicates to [param participant], for any reason at all.
+				Whether this scene currently replicates to [param player], for any reason at all.
 				A body of theirs residing here is a reason, and so is a watch [method watch] placed. This answers the effective question, so it stays [code]true[/code] after [method unwatch] while a body of theirs is still standing in the scene.
-			</description>
-		</method>
-		<method name="move">
-			<return type="NetwPromise" />
-			<param index="0" name="entity" type="NetwEntity" />
-			<description>
-				Moves [param entity] into this scene, returning the [NetwPromise] the settle carries. [method NetwMultiplayer.scene_move] holds the law, the carry window included. What differs here is the direction the call reads in, because the destination is the object the verb is called on and the mover is what it takes.
-				[codeblock]
-				var moved := destination.move(NetwEntity.of(player))
-				await moved.wait()
-				[/codeblock]
-				Returns an already-settled [constant @GlobalScope.ERR_INVALID_PARAMETER] for a null [param entity] or outside a session.
-				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="observe">
@@ -58,13 +45,13 @@
 				Calls [param callback] whenever this scene gains or loses a subject of [param event], one of [enum NetwMultiplayer.SceneEvent]. Registering the same [param callback] for the same [param event] twice does nothing.
 				[b]The callback is handed the subject as the object a game holds, never as the internal handle the scene book keys its rows by.[/b] That is the one place this class does more than forward: [method NetwMultiplayer.scene_observe] hands a raw subject straight through, and a game writing this signature would have to name an [RID] it can do nothing with.
 				[codeblock]
-				arena.observe(NetwMultiplayer.SCENE_EVENT_PLAYER, on_car_edge)
+				arena.observe(NetwMultiplayer.SCENE_EVENT_BODY, on_car_edge)
 
 				func on_car_edge(present: bool, car: NetwEntity) -&gt; bool:
 				        reshuffle(car)
 				        return false        # true drops the subscription
 				[/codeblock]
-				[constant NetwMultiplayer.SCENE_EVENT_VIEWER] carries a [NetwParticipant]; [constant NetwMultiplayer.SCENE_EVENT_PLAYER] and [constant NetwMultiplayer.SCENE_EVENT_ENTITY] carry a [NetwEntity]. Returning [code]true[/code] from the callback withdraws it, exactly as the flat verb's does, and [method unobserve] withdraws it by name.
+				[constant NetwMultiplayer.SCENE_EVENT_VIEWER] carries a [NetwPlayer]; [constant NetwMultiplayer.SCENE_EVENT_BODY] and [constant NetwMultiplayer.SCENE_EVENT_ENTITY] carry a [NetwEntity]. Returning [code]true[/code] from the callback withdraws it, exactly as the flat verb's does, and [method unobserve] withdraws it by name.
 			</description>
 		</method>
 		<method name="unobserve">
@@ -77,35 +64,35 @@
 		</method>
 		<method name="unwatch">
 			<return type="int" enum="Error" />
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Withdraws the watch [method watch] placed, so this scene stops replicating to [param participant] once nothing else keeps them here.
-				A watch is one reason among several. Withdrawing it does not evict a participant whose player is still in this scene, which is what stops a lobby leaving a game to also blind the player it left behind.
+				Withdraws the watch [method watch] placed, so this scene stops replicating to [param player] once nothing else keeps them here.
+				A watch is one reason among several. Withdrawing it does not evict a player whose body is still in this scene, which is what stops a lobby leaving a game to also blind the player it left behind.
 				[codeblock lang=text]
 				Error
 				┠╴OK                      the watch is withdrawn
-				┠╴ERR_INVALID_PARAMETER   a null participant, or one this session no longer holds
-				┖╴ERR_DOES_NOT_EXIST      this participant was not watching
+				┠╴ERR_INVALID_PARAMETER   a null player, or one this session no longer holds
+				┖╴ERR_DOES_NOT_EXIST      this player was not watching
 				[/codeblock]
 				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="watch">
 			<return type="int" enum="Error" />
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Replicates this scene to [param participant] for as long as the watch stands, without giving them a body in it.
-				Watching is not exclusive and not a move. A participant may watch several scenes at once, and watching this one withdraws nothing elsewhere, which is what an avatarless lobby and a spectator both need.
+				Replicates this scene to [param player] for as long as the watch stands, without giving them a body in it.
+				Watching is not exclusive and not a move. A player may watch several scenes at once, and watching this one withdraws nothing elsewhere, which is what an avatarless lobby and a spectator both need.
 				[codeblock]
 				Netw.scene(lobby).watch(who)
 				[/codeblock]
-				A scene nested inside another arrives with the scene roots it hangs from, because a watcher cannot hold a node whose parent it has never seen. Those roots arrive as structure alone. Their own content stays with the participants they already reach, so watching an inner scene never reveals what sits beside it in the outer one.
-				Idempotent, and refused for a participant this session no longer holds, so a handle kept across a disconnect cannot seat whoever reconnected onto that peer id.
+				A scene nested inside another arrives with the scene roots it hangs from, because a watcher cannot hold a node whose parent it has never seen. Those roots arrive as structure alone. Their own content stays with the players they already reach, so watching an inner scene never reveals what sits beside it in the outer one.
+				Idempotent, and refused for a player this session no longer holds, so a handle kept across a disconnect cannot seat whoever reconnected onto that peer id.
 				[codeblock lang=text]
 				Error
 				┠╴OK                      the watch stands
 				┠╴ERR_UNAUTHORIZED        this peer is not the server
-				┠╴ERR_INVALID_PARAMETER   a null participant, or one this session no longer holds
+				┠╴ERR_INVALID_PARAMETER   a null player, or one this session no longer holds
 				┖╴ERR_DOES_NOT_EXIST      this scene names no live node
 				[/codeblock]
 				[b]Server Only.[/b]
@@ -126,14 +113,14 @@
 		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
 			The name this scene was declared under, which is the name [method Netw.scene] and [method NetwMultiplayer.scene_find] resolve.
 		</member>
-		<member name="local_players" type="NetwEntity[]" setter="" getter="get_local_players">
-			Every player entity in this scene that this peer represents, which is empty for a peer with no body here and holds more than one where a game gave it several.
+		<member name="local_bodies" type="NetwEntity[]" setter="" getter="get_local_bodies">
+			Every body in this scene that this peer represents, which is empty for a peer with no body here and holds more than one where a game gave it several.
 		</member>
-		<member name="viewers" type="NetwParticipant[]" setter="" getter="get_viewers" default="[]">
-			Every participant this scene currently replicates to, whether a body of theirs stands here or a [method watch] put them here. A participant is a person in the session; a player is the entity they steer, and [member players] returns those.
+		<member name="viewers" type="NetwPlayer[]" setter="" getter="get_viewers" default="[]">
+			Every player this scene currently replicates to, whether a body of theirs stands here or a [method watch] put them here. A player is a person in the session; a body is the entity they steer, and [member bodies] returns those.
 		</member>
-		<member name="players" type="NetwEntity[]" setter="" getter="get_players" default="[]">
-			Every player entity in this scene, in no declared order.
+		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies" default="[]">
+			Every body in this scene, in no declared order.
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
 			The authored node this scene was declared on, which is the scene's own identity, or [code]null[/code] outside a session.
@@ -146,27 +133,27 @@
 	</members>
 	<signals>
 		<signal name="viewer_entered">
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Emitted when this scene starts replicating to [param participant], after the boundary is written, so a listener reading [member viewers] sees them.
+				Emitted when this scene starts replicating to [param player], after the boundary is written, so a listener reading [member viewers] sees them.
 			</description>
 		</signal>
 		<signal name="viewer_left">
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Emitted when this scene stops replicating to [param participant], whether the last body of theirs left it, a watch was withdrawn, or the membership ended.
+				Emitted when this scene stops replicating to [param player], whether the last body of theirs left it, a watch was withdrawn, or the membership ended.
 			</description>
 		</signal>
-		<signal name="player_entered">
-			<param index="0" name="player" type="NetwEntity" />
+		<signal name="body_entered">
+			<param index="0" name="body" type="NetwEntity" />
 			<description>
-				Emitted when [param player] joins this scene's roster. A join changes what every other player in the scene is compared against, so a listener that maintains per-player state rebuilds the whole roster here rather than only the newcomer.
+				Emitted when [param body] joins this scene's roster. A join changes what every other body in the scene is compared against, so a listener that maintains per-body state rebuilds the whole roster here rather than only the newcomer.
 			</description>
 		</signal>
-		<signal name="player_left">
-			<param index="0" name="player" type="NetwEntity" />
+		<signal name="body_left">
+			<param index="0" name="body" type="NetwEntity" />
 			<description>
-				Emitted when [param player] leaves this scene's roster.
+				Emitted when [param body] leaves this scene's roster.
 			</description>
 		</signal>
 	</signals>

@@ -38,7 +38,7 @@ using netw::NetwEntity;
 using netw::NetwInterestLayer;
 using netw::NetwInterpolate;
 using netw::NetwMultiplayer;
-using netw::NetwParticipant;
+using netw::NetwPlayer;
 using netw::NetwPropertyConfig;
 using netw::NetwPropertySet;
 using netw::NetwSceneHandle;
@@ -228,11 +228,11 @@ struct ComposedWorld {
         const Ref<NetwSceneHandle> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
         NETW_CHECK_EQ(
-            int(handle->watch(host->participant_of(TRANSPORT_SERVER))),
+            int(handle->watch(host->player_of(TRANSPORT_SERVER))),
             int(OK)
         );
         NETW_CHECK_EQ(
-            int(handle->watch(host->participant_of(MEMBER))),
+            int(handle->watch(host->player_of(MEMBER))),
             int(OK)
         );
         stand.step_ticks(6);
@@ -267,7 +267,7 @@ struct ComposedWorld {
         const RID made = host->spawn_registered(
             StringName(PLAYER_ID),
             named(p_name),
-            host->participant_of(p_only_viewer).ptr()
+            host->player_of(p_only_viewer).ptr()
         );
         REQUIRE(made.is_valid());
         Node *body = host->entity_get_node(made);
@@ -295,7 +295,7 @@ struct ComposedWorld {
         const Ref<NetwSceneHandle> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
         NETW_CHECK_EQ(
-            int(handle->watch(host->participant_of(LATECOMER))),
+            int(handle->watch(host->player_of(LATECOMER))),
             int(OK)
         );
         stand.step_ticks(10);
@@ -305,7 +305,7 @@ struct ComposedWorld {
         const RID made = host->spawn_registered(
             StringName(BODY_ID),
             named(p_name),
-            host->participant_of(p_peer).ptr()
+            host->player_of(p_peer).ptr()
         );
         REQUIRE(made.is_valid());
         Node *body = host->entity_get_node(made);
@@ -331,7 +331,7 @@ struct ComposedWorld {
         const RID made = host->spawn_registered(
             StringName(PLAYER_ID),
             named(p_name),
-            host->participant_of(p_peer).ptr()
+            host->player_of(p_peer).ptr()
         );
         REQUIRE(made.is_valid());
         Node *body = host->entity_get_node(made);
@@ -363,7 +363,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(cw.nine->is_host()), 0);
     NETW_CHECK_EQ(int(cw.nine->is_server()), 0);
 
-    NETW_CHECK_EQ(int(cw.host->get_connected_participants().size()), 3);
+    NETW_CHECK_EQ(int(cw.host->get_connected_players().size()), 3);
     NETW_CHECK_EQ(int(cw.host->scene_list().size()), 1);
     NETW_CHECK_EQ(int(cw.one->scene_list().size()), 1);
     NETW_CHECK_EQ(int(cw.nine->scene_list().size()), 1);
@@ -375,7 +375,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][SceneTree] CW2 a player coordinator 7 seats for "
-    "the participant at 9 reaches both members under one route, and each "
+    "the player at 9 reaches both members under one route, and each "
     "member displays it as the remote body while 7 displays its own"
 ) {
     ComposedWorld cw;
@@ -555,7 +555,7 @@ TEST_CASE(
 
     cw.admit_latecomer();
 
-    NETW_CHECK_EQ(int(cw.host->get_connected_participants().size()), 4);
+    NETW_CHECK_EQ(int(cw.host->get_connected_players().size()), 4);
     NETW_CHECK_EQ(int(cw.host->entity_get_route(seated)), int(route));
     NETW_CHECK_EQ(
         int(netw::gd::instance_id(cw.host->entity_get_node(seated))

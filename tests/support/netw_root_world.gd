@@ -82,7 +82,7 @@ func add_client(username: String) -> NetwMultiplayer:
 			.create_client_peer()
 
 	var api := tree.api
-	await pump_until(func() -> bool: return api.local_participant != null)
+	await pump_until(func() -> bool: return api.local_player != null)
 	return api
 
 

@@ -29,21 +29,21 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
-   | :ref:`MultiplayerTree<class_MultiplayerTree>`         | :ref:`tree<class_NetwSceneRunner_property_tree>`                   |         |
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
-   | :ref:`NetwWaiter<class_NetwWaiter>`                   | :ref:`waiter<class_NetwSceneRunner_property_waiter>`               |         |
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
-   | :ref:`ParticipantWindow<class_ParticipantWindow>`     | :ref:`slot<class_NetwSceneRunner_property_slot>`                   |         |
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
-   | :godot:`int`                                          | :ref:`peer_id<class_NetwSceneRunner_property_peer_id>`             | ``0``   |
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
-   | :godot:`StringName`                                   | :ref:`username<class_NetwSceneRunner_property_username>`           | ``&""`` |
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`local_players<class_NetwSceneRunner_property_local_players>` |         |
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
-   | :godot:`Node`                                         | :ref:`local_player<class_NetwSceneRunner_property_local_player>`   |         |
-   +-------------------------------------------------------+--------------------------------------------------------------------+---------+
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :ref:`MultiplayerTree<class_MultiplayerTree>`         | :ref:`tree<class_NetwSceneRunner_property_tree>`                 |         |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :ref:`NetwWaiter<class_NetwWaiter>`                   | :ref:`waiter<class_NetwSceneRunner_property_waiter>`             |         |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :ref:`ParticipantWindow<class_ParticipantWindow>`     | :ref:`slot<class_NetwSceneRunner_property_slot>`                 |         |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :godot:`int`                                          | :ref:`peer_id<class_NetwSceneRunner_property_peer_id>`           | ``0``   |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :godot:`StringName`                                   | :ref:`username<class_NetwSceneRunner_property_username>`         | ``&""`` |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`local_bodies<class_NetwSceneRunner_property_local_bodies>` |         |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :godot:`Node`                                         | :ref:`local_player<class_NetwSceneRunner_property_local_player>` |         |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
 
 .. rst-class:: classref-reftable-group
 
@@ -136,17 +136,17 @@ Username used to join the session.
 
 ----
 
-.. _class_NetwSceneRunner_property_local_players:
+.. _class_NetwSceneRunner_property_local_bodies:
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **local_players** :ref:`🔗<class_NetwSceneRunner_property_local_players>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **local_bodies** :ref:`🔗<class_NetwSceneRunner_property_local_bodies>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **@local_players_getter**\ (\ )
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **@local_bodies_getter**\ (\ )
 
-Every body this runner's participant represents.
+Every body this runner's player represents.
 
 .. rst-class:: classref-item-separator
 

@@ -18,7 +18,7 @@ namespace Networked;
 /// base record to edit rather than an API to read.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_server_info(self, server_info)
+///     Netw.configure_server_info(server_info)
 ///
 /// func server_info(info: NetwServerInfo) -&gt; NetwServerInfo:
 ///     info.motd = "Ranked, no friendly fire"
@@ -107,7 +107,7 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_players", 1286410249UL);
 
     /// <summary>
-    /// The live participant count at the moment the reply was built.
+    /// The live player count at the moment the reply was built.
     /// </summary>
     public long Players
     {
@@ -387,7 +387,7 @@ public sealed class NetwServerInfo : NetwRefCounted
     /// <summary>
     /// The default probe reply: a copy of
     /// <see cref="NetwSessionConfig.ServerInfo"/> with the live fields
-    /// overlaid, which are the connected participant count as
+    /// overlaid, which are the connected player count as
     /// <see cref="NetwServerInfo.Players"/> and
     /// <see cref="NetwSessionConfig.AppId"/>.
     /// <see cref="NetwServerInfo.IsLocalListener"/> is marked, so a caller can

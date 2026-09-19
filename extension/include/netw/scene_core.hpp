@@ -21,7 +21,7 @@ public:
 
     enum Scope {
         SCOPE_SESSION = 0,
-        SCOPE_PARTICIPANT = 1,
+        SCOPE_PLAYER = 1,
         SCOPE_SCENE = 2,
         SCOPE_MAX = 3,
     };
@@ -38,8 +38,8 @@ public:
     };
 
     enum Event {
-        EVENT_PARTICIPANT = 0,
-        EVENT_PLAYER = 1,
+        EVENT_PLAYER = 0,
+        EVENT_BODY = 1,
         EVENT_ENTITY = 2,
     };
 
@@ -200,7 +200,7 @@ public:
 
     static bool isolation_owns_world(int isolation);
     godot::Error decide_request(
-        const godot::Variant &participant,
+        const godot::Variant &player,
         const godot::Variant &destination,
         int scope
     ) const;

@@ -122,7 +122,7 @@ func _await_local_admission(tree: MultiplayerTree) -> Error:
 		return ERR_UNCONFIGURED
 	var deadline := Time.get_ticks_msec() + ADMISSION_TIMEOUT_MS
 	var session: NetwSessionHandle = Netw.session(tree)
-	while session.local_participant == null:
+	while session.local_player == null:
 		if Time.get_ticks_msec() > deadline:
 			return ERR_TIMEOUT
 		await loop.process_frame

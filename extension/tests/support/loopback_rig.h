@@ -569,8 +569,8 @@ public:
         return int(server()->entity_get_route(entity));
     }
 
-    godot::Ref<netw::NetwParticipant> participant(int p_client) const {
-        return server()->peer_get_participant(peer_id(p_client));
+    godot::Ref<netw::NetwPlayer> player(int p_client) const {
+        return server()->peer_get_player(peer_id(p_client));
     }
 
     netw::spawn::Pipeline *spawn_plane(int p_client = -1) const {
@@ -760,7 +760,7 @@ public:
         return entity;
     }
 
-    godot::Ref<netw::NetwParticipant> join(
+    godot::Ref<netw::NetwPlayer> join(
         int p_client,
         const godot::StringName &p_username = godot::StringName(),
         const godot::Array &p_args = godot::Array()
@@ -769,8 +769,8 @@ public:
             = p_client < 0 ? shell() : shell_at(p_client);
         api->session_submit_join(p_username, p_args);
         pump(4);
-        return godot::Object::cast_to<netw::NetwParticipant>(
-            netw::gd::live_object(api->get("local_participant"))
+        return godot::Object::cast_to<netw::NetwPlayer>(
+            netw::gd::live_object(api->get("local_player"))
         );
     }
 
@@ -926,8 +926,8 @@ public:
         const godot::RID &p_destination
     ) {
         const godot::Ref<netw::NetwPromise> settled
-            = server()->scene_move(p_entity, p_destination);
-        REQUIRE_MESSAGE(settled.is_valid(), "scene_move returned no promise");
+            = server()->entity_reparent(p_entity, node_of(p_destination));
+        REQUIRE_MESSAGE(settled.is_valid(), "reparent returned no promise");
         NETW_CHECK_EQ(int(settled.is_valid() && settled->get_is_settled()), 1);
         NETW_CHECK_EQ(settled.is_valid() ? settled->get_code() : -1, 0);
         flush_interest();

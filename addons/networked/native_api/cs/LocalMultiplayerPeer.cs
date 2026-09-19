@@ -91,15 +91,21 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
         NetwApi.MethodBind(
             "LocalMultiplayerPeer",
             "create_server",
-            166280745UL);
+            415307706UL);
 
     /// <summary>
-    /// Initializes this peer as the server, whose id is always <c>1</c>.
+    /// Initializes this peer as the server under <paramref name="uniqueId"/>,
+    /// which a rig leaves at <c>1</c>.
     /// </summary>
-    public Error CreateServer()
+    public Error CreateServer(int uniqueId = 1)
     {
+        int slot0 = uniqueId;
         long answered = default;
-        NetwThunks.Ptrcall0_Long(_bindCreateServer, Checked, ref answered);
+        NetwThunks.Ptrcall1_Int_Long(
+            _bindCreateServer,
+            Checked,
+            in slot0,
+            ref answered);
         return (Error)answered;
     }
 

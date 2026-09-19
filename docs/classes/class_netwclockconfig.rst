@@ -79,13 +79,13 @@ Methods
    :widths: auto
 
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`display_offset<class_NetwClockConfig_method_display_offset>`\ (\ display_offset\: :godot:`int`\ )                           |
+   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`display_offset_ticks<class_NetwClockConfig_method_display_offset_ticks>`\ (\ display_offset\: :godot:`int`\ )               |
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`physics_interpolation<class_NetwClockConfig_method_physics_interpolation>`\ (\ use_physics_interpolation\: :godot:`bool`\ ) |
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`sync_mode<class_NetwClockConfig_method_sync_mode>`\ (\ sync_mode\: :godot:`int`\ )                                          |
+   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`sync<class_NetwClockConfig_method_sync>`\ (\ sync_mode\: :godot:`int`\ )                                                    |
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`tickrate<class_NetwClockConfig_method_tickrate>`\ (\ tickrate\: :godot:`int`\ )                                             |
+   | :ref:`NetwClockConfig<class_NetwClockConfig>` | :ref:`ticks_per_second<class_NetwClockConfig_method_ticks_per_second>`\ (\ tickrate\: :godot:`int`\ )                             |
    +-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
@@ -340,11 +340,11 @@ Reads the engine's physics interpolation fraction when available instead of a wa
 Method Descriptions
 -------------------
 
-.. _class_NetwClockConfig_method_display_offset:
+.. _class_NetwClockConfig_method_display_offset_ticks:
 
 .. rst-class:: classref-method
 
-:ref:`NetwClockConfig<class_NetwClockConfig>` **display_offset**\ (\ display_offset\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_display_offset>`
+:ref:`NetwClockConfig<class_NetwClockConfig>` **display_offset_ticks**\ (\ display_offset\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_display_offset_ticks>`
 
 Sets :ref:`display_offset<class_NetwClockConfig_property_display_offset>` and returns this same draft, so a declaration reads as one chained expression.
 
@@ -364,11 +364,11 @@ Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_
 
 ----
 
-.. _class_NetwClockConfig_method_sync_mode:
+.. _class_NetwClockConfig_method_sync:
 
 .. rst-class:: classref-method
 
-:ref:`NetwClockConfig<class_NetwClockConfig>` **sync_mode**\ (\ sync_mode\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_sync_mode>`
+:ref:`NetwClockConfig<class_NetwClockConfig>` **sync**\ (\ sync_mode\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_sync>`
 
 Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this same draft, so a declaration reads as one chained expression.
 
@@ -376,11 +376,11 @@ Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this
 
 ----
 
-.. _class_NetwClockConfig_method_tickrate:
+.. _class_NetwClockConfig_method_ticks_per_second:
 
 .. rst-class:: classref-method
 
-:ref:`NetwClockConfig<class_NetwClockConfig>` **tickrate**\ (\ tickrate\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_tickrate>`
+:ref:`NetwClockConfig<class_NetwClockConfig>` **ticks_per_second**\ (\ tickrate\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_ticks_per_second>`
 
 Sets :ref:`tickrate<class_NetwClockConfig_property_tickrate>` and returns this same draft, so a declaration reads as one chained expression.
 

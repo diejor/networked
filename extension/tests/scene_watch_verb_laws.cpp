@@ -25,15 +25,15 @@ Ref<NetwMultiplayer> peered_core() {
     return core;
 }
 
-Ref<netw::NetwParticipant> adopt_participant(
+Ref<netw::NetwPlayer> adopt_player(
     const Ref<NetwMultiplayer> &p_core,
     int64_t p_peer
 ) {
-    Ref<netw::NetwParticipant> row;
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
-    p_core->participant_adopt(p_peer, row);
-    p_core->participant_publish_joined(p_peer);
-    REQUIRE(p_core->participant_has(p_peer));
+    p_core->player_adopt(p_peer, row);
+    p_core->player_publish_joined(p_peer);
+    REQUIRE(p_core->player_has(p_peer));
     return row;
 }
 
@@ -84,7 +84,7 @@ int64_t declared_channel_id(const char *p_name) {
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SP1 a watch names one scene and adds itself "
-    "to what the peer already reaches, so a participant watching a second "
+    "to what the peer already reaches, so a player watching a second "
     "scene is in both and the first is not traded away for it"
 ) {
     Ref<NetwMultiplayer> core = peered_core();
@@ -94,7 +94,7 @@ TEST_CASE(
     const Declared arena = declare_scene(core, root, "Arena");
     const Declared annex = declare_scene(core, root, "Annex");
     const int64_t peer = 7;
-    adopt_participant(core, peer);
+    adopt_player(core, peer);
     netw::interest::Engine &engine = core->interest_plane();
     const StringName arena_layer = core->scene_layer_id(arena.handle);
     const StringName annex_layer = core->scene_layer_id(annex.handle);
@@ -127,7 +127,7 @@ TEST_CASE(
     Node *root = memnew(Node);
     const Declared arena = declare_scene(core, root, "Arena");
     const int64_t peer = 7;
-    adopt_participant(core, peer);
+    adopt_player(core, peer);
     netw::interest::Engine &engine = core->interest_plane();
     const StringName arena_layer = core->scene_layer_id(arena.handle);
 
@@ -168,7 +168,7 @@ TEST_CASE(
     const Declared arena = declare_scene(core, root, "Arena");
     const Declared annex = declare_scene(core, root, "Annex");
     const int64_t local = int64_t(core->get_unique_id());
-    adopt_participant(core, local);
+    adopt_player(core, local);
 
     NETW_CHECK_EQ(int(core->scene_watch(arena.handle, local)), int(OK));
     NETW_CHECK_EQ(int(core->scene_watch(annex.handle, local)), int(OK));
@@ -186,7 +186,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Scene][Hosted] SP4 unwatching takes the boundary and the "
     "viewer roster together, so the two published readers can never disagree "
-    "about whether a participant reaches the scene"
+    "about whether a player reaches the scene"
 ) {
     Ref<NetwMultiplayer> core = peered_core();
     const CallLog seen;
@@ -194,7 +194,7 @@ TEST_CASE(
     Node *root = memnew(Node);
     const Declared arena = declare_scene(core, root, "Arena");
     const int64_t peer = 7;
-    adopt_participant(core, peer);
+    adopt_player(core, peer);
     const StringName layer = core->scene_layer_id(arena.handle);
 
     REQUIRE(core->scene_watch(arena.handle, peer) == OK);

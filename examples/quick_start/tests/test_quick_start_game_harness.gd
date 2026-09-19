@@ -29,6 +29,7 @@ func test_host_input_reaches_local_player_after_add_host() -> void:
 
 	var player := valeria.local_player as Node2D
 	assert_that(player).is_not_null()
+	assert_that(player.visible).is_true()
 	var start := player.position.x
 
 	valeria.simulate_action_press("move_right")
@@ -41,6 +42,22 @@ func test_host_input_reaches_local_player_after_add_host() -> void:
 	await game.sync_ticks(2)
 
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
+
+
+func test_a_host_named_after_the_preplaced_player_keeps_a_readable_name() -> void:
+	var host := await game.add_host("Player", true)
+	await _wait_for_transition(host)
+
+	var body := host.local_player as Node2D
+	assert_that(body).is_not_null()
+	var seated := String(body.name)
+	assert_str(seated) \
+			.override_failure_message(
+				"the host's body was seated as '%s', which no spawner accepts"
+				% seated,
+			) \
+			.is_equal(seated.validate_node_name())
+	assert_that(NetwEntity.of(body).entity_id).is_equal(&"Player")
 
 
 func test_client_input_reaches_local_player() -> void:
@@ -220,6 +237,9 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 			.override_failure_message("jose never reached Level2") \
 			.is_not_null()
 	_assert_arrived_at_marker(jose, "Level2")
+	assert_that(Netw.session(jose.tree).presented_scene.label) \
+			.override_failure_message("jose presents no Level2 after moving into it") \
+			.is_equal(&"Level2")
 
 	await _teleport_without_bridge(jose, maria, _LEVEL_1_PATH, &"Level1")
 	await game.sync_ticks(20)
@@ -242,6 +262,9 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 	var jose_level: Node = jose_scene.root
 	assert_that(StringName(jose_level.name)) \
 			.override_failure_message("jose's player did not return to Level1") \
+			.is_equal(&"Level1")
+	assert_that(Netw.session(jose.tree).presented_scene.label) \
+			.override_failure_message("jose presents no Level1 after returning") \
 			.is_equal(&"Level1")
 
 	var maria_on_jose: Node2D = await jose.await_player(&"maria", 2.0)
@@ -522,7 +545,7 @@ func _wait_for_tp(participant: NetwSceneRunner) -> TPComponent:
 	var layer := _layer_of(participant)
 	for _i in 240:
 		var tp := _tp_of(participant)
-		if tp and not layer.is_settling() and not layer.is_moving():
+		if tp and not layer.is_moving():
 			return tp
 		await game.sync_ticks(1)
 	return null

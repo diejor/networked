@@ -74,9 +74,9 @@ struct Persisted {
         owner = memnew(Node2D);
         owner->set_name("Valeria");
         owner->set_meta(NetwPersistenceEngine::meta_columns(), p_columns);
-        NetwEntity::bind(owner, p_id, 0);
-        entity = NetwEntity::of(owner);
+        entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
+        entity->set_entity_id(p_id);
 
         Array declared_columns;
         for (int at = 0; at < p_columns.size(); ++at) {

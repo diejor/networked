@@ -281,8 +281,8 @@ public sealed class NetwInterestHandle : NetwRefCounted
     /// with one of <see cref="NetwMultiplayer.PerceptionPolicy"/>, and returns
     /// this handle. <see cref="NetwMultiplayer.PerceptionPolicy.Custom"/>
     /// requires <paramref name="customCallback"/>. The callback receives
-    /// <c>(visible, peer_id, layer_id)</c> on both local participant edges.
-    /// Other policies reject a callback.
+    /// <c>(visible, peer_id, layer_id)</c> on both local player edges. Other
+    /// policies reject a callback.
     /// </summary>
     public NetwInterestHandle OnPerceptionPolicy(
         StringName layerId,

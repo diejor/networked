@@ -81,12 +81,14 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] L4 an effect key an entity CAN name carries "
-    "that name, and the name survives being spent as a node identity"
+    "that name, and the key stands as an entity id of its own"
 ) {
     Ref<NetwMultiplayer> session = make_session();
     Node *body = memnew(Node);
     body->set_name("PlayerBody");
-    NetwEntity::bind(body, StringName("player"), 7);
+    const Ref<NetwEntity> acting = NetwEntity::ensure(body);
+    acting->set_entity_id(StringName("player"));
+    acting->set_peer_id(7);
     const RID entity = session->entity_of(body);
     REQUIRE(entity.is_valid());
 
@@ -94,10 +96,9 @@ TEST_CASE(
     CHECK(reads(key, "act__player__12__3"));
 
     Node *spawned = memnew(Node);
-    NetwEntity::bind(spawned, key, 0);
-    CHECK(NetwEntity::parse_entity(spawned->get_name()) == key);
-    const Ref<NetwEntity> wrapper = NetwEntity::of(spawned);
+    const Ref<NetwEntity> wrapper = NetwEntity::ensure(spawned);
     REQUIRE(wrapper.is_valid());
+    wrapper->set_entity_id(key);
     CHECK(wrapper->get_entity_id() == key);
 
     memdelete(spawned);

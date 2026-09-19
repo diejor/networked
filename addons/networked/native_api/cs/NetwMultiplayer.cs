@@ -29,7 +29,7 @@ namespace Networked;
 /// - <c>table_*</c>: <see cref="NetwRecordTable"/>
 /// - <c>schema_*</c>: <see cref="NetwSchema"/>
 /// - <c>lagcomp_*</c>: <see cref="NetwAction"/>
-/// - <c>peer_*</c>: <see cref="NetwParticipant"/>
+/// - <c>peer_*</c>: <see cref="NetwPlayer"/>
 /// - <c>display_*</c>: <see cref="NetwDisplayHandle"/>
 /// - <c>endpoint_*</c> and <c>embed_*</c>: <see cref="NetwConnectHandle"/>
 /// - <c>transport_*</c>: <see cref="NetwTransport"/>
@@ -37,7 +37,6 @@ namespace Networked;
 /// - <c>property_set_*</c>: <see cref="NetwPropertySet"/>
 /// - <c>service_*</c>: <see cref="NetwService"/>
 /// - <c>persist_*</c>: <see cref="NetwDatabase"/>
-/// - <c>auth_*</c>: <see cref="NetwAuthFlow"/>
 /// - <c>stats_*</c> and <c>attribution_*</c>: <see cref="NetwPredictStats"/>
 /// Methods beginning with an underscore are virtual extension points. Override
 /// one in a <see cref="Script"/> and call its corresponding <c>_default</c>
@@ -411,7 +410,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         Reliable = 0,
     }
 
-    public enum SceneMoveEnum : long
+    public enum SceneMove : long
     {
         /// <summary>
         /// The move is rejected because its source or destination is not live.
@@ -575,7 +574,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// <summary>
         /// Resolve from <see cref="NetwEntity"/> control and
         /// <see cref="Node.GetMultiplayerAuthority"/>. The default, and correct
-        /// for almost every entity.
+        /// for almost every entity. A peer holding node authority over a body
+        /// it also controls locally resolves to
+        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/>, because its own
+        /// solver already writes that node every step and there is nothing left
+        /// for a display to drive.
+        /// <see cref="NetwMultiplayer.DisplayRole.Authority"/> is what an
+        /// authoring peer resolves to when it does not run that body's control
+        /// itself.
         /// </summary>
         Auto = 0,
         /// <summary>
@@ -594,7 +600,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         Disabled = 3,
         /// <summary>
         /// Sample the locally authored simulation each tick and play it back,
-        /// so the server sees its own world smoothed the same way.
+        /// so an authoring peer sees its own world smoothed the same way. A
+        /// body whose control the same peer runs locally takes
+        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/> instead.
         /// </summary>
         Authority = 4,
     }
@@ -896,7 +904,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public enum SceneEvent : long
     {
         /// <summary>
-        /// The scene started or stopped replicating to a participant, and
+        /// The scene started or stopped replicating to a player, and
         /// <c>subject</c> is its peer id. Every
         /// <see cref="NetwMultiplayer.SceneObserve"/> callback takes
         /// <c>(present: bool, subject: Variant)</c>, so one registration hears
@@ -905,14 +913,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Viewer = 0,
         /// <summary>
-        /// A player entity entered or left, and <c>subject</c> is its entity
-        /// RID.
+        /// A body entered or left, and <c>subject</c> is its entity RID.
         /// </summary>
-        Player = 1,
+        Body = 1,
         /// <summary>
         /// Any tracked entity entered or left, and <c>subject</c> is its entity
-        /// RID. Players report here too, so a caller wanting only them reads
-        /// <see cref="NetwMultiplayer.SceneEvent.Player"/> instead.
+        /// RID. Bodies report here too, so a caller wanting only them reads
+        /// <see cref="NetwMultiplayer.SceneEvent.Body"/> instead.
         /// </summary>
         Entity = 2,
     }
@@ -920,18 +927,17 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public enum SceneChange : long
     {
         /// <summary>
-        /// Every participant converges on the destination and every other live
-        /// scene retires. Isolation, the number of live scenes, and whether
-        /// authority also holds a local player do not change what this means.
+        /// Every player converges on the destination and every other live scene
+        /// retires. Isolation, the number of live scenes, and whether authority
+        /// also holds a local player do not change what this means.
         /// </summary>
         Session = 0,
         /// <summary>
-        /// One participant travels with the player entities it is enrolled in,
-        /// and every world keeps running. A change at this scope with no
-        /// participant to resolve is rejected rather than widened to the
-        /// session.
+        /// One player travels with the bodies it is enrolled in, and every
+        /// world keeps running. A change at this scope with no player to
+        /// resolve is rejected rather than widened to the session.
         /// </summary>
-        Participant = 1,
+        Player = 1,
         /// <summary>
         /// The occupants of the caller's own world travel and that world
         /// retires, leaving other worlds untouched. A change at this scope with
@@ -1980,22 +1986,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         ListenServer = 3,
     }
 
-    public enum NameVerdict : long
-    {
-        /// <summary>
-        /// The name collides and the join may be renamed around it, which is
-        /// what a debug join asks for. The caller picks a name nobody holds and
-        /// admits that instead.
-        /// </summary>
-        Rename = 1,
-        /// <summary>
-        /// The name collides and may not be altered, because it came from an
-        /// authenticated identity. The join is rejected rather than renamed, so
-        /// the roster never disagrees with the account behind it.
-        /// </summary>
-        Refuse = 2,
-    }
-
     public enum TransportMode : long
     {
         /// <summary>
@@ -2144,11 +2134,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted by <see cref="NetwMultiplayer.SceneActivate"/> for the container
-    /// a caller made current, once per activation and never for a rejection.
-    /// Reusing a container that was already live still announces, because the
-    /// signal reports what the session now presents and not whether a spawn
-    /// happened.
+    /// Emitted for the container the session made current, once per activation
+    /// and never for a rejection. A session change that reuses a container
+    /// already live still announces, because the signal reports what the
+    /// session now presents and not whether a spawn happened.
     /// </summary>
     public event Action<Variant> SceneActivated
     {
@@ -2194,9 +2183,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when <see cref="NetwMultiplayer.SceneParticipantViewport"/>
-    /// resolves to a different <see cref="SubViewport"/>, and <c>viewport</c>
-    /// is <c>null</c> when it resolves to none. A settle that lands on what the
+    /// Emitted when <see cref="NetwMultiplayer.ScenePlayerViewport"/> resolves
+    /// to a different <see cref="SubViewport"/>, and <c>viewport</c> is
+    /// <c>null</c> when it resolves to none. A settle that lands on what the
     /// last one did stays silent, so a listener is never told to re-adopt a
     /// display it already holds. The settle is deferred, because the local
     /// player is assigned while its entity is still entering the tree and the
@@ -2478,9 +2467,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when a client asks for a peer to be kicked. Heard only by a
-    /// session holding peer id 1. A request that does not carry a target and a
-    /// reason is dropped rather than announced against a default target.
+    /// Emitted when a client asks for a peer to be kicked. Heard only by the
+    /// peer holding session authority, which is peer 1 in an ordinary star and
+    /// the declared coordinator elsewhere. A request that does not carry a
+    /// target and a reason is dropped rather than announced against a default
+    /// target.
     /// </summary>
     public event Action<long, long, string> PeerKickRequested
     {
@@ -2489,9 +2480,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when a client asks to leave. Heard only by a session holding
-    /// peer id 1, and <c>peer_id</c> is who actually sent the request rather
-    /// than anything the request claims.
+    /// Emitted when a client asks to leave. Heard only by the peer holding
+    /// session authority, which is peer 1 in an ordinary star and the declared
+    /// coordinator elsewhere, and <c>peer_id</c> is who actually sent the
+    /// request rather than anything the request claims.
     /// </summary>
     public event Action<long, string> SessionDisconnectRequested
     {
@@ -2611,47 +2603,45 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Emitted for every peer the session admits, this one included. A peer
     /// with no roster row has not been admitted and is never announced.
     /// </summary>
-    public event Action<Variant> ParticipantJoined
+    public event Action<Variant> PlayerJoined
     {
-        add => Connect("participant_joined", Callable.From(value));
-        remove => Disconnect("participant_joined", Callable.From(value));
+        add => Connect("player_joined", Callable.From(value));
+        remove => Disconnect("player_joined", Callable.From(value));
     }
 
     /// <summary>
     /// Emitted when the peer being admitted is this one, ahead of
-    /// <see cref="NetwMultiplayer.ParticipantJoined"/>, so a listener handling
-    /// both sees itself arrive before it sees the roster grow.
+    /// <see cref="NetwMultiplayer.PlayerJoined"/>, so a listener handling both
+    /// sees itself arrive before it sees the roster grow.
     /// </summary>
-    public event Action<Variant> ParticipantLocalJoined
+    public event Action<Variant> PlayerLocalJoined
     {
-        add => Connect("participant_local_joined", Callable.From(value));
-        remove => Disconnect("participant_local_joined", Callable.From(value));
+        add => Connect("player_local_joined", Callable.From(value));
+        remove => Disconnect("player_local_joined", Callable.From(value));
     }
 
     /// <summary>
     /// Emitted when a membership ends, whether its peer disconnected or
-    /// <see cref="NetwMultiplayer.ParticipantKick"/> ended it. A peer that
-    /// connected and never joined held no membership and is never announced.
-    /// The membership is released before this is emitted, so
-    /// <see cref="NetwParticipant.IsActive"/> reads <c>false</c> inside the
-    /// handler and every participant-taking verb refuses them. A game erasing
-    /// its own roster row here is reading the last honest handle for that
-    /// player.
+    /// <see cref="NetwMultiplayer.PlayerKick"/> ended it. A peer that connected
+    /// and never joined held no membership and is never announced. The
+    /// membership is released before this is emitted, so
+    /// <see cref="NetwPlayer.IsActive"/> reads <c>false</c> inside the handler
+    /// and every player-taking verb refuses them. A game erasing its own roster
+    /// row here is reading the last honest handle for that player.
     /// </summary>
-    public event Action<Variant> ParticipantLeft
+    public event Action<Variant> PlayerLeft
     {
-        add => Connect("participant_left", Callable.From(value));
-        remove => Disconnect("participant_left", Callable.From(value));
+        add => Connect("player_left", Callable.From(value));
+        remove => Disconnect("player_left", Callable.From(value));
     }
 
     /// <summary>
-    /// Emitted when <see cref="NetwMultiplayer.ScenePresent"/> changes what
-    /// this peer looks at, carrying the <see cref="NetwSceneHandle"/> left and
-    /// the one taken, either of which may be <c>null</c>. Relayed to a game as
+    /// Emitted when what this peer draws changes, carrying the
+    /// <see cref="NetwSceneHandle"/> left and the one taken, either of which
+    /// may be <c>null</c>. Relayed to a game as
     /// <see cref="NetwSessionHandle.PresentationChanged"/>. Spent on a change
-    /// and never on a repeat. A scene leaving the live book clears the choice
-    /// and announces that, naming <c>null</c> as the destination rather than
-    /// choosing another scene.
+    /// and never on a repeat. <see cref="NetwSessionHandle.PresentedScene"/> is
+    /// what it announces and where the derivation is written.
     /// </summary>
     public event Action<Variant, Variant> ScenePresentationChanged
     {
@@ -2664,7 +2654,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Emitted for the scene a newly live route belongs to. The handle is the
     /// scene's own, so a node coming live inside a scene announces the scene
-    /// and not itself.
+    /// and not itself. It arrives once the scene root is ready, so every node
+    /// inside the scene is mounted, every <c>@onready</c> field is set and
+    /// <see cref="Node.Multiplayer"/> answers on all of them. A handler may
+    /// reach into the scene it was handed.
     /// </summary>
     public event Action<Variant> SceneLive
     {
@@ -2916,23 +2909,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindParticipantJoinedAll =
+    private static readonly IntPtr _bindPlayerJoinedAll =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "participant_joined_all",
+            "player_joined_all",
             2915620761UL);
 
     /// <summary>
-    /// Every accepted participant known by this peer. A participant appears
-    /// here once the session has accepted its membership, so a connected peer
-    /// that has not joined yet is absent.
+    /// Every accepted player known by this peer. A player appears here once the
+    /// session has accepted its membership, so a connected peer that has not
+    /// joined yet is absent.
     /// </summary>
-    public Godot.Collections.Array Participants
+    public Godot.Collections.Array Players
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindParticipantJoinedAll, Checked, ref answered);
+            NetwThunks.Call0(_bindPlayerJoinedAll, Checked, ref answered);
             Godot.Collections.Array result =
                 VariantUtils.ConvertToArray(answered);
             answered.Dispose();
@@ -2940,22 +2933,22 @@ public sealed class NetwMultiplayer : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindParticipantAll =
-        NetwApi.MethodBind("NetwMultiplayer", "participant_all", 3995934104UL);
+    private static readonly IntPtr _bindPlayerAll =
+        NetwApi.MethodBind("NetwMultiplayer", "player_all", 3995934104UL);
 
     /// <summary>
     /// Every membership this session holds a row for, in peer order. A row
     /// exists from the acceptance that minted it, so this and
-    /// <see cref="NetwMultiplayer.Participants"/> name the same players. They
-    /// differ only while a membership is being torn down, when a row this still
-    /// reports has already left <see cref="NetwMultiplayer.Participants"/>.
+    /// <see cref="NetwMultiplayer.Players"/> name the same players. They differ
+    /// only while a membership is being torn down, when a row this still
+    /// reports has already left <see cref="NetwMultiplayer.Players"/>.
     /// </summary>
-    public Godot.Collections.Array ConnectedParticipants
+    public Godot.Collections.Array ConnectedPlayers
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindParticipantAll, Checked, ref answered);
+            NetwThunks.Call0(_bindPlayerAll, Checked, ref answered);
             Godot.Collections.Array result =
                 VariantUtils.ConvertToArray(answered);
             answered.Dispose();
@@ -2963,26 +2956,20 @@ public sealed class NetwMultiplayer : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindParticipantLocal =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "participant_local",
-            2201168958UL);
+    private static readonly IntPtr _bindPlayerLocal =
+        NetwApi.MethodBind("NetwMultiplayer", "player_local", 3183676423UL);
 
     /// <summary>
-    /// The accepted <see cref="NetwParticipant"/> for this peer, or <c>null</c>
+    /// The accepted <see cref="NetwPlayer"/> for this peer, or <c>null</c>
     /// before its join is accepted.
     /// </summary>
-    public NetwParticipant LocalParticipant
+    public NetwPlayer LocalPlayer
     {
         get
         {
             IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindParticipantLocal,
-                Checked,
-                ref answered);
-            return NetwParticipant.Adopt(answered);
+            NetwThunks.Ptrcall0_IntPtr(_bindPlayerLocal, Checked, ref answered);
+            return NetwPlayer.Adopt(answered);
         }
     }
 
@@ -3136,7 +3123,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <see cref="LocalMultiplayerPeer"/> does not implement it at all. A
     /// session on the in-process loopback reads <c>false</c> whatever a game
     /// writes here, which is why who gets in is decided by
-    /// <see cref="NetwMultiplayer.AuthFlow"/> and the session's own roster
+    /// <see cref="Netw.ConfigureAdmission"/> and the session's own roster
     /// rather than by this.
     /// </summary>
     public bool RefuseNewConnections
@@ -3302,26 +3289,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindScenePlayersAll =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "scene_players_all",
-            2915620761UL);
+    private static readonly IntPtr _bindSceneBodiesAll =
+        NetwApi.MethodBind("NetwMultiplayer", "scene_bodies_all", 2915620761UL);
 
     /// <summary>
-    /// Every player entity across every live scene. A player lives inside a
-    /// scene, so the session reads its players by asking every scene rather
-    /// than keeping a second roster that could disagree with
-    /// <see cref="NetwMultiplayer.SceneGetPlayers"/>. Scenes partition the
-    /// players, so a name is unique across this whole array and never merely
+    /// Every body across every live scene. A body lives inside a scene, so the
+    /// session reads its bodies by asking every scene rather than keeping a
+    /// second roster that could disagree with
+    /// <see cref="NetwMultiplayer.SceneGetBodies"/>. Scenes partition the
+    /// bodies, so a name is unique across this whole array and never merely
     /// within one scene.
     /// </summary>
-    public Godot.Collections.Array Players
+    public Godot.Collections.Array Bodies
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindScenePlayersAll, Checked, ref answered);
+            NetwThunks.Call0(_bindSceneBodiesAll, Checked, ref answered);
             Godot.Collections.Array result =
                 VariantUtils.ConvertToArray(answered);
             answered.Dispose();
@@ -3368,35 +3352,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
                 ref answered);
             slot0.Dispose();
             answered.Dispose();
-        }
-    }
-
-    private static readonly IntPtr _bindAuthEffectiveFlow =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "auth_effective_flow",
-            890876124UL);
-
-    /// <summary>
-    /// The <see cref="NetwAuthFlow"/> this session checks arriving peers with,
-    /// resolved in this order.
-    /// - a flow installed through <see cref="NetwMultiplayer.AuthSetFlow"/>
-    /// - the flow built by the factory <see cref="Netw.ConfigureAuth"/>
-    /// declared
-    /// - <c>null</c>, and every peer is let in
-    /// A <c>null</c> here means open admission only when nothing was declared.
-    /// A declared factory that failed to build rejects every peer instead.
-    /// </summary>
-    public NetwAuthFlow AuthFlow
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindAuthEffectiveFlow,
-                Checked,
-                ref answered);
-            return NetwAuthFlow.Adopt(answered);
         }
     }
 
@@ -3562,30 +3517,30 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindInterestParticipantSees =
+    private static readonly IntPtr _bindInterestPlayerSees =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "interest_participant_sees",
+            "interest_player_sees",
             2487528652UL);
 
     /// <summary>
     /// Whether <paramref name="peerId"/> can see <paramref name="entity"/> as
-    /// an ordinary participant, holding a listen-server host to the same rule
-    /// as any client. On the server this reads <paramref name="peerId"/>'s row
-    /// through <see cref="NetwMultiplayer.InterestGetRow"/>. Off the server it
-    /// can only return a result for the local peer, from its own
+    /// an ordinary player, holding a listen-server host to the same rule as any
+    /// client. On the server this reads <paramref name="peerId"/>'s row through
+    /// <see cref="NetwMultiplayer.InterestGetRow"/>. Off the server it can only
+    /// return a result for the local peer, from its own
     /// <see cref="NetwEntity.Interest"/> declaration. Game code asking whether
     /// a player can see an entity calls here.
     /// <see cref="NetwMultiplayer.InterestWireAdmits"/> is the one to call when
     /// the server must not be blinded to its own entities.
     /// </summary>
-    public bool InterestParticipantSees(long peerId, NetwEntity entity)
+    public bool InterestPlayerSees(long peerId, NetwEntity entity)
     {
         long slot0 = peerId;
         IntPtr slot1 = entity?.Native ?? IntPtr.Zero;
         byte answered = default;
         NetwThunks.Ptrcall2_Long_IntPtr_Byte(
-            _bindInterestParticipantSees,
+            _bindInterestPlayerSees,
             Checked,
             in slot0,
             in slot1,
@@ -3770,14 +3725,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Whether traffic for <paramref name="entity"/> may reach
-    /// <paramref name="peerId"/>, short-circuiting <c>true</c> for
-    /// <see cref="MultiplayerPeer.TargetPeerServer"/> because server authority
-    /// always knows every entity it holds. Every other peer falls through to
-    /// <see cref="NetwMultiplayer.InterestParticipantSees"/>. Replication and
-    /// spawn gating call this rather than
-    /// <see cref="NetwMultiplayer.InterestParticipantSees"/>, because a wire
-    /// gate that hid the server's own entities from itself would stall
-    /// authority rather than protect it.
+    /// <paramref name="peerId"/>, short-circuiting <c>true</c> for the peer
+    /// holding session authority, which is peer 1 in an ordinary star and the
+    /// declared coordinator elsewhere, because that peer always knows every
+    /// entity it holds. Every other peer falls through to
+    /// <see cref="NetwMultiplayer.InterestPlayerSees"/>. Replication and spawn
+    /// gating call this rather than
+    /// <see cref="NetwMultiplayer.InterestPlayerSees"/>, because a wire gate
+    /// that hid the server's own entities from itself would stall authority
+    /// rather than protect it.
     /// </summary>
     public bool InterestWireAdmits(long peerId, NetwEntity entity)
     {
@@ -3836,7 +3792,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// offline session self-dispatches through the loopback and returns the
     /// single local recipient <c>1</c>. This returns who a message would go to
     /// rather than who can see the entity.
-    /// <see cref="NetwMultiplayer.InterestParticipantSees"/> is the visibility
+    /// <see cref="NetwMultiplayer.InterestPlayerSees"/> is the visibility
     /// question.
     /// </summary>
     public int[] RpcGetRecipients(NetwEntity entity)
@@ -3991,18 +3947,24 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> with <paramref name="args"/> on
-    /// <paramref name="peer"/>, where zero is every peer that may currently see
-    /// the target and any other value is that one peer.
-    /// <paramref name="callable"/>'s object must be a node an entity governs,
-    /// because a remote call is addressed by <see cref="NetwEntity.Route"/> and
-    /// a node no entity holds has none. A node with no entity at all and a node
-    /// whose route is not live are counted apart and both drop the call.
-    /// Neither is an error, because a call issued in the frame an entity is
-    /// despawning is ordinary rather than a defect. A method the target's
-    /// script neither annotates nor registers is rejected with a warning and
-    /// nothing is sent, so a typo does not become a silent no-op on every peer.
-    /// A local dispatch happens before anything is sent, when the method is
-    /// <c>call_local</c> and <paramref name="peer"/> is zero or this peer.
+    /// <paramref name="peer"/>, where zero is every peer
+    /// <see cref="NetwMultiplayer.RpcGetRecipients"/> answers for the target
+    /// and any other value is that one peer. The audience for zero is narrowed
+    /// by the interest this peer itself declares, which is authoritative
+    /// membership only when this peer holds session authority. A call a client
+    /// addresses to zero can therefore reach a peer an interest layer hides the
+    /// target from, so interest bounds what a call costs rather than who may
+    /// learn it. <paramref name="callable"/>'s object must be a node an entity
+    /// governs, because a remote call is addressed by
+    /// <see cref="NetwEntity.Route"/> and a node no entity holds has none. A
+    /// node with no entity at all and a node whose route is not live are
+    /// counted apart and both drop the call. Neither is an error, because a
+    /// call issued in the frame an entity is despawning is ordinary rather than
+    /// a defect. A method the target's script neither annotates nor registers
+    /// is rejected with a warning and nothing is sent, so a typo does not
+    /// become a silent no-op on every peer. A local dispatch happens before
+    /// anything is sent, when the method is <c>call_local</c> and
+    /// <paramref name="peer"/> is zero or this peer.
     /// <see cref="NetwMultiplayer.RelaySender"/> reads this peer for the length
     /// of that call and is restored afterwards. A <c>call_remote</c> method
     /// addressed at this peer alone is an error rather than a send. An entity
@@ -4370,10 +4332,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindSceneParticipantViewport =
+    private static readonly IntPtr _bindScenePlayerViewport =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "scene_participant_viewport",
+            "scene_player_viewport",
             4183120852UL);
 
     /// <summary>
@@ -4392,10 +4354,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// turn-over, and <see cref="HostSceneView"/> is the stock consumer of
     /// both.
     /// </summary>
-    public SubViewport SceneParticipantViewport()
+    public SubViewport ScenePlayerViewport()
     {
         godot_variant answered = default;
-        NetwThunks.Call0(_bindSceneParticipantViewport, Checked, ref answered);
+        NetwThunks.Call0(_bindScenePlayerViewport, Checked, ref answered);
         SubViewport result =
             (SubViewport)VariantUtils.ConvertToGodotObject(answered);
         answered.Dispose();
@@ -5446,60 +5408,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
-    }
-
-    private static readonly IntPtr _bindPeerSetIdentity =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "peer_set_identity",
-            2797915946UL);
-
-    /// <summary>
-    /// Records <paramref name="identity"/> as what
-    /// <see cref="NetwMultiplayer.PeerGetIdentity"/> returns for
-    /// <paramref name="peer"/>. Passing <c>null</c> erases the row, and so does
-    /// <see cref="NetwMultiplayer.PeerForget"/> or the session's own roster
-    /// teardown, because an identity outliving the peer it names would let the
-    /// next peer at that id read the previous one's. Written by whatever
-    /// verified the credentials, which is the auth flow on the server. A peer
-    /// that never authenticated has no row rather than an empty one.
-    /// </summary>
-    public void PeerSetIdentity(long peer, NetwIdentity identity)
-    {
-        long slot0 = peer;
-        IntPtr slot1 = identity?.Native ?? IntPtr.Zero;
-        long discarded = default;
-        NetwThunks.Ptrcall2_Long_IntPtr_Long(
-            _bindPeerSetIdentity,
-            Checked,
-            in slot0,
-            in slot1,
-            ref discarded);
-    }
-
-    private static readonly IntPtr _bindPeerGetIdentity =
-        NetwApi.MethodBind("NetwMultiplayer", "peer_get_identity", 85520819UL);
-
-    /// <summary>
-    /// The validated <see cref="NetwIdentity"/> this session holds for
-    /// <paramref name="peer"/>, or <c>null</c> when authentication never
-    /// completed for it. Backs <see cref="NetwParticipant.Identity"/>. The
-    /// session keeps these itself rather than reading them out of a
-    /// <see cref="NetwMultiplayer.PeerGetBucket"/> bucket, so there is exactly
-    /// one result to who authenticated. A bucket belongs to the game and is
-    /// keyed by a <see cref="Script"/> type, so an identity a game writes into
-    /// one of its own describes the game's state and not the session's.
-    /// </summary>
-    public NetwIdentity PeerGetIdentity(long peer)
-    {
-        long slot0 = peer;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_Long_IntPtr(
-            _bindPeerGetIdentity,
-            Checked,
-            in slot0,
-            ref answered);
-        return NetwIdentity.Adopt(answered);
     }
 
     private static readonly IntPtr _bindSessionGetAuthoredRole =
@@ -6785,7 +6693,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Fixes <paramref name="table"/>'s written routes and columns as the
     /// applied state readers compare against. Stamped with the session's own
     /// tick, because a commit is what fixes the frame a reader dates itself
-    /// against and two clocks would date it twice.
+    /// against and two clocks would date it twice. Any peer commits its own
+    /// rows and hears <see cref="NetwMultiplayer.TableReceived"/> for them.
+    /// Only the peer holding authority sends the wave to the others, so a
+    /// commit on a peer that holds none stays local.
     /// <code>
     /// Error
     /// ┠╴OK                  the wave was applied
@@ -7400,68 +7311,22 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered;
     }
 
-    private static readonly IntPtr _bindParticipantPlayers =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "participant_players",
-            1171824711UL);
+    private static readonly IntPtr _bindPlayerBodies =
+        NetwApi.MethodBind("NetwMultiplayer", "player_bodies", 1171824711UL);
 
     /// <summary>
-    /// Every player entity the session currently holds for
-    /// <paramref name="peer"/>'s participant, in no promised order. The flat
-    /// spelling of <see cref="NetwParticipant.Players"/>.
+    /// Every body the session currently holds for the membership
+    /// <paramref name="peer"/> is on right now, in no promised order. The flat
+    /// spelling of <see cref="NetwPlayer.Bodies"/>, read through whoever holds
+    /// that peer id at the moment of the call.
     /// </summary>
-    public Godot.Collections.Array ParticipantPlayers(long peer)
+    public Godot.Collections.Array PlayerBodies(long peer)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peer);
         godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindParticipantPlayers,
-            Checked,
-            in slot0,
-            ref answered);
+        NetwThunks.Call1(_bindPlayerBodies, Checked, in slot0, ref answered);
         slot0.Dispose();
         Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindSceneActivate =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_activate", 704522232UL);
-
-    /// <summary>
-    /// Brings <paramref name="destination"/> up if it is not already live and
-    /// forces its content root to process, returning the container it settled
-    /// on or <c>null</c> when nothing could be activated. Whatever it settles
-    /// on is announced on <see cref="NetwMultiplayer.SceneActivated"/>, so one
-    /// activation is always one announcement. Only a file-backed
-    /// <see cref="PackedScene"/> can be activated. It reuses the live scene of
-    /// the same name when there is one, and spawns from the packed scene's own
-    /// path otherwise. A <see cref="StringName"/> or <see cref="string"/> is
-    /// rejected, because a label names a live scene rather than something to
-    /// build, and <see cref="Netw.Scene"/> is how a live one is found by label.
-    /// An in-memory <see cref="PackedScene"/> is rejected because a peer
-    /// receiving the spawn has no path to load it from, and a
-    /// <see cref="Node"/> is rejected because an already-mounted node is not
-    /// something to activate.
-    /// <code>
-    /// DESTINATION_PACKED           -&gt; the live container, else a spawn
-    /// DESTINATION_PACKED_UNPATHED  -&gt; rejected
-    /// DESTINATION_NAME             -&gt; rejected
-    /// DESTINATION_NODE             -&gt; rejected
-    /// DESTINATION_NONE             -&gt; rejected
-    /// </code>
-    /// <para>
-    /// <b>Server Only.</b>
-    /// </para>
-    /// </summary>
-    public Node SceneActivate(Variant destination)
-    {
-        godot_variant slot0 = destination.CopyNativeVariant();
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindSceneActivate, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
         answered.Dispose();
         return result;
     }
@@ -7478,13 +7343,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// server authority. <paramref name="scope"/> says who the change is for
     /// and nothing infers it, so the same call means the same thing on a listen
     /// host and on a dedicated server. <paramref name="requester"/> names the
-    /// node the change is asked from, which resolves the participant a
-    /// <see cref="NetwMultiplayer.SceneChange.Participant"/> change moves and
-    /// the source world a <see cref="NetwMultiplayer.SceneChange.Scene"/>
-    /// change replaces. A scope that needs one and finds none is rejected
-    /// rather than widened. On authority the change applies directly. On a
-    /// client it becomes a <see cref="NetwMultiplayer.SceneRequest"/> whose
-    /// result settles the returned <see cref="NetwPromise"/>.
+    /// node the change is asked from, which resolves the player a
+    /// <see cref="NetwMultiplayer.SceneChange.Player"/> change moves and the
+    /// source world a <see cref="NetwMultiplayer.SceneChange.Scene"/> change
+    /// replaces. A scope that needs one and finds none is rejected rather than
+    /// widened. On authority the change applies directly. On a client it
+    /// becomes a <see cref="NetwMultiplayer.SceneRequest"/> whose result
+    /// settles the returned <see cref="NetwPromise"/>.
     /// <code>
     /// var promise := session.scene_change_to_file(self, "res://arena.tscn")
     /// await promise.wait()
@@ -7759,13 +7624,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <c>@GlobalScope.ERR_SKIP</c>, a route whose entity no longer stands is
     /// <c>@GlobalScope.ERR_UNAVAILABLE</c>, and a wrong channel or an empty
     /// payload is <c>@GlobalScope.ERR_INVALID_DATA</c>. The channels admitted
-    /// are <c>NetwFrameEnvelope.SYNC</c>, <c>NetwFrameEnvelope.SYNC_ROW</c>,
-    /// <c>NetwFrameEnvelope.SYNC_ROW_DELTA</c>,
-    /// <c>NetwFrameEnvelope.SYNC_ROW_WINDOW</c> and
-    /// <c>NetwFrameEnvelope.SYNC_DELTA</c>. <paramref name="sender"/>,
-    /// <paramref name="comp"/>, <paramref name="flags"/> and
-    /// <paramref name="tick"/> travel so a game overriding the gate can judge
-    /// the whole header, and the stock verdict reads none of them.
+    /// are the built-in replication lanes <c>SYNC</c>, <c>SYNC_ROW</c>,
+    /// <c>SYNC_ROW_DELTA</c>, <c>SYNC_ROW_WINDOW</c> and <c>SYNC_DELTA</c>.
+    /// <paramref name="sender"/>, <paramref name="comp"/>,
+    /// <paramref name="flags"/> and <paramref name="tick"/> travel so a game
+    /// overriding the gate can judge the whole header, and the stock verdict
+    /// reads none of them.
     /// <code>
     /// Error
     /// ┠╴OK                  the frame is admitted
@@ -8176,23 +8040,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwThunks.Ptrcall0_Long(_bindLivenessPollNow, Checked, ref discarded);
     }
 
-    private static readonly IntPtr _bindParticipantKick =
-        NetwApi.MethodBind("NetwMultiplayer", "participant_kick", 538576922UL);
+    private static readonly IntPtr _bindPlayerKick =
+        NetwApi.MethodBind("NetwMultiplayer", "player_kick", 1232915396UL);
 
     /// <summary>
-    /// Ends <paramref name="participant"/>'s membership and turns their peer
-    /// away carrying <paramref name="reason"/>, announcing
-    /// <see cref="NetwMultiplayer.ParticipantLeft"/> before the connection
-    /// goes. A membership rather than a connection is what this names, which is
-    /// what separates it from <see cref="NetwMultiplayer.PeerKick"/>. The
-    /// membership is released first, so a handler on
-    /// <see cref="NetwMultiplayer.ParticipantLeft"/> reads a session that no
-    /// longer holds them.
+    /// Ends <paramref name="player"/>'s membership and turns their peer away
+    /// carrying <paramref name="reason"/>, announcing
+    /// <see cref="NetwMultiplayer.PlayerLeft"/> before the connection goes. A
+    /// membership rather than a connection is what this names, which is what
+    /// separates it from <see cref="NetwMultiplayer.PeerKick"/>. The membership
+    /// is released first, so a handler on
+    /// <see cref="NetwMultiplayer.PlayerLeft"/> reads a session that no longer
+    /// holds them.
     /// <code>
     /// Error
     /// ┠╴OK                      the membership is ended and the peer is turned away
     /// ┠╴ERR_UNAUTHORIZED        this peer is not the server
-    /// ┖╴ERR_INVALID_PARAMETER   a participant this session no longer holds, or the
+    /// ┖╴ERR_INVALID_PARAMETER   a player this session no longer holds, or the
     ///                           local server's own, which leaves through
     ///                           session_leave instead
     /// </code>
@@ -8200,17 +8064,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <b>Server Only.</b>
     /// </para>
     /// </summary>
-    public Error ParticipantKick(
-        NetwParticipant participant,
-        string reason = "")
+    public Error PlayerKick(NetwPlayer player, string reason = "")
     {
         godot_variant slot0 =
             VariantUtils.CreateFromGodotObjectPtr(
-                participant?.Native ?? IntPtr.Zero);
+                player?.Native ?? IntPtr.Zero);
         godot_variant slot1 = VariantUtils.CreateFromString(reason);
         godot_variant answered = default;
         NetwThunks.Call2(
-            _bindParticipantKick,
+            _bindPlayerKick,
             Checked,
             in slot0,
             in slot1,
@@ -8230,16 +8092,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Prepares <paramref name="userName"/> and <paramref name="args"/> as the
-    /// local player's join, without assigning a transport peer. It checks the
-    /// identity, arms authentication, runs the declared
-    /// <see cref="NetwAuthFlow"/>'s credential step, and holds what
-    /// authentication will send until the peer is assigned. A client submits it
-    /// on reaching <see cref="NetwMultiplayer.SessionState.Online"/>. A server
-    /// holds it until <see cref="NetwMultiplayer.SessionSubmitJoin"/> is
-    /// called. The <c>@GlobalScope.Error</c> travels as the promise's
+    /// local player's join, without assigning a transport peer. It arms
+    /// authentication and holds the request until the peer is assigned. A
+    /// client submits it on reaching
+    /// <see cref="NetwMultiplayer.SessionState.Online"/>. A server holds it
+    /// until <see cref="NetwMultiplayer.SessionSubmitJoin"/> is called. The
+    /// <c>@GlobalScope.Error</c> travels as the promise's
     /// <see cref="NetwPromise.Result"/>, so a caller reads
-    /// <c>int(prepared.result)</c>. A flow with no credential preparation to
-    /// run returns a promise that is already settled, so it never suspends.
+    /// <c>int(prepared.result)</c>. The promise is already settled when it is
+    /// returned, so the call never suspends.
     /// <code>
     /// var prepared := api.session_prepare_join(&amp;"Dev")
     /// if not prepared.is_settled:
@@ -8335,7 +8196,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// embedding offers, consumed by the next
     /// <see cref="NetwMultiplayer.EmbedSettle"/>. The embedding captures it
     /// synchronously, so a node dropped in afterwards never becomes the
-    /// candidate. A root install offers nothing and passes <c>null</c>.
+    /// candidate. A root install offers nothing and passes <c>null</c>. A level
+    /// that declares a multiplayer scene is freed by the settle. The peer
+    /// holding authority spawns the scene again from the file
+    /// <paramref name="level"/> came from, and a peer holding none presents the
+    /// world that authority sends it instead. A declared level naming no
+    /// <c>.tscn</c> under <c>res://</c> is kept and reported rather than
+    /// adopted, because replacing it with nothing would leave the session
+    /// presenting no world at all.
     /// </summary>
     public void EmbedOfferBareLevel(Node level)
     {
@@ -9514,44 +9382,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered;
     }
 
-    private static readonly IntPtr _bindSceneMove =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_move", 735505754UL);
-
-    /// <summary>
-    /// Moves <paramref name="entity"/> under <paramref name="destination"/>'s
-    /// container, returning the <see cref="NetwPromise"/> the settle carries.
-    /// The mover is reparented on every peer by the same carry rules, so the
-    /// promise resolves <c>@GlobalScope.OK</c> only once the entity stands
-    /// under its new scene everywhere it exists. A carry masks the mover off
-    /// the physics server before the parent swap and restores it after,
-    /// spending two <see cref="SceneTree.PhysicsFrame"/>s on each side. The
-    /// physics server drops a body from an <see cref="Area2D"/>'s or
-    /// <see cref="Area3D"/>'s overlap tracking only on a step, and a body still
-    /// tracked re-emits <see cref="Area2D.BodyEntered"/> out of its own
-    /// <see cref="Node.TreeEntered"/> as the swap remounts it. That signal
-    /// fires while the body is in the tree and its children are not, so a
-    /// handler reading a child of the body sees an orphan. The window is what
-    /// stops it, and a mover with no
-    /// <see cref="CollisionObject2D.CollisionLayer"/> or
-    /// <see cref="CollisionObject2D.CollisionMask"/> skips the window because
-    /// it has nothing to evict. A move asked off server authority returns
-    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> on a promise that has already
-    /// settled. <b>Server Only.</b>
-    /// </summary>
-    public NetwPromise SceneMove(Rid entity, Rid destination)
-    {
-        Rid slot0 = entity;
-        Rid slot1 = destination;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_Rid_Rid_IntPtr(
-            _bindSceneMove,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwPromise.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindLivenessWhenLive =
         NetwApi.MethodBind(
             "NetwMultiplayer",
@@ -9751,8 +9581,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Drops everything this session holds about who is in it. That is every
     /// peer's bucket, its identity and its accepted membership, and every
-    /// participant row, clearing <see cref="NetwMultiplayer.LocalParticipant"/>
-    /// with them. The transport is untouched, so this empties the roster of a
+    /// player row, clearing <see cref="NetwMultiplayer.LocalPlayer"/> with
+    /// them. The transport is untouched, so this empties the roster of a
     /// session that is going down rather than disconnecting anyone.
     /// <see cref="NetwMultiplayer.PeerForget"/> is the same clearing for one
     /// peer.
@@ -10180,12 +10010,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Drops everything this session holds for <paramref name="peer"/>. That is
     /// its buckets, its identity, the membership it was admitted on, and its
-    /// participant row, clearing <see cref="NetwMultiplayer.LocalParticipant"/>
-    /// when <paramref name="peer"/> is this peer's own. The transport
-    /// connection is left alone, so this is bookkeeping for a peer already gone
-    /// rather than a way to remove one.
-    /// <see cref="NetwMultiplayer.DisconnectPeer"/> is what closes a
-    /// connection.
+    /// player row, clearing <see cref="NetwMultiplayer.LocalPlayer"/> when
+    /// <paramref name="peer"/> is this peer's own. The transport connection is
+    /// left alone, so this is bookkeeping for a peer already gone rather than a
+    /// way to remove one. <see cref="NetwMultiplayer.DisconnectPeer"/> is what
+    /// closes a connection.
     /// </summary>
     public void PeerForget(long peer)
     {
@@ -10198,30 +10027,27 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref discarded);
     }
 
-    private static readonly IntPtr _bindPeerGetParticipant =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "peer_get_participant",
-            3692615879UL);
+    private static readonly IntPtr _bindPeerGetPlayer =
+        NetwApi.MethodBind("NetwMultiplayer", "peer_get_player", 3794790081UL);
 
     /// <summary>
-    /// <paramref name="peer"/>'s <see cref="NetwParticipant"/>, created on
-    /// first ask and the same instance from then on, or <c>null</c> when
-    /// <c>peer_get_accepted_join</c> returns <c>null</c> for it. Creating is
-    /// gated on the accepted join rather than on the connection, so reading
-    /// this never invents a participant for a peer the session has not
-    /// admitted. <see cref="NetwMultiplayer.PeerForget"/> is what drops one.
+    /// <paramref name="peer"/>'s <see cref="NetwPlayer"/>, created on first ask
+    /// and the same instance from then on, or <c>null</c> until the session has
+    /// admitted a join for that peer. Creating is gated on the admitted join
+    /// rather than on the connection, so reading this never invents a player
+    /// for a peer the session has not admitted.
+    /// <see cref="NetwMultiplayer.PeerForget"/> is what drops one.
     /// </summary>
-    public NetwParticipant PeerGetParticipant(long peer)
+    public NetwPlayer PeerGetPlayer(long peer)
     {
         long slot0 = peer;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
-            _bindPeerGetParticipant,
+            _bindPeerGetPlayer,
             Checked,
             in slot0,
             ref answered);
-        return NetwParticipant.Adopt(answered);
+        return NetwPlayer.Adopt(answered);
     }
 
     private static readonly IntPtr _bindDisplayDeclare =
@@ -11124,7 +10950,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Makes <paramref name="entity"/> a scene, so it can hold the nodes that
-    /// belong to it and replicate them to the participants it reaches. Server
+    /// belong to it and replicate them to the players it reaches. Server
     /// authority may declare anything, and any peer may declare an entity whose
     /// route it already holds, because the server admitted that route. A client
     /// repeating a scene the server declared is following rather than
@@ -11389,22 +11215,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindSceneGetPlayers =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "scene_get_players",
-            2670461153UL);
+    private static readonly IntPtr _bindSceneGetBodies =
+        NetwApi.MethodBind("NetwMultiplayer", "scene_get_bodies", 2670461153UL);
 
     /// <summary>
-    /// The player entities in <paramref name="scene"/>.
-    /// <see cref="NetwMultiplayer.Players"/> contains the players from every
-    /// live scene.
+    /// The bodies in <paramref name="scene"/>.
+    /// <see cref="NetwMultiplayer.Bodies"/> contains the bodies from every live
+    /// scene.
     /// </summary>
-    public Godot.Collections.Array SceneGetPlayers(Rid scene)
+    public Godot.Collections.Array SceneGetBodies(Rid scene)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
         godot_variant answered = default;
-        NetwThunks.Call1(_bindSceneGetPlayers, Checked, in slot0, ref answered);
+        NetwThunks.Call1(_bindSceneGetBodies, Checked, in slot0, ref answered);
         slot0.Dispose();
         Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
         answered.Dispose();
@@ -11418,9 +11241,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
             2670461153UL);
 
     /// <summary>
-    /// The participants <paramref name="scene"/> currently replicates to, read
-    /// from the scene's interest layer. The roster row behind each of those
-    /// peers, rather than the peer id itself.
+    /// The players <paramref name="scene"/> currently replicates to, read from
+    /// the scene's interest layer. The roster row behind each of those peers,
+    /// rather than the peer id itself.
     /// </summary>
     public Godot.Collections.Array SceneGetViewers(Rid scene)
     {
@@ -11433,23 +11256,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindSceneGetLocalPlayers =
+    private static readonly IntPtr _bindSceneGetLocalBodies =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "scene_get_local_players",
+            "scene_get_local_bodies",
             2670461153UL);
 
     /// <summary>
-    /// Every player entity inside <paramref name="scene"/> that this peer
-    /// represents, which is empty for a peer with no body there. The flat
-    /// spelling of <see cref="NetwSceneHandle.LocalPlayers"/>.
+    /// Every body inside <paramref name="scene"/> that this peer represents,
+    /// which is empty for a peer with no body there. The flat spelling of
+    /// <see cref="NetwSceneHandle.LocalBodies"/>.
     /// </summary>
-    public Godot.Collections.Array SceneGetLocalPlayers(Rid scene)
+    public Godot.Collections.Array SceneGetLocalBodies(Rid scene)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
         godot_variant answered = default;
         NetwThunks.Call1(
-            _bindSceneGetLocalPlayers,
+            _bindSceneGetLocalBodies,
             Checked,
             in slot0,
             ref answered);
@@ -11481,39 +11304,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered;
     }
 
-    private static readonly IntPtr _bindScenePresent =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_present", 813180755UL);
-
-    /// <summary>
-    /// Names the scene this peer looks at, and an invalid <see cref="Rid"/>
-    /// names none. The flat spelling of
-    /// <see cref="NetwSessionHandle.Present"/>, where the guide lives. Refuses
-    /// a handle this session holds no live scene for with
-    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>, leaving the standing choice alone,
-    /// because a presentation that fell back to a scene the caller did not name
-    /// would draw the wrong world silently.
-    /// </summary>
-    public Error ScenePresent(Rid scene)
-    {
-        Rid slot0 = scene;
-        long answered = default;
-        NetwThunks.Ptrcall1_Rid_Long(
-            _bindScenePresent,
-            Checked,
-            in slot0,
-            ref answered);
-        return (Error)answered;
-    }
-
     private static readonly IntPtr _bindScenePresented =
         NetwApi.MethodBind("NetwMultiplayer", "scene_presented", 2944877500UL);
 
     /// <summary>
-    /// The scene <see cref="NetwMultiplayer.ScenePresent"/> last named, or an
-    /// invalid <see cref="Rid"/> while this peer presents none, which is the
-    /// session's one answer to the question. Nothing computes it. A session
-    /// presents nothing until a game names a scene, and a scene leaving the
-    /// live book clears the choice rather than replacing it.
+    /// The scene this peer draws, or an invalid <see cref="Rid"/> while it
+    /// draws none. The flat spelling of
+    /// <see cref="NetwSessionHandle.PresentedScene"/>, where the guide lives.
     /// </summary>
     public Rid ScenePresented()
     {
@@ -12092,10 +11889,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Calls <paramref name="method"/> on <paramref name="entity"/>'s
     /// <paramref name="comp"/> component over the wire, addressed the way
     /// <see cref="NetwMultiplayer.RpcCall"/> addresses anything. It goes by
-    /// route to <paramref name="peer"/>, or to every peer that may see the
-    /// entity when <paramref name="peer"/> is zero. Each rejection has a
-    /// distinct result and occurs before anything is sent. Rejected calls are
-    /// not counted as dropped packets.
+    /// route to <paramref name="peer"/>, or to the audience
+    /// <see cref="NetwMultiplayer.RpcCall"/> broadcasts to when
+    /// <paramref name="peer"/> is zero, which carries that method's interest
+    /// caveat unchanged. Each rejection has a distinct result and occurs before
+    /// anything is sent. Rejected calls are not counted as dropped packets.
     /// <code>
     /// Error
     /// ┠╴OK                  the call was sent
@@ -12351,48 +12149,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref discarded);
     }
 
-    private static readonly IntPtr _bindAuthSetFlow =
-        NetwApi.MethodBind("NetwMultiplayer", "auth_set_flow", 549114886UL);
-
-    /// <summary>
-    /// Overrides <see cref="Netw.ConfigureAuth"/> for this session. Pass
-    /// <c>null</c> to restore the project auth flow. The next peer uses the new
-    /// flow.
-    /// </summary>
-    public void AuthSetFlow(NetwAuthFlow flow)
-    {
-        IntPtr slot0 = flow?.Native ?? IntPtr.Zero;
-        long discarded = default;
-        NetwThunks.Ptrcall1_IntPtr_Long(
-            _bindAuthSetFlow,
-            Checked,
-            in slot0,
-            ref discarded);
-    }
-
-    private static readonly IntPtr _bindAuthSeatHostIdentity =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "auth_seat_host_identity",
-            3218959716UL);
-
-    /// <summary>
-    /// Stores the identity the seated flow claims for the local host against
-    /// the server peer. Godot never runs the authentication callback for the
-    /// host, so a listen server would otherwise be the one participant with no
-    /// verified identity. The peer is not completed here. The host was never in
-    /// the pending queue, and completing it would corrupt the authentication
-    /// state of the peers that are. <b>Server Only.</b>
-    /// </summary>
-    public void AuthSeatHostIdentity()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(
-            _bindAuthSeatHostIdentity,
-            Checked,
-            ref discarded);
-    }
-
     private static readonly IntPtr _bindSessionAnswerProbe =
         NetwApi.MethodBind(
             "NetwMultiplayer",
@@ -12471,10 +12227,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// peer has none, so a peer the session does not hold returns <c>null</c>
     /// and reports rather than being invented to hang a bucket on.
     /// <see cref="NetwMultiplayer.PeerHasBucket"/> is the call when the
-    /// question is whether the bucket is there. The session decides nothing
-    /// here. A peer's checked credentials live on the session itself, at
-    /// <see cref="NetwMultiplayer.PeerGetIdentity"/>. A bucket lives exactly as
-    /// long as the session holds the peer, so
+    /// question is whether the bucket is there. A bucket lives exactly as long
+    /// as the session holds the peer, so
     /// <see cref="NetwMultiplayer.PeerForget"/> drops it. Instances are
     /// <see cref="RefCounted"/>, so a handler still holding one finishes its
     /// work before it goes.
@@ -12887,14 +12641,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// route because a table frame is route-0 addressed and the routes it
     /// carries are knowable only mid-decode, so everything it judges is in the
     /// header. That is who sent it, which table it names, and whether that
-    /// table's sealed schema agrees. A frame from a peer other than the server
-    /// is counted as well as rejected, because the count is what separates a
+    /// table's sealed schema agrees. The one sender it admits is the peer this
+    /// session follows for authority, which is peer 1 in an ordinary star and
+    /// the declared coordinator elsewhere. A frame from any other peer is
+    /// counted as well as rejected, because the count is what separates a
     /// rejected sender from a table nobody is publishing.
     /// <code>
     /// Error
     /// ┠╴OK                  the frame is admitted
     /// ┠╴ERR_INVALID_DATA    payload or header is empty, an unimplemented flag is set, or the schema hash disagrees
-    /// ┠╴ERR_UNAUTHORIZED    sender is not the server
+    /// ┠╴ERR_UNAUTHORIZED    sender is not the peer this session follows for authority
     /// ┖╴ERR_DOES_NOT_EXIST  the header names a table this session does not hold
     /// </code>
     /// </summary>

@@ -31,9 +31,9 @@ TEST_CASE(
         return;
     }
 
-    CHECK(client->interest_participant_sees(rig.peer_id(0), seen));
-    CHECK_FALSE(client->interest_participant_sees(0, seen));
-    CHECK_FALSE(client->interest_participant_sees(
+    CHECK(client->interest_player_sees(rig.peer_id(0), seen));
+    CHECK_FALSE(client->interest_player_sees(0, seen));
+    CHECK_FALSE(client->interest_player_sees(
         rig.peer_id(0),
         Ref<netw::NetwEntity>()
     ));

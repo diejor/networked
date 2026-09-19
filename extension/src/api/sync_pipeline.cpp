@@ -1458,6 +1458,8 @@ Dictionary SyncPipeline::counters() const {
         = int64_t(flush_stats.get(StringName("row_frames_stage_refused"), 0));
     out[StringName("row_frames_ungathered")]
         = int64_t(flush_stats.get(StringName("row_frames_ungathered"), 0));
+    out[StringName("row_frames_deferred")]
+        = int64_t(flush_stats.get(StringName("row_frames_deferred"), 0));
     out[StringName("retained_frames_out")]
         = int64_t(flush_stats.get(StringName("retained_frames_out"), 0));
     out[StringName("window_frames_out")]

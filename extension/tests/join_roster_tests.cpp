@@ -17,15 +17,7 @@ AcceptFrame join(int64_t p_peer, const char *p_name, uint64_t p_membership) {
     AcceptFrame out;
     out.peer_id = p_peer;
     out.username = StringName(p_name);
-    out.membership = p_membership;
-    return out;
-}
-
-PackedStringArray names(std::initializer_list<const char *> p_names) {
-    PackedStringArray out;
-    for (const char *name : p_names) {
-        out.push_back(String(name));
-    }
+    out.player_id = p_membership;
     return out;
 }
 
@@ -47,7 +39,7 @@ TEST_CASE(
     SUBCASE("a new membership at the same peer replaces the record") {
         CHECK(roster.remember(join(4, "bo", 2)));
         NETW_CHECK_EQ(roster.size(), 1);
-        NETW_CHECK_EQ(int(roster.accepted_join(4).membership), 2);
+        NETW_CHECK_EQ(int(roster.accepted_join(4).player_id), 2);
         CHECK(bool(roster.accepted_join(4).username == StringName("bo")));
     }
 
@@ -64,47 +56,17 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] L2 a name collision has three answers, and "
-    "which one depends on the peer asking"
+    "[Networked][Session][Hosted] L2 two memberships joining under one "
+    "username are two records, each answering its own accepted join"
 ) {
     JoinRoster roster = make_roster();
-    const PackedStringArray taken = names({"ana", "ana1"});
+    CHECK(roster.remember(join(4, "ana", 1)));
+    CHECK(roster.remember(join(5, "ana", 2)));
 
-    NETW_CHECK_EQ(
-        roster.name_verdict("bo", taken, false, false),
-        int(JoinRoster::ADMIT)
-    );
-    NETW_CHECK_EQ(
-        roster.name_verdict("ana", taken, true, false),
-        int(JoinRoster::RENAME)
-    );
-    NETW_CHECK_EQ(
-        roster.name_verdict("ana", taken, false, true),
-        int(JoinRoster::REFUSE)
-    );
-
-    SUBCASE("an unauthenticated collision is admitted, not refused") {
-        NETW_CHECK_EQ(
-            roster.name_verdict("ana", taken, false, false),
-            int(JoinRoster::ADMIT)
-        );
-    }
-
-    SUBCASE(
-        "an authenticated refusal outranks the rename, because a peer "
-        "that proved who it is may not take a seated player's name even "
-        "on a build that renames everyone else"
-    ) {
-        NETW_CHECK_EQ(
-            roster.name_verdict("ana", taken, true, true),
-            int(JoinRoster::REFUSE)
-        );
-    }
-
-    SUBCASE("the free name skips every suffix already held") {
-        CHECK(bool(roster.free_name("ana", taken) == StringName("ana2")));
-        CHECK(bool(roster.free_name("bo", taken) == StringName("bo1")));
-    }
+    NETW_CHECK_EQ(roster.size(), 2);
+    NETW_CHECK_EQ(int(roster.accepted_join(4).player_id), 1);
+    NETW_CHECK_EQ(int(roster.accepted_join(5).player_id), 2);
+    CHECK(bool(roster.accepted_join(5).username == StringName("ana")));
 }
 
 TEST_CASE(
@@ -152,9 +114,9 @@ TEST_CASE(
     CHECK(framed);
     NETW_CHECK_EQ(int(rows.size()), 3);
     NETW_CHECK_EQ(int(rows[0].peer_id), 4);
-    NETW_CHECK_EQ(int(rows[0].membership), 1);
+    NETW_CHECK_EQ(int(rows[0].player_id), 1);
     NETW_CHECK_EQ(int(rows[2].peer_id), 9);
-    NETW_CHECK_EQ(int(rows[2].membership), 3);
+    NETW_CHECK_EQ(int(rows[2].player_id), 3);
 }
 
 } // namespace TestNetwJoinRoster

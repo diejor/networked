@@ -6,9 +6,9 @@
 	<description>
 		Each method resolves the [NetwMultiplayer] associated with its node argument. Use [method of] to access that session directly.
 		[codeblock]
-		Netw.session(self).participants       # who is playing
+		Netw.session(self).players            # who is playing
 		Netw.clock(self).tick                 # the tick every peer shares
-		Netw.scene(self).watch(participant)   # show a player a world
+		Netw.scene(self).watch(player)        # show a player a world
 		Netw.spawn(_spawn_bullet, dir)        # make a node on every peer
 		Netw.rpc(turret.aim, yaw)             # call a method on every peer
 		[/codeblock]
@@ -21,13 +21,14 @@
 		    Netw.join(self, &amp;"Mario", &amp;"red")
 		    multiplayer.multiplayer_peer = peer
 		[/codeblock]
-		The server runs the handler declared by [method configure_join] once for every join it accepts, after that membership has been announced. Its first parameter is always the [NetwParticipant] the session admitted, and its remaining parameters are the extra values [method join] was given.
+		[method configure_admission] is what decides whether a join is accepted at all. It answers before the membership exists, so a join it turns down seats no [NetwPlayer] and reaches no other peer, and a session declaring nothing admits everyone.
+		The server runs the handler declared by [method configure_join] once for every join it accepts, after that membership has been announced. Its first parameter is always the [NetwPlayer] the session admitted, and its remaining parameters are the extra values [method join] was given.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_join(self, player_joined)
+		    Netw.configure_join(player_joined)
 		    Netw.configure_spawn(make_player)
 
-		func player_joined(who: NetwParticipant, team: StringName) -&gt; void:
+		func player_joined(who: NetwPlayer, team: StringName) -&gt; void:
 		    arena.add_child(Netw.spawn_player(who, make_player, team))
 
 		func make_player(team: StringName) -&gt; Node:
@@ -119,7 +120,7 @@
 		muzzle.add_child(Netw.spawn(_spawn_bullet, dir))   # server only
 		Netw.despawn(bullet)
 		[/codeblock]
-		The arguments decide what is built and a field marked [method NetwPropertyConfig.on_spawn] carries what it was holding, applied on the other peers once the function has run. [method spawn_player] is the same act for the node a player drives, and it fills [member NetwEntity.controller] before the node enters the tree so the node leaves with its peer. [method replicate] is the door for a node the game instantiated itself, which is where loading a saved player belongs.
+		The arguments decide what is built and a field marked [method NetwPropertyConfig.on_spawn] carries what it was holding, applied on the other peers once the function has run. [method spawn_player] is the same act for the node a player drives, and it fills [member NetwEntity.controller] before the node enters the tree so the node leaves with its peer. [method replicate] is the door for a node the game instantiated itself, which is where loading a saved player belongs. A body already standing somewhere moves with [method Node.reparent], or with [method reparent] when it is a physics body and the game has to know the move landed everywhere.
 		[b]Scenes[/b]
 		A multiplayer scene is a world a player is shown. [method configure_multiplayer_scene] declares one, every node under it belongs to it, and a scene reaches a player for two reasons. A body of theirs standing in it is one, so the [method Node.add_child] a join handler writes is enough. A [method NetwSceneHandle.watch] is the other, and it is what shows a scene to a player with no body there at all. A player may hold several scenes at once, and [NetwSceneHandle] carries the rest of that guide.
 		[codeblock]
@@ -128,20 +129,20 @@
 		[/codeblock]
 		[codeblock]
 		var arena := Netw.scene(self, &amp;"Arena")   # by label, or Netw.scene(self)
-		arena.watch(participant)
-		arena.player_entered.connect(_on_car_entered)
+		arena.watch(player)
+		arena.body_entered.connect(_on_car_entered)
 		[/codeblock]
-		What a peer draws is its own choice and no consequence of any of this. [method NetwSessionHandle.present] names the scene this peer looks at, nothing names one for it, and a peer presenting nothing draws nothing however many worlds stand live beside it.
+		What a peer draws follows where it stands and takes no call at all. [member NetwSessionHandle.presented_scene] is the world holding a body of its own, or the one world it watches, and a peer reaching two at once draws neither.
 		A game opens a world by spawning it and showing it to players, and it can also travel players the way the engine travels a scene. [method change_scene_to_file] is that second shape made multiplayer correct, since [method SceneTree.change_scene_to_file] moves this peer alone and leaves the rest of the session running without it. The [enum SceneChange] scope says who the change is for. The server's own call applies straight away. A client's call is a request, and an arriving request is rejected unless [method configure_scene_requests] declared a handler that admits it.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_scene_requests(self, authorize)
+		    Netw.configure_scene_requests(authorize)
 
-		func authorize(who: NetwParticipant, destination: String, _scope: int) -&gt; Error:
+		func authorize(who: NetwPlayer, destination: String, _scope: int) -&gt; Error:
 		    return OK if unlocked(who, destination) else ERR_UNAUTHORIZED
 
 		await Netw.change_scene_to_file(
-		        self, "res://match.tscn", Netw.SCENE_CHANGE_PARTICIPANT).wait()
+		        self, "res://match.tscn", Netw.SCENE_CHANGE_PLAYER).wait()
 		[/codeblock]
 		[b]Interest[/b]
 		A [NetwInterestLayer] decides which peers are told about which entities, so what a player cannot see is never sent to them at all. Every peer declares the layers a node belongs to, and the server owns the real membership and the viewers.
@@ -199,7 +200,7 @@
 		[b]Everything else[/b]
 		The sections above are what a game needs in order to play. Each row below is something else this addon owns, and the class named is where it is documented.
 		- [NetwConnectHandle] building a peer and listing the servers to connect to
-		- [NetwAuthFlow] admission, deciding who is let in at all
+		- [method configure_admission] turning a join down before the player exists
 		- [NetwSessionHandle] who is playing, and the session's state
 		- [NetwChannel] bytes belonging to no node
 		- [NetwService] one part of a game reaching another without a node path
@@ -238,7 +239,7 @@
 			<param index="2" name="scope" type="int" enum="Netw.SceneChange" default="0" />
 			<description>
 				Travels players to [param path] the way [method SceneTree.change_scene_to_file] travels this peer, except that the rest of the session comes along.
-				[param scope] says who is travelling, and it means the same thing whoever calls it. [constant SCENE_CHANGE_SESSION] brings everyone, [constant SCENE_CHANGE_PARTICIPANT] brings one player and leaves every world standing, and [constant SCENE_CHANGE_SCENE] brings whoever is in the world [param node] sits in.
+				[param scope] says who is travelling, and it means the same thing whoever calls it. [constant SCENE_CHANGE_SESSION] brings everyone, [constant SCENE_CHANGE_PLAYER] brings one player and leaves every world standing, and [constant SCENE_CHANGE_SCENE] brings whoever is in the world [param node] sits in.
 				The server's own call applies. A client's call is a request that [method configure_scene_requests] decides, so a session declaring no handler rejects it.
 				[codeblock]
 				var err: Error = await Netw.change_scene_to_file(
@@ -286,25 +287,26 @@
 				[method configure_clock] is where the clock is set up before the session starts. This is how a running one is reached.
 			</description>
 		</method>
-		<method name="configure_auth" qualifiers="static">
+		<method name="configure_admission" qualifiers="static">
 			<return type="int" enum="Error" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="factory" type="Callable" />
+			<param index="0" name="handler" type="Callable" />
 			<description>
-				Declares how this session checks that a player is who they claim to be, by naming a [param factory] that builds its [NetwAuthFlow].
+				Declares who this session lets in, which is the only place a join can be turned down.
+				[param handler] is given the transport peer the join arrived on, the username it claimed, and the arguments it carried as one [Array]. Returning [constant @GlobalScope.OK] admits it and any other [enum Error] turns it down. A [param handler] returning something that is not an [enum Error] turns the join down and reports a fault, which is how a broken one reads apart from a strict one.
+				It runs before the membership exists, so a turned-down join mints none, seats no [NetwPlayer], and reaches no other peer. The client learns its own refusal through [signal NetwConnectHandle.join_failed]. That is what [method configure_join] cannot do, because a join handler runs after the acceptance has already reached every peer.
+				A username becomes server-authoritative by refusing one this session does not believe, so the client always holds the name it asked for. The peer is what the connection says it is and cannot be claimed, so the check reads the table an authentication phase filled rather than anything the join carried. That phase is Godot's own, [member NetwMultiplayer.auth_callback] with [method NetwMultiplayer.send_auth] and [method NetwMultiplayer.complete_auth], and it may take as long as it likes. This handler may not, since it answers in the call.
+				The host's own join is judged the same way, so a handler that turns everyone down locks its own host out through [signal NetwConnectHandle.join_failed] rather than seating one player under a rule it refused every other player by.
+				A session declaring nothing admits every join. Declare it from [method Object._init] on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a [param handler] written on something that is not a [Node] is refused.
 				[codeblock]
 				func _init() -&gt; void:
-				    Netw.configure_auth(self, make_auth)
+				    Netw.configure_admission(admit)
 
-				func make_auth() -&gt; NetwAuthFlow:
-				    var flow := NakamaAuth.new()
-				    flow.bind_session(NakamaSessionService.of(self))
-				    flow.bind_tree(self)
-				    return flow
+				func admit(peer_id: int, username: StringName, _args: Array) -&gt; Error:
+				    if nakama.username_for_peer(peer_id) != username:
+				        return ERR_UNAUTHORIZED
+				    return OK
 				[/codeblock]
-				A flow usually needs something the game already holds, such as the login service it verifies against, so [param factory] is where the flow is built and wired in one place. [member NetwSessionHandle.auth_flow] reaches the built flow afterwards for anything that cannot be known at declaration.
-				Declare it from [method Object._init] on a node in the session's branch. [param factory] takes no arguments and returns a fresh [NetwAuthFlow]. It runs once for the session, at the first login that needs it rather than at declaration, and the session keeps what it built even after the declaring node is gone.
-				A session declaring nothing lets players in on the username they claim. A [param factory] returning anything else turns every login down rather than falling back to that. Pass [code]Callable()[/code] to clear the declaration.
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="configure_clock" qualifiers="static">
@@ -370,20 +372,20 @@
 		</method>
 		<method name="configure_join" qualifiers="static">
 			<return type="NetwJoinConfig" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="handler" type="Callable" />
+			<param index="0" name="handler" type="Callable" />
 			<description>
 				Declares what the server does with each player it lets in, and returns the [NetwJoinConfig] that can [method NetwJoinConfig.quantize] the extra values they sent.
 				[codeblock]
 				func _init() -&gt; void:
-				    Netw.configure_join(self, spawn_at)
+				    Netw.configure_join(spawn_at)
 
-				func spawn_at(who: NetwParticipant, point: StringName, team: int) -&gt; void:
+				func spawn_at(who: NetwPlayer, point: StringName, team: int) -&gt; void:
 				    arena.add_child(Netw.spawn_player(who, _spawn_avatar, team))
 				[/codeblock]
-				[param handler] takes the [NetwParticipant] first and the values passed to [method join] after it. The participant is already a member when the handler runs, so it is the player's own handle.
-				Those values reach this server and nobody else. What every peer receives names the membership and the [member NetwParticipant.username], so a value a game wants other players to see is replicated by the game rather than carried by the join.
-				Declare it from [method Object._init] on a node in the session's branch. A [param handler] taking extra values is a named method rather than a lambda, because its parameter types are how both sides agree on what those values are. A session declaring nothing accepts every join and places nobody. Two live declarations on one session turn every join down rather than placing players somewhere the game never chose. Pass [code]Callable()[/code] to clear the declaration.
+				[param handler] takes the [NetwPlayer] first and the values passed to [method join] after it. The player is already a member when the handler runs, so it is the player's own handle.
+				Those values reach this server and nobody else. What every peer receives names the membership and the [member NetwPlayer.username], so a value a game wants other players to see is replicated by the game rather than carried by the join.
+				Declare it from [method Object._init] on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a [param handler] written on something that is not a [Node] is refused. A [param handler] taking extra values is a named method rather than a lambda, because its parameter types are how both sides agree on what those values are. A session declaring nothing accepts every join and places nobody. Two live declarations on one session turn every join down rather than placing players somewhere the game never chose.
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="configure_lagcomp" qualifiers="static">
@@ -465,25 +467,24 @@
 		</method>
 		<method name="configure_scene_requests" qualifiers="static">
 			<return type="int" enum="Error" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="handler" type="Callable" />
+			<param index="0" name="handler" type="Callable" />
 			<description>
 				Declares who is allowed to ask this session to change scenes, which nothing else grants.
-				[param handler] is given the [NetwParticipant] asking, the scene path they asked for, and the [enum SceneChange] they asked at. Returning [constant @GlobalScope.OK] lets it through and any other [enum Error] turns it down. The participant comes from the connection rather than from anything the client sent, so it cannot be claimed. A [param handler] returning something that is not an [enum Error] turns the request down and warns, which is how a broken one reads apart from a strict one.
+				[param handler] is given the [NetwPlayer] asking, the scene path they asked for, and the [enum SceneChange] they asked at. Returning [constant @GlobalScope.OK] lets it through and any other [enum Error] turns it down. The player comes from the connection rather than from anything the client sent, so it cannot be claimed. A [param handler] returning something that is not an [enum Error] turns the request down and warns, which is how a broken one reads apart from a strict one.
 				Only a client's request arrives here. The server's own [method change_scene_to_file] applies, on a dedicated server and on a listen host alike, so a game that drives every change from the server declares nothing and is never asked. A game that wants its host player held to the same rule calls its own check in both places.
-				A session declaring nothing turns every request down and warns once. Two live declarations on one session do the same. Declare it from [method Object._init] on a node in the session's branch, and pass [code]Callable()[/code] to clear it.
+				A session declaring nothing turns every request down and warns once. Two live declarations on one session do the same. Declare it from [method Object._init] on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a [param handler] written on something that is not a [Node] is refused.
 				[codeblock]
 				func _init() -&gt; void:
-				    Netw.configure_scene_requests(self, authorize_scene_request)
+				    Netw.configure_scene_requests(authorize_scene_request)
 
 				func authorize_scene_request(
-				    participant: NetwParticipant,
+				    player: NetwPlayer,
 				    destination: String,
 				    scope: int
 				) -&gt; Error:
-				    if scope != Netw.SCENE_CHANGE_PARTICIPANT:
+				    if scope != Netw.SCENE_CHANGE_PLAYER:
 				        return ERR_UNAUTHORIZED
-				    return OK if unlocked(participant, destination) else ERR_UNAUTHORIZED
+				    return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
 				[/codeblock]
 			</description>
 		</method>
@@ -506,15 +507,14 @@
 		</method>
 		<method name="configure_server_info" qualifiers="static">
 			<return type="int" enum="Error" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="provider" type="Callable" />
+			<param index="0" name="provider" type="Callable" />
 			<description>
-				Declares what this server says about itself when a [NetwServerBrowser] asks.
+				Declares what this server says about itself when another peer probes it with [method NetwConnectHandle.endpoint_probe].
 				[param provider] is handed a [NetwServerInfo] already filled in from the session and returns what to send back, normally the same one with a few fields edited.
-				A session with no provider uses [method NetwServerInfo.from_session]. Conflicting providers or an invalid return value report an error. Declare the provider from [method Object._init] on a node in the session branch. Pass [code]Callable()[/code] to clear it.
+				A session with no provider uses [method NetwServerInfo.from_session]. Conflicting providers or an invalid return value report an error. Declare the provider from [method Object._init] on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a [param provider] written on something that is not a [Node] is refused.
 				[codeblock]
 				func _init() -&gt; void:
-				    Netw.configure_server_info(self, server_info)
+				    Netw.configure_server_info(server_info)
 
 				func server_info(info: NetwServerInfo) -&gt; NetwServerInfo:
 				    info.motd = "Friday night session"
@@ -621,7 +621,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="username" type="StringName" />
 			<description>
-				Asks the session for a place in the game as [param username]. Every argument after the username reaches the [method configure_join] handler after its [NetwParticipant].
+				Asks the session for a place in the game as [param username]. Every argument after the username reaches the [method configure_join] handler after its [NetwPlayer].
 				[codeblock]
 				Netw.join(self, &amp;"Dev", &amp;"red")
 				multiplayer.multiplayer_peer = peer
@@ -657,18 +657,34 @@
 				The world is built again from scratch even though the path is the same, so a [NetwSceneHandle] held on the old one does not follow.
 			</description>
 		</method>
+		<method name="reparent" qualifiers="static">
+			<return type="NetwPromise" />
+			<param index="0" name="node" type="Node" />
+			<param index="1" name="new_parent" type="Node" />
+			<description>
+				Moves [param node] under [param new_parent] the way [method Node.reparent] does, and answers a [NetwPromise] that resolves once the node stands there on every peer that holds it.
+				[codeblock]
+				await Netw.reparent(body, level2.get_node(^"Players")).wait()
+				[/codeblock]
+				What it adds over [method Node.reparent] is a window that masks the mover off the physics server across the parent swap, spending two [signal SceneTree.physics_frame]s on each side of it. A body leaves an [Area2D]'s overlap tracking only on a step, so a body still tracked re-emits [signal Area2D.body_entered] out of its own [signal Node.tree_entered] as the swap remounts it, which is godot#14578. The half of the window that precedes the swap is why this verb exists, since [method Node.reparent] offers no hook before it commits.
+				A mover carrying neither [member CollisionObject2D.collision_layer] nor [member CollisionObject2D.collision_mask] has nothing to evict, so it spends no frames and the promise is already settled when this returns.
+				[method Node.reparent] stays fully supported and is the right verb for anything that is not a physics body. Membership of a [NetwSceneHandle] follows it either way. What it does not carry is the window or a [NetwPromise].
+				A [param node] that is no entity answers [constant @GlobalScope.ERR_DOES_NOT_EXIST] and one in no session answers [constant @GlobalScope.ERR_UNAVAILABLE], both on a promise that has already settled.
+				[b]Server Only.[/b]
+			</description>
+		</method>
 		<method name="replicate" qualifiers="static">
 			<return type="NetwEntity" />
 			<param index="0" name="node" type="Node" />
-			<param index="1" name="owner" type="NetwParticipant" default="null" />
+			<param index="1" name="owner" type="NetwPlayer" default="null" />
 			<description>
 				Sends a node the game built itself to every peer, which rebuild it from its [member Node.scene_file_path], and returns its [NetwEntity].
 				[param node] has no parent yet. [member NetwEntity.route], [member NetwEntity.entity_id], [member NetwEntity.peer_id] and [member NetwEntity.controller] are all filled in by the time this returns, and the other peers are not told anything until the node enters the tree. That gap is where a save is loaded and where the node's first values are written.
 				[codeblock]
-				var player := PlayerScene.instantiate()
-				var entity := Netw.replicate(player, participant)
+				var body := PlayerScene.instantiate()
+				var entity := Netw.replicate(body, player)
 				await save.hydrate(entity)
-				scene.add_child(player)
+				scene.add_child(body)
 				[/codeblock]
 				A node with no parent is in no session, so this one finds the only session running and reports an error when there is more than one. A host running several calls [method NetwMultiplayer.entity_replicate] on the one it means.
 				[b]Server Only.[/b]
@@ -842,7 +858,7 @@
 		</method>
 		<method name="spawn_player" qualifiers="vararg static">
 			<return type="Node" />
-			<param index="0" name="player" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<param index="1" name="fn" type="Callable" />
 			<description>
 				Builds the node [param player] drives, the same way [method spawn] builds any other.
@@ -851,7 +867,7 @@
 				    Netw.spawn_player(player, _spawn_avatar, character_class)
 				)
 				[/codeblock]
-				It fills [member NetwEntity.peer_id] and [member NetwEntity.controller] from [param player] before the node enters the tree, so the node is counted as that player's and is removed when they disconnect. To remember who fired a bullet without making that bullet theirs to drive, pass the participant as an argument to [method spawn] instead.
+				It fills [member NetwEntity.peer_id] and [member NetwEntity.controller] from [param player] before the node enters the tree, so the node is counted as that player's and is removed when they disconnect. A [param fn] that stamped no [member NetwEntity.entity_id] gets the [member NetwPlayer.username], and the node is named the same. A parent that already holds a child under that name seats the body under a numbered variant of it, because a node name is unique among its siblings while [member NetwEntity.entity_id] stays the identity. To remember who fired a bullet without making that bullet theirs to drive, pass the player as an argument to [method spawn] instead.
 				[param player] must be a membership this session currently holds, and a handle to one that has left builds nothing. The check names the membership rather than the peer, so a reconnection handed the same transport peer is a different player here.
 				The node comes back unparented, so a game that restores saved state does it before [method Node.add_child]. [member NetwEntity.persistence] answers on the orphan, and what it applies is in place before the first spawn snapshot is taken. A body armed for a player who leaves before it is parented is discarded rather than replicated.
 				[codeblock]
@@ -861,7 +877,7 @@
 				    await saved.hydrate().wait()
 				players.add_child(body)
 				[/codeblock]
-				The record that [method NetwPersistenceEngine.hydrate] reads is named by [member NetwEntity.entity_id], which the spawn function sets on the node it builds. Leaving it unset names the record after the recipe and the route, and a route is new on every spawn, so a game with a save stamps the id it wants to load.
+				The record that [method NetwPersistenceEngine.hydrate] reads is named by [member NetwEntity.entity_id], so a save loads under the player's username unless [param fn] stamped an id of its own. A game handing one player several bodies stamps a distinct id on each, because the username names only one of them.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -882,10 +898,10 @@
 	</methods>
 	<constants>
 		<constant name="SCENE_CHANGE_SESSION" value="0" enum="SceneChange">
-			Every represented body moves to the destination, every accepted participant watches it, and every other live scene retires. Whether a scene is isolated, how many are live, and whether authority holds a body of its own do not change what this means.
+			Every represented body moves to the destination, every accepted player watches it, and every other live scene retires. Whether a scene is isolated, how many are live, and whether authority holds a body of its own do not change what this means.
 		</constant>
-		<constant name="SCENE_CHANGE_PARTICIPANT" value="1" enum="SceneChange">
-			Every body representing one participant moves to the destination and every world keeps running. Watches that participant holds elsewhere stand, a participant representing no body at all gains a watch on the destination instead, and no source retires. A call with no participant to resolve is rejected rather than widened to the session.
+		<constant name="SCENE_CHANGE_PLAYER" value="1" enum="SceneChange">
+			Every body representing one player moves to the destination and every world keeps running. Watches that player holds elsewhere stand, a player representing no body at all gains a watch on the destination instead, and no source retires. A call with no player to resolve is rejected rather than widened to the session.
 		</constant>
 		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
 			The bodies standing inside the caller's own world move to the destination, the watches that world was given transfer with them, and that world alone retires. The source is the scene the calling node sits in, and a caller sitting in none is refused rather than widened to the session.

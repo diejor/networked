@@ -45,7 +45,7 @@ protected:
 public:
     enum SceneChange {
         SCENE_CHANGE_SESSION = NetwSceneCore::SCOPE_SESSION,
-        SCENE_CHANGE_PARTICIPANT = NetwSceneCore::SCOPE_PARTICIPANT,
+        SCENE_CHANGE_PLAYER = NetwSceneCore::SCOPE_PLAYER,
         SCENE_CHANGE_SCENE = NetwSceneCore::SCOPE_SCENE,
     };
 
@@ -82,16 +82,13 @@ public:
     );
 
     static godot::Error configure_server_info(
-        godot::Node *p_node,
         const godot::Callable &p_provider
     );
     static godot::Ref<NetwJoinConfig> configure_join(
-        godot::Node *p_node,
         const godot::Callable &p_handler
     );
-    static godot::Error configure_auth(
-        godot::Node *p_node,
-        const godot::Callable &p_factory
+    static godot::Error configure_admission(
+        const godot::Callable &p_handler
     );
     static godot::Ref<NetwSessionConfig> configure_session(
         godot::Node *p_node,
@@ -180,20 +177,24 @@ public:
 
     static godot::Ref<NetwEntity> replicate(
         godot::Node *p_node,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     static godot::Node *spawn(
         const godot::Callable &p_fn,
         const godot::Array &p_args
     );
     static godot::Node *spawn_player(
-        const godot::Ref<NetwParticipant> &p_player,
+        const godot::Ref<NetwPlayer> &p_player,
         const godot::Callable &p_fn,
         const godot::Array &p_args
     );
     static godot::Error despawn(
         godot::Node *p_node,
         const godot::Ref<NetwDespawnOpts> &p_opts
+    );
+    static godot::Ref<NetwPromise> reparent(
+        godot::Node *p_node,
+        godot::Node *p_new_parent
     );
 
     static godot::Ref<NetwAction> action(const godot::Callable &p_authority);
@@ -225,7 +226,6 @@ public:
         godot::Node *p_node
     );
     static godot::Error configure_scene_requests(
-        godot::Node *p_node,
         const godot::Callable &p_handler
     );
 };

@@ -386,7 +386,7 @@ bool NetwInterestLayer::is_visible_to(
 ) {
     NetwMultiplayer *owner = host();
     if (owner != nullptr) {
-        return owner->interest_participant_sees(p_peer_id, p_entity);
+        return owner->interest_player_sees(p_peer_id, p_entity);
     }
     return has_entity(p_entity) && verdict_for(p_peer_id);
 }

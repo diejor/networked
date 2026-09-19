@@ -65,18 +65,13 @@ TEST_CASE(
     rig.pump(4);
 
     Node *holder = scripted_handler(rig.branch(-1));
-    REQUIRE(netw::Netw::configure_join(
-                holder,
-                Callable(holder, StringName("seat"))
-    )
+    REQUIRE(netw::Netw::configure_join(Callable(holder, StringName("seat")))
                 .is_valid());
     Node *joiner = scripted_handler(rig.branch(0));
-    REQUIRE(
-        netw::Netw::configure_join(joiner, Callable(joiner, StringName("seat")))
-            .is_valid()
-    );
+    REQUIRE(netw::Netw::configure_join(Callable(joiner, StringName("seat")))
+                .is_valid());
 
-    const Ref<netw::NetwParticipant> seated
+    const Ref<netw::NetwPlayer> seated
         = rig.join(0, StringName("ana"), one_arg(SECRET));
     REQUIRE(seated.is_valid());
 
@@ -113,24 +108,24 @@ TEST_CASE(
     const int first = rig.peer_id(0);
     NetwMultiplayer *watcher = rig.client(1);
 
-    const Ref<netw::NetwParticipant> seen
-        = watcher->peer_get_participant(first);
+    const Ref<netw::NetwPlayer> seen
+        = watcher->peer_get_player(first);
     REQUIRE(seen.is_valid());
-    CHECK(bool(watcher->peer_get_participant(first) == seen));
+    CHECK(bool(watcher->peer_get_player(first) == seen));
 
     watcher->session_receive_roster(rig.server()->session_roster_bytes(), 1);
-    CHECK(bool(watcher->peer_get_participant(first) == seen));
+    CHECK(bool(watcher->peer_get_player(first) == seen));
 
     watcher->session_receive_accept(
         rig.server()->session_accept_bytes(first),
         1
     );
-    CHECK(bool(watcher->peer_get_participant(first) == seen));
+    CHECK(bool(watcher->peer_get_player(first) == seen));
 }
 
 TEST_CASE(
     "[Networked][Session] JV3 a membership is not the transport peer, so a "
-    "reconnect that reuses a peer id reads as a new participant and the handle "
+    "reconnect that reuses a peer id reads as a new player and the handle "
     "the game still holds from the previous one reports itself inactive"
 ) {
     LoopbackRig rig(1);
@@ -140,11 +135,11 @@ TEST_CASE(
     const int reused = rig.peer_id(0);
 
     REQUIRE(rig.join(0, StringName("ana")).is_valid());
-    const Ref<netw::NetwParticipant> before
-        = host->peer_get_participant(reused);
+    const Ref<netw::NetwPlayer> before
+        = host->peer_get_player(reused);
     REQUIRE(before.is_valid());
-    const int64_t first_membership = host->participant_incarnation(reused);
-    CHECK(host->participant_is_active(reused, first_membership));
+    const int64_t first_membership = host->player_incarnation(reused);
+    CHECK(host->player_is_active(reused, first_membership));
 
     host->session_forget_peer(reused);
     rig.pump(4);
@@ -157,14 +152,14 @@ TEST_CASE(
     host->session_receive_join(again.serialize(), reused);
     rig.pump(4);
 
-    const Ref<netw::NetwParticipant> after = host->peer_get_participant(reused);
+    const Ref<netw::NetwPlayer> after = host->peer_get_player(reused);
     REQUIRE(after.is_valid());
     CHECK(bool(after != before));
 
-    const int64_t second_membership = host->participant_incarnation(reused);
+    const int64_t second_membership = host->player_incarnation(reused);
     CHECK(second_membership != first_membership);
-    CHECK_FALSE(host->participant_is_active(reused, first_membership));
-    CHECK(host->participant_is_active(reused, second_membership));
+    CHECK_FALSE(host->player_is_active(reused, first_membership));
+    CHECK(host->player_is_active(reused, second_membership));
     CHECK(bool(String(after->get_username()) == String("bo")));
 }
 

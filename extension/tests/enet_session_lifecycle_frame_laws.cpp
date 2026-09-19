@@ -170,7 +170,7 @@ public:
                     enter(99);
                     return true;
                 }
-                if (host->participant_local().is_valid()) {
+                if (host->player_local().is_valid()) {
                     evidence.host_admitted_itself = true;
                 }
                 const int seated = kicked->NETW_API_VIRTUAL(get_unique_id)();

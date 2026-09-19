@@ -6,7 +6,7 @@
 	<description>
 		Only a scene declaring [constant NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD] is hosted in an offscreen [SubViewport], so this view exists only for one. A dedicated server renders no scene and a host whose scene shares the session's world already renders in the root viewport, so neither builds this view.
 		The session creates this node for a listen server when a live scene owns its own world and no [ParticipantView] exists under the session root. Add one manually only to configure or position the window. Use [method NetwMultiplayer.scene_set_host_view_factory] to create a different node type.
-		The world it draws is the one [method NetwSessionHandle.present] named, so a host presenting nothing draws nothing however many worlds stand live beside it. It follows [signal NetwMultiplayer.participant_viewport_changed] to retarget, and re-announces as entities go live, because the display resolves before the local player has spawned into it.
+		The world it draws is [member NetwSessionHandle.presented_scene], so a host presenting nothing draws nothing however many worlds stand live beside it. It follows [signal NetwMultiplayer.participant_viewport_changed] to retarget, and re-announces as entities go live, because the display resolves before the local player has spawned into it.
 		On every announce it emits [signal NetwEntity.view_activated] on every local player standing in that world, and it makes a camera current only where exactly one of them is there. Several local players is the couch case, and choosing one of them is the game's call rather than this node's, so connect the signal to take it. With one local player and nothing listening, the first conventional camera in the player branch becomes current, falling back to the scene's level.
 		[codeblock]
 		func _ready() -&gt; void:
@@ -22,7 +22,7 @@
 	</tutorials>
 	<members>
 		<member name="suppressed" type="bool" setter="set_suppressed" getter="get_suppressed" default="false">
-			Whether this view stands down. A suppressed view hides itself, drops its target and stops forwarding input, which is how a game shows something else over the whole window without losing the view or the display it was tracking. Clearing it re-adopts whatever [method NetwMultiplayer.scene_participant_viewport] now returns.
+			Whether this view stands down. A suppressed view hides itself, drops its target and stops forwarding input, which is how a game shows something else over the whole window without losing the view or the display it was tracking. Clearing it re-adopts whatever [method NetwMultiplayer.scene_player_viewport] now returns.
 		</member>
 	</members>
 </class>

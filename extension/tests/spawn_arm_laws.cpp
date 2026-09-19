@@ -3,7 +3,9 @@
 #include <cstdint>
 
 #include "godot/node.hpp"
+#include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/spawn/book.hpp"
@@ -19,27 +21,28 @@ namespace TestNetwSpawnArm {
 
 using namespace godot;
 using netw::NetwEntity;
+using netw::NetwEntityRecord;
 using netw::NetwMultiplayer;
-using netw::NetwParticipant;
+using netw::NetwPlayer;
 using netw::spawn::Record;
 using netw_test::CallLog;
 
-Ref<NetwParticipant> seated(
+Ref<NetwPlayer> seated(
     const Ref<NetwMultiplayer> &p_core,
     int64_t p_peer
 ) {
-    Ref<NetwParticipant> owner;
+    Ref<NetwPlayer> owner;
     owner.instantiate();
-    p_core->participant_adopt(p_peer, owner);
-    p_core->participant_admit(p_peer);
+    p_core->player_adopt(p_peer, owner);
+    p_core->player_admit(p_peer);
     return owner;
 }
 
-Ref<NetwParticipant> a_stranger(
+Ref<NetwPlayer> a_stranger(
     const Ref<NetwMultiplayer> &p_core,
     int64_t p_peer
 ) {
-    Ref<NetwParticipant> stranger;
+    Ref<NetwPlayer> stranger;
     stranger.instantiate();
     stranger->bind_to(p_core.ptr(), p_peer);
     return stranger;
@@ -61,7 +64,7 @@ TEST_CASE(
     const Ref<NetwEntity> entity = core->spawn_arm_identity(
         &record,
         node,
-        Ref<NetwParticipant>(),
+        Ref<NetwPlayer>(),
         log.answering("declare", int64_t(OK))
     );
 
@@ -159,21 +162,21 @@ TEST_CASE(
     CHECK(core->spawn_arm_identity(
                   nullptr,
                   node,
-                  Ref<NetwParticipant>(),
+                  Ref<NetwPlayer>(),
                   Callable()
     )
               .is_null());
     CHECK(core->spawn_arm_identity(
                   &scratch,
                   nullptr,
-                  Ref<NetwParticipant>(),
+                  Ref<NetwPlayer>(),
                   Callable()
     )
               .is_null());
     CHECK(core->spawn_arm_identity(
                   &scratch,
                   node,
-                  Ref<NetwParticipant>(),
+                  Ref<NetwPlayer>(),
                   Callable()
     )
               .is_valid());
@@ -182,7 +185,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Spawn][Hosted] SM5 an arm naming a participant this session "
+    "[Networked][Spawn][Hosted] SM5 an arm naming a player this session "
     "does not hold is refused outright, so a stale handle cannot stamp a peer "
     "that has gone"
 ) {
@@ -193,8 +196,8 @@ TEST_CASE(
     node->set_name("Crate");
     Record record;
 
-    const Ref<NetwParticipant> stranger = a_stranger(core, 9);
-    CHECK_FALSE(core->participant_holds(stranger));
+    const Ref<NetwPlayer> stranger = a_stranger(core, 9);
+    CHECK_FALSE(core->player_holds(stranger));
     const Ref<NetwEntity> refused = core->spawn_arm_identity(
         &record,
         node,
@@ -209,8 +212,8 @@ TEST_CASE(
     const int64_t stamped = held.is_valid() ? held->get_peer_id() : 0;
     NETW_CHECK_EQ(stamped, int64_t(0));
 
-    const Ref<NetwParticipant> admitted = seated(core, 9);
-    CHECK(core->participant_holds(admitted));
+    const Ref<NetwPlayer> admitted = seated(core, 9);
+    CHECK(core->player_holds(admitted));
     const Ref<NetwEntity> armed = core->spawn_arm_identity(
         &record,
         node,
@@ -223,6 +226,40 @@ TEST_CASE(
     memdelete(node);
 }
 
+TEST_CASE(
+    "[Networked][Spawn][Hosted][SceneTree] SM7 a body seated beside a node "
+    "that already holds its name takes a readable name from its entity id, "
+    "because a colliding child is renamed to a form the stock "
+    "MultiplayerSpawner refuses to auto-spawn"
+) {
+    Node *root = netw::gd::scene_root();
+    REQUIRE(root != nullptr);
+    Node *level = memnew(Node);
+    level->set_name("Level");
+    root->add_child(level);
+    Node *squatter = memnew(Node);
+    squatter->set_name("Avatar");
+    level->add_child(squatter);
+
+    Node *body = memnew(Node);
+    body->set_name("Avatar");
+    const Ref<NetwEntity> wrapper = NetwEntity::ensure(body);
+    REQUIRE(wrapper.is_valid());
+    NetwEntityRecord *const record = wrapper->get_record();
+    REQUIRE(record != nullptr);
+    record->set_entity_id(StringName("Avatar"));
+
+    level->add_child(body);
+
+    const String seated_name = String(body->get_name());
+    CHECK(bool(seated_name == seated_name.validate_node_name()));
+    CHECK(bool(seated_name.begins_with("Avatar")));
+    CHECK_FALSE(bool(seated_name == String(squatter->get_name())));
+
+    root->remove_child(level);
+    memdelete(level);
+}
+
 #if defined(NETW_TIER_HOSTED)
 
 Node *build_orphan_avatar() {
@@ -232,19 +269,19 @@ Node *build_orphan_avatar() {
 }
 
 TEST_CASE(
-    "[Networked][Spawn][SceneTree] SM6 an orphan armed for a participant is "
-    "discarded rather than replicated when that participant leaves before the "
+    "[Networked][Spawn][SceneTree] SM6 an orphan armed for a player is "
+    "discarded rather than replicated when that player leaves before the "
     "body is mounted"
 ) {
     netw_test::LoopbackRig rig(0);
     rig.mount();
     NetwMultiplayer *server = rig.server();
 
-    Ref<NetwParticipant> leaving;
+    Ref<NetwPlayer> leaving;
     leaving.instantiate();
-    server->participant_adopt(77, leaving);
-    server->participant_admit(77);
-    REQUIRE(server->participant_holds(leaving));
+    server->player_adopt(77, leaving);
+    server->player_admit(77);
+    REQUIRE(server->player_holds(leaving));
 
     rig.register_constructor(
         server,
@@ -266,8 +303,8 @@ TEST_CASE(
     const bool orphaned = !body->is_inside_tree();
     CHECK(orphaned);
 
-    server->participant_release_membership(leaving);
-    const bool still_held = server->participant_holds(leaving);
+    server->player_release_id(leaving);
+    const bool still_held = server->player_holds(leaving);
     CHECK_FALSE(still_held);
 
     rig.branch(-1)->add_child(body);

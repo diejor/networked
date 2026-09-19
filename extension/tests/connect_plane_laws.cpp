@@ -627,7 +627,7 @@ TEST_CASE(
         core->NETW_API_VIRTUAL(get_multiplayer_peer)()
         == Ref<MultiplayerPeer>(server)
     );
-    CHECK(core->participant_local().is_null());
+    CHECK(core->player_local().is_null());
     CHECK(core->session_get_inner()->get_auth_callback().is_valid());
 
     core->embed_dispose();

@@ -6,9 +6,7 @@
 #include "netw/api/ring_buffer.hpp"
 
 #include "netw/api/action.hpp"
-#include "netw/api/auth_flow.hpp"
 #include "netw/api/auth_protocol.hpp"
-#include "netw/api/auth_result.hpp"
 #include "netw/api/bit_stream.hpp"
 #include "netw/api/channel.hpp"
 #include "netw/api/clock_config.hpp"
@@ -29,7 +27,6 @@
 #include "netw/api/join_config.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/member_config.hpp"
-#include "netw/api/netw_identity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/nodes/lobby_directory.hpp"
 #include "netw/api/nodes/multiplayer_tree.hpp"
@@ -129,7 +126,6 @@
 #endif
 
 #if defined(NETW_TESTS)
-#include "tests/support/auth_stand.h"
 #include "tests/support/persistence_stand.h"
 #include "tests/support/published_classes.h"
 #include "tests/support/stepper_recorder.h"
@@ -163,10 +159,8 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_ABSTRACT_CLASS(netw::NetwAuthProtocol);
     GDREGISTER_CLASS(netw::NetwAction);
     GDREGISTER_CLASS(netw::NetwActionContext);
-    GDREGISTER_CLASS(netw::NetwParticipant);
+    GDREGISTER_CLASS(netw::NetwPlayer);
     GDREGISTER_CLASS(netw::NetwPhysicsStepper);
-    GDREGISTER_CLASS(netw::AuthResult);
-    GDREGISTER_CLASS(netw::NetwAuthFlow);
     GDREGISTER_CLASS(netw::NetwServerInfo);
     GDREGISTER_CLASS(netw::NetwConnectHandle);
     GDREGISTER_CLASS(netw::NetwSessionHandle);
@@ -175,7 +169,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwWebRTCSignaler);
     GDREGISTER_CLASS(netw::NetwLinkConditions);
     GDREGISTER_CLASS(netw::NetwProbeResult);
-    GDREGISTER_CLASS(netw::NetwIdentity);
     GDREGISTER_CLASS(netw::DebugJoinConfig);
     GDREGISTER_CLASS(netw::NetwDisplayHandle);
     GDREGISTER_CLASS(netw::NetwInterestHandle);
@@ -263,7 +256,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwNativeTests);
 #endif
     GDREGISTER_CLASS(netw_test::NetwTestPersistenceEngine);
-    GDREGISTER_CLASS(netw_test::NetwTestAuthFlow);
     GDREGISTER_CLASS(netw_test::RecordingStepper);
 #endif
     netw::NetwEntityRecord::set_part_factory(

@@ -93,7 +93,7 @@
 			<param index="2" name="custom_callback" type="Callable" default="Callable()" />
 			<description>
 				Overrides local presentation behavior for [param layer_id] with one of [enum NetwMultiplayer.PerceptionPolicy], and returns this handle.
-				[constant NetwMultiplayer.PERCEPTION_POLICY_CUSTOM] requires [param custom_callback]. The callback receives [code](visible, peer_id, layer_id)[/code] on both local participant edges. Other policies reject a callback.
+				[constant NetwMultiplayer.PERCEPTION_POLICY_CUSTOM] requires [param custom_callback]. The callback receives [code](visible, peer_id, layer_id)[/code] on both local player edges. Other policies reject a callback.
 			</description>
 		</method>
 	</methods>

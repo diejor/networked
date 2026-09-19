@@ -383,8 +383,9 @@ public sealed class NetwPredictJournal : NetwRefCounted
 
     /// <summary>
     /// Returns the <see cref="NetwPredictJournal.Attribution"/> charged to
-    /// <paramref name="transition"/>, or <c>Attribution.UNKNOWN</c> when
-    /// nothing charged it or the row has fallen out of the ring.
+    /// <paramref name="transition"/>, or
+    /// <see cref="NetwPredictJournal.Attribution.Unknown"/> when nothing
+    /// charged it or the row has fallen out of the ring.
     /// </summary>
     public int AttributionAt(long transition)
     {
@@ -403,10 +404,11 @@ public sealed class NetwPredictJournal : NetwRefCounted
 
     /// <summary>
     /// Returns the <see cref="NetwPredictJournal.Domain"/> recorded for
-    /// <paramref name="transition"/>, or <c>Domain.OUT_OF_DOMAIN</c> when the
-    /// row has fallen out of the ring. A transition nobody retained is one
-    /// nobody can show was entitled to exactness, so the forgotten row reads as
-    /// the label that claims nothing.
+    /// <paramref name="transition"/>, or
+    /// <see cref="NetwPredictJournal.Domain.OutOfDomain"/> when the row has
+    /// fallen out of the ring. A transition nobody retained is one nobody can
+    /// show was entitled to exactness, so the forgotten row reads as the label
+    /// that claims nothing.
     /// </summary>
     public int DomainAt(long transition)
     {

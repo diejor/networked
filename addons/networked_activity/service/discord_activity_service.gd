@@ -191,12 +191,6 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 		# The rendezvous owns its transport, so it installs whatever core seams
 		# that backend needs. The service never reaches into a backend itself.
 		rendezvous.bind(mt)
-	var nakama_auth := Netw.session(mt).auth_flow as NakamaAuth
-	if nakama_auth != null:
-		# NakamaSessionService.of add_childs the session node, which fails if the
-		# tree is still setting up its children when this service registers.
-		# Defer past setup; the bind only stores references used later at connect.
-		_bind_nakama_auth.call_deferred(mt, nakama_auth)
 	_push_identity()
 	# Bridge a dropped connection into the activity lifecycle so a host that leaves
 	# (or any transport drop) surfaces as session_lost while connected, the
@@ -215,13 +209,6 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 	_sdk = _create_sdk()
 	if _sdk != null:
 		_sdk.name = &"DiscordSDK"
-
-
-# Binds the verified-identity provider to the shared session and tree once the
-# tree has finished setting up, so the session node can add_child safely.
-func _bind_nakama_auth(mt: MultiplayerTree, nakama_auth: NakamaAuth) -> void:
-	nakama_auth.bind_session(NakamaSessionService.of(mt))
-	nakama_auth.bind_tree(mt)
 
 
 ## Drives the Discord SDK handshake to [constant State.READY].

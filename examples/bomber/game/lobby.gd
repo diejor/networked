@@ -29,7 +29,6 @@ func _ready() -> void:
 
 
 func on_presentation_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
-	browser.visible = to == null
 	if to != null:
 		set_status("")
 

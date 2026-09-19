@@ -187,6 +187,7 @@ public:
     godot::Error consume_remove(godot::Node *p_root, godot::Object *p_sync);
 
     void refresh_interest_intents();
+    int64_t local_peer_id();
     bool synchronizer_verdict(int64_t p_peer_id, godot::Node *p_node);
 
     void pump();

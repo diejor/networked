@@ -97,4 +97,5 @@
     X(ATTRIBUTED_FRAMES_OUT, "attributed_frames_out") \
     X(ATTRIBUTED_FRAMES_IN, "attributed_frames_in") \
     X(ATTRIBUTION_FRAMING_OUT, "attribution_framing_out") \
-    X(ATTRIBUTION_DROPPED_OUT, "attribution_dropped_out")
+    X(ATTRIBUTION_DROPPED_OUT, "attribution_dropped_out") \
+    X(ROW_FRAMES_DEFERRED, "row_frames_deferred")

@@ -106,6 +106,13 @@ public:
         );
     }
 
+    godot::Callable callable_on(
+        const godot::Object *p_anchor,
+        const godot::StringName &p_tag
+    ) const {
+        return godot::Callable(memnew(CallLogSink(entries, p_tag, p_anchor)));
+    }
+
     void note(const godot::StringName &p_tag) const {
         entries->tags.push_back(p_tag);
         entries->args.push_back(godot::Array());
@@ -124,6 +131,20 @@ public:
         godot::Ref<T> fresh;
         fresh.instantiate();
         return fresh;
+    }
+
+    template <typename T = godot::RefCounted>
+    godot::Callable minting_on(
+        const godot::Object *p_anchor,
+        const godot::StringName &p_tag
+    ) const {
+        return godot::Callable(memnew(CallLogSink(
+            entries,
+            p_tag,
+            p_anchor,
+            godot::Variant(),
+            &CallLog::mint_one<T>
+        )));
     }
 
     template <typename T = godot::RefCounted>

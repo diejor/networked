@@ -10,7 +10,7 @@ var goal_team := -1
 @onready var entity := NetwEntity.of(self)
 @onready var state := PhysicsServer3D.body_get_direct_state(get_rid())
 @onready var level: Node = entity.scene.root
-@onready var game: RocketGame = level.get_node(^"game|0")
+@onready var game: RocketGame = level.get_node(^"game")
 @onready var goals := level.get_node(^"field").find_children("*", "Area3D", false)
 
 var pose: Transform3D:
@@ -80,6 +80,7 @@ func _init() -> void:
 
 	Netw.configure_rpc(announce_goal).authority().reliable()
 	var e := NetwEntity.ensure(self)
+	e.entity_id = &"ball"
 	e.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
 	e.prediction.schedule = RocketJoltStepper.schedule()
 	e.prediction.recovery_policy = NetwPredict.RECOVERY_POLICY_REBASE_REPLAY
@@ -122,7 +123,7 @@ func reset() -> void:
 
 func announce_goal(_team: int) -> void:
 	var confetti_instance := CONFETTI.instantiate() as Node3D
-	get_tree().root.add_child(confetti_instance)
+	get_parent().add_child(confetti_instance)
 	confetti_instance.global_position = global_position
 
 

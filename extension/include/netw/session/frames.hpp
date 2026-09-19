@@ -12,7 +12,7 @@ namespace netw::session {
 struct AcceptFrame {
     int64_t peer_id = 0;
     godot::StringName username;
-    uint64_t membership = 0;
+    uint64_t player_id = 0;
 
     static constexpr auto wire = netw::wire::describe(
         netw::wire::field<&AcceptFrame::peer_id>(
@@ -23,8 +23,8 @@ struct AcceptFrame {
             "username",
             netw::wire::string()
         ),
-        netw::wire::field<&AcceptFrame::membership>(
-            "membership",
+        netw::wire::field<&AcceptFrame::player_id>(
+            "player_id",
             netw::wire::varuint(5)
         )
     );
@@ -191,11 +191,11 @@ struct SceneViewersHead {
 };
 
 struct SceneViewerRow {
-    uint64_t membership = 0;
+    uint64_t player_id = 0;
 
     static constexpr auto wire = netw::wire::describe(
-        netw::wire::field<&SceneViewerRow::membership>(
-            "membership",
+        netw::wire::field<&SceneViewerRow::player_id>(
+            "player_id",
             netw::wire::varuint(5)
         )
     );

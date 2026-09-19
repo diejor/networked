@@ -107,6 +107,10 @@ bool NetwCompTable::reconcile(bool p_is_authority) {
         poisoned = false;
         return false;
     }
+    if (wire_hash == 0) {
+        poisoned = false;
+        return false;
+    }
     poisoned = wire_hash != table_hash;
     return poisoned;
 }

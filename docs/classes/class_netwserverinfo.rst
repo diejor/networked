@@ -26,7 +26,7 @@ A session with no declared provider returns :ref:`from_session()<class_NetwServe
 ::
 
     func _init() -> void:
-        Netw.configure_server_info(self, server_info)
+        Netw.configure_server_info(server_info)
 
     func server_info(info: NetwServerInfo) -> NetwServerInfo:
         info.motd = "Ranked, no friendly fire"
@@ -261,7 +261,7 @@ The message the host shows in a browser row. Unset by the built-in provider.
 - |void| **set_players**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_players**\ (\ )
 
-The live participant count at the moment the reply was built.
+The live player count at the moment the reply was built.
 
 .. rst-class:: classref-item-separator
 
@@ -324,7 +324,7 @@ Decodes ``bytes`` into a fresh record, or ``null`` when ``bytes`` is empty or do
 
 :ref:`NetwServerInfo<class_NetwServerInfo>` **from_session**\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |static| :ref:`🔗<class_NetwServerInfo_method_from_session>`
 
-The default probe reply: a copy of :ref:`NetwSessionConfig.server_info<class_NetwSessionConfig_property_server_info>` with the live fields overlaid, which are the connected participant count as :ref:`players<class_NetwServerInfo_property_players>` and :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>`. :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than returned, so replying to a probe can never write back into what the game authored.
+The default probe reply: a copy of :ref:`NetwSessionConfig.server_info<class_NetwSessionConfig_property_server_info>` with the live fields overlaid, which are the connected player count as :ref:`players<class_NetwServerInfo_property_players>` and :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>`. :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than returned, so replying to a probe can never write back into what the game authored.
 
 This is what a probe returns when no :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` declaration governs the session, and it is also the record a declared provider is handed.
 

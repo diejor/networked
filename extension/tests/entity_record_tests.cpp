@@ -687,8 +687,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] R18 an unset identity is filled from the node "
-    "name, and a bound one is not"
+    "[Networked][Entity][Hosted] R18 a node name is never an identity, so "
+    "hydration invents neither half of one"
 ) {
     Record record;
     Node *owner = memnew(Node);
@@ -696,24 +696,23 @@ TEST_CASE(
 
     record->hydrate_identity(owner);
 
-    CHECK(record->get_entity_id() == StringName("valeria"));
-    NETW_CHECK_EQ(record->get_peer_id(), 7);
+    CHECK(record->get_entity_id() == StringName());
+    NETW_CHECK_EQ(record->get_peer_id(), 0);
 
-    SUBCASE("a caller that already bound the identity keeps it") {
-        Record bound;
-        bound->set_entity_id("crate");
-        bound->set_peer_id(3);
-        bound->hydrate_identity(owner);
-        CHECK(bound->get_entity_id() == StringName("crate"));
-        NETW_CHECK_EQ(bound->get_peer_id(), 3);
+    SUBCASE("a stamped identity survives hydration untouched") {
+        Record stamped;
+        stamped->set_entity_id("crate");
+        stamped->set_peer_id(3);
+        stamped->hydrate_identity(owner);
+        CHECK(stamped->get_entity_id() == StringName("crate"));
+        NETW_CHECK_EQ(stamped->get_peer_id(), 3);
     }
 
-    SUBCASE("a name that spells no identity fills nothing") {
-        Record plain;
-        owner->set_name("JustANode");
-        plain->hydrate_identity(owner);
-        CHECK(plain->get_entity_id() == StringName());
-        NETW_CHECK_EQ(plain->get_peer_id(), 0);
+    SUBCASE("an unidentified node stays inert rather than activating") {
+        Record inert;
+        CHECK_FALSE(inert->classify_activation(owner));
+        inert->set_entity_id("crate");
+        CHECK(inert->classify_activation(owner));
     }
 
     memdelete(owner);

@@ -16,7 +16,7 @@ namespace session_decl {
 
 enum Kind {
     KIND_JOIN = 0,
-    KIND_AUTH = 1,
+    KIND_ADMISSION = 1,
     KIND_SERVER_INFO = 2,
     KIND_SCENE_REQUESTS = 3,
     KIND_SESSION_CONFIG = 4,
@@ -55,8 +55,6 @@ godot::Error declare(
     const godot::Variant &p_payload,
     const char *p_verb
 );
-
-NetwMultiplayer *installed_api(godot::Node *p_scope);
 
 godot::Variant payload_on(godot::Node *p_scope, Kind p_kind);
 

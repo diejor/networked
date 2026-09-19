@@ -10,7 +10,7 @@ namespace TestNetwMeshStand {
 using namespace godot;
 using netw::LocalMultiplayerPeer;
 using netw::MultiplayerPeerBase;
-using netw::NetwParticipant;
+using netw::NetwPlayer;
 using netw::NetwPromise;
 using netw::NetwSceneCore;
 using netw::session::AcceptFrame;
@@ -224,7 +224,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session] L8 a member's join crosses the transport to "
-    "coordinator 7, seats a participant there, and the accept and roster 7 "
+    "coordinator 7, seats a player there, and the accept and roster 7 "
     "sends back seat the same membership at the member"
 ) {
     MeshStand mesh;
@@ -233,8 +233,8 @@ TEST_CASE(
     mesh.wire(7, 9);
     mesh.pump(4);
 
-    const Ref<NetwParticipant> host_seat = mesh.join(7, StringName("seven"));
-    const Ref<NetwParticipant> member_seat = mesh.join(9, StringName("nine"));
+    const Ref<NetwPlayer> host_seat = mesh.join(7, StringName("seven"));
+    const Ref<NetwPlayer> member_seat = mesh.join(9, StringName("nine"));
 
     REQUIRE(host_seat.is_valid());
     REQUIRE(member_seat.is_valid());
@@ -242,19 +242,19 @@ TEST_CASE(
     NETW_CHECK_EQ(int(member_seat->get_peer_id()), 9);
 
     NETW_CHECK_EQ(
-        int(mesh.session_of(7)->get_connected_participants().size()),
+        int(mesh.session_of(7)->get_connected_players().size()),
         2
     );
     NETW_CHECK_EQ(
-        int(mesh.session_of(9)->get_connected_participants().size()),
+        int(mesh.session_of(9)->get_connected_players().size()),
         2
     );
 
-    const Ref<NetwParticipant> local_at_member
-        = mesh.session_of(9)->participant_local();
+    const Ref<NetwPlayer> local_at_member
+        = mesh.session_of(9)->player_local();
     REQUIRE(local_at_member.is_valid());
     NETW_CHECK_EQ(int(local_at_member->get_peer_id()), 9);
-    CHECK(mesh.session_of(9)->participant_of(7).is_valid());
+    CHECK(mesh.session_of(9)->player_of(7).is_valid());
 }
 
 TEST_CASE(
@@ -274,14 +274,14 @@ TEST_CASE(
     AcceptFrame forged;
     forged.peer_id = 11;
     forged.username = StringName("eleven");
-    forged.membership = 11;
+    forged.player_id = 11;
     const PackedByteArray frame = netw::session::frame_write(forged);
 
     mesh.session_of(9)->session_receive_accept(frame, 1);
-    NETW_CHECK_EQ(int(mesh.session_of(9)->participant_of(11).is_valid()), 0);
+    NETW_CHECK_EQ(int(mesh.session_of(9)->player_of(11).is_valid()), 0);
 
     mesh.session_of(9)->session_receive_accept(frame, 7);
-    NETW_CHECK_EQ(int(mesh.session_of(9)->participant_of(11).is_valid()), 1);
+    NETW_CHECK_EQ(int(mesh.session_of(9)->player_of(11).is_valid()), 1);
 }
 
 TEST_CASE(
@@ -305,11 +305,11 @@ TEST_CASE(
     REQUIRE(mesh.join(11, StringName("eleven")).is_valid());
 
     NETW_CHECK_EQ(
-        int(mesh.session_of(11)->get_connected_participants().size()),
+        int(mesh.session_of(11)->get_connected_players().size()),
         3
     );
-    CHECK(mesh.session_of(11)->participant_of(7).is_valid());
-    CHECK(mesh.session_of(11)->participant_of(9).is_valid());
+    CHECK(mesh.session_of(11)->player_of(7).is_valid());
+    CHECK(mesh.session_of(11)->player_of(9).is_valid());
 }
 
 TEST_CASE(
@@ -334,11 +334,11 @@ TEST_CASE(
     REQUIRE(mesh.join(1, StringName("one")).is_valid());
 
     NETW_CHECK_EQ(
-        int(mesh.session_of(1)->get_connected_participants().size()),
+        int(mesh.session_of(1)->get_connected_players().size()),
         3
     );
-    CHECK(mesh.session_of(1)->participant_of(7).is_valid());
-    CHECK(mesh.session_of(1)->participant_of(9).is_valid());
+    CHECK(mesh.session_of(1)->player_of(7).is_valid());
+    CHECK(mesh.session_of(1)->player_of(9).is_valid());
     NETW_CHECK_EQ(int(mesh.capture_at(7).size()), 0);
 }
 

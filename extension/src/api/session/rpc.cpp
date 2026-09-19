@@ -27,7 +27,6 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -774,7 +773,8 @@ Dictionary NetwMultiplayer::relay_stats_snapshot() {
         "drops_derived_no_set",    "drops_derived_bad_sender",
         "drops_derived_schema",    "row_frames_out",
         "row_frames_full",         "row_frames_stage_refused",
-        "row_frames_ungathered",   "retained_frames_out",
+        "row_frames_ungathered",   "row_frames_deferred",
+        "retained_frames_out",
         "window_frames_out",       "window_samples_out",
         "sync_sets_active",        "sync_frames_out",
         "sync_frames_in",          "delta_frames_out",

@@ -43,15 +43,10 @@ NetwAuthProtocol::Kind NetwAuthProtocol::classify(
 }
 
 PackedByteArray NetwAuthProtocol::encode_client_hello(
-    const PackedByteArray &p_provider_payload,
     int64_t p_app_tag,
     int p_flags
 ) {
-    return auth::encode_client_hello(
-        p_provider_payload,
-        uint64_t(p_app_tag),
-        p_flags
-    );
+    return auth::encode_client_hello(uint64_t(p_app_tag), p_flags);
 }
 
 Dictionary NetwAuthProtocol::decode_client_hello(
@@ -66,7 +61,6 @@ Dictionary NetwAuthProtocol::decode_client_hello(
     row["version"] = decoded.version;
     row["app_tag"] = int64_t(decoded.app_tag);
     row["flags"] = decoded.flags;
-    row["provider_payload"] = decoded.provider_payload;
     return row;
 }
 
@@ -125,7 +119,7 @@ void NetwAuthProtocol::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwAuthProtocol",
-        D_METHOD("encode_client_hello", "provider_payload", "app_tag", "flags"),
+        D_METHOD("encode_client_hello", "app_tag", "flags"),
         &NetwAuthProtocol::encode_client_hello,
         DEFVAL(0),
         DEFVAL(0)

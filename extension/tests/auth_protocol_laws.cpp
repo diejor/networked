@@ -20,7 +20,7 @@ TEST_CASE(
     "and one that carries neither, or is shorter than a header, is unknown"
 ) {
     NETW_CHECK_EQ(
-        int(auth::classify(auth::encode_client_hello(PackedByteArray(), 0, 0))),
+        int(auth::classify(auth::encode_client_hello(0, 0))),
         int(auth::Kind::HELLO)
     );
     NETW_CHECK_EQ(
@@ -40,36 +40,28 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] A2 a hello round-trips its build tag, its "
-    "flags and the provider's own bytes, and an empty payload stays empty"
+    "[Networked][Session][Hosted] A2 a hello round-trips its build tag and "
+    "its flags, and it is the whole packet"
 ) {
-    const int provider[] = {0xDE, 0xAD, 0xBE, 0xEF};
-    const PackedByteArray payload = bytes_of(provider, 4);
-
-    auth::Hello decoded = auth::decode_client_hello(
-        auth::encode_client_hello(payload, 0, 0x42),
-        0
-    );
+    auth::Hello decoded
+        = auth::decode_client_hello(auth::encode_client_hello(0, 0x42), 0);
     CHECK(decoded.ok());
     NETW_CHECK_EQ(decoded.version, int(auth::PROTOCOL_VERSION));
     NETW_CHECK_EQ(int64_t(decoded.app_tag), int64_t(0));
     NETW_CHECK_EQ(decoded.flags, 0x42);
-    CHECK(decoded.provider_payload == payload);
 
     decoded = auth::decode_client_hello(
-        auth::encode_client_hello(payload, 0xABCDEF12, 0),
+        auth::encode_client_hello(0xABCDEF12, 0),
         0xABCDEF12
     );
     CHECK(decoded.ok());
     NETW_CHECK_EQ(int64_t(decoded.app_tag), int64_t(0xABCDEF12));
-    CHECK(decoded.provider_payload == payload);
+    NETW_CHECK_EQ(decoded.flags, 0);
 
-    decoded = auth::decode_client_hello(
-        auth::encode_client_hello(PackedByteArray(), 0, 0),
-        0
+    NETW_CHECK_EQ(
+        int64_t(auth::encode_client_hello(0, 0).size()),
+        int64_t(auth::HELLO_HEADER_LEN)
     );
-    CHECK(decoded.ok());
-    NETW_CHECK_EQ(int64_t(decoded.provider_payload.size()), int64_t(0));
 }
 
 TEST_CASE(
@@ -97,7 +89,7 @@ TEST_CASE(
     "the wrong packet are each refused by name rather than misread"
 ) {
     auth::Hello decoded = auth::decode_client_hello(
-        auth::encode_client_hello(PackedByteArray(), 0x11111111, 0),
+        auth::encode_client_hello(0x11111111, 0),
         0x22222222
     );
     CHECK_FALSE(decoded.ok());
@@ -110,7 +102,7 @@ TEST_CASE(
 
     CHECK_FALSE(
         auth::decode_probe_request(
-            auth::encode_client_hello(PackedByteArray(), 0, 0)
+            auth::encode_client_hello(0, 0)
         )
             .ok
     );

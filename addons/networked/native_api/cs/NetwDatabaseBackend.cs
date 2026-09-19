@@ -13,13 +13,12 @@ namespace Networked;
 /// A game subclasses this to save into something of its own, and
 /// <see cref="FileSystemDatabase"/> is the backend this addon ships. Every
 /// method here returns a <see cref="NetwPromise"/> straight away and none of
-/// them may suspend. <c>NetwDatabase.TableRepository</c> is the layer above
-/// that waits on the promise, and that is where a coroutine belongs. That is
-/// what makes a backend allowed to be slow. A backend talking to a service over
-/// a socket cannot return a record on the calling frame, and a method that
-/// promised the record directly would hand its caller whatever a suspended
-/// GDScript call turns into, which is an empty record and a miss nothing
-/// reports.
+/// them may suspend. <see cref="NetwDatabase"/> is the layer above that waits
+/// on the promise, and that is where a coroutine belongs. That is what makes a
+/// backend allowed to be slow. A backend talking to a service over a socket
+/// cannot return a record on the calling frame, and a method that promised the
+/// record directly would hand its caller whatever a suspended GDScript call
+/// turns into, which is an empty record and a miss nothing reports.
 /// <code>
 /// # A backend that returns on the spot.
 /// func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:

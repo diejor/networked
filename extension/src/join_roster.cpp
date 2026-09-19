@@ -16,13 +16,13 @@ LocalVector<int64_t> JoinRoster::peers_in_order() const {
 }
 
 bool JoinRoster::remember(const session::AcceptFrame &p_entry) {
-    if (p_entry.peer_id == 0 || p_entry.membership == 0) {
+    if (p_entry.peer_id == 0 || p_entry.player_id == 0) {
         return false;
     }
     const HashMap<int64_t, session::AcceptFrame>::ConstIterator found
         = accepted.find(p_entry.peer_id);
     if (found != accepted.end()
-        && found->value.membership == p_entry.membership) {
+        && found->value.player_id == p_entry.player_id) {
         return false;
     }
     accepted[p_entry.peer_id] = p_entry;
@@ -58,34 +58,6 @@ PackedByteArray JoinRoster::accept_frame(int64_t p_peer) const {
         return PackedByteArray();
     }
     return session::frame_write(found->value);
-}
-
-int JoinRoster::name_verdict(
-    const StringName &p_name,
-    const PackedStringArray &p_taken,
-    bool p_renames_on_collision,
-    bool p_has_identity
-) const {
-    if (!p_taken.has(String(p_name))) {
-        return ADMIT;
-    }
-    if (p_has_identity) {
-        return REFUSE;
-    }
-    return p_renames_on_collision ? RENAME : ADMIT;
-}
-
-StringName JoinRoster::free_name(
-    const StringName &p_name,
-    const PackedStringArray &p_taken
-) const {
-    int suffix = 1;
-    String candidate = String(p_name) + String::num_int64(suffix);
-    while (p_taken.has(candidate)) {
-        suffix += 1;
-        candidate = String(p_name) + String::num_int64(suffix);
-    }
-    return StringName(candidate);
 }
 
 void JoinRoster::refuse(int64_t p_peer, const String &p_reason) {

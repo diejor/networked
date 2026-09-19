@@ -7,15 +7,21 @@ const _BROWSER_SCENE := preload(
 )
 
 
-func _smoke_info(info: NetwServerInfo) -> NetwServerInfo:
-	info.players = 1
-	info.max_players = 8
-	info.is_local_listener = true
-	return info
+class SmokeInfoSource:
+	extends Node
+
+	func _init() -> void:
+		Netw.configure_server_info(smoke_info)
+
+	func smoke_info(info: NetwServerInfo) -> NetwServerInfo:
+		info.players = 1
+		info.max_players = 8
+		info.is_local_listener = true
+		return info
 
 
 func test_handle_reports_ok_for_probed_direct_target() -> void:
-	var host := await EnetTestSupport.start_host(self, _smoke_info)
+	var host := await EnetTestSupport.start_host(self, SmokeInfoSource.new())
 	assert_that(host).is_not_empty()
 
 	var tree := MultiplayerTree.new()

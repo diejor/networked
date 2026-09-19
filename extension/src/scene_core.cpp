@@ -588,7 +588,7 @@ bool NetwSceneCore::isolation_owns_world(int isolation) {
 }
 
 Error NetwSceneCore::decide_request(
-    const Variant &participant,
+    const Variant &player,
     const Variant &destination,
     int scope
 ) const {
@@ -596,7 +596,7 @@ Error NetwSceneCore::decide_request(
         return ERR_UNAUTHORIZED;
     }
     Array arguments;
-    arguments.push_back(participant);
+    arguments.push_back(player);
     arguments.push_back(destination);
     arguments.push_back(scope);
     const Variant verdict = request_handler.callv(arguments);

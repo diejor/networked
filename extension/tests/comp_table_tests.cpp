@@ -172,6 +172,33 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Comp][Hosted] a table nobody announced has nothing to "
+    "disagree with, so a peer holding one built from its own scene keeps the "
+    "compact ids"
+) {
+    NetwCompTable unannounced = table({"Gun"});
+    unannounced.table_hash = 4242;
+
+    CHECK_FALSE(unannounced.reconcile(false));
+    CHECK_FALSE(unannounced.poisoned);
+}
+
+TEST_CASE(
+    "[Networked][Comp][Hosted] an announcement arriving after a poisoning is "
+    "still judged, so an absent digest is not a way to clear a real "
+    "disagreement"
+) {
+    NetwCompTable late = table({"Gun"});
+    late.table_hash = 4242;
+    late.wire_hash = 9999;
+    CHECK(late.reconcile(false));
+
+    late.wire_hash = 4242;
+    CHECK_FALSE(late.reconcile(false));
+    CHECK_FALSE(late.poisoned);
+}
+
+TEST_CASE(
     "[Networked][Comp][Hosted] an id the table cannot map resolves to nothing "
     "rather than to the entity root, because a row addressed by an id carries "
     "no path to fall back to"

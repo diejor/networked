@@ -2,6 +2,11 @@
 class_name TestDiscordActivity
 extends NetwTestSuite
 
+const _ERROR_SCRUBBER := preload(
+	"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
+)
+
+
 func test_discord_instance_state_flow() -> void:
 	var injected := NetwTestDiscordService.new()
 	auto_free(injected)
@@ -23,7 +28,6 @@ func test_discord_instance_state_flow() -> void:
 	auto_free(tree)
 	auto_free(service)
 	service._service_entered(tree.api)
-	assert_object(tree.api.auth_flow).is_null()
 	assert_object(service.rendezvous).is_null()
 
 	tree = MultiplayerTree.new()
@@ -85,25 +89,21 @@ func test_dedicated_rendezvous_flow() -> void:
 	assert_int(err).is_equal(ERR_UNCONFIGURED)
 
 
-func test_nakama_auth_identity_flow() -> void:
-	var tree := MultiplayerTree.new()
-	var service := DiscordActivityService.new()
-	var auth := NakamaAuth.new()
-	auto_free(tree)
-	auto_free(service)
-	# Mount both, the way a live service is mounted: the seam fires on
-	# NOTIFICATION_ENTER_TREE, so a service reaching its own session is reaching
-	# one an in-tree node resolves.
-	add_child(tree)
-	service.rendezvous = DedicatedDiscordRendezvous.new()
-	tree.api.auth_set_flow(auth)
-	tree.add_child(service)
-	service._service_entered(tree.api)
-	await get_tree().process_frame
-	assert_object(tree.api.auth_flow).is_same(auth)
-	assert_object(auth._session).is_same(NakamaSessionService.of(tree))
-	assert_object(auth._tree).is_same(tree)
+func test_nakama_auth_admits_only_the_attested_username() -> void:
+	var auth := _bound_nakama_auth("nk-user-1", "Diego")
+	assert_int(auth.admit(2, &"Diego", [])).is_equal(OK)
+	assert_int(auth.admit(2, &"Mallory", [])).is_equal(ERR_UNAUTHORIZED)
 
+	auth = _bound_nakama_auth("", "")
+	assert_int(auth.admit(2, &"Diego", [])).is_equal(ERR_UNAUTHORIZED)
+
+	var unbound := NakamaAuth.new()
+	auto_free(unbound)
+	assert_int(unbound.admit(2, &"Diego", [])).is_equal(ERR_UNAVAILABLE)
+	await _ERROR_SCRUBBER.erase_matching(["NakamaAuth: the relay presence"])
+
+
+func test_nakama_session_configure_flow() -> void:
 	var nakama_session := NakamaSessionService.new()
 	auto_free(nakama_session)
 	nakama_session.configure(
@@ -117,45 +117,6 @@ func test_nakama_auth_identity_flow() -> void:
 	assert_str(nakama_session.custom_id).is_equal("123456789012345678")
 	assert_str(String(nakama_session.auth_vars.get("discord_token", ""))) \
 			.is_equal("token")
-
-	auth = _bound_nakama_auth("nk-user-1", "Diego")
-	var fake_session := _FakeNakamaSession.new()
-	fake_session._uid = "nk-user-1"
-	fake_session._uname = "Diego"
-	auth.bind_session(fake_session)
-	var prepared: NetwPromise = auth.prepare(&"Diego")
-	assert_int(int(prepared.result)).is_equal(OK)
-	var result := auth.verify(2, auth.credentials(&"Diego"))
-	_assert_identity(result.identity, "nk-user-1", "Diego")
-	assert_str(String(result.identity.service)).is_equal("nakama")
-
-	auth = _bound_nakama_auth("", "")
-	fake_session = _FakeNakamaSession.new()
-	auth.bind_session(fake_session)
-	result = auth.verify(2, auth.credentials(&"Diego"))
-	assert_bool(result.accepted).is_false()
-	assert_str(result.rejection_reason).is_equal(
-		"Peer Nakama identity not found in presence",
-	)
-
-	auth = NakamaAuth.new()
-	fake_session = _FakeNakamaSession.new()
-	fake_session._uid = "nk-host-1"
-	fake_session._uname = "HostAlice"
-	auth.bind_session(fake_session)
-	var identity := auth.host_identity()
-	_assert_identity(identity, "nk-host-1", "HostAlice")
-
-
-func _assert_identity(
-		identity: NetwIdentity,
-		expected_id: String,
-		expected_username: String,
-) -> void:
-	assert_object(identity).is_not_null()
-	assert_str(identity.external_id).is_equal(expected_id)
-	assert_str(String(identity.username)).is_equal(expected_username)
-	assert_bool(identity.metadata.get("verified", false)).is_true()
 
 
 func _bound_nakama_auth(
@@ -176,26 +137,9 @@ func _bound_nakama_auth(
 	wrapper.attested_user_id = attested_uid
 	wrapper.attested_username = attested_username
 	var auth := NakamaAuth.new()
+	auto_free(auth)
 	auth.bind_tree(tree)
 	return auth
-
-
-class _FakeNakamaSession:
-	var _uid := ""
-	var _uname := ""
-	var _authenticated := true
-
-
-	func is_authenticated() -> bool:
-		return _authenticated
-
-
-	func local_user_id() -> String:
-		return _uid
-
-
-	func local_username() -> String:
-		return _uname
 
 
 class _FakeNakamaWrapper:

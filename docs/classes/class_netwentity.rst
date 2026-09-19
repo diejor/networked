@@ -61,7 +61,7 @@ A child marks its own :ref:`NetwPropertyConfig.on_spawn()<class_NetwPropertyConf
 
 \ **Acting on an entity**\ 
 
-The server drives the lifecycle. It creates entities through the spawn pipeline (:godot:`ReplicationCore.replicate() <ReplicationCore#class_ReplicationCore_method_replicate>`) , moves one with :godot:`Node.reparent() <Node#class_Node_method_reparent>` or :ref:`NetwSceneHandle.move()<class_NetwSceneHandle_method_move>`, and ends one with :ref:`despawn()<class_NetwEntity_method_despawn>`. A client asks the server through :ref:`request_control()<class_NetwEntity_method_request_control>` and reads whether it steers the entity from :ref:`is_controlled_locally<class_NetwEntity_property_is_controlled_locally>`.
+The server drives the lifecycle. It creates entities with :ref:`Netw.spawn()<class_Netw_method_spawn>` and :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, moves one with :godot:`Node.reparent() <Node#class_Node_method_reparent>` or :ref:`Netw.reparent()<class_Netw_method_reparent>`, and ends one with :ref:`despawn()<class_NetwEntity_method_despawn>`. A client asks the server through :ref:`request_control()<class_NetwEntity_method_request_control>` and reads whether it steers the entity from :ref:`is_controlled_locally<class_NetwEntity_property_is_controlled_locally>`.
 
 ::
 
@@ -71,7 +71,14 @@ The server drives the lifecycle. It creates entities through the spawn pipeline 
 
 \ **Owning identity before the tree**\ 
 
-A spawned :godot:`Node` must own its identity before it enters the tree. Replicated spawns carry it in the SPAWN frame and stamp it during reconstruction, and :ref:`bind()<class_NetwEntity_method_bind>` stamps it when identity rides the :godot:`Node.name <Node#class_Node_property_name>` channel: call it inside a :godot:`MultiplayerSpawner.spawn_function <MultiplayerSpawner#class_MultiplayerSpawner_property_spawn_function>` before returning the node. A scene requires each spawned :godot:`Node` to own its record, which :ref:`ensure()<class_NetwEntity_method_ensure>` provides before the node joins the scene's subtree.
+A spawned :godot:`Node` must own its identity before it enters the tree. A replicated spawn carries it in the SPAWN frame and stamps it during reconstruction, and :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>` stamps a player's body from the :ref:`NetwPlayer.username<class_NetwPlayer_property_username>` it was spawned for. A node the game authors into a scene declares its own, and one that declares none is inert.
+
+::
+
+    func _init() -> void:
+        Netw.configure_entity(self).entity_id = &"ball"
+
+\ A node name is never an identity. A scene requires each spawned :godot:`Node` to own its record, which :ref:`ensure()<class_NetwEntity_method_ensure>` provides before the node joins the scene's subtree.
 
 \ **The facets it returns**\ 
 
@@ -100,7 +107,7 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`controller<class_NetwEntity_property_controller>`                             | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwParticipant<class_NetwParticipant>`               | :ref:`controller_participant<class_NetwEntity_property_controller_participant>`     |                      |
+   | :ref:`NetwPlayer<class_NetwPlayer>`                         | :ref:`controller_player<class_NetwEntity_property_controller_player>`               |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`bool`                                               | :ref:`declares_scene<class_NetwEntity_property_declares_scene>`                     | ``false``            |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -130,7 +137,7 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`ownership<class_NetwEntity_property_ownership>`                               |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwParticipant<class_NetwParticipant>`               | :ref:`participant<class_NetwEntity_property_participant>`                           |                      |
+   | :ref:`NetwPlayer<class_NetwPlayer>`                         | :ref:`player<class_NetwEntity_property_player>`                                     |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`peer_id<class_NetwEntity_property_peer_id>`                                   | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -165,59 +172,49 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`arm<class_NetwEntity_method_arm>`\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>` = null\ )                                                                           |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                 | :ref:`bind<class_NetwEntity_method_bind>`\ (\ node\: :godot:`Node`, entity_id\: :godot:`StringName`, peer_id\: :godot:`int`\ ) |static|                                             |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`by_route<class_NetwEntity_method_by_route>`\ (\ route\: :godot:`int`, api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |static|                                         |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                 | :ref:`comp_node_of<class_NetwEntity_method_comp_node_of>`\ (\ comp\: :godot:`int`\ ) |const|                                                                                        |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                  | :ref:`comp_of<class_NetwEntity_method_comp_of>`\ (\ node\: :godot:`Node`\ ) |const|                                                                                                 |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                               | :ref:`comp_path_of<class_NetwEntity_method_comp_path_of>`\ (\ node\: :godot:`Node`\ ) |const|                                                                                       |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`despawn<class_NetwEntity_method_despawn>`\ (\ opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ )                                                                  |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`ensure<class_NetwEntity_method_ensure>`\ (\ root\: :godot:`Node`\ ) |static|                                                                                                  |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                 | :ref:`find<class_NetwEntity_method_find>`\ (\ root\: :godot:`Node`, participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |static|                                         |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`from_rid<class_NetwEntity_method_from_rid>`\ (\ entity\: :godot:`RID`, api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |static|                                        |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`grant_control<class_NetwEntity_method_grant_control>`\ (\ peer_id\: :godot:`int`\ )                                                                                           |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                 | :ref:`instantiate_from<class_NetwEntity_method_instantiate_from>`\ (\ template\: :godot:`Node`, configure\: :godot:`Callable` = Callable()\ ) |static|                              |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`mark_template<class_NetwEntity_method_mark_template>`\ (\ )                                                                                                                   |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                           | :ref:`meta_key<class_NetwEntity_method_meta_key>`\ (\ ) |static|                                                                                                                    |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                               | :ref:`name_for<class_NetwEntity_method_name_for>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |static|                                                       |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`of<class_NetwEntity_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                          |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`parent_entity<class_NetwEntity_method_parent_entity>`\ (\ ) |const|                                                                                                           |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                           | :ref:`parse_entity<class_NetwEntity_method_parse_entity>`\ (\ node_name\: :godot:`String`\ ) |static|                                                                               |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                  | :ref:`parse_peer<class_NetwEntity_method_parse_peer>`\ (\ node_name\: :godot:`String`\ ) |static|                                                                                   |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`register_component<class_NetwEntity_method_register_component>`\ (\ component\: :godot:`Node`\ )                                                                              |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`request_control<class_NetwEntity_method_request_control>`\ (\ )                                                                                                               |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`revoke_control<class_NetwEntity_method_revoke_control>`\ (\ )                                                                                                                 |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwMultiplayer<class_NetwMultiplayer>` | :ref:`session_plane_for<class_NetwEntity_method_session_plane_for>`\ (\ node\: :godot:`Node`\ ) |static|                                                                            |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                 | :ref:`spawn_player<class_NetwEntity_method_spawn_player>`\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`, scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                 | :ref:`spawn_under<class_NetwEntity_method_spawn_under>`\ (\ parent\: :godot:`Node` = null, id\: :godot:`StringName` = &""\ )                                                        |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                           | :ref:`template_meta<class_NetwEntity_method_template_meta>`\ (\ ) |static|                                                                                                          |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`arm<class_NetwEntity_method_arm>`\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>` = null\ )                                                            |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`by_route<class_NetwEntity_method_by_route>`\ (\ route\: :godot:`int`, api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |static|                          |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                 | :ref:`comp_node_of<class_NetwEntity_method_comp_node_of>`\ (\ comp\: :godot:`int`\ ) |const|                                                                         |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                                  | :ref:`comp_of<class_NetwEntity_method_comp_of>`\ (\ node\: :godot:`Node`\ ) |const|                                                                                  |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                               | :ref:`comp_path_of<class_NetwEntity_method_comp_path_of>`\ (\ node\: :godot:`Node`\ ) |const|                                                                        |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`despawn<class_NetwEntity_method_despawn>`\ (\ opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ )                                                   |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`ensure<class_NetwEntity_method_ensure>`\ (\ root\: :godot:`Node`\ ) |static|                                                                                   |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`from_rid<class_NetwEntity_method_from_rid>`\ (\ entity\: :godot:`RID`, api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |static|                         |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`grant_control<class_NetwEntity_method_grant_control>`\ (\ peer_id\: :godot:`int`\ )                                                                            |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                 | :ref:`instantiate_from<class_NetwEntity_method_instantiate_from>`\ (\ template\: :godot:`Node`, configure\: :godot:`Callable` = Callable()\ ) |static|               |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`mark_template<class_NetwEntity_method_mark_template>`\ (\ )                                                                                                    |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`StringName`                           | :ref:`meta_key<class_NetwEntity_method_meta_key>`\ (\ ) |static|                                                                                                     |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`of<class_NetwEntity_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                           |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`           | :ref:`parent_entity<class_NetwEntity_method_parent_entity>`\ (\ ) |const|                                                                                            |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`register_component<class_NetwEntity_method_register_component>`\ (\ component\: :godot:`Node`\ )                                                               |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`request_control<class_NetwEntity_method_request_control>`\ (\ )                                                                                                |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`revoke_control<class_NetwEntity_method_revoke_control>`\ (\ )                                                                                                  |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwMultiplayer<class_NetwMultiplayer>` | :ref:`session_plane_for<class_NetwEntity_method_session_plane_for>`\ (\ node\: :godot:`Node`\ ) |static|                                                             |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                 | :ref:`spawn_player<class_NetwEntity_method_spawn_player>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                 | :ref:`spawn_under<class_NetwEntity_method_spawn_under>`\ (\ parent\: :godot:`Node` = null, id\: :godot:`StringName` = &""\ )                                         |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`StringName`                           | :ref:`template_meta<class_NetwEntity_method_template_meta>`\ (\ ) |static|                                                                                           |
+   +-----------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -350,7 +347,7 @@ Emitted on the owner client when ``peer_id`` stops observing this entity through
 
 **reparented**\ (\ ) :ref:`🔗<class_NetwEntity_signal_reparented>`
 
-Emitted once per settled move, after the session has made this entity's ancestry consistent, whether it was made with :godot:`Node.reparent() <Node#class_Node_method_reparent>`, with a bare :godot:`Node.remove_child() <Node#class_Node_method_remove_child>` followed by :godot:`Node.add_child() <Node#class_Node_method_add_child>`, or through :ref:`NetwSceneHandle.move()<class_NetwSceneHandle_method_move>`. Standing up for the first time is not a move and reports nothing. Several hops before one settle are one move, reported at the parent the owner ended under. A component that unregisters in ``_exit_tree`` reconnects its runtime service registration here, so a move self-heals without :godot:`Node.request_ready() <Node#class_Node_method_request_ready>`.
+Emitted once per settled move, after the session has made this entity's ancestry consistent, whether it was made with :godot:`Node.reparent() <Node#class_Node_method_reparent>`, with a bare :godot:`Node.remove_child() <Node#class_Node_method_remove_child>` followed by :godot:`Node.add_child() <Node#class_Node_method_add_child>`, or through :ref:`Netw.reparent()<class_Netw_method_reparent>`. Standing up for the first time is not a move and reports nothing. Several hops before one settle are one move, reported at the parent the owner ended under. A component that unregisters in ``_exit_tree`` reconnects its runtime service registration here, so a move self-heals without :godot:`Node.request_ready() <Node#class_Node_method_request_ready>`.
 
 The signal takes no argument. Its fact is that the owner has landed, so a listener reads the final parent or :ref:`scene<class_NetwEntity_property_scene>` off the live owner. What a move ASKED FOR is a command input, and it reaches an observer in the detail of :ref:`NetwMultiplayer.EVENT_REPARENTED<class_NetwMultiplayer_constant_EVENT_REPARENTED>` instead.
 
@@ -723,23 +720,23 @@ Resolved once at :ref:`arm()<class_NetwEntity_method_arm>` from an explicit pre-
 
     var entity := NetwEntity.of(ball)
     if entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED:
-        show_controller(entity.controller_participant)
+        show_controller(entity.controller_player)
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwEntity_property_controller_participant:
+.. _class_NetwEntity_property_controller_player:
 
 .. rst-class:: classref-property
 
-:ref:`NetwParticipant<class_NetwParticipant>` **controller_participant** :ref:`🔗<class_NetwEntity_property_controller_participant>`
+:ref:`NetwPlayer<class_NetwPlayer>` **controller_player** :ref:`🔗<class_NetwEntity_property_controller_player>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwParticipant<class_NetwParticipant>` **get_controller_participant**\ (\ )
+- :ref:`NetwPlayer<class_NetwPlayer>` **get_controller_player**\ (\ )
 
-The participant steering :ref:`controller<class_NetwEntity_property_controller>`, or ``null``. Independent from :ref:`participant<class_NetwEntity_property_participant>`: a server-owned entity can be controlled by a participant without representing that participant.
+The player steering :ref:`controller<class_NetwEntity_property_controller>`, or ``null``. Independent from :ref:`player<class_NetwEntity_property_player>`: a server-owned entity can be controlled by a player without representing that player.
 
 .. rst-class:: classref-item-separator
 
@@ -781,7 +778,9 @@ An archetype config field written while the record is :ref:`STAGE_UNBOUND<class_
 - |void| **set_entity_id**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_entity_id**\ (\ )
 
-The stable display, save and debug label for this entity.
+The stable display, save and debug label for this entity, and what identifies it across peers.
+
+An entity a game authors into a scene sets it in :godot:`Object._init() <Object#class_Object_private_method__init>`, before the node enters the tree, because an entity carrying none never activates. A spawn leaves it to :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, which stamps the player's :ref:`NetwPlayer.username<class_NetwPlayer_property_username>` onto the body it was spawned for. A game handing one player several bodies stamps a distinct id on each.
 
 .. rst-class:: classref-item-separator
 
@@ -904,7 +903,7 @@ Three questions about one entity read differently. :ref:`is_controlled_locally<c
 
 - :godot:`bool` **get_is_player**\ (\ )
 
-``true`` when this entity represents a participant rather than a server-owned object. The canonical player test across the addon, equivalent to a non-zero :ref:`peer_id<class_NetwEntity_property_peer_id>`.
+``true`` when this entity represents a player rather than a server-owned object. The canonical player test across the addon, equivalent to a non-zero :ref:`peer_id<class_NetwEntity_property_peer_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -938,7 +937,7 @@ Three questions about one entity read differently. :ref:`is_controlled_locally<c
 
 The :ref:`NetwMultiplayer<class_NetwMultiplayer>` session this entity belongs to, or ``null`` when it has none, which is an offline rig or an orphan before activation.
 
-Mirrors :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` on the entity root once live, but handed over by the creator rather than re-discovered: stamped once at :ref:`arm()<class_NetwEntity_method_arm>` when the spawn pipeline holds the api, or at first tree entry for a manual :ref:`bind()<class_NetwEntity_method_bind>` flow. Immutable afterward, since an entity changes sessions only by despawn and respawn. Every session-derived member resolves through this one handle, so "no session" is the single condition ``multiplayer == null``.
+Mirrors :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` on the entity root once live, but handed over by the creator rather than re-discovered: stamped once at :ref:`arm()<class_NetwEntity_method_arm>` when the spawn pipeline holds the api, or at first tree entry for an entity a game authored into a scene. Immutable afterward, since an entity changes sessions only by despawn and respawn. Every session-derived member resolves through this one handle, so "no session" is the single condition ``multiplayer == null``.
 
 .. rst-class:: classref-item-separator
 
@@ -994,17 +993,17 @@ Derived from :ref:`peer_id<class_NetwEntity_property_peer_id>`. See :ref:`Owners
 
 ----
 
-.. _class_NetwEntity_property_participant:
+.. _class_NetwEntity_property_player:
 
 .. rst-class:: classref-property
 
-:ref:`NetwParticipant<class_NetwParticipant>` **participant** :ref:`🔗<class_NetwEntity_property_participant>`
+:ref:`NetwPlayer<class_NetwPlayer>` **player** :ref:`🔗<class_NetwEntity_property_player>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwParticipant<class_NetwParticipant>` **get_participant**\ (\ )
+- :ref:`NetwPlayer<class_NetwPlayer>` **get_player**\ (\ )
 
-The participant :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or ``null``. This resolves the live session handle for player avatars; server-owned entities, props and NPCs return ``null``.
+The player :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or ``null``. This resolves the live session handle for player avatars; server-owned entities, props and NPCs return ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -1023,7 +1022,7 @@ The participant :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or
 
 The peer this entity represents, or ``0`` for a server-owned entity such as an NPC, prop or world object.
 
-A non-zero value drives :ref:`NetwParticipant.players<class_NetwParticipant_property_players>`, the scene subscription a residing body grants, and an automatic :ref:`despawn()<class_NetwEntity_method_despawn>` when its peer disconnects. This is the source of the player test. See :ref:`is_player<class_NetwEntity_property_is_player>`.
+A non-zero value drives :ref:`NetwPlayer.bodies<class_NetwPlayer_property_bodies>`, the scene subscription a residing body grants, and an automatic :ref:`despawn()<class_NetwEntity_method_despawn>` when its peer disconnects. This is the source of the player test. See :ref:`is_player<class_NetwEntity_property_is_player>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1245,26 +1244,7 @@ Method Descriptions
 
 Seals the record and applies node authority, then marks it :ref:`STAGE_ARMED<class_NetwEntity_constant_STAGE_ARMED>`.
 
-The single choke point every spawn path funnels through, called on the orphan before :godot:`Node.add_child() <Node#class_Node_method_add_child>` on the pipeline paths so authority is recursive and correct in every child :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>` and :godot:`Node._ready() <Node#class_Node_private_method__ready>`, on every peer. The manual :ref:`bind()<class_NetwEntity_method_bind>` flows arm at their owner's first tree entry instead.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_method_bind:
-
-.. rst-class:: classref-method
-
-:godot:`Node` **bind**\ (\ node\: :godot:`Node`, entity_id\: :godot:`StringName`, peer_id\: :godot:`int`\ ) |static| :ref:`🔗<class_NetwEntity_method_bind>`
-
-Binds ``entity_id`` and ``peer_id`` onto ``node`` and returns it. This is the public identity binding surface; once bound, the node's name is owned by the synchronization system and must not be modified.
-
-An invalid ``entity_id`` binds nothing and leaves the record unchanged.
-
-::
-
-    var player := NetwEntity.bind(copy, username, peer_id)
-    NetwEntity.of(self).scene.root.add_child(player)
+The single choke point every spawn path funnels through, called on the orphan before :godot:`Node.add_child() <Node#class_Node_method_add_child>` on the pipeline paths so authority is recursive and correct in every child :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>` and :godot:`Node._ready() <Node#class_Node_private_method__ready>`, on every peer. An entity a game authors into a scene arms at its owner's first tree entry instead.
 
 .. rst-class:: classref-item-separator
 
@@ -1356,20 +1336,6 @@ Get-or-creates the record on the exact ``root`` node, even when ``root`` has an 
 
 ----
 
-.. _class_NetwEntity_method_find:
-
-.. rst-class:: classref-method
-
-:godot:`Node` **find**\ (\ root\: :godot:`Node`, participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |static| :ref:`🔗<class_NetwEntity_method_find>`
-
-The node ``participant`` plays, found under ``root``, or ``null`` when they have none there.
-
-It resolves the one name :ref:`name_for()<class_NetwEntity_method_name_for>` builds, as a path under ``root``, so it answers a body a spawn named by that convention and standing directly there. A body the game named itself, or parented deeper, is reached through :ref:`NetwParticipant.players<class_NetwParticipant_property_players>` instead, which is also the read for a participant holding more than one.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwEntity_method_from_rid:
 
 .. rst-class:: classref-method
@@ -1441,18 +1407,6 @@ The metadata key an entity root carries its record in. One spelling, shared by t
 
 ----
 
-.. _class_NetwEntity_method_name_for:
-
-.. rst-class:: classref-method
-
-:godot:`String` **name_for**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`\ ) |static| :ref:`🔗<class_NetwEntity_method_name_for>`
-
-The node name a spawn gives the player ``participant`` drives, built from their :ref:`NetwParticipant.username<class_NetwParticipant_property_username>` and their peer id, and empty when that username holds the separator the two are joined with.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwEntity_method_of:
 
 .. rst-class:: classref-method
@@ -1472,30 +1426,6 @@ The **NetwEntity** on ``node``'s entity root, walking the parent chain, or ``nul
 :ref:`NetwEntity<class_NetwEntity>` **parent_entity**\ (\ ) |const| :ref:`🔗<class_NetwEntity_method_parent_entity>`
 
 The nearest ancestor **NetwEntity**, or ``null``. The session walks the marked ancestors, so the mark and the walk that reads it stay one implementation and the result follows a move with nothing to invalidate.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_method_parse_entity:
-
-.. rst-class:: classref-method
-
-:godot:`StringName` **parse_entity**\ (\ node_name\: :godot:`String`\ ) |static| :ref:`🔗<class_NetwEntity_method_parse_entity>`
-
-The entity id in an ``entity_id|peer_id`` node name, empty for a name that spells no identity.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_method_parse_peer:
-
-.. rst-class:: classref-method
-
-:godot:`int` **parse_peer**\ (\ node_name\: :godot:`String`\ ) |static| :ref:`🔗<class_NetwEntity_method_parse_peer>`
-
-The peer id in an ``entity_id|peer_id`` node name, ``0`` for a name that spells no identity and for an entity representing no player.
 
 .. rst-class:: classref-item-separator
 
@@ -1561,9 +1491,9 @@ The :ref:`NetwMultiplayer<class_NetwMultiplayer>` governing ``node``'s branch, o
 
 .. rst-class:: classref-method
 
-:godot:`Node` **spawn_player**\ (\ participant\: :ref:`NetwParticipant<class_NetwParticipant>`, scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwEntity_method_spawn_player>`
+:godot:`Node` **spawn_player**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwEntity_method_spawn_player>`
 
-Spawns a player copy of :ref:`owner<class_NetwEntity_property_owner>`'s scene into ``scene`` from ``participant``.
+Spawns a player copy of :ref:`owner<class_NetwEntity_property_owner>`'s scene into ``scene`` from ``player``.
 
 \ **Server Only.**
 

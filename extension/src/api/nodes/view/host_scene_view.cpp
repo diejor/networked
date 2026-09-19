@@ -46,7 +46,7 @@ void HostSceneView::attach() {
     if (!api->is_connected(SIG_ENTITY_LIVE, roster)) {
         api->connect(SIG_ENTITY_LIVE, roster);
     }
-    on_display_changed(api->scene_participant_viewport());
+    on_display_changed(api->scene_player_viewport());
 }
 
 void HostSceneView::detach() {
@@ -82,7 +82,7 @@ void HostSceneView::reannounce() {
     if (suppressed || !is_inside_tree() || api == nullptr) {
         return;
     }
-    announce(api->scene_participant_viewport());
+    announce(api->scene_player_viewport());
 }
 
 void HostSceneView::set_suppressed(bool p_suppressed) {
@@ -98,7 +98,7 @@ void HostSceneView::set_suppressed(bool p_suppressed) {
     }
     NetwMultiplayer *api = session();
     if (api != nullptr) {
-        on_display_changed(api->scene_participant_viewport());
+        on_display_changed(api->scene_player_viewport());
     }
 }
 
@@ -117,7 +117,7 @@ void HostSceneView::announce(SubViewport *p_viewport) {
         return;
     }
     const TypedArray<NetwEntity> mine
-        = api->scene_get_local_players(api->scene_presented());
+        = api->scene_get_local_bodies(api->scene_presented());
     TypedArray<NetwEntity> drawn;
     for (int at = 0; at < mine.size(); at++) {
         const Ref<NetwEntity> player = mine[at];

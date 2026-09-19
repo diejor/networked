@@ -37,7 +37,7 @@ TEST_CASE("[Networked][Scene] move snaps to the declared marker") {
     body->set_global_position(marker->get_global_position());
 
     Ref<netw::NetwPromise> settled
-        = rig.server()->call("scene_move", entity, destination);
+        = rig.server()->entity_reparent(entity, level);
     REQUIRE(settled.is_valid());
     REQUIRE(settled->get_is_settled());
     REQUIRE(settled->get_code() == 0);

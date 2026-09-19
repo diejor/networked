@@ -79,13 +79,13 @@ TEST_CASE(
     rig.flush_interest();
 
     NETW_CHECK_EQ(core->interest_wire_admits(SERVER_PEER, entity), true);
-    NETW_CHECK_EQ(core->interest_participant_sees(SERVER_PEER, entity), false);
+    NETW_CHECK_EQ(core->interest_player_sees(SERVER_PEER, entity), false);
 
     layer->add_viewer(SERVER_PEER);
     rig.flush_interest();
 
     NETW_CHECK_EQ(core->interest_wire_admits(SERVER_PEER, entity), true);
-    NETW_CHECK_EQ(core->interest_participant_sees(SERVER_PEER, entity), true);
+    NETW_CHECK_EQ(core->interest_player_sees(SERVER_PEER, entity), true);
 }
 
 TEST_CASE(

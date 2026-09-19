@@ -360,8 +360,6 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] a slot with no island records") {
         int(CellProvenance::SUBSTITUTED)
     );
 
-    // A guess never displaces the author's own command, whatever order the
-    // two arrive in.
     engine->joint_record(slot, 3, Array(), Variant(9), false, true, false);
     NETW_CHECK_EQ(int(engine->joint_command_at(slot, 3)), 9);
     engine->joint_record(slot, 3, Array(), Variant(11), false, false, true);
@@ -629,9 +627,10 @@ struct SeatedEntity {
 
     SeatedEntity(const char *p_id) {
         owner = memnew(Node);
-        NetwEntity::bind(owner, p_id, 1);
-        entity = NetwEntity::of(owner);
+        entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
+        entity->set_entity_id(p_id);
+        entity->set_peer_id(1);
     }
 
     ~SeatedEntity() {
@@ -672,6 +671,46 @@ TEST_CASE(
     const PackedStringArray published = engine->island_participants(owner);
     NETW_CHECK_EQ(published.size(), 1);
     CHECK(published[0] == String("committed"));
+}
+
+struct RoutedEntity {
+    Node *owner = nullptr;
+    Ref<NetwEntity> entity;
+
+    RoutedEntity(int64_t p_route) {
+        owner = memnew(Node);
+        entity = NetwEntity::ensure(owner);
+        REQUIRE(entity.is_valid());
+        entity->set_route(p_route);
+    }
+
+    ~RoutedEntity() {
+        memdelete(owner);
+    }
+};
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Island] two participants carrying no "
+    "entity_id are still told apart, because the roster keys on route"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    RoutedEntity owner_body(11);
+    RoutedEntity first(7);
+    RoutedEntity second(9);
+
+    const int64_t owner = engine->slot_register(owner_body.entity);
+
+    Ref<NetwPredictIsland> rule;
+    rule.instantiate();
+    rule->add(first.entity);
+    rule->add(second.entity);
+
+    const PackedStringArray ids = engine->live_participant_ids(owner, rule);
+    NETW_CHECK_EQ(ids.size(), 2);
+    CHECK(ids[0] != ids[1]);
+    CHECK_FALSE(String(ids[0]).is_empty());
+    CHECK_FALSE(String(ids[1]).is_empty());
 }
 
 TEST_CASE(
@@ -831,9 +870,10 @@ struct SeatedSpatial {
         owner = memnew(Node3D);
         netw::gd::scene_root()->add_child(owner);
         owner->set_position(p_at);
-        NetwEntity::bind(owner, p_id, 1);
-        entity = NetwEntity::of(owner);
+        entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
+        entity->set_entity_id(p_id);
+        entity->set_peer_id(1);
     }
 
     ~SeatedSpatial() {

@@ -23,7 +23,7 @@ Description
 
 A game subclasses this to save into something of its own, and :ref:`FileSystemDatabase<class_FileSystemDatabase>` is the backend this addon ships.
 
-Every method here returns a :ref:`NetwPromise<class_NetwPromise>` straight away and none of them may suspend. :godot:`NetwDatabase.TableRepository` is the layer above that waits on the promise, and that is where a coroutine belongs.
+Every method here returns a :ref:`NetwPromise<class_NetwPromise>` straight away and none of them may suspend. :ref:`NetwDatabase<class_NetwDatabase>` is the layer above that waits on the promise, and that is where a coroutine belongs.
 
 That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot return a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
 

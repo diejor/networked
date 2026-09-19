@@ -76,6 +76,9 @@ bool ReplicationSend::commit(
     int64_t p_frames,
     int64_t p_bits
 ) {
+    if (p_seq < 0) {
+        return false;
+    }
     return impl.commit(
         int(p_peer),
         uint16_t(p_seq),

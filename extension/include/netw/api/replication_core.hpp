@@ -235,12 +235,12 @@ public:
 
     godot::Ref<NetwEntity> replicate(
         godot::Node *p_node,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     godot::Node *spawn(
         const godot::Callable &p_fn,
         const godot::Array &p_args,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     void register_spawn_constructor(
         const godot::StringName &p_id,
@@ -249,7 +249,7 @@ public:
     godot::Node *spawn_registered(
         const godot::StringName &p_id,
         const godot::Array &p_args,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     godot::Ref<NetwEntity> adopt_in_place(godot::Node *p_root);
     godot::TypedArray<godot::Dictionary> spawn_state_of(godot::Node *p_root);

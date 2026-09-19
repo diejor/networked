@@ -10,16 +10,21 @@
 NakamaAuth
 ==========
 
-**Inherits:** :ref:`NetwAuthFlow<class_NetwAuthFlow>` **<** :godot:`RefCounted`
+**Inherits:** :godot:`Node`
 
-:ref:`NetwAuthFlow<class_NetwAuthFlow>` that verifies a joining peer's Nakama presence identity.
+Admission handler that admits a join only under the username Nakama attests for the joining peer.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The host trusts the Nakama server's presence list, which maps each peer to their authenticated Nakama user id. This is what makes the identity spoof-proof even though the listen-server host is itself an untrusted browser in the relay topology.
+The host trusts the Nakama server's presence list, which maps each peer to their authenticated Nakama user id. That is what makes the username spoof-proof even though the listen-server host is itself an untrusted browser in the relay topology. Mount it inside the session's branch, where it declares itself. 
+
+::
+
+    var gate := NakamaAuth.new()
+    tree.add_child(gate)
 
 .. rst-class:: classref-reftable-group
 
@@ -29,19 +34,11 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------+------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                  | :ref:`bind_session<class_NakamaAuth_method_bind_session>`\ (\ session\: :godot:`Variant`\ )                            |
-   +-----------------------------------------+------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                  | :ref:`bind_tree<class_NakamaAuth_method_bind_tree>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ )        |
-   +-----------------------------------------+------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`   | :ref:`_prepare<class_NakamaAuth_private_method__prepare>`\ (\ _username\: :godot:`StringName`\ )                       |
-   +-----------------------------------------+------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedByteArray`                | :ref:`_credentials<class_NakamaAuth_private_method__credentials>`\ (\ _username\: :godot:`StringName`\ )               |
-   +-----------------------------------------+------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`AuthResult<class_AuthResult>`     | :ref:`_verify<class_NakamaAuth_private_method__verify>`\ (\ peer_id\: :godot:`int`, data\: :godot:`PackedByteArray`\ ) |
-   +-----------------------------------------+------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwIdentity<class_NetwIdentity>` | :ref:`_host_identity<class_NakamaAuth_private_method__host_identity>`\ (\ )                                            |
-   +-----------------------------------------+------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`bind_tree<class_NakamaAuth_method_bind_tree>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ )                   |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`admit<class_NakamaAuth_method_admit>`\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array`\ ) |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -52,75 +49,27 @@ Methods
 Method Descriptions
 -------------------
 
-.. _class_NakamaAuth_method_bind_session:
-
-.. rst-class:: classref-method
-
-|void| **bind_session**\ (\ session\: :godot:`Variant`\ ) :ref:`🔗<class_NakamaAuth_method_bind_session>`
-
-Binds the authenticated :ref:`NakamaSessionService<class_NakamaSessionService>` used to read identity.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NakamaAuth_method_bind_tree:
 
 .. rst-class:: classref-method
 
 |void| **bind_tree**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ ) :ref:`🔗<class_NakamaAuth_method_bind_tree>`
 
-Binds the :ref:`MultiplayerTree<class_MultiplayerTree>` used to reach the active presence.
+Binds the :ref:`MultiplayerTree<class_MultiplayerTree>` whose relay presence attests a join.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NakamaAuth_private_method__prepare:
+.. _class_NakamaAuth_method_admit:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_prepare**\ (\ _username\: :godot:`StringName`\ ) :ref:`🔗<class_NakamaAuth_private_method__prepare>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **admit**\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array`\ ) :ref:`🔗<class_NakamaAuth_method_admit>`
 
-Prepares the flow by ensuring the Nakama session is authenticated.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaAuth_private_method__credentials:
-
-.. rst-class:: classref-method
-
-:godot:`PackedByteArray` **_credentials**\ (\ _username\: :godot:`StringName`\ ) :ref:`🔗<class_NakamaAuth_private_method__credentials>`
-
-Sends a trivial credentials payload indicating Nakama authentication.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaAuth_private_method__verify:
-
-.. rst-class:: classref-method
-
-:ref:`AuthResult<class_AuthResult>` **_verify**\ (\ peer_id\: :godot:`int`, data\: :godot:`PackedByteArray`\ ) :ref:`🔗<class_NakamaAuth_private_method__verify>`
-
-Verifies the credentials and binds the peer to their Nakama presence.  
+Admits ``peer_id`` only under the username Nakama attests for it.  
 
 \ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaAuth_private_method__host_identity:
-
-.. rst-class:: classref-method
-
-:ref:`NetwIdentity<class_NetwIdentity>` **_host_identity**\ (\ ) :ref:`🔗<class_NakamaAuth_private_method__host_identity>`
-
-Returns the local host's own Nakama identity from the session.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

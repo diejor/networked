@@ -139,7 +139,7 @@ TEST_CASE(
     rig.join(0, StringName("alpha"));
     const int64_t owned_by = rig.peer_id(0);
 
-    const Seated made = seat(rig, arena, "Owned", rig.participant(0));
+    const Seated made = seat(rig, arena, "Owned", rig.player(0));
     rig.pump(8);
 
     const Ref<NetwEntity> host = NetwEntity::of(made.node);

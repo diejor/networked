@@ -35,8 +35,6 @@ func on_body_entered(body: Node2D) -> void:
 	var tp: TPComponent = body.get_node_or_null("%TPComponent")
 	if tp == null or not tp.is_multiplayer_authority():
 		return
-	if tp.is_settling():
-		return
 
 	assert(
 		not target_scene.is_empty() and not target_marker.is_empty(),

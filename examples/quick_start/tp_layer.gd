@@ -3,20 +3,16 @@ extends CanvasLayer
 
 signal configured
 
-const ARRIVAL_TOLERANCE := 1.0
-
 @export var transition_progress: TextureProgressBar
 @export var transition_anim: AnimationPlayer
-@export var settle_seconds: float = 0.5
 
 var pending: NetwPromise
 var pending_scene: String = ""
-var pending_marker: NodePath
 var answered := false
 var answered_code: Error = OK
 var answered_detail: String = ""
 var revealing := false
-var settle_until_msec: int = 0
+var presented: NetwSceneHandle
 
 
 func _init() -> void:
@@ -48,26 +44,31 @@ func on_multiplayer_configured() -> void:
 	if session.role == NetwMultiplayer.ROLE_DEDICATED_SERVER:
 		queue_free()
 		return
-	if not session.local_joined.is_connected(on_local_participant_joined):
-		session.local_joined.connect(on_local_participant_joined)
+	if not session.local_joined.is_connected(on_local_player_joined):
+		session.local_joined.connect(on_local_player_joined)
+	if not session.presentation_changed.is_connected(on_presentation_changed):
+		session.presentation_changed.connect(on_presentation_changed)
 
 
-func on_local_participant_joined(_participant: NetwParticipant) -> void:
+func on_local_player_joined(_player: NetwPlayer) -> void:
 	await teleport_in()
+
+
+func on_presentation_changed(
+		_from: NetwSceneHandle,
+		to: NetwSceneHandle,
+) -> void:
+	presented = to
+	reveal_when_presented()
 
 
 func is_moving() -> bool:
 	return pending != null
 
 
-func is_settling() -> bool:
-	return Time.get_ticks_msec() < settle_until_msec
-
-
-func open(scene_path: String, marker_path: NodePath) -> NetwPromise:
+func open(scene_path: String) -> NetwPromise:
 	answered = false
 	pending_scene = scene_path
-	pending_marker = marker_path
 	pending = NetwPromise.new()
 	teleport_out.call_deferred()
 	return pending
@@ -79,51 +80,22 @@ func answer(code: Error, detail: String) -> void:
 	answered = true
 	answered_code = code
 	answered_detail = detail
-	reveal_when_placed()
+	reveal_when_presented()
 
 
-func placed() -> void:
-	reveal_when_placed()
-
-
-func reveal_when_placed() -> void:
+func reveal_when_presented() -> void:
 	if pending == null or revealing or not answered:
 		return
-	if answered_code == OK and not arrived():
+	if answered_code == OK and not presents(pending_scene):
 		return
 	revealing = true
 	reveal.call_deferred()
 
 
-func arrived() -> bool:
-	var entity := local_entity()
-	if entity == null:
+func presents(scene_path: String) -> bool:
+	if presented == null or not presented.is_declared:
 		return false
-	var scene: NetwSceneHandle = entity.scene
-	if scene == null or not scene.is_declared:
-		return false
-	if scene.root.scene_file_path != pending_scene:
-		return false
-	var marker := scene.root.get_node_or_null(pending_marker) as Node2D
-	if marker == null:
-		return false
-	var body := entity.owner as Node2D
-	return body.global_position.distance_to(marker.global_position) \
-			< ARRIVAL_TOLERANCE
-
-
-func local_entity() -> NetwEntity:
-	var session: NetwSessionHandle = Netw.session(self)
-	if session == null:
-		return null
-	var who: NetwParticipant = session.local_participant
-	if who == null:
-		return null
-	var mine: Array[NetwEntity] = []
-	for player: NetwEntity in who.players:
-		if is_instance_valid(player.owner):
-			mine.append(player)
-	return mine[0] if mine.size() == 1 else null
+	return presented.root.scene_file_path == scene_path
 
 
 func reveal() -> void:
@@ -133,7 +105,6 @@ func reveal() -> void:
 	var code := answered_code
 	var detail := answered_detail
 	pending = null
-	settle_until_msec = Time.get_ticks_msec() + int(settle_seconds * 1000.0)
 	if code == OK:
 		settled.resolve(OK)
 	else:

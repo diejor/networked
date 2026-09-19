@@ -129,10 +129,7 @@ func _player_x_greater(
 
 func _find_player(tree: MultiplayerTree, username: String) -> Node:
 	var username_id := StringName(username)
-	for player: NetwEntity in tree.api.players:
-		var owner := player.owner
+	for player: NetwEntity in tree.api.bodies:
 		if player.entity_id == username_id:
-			return owner
-		if owner and StringName(NetwEntity.parse_entity(owner.name)) == username_id:
-			return owner
+			return player.owner
 	return null

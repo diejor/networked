@@ -454,10 +454,14 @@ TEST_CASE(
         godot::Node *copy = packed->instantiate();
         REQUIRE(copy != nullptr);
 
-        NetwMultiplayer::wrapper_bind(copy, godot::StringName("courier"), 7);
+        NetwMultiplayer::wrapper_stamp_identity(
+            copy,
+            godot::StringName("courier"),
+            7
+        );
         fixture_parent->add_child(copy);
 
-        NETW_CHECK_EQ(copy->get_name() == godot::StringName("courier|7"), true);
+        NETW_CHECK_EQ(copy->get_name() == godot::StringName("courier"), true);
 
         const godot::Ref<NetwEntity> entity = NetwEntity::of(copy);
         REQUIRE(entity.is_valid());

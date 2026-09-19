@@ -71,7 +71,7 @@ TEST_CASE(
     rig.flush_interest();
 
     NETW_CHECK_EQ(
-        made.core->interest_participant_sees(HOST_PEER, made.entity),
+        made.core->interest_player_sees(HOST_PEER, made.entity),
         false
     );
     NETW_CHECK_EQ(made.owner->is_visible(), false);
@@ -81,7 +81,7 @@ TEST_CASE(
     rig.flush_interest();
 
     NETW_CHECK_EQ(
-        made.core->interest_participant_sees(HOST_PEER, made.entity),
+        made.core->interest_player_sees(HOST_PEER, made.entity),
         true
     );
     NETW_CHECK_EQ(made.owner->is_visible(), true);
@@ -139,7 +139,7 @@ TEST_CASE(
     rig.flush_interest();
 
     NETW_CHECK_EQ(
-        made.core->interest_participant_sees(HOST_PEER, made.entity),
+        made.core->interest_player_sees(HOST_PEER, made.entity),
         false
     );
     NETW_CHECK_EQ(made.owner->is_visible(), false);
@@ -147,7 +147,7 @@ TEST_CASE(
     made.layer->set_default_perception_policy(Perception::SHOW);
 
     NETW_CHECK_EQ(
-        made.core->interest_participant_sees(HOST_PEER, made.entity),
+        made.core->interest_player_sees(HOST_PEER, made.entity),
         false
     );
     NETW_CHECK_EQ(made.owner->is_visible(), true);
@@ -155,7 +155,7 @@ TEST_CASE(
     made.layer->set_default_perception_policy(Perception::HIDE);
 
     NETW_CHECK_EQ(
-        made.core->interest_participant_sees(HOST_PEER, made.entity),
+        made.core->interest_player_sees(HOST_PEER, made.entity),
         false
     );
     NETW_CHECK_EQ(made.owner->is_visible(), false);

@@ -44,7 +44,6 @@
 #include "netw/connect/browse_list.hpp"
 #include "netw/connect/creation.hpp"
 #include "netw/connect/directory_transport.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -77,9 +76,9 @@ const char *SIG_CONNECTION_FAILED = "connection_failed";
 const char *SIG_ENTITY_DEAD = "entity_dead";
 const char *SIG_ENTITY_HIDDEN = "entity_hidden";
 const char *SIG_ENTITY_LIVE = "entity_live";
-const char *SIG_PARTICIPANT_JOINED = "participant_joined";
-const char *SIG_PARTICIPANT_LOCAL_JOINED = "participant_local_joined";
-const char *SIG_PARTICIPANT_LEFT = "participant_left";
+const char *SIG_PLAYER_JOINED = "player_joined";
+const char *SIG_PLAYER_LOCAL_JOINED = "player_local_joined";
+const char *SIG_PLAYER_LEFT = "player_left";
 const char *SIG_PEER_AUTHENTICATING = "peer_authenticating";
 const char *SIG_PEER_AUTHENTICATION_FAILED = "peer_authentication_failed";
 const char *SIG_PEER_KICKED = "peer_kicked";
@@ -311,7 +310,7 @@ void NetwMultiplayer::embed_dispose() {
     clear_flat_family_state();
     service_clear();
     session_clear_roster();
-    participant_clear();
+    player_clear();
 }
 
 uint8_t NetwMultiplayer::declared_channel(const char *p_name) const {
@@ -320,147 +319,147 @@ uint8_t NetwMultiplayer::declared_channel(const char *p_name) const {
     return decl ? decl->id : 0;
 }
 
-NetwMultiplayer::ParticipantRow *NetwMultiplayer::participant_row(
+NetwMultiplayer::PlayerRow *NetwMultiplayer::player_row(
     int64_t p_peer
 ) {
-    const int64_t *membership = membership_of_peer.getptr(p_peer);
-    return membership != nullptr ? participants.getptr(*membership) : nullptr;
+    const int64_t *player_id = player_id_of_peer.getptr(p_peer);
+    return player_id != nullptr ? players.getptr(*player_id) : nullptr;
 }
 
-const NetwMultiplayer::ParticipantRow *NetwMultiplayer::participant_row(
+const NetwMultiplayer::PlayerRow *NetwMultiplayer::player_row(
     int64_t p_peer
 ) const {
-    const int64_t *membership = membership_of_peer.getptr(p_peer);
-    return membership != nullptr ? participants.getptr(*membership) : nullptr;
+    const int64_t *player_id = player_id_of_peer.getptr(p_peer);
+    return player_id != nullptr ? players.getptr(*player_id) : nullptr;
 }
 
-int64_t NetwMultiplayer::participant_mint_membership() {
-    const int64_t minted = participant_incarnation_next;
-    participant_incarnation_next += 1;
+int64_t NetwMultiplayer::player_mint_id() {
+    const int64_t minted = player_incarnation_next;
+    player_incarnation_next += 1;
     return minted;
 }
 
-int64_t NetwMultiplayer::participant_peer_of_membership(int64_t p_membership
+int64_t NetwMultiplayer::player_peer_of_id(int64_t p_player_id
 ) const {
-    const ParticipantRow *found = participants.getptr(p_membership);
+    const PlayerRow *found = players.getptr(p_player_id);
     return found != nullptr ? found->peer : 0;
 }
 
 void NetwMultiplayer::participant_index_peer(
     int64_t p_peer,
-    int64_t p_membership
+    int64_t p_player_id
 ) {
-    membership_of_peer[p_peer] = p_membership;
+    player_id_of_peer[p_peer] = p_player_id;
 }
 
 void NetwMultiplayer::participant_unindex(
     int64_t p_peer,
-    int64_t p_membership
+    int64_t p_player_id
 ) {
-    const int64_t *current = membership_of_peer.getptr(p_peer);
-    if (current != nullptr && *current == p_membership) {
-        membership_of_peer.erase(p_peer);
+    const int64_t *current = player_id_of_peer.getptr(p_peer);
+    if (current != nullptr && *current == p_player_id) {
+        player_id_of_peer.erase(p_peer);
     }
 }
 
-Ref<NetwParticipant> NetwMultiplayer::participant_ensure(
+Ref<NetwPlayer> NetwMultiplayer::player_ensure(
     const session::AcceptFrame &p_accepted
 ) {
-    if (p_accepted.membership == 0) {
-        return Ref<NetwParticipant>();
+    if (p_accepted.player_id == 0) {
+        return Ref<NetwPlayer>();
     }
-    const int64_t membership = int64_t(p_accepted.membership);
-    ParticipantRow *found = participants.getptr(membership);
+    const int64_t player_id = int64_t(p_accepted.player_id);
+    PlayerRow *found = players.getptr(player_id);
     if (found != nullptr) {
         if (found->peer != p_accepted.peer_id) {
-            participant_unindex(found->peer, membership);
+            participant_unindex(found->peer, player_id);
             found->peer = p_accepted.peer_id;
             if (found->row.is_valid()) {
                 found->row->rebind_peer(p_accepted.peer_id);
             }
         }
-        participant_index_peer(p_accepted.peer_id, membership);
+        participant_index_peer(p_accepted.peer_id, player_id);
         return found->row;
     }
-    if (ParticipantRow *stale = participant_row(p_accepted.peer_id)) {
+    if (PlayerRow *stale = player_row(p_accepted.peer_id)) {
         stale->admitted = false;
         stale->incarnation = 0;
     }
-    Ref<NetwParticipant> minted;
+    Ref<NetwPlayer> minted;
     minted.instantiate();
     minted->bind_to(
         this,
         p_accepted.peer_id,
-        membership,
+        player_id,
         p_accepted.username
     );
     NETW_TRACE(
         sys::SESSION,
-        "minted membership %d for peer %d",
-        int(membership),
+        "minted player id %d for peer %d",
+        int(player_id),
         int(p_accepted.peer_id)
     );
-    ParticipantRow seating;
+    PlayerRow seating;
     seating.row = minted;
     seating.peer = p_accepted.peer_id;
-    seating.incarnation = membership;
-    participants[membership] = seating;
-    participant_index_peer(p_accepted.peer_id, membership);
+    seating.incarnation = player_id;
+    players[player_id] = seating;
+    participant_index_peer(p_accepted.peer_id, player_id);
     return minted;
 }
 
-void NetwMultiplayer::participant_adopt(
+void NetwMultiplayer::player_adopt(
     int64_t p_peer,
-    const Ref<NetwParticipant> &p_participant
+    const Ref<NetwPlayer> &p_player
 ) {
-    if (p_participant.is_null() || participant_row(p_peer) != nullptr) {
+    if (p_player.is_null() || player_row(p_peer) != nullptr) {
         return;
     }
-    const int64_t membership = participant_mint_membership();
-    p_participant->bind_to(this, p_peer, membership);
-    ParticipantRow seating;
-    seating.row = p_participant;
+    const int64_t player_id = player_mint_id();
+    p_player->bind_to(this, p_peer, player_id);
+    PlayerRow seating;
+    seating.row = p_player;
     seating.peer = p_peer;
-    seating.incarnation = membership;
-    participants[membership] = seating;
-    participant_index_peer(p_peer, membership);
+    seating.incarnation = player_id;
+    players[player_id] = seating;
+    participant_index_peer(p_peer, player_id);
 }
 
-Ref<NetwParticipant> NetwMultiplayer::participant_of(int64_t p_peer) const {
-    const ParticipantRow *found = participant_row(p_peer);
-    return found ? found->row : Ref<NetwParticipant>();
+Ref<NetwPlayer> NetwMultiplayer::player_of(int64_t p_peer) const {
+    const PlayerRow *found = player_row(p_peer);
+    return found ? found->row : Ref<NetwPlayer>();
 }
 
-bool NetwMultiplayer::participant_has(int64_t p_peer) const {
-    return participant_row(p_peer) != nullptr;
+bool NetwMultiplayer::player_has(int64_t p_peer) const {
+    return player_row(p_peer) != nullptr;
 }
 
-TypedArray<NetwParticipant> NetwMultiplayer::participant_all() const {
+TypedArray<NetwPlayer> NetwMultiplayer::player_all() const {
     LocalVector<int64_t> peers;
-    for (const KeyValue<int64_t, ParticipantRow> &row : participants) {
+    for (const KeyValue<int64_t, PlayerRow> &row : players) {
         peers.push_back(row.value.peer);
     }
     peers.sort();
-    TypedArray<NetwParticipant> out;
+    TypedArray<NetwPlayer> out;
     for (uint32_t at = 0; at < peers.size(); at++) {
-        out.push_back(participant_of(peers[at]));
+        out.push_back(player_of(peers[at]));
     }
     return out;
 }
 
-Ref<NetwParticipant> NetwMultiplayer::participant_joined_of(int64_t p_peer) {
+Ref<NetwPlayer> NetwMultiplayer::player_joined_of(int64_t p_peer) {
     if (!session_has_accepted(p_peer)) {
-        return Ref<NetwParticipant>();
+        return Ref<NetwPlayer>();
     }
-    return participant_of(p_peer);
+    return player_of(p_peer);
 }
 
-TypedArray<NetwParticipant> NetwMultiplayer::participant_joined_all() {
+TypedArray<NetwPlayer> NetwMultiplayer::player_joined_all() {
     const LocalVector<session::AcceptFrame> joins = session_accepted_joins();
-    TypedArray<NetwParticipant> out;
+    TypedArray<NetwPlayer> out;
     for (uint32_t at = 0; at < joins.size(); ++at) {
-        const Ref<NetwParticipant> seated
-            = participant_joined_of(joins[at].peer_id);
+        const Ref<NetwPlayer> seated
+            = player_joined_of(joins[at].peer_id);
         if (seated.is_valid()) {
             out.push_back(seated);
         }
@@ -468,12 +467,12 @@ TypedArray<NetwParticipant> NetwMultiplayer::participant_joined_all() {
     return out;
 }
 
-Ref<NetwParticipant> NetwMultiplayer::participant_local() {
-    return participant_joined_of(get_unique_id());
+Ref<NetwPlayer> NetwMultiplayer::player_local() {
+    return player_joined_of(get_unique_id());
 }
 
-bool NetwMultiplayer::participant_admit(int64_t p_peer) {
-    ParticipantRow *found = participant_row(p_peer);
+bool NetwMultiplayer::player_admit(int64_t p_peer) {
+    PlayerRow *found = player_row(p_peer);
     if (found == nullptr || found->admitted) {
         return false;
     }
@@ -481,19 +480,19 @@ bool NetwMultiplayer::participant_admit(int64_t p_peer) {
     return true;
 }
 
-Ref<NetwParticipant> NetwMultiplayer::participant_admitted_of(
+Ref<NetwPlayer> NetwMultiplayer::player_admitted_of(
     int64_t p_peer
 ) const {
-    const ParticipantRow *found = participant_row(p_peer);
+    const PlayerRow *found = player_row(p_peer);
     if (found == nullptr || !found->admitted) {
-        return Ref<NetwParticipant>();
+        return Ref<NetwPlayer>();
     }
     return found->row;
 }
 
-TypedArray<Object> NetwMultiplayer::participant_admitted_all() const {
+TypedArray<Object> NetwMultiplayer::player_admitted_all() const {
     LocalVector<int64_t> peers;
-    for (const KeyValue<int64_t, ParticipantRow> &row : participants) {
+    for (const KeyValue<int64_t, PlayerRow> &row : players) {
         if (row.value.admitted) {
             peers.push_back(row.value.peer);
         }
@@ -501,17 +500,35 @@ TypedArray<Object> NetwMultiplayer::participant_admitted_all() const {
     peers.sort();
     TypedArray<Object> out;
     for (uint32_t at = 0; at < peers.size(); at++) {
-        out.push_back(participant_admitted_of(peers[at]));
+        out.push_back(player_admitted_of(peers[at]));
     }
     return out;
 }
 
-Ref<NetwParticipant> NetwMultiplayer::participant_admitted_local() {
-    return participant_admitted_of(get_unique_id());
+Ref<NetwPlayer> NetwMultiplayer::player_admitted_local() {
+    return player_admitted_of(get_unique_id());
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::participant_players(int64_t p_peer) {
-    return scene_players_of(p_peer);
+TypedArray<NetwEntity> NetwMultiplayer::player_bodies_held(
+    int64_t p_peer,
+    int64_t p_player_id
+) {
+    TypedArray<NetwEntity> held;
+    const TypedArray<NetwEntity> everywhere = scene_bodies_all();
+    for (int at = 0; at < everywhere.size(); at++) {
+        const Ref<NetwEntity> body = everywhere[at];
+        if (body.is_null() || body->get_peer_id() != p_peer) {
+            continue;
+        }
+        if (body->get_player_id() == p_player_id) {
+            held.push_back(body);
+        }
+    }
+    return held;
+}
+
+TypedArray<NetwEntity> NetwMultiplayer::player_bodies(int64_t p_peer) {
+    return player_bodies_held(p_peer, player_incarnation(p_peer));
 }
 
 SceneMembership &NetwMultiplayer::membership_book() {
@@ -523,7 +540,7 @@ int64_t NetwMultiplayer::membership_body_id(const RID &p_entity) {
 }
 
 bool NetwMultiplayer::membership_member_active(int64_t p_peer) const {
-    const ParticipantRow *found = participant_row(p_peer);
+    const PlayerRow *found = player_row(p_peer);
     return found != nullptr && found->incarnation != 0;
 }
 
@@ -650,6 +667,9 @@ void NetwMultiplayer::membership_settle() {
     for (uint32_t at = 0; at < settling.size(); ++at) {
         scene_sync_viewer(settling[at].scene, settling[at].member);
     }
+    if (!settling.is_empty()) {
+        scene_player_display_invalidate();
+    }
 #if defined(NETW_TESTS)
     membership_audit();
 #endif
@@ -691,7 +711,7 @@ void NetwMultiplayer::membership_audit() {
         return;
     }
     residency_audit::Ledger &book = residency_audit::ledger();
-    for (const KeyValue<int64_t, ParticipantRow> &row : participants) {
+    for (const KeyValue<int64_t, PlayerRow> &row : players) {
         LocalVector<RID> scenes;
         scene_membership.body_scenes_of(row.value.peer, scenes);
         for (uint32_t at = 0; at < scenes.size(); ++at) {
@@ -735,74 +755,74 @@ void NetwMultiplayer::membership_audit() {
 
 #endif
 
-void NetwMultiplayer::participant_forget(int64_t p_peer) {
-    const ParticipantRow *found = participant_row(p_peer);
+void NetwMultiplayer::player_forget(int64_t p_peer) {
+    const PlayerRow *found = player_row(p_peer);
     if (found == nullptr) {
         return;
     }
-    const int64_t membership = found->incarnation != 0
+    const int64_t player_id = found->incarnation != 0
         ? found->incarnation
-        : *membership_of_peer.getptr(p_peer);
-    if (found->row == local_participant) {
-        bind_local_participant(Ref<NetwParticipant>());
+        : *player_id_of_peer.getptr(p_peer);
+    if (found->row == local_player) {
+        bind_local_player(Ref<NetwPlayer>());
     }
-    participant_unindex(p_peer, membership);
-    participants.erase(membership);
+    participant_unindex(p_peer, player_id);
+    players.erase(player_id);
     membership_mirror_release(p_peer);
 }
 
-void NetwMultiplayer::participant_clear() {
-    bind_local_participant(Ref<NetwParticipant>());
-    participants.clear();
-    membership_of_peer.clear();
+void NetwMultiplayer::player_clear() {
+    bind_local_player(Ref<NetwPlayer>());
+    players.clear();
+    player_id_of_peer.clear();
     scene_membership.clear();
 }
 
-void NetwMultiplayer::bind_local_participant(
-    const Ref<NetwParticipant> &p_row
+void NetwMultiplayer::bind_local_player(
+    const Ref<NetwPlayer> &p_row
 ) {
-    local_participant = p_row;
+    local_player = p_row;
 }
 
-int64_t NetwMultiplayer::participant_incarnation(int64_t p_peer) const {
-    const ParticipantRow *found = participant_row(p_peer);
+int64_t NetwMultiplayer::player_incarnation(int64_t p_peer) const {
+    const PlayerRow *found = player_row(p_peer);
     return found ? found->incarnation : 0;
 }
 
-bool NetwMultiplayer::participant_is_active(
+bool NetwMultiplayer::player_is_active(
     int64_t p_peer,
     int64_t p_incarnation
 ) const {
-    const ParticipantRow *found = participant_row(p_peer);
+    const PlayerRow *found = player_row(p_peer);
     return found != nullptr && found->admitted
         && found->incarnation == p_incarnation;
 }
 
-bool NetwMultiplayer::participant_holds(
-    const Ref<NetwParticipant> &p_who
+bool NetwMultiplayer::player_holds(
+    const Ref<NetwPlayer> &p_who
 ) const {
     if (p_who.is_null()) {
         return false;
     }
-    const ParticipantRow *found = participant_row(p_who->get_peer_id());
+    const PlayerRow *found = player_row(p_who->get_peer_id());
     return found != nullptr && found->admitted && found->row == p_who;
 }
 
-Error NetwMultiplayer::participant_kick(
-    const Ref<NetwParticipant> &p_who,
+Error NetwMultiplayer::player_kick(
+    const Ref<NetwPlayer> &p_who,
     const String &p_reason
 ) {
     NETW_ERR_COND_V(
         !is_server(),
         ERR_UNAUTHORIZED,
         sys::SESSION,
-        "session.kick: only server authority removes a participant."
+        "session.kick: only server authority removes a player."
     );
     NETW_ERR_COND_V(
-        !participant_holds(p_who),
+        !player_holds(p_who),
         ERR_INVALID_PARAMETER,
         sys::SESSION,
-        "session.kick: this participant is not the session's current "
+        "session.kick: this player is not the session's current "
         "membership, so there is nothing to remove."
     );
     const int64_t peer = p_who->get_peer_id();
@@ -810,48 +830,48 @@ Error NetwMultiplayer::participant_kick(
         peer == get_unique_id(),
         ERR_INVALID_PARAMETER,
         sys::SESSION,
-        "session.kick: the local server participant leaves through "
+        "session.kick: the local server player leaves through "
         "session.leave, not through a kick."
     );
-    participant_release_membership(p_who);
+    player_release_id(p_who);
     session_turn_peer_away(peer, p_reason);
     return OK;
 }
 
-void NetwMultiplayer::participant_release_membership(
-    const Ref<NetwParticipant> &p_who
+void NetwMultiplayer::player_release_id(
+    const Ref<NetwPlayer> &p_who
 ) {
     const int64_t peer = p_who->get_peer_id();
-    ParticipantRow *found = participant_row(peer);
+    PlayerRow *found = player_row(peer);
     if (found != nullptr) {
         found->admitted = false;
         found->incarnation = 0;
         membership_mirror_release(peer);
     }
     join_roster.forget(peer);
-    participant_publish_left(p_who);
-    participant_forget(peer);
+    player_publish_left(p_who);
+    player_forget(peer);
 }
 
-void NetwMultiplayer::participant_publish_left(
-    const Ref<NetwParticipant> &p_who
+void NetwMultiplayer::player_publish_left(
+    const Ref<NetwPlayer> &p_who
 ) {
     if (p_who.is_null()) {
         return;
     }
-    emit_signal(SIG_PARTICIPANT_LEFT, p_who);
+    emit_signal(SIG_PLAYER_LEFT, p_who);
 }
 
-void NetwMultiplayer::participant_publish_joined(int64_t p_peer) {
-    const Ref<NetwParticipant> participant = participant_of(p_peer);
-    if (participant.is_null()) {
+void NetwMultiplayer::player_publish_joined(int64_t p_peer) {
+    const Ref<NetwPlayer> player = player_of(p_peer);
+    if (player.is_null()) {
         return;
     }
     if (p_peer == get_unique_id()) {
-        bind_local_participant(participant);
-        emit_signal(SIG_PARTICIPANT_LOCAL_JOINED, participant);
+        bind_local_player(player);
+        emit_signal(SIG_PLAYER_LOCAL_JOINED, player);
     }
-    emit_signal(SIG_PARTICIPANT_JOINED, participant);
+    emit_signal(SIG_PLAYER_JOINED, player);
 }
 
 void NetwMultiplayer::set_session_api(Object *p_api) {
@@ -1189,7 +1209,7 @@ bool NetwMultiplayer::session_publish_control(
 }
 
 void NetwMultiplayer::session_admit(const session::AcceptFrame &p_accepted) {
-    if (p_accepted.peer_id == 0 || p_accepted.membership == 0) {
+    if (p_accepted.peer_id == 0 || p_accepted.player_id == 0) {
         return;
     }
     if (!join_roster.remember(p_accepted)) {
@@ -1199,11 +1219,11 @@ void NetwMultiplayer::session_admit(const session::AcceptFrame &p_accepted) {
     if (joined == get_unique_id()) {
         join_awaiting_admission = false;
     }
-    if (participant_ensure(p_accepted).is_null()) {
+    if (player_ensure(p_accepted).is_null()) {
         return;
     }
-    participant_admit(joined);
-    participant_publish_joined(joined);
+    player_admit(joined);
+    player_publish_joined(joined);
 }
 
 bool NetwMultiplayer::session_preflight_join(
@@ -1243,14 +1263,66 @@ bool NetwMultiplayer::session_preflight_join(
     return true;
 }
 
+Error NetwMultiplayer::session_admits_join(
+    int64_t p_peer,
+    const StringName &p_username,
+    const Array &p_args
+) {
+    NETW_ZONE_NC("netw::session_admits_join", colors::SESSION);
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
+    if (declared.state == session_decl::ABSENT) {
+        return OK;
+    }
+    if (declared.state != session_decl::READY) {
+        declaration_book().report_unresolved(
+            this,
+            session_decl::KIND_ADMISSION,
+            declared.state,
+            "a join"
+        );
+        return ERR_UNAUTHORIZED;
+    }
+    Array arguments;
+    arguments.push_back(p_peer);
+    arguments.push_back(p_username);
+    arguments.push_back(p_args);
+    bool called = false;
+    const Variant verdict
+        = gd::call_checked(declared.callable, arguments, called);
+    if (!called) {
+        NETW_ERROR(
+            sys::SESSION,
+            "join: peer %d is refused because this session's admission "
+            "handler could not be called. Declare it as 'func admit(peer_id: "
+            "int, username: StringName, args: Array) -> Error'.",
+            int(p_peer)
+        );
+        return ERR_UNAUTHORIZED;
+    }
+    const Variant::Type answered = verdict.get_type();
+    if (answered != Variant::INT && answered != Variant::FLOAT) {
+        NETW_ERROR(
+            sys::SESSION,
+            "join: peer %d is refused because this session's admission "
+            "handler answered %s rather than an Error. Answer OK to admit "
+            "and an Error to turn the join down.",
+            int(p_peer),
+            String(Variant::get_type_name(answered))
+        );
+        return ERR_INVALID_DATA;
+    }
+    return Error(int64_t(verdict));
+}
+
 void NetwMultiplayer::session_fail_join(
     int64_t p_peer,
     Error p_error,
     const String &p_reason
 ) {
     const int64_t peer = p_peer;
-    session_refuse(peer, p_reason);
     join_roster.forget(peer);
+    session_refuse(peer, p_reason);
     if (peer == get_unique_id()) {
         session_report_join_failure(p_error, p_reason);
         return;
@@ -1296,10 +1368,6 @@ void NetwMultiplayer::session_report_join_failure(
 ) {
     join_awaiting_admission = false;
     prepared_join.reset();
-    if (preparing_join.is_valid() && !preparing_join->get_is_settled()) {
-        preparing_join->resolve(int64_t(p_error));
-    }
-    preparing_join = Ref<NetwPromise>();
     emit_signal(SIG_SESSION_JOIN_FAILED, int64_t(p_error), p_reason);
 }
 
@@ -1311,7 +1379,7 @@ void NetwMultiplayer::session_run_join_handler(
         return;
     }
     const int64_t peer = p_accepted.peer_id;
-    ParticipantRow *seated = participant_row(peer);
+    PlayerRow *seated = player_row(peer);
     if (seated == nullptr || !seated->admitted || seated->handled) {
         return;
     }
@@ -1320,7 +1388,7 @@ void NetwMultiplayer::session_run_join_handler(
         seated->handled = true;
         return;
     }
-    const Ref<NetwParticipant> joining = seated->row;
+    const Ref<NetwPlayer> joining = seated->row;
     if (joining.is_null()) {
         return;
     }
@@ -1334,8 +1402,10 @@ void NetwMultiplayer::session_run_join_handler(
         NETW_ERROR(
             sys::SESSION,
             "join: peer %d is a member, and this server's join handler "
-            "refused the arguments it carried. The membership stands. Fix the "
-            "handler's declared parameters or kick the participant.",
+            "refused the arguments it carried. The membership stands, because "
+            "a join handler runs after one is minted. Fix the handler's "
+            "declared parameters, and turn a join down from the handler "
+            "Netw.configure_admission declares.",
             int(peer)
         );
     }
@@ -1347,7 +1417,6 @@ void NetwMultiplayer::session_after_entered() {
         session_warn_missing_local_join();
         return;
     }
-    auth_seat_host_identity();
     session_submit_host_join();
     session_warn_missing_local_join();
 }
@@ -1356,14 +1425,13 @@ void NetwMultiplayer::session_warn_missing_local_join() {
     if (session_get_role() == ROLE_DEDICATED_SERVER) {
         return;
     }
-    if ((preparing_join.is_valid() && !preparing_join->get_is_settled())
-        || prepared_join.has_value()) {
+    if (prepared_join.has_value()) {
         return;
     }
     if (join_awaiting_admission) {
         return;
     }
-    if (participant_local().is_valid()) {
+    if (player_local().is_valid()) {
         return;
     }
     missing_local_join_warnings++;
@@ -1687,14 +1755,14 @@ SessionCore &NetwMultiplayer::session_plane() {
 
 void NetwMultiplayer::session_announce_entered() {
     emit_signal(SIG_SESSION_ENTERED);
-    scene_participant_display_invalidate();
+    scene_player_display_invalidate();
     session_after_entered();
 }
 
 void NetwMultiplayer::session_announce_ended() {
     emit_signal(SIG_SESSION_ENDED);
     emit_signal(SIG_SESSION_RECLAIMED);
-    scene_participant_display_invalidate();
+    scene_player_display_invalidate();
 }
 
 void NetwMultiplayer::session_announce_edge(int p_old, int p_new) {
@@ -1734,13 +1802,11 @@ PackedByteArray NetwMultiplayer::session_roster_bytes() const {
 
 void NetwMultiplayer::session_forget_peer(int64_t p_peer) {
     peer_buckets.erase(p_peer);
-    peer_identities.erase(p_peer);
     join_roster.forget(p_peer);
 }
 
 void NetwMultiplayer::session_clear_roster() {
     peer_buckets.clear();
-    peer_identities.clear();
     link_handshakes.clear();
     join_roster.clear();
     unreachable_peers.clear();
@@ -1891,8 +1957,8 @@ void NetwMultiplayer::set_input_gate_deadline_ticks(int p_value) {
     input_gate_deadline_ticks = p_value;
 }
 
-TypedArray<Object> NetwMultiplayer::get_connected_participants() const {
-    return participant_all();
+TypedArray<Object> NetwMultiplayer::get_connected_players() const {
+    return player_all();
 }
 
 Error NetwMultiplayer::configuration_door_refuses_config(Object *p_config) {
@@ -1948,26 +2014,12 @@ PackedInt32Array NetwMultiplayer::get_authenticating_peers() const {
 #endif
 }
 
-Ref<NetwAuthFlow> NetwMultiplayer::auth_flow() const {
-    return auth_flow_object;
-}
-
 void NetwMultiplayer::auth_set_app_tag(int64_t p_tag) {
     auth_app_tag = p_tag;
 }
 
 int64_t NetwMultiplayer::auth_app_tag_of() const {
     return auth_app_tag;
-}
-
-void NetwMultiplayer::auth_set_join_request(
-    const std::optional<JoinRequest> &p_request
-) {
-    auth_request = p_request;
-}
-
-const std::optional<JoinRequest> &NetwMultiplayer::auth_join_request() const {
-    return auth_request;
 }
 
 void NetwMultiplayer::set_auth_callback(const Callable &p_callback) {
@@ -1980,96 +2032,7 @@ Callable NetwMultiplayer::get_auth_callback() const {
 
 void NetwMultiplayer::auth_clear() {
     auth_disarm();
-    auth_flow_declared = Ref<NetwAuthFlow>();
-    auth_flow_generation = 0;
-    auth_flow_broken = false;
-    auth_flow_object = Ref<NetwAuthFlow>();
-    auth_request.reset();
     auth_app_callback = Callable();
-}
-
-Ref<NetwPromise> NetwMultiplayer::auth_prepare(const StringName &p_username) {
-    if (auth_app_callback.is_valid()) {
-        return NetwPromise::resolved(OK);
-    }
-    const Ref<NetwAuthFlow> flow = auth_effective_flow();
-    if (flow.is_null()) {
-        if (auth_is_configured()) {
-            return NetwPromise::rejected(
-                ERR_UNCONFIGURED,
-                "This game declares authentication and this session could "
-                "not build it, so nothing is prepared to join with"
-            );
-        }
-        return NetwPromise::resolved(OK);
-    }
-    NETW_INFO(
-        sys::SESSION,
-        "auth prepares the flow for '%s'",
-        String(p_username)
-    );
-    const Ref<NetwPromise> prepared = flow->prepare(p_username);
-    if (prepared.is_null()) {
-        return NetwPromise::rejected(
-            ERR_INVALID_DATA,
-            "The declared authentication flow prepared no answer, and a "
-            "configured flow that prepares nothing has not authenticated"
-        );
-    }
-    return prepared;
-}
-
-void NetwMultiplayer::auth_seat_host_identity() {
-    if (auth_app_callback.is_valid()) {
-        return;
-    }
-    const Ref<NetwAuthFlow> flow = auth_effective_flow();
-    if (flow.is_null()) {
-        return;
-    }
-    const Ref<NetwIdentity> host = flow->host_identity();
-    if (host.is_null()) {
-        NETW_TRACE(sys::SESSION, "the auth flow claims no host identity");
-        return;
-    }
-    NETW_INFO(
-        sys::SESSION,
-        "the host is seated as '%s' from service '%s'",
-        String(host->get_username()),
-        String(host->get_service())
-    );
-    peer_set_identity(int64_t(get_unique_id()), host);
-}
-
-void NetwMultiplayer::auth_resolve_identity(
-    int64_t p_peer,
-    JoinRequest &r_join
-) {
-    if (auth_app_callback.is_valid()) {
-        return;
-    }
-    if (auth_effective_flow().is_null()) {
-        return;
-    }
-    const Ref<NetwIdentity> verified = peer_get_identity(p_peer);
-    if (verified.is_null()) {
-        NETW_DEBUG(
-            sys::SESSION,
-            "peer %d was accepted without an identity, so it joins under the "
-            "name it claimed, '%s'",
-            int(p_peer),
-            String(r_join.username)
-        );
-        return;
-    }
-    NETW_INFO(
-        sys::SESSION,
-        "peer %d joins as the verified '%s' rather than the claimed '%s'",
-        int(p_peer),
-        String(verified->get_username()),
-        String(r_join.username)
-    );
-    r_join.username = verified->get_username();
 }
 
 void NetwMultiplayer::auth_arm() {
@@ -2124,37 +2087,15 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
     if (auth_app_callback.is_valid() || inner.is_null()) {
         return;
     }
-    LinkHandshake &link = link_handshakes[p_peer];
-    if (preparing_join.is_valid() && !preparing_join->get_is_settled()) {
-        NETW_DEBUG(
-            sys::SESSION,
-            "the hello for peer %d waits on the join preparation",
-            int(p_peer)
-        );
-        link.waits_on_preparation = true;
-        return;
-    }
-    link.waits_on_preparation = false;
-    PackedByteArray credentials;
-    int flags = 0;
-    const Ref<NetwAuthFlow> flow = auth_effective_flow();
-    if (p_peer == session_authority_peer() && flow.is_valid()
-        && auth_request.has_value()) {
-        credentials = flow->credentials(auth_request->username);
-        flags = auth::HELLO_BEARS_CREDENTIAL;
-    }
     NETW_DEBUG(
         sys::SESSION,
-        "auth sends a hello for peer %d with app tag %s and %d "
-        "credential bytes",
+        "auth sends a hello for peer %d with app tag %s",
         int(p_peer),
-        String::num_uint64(auth_app_tag, 16),
-        credentials.size()
+        String::num_uint64(auth_app_tag, 16)
     );
-    const Error sent = send_auth(
-        p_peer,
-        auth::encode_client_hello(credentials, uint64_t(auth_app_tag), flags)
-    );
+    const Error sent
+        = send_auth(p_peer, auth::encode_client_hello(uint64_t(auth_app_tag), 0)
+        );
     if (sent != OK) {
         NETW_WARN(
             sys::SESSION,
@@ -2191,40 +2132,11 @@ void NetwMultiplayer::auth_forget_link(int64_t p_peer) {
     link_handshakes.erase(p_peer);
 }
 
-void NetwMultiplayer::auth_release_held_hellos() {
-    if (preparing_join.is_valid() && !preparing_join->get_is_settled()) {
-        return;
-    }
-    preparing_join = Ref<NetwPromise>();
-    LocalVector<int64_t> held;
-    for (const KeyValue<int64_t, LinkHandshake> &link : link_handshakes) {
-        if (link.value.waits_on_preparation) {
-            held.push_back(link.key);
-        }
-    }
-    for (uint32_t at = 0; at < held.size(); at++) {
-        link_handshakes[held[at]].waits_on_preparation = false;
-        auth_send_hello(held[at]);
-    }
-}
-
-void NetwMultiplayer::auth_clear_held_hellos() {
-    for (KeyValue<int64_t, LinkHandshake> &link : link_handshakes) {
-        link.value.waits_on_preparation = false;
-    }
-}
-
 #if defined(NETW_TESTS)
 bool NetwMultiplayer::auth_link_is_completed(int64_t p_peer) const {
     const HashMap<int64_t, LinkHandshake>::ConstIterator found
         = link_handshakes.find(p_peer);
     return found != link_handshakes.end() && found->value.completed;
-}
-
-bool NetwMultiplayer::auth_link_waits_on_preparation(int64_t p_peer) const {
-    const HashMap<int64_t, LinkHandshake>::ConstIterator found
-        = link_handshakes.find(p_peer);
-    return found != link_handshakes.end() && found->value.waits_on_preparation;
 }
 #endif
 
@@ -2265,150 +2177,16 @@ void NetwMultiplayer::auth_receive_hello(
         disconnect_peer(p_peer);
         return;
     }
-    if (!is_host()) {
-        if ((decoded.flags & auth::HELLO_BEARS_CREDENTIAL) != 0) {
-            NETW_WARN(
-                sys::SESSION,
-                "peer %d sent a player credential to a session that admits "
-                "nobody, so the link is authenticated and the credential is "
-                "left unread",
-                int(p_peer)
-            );
-        }
-        auth_complete_link(p_peer);
-        return;
-    }
-    const Ref<NetwAuthFlow> flow = auth_effective_flow();
-    if (flow.is_null()) {
-        if (auth_is_configured()) {
-            NETW_WARN(
-                sys::SESSION,
-                "peer %d is refused: this session declares authentication "
-                "and could not build it, so it admits nobody",
-                int(p_peer)
-            );
-            session_refuse(
-                p_peer,
-                "This server could not start its own "
-                "authentication"
-            );
-            disconnect_peer(p_peer);
-            return;
-        }
-        NETW_TRACE(
-            sys::SESSION,
-            "no auth flow, so peer %d completes on the hello alone",
-            int(p_peer)
-        );
-        auth_complete_link(p_peer);
-        return;
-    }
-    const Ref<AuthResult> verdict
-        = flow->verify(p_peer, decoded.provider_payload);
-    if (verdict.is_null()) {
-        NETW_ERROR(
-            sys::SESSION,
-            "peer %d is refused: this session's authentication flow answered "
-            "no AuthResult, and a flow that decides nothing has not accepted "
-            "anyone",
-            int(p_peer)
-        );
-        session_refuse(p_peer, "Authentication failed");
-        disconnect_peer(p_peer);
-        return;
-    }
-    if (verdict->get_accepted()) {
-        const Ref<NetwIdentity> identity = verdict->get_identity();
-        NETW_INFO(
-            sys::SESSION,
-            "peer %d is accepted as '%s'",
-            int(p_peer),
-            identity.is_valid() ? String(identity->get_username()) : String()
-        );
-        peer_set_identity(p_peer, identity);
-        auth_complete_link(p_peer);
-        return;
-    }
-    String reason = verdict->get_rejection_reason();
-    if (reason.is_empty()) {
-        reason = "Authentication failed";
-    }
-    session_refuse(p_peer, reason);
-    NETW_DEBUG(
+    NETW_TRACE(
         sys::SESSION,
-        "peer %d is rejected by this session's own policy: %s",
-        int(p_peer),
-        reason
+        "peer %d speaks this build, so its link completes on the hello",
+        int(p_peer)
     );
-    disconnect_peer(p_peer);
+    auth_complete_link(p_peer);
 }
 
 session_decl::Book &NetwMultiplayer::declaration_book() {
     return declaration_slots;
-}
-
-Ref<NetwAuthFlow> NetwMultiplayer::auth_effective_flow() {
-    if (auth_flow_override.is_valid()) {
-        auth_flow_object = auth_flow_override;
-        return auth_flow_override;
-    }
-    const session_decl::Resolved declared
-        = declaration_slots.resolve(this, session_decl::KIND_AUTH);
-    if (declared.state == session_decl::READY) {
-        if (declared.generation != auth_flow_generation) {
-            auth_flow_generation = declared.generation;
-            auth_flow_declared = Ref<NetwAuthFlow>();
-            auth_flow_broken = false;
-        }
-        if (auth_flow_declared.is_null() && !auth_flow_broken) {
-            bool called = false;
-            const Variant made = gd::call_checked(declared.callable, called);
-            auth_flow_declared
-                = Ref<NetwAuthFlow>(Object::cast_to<NetwAuthFlow>(made));
-            if (!called || auth_flow_declared.is_null()) {
-                auth_flow_broken = true;
-                NETW_ERROR(
-                    sys::SESSION,
-                    "authentication is refused. The factory declared through "
-                    "Netw.configure_auth answered %s, and a session needs a "
-                    "NetwAuthFlow. Every peer is turned away until it does.",
-                    called ? String(Variant::get_type_name(made.get_type()))
-                           : String("nothing, because the call itself failed")
-                );
-            }
-        }
-        auth_flow_object = auth_flow_declared;
-        return auth_flow_declared;
-    }
-    if (auth_flow_declared.is_valid()) {
-        auth_flow_object = auth_flow_declared;
-        return auth_flow_declared;
-    }
-    if (declared.state != session_decl::ABSENT) {
-        declaration_slots.report_unresolved(
-            this,
-            session_decl::KIND_AUTH,
-            declared.state,
-            "authentication"
-        );
-        auth_flow_broken = true;
-    }
-    auth_flow_object = Ref<NetwAuthFlow>();
-    return auth_flow_object;
-}
-
-bool NetwMultiplayer::auth_is_configured() {
-    if (auth_flow_override.is_valid() || auth_flow_declared.is_valid()
-        || auth_flow_broken) {
-        return true;
-    }
-    return declaration_slots.resolve(this, session_decl::KIND_AUTH).state
-        != session_decl::ABSENT;
-}
-
-void NetwMultiplayer::auth_set_flow(const Ref<NetwAuthFlow> &p_flow) {
-    auth_flow_override = p_flow;
-    auth_flow_object = p_flow;
 }
 
 PackedByteArray NetwMultiplayer::probe_reply_payload(bool &r_answered) {
@@ -2557,104 +2335,6 @@ void NetwMultiplayer::session_refuse(int64_t p_peer, const String &p_reason) {
 
 String NetwMultiplayer::session_refusal(int64_t p_peer) const {
     return join_roster.refusal(p_peer);
-}
-
-int NetwMultiplayer::session_name_verdict(
-    const StringName &p_name,
-    const PackedStringArray &p_taken,
-    bool p_renames_on_collision,
-    bool p_has_identity
-) const {
-    return join_roster
-        .name_verdict(p_name, p_taken, p_renames_on_collision, p_has_identity);
-}
-
-StringName NetwMultiplayer::session_free_name(
-    const StringName &p_name,
-    const PackedStringArray &p_taken
-) const {
-    return join_roster.free_name(p_name, p_taken);
-}
-
-PackedStringArray NetwMultiplayer::session_seated_names(
-    const TypedArray<NetwEntity> &p_seated
-) const {
-    PackedStringArray taken;
-    for (int at = 0; at < p_seated.size(); at++) {
-        const Ref<NetwEntity> seated = p_seated[at];
-        if (seated.is_null()) {
-            continue;
-        }
-        const StringName stamped = seated->get_entity_id();
-        if (!String(stamped).is_empty()) {
-            taken.push_back(String(stamped));
-            continue;
-        }
-        Node *owner = seated->get_owner();
-        if (owner == nullptr) {
-            continue;
-        }
-        const String parsed = String(owner->get_name()).get_slice("|", 0);
-        if (!parsed.is_empty()) {
-            taken.push_back(parsed);
-        }
-    }
-    return taken;
-}
-
-bool NetwMultiplayer::session_admit_username(
-    session::AcceptFrame &r_accepted,
-    const TypedArray<NetwEntity> &p_seated,
-    const Callable &p_disconnect
-) {
-    NETW_ZONE_NC("netw::session_admit_username", colors::SESSION);
-    if (String(r_accepted.username).is_empty()) {
-        NETW_TRACE(sys::SESSION, "no join row claims a username to admit");
-        return false;
-    }
-    const PackedStringArray taken = session_seated_names(p_seated);
-    const StringName claimed = r_accepted.username;
-    const int64_t peer = r_accepted.peer_id;
-    const int verdict = join_roster.name_verdict(
-        claimed,
-        taken,
-        OS::get_singleton()->has_feature("debug"),
-        peer_get_identity(peer).is_valid()
-    );
-    if (verdict == JoinRoster::RENAME) {
-        const StringName renamed = join_roster.free_name(claimed, taken);
-        NETW_INFO(
-            sys::SESSION,
-            "Debug name collision: renaming %s to %s",
-            String(claimed),
-            String(renamed)
-        );
-        r_accepted.username = renamed;
-        return true;
-    }
-    if (verdict == JoinRoster::REFUSE) {
-        const String reason
-            = String("Username '") + String(claimed) + "' is already in use";
-        session_refuse(peer, reason);
-        NETW_ERROR(
-            sys::SESSION,
-            "Authenticated username collision for '%s'. Rejecting join.",
-            String(claimed)
-        );
-        if (p_disconnect.is_valid()) {
-            p_disconnect.call(peer);
-        }
-        return false;
-    }
-    if (taken.find(String(claimed)) != -1) {
-        NETW_WARN(
-            sys::SESSION,
-            "Username collision detected for '%s'. Topology nameplates may "
-            "break.",
-            String(claimed)
-        );
-    }
-    return true;
 }
 
 String NetwMultiplayer::session_role_name(Role p_role) {
@@ -4148,33 +3828,6 @@ Node *NetwMultiplayer::session_root() const {
     return root->get_node_or_null(inner->get_root_path());
 }
 
-void NetwMultiplayer::peer_set_identity(
-    int64_t p_peer,
-    const Ref<NetwIdentity> &p_identity
-) {
-    NETW_ZONE_NC("peer_set_identity", colors::SESSION);
-    if (p_identity.is_null()) {
-        NETW_TRACE(sys::SESSION, "peer %d loses its identity row", int(p_peer));
-        peer_identities.erase(p_peer);
-        return;
-    }
-    peer_identities[p_peer] = p_identity;
-}
-
-Ref<NetwIdentity> NetwMultiplayer::peer_get_identity(int64_t p_peer) const {
-    const HashMap<int64_t, Ref<NetwIdentity>>::ConstIterator found
-        = peer_identities.find(p_peer);
-    if (found == peer_identities.end()) {
-        NETW_TRACE(sys::SESSION, "peer %d has no identity row", int(p_peer));
-        return Ref<NetwIdentity>();
-    }
-    return found->value;
-}
-
-Ref<NetwIdentity> NetwMultiplayer::participant_identity(int64_t p_peer) const {
-    return peer_get_identity(p_peer);
-}
-
 Ref<NetwSessionConfig> NetwMultiplayer::session_get_config() const {
     Ref<NetwSessionConfig> snapshot;
     snapshot.instantiate();
@@ -4426,7 +4079,6 @@ bool NetwMultiplayer::session_resolve_inbound_join(
         );
         return false;
     }
-    auth_resolve_identity(p_sender, r_request);
     if (String(r_request.username).is_empty()) {
         NETW_WARN(
             sys::SESSION,
@@ -4435,16 +4087,32 @@ bool NetwMultiplayer::session_resolve_inbound_join(
         );
         return false;
     }
-    r_accepted.peer_id = p_sender;
-    r_accepted.username = r_request.username;
-    if (!session_admit_username(
-            r_accepted,
-            scene_players_all(),
-            Callable(inner.ptr(), StringName("disconnect_peer"))
-        )) {
+    const Error refusal = session_admits_join(
+        p_sender,
+        r_request.username,
+        r_request.arg_values
+    );
+    if (refusal != OK) {
+        NETW_INFO(
+            sys::SESSION,
+            "join: peer %d is turned down by this session's admission "
+            "handler with %s",
+            int(p_sender),
+            gd::error_name(refusal)
+        );
+        session_fail_join(
+            p_sender,
+            refusal,
+            vformat(
+                "This server did not admit the join (%s)",
+                String(gd::error_name(refusal))
+            )
+        );
         return false;
     }
-    r_accepted.membership = uint64_t(participant_mint_membership());
+    r_accepted.peer_id = p_sender;
+    r_accepted.username = r_request.username;
+    r_accepted.player_id = uint64_t(player_mint_id());
     return true;
 }
 
@@ -4557,9 +4225,6 @@ void NetwMultiplayer::session_settle_leave(const Ref<NetwPromise> &p_left) {
 
 void NetwMultiplayer::session_clear_prepared_join() {
     prepared_join.reset();
-    preparing_join = Ref<NetwPromise>();
-    auth_clear_held_hellos();
-    auth_request.reset();
     resubmit_join.reset();
     resubmit_authority = 0;
     join_awaiting_admission = false;
@@ -4579,7 +4244,6 @@ void NetwMultiplayer::session_submit_prepared_join() {
     const JoinRequest request = *prepared_join;
     const int64_t coordinator = session_authority_peer();
     prepared_join.reset();
-    auth_request.reset();
     session_submit_request(request, coordinator);
     if (is_host() || NETW_API_VIRTUAL(get_peer_ids)().has(coordinator)) {
         return;
@@ -4630,65 +4294,8 @@ Ref<NetwPromise> NetwMultiplayer::session_prepare_join(
     }
 
     auth_arm();
-    Ref<NetwPromise> prepared;
-    prepared.instantiate();
-    preparing_join = prepared;
-    const Ref<NetwPromise> flow_ready = auth_prepare(p_username);
-    flow_ready->then(
-        callable_mp(this, &NetwMultiplayer::session_settle_prepared_join)
-            .bind(p_username, p_args, prepared)
-    );
-    flow_ready->catch_error(
-        callable_mp(this, &NetwMultiplayer::session_settle_refused_join)
-            .bind(p_username, p_args, prepared)
-    );
-    return prepared;
-}
-
-void NetwMultiplayer::session_settle_prepared_join(
-    const Variant &p_prepare_result,
-    const StringName &p_username,
-    const Array &p_args,
-    const Ref<NetwPromise> &p_prepared
-) {
-    const int64_t prepare_err = p_prepare_result;
-    if (prepare_err != OK) {
-        NETW_ERROR(
-            sys::SESSION,
-            "Auth prepare failed: %s",
-            gd::error_name(prepare_err)
-        );
-        p_prepared->resolve(prepare_err);
-        auth_release_held_hellos();
-        return;
-    }
-    const std::optional<JoinRequest> request
-        = connect::request_of(p_username, p_args);
-    auth_set_join_request(request);
-    prepared_join = request;
-    p_prepared->resolve(OK);
-    auth_release_held_hellos();
-}
-
-void NetwMultiplayer::session_settle_refused_join(
-    int64_t p_error,
-    const String &p_detail,
-    const StringName &,
-    const Array &,
-    const Ref<NetwPromise> &p_prepared
-) {
-    const Error refused = p_error == OK ? FAILED : Error(p_error);
-    NETW_WARN(
-        sys::SESSION,
-        "the join preparation was refused (%s): %s",
-        gd::error_name(refused),
-        p_detail
-    );
-    prepared_join.reset();
-    auth_set_join_request(std::optional<JoinRequest>());
-    auth_clear_held_hellos();
-    p_prepared->resolve(int64_t(refused));
-    session_report_join_failure(refused, p_detail);
+    prepared_join = connect::request_of(p_username, p_args);
+    return NetwPromise::resolved(OK);
 }
 
 void NetwMultiplayer::session_push_desired_role() {
@@ -4795,7 +4402,7 @@ Ref<table::Core> NetwMultiplayer::get_table_core() const {
 
 void NetwMultiplayer::clear_roster() {
     session_clear_roster();
-    participant_clear();
+    player_clear();
 }
 
 Ref<NetwTimeline> NetwMultiplayer::register_timeline(
@@ -4902,21 +4509,21 @@ void NetwMultiplayer::embed_autosettle_tree_default() {
 }
 
 void NetwMultiplayer::peer_forget(int64_t p_peer) {
-    const Ref<NetwParticipant> leaving = participant_admitted_of(p_peer);
-    if (ParticipantRow *found = participant_row(p_peer)) {
+    const Ref<NetwPlayer> leaving = player_admitted_of(p_peer);
+    if (PlayerRow *found = player_row(p_peer)) {
         found->admitted = false;
         found->incarnation = 0;
     }
     session_forget_peer(p_peer);
-    participant_publish_left(leaving);
-    participant_forget(p_peer);
+    player_publish_left(leaving);
+    player_forget(p_peer);
 }
 
-Ref<NetwParticipant> NetwMultiplayer::peer_get_participant(int64_t p_peer) {
+Ref<NetwPlayer> NetwMultiplayer::peer_get_player(int64_t p_peer) {
     if (!session_has_accepted(p_peer)) {
-        return Ref<NetwParticipant>();
+        return Ref<NetwPlayer>();
     }
-    return participant_of(p_peer);
+    return player_of(p_peer);
 }
 
 Ref<Script> NetwMultiplayer::law_extension_script() {

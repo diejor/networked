@@ -66,16 +66,11 @@ Kind classify(const PackedByteArray &p_data) {
     return Kind::UNKNOWN;
 }
 
-PackedByteArray encode_client_hello(
-    const PackedByteArray &p_provider_payload,
-    uint64_t p_app_tag,
-    int p_flags
-) {
+PackedByteArray encode_client_hello(uint64_t p_app_tag, int p_flags) {
     PackedByteArray buffer = magic_of(HELLO_BYTES);
     buffer.push_back(PROTOCOL_VERSION);
     append_u64(buffer, p_app_tag);
     buffer.push_back(uint8_t(p_flags & 0xFF));
-    buffer.append_array(p_provider_payload);
     return buffer;
 }
 
@@ -99,7 +94,6 @@ Hello decode_client_hello(
     }
     decoded.refusal = Refusal::NONE;
     decoded.flags = int(p_data[13]);
-    decoded.provider_payload = p_data.slice(HELLO_HEADER_LEN, p_data.size());
     return decoded;
 }
 

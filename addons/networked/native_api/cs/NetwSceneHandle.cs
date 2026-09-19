@@ -18,49 +18,48 @@ namespace Networked;
 /// session. An entity that declares itself a scene resolves to itself, and any
 /// other entity resolves to its nearest scene ancestor. Ask
 /// <see cref="NetwSceneHandle.IsDeclared"/> when the difference matters. <b>A
-/// scene reaches a participant for a reason, and there are two of them.</b> A
-/// body of theirs residing here is one, so parenting a player in is the whole
-/// of it and no call follows. A <see cref="NetwSceneHandle.Watch"/> is the
-/// other, and it is the one for a participant with no body here at all. The two
-/// are independent and the scene keeps replicating until the last of them is
-/// gone, so <see cref="NetwSceneHandle.Unwatch"/> does not evict a player still
-/// standing in the room. A participant may hold as many scenes at once as the
-/// game gives them reasons for.
+/// scene reaches a player for a reason, and there are two of them.</b> A body
+/// of theirs residing here is one, so parenting a player in is the whole of it
+/// and no call follows. A <see cref="NetwSceneHandle.Watch"/> is the other, and
+/// it is the one for a player with no body here at all. The two are independent
+/// and the scene keeps replicating until the last of them is gone, so
+/// <see cref="NetwSceneHandle.Unwatch"/> does not evict a player still standing
+/// in the room. A player may hold as many scenes at once as the game gives them
+/// reasons for.
 /// <code>
-/// lobby.watch(participant)
-/// arena.add_child(Netw.spawn_player(participant, make_player))
-/// lobby.unwatch(participant)
+/// lobby.watch(player)
+/// arena.add_child(Netw.spawn_player(player, make_player))
+/// lobby.unwatch(player)
 /// </code>
 /// <para>
-/// Reaching a participant is scene-wide and it is not the last word on any one
-/// node. <see cref="NetwInterestLayer"/> still filters entity by entity inside
-/// a scene this participant reaches, so a scene arriving does not mean
-/// everything in it arrived. <b>Putting a player somewhere</b> Three calls move
-/// a body and they differ in what they answer, not in where the body lands.
-/// Only the last carries a <see cref="NetwPromise"/>.
+/// Reaching a player is scene-wide and it is not the last word on any one node.
+/// <see cref="NetwInterestLayer"/> still filters entity by entity inside a
+/// scene this player reaches, so a scene arriving does not mean everything in
+/// it arrived. <b>Putting a body somewhere</b> Three calls move a body and they
+/// differ in what they answer, not in where the body lands. Only the last
+/// carries a <see cref="NetwPromise"/>.
 /// <code>
-/// arena.add_child(player)    a first placement. there is nothing to await
-/// player.reparent(other)     an ordinary Godot move, taken here and
+/// arena.add_child(body)      a first placement. there is nothing to await
+/// body.reparent(other)       an ordinary Godot move, taken here and
 ///                            replicated. it answers nothing
-/// destination.move(entity)   the same move carrying a NetwPromise, which
-///                            resolves only once the entity stands under
-///                            this scene on every peer that has it
+/// Netw.reparent(body, other) the same move carrying a NetwPromise, which
+///                            resolves only once the body stands under
+///                            its new parent on every peer that has it
 /// </code>
 /// </para>
 /// <para>
-/// Only <see cref="NetwSceneHandle.Move"/> can be awaited, so a game that has
-/// to know the move landed everywhere takes that one and
-/// <see cref="NetwMultiplayer.SceneMove"/> holds its law, the carry window
-/// included. A view resolves its session through the branch its scene node sits
-/// in, so a scene whose container is not in the tree returns
+/// Only <see cref="Netw.Reparent"/> can be awaited, so a game that has to know
+/// the move landed everywhere takes that one, and it holds the law with the
+/// carry window included. A view resolves its session through the branch its
+/// scene node sits in, so a scene whose container is not in the tree returns
 /// <see cref="NetwSceneHandle.IsDeclared"/> <c>false</c> and every other member
 /// empty. <see cref="NetwMultiplayer"/> keeps the same surface keyed by
 /// <see cref="Rid"/> for callers that already hold one, and
 /// <see cref="NetwSceneHandle.Entity"/> is the bridge to it:
-/// <see cref="NetwMultiplayer.SceneGetPlayers"/>,
+/// <see cref="NetwMultiplayer.SceneGetBodies"/>,
 /// <see cref="NetwMultiplayer.SceneWatch"/> and
 /// <see cref="NetwMultiplayer.SceneObserve"/> are the flat spellings of
-/// <see cref="NetwSceneHandle.Players"/>, <see cref="NetwSceneHandle.Watch"/>
+/// <see cref="NetwSceneHandle.Bodies"/>, <see cref="NetwSceneHandle.Watch"/>
 /// and the signals here.
 /// </para>
 /// </remarks>
@@ -81,29 +80,29 @@ public sealed class NetwSceneHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when <c>player</c> joins this scene's roster. A join changes
-    /// what every other player in the scene is compared against, so a listener
-    /// that maintains per-player state rebuilds the whole roster here rather
-    /// than only the newcomer.
+    /// Emitted when <c>body</c> joins this scene's roster. A join changes what
+    /// every other body in the scene is compared against, so a listener that
+    /// maintains per-body state rebuilds the whole roster here rather than only
+    /// the newcomer.
     /// </summary>
-    public event Action<Variant> PlayerEntered
+    public event Action<Variant> BodyEntered
     {
-        add => Connect("player_entered", Callable.From(value));
-        remove => Disconnect("player_entered", Callable.From(value));
+        add => Connect("body_entered", Callable.From(value));
+        remove => Disconnect("body_entered", Callable.From(value));
     }
 
     /// <summary>
-    /// Emitted when <c>player</c> leaves this scene's roster.
+    /// Emitted when <c>body</c> leaves this scene's roster.
     /// </summary>
-    public event Action<Variant> PlayerLeft
+    public event Action<Variant> BodyLeft
     {
-        add => Connect("player_left", Callable.From(value));
-        remove => Disconnect("player_left", Callable.From(value));
+        add => Connect("body_left", Callable.From(value));
+        remove => Disconnect("body_left", Callable.From(value));
     }
 
     /// <summary>
-    /// Emitted when this scene starts replicating to <c>participant</c>, after
-    /// the boundary is written, so a listener reading
+    /// Emitted when this scene starts replicating to <c>player</c>, after the
+    /// boundary is written, so a listener reading
     /// <see cref="NetwSceneHandle.Viewers"/> sees them.
     /// </summary>
     public event Action<Variant> ViewerEntered
@@ -113,9 +112,9 @@ public sealed class NetwSceneHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when this scene stops replicating to <c>participant</c>, whether
-    /// the last body of theirs left it, a watch was withdrawn, or the
-    /// membership ended.
+    /// Emitted when this scene stops replicating to <c>player</c>, whether the
+    /// last body of theirs left it, a watch was withdrawn, or the membership
+    /// ended.
     /// </summary>
     public event Action<Variant> ViewerLeft
     {
@@ -233,18 +232,18 @@ public sealed class NetwSceneHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetPlayers =
-        NetwApi.MethodBind("NetwSceneHandle", "get_players", 3995934104UL);
+    private static readonly IntPtr _bindGetBodies =
+        NetwApi.MethodBind("NetwSceneHandle", "get_bodies", 3995934104UL);
 
     /// <summary>
-    /// Every player entity in this scene, in no declared order.
+    /// Every body in this scene, in no declared order.
     /// </summary>
-    public Godot.Collections.Array Players
+    public Godot.Collections.Array Bodies
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetPlayers, Checked, ref answered);
+            NetwThunks.Call0(_bindGetBodies, Checked, ref answered);
             Godot.Collections.Array result =
                 VariantUtils.ConvertToArray(answered);
             answered.Dispose();
@@ -256,10 +255,10 @@ public sealed class NetwSceneHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSceneHandle", "get_viewers", 3995934104UL);
 
     /// <summary>
-    /// Every participant this scene currently replicates to, whether a body of
+    /// Every player this scene currently replicates to, whether a body of
     /// theirs stands here or a <see cref="NetwSceneHandle.Watch"/> put them
-    /// here. A participant is a person in the session; a player is the entity
-    /// they steer, and <see cref="NetwSceneHandle.Players"/> returns those.
+    /// here. A player is a person in the session; a body is the entity they
+    /// steer, and <see cref="NetwSceneHandle.Bodies"/> returns those.
     /// </summary>
     public Godot.Collections.Array Viewers
     {
@@ -274,23 +273,20 @@ public sealed class NetwSceneHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetLocalPlayers =
-        NetwApi.MethodBind(
-            "NetwSceneHandle",
-            "get_local_players",
-            3995934104UL);
+    private static readonly IntPtr _bindGetLocalBodies =
+        NetwApi.MethodBind("NetwSceneHandle", "get_local_bodies", 3995934104UL);
 
     /// <summary>
-    /// Every player entity in this scene that this peer represents, which is
-    /// empty for a peer with no body here and holds more than one where a game
-    /// gave it several.
+    /// Every body in this scene that this peer represents, which is empty for a
+    /// peer with no body here and holds more than one where a game gave it
+    /// several.
     /// </summary>
-    public Godot.Collections.Array LocalPlayers
+    public Godot.Collections.Array LocalBodies
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetLocalPlayers, Checked, ref answered);
+            NetwThunks.Call0(_bindGetLocalBodies, Checked, ref answered);
             Godot.Collections.Array result =
                 VariantUtils.ConvertToArray(answered);
             answered.Dispose();
@@ -336,7 +332,7 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// through, and a game writing this signature would have to name an
     /// <see cref="Rid"/> it can do nothing with.
     /// <code>
-    /// arena.observe(NetwMultiplayer.SCENE_EVENT_PLAYER, on_car_edge)
+    /// arena.observe(NetwMultiplayer.SCENE_EVENT_BODY, on_car_edge)
     ///
     /// func on_car_edge(present: bool, car: NetwEntity) -&gt; bool:
     ///         reshuffle(car)
@@ -344,9 +340,8 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// </code>
     /// <para>
     /// <see cref="NetwMultiplayer.SceneEvent.Viewer"/> carries a
-    /// <see cref="NetwParticipant"/>;
-    /// <see cref="NetwMultiplayer.SceneEvent.Player"/> and
-    /// <see cref="NetwMultiplayer.SceneEvent.Entity"/> carry a
+    /// <see cref="NetwPlayer"/>; <see cref="NetwMultiplayer.SceneEvent.Body"/>
+    /// and <see cref="NetwMultiplayer.SceneEvent.Entity"/> carry a
     /// <see cref="NetwEntity"/>. Returning <c>true</c> from the callback
     /// withdraws it, exactly as the flat verb's does, and
     /// <see cref="NetwSceneHandle.Unobserve"/> withdraws it by name.
@@ -395,47 +390,15 @@ public sealed class NetwSceneHandle : NetwRefCounted
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindMove =
-        NetwApi.MethodBind("NetwSceneHandle", "move", 2513847728UL);
-
-    /// <summary>
-    /// Moves <paramref name="entity"/> into this scene, returning the
-    /// <see cref="NetwPromise"/> the settle carries.
-    /// <see cref="NetwMultiplayer.SceneMove"/> holds the law, the carry window
-    /// included. What differs here is the direction the call reads in, because
-    /// the destination is the object the verb is called on and the mover is
-    /// what it takes.
-    /// <code>
-    /// var moved := destination.move(NetwEntity.of(player))
-    /// await moved.wait()
-    /// </code>
-    /// <para>
-    /// Returns an already-settled <c>@GlobalScope.ERR_INVALID_PARAMETER</c> for
-    /// a null <paramref name="entity"/> or outside a session. <b>Server
-    /// Only.</b>
-    /// </para>
-    /// </summary>
-    public NetwPromise Move(NetwEntity entity)
-    {
-        IntPtr slot0 = entity?.Native ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindMove,
-            Checked,
-            in slot0,
-            ref answered);
-        return NetwPromise.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindWatch =
-        NetwApi.MethodBind("NetwSceneHandle", "watch", 4188932107UL);
+        NetwApi.MethodBind("NetwSceneHandle", "watch", 1229657424UL);
 
     /// <summary>
-    /// Replicates this scene to <paramref name="participant"/> for as long as
-    /// the watch stands, without giving them a body in it. Watching is not
-    /// exclusive and not a move. A participant may watch several scenes at
-    /// once, and watching this one withdraws nothing elsewhere, which is what
-    /// an avatarless lobby and a spectator both need.
+    /// Replicates this scene to <paramref name="player"/> for as long as the
+    /// watch stands, without giving them a body in it. Watching is not
+    /// exclusive and not a move. A player may watch several scenes at once, and
+    /// watching this one withdraws nothing elsewhere, which is what an
+    /// avatarless lobby and a spectator both need.
     /// <code>
     /// Netw.scene(lobby).watch(who)
     /// </code>
@@ -443,15 +406,15 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// A scene nested inside another arrives with the scene roots it hangs
     /// from, because a watcher cannot hold a node whose parent it has never
     /// seen. Those roots arrive as structure alone. Their own content stays
-    /// with the participants they already reach, so watching an inner scene
-    /// never reveals what sits beside it in the outer one. Idempotent, and
-    /// refused for a participant this session no longer holds, so a handle kept
-    /// across a disconnect cannot seat whoever reconnected onto that peer id.
+    /// with the players they already reach, so watching an inner scene never
+    /// reveals what sits beside it in the outer one. Idempotent, and refused
+    /// for a player this session no longer holds, so a handle kept across a
+    /// disconnect cannot seat whoever reconnected onto that peer id.
     /// <code>
     /// Error
     /// ┠╴OK                      the watch stands
     /// ┠╴ERR_UNAUTHORIZED        this peer is not the server
-    /// ┠╴ERR_INVALID_PARAMETER   a null participant, or one this session no longer holds
+    /// ┠╴ERR_INVALID_PARAMETER   a null player, or one this session no longer holds
     /// ┖╴ERR_DOES_NOT_EXIST      this scene names no live node
     /// </code>
     /// </para>
@@ -459,9 +422,9 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// <b>Server Only.</b>
     /// </para>
     /// </summary>
-    public Error Watch(NetwParticipant participant)
+    public Error Watch(NetwPlayer player)
     {
-        IntPtr slot0 = participant?.Native ?? IntPtr.Zero;
+        IntPtr slot0 = player?.Native ?? IntPtr.Zero;
         long answered = default;
         NetwThunks.Ptrcall1_IntPtr_Long(
             _bindWatch,
@@ -472,28 +435,27 @@ public sealed class NetwSceneHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindUnwatch =
-        NetwApi.MethodBind("NetwSceneHandle", "unwatch", 4188932107UL);
+        NetwApi.MethodBind("NetwSceneHandle", "unwatch", 1229657424UL);
 
     /// <summary>
     /// Withdraws the watch <see cref="NetwSceneHandle.Watch"/> placed, so this
-    /// scene stops replicating to <paramref name="participant"/> once nothing
-    /// else keeps them here. A watch is one reason among several. Withdrawing
-    /// it does not evict a participant whose player is still in this scene,
-    /// which is what stops a lobby leaving a game to also blind the player it
-    /// left behind.
+    /// scene stops replicating to <paramref name="player"/> once nothing else
+    /// keeps them here. A watch is one reason among several. Withdrawing it
+    /// does not evict a player whose body is still in this scene, which is what
+    /// stops a lobby leaving a game to also blind the player it left behind.
     /// <code>
     /// Error
     /// ┠╴OK                      the watch is withdrawn
-    /// ┠╴ERR_INVALID_PARAMETER   a null participant, or one this session no longer holds
-    /// ┖╴ERR_DOES_NOT_EXIST      this participant was not watching
+    /// ┠╴ERR_INVALID_PARAMETER   a null player, or one this session no longer holds
+    /// ┖╴ERR_DOES_NOT_EXIST      this player was not watching
     /// </code>
     /// <para>
     /// <b>Server Only.</b>
     /// </para>
     /// </summary>
-    public Error Unwatch(NetwParticipant participant)
+    public Error Unwatch(NetwPlayer player)
     {
-        IntPtr slot0 = participant?.Native ?? IntPtr.Zero;
+        IntPtr slot0 = player?.Native ?? IntPtr.Zero;
         long answered = default;
         NetwThunks.Ptrcall1_IntPtr_Long(
             _bindUnwatch,
@@ -504,20 +466,19 @@ public sealed class NetwSceneHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindIsWatching =
-        NetwApi.MethodBind("NetwSceneHandle", "is_watching", 630023716UL);
+        NetwApi.MethodBind("NetwSceneHandle", "is_watching", 2698762196UL);
 
     /// <summary>
-    /// Whether this scene currently replicates to
-    /// <paramref name="participant"/>, for any reason at all. A body of theirs
-    /// residing here is a reason, and so is a watch
-    /// <see cref="NetwSceneHandle.Watch"/> placed. This answers the effective
-    /// question, so it stays <c>true</c> after
+    /// Whether this scene currently replicates to <paramref name="player"/>,
+    /// for any reason at all. A body of theirs residing here is a reason, and
+    /// so is a watch <see cref="NetwSceneHandle.Watch"/> placed. This answers
+    /// the effective question, so it stays <c>true</c> after
     /// <see cref="NetwSceneHandle.Unwatch"/> while a body of theirs is still
     /// standing in the scene.
     /// </summary>
-    public bool IsWatching(NetwParticipant participant)
+    public bool IsWatching(NetwPlayer player)
     {
-        IntPtr slot0 = participant?.Native ?? IntPtr.Zero;
+        IntPtr slot0 = player?.Native ?? IntPtr.Zero;
         byte answered = default;
         NetwThunks.Ptrcall1_IntPtr_Byte(
             _bindIsWatching,

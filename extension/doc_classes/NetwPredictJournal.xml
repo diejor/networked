@@ -40,7 +40,7 @@
 			<param index="0" name="transition" type="int" />
 			<description>
 				Returns the [enum Attribution] charged to [param transition], or
-				[constant Attribution.UNKNOWN] when nothing charged it or the row
+				[constant UNKNOWN] when nothing charged it or the row
 				has fallen out of the ring.
 			</description>
 		</method>
@@ -88,7 +88,7 @@
 			<param index="0" name="transition" type="int" />
 			<description>
 				Returns the [enum Domain] recorded for [param transition], or
-				[constant Domain.OUT_OF_DOMAIN] when the row has fallen out of
+				[constant OUT_OF_DOMAIN] when the row has fallen out of
 				the ring.
 				A transition nobody retained is one nobody can show was
 				entitled to exactness, so the forgotten row reads as the label

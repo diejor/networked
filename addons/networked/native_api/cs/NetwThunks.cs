@@ -722,29 +722,6 @@ internal static class NetwThunks
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate void Ptrcall2_Rid_Rid_IntPtrFn(
-        IntPtr bind,
-        IntPtr instance,
-        in Rid a0,
-        in Rid a1,
-        ref IntPtr answered);
-
-    private static Ptrcall2_Rid_Rid_IntPtrFn _ptrcall2_Rid_Rid_IntPtr;
-
-    internal static void Ptrcall2_Rid_Rid_IntPtr(
-        IntPtr bind,
-        IntPtr instance,
-        in Rid a0,
-        in Rid a1,
-        ref IntPtr answered)
-    {
-        Ptrcall2_Rid_Rid_IntPtrFn thunk =
-            _ptrcall2_Rid_Rid_IntPtr ??= NetwApi.Thunk<Ptrcall2_Rid_Rid_IntPtrFn>(
-                "ptrcall2");
-        thunk(bind, instance, in a0, in a1, ref answered);
-    }
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void Ptrcall2_Rid_Rid_LongFn(
         IntPtr bind,
         IntPtr instance,

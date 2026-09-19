@@ -421,7 +421,7 @@ TEST_CASE(
         named("Driven"),
         one_type(),
         arena,
-        rig.participant(0),
+        rig.player(0),
         false
     );
     rig.pump(10);

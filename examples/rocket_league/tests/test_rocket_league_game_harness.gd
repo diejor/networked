@@ -283,11 +283,11 @@ func arena_level(peer: NetwSceneRunner) -> Node:
 
 
 func arena_ball(peer: NetwSceneRunner) -> RocketBall:
-	return arena_level(peer).get_node(^"ball|0")
+	return arena_level(peer).get_node(^"ball")
 
 
 func rocket_game(peer: NetwSceneRunner) -> RocketGame:
-	return arena_level(peer).get_node(^"game|0")
+	return arena_level(peer).get_node(^"game")
 
 
 func goal_position(peer: NetwSceneRunner, named: String) -> Vector3:

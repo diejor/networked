@@ -18,8 +18,8 @@ namespace Networked;
 /// live scene owns its own world and no <see cref="ParticipantView"/> exists
 /// under the session root. Add one manually only to configure or position the
 /// window. Use <see cref="NetwMultiplayer.SceneSetHostViewFactory"/> to create
-/// a different node type. The world it draws is the one
-/// <see cref="NetwSessionHandle.Present"/> named, so a host presenting nothing
+/// a different node type. The world it draws is
+/// <see cref="NetwSessionHandle.PresentedScene"/>, so a host presenting nothing
 /// draws nothing however many worlds stand live beside it. It follows
 /// <see cref="NetwMultiplayer.ParticipantViewportChanged"/> to retarget, and
 /// re-announces as entities go live, because the display resolves before the
@@ -73,7 +73,7 @@ public sealed class HostSceneView : ParticipantView
     /// target and stops forwarding input, which is how a game shows something
     /// else over the whole window without losing the view or the display it was
     /// tracking. Clearing it re-adopts whatever
-    /// <see cref="NetwMultiplayer.SceneParticipantViewport"/> now returns.
+    /// <see cref="NetwMultiplayer.ScenePlayerViewport"/> now returns.
     /// </summary>
     public bool Suppressed
     {

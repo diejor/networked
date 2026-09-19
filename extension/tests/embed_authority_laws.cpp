@@ -189,8 +189,8 @@ void teach_player(NetwMultiplayer *p_session) {
 
 TEST_CASE(
     "[Networked][Session][SceneTree] EA4 coordinator 7 startup gives its "
-    "joined member at 9 one scene and the one player seated for that "
-    "participant, so the authoritative world arrives whole"
+    "joined member at 9 one scene and the one body seated for that "
+    "player, so the authoritative world arrives whole"
 ) {
     MeshStand stand;
     stand.seat_coordinator(COORDINATOR);
@@ -225,7 +225,7 @@ TEST_CASE(
     const Ref<NetwSceneHandle> world = host->scene_handle_of(opened);
     NETW_CHECK_EQ(int(world.is_valid()), 1);
     NETW_CHECK_EQ(
-        int(world.is_valid() ? world->watch(host->participant_of(MEMBER))
+        int(world.is_valid() ? world->watch(host->player_of(MEMBER))
                              : ERR_DOES_NOT_EXIST),
         int(OK)
     );
@@ -237,7 +237,7 @@ TEST_CASE(
     const RID player = host->spawn_registered(
         StringName(PLAYER_ID),
         named("NinePlayer"),
-        host->participant_of(MEMBER).ptr()
+        host->player_of(MEMBER).ptr()
     );
     REQUIRE(player.is_valid());
     Node *body = host->entity_get_node(player);
@@ -253,8 +253,8 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(host->scene_list().size()), 1);
     NETW_CHECK_EQ(int(guest->scene_list().size()), 1);
-    NETW_CHECK_EQ(int(host->scene_players_all().size()), 1);
-    NETW_CHECK_EQ(int(guest->scene_players_all().size()), 1);
+    NETW_CHECK_EQ(int(host->scene_bodies_all().size()), 1);
+    NETW_CHECK_EQ(int(guest->scene_bodies_all().size()), 1);
     NETW_CHECK_EQ(int(host->scene_get_viewers(opened).size()), 1);
 
     drop(seen);

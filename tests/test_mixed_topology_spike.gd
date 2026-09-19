@@ -139,7 +139,7 @@ func test_subpath_client_is_admitted_across_the_mount_boundary() -> void:
 	# submits, the root host admits, and the roster echoes back. Admission on
 	# both sides is the substrate crossing the embedding boundary.
 	var admitted := await _pump_until(
-		func() -> bool: return client_api.local_participant != null
+		func() -> bool: return client_api.local_player != null
 	)
 	assert_bool(admitted).override_failure_message(
 		"subpath client was never admitted to its own session",
@@ -147,7 +147,7 @@ func test_subpath_client_is_admitted_across_the_mount_boundary() -> void:
 
 	var client_id := client_api.get_unique_id()
 	var host_sees_client := await _pump_until(
-		func() -> bool: return _host_api.peer_get_participant(client_id) != null
+		func() -> bool: return _host_api.peer_get_player(client_id) != null
 	)
 	assert_bool(host_sees_client).override_failure_message(
 		"root host admitted no roster row for the subpath client",

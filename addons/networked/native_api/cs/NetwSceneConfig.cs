@@ -133,9 +133,9 @@ public sealed class NetwSceneConfig : NetwRefCounted
     ///       ┖╴ Level1 (Node2D)        # the scene, what the callable built
     /// </code>
     /// <para>
-    /// A <see cref="SubViewport"/> renders to a texture, so whether an isolated
-    /// scene reaches the screen is the game's decision.
-    /// <see cref="NetwSessionHandle.Present"/> is where that decision is made.
+    /// A <see cref="SubViewport"/> renders to a texture, and an isolated world
+    /// reaches the screen on a listen host while it is
+    /// <see cref="NetwSessionHandle.PresentedScene"/>.
     /// </para>
     /// </summary>
     public NetwSceneConfig Isolated()

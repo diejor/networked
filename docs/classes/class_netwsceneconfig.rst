@@ -129,7 +129,7 @@ The scene is still the authored root. :ref:`Netw.scene()<class_Netw_method_scene
      ┖╴ Level1World (SubViewport)   # what spawn returned
           ┖╴ Level1 (Node2D)        # the scene, what the callable built
 
-\ A :godot:`SubViewport` renders to a texture, so whether an isolated scene reaches the screen is the game's decision. :ref:`NetwSessionHandle.present()<class_NetwSessionHandle_method_present>` is where that decision is made.
+\ A :godot:`SubViewport` renders to a texture, and an isolated world reaches the screen on a listen host while it is :ref:`NetwSessionHandle.presented_scene<class_NetwSessionHandle_property_presented_scene>`.
 
 .. rst-class:: classref-item-separator
 

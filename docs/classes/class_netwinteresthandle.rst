@@ -187,7 +187,7 @@ Overrides the wire behavior for ``layer_id`` with one of :ref:`LeavePolicy<enum_
 
 Overrides local presentation behavior for ``layer_id`` with one of :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>`, and returns this handle.
 
-\ :ref:`NetwMultiplayer.PERCEPTION_POLICY_CUSTOM<class_NetwMultiplayer_constant_PERCEPTION_POLICY_CUSTOM>` requires ``custom_callback``. The callback receives ``(visible, peer_id, layer_id)`` on both local participant edges. Other policies reject a callback.
+\ :ref:`NetwMultiplayer.PERCEPTION_POLICY_CUSTOM<class_NetwMultiplayer_constant_PERCEPTION_POLICY_CUSTOM>` requires ``custom_callback``. The callback receives ``(visible, peer_id, layer_id)`` on both local player edges. Other policies reject a callback.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

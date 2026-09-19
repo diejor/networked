@@ -73,7 +73,7 @@ Node *level_of(LoopbackRig &p_rig, const RID &p_scene) {
 int spawn_into(
     LoopbackRig &p_rig,
     Node *p_parent,
-    const Ref<netw::NetwParticipant> &p_owner,
+    const Ref<netw::NetwPlayer> &p_owner,
     const char *p_marker,
     bool p_pump = true
 ) {
@@ -110,7 +110,7 @@ TEST_CASE(
     const RID arena = open_scene(rig, StringName("Arena"), nullptr);
     Node *level = level_of(rig, arena);
     const int peer = rig.peer_id(0);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     CHECK_FALSE(host->scene_subscribes(arena, peer));
@@ -123,7 +123,7 @@ TEST_CASE(
     NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 1);
 
     const int furniture
-        = spawn_into(rig, level, Ref<netw::NetwParticipant>(), "furniture");
+        = spawn_into(rig, level, Ref<netw::NetwPlayer>(), "furniture");
     rig.pump(8);
 
     CHECK(rig.route_node(furniture, 0) != nullptr);
@@ -141,7 +141,7 @@ TEST_CASE(
     const RID arena = open_scene(rig, StringName("Arena"), nullptr);
     Node *level = level_of(rig, arena);
     const int peer = rig.peer_id(0);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int first = spawn_into(rig, level, ana, "first");
@@ -180,7 +180,7 @@ TEST_CASE(
     const RID arena = open_scene(rig, StringName("Arena"), nullptr);
     const RID annex = open_scene(rig, StringName("Annex"), nullptr);
     const int peer = rig.peer_id(0);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int route = spawn_into(rig, level_of(rig, arena), ana, "mover");
@@ -214,9 +214,9 @@ TEST_CASE(
     const RID annex = open_scene(rig, StringName("Annex"), nullptr);
     const int first = rig.peer_id(0);
     const int second = rig.peer_id(1);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, first, StringName("ana"));
-    const Ref<netw::NetwParticipant> bo
+    const Ref<netw::NetwPlayer> bo
         = netw_test::seated_peer(host, second, StringName("bo"));
 
     Node *carrier = memnew(Node2D);
@@ -248,7 +248,7 @@ TEST_CASE(
     const RID arena = open_scene(rig, StringName("Arena"), nullptr);
     const RID annex = open_scene(rig, StringName("Annex"), nullptr);
     const int peer = rig.peer_id(0);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int route = spawn_into(rig, level_of(rig, arena), ana, "mover");
@@ -276,7 +276,7 @@ TEST_CASE(
     NetwMultiplayer *host = rig.server();
     const RID arena = open_scene(rig, StringName("Arena"), nullptr);
     const int peer = rig.peer_id(0);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int route = spawn_into(rig, level_of(rig, arena), ana, "mover");
@@ -310,14 +310,14 @@ TEST_CASE(
     NetwMultiplayer *host = rig.server();
     const RID arena = open_scene(rig, StringName("Arena"), nullptr);
     const int peer = rig.peer_id(0);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int route
         = spawn_into(rig, level_of(rig, arena), ana, "orphan", false);
     NETW_CHECK_GT(route, 0);
-    host->participant_forget(peer);
-    REQUIRE_FALSE(host->participant_has(peer));
+    host->player_forget(peer);
+    REQUIRE_FALSE(host->player_has(peer));
 
     rig.pump(8);
 
@@ -339,7 +339,7 @@ TEST_CASE(
     const int peer = rig.peer_id(0);
     REQUIRE(netw_test::seated_peer(host, peer, StringName("ana")).is_valid());
     const int inner_body
-        = spawn_into(rig, level_of(rig, inner), Ref<netw::NetwParticipant>(),
+        = spawn_into(rig, level_of(rig, inner), Ref<netw::NetwPlayer>(),
             "inside");
 
     REQUIRE(host->scene_admit_peer(inner, peer));
@@ -371,7 +371,7 @@ TEST_CASE(
     REQUIRE(netw_test::seated_peer(host, outside, StringName("cy")).is_valid());
 
     const int sibling
-        = spawn_into(rig, level_of(rig, outer), Ref<netw::NetwParticipant>(),
+        = spawn_into(rig, level_of(rig, outer), Ref<netw::NetwPlayer>(),
             "sibling");
 
     REQUIRE(host->scene_admit_peer(inner, nested));
@@ -400,9 +400,9 @@ TEST_CASE(
     NetwMultiplayer *host = rig.server();
     const RID arena = open_scene(rig, StringName("Arena"), nullptr);
     const RID annex = open_scene(rig, StringName("Annex"), nullptr);
-    const Ref<netw::NetwParticipant> ana
+    const Ref<netw::NetwPlayer> ana
         = netw_test::seated_peer(host, rig.peer_id(0), StringName("ana"));
-    const Ref<netw::NetwParticipant> bo
+    const Ref<netw::NetwPlayer> bo
         = netw_test::seated_peer(host, rig.peer_id(1), StringName("bo"));
 
     const int mover = spawn_into(rig, level_of(rig, arena), ana, "ana");

@@ -1,65 +1,50 @@
-## [NetwAuthFlow] that verifies a joining peer's Nakama presence identity.
+## Admission handler that admits a join only under the username Nakama
+## attests for the joining peer.
 ##
 ## The host trusts the Nakama server's presence list, which maps each peer to
-## their authenticated Nakama user id. This is what makes the identity
-## spoof-proof even though the listen-server host is itself an untrusted browser
-## in the relay topology.
+## their authenticated Nakama user id. That is what makes the username
+## spoof-proof even though the listen-server host is itself an untrusted
+## browser in the relay topology. Mount it inside the session's branch, where
+## it declares itself.
+##
+## [codeblock]
+## var gate := NakamaAuth.new()
+## tree.add_child(gate)
+## [/codeblock]
 class_name NakamaAuth
-extends NetwAuthFlow
+extends Node
 
-# Bound by the installer (DiscordActivityService) so the hooks can reach the
-# authenticated session and the active relay presence.
-var _session: Variant
 var _tree: MultiplayerTree
 
 
-## Binds the authenticated [NakamaSessionService] used to read identity.
-func bind_session(session: Variant) -> void:
-	_session = session
+func _ready() -> void:
+	var session: NetwSessionHandle = Netw.session(self)
+	if session != null:
+		_tree = session.root as MultiplayerTree
+	Netw.configure_admission(admit)
 
 
-## Binds the [MultiplayerTree] used to reach the active presence.
+## Binds the [MultiplayerTree] whose relay presence attests a join.
 func bind_tree(tree: MultiplayerTree) -> void:
 	_tree = tree
 
 
-## Prepares the flow by ensuring the Nakama session is authenticated.
-func _prepare(_username: StringName) -> NetwPromise:
-	if _session == null or not _session.has_method("is_authenticated") \
-			or not _session.is_authenticated():
-		return NetwPromise.resolved(ERR_UNAUTHORIZED)
-	return NetwPromise.resolved(OK)
-
-
-## Sends a trivial credentials payload indicating Nakama authentication.
-func _credentials(_username: StringName) -> PackedByteArray:
-	return var_to_bytes({ "service": "nakama" })
-
-
-## Verifies the credentials and binds the peer to their Nakama presence.
+## Admits [param peer_id] only under the username Nakama attests for it.
 ##
 ## [br][br][b]Server Only.[/b]
-func _verify(peer_id: int, data: PackedByteArray) -> AuthResult:
-	var creds: Variant = bytes_to_var(data)
-	if typeof(creds) != TYPE_DICTIONARY or String(creds.get("service", "")) != "nakama":
-		return AuthResult.reject("Invalid Nakama auth credentials")
+func admit(peer_id: int, username: StringName, _args: Array) -> Error:
 	var wrapper := _active_wrapper()
 	if wrapper == null:
-		return AuthResult.reject("Nakama relay presence unavailable")
-	var attested_uid := wrapper.user_id_for_peer(peer_id)
-	if attested_uid.is_empty():
-		return AuthResult.reject("Peer Nakama identity not found in presence")
-	var attested_username := wrapper.username_for_peer(peer_id)
-	return AuthResult.accept(_identity(attested_uid, StringName(attested_username)))
-
-
-## Returns the local host's own Nakama identity from the session.
-func _host_identity() -> NetwIdentity:
-	var local_uid := _local_user_id()
-	if local_uid.is_empty():
-		return null
-	var local_username := _local_username()
-	return _identity(local_uid, StringName(local_username))
+		push_error(
+			"NakamaAuth: the relay presence is unavailable, so this join is "
+			+ "turned down rather than taken on the name it claimed.",
+		)
+		return ERR_UNAVAILABLE
+	if wrapper.user_id_for_peer(peer_id).is_empty():
+		return ERR_UNAUTHORIZED
+	if StringName(wrapper.username_for_peer(peer_id)) != username:
+		return ERR_UNAUTHORIZED
+	return OK
 
 
 func _active_wrapper() -> NakamaWrapper:
@@ -67,24 +52,3 @@ func _active_wrapper() -> NakamaWrapper:
 		return null
 	var dir := Netw.service(_tree, NakamaLobbyDirectory) as NakamaLobbyDirectory
 	return dir.wrapper() if dir != null else null
-
-
-func _local_user_id() -> String:
-	if _session == null or not _session.has_method("local_user_id"):
-		return ""
-	return _session.local_user_id()
-
-
-func _local_username() -> String:
-	if _session == null or not _session.has_method("local_username"):
-		return ""
-	return _session.local_username()
-
-
-func _identity(external_id: String, username: StringName) -> NetwIdentity:
-	var identity := NetwIdentity.new()
-	identity.username = username if not username.is_empty() else StringName(external_id)
-	identity.external_id = external_id
-	identity.service = &"nakama"
-	identity.metadata = { "verified": true }
-	return identity

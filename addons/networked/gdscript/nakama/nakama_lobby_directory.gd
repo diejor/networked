@@ -1,6 +1,6 @@
 ## [LobbyDirectory] backed by Nakama relay matches.
 ##
-## Relay hosting does not open a listening socket. The host is the participant
+## Relay hosting does not open a listening socket. The host is the peer
 ## that claims peer id [code]1[/code], so web exports can host through this
 ## directory.
 ## [codeblock]

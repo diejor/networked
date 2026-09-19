@@ -9,7 +9,7 @@ const TURN_DEADZONE := 0.1
 
 @onready var car: RocketCar = get_parent()
 @onready var ball: RocketBall = NetwEntity.of(get_parent()).scene.root.get_node(
-	^"ball|0",
+	^"ball",
 )
 
 var last_position := Vector3.ZERO

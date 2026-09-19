@@ -117,11 +117,11 @@ signal released(value: Variant)
 
 var calls := 0
 
-func immediate(_participant: NetwParticipant, scene: Node) -> Node:
+func immediate(_player: NetwPlayer, scene: Node) -> Node:
 	calls += 1
 	return scene
 
-func suspended(_participant: NetwParticipant, _scene: Node) -> Node:
+func suspended(_player: NetwPlayer, _scene: Node) -> Node:
 	calls += 1
 	return await released
 )";

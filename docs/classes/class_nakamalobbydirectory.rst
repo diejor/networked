@@ -19,7 +19,7 @@ NakamaLobbyDirectory
 Description
 -----------
 
-Relay hosting does not open a listening socket. The host is the participant that claims peer id ``1``, so web exports can host through this directory.
+Relay hosting does not open a listening socket. The host is the peer that claims peer id ``1``, so web exports can host through this directory.
 
 ::
 

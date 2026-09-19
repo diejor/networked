@@ -16,7 +16,7 @@ func _ready() -> void:
 func on_scene_live(scene: NetwSceneHandle) -> void:
 	if scene.label != &"Arena":
 		return
-	game = scene.root.get_node(^"game|0")
+	game = scene.root.get_node(^"game")
 	set_process(true)
 
 

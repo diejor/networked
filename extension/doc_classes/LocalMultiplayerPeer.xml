@@ -29,8 +29,9 @@
 		</method>
 		<method name="create_server">
 			<return type="int" enum="Error" />
+			<param index="0" name="unique_id" type="int" default="1" />
 			<description>
-				Initializes this peer as the server, whose id is always [code]1[/code].
+				Initializes this peer as the server under [param unique_id], which a rig leaves at [code]1[/code].
 			</description>
 		</method>
 		<method name="force_connect_peer">

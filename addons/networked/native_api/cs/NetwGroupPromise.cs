@@ -274,7 +274,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
     /// defers its emission here, so the <c>await</c> subscribes before the
     /// answer is delivered.
     /// <code>
-    /// await destination.move_participants(peers).wait()
+    /// await destination.move_players(peers).wait()
     /// </code>
     /// <para>
     /// This never re-emits <see cref="NetwGroupPromise.Completed"/>,

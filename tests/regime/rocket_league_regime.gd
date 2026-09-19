@@ -69,10 +69,10 @@ func connect_session(role: String, port: int) -> Error:
 
 func await_local_ready() -> bool:
 	var deadline := Time.get_ticks_msec() + 40000
-	while session_handle.participants.size() < regime.peers \
+	while session_handle.players.size() < regime.peers \
 			and Time.get_ticks_msec() < deadline:
 		await session.get_tree().process_frame
-	if session_handle.participants.size() < regime.peers:
+	if session_handle.players.size() < regime.peers:
 		return false
 
 	if NetwRegimePeer.role_is_host(regime.role):
@@ -192,7 +192,7 @@ func condition_evidence() -> Dictionary:
 		"car_spin": car_spin,
 		"car_samples": car_seen,
 		"remote_travel_min": remote_travel_min(),
-		"participants": session_handle.participants.size(),
+		"players": session_handle.players.size(),
 		"api_peers": Array(api.get_peers()),
 	}
 
@@ -228,8 +228,8 @@ func start_match() -> void:
 
 
 func local_car() -> RocketCar:
-	var here: NetwParticipant = session_handle.local_participant
-	var mine: Array[NetwEntity] = here.players if here else []
+	var here: NetwPlayer = session_handle.local_player
+	var mine: Array[NetwEntity] = here.bodies if here else []
 	return mine[0].owner as RocketCar if mine.size() == 1 else null
 
 
@@ -240,7 +240,7 @@ func arena_level() -> Node:
 
 func arena_ball() -> RocketBall:
 	var level := arena_level()
-	return level.get_node_or_null(^"ball|0") as RocketBall if level else null
+	return level.get_node_or_null(^"ball") as RocketBall if level else null
 
 
 func cars() -> Array[RocketCar]:

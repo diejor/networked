@@ -150,7 +150,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         int(core->scene_admits_request(
-            Ref<netw::NetwParticipant>(),
+            Ref<netw::NetwPlayer>(),
             Variant(String("res://arena.tscn")),
             netw::NetwSceneCore::SCOPE_SESSION
         )),
@@ -174,7 +174,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         int(refusing->scene_admits_request(
-            Ref<netw::NetwParticipant>(),
+            Ref<netw::NetwPlayer>(),
             Variant(String("res://arena.tscn")),
             netw::NetwSceneCore::SCOPE_SESSION
         )),
@@ -191,7 +191,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         int(broken->scene_admits_request(
-            Ref<netw::NetwParticipant>(),
+            Ref<netw::NetwPlayer>(),
             Variant(String("res://arena.tscn")),
             netw::NetwSceneCore::SCOPE_SESSION
         )),

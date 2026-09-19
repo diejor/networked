@@ -4,7 +4,7 @@
 		Wire-format codec for the packets Networked exchanges during [SceneMultiplayer]'s authentication phase.
 	</brief_description>
 	<description>
-		Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single provider byte. A packet matching neither magic is [constant KIND_UNKNOWN] and the receiver fails closed on it, because an auth phase that guesses at an unrecognised packet is an auth phase that can be walked past. Only the provider payload below reaches a [NetwAuthFlow].
+		Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single byte of body. A packet matching neither magic is [constant KIND_UNKNOWN] and the receiver fails closed on it, because an auth phase that guesses at an unrecognised packet is an auth phase that can be walked past.
 		[codeblock lang=text]
 		auth packet
 		 ┠╴ "NHEL"   a player opening a session
@@ -43,8 +43,7 @@
 				┠╴reason            String           "framing", "version" or "app", empty when ok
 				┠╴version           int              the framing version the packet carried
 				┠╴app_tag           int              the 64-bit build tag the packet carried
-				┠╴flags             int              reserved
-				┖╴provider_payload  PackedByteArray  empty on a rejection
+				┖╴flags             int              reserved
 				[/codeblock]
 				A rejection still reports the [code]version[/code] and [code]app_tag[/code] it read, so the rejecting side can say what the peer claimed rather than only that it said no.
 			</description>
@@ -78,11 +77,10 @@
 		</method>
 		<method name="encode_client_hello" qualifiers="static">
 			<return type="PackedByteArray" />
-			<param index="0" name="provider_payload" type="PackedByteArray" />
-			<param index="1" name="app_tag" type="int" default="0" />
-			<param index="2" name="flags" type="int" default="0" />
+			<param index="0" name="app_tag" type="int" default="0" />
+			<param index="1" name="flags" type="int" default="0" />
 			<description>
-				Wraps [param provider_payload] in a hello header stamped with [param app_tag], the 64-bit build tag folded from [member MultiplayerTree.app_id] and the wire identity by [method NetwMultiplayer.auth_set_app_tag]. There is no ungated value. An empty [member MultiplayerTree.app_id] still carries the wire the build speaks, so two builds that disagree about the format or the channel table are rejected whether or not the game named itself. [param flags] is reserved.
+				Writes a hello header stamped with [param app_tag], the 64-bit build tag folded from [member MultiplayerTree.app_id] and the wire identity by [method NetwMultiplayer.auth_set_app_tag]. There is no ungated value. An empty [member MultiplayerTree.app_id] still carries the wire the build speaks, so two builds that disagree about the format or the channel table are rejected whether or not the game named itself. [param flags] is reserved.
 			</description>
 		</method>
 		<method name="encode_probe_reply" qualifiers="static">

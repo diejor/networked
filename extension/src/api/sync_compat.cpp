@@ -297,11 +297,15 @@ void SyncCompat::refresh_interest_intent(Node *p_root) {
     if (entity_root == nullptr) {
         return;
     }
-    const PackedInt64Array known = plane->interest_known_peers();
+    PackedInt64Array candidates = plane->interest_known_peers();
+    const int64_t local = local_peer_id();
+    if (local != 0 && !candidates.has(local)) {
+        candidates.push_back(local);
+    }
     PackedInt64Array admitted;
-    for (int at = 0; at < known.size(); ++at) {
-        if (synchronizer_verdict(known[at], entity_root)) {
-            admitted.push_back(known[at]);
+    for (int at = 0; at < candidates.size(); ++at) {
+        if (synchronizer_verdict(candidates[at], entity_root)) {
+            admitted.push_back(candidates[at]);
         }
     }
     plane->interest_set_entity_intent(entity, admitted);
@@ -605,14 +609,21 @@ void SyncCompat::prune() {
     }
 }
 
-bool SyncCompat::synchronizer_verdict(int64_t p_peer_id, Node *p_node) {
+int64_t SyncCompat::local_peer_id() {
     NetwMultiplayer *plane = core();
-    int64_t local_id = 1;
     if (plane != nullptr && plane->session_get_inner().is_valid()
         && plane->session_get_inner()->get_multiplayer_peer().is_valid()) {
-        local_id = plane->get_unique_id();
+        return plane->get_unique_id();
     }
-    return synchronizers::visibility_verdict(p_node, p_peer_id, local_id);
+    return 1;
+}
+
+bool SyncCompat::synchronizer_verdict(int64_t p_peer_id, Node *p_node) {
+    return synchronizers::visibility_verdict(
+        p_node,
+        p_peer_id,
+        local_peer_id()
+    );
 }
 
 PackedInt32Array SyncCompat::recipients_for(

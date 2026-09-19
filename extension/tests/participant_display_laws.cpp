@@ -83,8 +83,15 @@ Ref<NetwMultiplayer> hosting() {
     return core;
 }
 
+Placed stand(const Ref<NetwMultiplayer> &p_core, const Placed &p_scene) {
+    const Placed pawn = share(p_core, p_scene.owner, StringName());
+    pawn.wrapper->set_peer_id(p_core->get_unique_id());
+    p_core->scene_player_display_invalidate();
+    return pawn;
+}
+
 TEST_CASE(
-    "[Networked][Scene][Hosted] PD1 only a listen host answers a participant "
+    "[Networked][Scene][Hosted] PD1 only a listen host answers a player "
     "viewport, so one presented isolated world reads as a display on a host "
     "and as nothing on a client, a dedicated server and a session that has "
     "resolved no role at all"
@@ -92,43 +99,46 @@ TEST_CASE(
     const Ref<NetwMultiplayer> core = hosting();
     Node *root = memnew(Node);
     const Placed arena = isolate(core, root, StringName("Arena"));
-    NETW_CHECK_EQ(int(core->scene_present(arena.handle)), int(OK));
+    stand(core, arena);
 
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() == arena.world), 1);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() == arena.world), 1);
 
     core->session_set_role(NetwMultiplayer::ROLE_CLIENT);
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() != nullptr), 0);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() != nullptr), 0);
 
     core->session_set_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() != nullptr), 0);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() != nullptr), 0);
 
     core->session_set_role(NetwMultiplayer::ROLE_NONE);
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() != nullptr), 0);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() != nullptr), 0);
 
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] PD2 the display is the scene the game named "
-    "and only that one, so a host holding two live isolated worlds draws "
-    "whichever it presented last and never the one the live book answers first"
+    "[Networked][Scene][Hosted] PD2 the display is the world the host's own "
+    "body stands in, so a host holding two live isolated worlds draws the one "
+    "it is in and never the one the live book answers first"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
     Node *root = memnew(Node);
     const Placed arena = isolate(core, root, StringName("Arena"));
     const Placed annex = isolate(core, root, StringName("Annex"));
 
-    NETW_CHECK_EQ(int(core->scene_present(annex.handle)), int(OK));
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() == annex.world), 1);
+    const Placed pawn = stand(core, annex);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() == annex.world), 1);
 
-    NETW_CHECK_EQ(int(core->scene_present(arena.handle)), int(OK));
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() == arena.world), 1);
+    annex.owner->remove_child(pawn.owner);
+    arena.owner->add_child(pawn.owner);
+    core->scene_player_display_invalidate();
+
+    NETW_CHECK_EQ(int(core->scene_player_viewport() == arena.world), 1);
 
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] PD3 a host that presents nothing draws "
+    "[Networked][Scene][Hosted] PD3 a host standing in no world draws "
     "nothing, however many live isolated worlds stand beside it, because a "
     "display that picked one of them would be picking for the game"
 ) {
@@ -138,7 +148,7 @@ TEST_CASE(
     isolate(core, root, StringName("Annex"));
 
     CHECK_FALSE(core->scene_presented().is_valid());
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() != nullptr), 0);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() != nullptr), 0);
 
     memdelete(root);
 }
@@ -153,28 +163,30 @@ TEST_CASE(
     const Placed lobby = share(core, root, StringName("Lobby"));
     isolate(core, root, StringName("Arena"));
 
-    NETW_CHECK_EQ(int(core->scene_present(lobby.handle)), int(OK));
+    stand(core, lobby);
 
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() != nullptr), 0);
+    CHECK(core->scene_presented() == lobby.handle);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() != nullptr), 0);
 
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] PD6 a local player standing in a world the "
-    "game did not name draws nothing, so the body a host happens to own never "
-    "outranks the presentation the game chose"
+    "[Networked][Scene][Hosted] PD6 a body belonging to another peer draws "
+    "that peer's world on nobody's screen, so a host watching a client "
+    "teleport keeps the display it holds"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
     Node *root = memnew(Node);
     const Placed arena = isolate(core, root, StringName("Arena"));
     const Placed annex = isolate(core, root, StringName("Annex"));
-    const Placed pawn = share(core, arena.owner, StringName());
-    pawn.wrapper->set_peer_id(core->get_unique_id());
+    stand(core, arena);
 
-    NETW_CHECK_EQ(int(core->scene_present(annex.handle)), int(OK));
+    const Placed guest = share(core, annex.owner, StringName());
+    guest.wrapper->set_peer_id(int64_t(core->get_unique_id()) + 1);
+    core->scene_player_display_invalidate();
 
-    NETW_CHECK_EQ(int(core->scene_participant_viewport() == annex.world), 1);
+    NETW_CHECK_EQ(int(core->scene_player_viewport() == arena.world), 1);
 
     memdelete(root);
 }
@@ -192,16 +204,18 @@ TEST_CASE(
         StringName("participant_viewport_changed"),
         announced.callable("changed")
     );
-    core->scene_present(arena.handle);
+    const Placed pawn = stand(core, arena);
 
-    core->scene_participant_display_settle();
+    core->scene_player_display_settle();
     NETW_CHECK_EQ(int(announced.count(StringName("changed"))), 1);
 
-    core->scene_participant_display_settle();
+    core->scene_player_display_settle();
     NETW_CHECK_EQ(int(announced.count(StringName("changed"))), 1);
 
-    core->scene_present(RID());
-    core->scene_participant_display_settle();
+    arena.owner->remove_child(pawn.owner);
+    root->add_child(pawn.owner);
+    core->scene_player_display_invalidate();
+    core->scene_player_display_settle();
     NETW_CHECK_EQ(int(announced.count(StringName("changed"))), 2);
 
     memdelete(root);

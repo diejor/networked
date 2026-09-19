@@ -27,17 +27,6 @@ func _init() -> void:
 			.interpolate(NetwInterpolate.new().lerp())
 
 
-func _ready() -> void:
-	if not is_multiplayer_authority():
-		return
-	entity.reparented.connect(present_own_scene)
-	present_own_scene()
-
-
-func present_own_scene() -> void:
-	Netw.session(self).present(entity.scene)
-
-
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority():
 		return

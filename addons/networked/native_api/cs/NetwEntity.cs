@@ -79,12 +79,11 @@ namespace Networked;
 /// </para>
 /// <para>
 /// <b>Acting on an entity</b> The server drives the lifecycle. It creates
-/// entities through the spawn pipeline (<c>ReplicationCore.replicate</c>) ,
-/// moves one with <see cref="Node.Reparent"/> or
-/// <see cref="NetwSceneHandle.Move"/>, and ends one with
-/// <see cref="NetwEntity.Despawn"/>. A client asks the server through
-/// <see cref="NetwEntity.RequestControl"/> and reads whether it steers the
-/// entity from <see cref="NetwEntity.IsControlledLocally"/>.
+/// entities with <see cref="Netw.Spawn"/> and <see cref="Netw.SpawnPlayer"/>,
+/// moves one with <see cref="Node.Reparent"/> or <see cref="Netw.Reparent"/>,
+/// and ends one with <see cref="NetwEntity.Despawn"/>. A client asks the server
+/// through <see cref="NetwEntity.RequestControl"/> and reads whether it steers
+/// the entity from <see cref="NetwEntity.IsControlledLocally"/>.
 /// <code>
 /// var entity := NetwEntity.of(hit_node)
 /// if entity and entity.is_player:
@@ -93,14 +92,21 @@ namespace Networked;
 /// </para>
 /// <para>
 /// <b>Owning identity before the tree</b> A spawned <see cref="Node"/> must own
-/// its identity before it enters the tree. Replicated spawns carry it in the
-/// SPAWN frame and stamp it during reconstruction, and
-/// <see cref="NetwEntity.Bind"/> stamps it when identity rides the
-/// <see cref="Node.Name"/> channel: call it inside a
-/// <see cref="MultiplayerSpawner.SpawnFunction"/> before returning the node. A
-/// scene requires each spawned <see cref="Node"/> to own its record, which
-/// <see cref="NetwEntity.Ensure"/> provides before the node joins the scene's
-/// subtree. <b>The facets it returns</b> <see cref="NetwEntity.Scene"/>,
+/// its identity before it enters the tree. A replicated spawn carries it in the
+/// SPAWN frame and stamps it during reconstruction, and
+/// <see cref="Netw.SpawnPlayer"/> stamps a player's body from the
+/// <see cref="NetwPlayer.UserName"/> it was spawned for. A node the game
+/// authors into a scene declares its own, and one that declares none is inert.
+/// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_entity(self).entity_id = &amp;"ball"
+/// </code>
+/// </para>
+/// <para>
+/// A node name is never an identity. A scene requires each spawned
+/// <see cref="Node"/> to own its record, which <see cref="NetwEntity.Ensure"/>
+/// provides before the node joins the scene's subtree. <b>The facets it
+/// returns</b> <see cref="NetwEntity.Scene"/>,
 /// <see cref="NetwEntity.Interest"/>, <see cref="NetwEntity.Prediction"/>, and
 /// <see cref="NetwEntity.Interpolation"/> are created once per entity. Repeated
 /// reads return the same object. They are <see cref="Variant"/> values because
@@ -383,9 +389,9 @@ public sealed class NetwEntity : NetwRefCounted
     /// ancestry consistent, whether it was made with
     /// <see cref="Node.Reparent"/>, with a bare <see cref="Node.RemoveChild"/>
     /// followed by <see cref="Node.AddChild"/>, or through
-    /// <see cref="NetwSceneHandle.Move"/>. Standing up for the first time is
-    /// not a move and reports nothing. Several hops before one settle are one
-    /// move, reported at the parent the owner ended under. A component that
+    /// <see cref="Netw.Reparent"/>. Standing up for the first time is not a
+    /// move and reports nothing. Several hops before one settle are one move,
+    /// reported at the parent the owner ended under. A component that
     /// unregisters in <c>_exit_tree</c> reconnects its runtime service
     /// registration here, so a move self-heals without
     /// <see cref="Node.RequestReady"/>. The signal takes no argument. Its fact
@@ -462,7 +468,13 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_entity_id", 3304788590UL);
 
     /// <summary>
-    /// The stable display, save and debug label for this entity.
+    /// The stable display, save and debug label for this entity, and what
+    /// identifies it across peers. An entity a game authors into a scene sets
+    /// it in <c>Object._init</c>, before the node enters the tree, because an
+    /// entity carrying none never activates. A spawn leaves it to
+    /// <see cref="Netw.SpawnPlayer"/>, which stamps the player's
+    /// <see cref="NetwPlayer.UserName"/> onto the body it was spawned for. A
+    /// game handing one player several bodies stamps a distinct id on each.
     /// </summary>
     public StringName EntityId
     {
@@ -493,9 +505,9 @@ public sealed class NetwEntity : NetwRefCounted
     /// <summary>
     /// The peer this entity represents, or <c>0</c> for a server-owned entity
     /// such as an NPC, prop or world object. A non-zero value drives
-    /// <see cref="NetwParticipant.Players"/>, the scene subscription a residing
-    /// body grants, and an automatic <see cref="NetwEntity.Despawn"/> when its
-    /// peer disconnects. This is the source of the player test. See
+    /// <see cref="NetwPlayer.Bodies"/>, the scene subscription a residing body
+    /// grants, and an automatic <see cref="NetwEntity.Despawn"/> when its peer
+    /// disconnects. This is the source of the player test. See
     /// <see cref="NetwEntity.IsPlayer"/>.
     /// </summary>
     public long PeerId
@@ -592,10 +604,10 @@ public sealed class NetwEntity : NetwRefCounted
     /// before activation. Mirrors <see cref="Node.Multiplayer"/> on the entity
     /// root once live, but handed over by the creator rather than
     /// re-discovered: stamped once at <see cref="NetwEntity.Arm"/> when the
-    /// spawn pipeline holds the api, or at first tree entry for a manual
-    /// <see cref="NetwEntity.Bind"/> flow. Immutable afterward, since an entity
-    /// changes sessions only by despawn and respawn. Every session-derived
-    /// member resolves through this one handle, so "no session" is the single
+    /// spawn pipeline holds the api, or at first tree entry for an entity a
+    /// game authored into a scene. Immutable afterward, since an entity changes
+    /// sessions only by despawn and respawn. Every session-derived member
+    /// resolves through this one handle, so "no session" is the single
     /// condition <c>multiplayer == null</c>.
     /// </summary>
     public MultiplayerApi Multiplayer
@@ -845,7 +857,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// <code>
     /// var entity := NetwEntity.of(ball)
     /// if entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED:
-    ///     show_controller(entity.controller_participant)
+    ///     show_controller(entity.controller_player)
     /// </code>
     /// </summary>
     public long Controller
@@ -910,28 +922,24 @@ public sealed class NetwEntity : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetControllerParticipant =
-        NetwApi.MethodBind(
-            "NetwEntity",
-            "get_controller_participant",
-            265848360UL);
+    private static readonly IntPtr _bindGetControllerPlayer =
+        NetwApi.MethodBind("NetwEntity", "get_controller_player", 1167648220UL);
 
     /// <summary>
-    /// The participant steering <see cref="NetwEntity.Controller"/>, or
-    /// <c>null</c>. Independent from <see cref="NetwEntity.Participant"/>: a
-    /// server-owned entity can be controlled by a participant without
-    /// representing that participant.
+    /// The player steering <see cref="NetwEntity.Controller"/>, or <c>null</c>.
+    /// Independent from <see cref="NetwEntity.Player"/>: a server-owned entity
+    /// can be controlled by a player without representing that player.
     /// </summary>
-    public NetwParticipant ControllerParticipant
+    public NetwPlayer ControllerPlayer
     {
         get
         {
             IntPtr answered = default;
             NetwThunks.Ptrcall0_IntPtr(
-                _bindGetControllerParticipant,
+                _bindGetControllerPlayer,
                 Checked,
                 ref answered);
-            return NetwParticipant.Adopt(answered);
+            return NetwPlayer.Adopt(answered);
         }
     }
 
@@ -1001,24 +1009,21 @@ public sealed class NetwEntity : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetParticipant =
-        NetwApi.MethodBind("NetwEntity", "get_participant", 265848360UL);
+    private static readonly IntPtr _bindGetPlayer =
+        NetwApi.MethodBind("NetwEntity", "get_player", 1167648220UL);
 
     /// <summary>
-    /// The participant <see cref="NetwEntity.PeerId"/> represents, or
-    /// <c>null</c>. This resolves the live session handle for player avatars;
-    /// server-owned entities, props and NPCs return <c>null</c>.
+    /// The player <see cref="NetwEntity.PeerId"/> represents, or <c>null</c>.
+    /// This resolves the live session handle for player avatars; server-owned
+    /// entities, props and NPCs return <c>null</c>.
     /// </summary>
-    public NetwParticipant Participant
+    public NetwPlayer Player
     {
         get
         {
             IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindGetParticipant,
-                Checked,
-                ref answered);
-            return NetwParticipant.Adopt(answered);
+            NetwThunks.Ptrcall0_IntPtr(_bindGetPlayer, Checked, ref answered);
+            return NetwPlayer.Adopt(answered);
         }
     }
 
@@ -1043,7 +1048,7 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_is_player", 36873697UL);
 
     /// <summary>
-    /// <c>true</c> when this entity represents a participant rather than a
+    /// <c>true</c> when this entity represents a player rather than a
     /// server-owned object. The canonical player test across the addon,
     /// equivalent to a non-zero <see cref="NetwEntity.PeerId"/>.
     /// </summary>
@@ -1506,133 +1511,6 @@ public sealed class NetwEntity : NetwRefCounted
         return NetwEntity.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindParseEntity =
-        NetwApi.MethodBind("NetwEntity", "parse_entity", 3915750055UL);
-
-    /// <summary>
-    /// The entity id in an <c>entity_id|peer_id</c> node name, empty for a name
-    /// that spells no identity.
-    /// </summary>
-    public static StringName ParseEntity(string nodeName)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromString(nodeName);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindParseEntity, IntPtr.Zero, in slot0, ref answered);
-        slot0.Dispose();
-        StringName result = VariantUtils.ConvertToStringName(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindParsePeer =
-        NetwApi.MethodBind("NetwEntity", "parse_peer", 1597066294UL);
-
-    /// <summary>
-    /// The peer id in an <c>entity_id|peer_id</c> node name, <c>0</c> for a
-    /// name that spells no identity and for an entity representing no player.
-    /// </summary>
-    public static long ParsePeer(string nodeName)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromString(nodeName);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindParsePeer, IntPtr.Zero, in slot0, ref answered);
-        slot0.Dispose();
-        long result = VariantUtils.ConvertToInt64(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindNameFor =
-        NetwApi.MethodBind("NetwEntity", "name_for", 2345684147UL);
-
-    /// <summary>
-    /// The node name a spawn gives the player <paramref name="participant"/>
-    /// drives, built from their <see cref="NetwParticipant.UserName"/> and
-    /// their peer id, and empty when that username holds the separator the two
-    /// are joined with.
-    /// </summary>
-    public static string NameFor(NetwParticipant participant)
-    {
-        godot_variant slot0 =
-            VariantUtils.CreateFromGodotObjectPtr(
-                participant?.Native ?? IntPtr.Zero);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindNameFor, IntPtr.Zero, in slot0, ref answered);
-        slot0.Dispose();
-        string result = VariantUtils.ConvertToString(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindFind =
-        NetwApi.MethodBind("NetwEntity", "find", 589285412UL);
-
-    /// <summary>
-    /// The node <paramref name="participant"/> plays, found under
-    /// <paramref name="root"/>, or <c>null</c> when they have none there. It
-    /// resolves the one name <see cref="NetwEntity.NameFor"/> builds, as a path
-    /// under <paramref name="root"/>, so it answers a body a spawn named by
-    /// that convention and standing directly there. A body the game named
-    /// itself, or parented deeper, is reached through
-    /// <see cref="NetwParticipant.Players"/> instead, which is also the read
-    /// for a participant holding more than one.
-    /// </summary>
-    public static Node Find(Node root, NetwParticipant participant)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(root);
-        godot_variant slot1 =
-            VariantUtils.CreateFromGodotObjectPtr(
-                participant?.Native ?? IntPtr.Zero);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindFind,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindBind =
-        NetwApi.MethodBind("NetwEntity", "bind", 926100483UL);
-
-    /// <summary>
-    /// Binds <paramref name="entityId"/> and <paramref name="peerId"/> onto
-    /// <paramref name="node"/> and returns it. This is the public identity
-    /// binding surface; once bound, the node's name is owned by the
-    /// synchronization system and must not be modified. An invalid
-    /// <paramref name="entityId"/> binds nothing and leaves the record
-    /// unchanged.
-    /// <code>
-    /// var player := NetwEntity.bind(copy, username, peer_id)
-    /// NetwEntity.of(self).scene.root.add_child(player)
-    /// </code>
-    /// </summary>
-    public static Node Bind(Node node, StringName entityId, long peerId)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(entityId);
-        godot_variant slot2 = VariantUtils.CreateFromInt((long)peerId);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindBind,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindInstantiateFrom =
         NetwApi.MethodBind("NetwEntity", "instantiate_from", 1961433713UL);
 
@@ -1739,9 +1617,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// spawn path funnels through, called on the orphan before
     /// <see cref="Node.AddChild"/> on the pipeline paths so authority is
     /// recursive and correct in every child <c>Node._enter_tree</c> and
-    /// <c>Node._ready</c>, on every peer. The manual
-    /// <see cref="NetwEntity.Bind"/> flows arm at their owner's first tree
-    /// entry instead.
+    /// <c>Node._ready</c>, on every peer. An entity a game authors into a scene
+    /// arms at its owner's first tree entry instead.
     /// </summary>
     public void Arm(NetwMultiplayer api = null)
     {

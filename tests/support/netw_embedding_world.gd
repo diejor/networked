@@ -12,7 +12,7 @@
 ## var world := _make_world()          # scoped or root
 ## var host := await world.host()      # host online through the same verb
 ## var client := await world.add_client("p1")
-## assert_that(host.peer_get_participant(client.get_unique_id())).is_not_null()
+## assert_that(host.peer_get_player(client.get_unique_id())).is_not_null()
 ## await world.dispose()               # restore process state
 ## [/codeblock]
 ##
@@ -34,7 +34,7 @@ func host() -> NetwMultiplayer:
 
 
 ## Joins a client named [param username] and returns its [NetwMultiplayer] once it
-## is admitted (its [member NetwMultiplayer.local_participant] is set).
+## is admitted (its [member NetwMultiplayer.local_player] is set).
 func add_client(_username: String) -> NetwMultiplayer:
 	return null
 

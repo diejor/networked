@@ -12,11 +12,10 @@ namespace Networked;
 /// <remarks>
 /// Every packet is framed with a four-byte magic prefix naming its purpose, so
 /// a session can tell a joining player from a server browser before it reads a
-/// single provider byte. A packet matching neither magic is
+/// single byte of body. A packet matching neither magic is
 /// <see cref="NetwAuthProtocol.Kind.Unknown"/> and the receiver fails closed on
 /// it, because an auth phase that guesses at an unrecognised packet is an auth
-/// phase that can be walked past. Only the provider payload below reaches a
-/// <see cref="NetwAuthFlow"/>.
+/// phase that can be walked past.
 /// <code>
 /// auth packet
 ///  ┠╴ "NHEL"   a player opening a session
@@ -170,38 +169,30 @@ public sealed class NetwAuthProtocol : NetwRefCounted
         NetwApi.MethodBind(
             "NetwAuthProtocol",
             "encode_client_hello",
-            3062473547UL);
+            4277510008UL);
 
     /// <summary>
-    /// Wraps <paramref name="providerPayload"/> in a hello header stamped with
-    /// <paramref name="appTag"/>, the 64-bit build tag folded from
-    /// <see cref="MultiplayerTree.AppId"/> and the wire identity by
-    /// <see cref="NetwMultiplayer.AuthSetAppTag"/>. There is no ungated value.
-    /// An empty <see cref="MultiplayerTree.AppId"/> still carries the wire the
-    /// build speaks, so two builds that disagree about the format or the
-    /// channel table are rejected whether or not the game named itself.
-    /// <paramref name="flags"/> is reserved.
+    /// Writes a hello header stamped with <paramref name="appTag"/>, the 64-bit
+    /// build tag folded from <see cref="MultiplayerTree.AppId"/> and the wire
+    /// identity by <see cref="NetwMultiplayer.AuthSetAppTag"/>. There is no
+    /// ungated value. An empty <see cref="MultiplayerTree.AppId"/> still
+    /// carries the wire the build speaks, so two builds that disagree about the
+    /// format or the channel table are rejected whether or not the game named
+    /// itself. <paramref name="flags"/> is reserved.
     /// </summary>
-    public static byte[] EncodeClientHello(
-        byte[] providerPayload,
-        long appTag = 0,
-        int flags = 0)
+    public static byte[] EncodeClientHello(long appTag = 0, int flags = 0)
     {
-        godot_variant slot0 =
-            VariantUtils.CreateFromPackedByteArray(providerPayload);
-        godot_variant slot1 = VariantUtils.CreateFromInt((long)appTag);
-        godot_variant slot2 = VariantUtils.CreateFromInt((long)flags);
+        godot_variant slot0 = VariantUtils.CreateFromInt((long)appTag);
+        godot_variant slot1 = VariantUtils.CreateFromInt((long)flags);
         godot_variant answered = default;
-        NetwThunks.Call3(
+        NetwThunks.Call2(
             _bindEncodeClientHello,
             IntPtr.Zero,
             in slot0,
             in slot1,
-            in slot2,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
-        slot2.Dispose();
         byte[] result =
             VariantUtils.ConvertAsPackedByteArrayToSystemArray(answered);
         answered.Dispose();
@@ -223,8 +214,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
     /// ┠╴reason            String           "framing", "version" or "app", empty when ok
     /// ┠╴version           int              the framing version the packet carried
     /// ┠╴app_tag           int              the 64-bit build tag the packet carried
-    /// ┠╴flags             int              reserved
-    /// ┖╴provider_payload  PackedByteArray  empty on a rejection
+    /// ┖╴flags             int              reserved
     /// </code>
     /// <para>
     /// A rejection still reports the <c>version</c> and <c>app_tag</c> it read,

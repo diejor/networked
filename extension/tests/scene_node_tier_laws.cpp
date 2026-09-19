@@ -196,9 +196,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SNT9 a scene leaving the live book clears the "
-    "presentation that named it and chooses nothing in its place, so a host "
-    "whose world went away draws nothing rather than whatever is left"
+    "[Networked][Scene][Hosted] SNT9 a scene leaving the live book leaves its "
+    "node mounted where the game put it, so forgetting a scene is a book "
+    "edit and never a free"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -207,7 +207,6 @@ TEST_CASE(
     const Mounted annex = mount_plain(core, root, StringName("Annex"));
 
     NETW_CHECK_EQ(core->get_scene_core()->live_count(), 2);
-    NETW_CHECK_EQ(int(core->scene_present(arena.scene)), int(OK));
 
     core->scene_forget(arena.root);
 
@@ -337,7 +336,7 @@ TEST_CASE(
     const Mounted annex = mount_plain(core, root, StringName("Annex"));
 
     const Ref<netw::NetwPromise> refused = core->scene_apply_change(
-        Ref<netw::NetwParticipant>(),
+        Ref<netw::NetwPlayer>(),
         StringName("Nowhere"),
         NetwMultiplayer::SCENE_CHANGE_SESSION,
         nullptr
@@ -348,7 +347,7 @@ TEST_CASE(
     NETW_CHECK_EQ(annex.root->get_parent(), root);
 
     const Ref<netw::NetwPromise> changed = core->scene_apply_change(
-        Ref<netw::NetwParticipant>(),
+        Ref<netw::NetwPlayer>(),
         StringName("Annex"),
         NetwMultiplayer::SCENE_CHANGE_SESSION,
         nullptr
@@ -516,9 +515,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SNT18 a joining participant spends the "
+    "[Networked][Scene][Hosted] SNT18 a joining player spends the "
     "admission parked for it against every live scene and is announced as a "
-    "viewer there, and a participant nothing parked for is announced nowhere"
+    "viewer there, and a player nothing parked for is announced nowhere"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -531,26 +530,26 @@ TEST_CASE(
         seen.callable("viewer")
     );
 
-    Ref<netw::NetwParticipant> waiting;
+    Ref<netw::NetwPlayer> waiting;
     waiting.instantiate();
     waiting->bind_to(core.ptr(), 9);
-    core->participant_adopt(9, waiting);
-    core->participant_admit(9);
+    core->player_adopt(9, waiting);
+    core->player_admit(9);
     CHECK(core->get_scene_core()->admission_park(arena.scene, 9));
     CHECK(core->get_scene_core()->admission_is_parked(arena.scene, 9));
 
-    core->scene_on_participant_joined(waiting);
+    core->scene_on_player_joined(waiting);
 
     CHECK_FALSE(core->get_scene_core()->admission_is_parked(arena.scene, 9));
     NETW_CHECK_EQ(seen.count(StringName("viewer")), 1);
 
-    Ref<netw::NetwParticipant> stranger;
+    Ref<netw::NetwPlayer> stranger;
     stranger.instantiate();
     stranger->bind_to(core.ptr(), 11);
-    core->participant_adopt(11, stranger);
-    core->participant_admit(11);
+    core->player_adopt(11, stranger);
+    core->player_admit(11);
 
-    core->scene_on_participant_joined(stranger);
+    core->scene_on_player_joined(stranger);
 
     NETW_CHECK_EQ(seen.count(StringName("viewer")), 1);
 
@@ -580,11 +579,11 @@ TEST_CASE(
     );
 
     REQUIRE(core->scene_admit_peer(arena.scene, 7));
-    Ref<netw::NetwParticipant> watching;
+    Ref<netw::NetwPlayer> watching;
     watching.instantiate();
     watching->bind_to(core.ptr(), 7);
-    core->participant_adopt(7, watching);
-    core->participant_admit(7);
+    core->player_adopt(7, watching);
+    core->player_admit(7);
     const int announced = seen.count(StringName("viewer"));
 
     core->scene_open_admission(arena.root);

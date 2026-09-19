@@ -1,146 +1,60 @@
-#include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
-#include "godot/node.hpp"
-#include "netw/api/entity.hpp"
-#include "netw/api/netw_identity.hpp"
+#include "netw/api/join_request.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
 #include "netw/session/frames.hpp"
 
 namespace TestNetwSessionUsername {
 
 using namespace godot;
-using netw::NetwEntity;
-using netw::NetwIdentity;
 using netw::NetwMultiplayer;
 using netw::session::AcceptFrame;
 
-Ref<NetwEntity> seated_as(Node *p_node, const StringName &p_id) {
-    p_node->set_name("Held");
-    const Ref<NetwEntity> entity = NetwEntity::ensure(p_node);
-    entity->set_entity_id(p_id);
-    return entity;
-}
-
-AcceptFrame claiming(int64_t p_peer, const StringName &p_name) {
-    AcceptFrame out;
-    out.peer_id = p_peer;
-    out.username = p_name;
-    return out;
-}
-
 TEST_CASE(
-    "[Networked][Session][Hosted] U1 a name no seated player holds is "
-    "admitted exactly as it was claimed"
+    "[Networked][Session][Hosted] U1 two joins claiming one username are both "
+    "admitted under it, each on its own membership, and the session records "
+    "no refusal either of them would have to retry past"
 ) {
-    Node *held = memnew(Node);
-    TypedArray<NetwEntity> seated;
-    seated.push_back(seated_as(held, "ana"));
-
-    Ref<NetwMultiplayer> session;
-    session.instantiate();
-    AcceptFrame join = claiming(4, "bo");
-
-    CHECK(session->session_admit_username(join, seated, Callable()));
-    CHECK(bool(join.username == StringName("bo")));
-
-    memdelete(held);
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] U2 an unauthenticated collision renames "
-    "around the seated name on a debug build rather than seating two players "
-    "under one name, which is what a dev loop launching the same client "
-    "twice needs"
-) {
-    Node *held = memnew(Node);
-    TypedArray<NetwEntity> seated;
-    seated.push_back(seated_as(held, "ana"));
-
-    Ref<NetwMultiplayer> session;
-    session.instantiate();
-    AcceptFrame join = claiming(4, "ana");
-
-    CHECK(session->session_admit_username(join, seated, Callable()));
-    CHECK(bool(join.username == StringName("ana1")));
-
-    memdelete(held);
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] U3 a collision the peer authenticated "
-    "under is refused, the reason is recorded, and the peer is dropped"
-) {
-    Node *held = memnew(Node);
-    TypedArray<NetwEntity> seated;
-    seated.push_back(seated_as(held, "ana"));
-
-    Ref<NetwMultiplayer> session;
-    session.instantiate();
-    Ref<NetwIdentity> identity;
-    identity.instantiate();
-    session->peer_set_identity(4, identity);
-
-    netw_test::CallLog dropped;
-    AcceptFrame join = claiming(4, "ana");
-
-    CHECK_FALSE(
-        session->session_admit_username(join, seated, dropped.callable("drop"))
-    );
-    NETW_CHECK_EQ(dropped.count("drop"), 1);
-    NETW_CHECK_EQ(int64_t(dropped.args("drop")[0]), int64_t(4));
-    CHECK_FALSE(session->session_refusal(4).is_empty());
-    CHECK(bool(join.username == StringName("ana")));
-
-    memdelete(held);
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] U4 a collision nothing authenticated is "
-    "admitted under the claimed name on a build that does not rename, "
-    "because no credential settles which player owns it"
-) {
-    PackedStringArray taken;
-    taken.push_back("ana");
-
     Ref<NetwMultiplayer> session;
     session.instantiate();
 
-    NETW_CHECK_EQ(
-        session->session_name_verdict("ana", taken, false, false),
-        int(netw::JoinRoster::ADMIT)
-    );
-    NETW_CHECK_EQ(
-        session->session_name_verdict("ana", taken, true, false),
-        int(netw::JoinRoster::RENAME)
-    );
-    NETW_CHECK_EQ(
-        session->session_name_verdict("ana", taken, true, true),
-        int(netw::JoinRoster::REFUSE)
-    );
+    netw::JoinRequest first;
+    first.username = StringName("ana");
+    AcceptFrame seated;
+    CHECK(session->session_resolve_inbound_join(first, 4, seated));
+    session->session_admit(seated);
+
+    netw::JoinRequest second;
+    second.username = StringName("ana");
+    AcceptFrame rival;
+    CHECK(session->session_resolve_inbound_join(second, 5, rival));
+    CHECK(bool(rival.username == StringName("ana")));
+    CHECK(rival.player_id != seated.player_id);
+    CHECK(session->session_refusal(5).is_empty());
+    session->session_admit(rival);
+
+    const Ref<netw::NetwPlayer> one = session->player_of(4);
+    const Ref<netw::NetwPlayer> other = session->player_of(5);
+    REQUIRE(one.is_valid());
+    REQUIRE(other.is_valid());
+    CHECK(one->get_is_active());
+    CHECK(other->get_is_active());
+    CHECK(bool(one->get_username() == StringName("ana")));
+    CHECK(bool(other->get_username() == StringName("ana")));
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] U5 a seated player with no stamped id "
-    "holds the leading slice of its node name, and a record claiming no name "
-    "admits nothing"
+    "[Networked][Session][Hosted] U2 a join carrying no username at all is "
+    "not resolved, so a forged payload seats nobody"
 ) {
-    Node *held = memnew(Node);
-    held->set_name("ana|7");
-    TypedArray<NetwEntity> seated;
-    seated.push_back(NetwEntity::ensure(held));
-
     Ref<NetwMultiplayer> session;
     session.instantiate();
-    AcceptFrame join = claiming(4, "ana");
 
-    CHECK(session->session_admit_username(join, seated, Callable()));
-    CHECK(bool(join.username == StringName("ana1")));
-
-    AcceptFrame nameless = claiming(4, StringName());
-    CHECK_FALSE(session->session_admit_username(nameless, seated, Callable()));
-
-    memdelete(held);
+    netw::JoinRequest nameless;
+    AcceptFrame seated;
+    CHECK_FALSE(session->session_resolve_inbound_join(nameless, 4, seated));
+    CHECK(session->player_of(4).is_null());
 }
 
 } // namespace TestNetwSessionUsername

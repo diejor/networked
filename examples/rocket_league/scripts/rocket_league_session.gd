@@ -8,7 +8,6 @@ const ARENA := "res://examples/rocket_league/scenes/arena.tscn"
 
 var stepped := false
 var level: Node
-var roster: Array[NetwParticipant] = []
 
 
 func _init() -> void:
@@ -16,13 +15,11 @@ func _init() -> void:
 	Netw.configure_lagcomp(self)
 	Netw.configure_session(self).app(&"netw-example-rocket-league")
 	Netw.configure_clock(self).ticks_per_second(60)
-	Netw.configure_join(self, enter_lobby)
+	Netw.configure_join(enter_lobby)
 
 
 func _ready() -> void:
 	session.scene_live.connect(on_scene_live)
-	session.presentation_changed.connect(on_presentation_changed)
-	session.participant_left.connect(leave_match)
 	session.ended.connect(show_browser)
 	session.disconnected.connect(show_browser)
 
@@ -38,60 +35,57 @@ func open_lobby() -> void:
 	add_child(level)
 
 
-func enter_lobby(participant: NetwParticipant) -> void:
-	roster.append(participant)
+func enter_lobby(player: NetwPlayer) -> void:
 	var arena: NetwSceneHandle = Netw.scene(self, &"Arena")
-	if arena != null:
-		arena.watch(participant)
-		car_spawner(arena).add_car(participant, roster.size() - 1)
+	if arena == null:
+		open_lobby()
+		Netw.scene(level).watch(player)
 		return
-	open_lobby()
-	Netw.scene(level).watch(participant)
+	add_car(arena, player)
 
 
-func leave_match(participant: NetwParticipant) -> void:
-	roster.erase(participant)
+func add_car(arena: NetwSceneHandle, player: NetwPlayer) -> void:
+	var players: Node = arena.root.get_node(^"Players")
+	if not player.bodies.is_empty():
+		return
+	var grid_slot := players.get_child_count()
+	@warning_ignore("integer_division")
+	var slot := grid_slot / 2
+	players.add_child(
+		Netw.spawn_player(
+			player,
+			arena.root.spawn_car,
+			grid_slot % 2,
+			slot,
+		)
+	)
 
 
 func start_match() -> void:
 	Netw.change_scene_to_file(self, ARENA)
 
 
-func car_spawner(arena: NetwSceneHandle) -> RocketPlayerSpawner:
-	return arena.root.get_node(^"PlayerSpawner")
-
-
 func open_match(arena: NetwSceneHandle) -> void:
-	if not arena.root.is_node_ready():
-		arena.root.ready.connect(open_match.bind(arena), CONNECT_ONE_SHOT)
-		return
-	var spawner := car_spawner(arena)
-	for slot in roster.size():
-		spawner.add_car(roster[slot], slot)
+	for player: NetwPlayer in session.players:
+		if player.is_active:
+			add_car(arena, player)
 
 
 func on_scene_live(scene: NetwSceneHandle) -> void:
 	if scene.label == &"Arena":
 		install_stepper(scene.root as Node3D, scene)
-		scene.observe(NetwMultiplayer.SCENE_EVENT_PLAYER, car_edge.bind(scene))
+		scene.observe(NetwMultiplayer.SCENE_EVENT_BODY, car_edge.bind(scene))
 		declare_islands(scene)
 
 	if scene.label == &"Lobby":
 		var in_lobby: InLobby = scene.root.find_child("InLobby", true, false)
 		in_lobby.start_pressed.connect(start_match)
 
-	session.present(scene)
 	if scene.label == &"Arena" and multiplayer.is_server():
 		open_match(scene)
 
 
 func install_stepper(root: Node3D, arena: NetwSceneHandle) -> void:
-	if not root.is_inside_tree():
-		root.tree_entered.connect(
-			install_stepper.bind(root, arena),
-			CONNECT_ONE_SHOT,
-		)
-		return
 	var space: RID = root.get_world_3d().space
 	multiplayer.predict_stepper_install(space, RocketJoltStepper.new())
 	stepped = multiplayer.predict_get_stepper(space) != null
@@ -124,10 +118,6 @@ func simulated_bodies(arena: NetwSceneHandle) -> Array[NetwEntity]:
 		if entity.owner is RocketCar or entity.owner is RocketBall:
 			out.append(entity)
 	return out
-
-
-func on_presentation_changed(_from: NetwSceneHandle, to: NetwSceneHandle) -> void:
-	browser.visible = to == null
 
 
 func show_browser() -> void:

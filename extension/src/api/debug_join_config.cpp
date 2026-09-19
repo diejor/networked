@@ -2,10 +2,22 @@
 
 #include "godot/class_db.hpp"
 #include "godot/object.hpp"
+#include "godot/os.hpp"
 
 using namespace godot;
 
 namespace netw {
+
+StringName DebugJoinConfig::submitted_username() const {
+    if (username != StringName(DEFAULT_USERNAME)) {
+        return username;
+    }
+    OS *os = OS::get_singleton();
+    const int64_t process = os == nullptr ? 0 : os->get_process_id();
+    return StringName(
+        String(DEFAULT_USERNAME) + String("-") + String::num_int64(process)
+    );
+}
 
 void DebugJoinConfig::_bind_methods() {
     ClassDB::bind_method(

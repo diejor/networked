@@ -173,10 +173,10 @@ TEST_CASE(
     const Placed arena = place(core, root, true);
     const int64_t here = core->get_unique_id();
 
-    Ref<netw::NetwParticipant> row;
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
-    core->participant_adopt(here, row);
-    REQUIRE(core->participant_admit(here));
+    core->player_adopt(here, row);
+    REQUIRE(core->player_admit(here));
     NETW_CHECK_EQ(int(core->scene_watch(arena.handle, here)), int(OK));
     REQUIRE(core->scene_subscribes(arena.handle, here));
 

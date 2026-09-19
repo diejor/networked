@@ -29,24 +29,24 @@ using netw_test::CallLog;
 using netw_test::EntityDecl;
 using netw_test::LoopbackRig;
 
-Ref<netw::NetwParticipant> participant_of(NetwMultiplayer *p_api, int p_peer) {
-    return p_api->peer_get_participant(p_peer);
+Ref<netw::NetwPlayer> player_of(NetwMultiplayer *p_api, int p_peer) {
+    return p_api->peer_get_player(p_peer);
 }
 
 TEST_CASE(
-    "[Networked][Session] a connected peer holds no participant until "
+    "[Networked][Session] a connected peer holds no player until "
     "it joins"
 ) {
     LoopbackRig rig(1);
     rig.pump(4);
 
-    CHECK(rig.client(0)->participant_local().is_null());
-    CHECK(participant_of(rig.server(), rig.peer_id(0)).is_null());
+    CHECK(rig.client(0)->player_local().is_null());
+    CHECK(player_of(rig.server(), rig.peer_id(0)).is_null());
 
-    Ref<netw::NetwParticipant> seated = rig.join(0, StringName("alice"));
+    Ref<netw::NetwPlayer> seated = rig.join(0, StringName("alice"));
 
     CHECK(seated.is_valid());
-    CHECK(participant_of(rig.server(), rig.peer_id(0)).is_valid());
+    CHECK(player_of(rig.server(), rig.peer_id(0)).is_valid());
 }
 
 TEST_CASE(
@@ -56,11 +56,11 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.pump(4);
 
-    Ref<netw::NetwParticipant> seated = rig.join(-1, StringName("host"));
+    Ref<netw::NetwPlayer> seated = rig.join(-1, StringName("host"));
 
     CHECK(seated.is_valid());
-    CHECK(participant_of(rig.server(), 1).is_valid());
-    CHECK(rig.client(0)->participant_local().is_null());
+    CHECK(player_of(rig.server(), 1).is_valid());
+    CHECK(rig.client(0)->player_local().is_null());
 }
 
 TEST_CASE(
@@ -77,20 +77,20 @@ TEST_CASE(
 
     for (int at = -1; at < 2; ++at) {
         NetwMultiplayer *api = at < 0 ? rig.server() : rig.client(at);
-        CHECK(participant_of(api, 1).is_valid());
-        CHECK(participant_of(api, rig.peer_id(0)).is_valid());
-        CHECK(participant_of(api, rig.peer_id(1)).is_valid());
+        CHECK(player_of(api, 1).is_valid());
+        CHECK(player_of(api, rig.peer_id(0)).is_valid());
+        CHECK(player_of(api, rig.peer_id(1)).is_valid());
     }
 }
 
 TEST_CASE(
-    "[Networked][Session] a joined peer's participant carries the name "
+    "[Networked][Session] a joined peer's player carries the name "
     "its payload named"
 ) {
     LoopbackRig rig(1);
     rig.pump(4);
 
-    Ref<netw::NetwParticipant> seated = rig.join(0, StringName("alice"));
+    Ref<netw::NetwPlayer> seated = rig.join(0, StringName("alice"));
 
     REQUIRE(seated.is_valid());
     CHECK(seated->get_username() == StringName("alice"));
@@ -154,13 +154,13 @@ TEST_CASE(
 
     NetwMultiplayer *client_scenes = rig.client(0);
     REQUIRE(client_scenes != nullptr);
-    const Ref<netw::NetwParticipant> seated
-        = rig.client(0)->participant_local();
+    const Ref<netw::NetwPlayer> seated
+        = rig.client(0)->player_local();
     REQUIRE(seated.is_valid());
 
     NETW_CHECK_EQ(int(client_scenes->scene_list().size()), 1);
     CHECK(client_scenes->scene_find(StringName("Arena")).is_valid());
-    CHECK(seated->get_players().is_empty());
+    CHECK(seated->get_bodies().is_empty());
     CHECK_FALSE(client_scenes->scene_presented().is_valid());
 }
 
@@ -225,7 +225,7 @@ TEST_CASE(
     netw::NetwMultiplayer *core = rig.server();
     REQUIRE(core != nullptr);
     NETW_CHECK_EQ(int(core->scene_list().size()), 2);
-    CHECK(core->scene_players_all().is_empty());
+    CHECK(core->scene_bodies_all().is_empty());
 
     const RID pawn
         = rig.declare_entity(EntityDecl().named("Pawn").on_route(71));
@@ -246,7 +246,7 @@ TEST_CASE(
     seated_pawn->set_peer_id(rig.peer_id(0));
     seated_guard->set_peer_id(1);
 
-    const TypedArray<netw::NetwEntity> roster = core->scene_players_all();
+    const TypedArray<netw::NetwEntity> roster = core->scene_bodies_all();
 
     NETW_CHECK_EQ(int(roster.size()), 2);
     CHECK(roster.has(seated_pawn));
@@ -294,7 +294,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Session] the membership announcement precedes the join "
     "handler whether the handler answers synchronously or suspends, so a "
-    "participant_joined listener never observes a member the handler has "
+    "player_joined listener never observes a member the handler has "
     "not yet seen"
 ) {
     Ref<NetwMultiplayer> core;
@@ -313,7 +313,7 @@ TEST_CASE(
     REQUIRE(handler.is_valid());
     CallLog announced;
     core->connect(
-        StringName("participant_joined"),
+        StringName("player_joined"),
         announced.callable("joined")
     );
 
@@ -493,7 +493,7 @@ TEST_CASE(
         CHECK_FALSE(core->session_preflight_join(starved, Array()));
 
         NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 1);
-        CHECK_FALSE(core->participant_has(12));
+        CHECK_FALSE(core->player_has(12));
     }
 
     core->embed_dispose();
@@ -560,8 +560,8 @@ TEST_CASE(
     const Ref<NetwMultiplayer> first_api = branch_session(first_branch);
     const Ref<NetwMultiplayer> second_api = branch_session(second_branch);
 
-    netw::Netw::configure_join(first, Callable(first, StringName("seat")));
-    netw::Netw::configure_join(second, Callable(second, StringName("seat")));
+    netw::Netw::configure_join(Callable(first, StringName("seat")));
+    netw::Netw::configure_join(Callable(second, StringName("seat")));
 
     admit_one(first_api, 21);
     admit_one(second_api, 22);
@@ -649,7 +649,7 @@ TEST_CASE(
     REQUIRE(carrier != nullptr);
     branch->add_child(carrier);
     const Ref<NetwMultiplayer> api = branch_session(branch);
-    netw::Netw::configure_join(carrier, Callable(carrier, StringName("seat")));
+    netw::Netw::configure_join(Callable(carrier, StringName("seat")));
 
     admit_one(api, 31);
     NETW_CHECK_EQ(int(carrier->get(StringName("seated"))), 1);
@@ -685,10 +685,10 @@ TEST_CASE(
 
     admit_one(api, 51);
 
-    CHECK(api->participant_has(51));
-    CHECK(api->participant_is_active(51, api->participant_incarnation(51)));
-    CHECK(api->participant_players(51).is_empty());
-    CHECK(api->scene_players_all().is_empty());
+    CHECK(api->player_has(51));
+    CHECK(api->player_is_active(51, api->player_incarnation(51)));
+    CHECK(api->player_bodies(51).is_empty());
+    CHECK(api->scene_bodies_all().is_empty());
 
     api->embed_dispose();
     release_branch(branch);
@@ -697,7 +697,8 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][SceneTree] two live join declarations on one session refuse "
     "the join, because picking the later entrant would seat a player through "
-    "a policy the game did not choose, and clearing one restores the answer"
+    "a policy the game did not choose, and one of them leaving the branch "
+    "restores the answer"
 ) {
     const Ref<Script> shape = shape_of(
         "extends Node\n"
@@ -716,19 +717,20 @@ TEST_CASE(
     branch->add_child(second);
     const Ref<NetwMultiplayer> api = branch_session(branch);
 
-    netw::Netw::configure_join(first, Callable(first, StringName("seat")));
-    netw::Netw::configure_join(second, Callable(second, StringName("seat")));
+    netw::Netw::configure_join(Callable(first, StringName("seat")));
+    netw::Netw::configure_join(Callable(second, StringName("seat")));
 
     admit_one(api, 41);
     NETW_CHECK_EQ(int(first->get(StringName("seated"))), 0);
     NETW_CHECK_EQ(int(second->get(StringName("seated"))), 0);
 
-    CHECK(netw::Netw::configure_join(second, Callable()).is_null());
+    branch->remove_child(second);
 
     admit_one(api, 42);
     NETW_CHECK_EQ(int(first->get(StringName("seated"))), 1);
     NETW_CHECK_EQ(int(second->get(StringName("seated"))), 0);
 
+    memdelete(second);
     api->embed_dispose();
     release_branch(branch);
 }
@@ -756,14 +758,10 @@ TEST_CASE(
     const Ref<NetwMultiplayer> first_api = branch_session(first_branch);
     const Ref<NetwMultiplayer> second_api = branch_session(second_branch);
 
-    const Ref<netw::NetwJoinConfig> packed = netw::Netw::configure_join(
-        first,
-        Callable(first, StringName("seat"))
-    );
-    const Ref<netw::NetwJoinConfig> bare = netw::Netw::configure_join(
-        second,
-        Callable(second, StringName("seat"))
-    );
+    const Ref<netw::NetwJoinConfig> packed
+        = netw::Netw::configure_join(Callable(first, StringName("seat")));
+    const Ref<netw::NetwJoinConfig> bare
+        = netw::Netw::configure_join(Callable(second, StringName("seat")));
     REQUIRE(packed.is_valid());
     REQUIRE(bare.is_valid());
     CHECK(packed != bare);
@@ -790,10 +788,11 @@ TEST_CASE(
 ) {
     const Ref<Script> shape = shape_of(
         "extends Node\n"
+        "var seated := 0\n"
         "func lambda() -> Callable:\n"
-        "\treturn func(_rj, _team: int) -> void: pass\n"
+        "\treturn func(_rj, _team: int) -> void: seated += 1\n"
         "func opaque() -> Callable:\n"
-        "\treturn func(_rj) -> void: pass\n"
+        "\treturn func(_rj) -> void: seated += 1\n"
     );
     REQUIRE(shape.is_valid());
     Node *branch = mounted_branch("JoinScopeOpaque");
@@ -804,7 +803,7 @@ TEST_CASE(
 
     const Callable lambda = holder->call(StringName("lambda"));
     NETW_CHECK_EQ(lambda.get_argument_count(), 2);
-    CHECK(netw::Netw::configure_join(holder, lambda).is_null());
+    CHECK(netw::Netw::configure_join(lambda).is_null());
 
     const NetwMultiplayer::JoinPlan plan = api->session_resolve_join();
     CHECK(plan.available);
@@ -812,7 +811,7 @@ TEST_CASE(
     CHECK_FALSE(plan.declared);
 
     const Callable opaque = holder->call(StringName("opaque"));
-    CHECK(netw::Netw::configure_join(holder, opaque).is_valid());
+    CHECK(netw::Netw::configure_join(opaque).is_valid());
     CHECK(api->session_resolve_join().handler == opaque);
 
     api->embed_dispose();
@@ -873,7 +872,7 @@ TEST_CASE(
     host->session_receive_join(older.serialize(), stranger);
     rig.pump(4);
 
-    CHECK(participant_of(host, stranger).is_null());
+    CHECK(player_of(host, stranger).is_null());
     CHECK(host->session_refusal(stranger).contains("wire"));
 
     netw::JoinRequest current = older;
@@ -883,7 +882,7 @@ TEST_CASE(
     host->session_receive_join(current.serialize(), stranger);
     rig.pump(4);
 
-    CHECK(participant_of(host, stranger).is_valid());
+    CHECK(player_of(host, stranger).is_valid());
 }
 
 } // namespace TestNetwSessionJoinLaws

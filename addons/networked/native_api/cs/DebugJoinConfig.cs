@@ -14,8 +14,7 @@ namespace Networked;
 /// <see cref="DebugJoinConfig.JoinArgs"/> holds the very values a live client
 /// fills into the form drawn from
 /// <see cref="NetwMultiplayer.SessionGetJoinSchema"/>. Author one entry per
-/// parameter the installed handler declares after its
-/// <see cref="NetwParticipant"/>.
+/// parameter the installed handler declares after its <see cref="NetwPlayer"/>.
 /// <code>
 /// # On a debug MultiplayerTree, assign a DebugJoinConfig and the tree hosts
 /// # straight into the game on play, skipping ConnectBrowser.
@@ -54,7 +53,12 @@ public sealed class DebugJoinConfig : NetwRefCounted
 
     /// <summary>
     /// Display name for the auto connected player, submitted alongside
-    /// <see cref="DebugJoinConfig.JoinArgs"/>.
+    /// <see cref="DebugJoinConfig.JoinArgs"/>. Left at its default, the name
+    /// actually submitted carries this process's id after it, so two runs of
+    /// one build join as two players. A <see cref="NetwPlayer.UserName"/> is
+    /// unique among the memberships a session holds, and a dev loop launching
+    /// the same build twice would otherwise have its second run turned away.
+    /// Write a name here and it is submitted exactly as written.
     /// </summary>
     public StringName UserName
     {

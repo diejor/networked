@@ -15,7 +15,7 @@ namespace netw {
 
 class NetwEntity;
 class NetwMultiplayer;
-class NetwParticipant;
+class NetwPlayer;
 
 class NetwSceneHandle : public godot::RefCounted {
     GDCLASS(NetwSceneHandle, godot::RefCounted)
@@ -32,25 +32,23 @@ public:
     godot::Node *get_world() const;
 
     godot::StringName get_label() const;
-    godot::TypedArray<NetwEntity> get_players() const;
-    godot::TypedArray<NetwParticipant> get_viewers() const;
-    godot::TypedArray<NetwEntity> get_local_players() const;
+    godot::TypedArray<NetwEntity> get_bodies() const;
+    godot::TypedArray<NetwPlayer> get_viewers() const;
+    godot::TypedArray<NetwEntity> get_local_bodies() const;
 
     godot::TypedArray<NetwEntity> get_entities() const;
     void observe(int64_t p_event, const godot::Callable &p_callback);
     void unobserve(int64_t p_event, const godot::Callable &p_callback);
-    godot::Ref<NetwPromise> move(const godot::Ref<NetwEntity> &p_entity);
+    godot::Error watch(const godot::Ref<NetwPlayer> &p_player);
+    godot::Error unwatch(const godot::Ref<NetwPlayer> &p_player);
+    bool is_watching(const godot::Ref<NetwPlayer> &p_player) const;
 
-    godot::Error watch(const godot::Ref<NetwParticipant> &p_participant);
-    godot::Error unwatch(const godot::Ref<NetwParticipant> &p_participant);
-    bool is_watching(const godot::Ref<NetwParticipant> &p_participant) const;
-
-    void announce_player(
-        const godot::Ref<NetwEntity> &p_player,
+    void announce_body(
+        const godot::Ref<NetwEntity> &p_body,
         bool p_present
     );
     void announce_viewer(
-        const godot::Ref<NetwParticipant> &p_participant,
+        const godot::Ref<NetwPlayer> &p_player,
         bool p_present
     );
 

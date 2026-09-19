@@ -36,7 +36,7 @@ Methods
    :widths: auto
 
    +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                   | :ref:`start_host<class_EnetTestSupport_method_start_host>`\ (\ parent\: :godot:`Node`, info_provider\: :godot:`Callable` = Callable(), auth_timeout\: :godot:`float` = -1.0\ ) |static|                                 |
+   | :godot:`Dictionary`                                   | :ref:`start_host<class_EnetTestSupport_method_start_host>`\ (\ parent\: :godot:`Node`, info_source\: :godot:`Node` = null, auth_timeout\: :godot:`float` = -1.0\ ) |static|                                             |
    +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`MultiplayerTree<class_MultiplayerTree>`         | :ref:`make_client_tree<class_EnetTestSupport_method_make_client_tree>`\ (\ parent\: :godot:`Node`, port\: :godot:`int`, name_suffix\: :godot:`String` = ""\ ) |static|                                                  |
    +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -81,9 +81,9 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:godot:`Dictionary` **start_host**\ (\ parent\: :godot:`Node`, info_provider\: :godot:`Callable` = Callable(), auth_timeout\: :godot:`float` = -1.0\ ) |static| :ref:`🔗<class_EnetTestSupport_method_start_host>`
+:godot:`Dictionary` **start_host**\ (\ parent\: :godot:`Node`, info_source\: :godot:`Node` = null, auth_timeout\: :godot:`float` = -1.0\ ) |static| :ref:`🔗<class_EnetTestSupport_method_start_host>`
 
-Builds and hosts a fresh :ref:`MultiplayerTree<class_MultiplayerTree>` backed by ENet on the first available port in the test range.  The peer is built with :godot:`ENetMultiplayerPeer.create_server() <ENetMultiplayerPeer#class_ENetMultiplayerPeer_method_create_server>` and assigned, so the port scan reads the bind result directly. No local player is seated, which is what a probe target wants.  ``parent`` receives the tree as a child. ``info_provider`` is optionally declared as the hosted session's probe reply through :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>`, scoped to the tree. ``auth_timeout`` overrides the host API auth cleanup timeout when greater than ``0.0``.  Returns a dictionary with ``tree`` (the :ref:`MultiplayerTree<class_MultiplayerTree>`), ``port`` (the bound UDP port).
+Builds and hosts a fresh :ref:`MultiplayerTree<class_MultiplayerTree>` backed by ENet on the first available port in the test range.  The peer is built with :godot:`ENetMultiplayerPeer.create_server() <ENetMultiplayerPeer#class_ENetMultiplayerPeer_method_create_server>` and assigned, so the port scan reads the bind result directly. No local player is seated, which is what a probe target wants.  ``parent`` receives the tree as a child. ``info_source`` is mounted under that tree, so a :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` declaration it made in :godot:`Object._init() <Object#class_Object_private_method__init>` governs the hosted session's probe reply. ``auth_timeout`` overrides the host API auth cleanup timeout when greater than ``0.0``.  Returns a dictionary with ``tree`` (the :ref:`MultiplayerTree<class_MultiplayerTree>`), ``port`` (the bound UDP port).
 
 .. rst-class:: classref-item-separator
 
@@ -107,7 +107,7 @@ Builds an offline client :ref:`MultiplayerTree<class_MultiplayerTree>` wired wit
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **join_client**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, port\: :godot:`int`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_EnetTestSupport_method_join_client>`
 
-Connects ``tree`` to a localhost host on ``port`` and waits until ``username`` is seated.  The local player is prepared before the peer is assigned, so the session holds its hello and submits exactly one request once the connection is admitted. Returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when :ref:`NetwMultiplayer.local_participant<class_NetwMultiplayer_property_local_participant>` arrives, the assignment refusal when the peer was refused, and :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` when the wait ran out.
+Connects ``tree`` to a localhost host on ``port`` and waits until ``username`` is seated.  The local player is prepared before the peer is assigned, so the session holds its hello and submits exactly one request once the connection is admitted. Returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when :ref:`NetwMultiplayer.local_player<class_NetwMultiplayer_property_local_player>` arrives, the assignment refusal when the peer was refused, and :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` when the wait ran out.
 
 .. rst-class:: classref-item-separator
 

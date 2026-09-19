@@ -15,7 +15,7 @@ namespace TestParticipantTravelLaws {
 using namespace godot;
 using namespace netw_test;
 using netw::NetwMultiplayer;
-using netw::NetwParticipant;
+using netw::NetwPlayer;
 using netw::NetwPromise;
 using netw::NetwSceneHandle;
 
@@ -81,17 +81,17 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         refusal_of(
-            rig.server()->participant_travel(Ref<NetwParticipant>(), arena.view)
+            rig.server()->player_travel(Ref<NetwPlayer>(), arena.view)
         ),
         int(ERR_INVALID_PARAMETER)
     );
 
-    const Ref<NetwParticipant> traveller
+    const Ref<NetwPlayer> traveller
         = netw_test::seated_peer(rig.server(), 7);
     REQUIRE(traveller.is_valid());
     NETW_CHECK_EQ(
         refusal_of(
-            rig.server()->participant_travel(traveller, Ref<NetwSceneHandle>())
+            rig.server()->player_travel(traveller, Ref<NetwSceneHandle>())
         ),
         int(ERR_INVALID_PARAMETER)
     );
@@ -102,16 +102,16 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Scene] PT2 travel names a destination this session actually "
     "holds, so a handle to a scene that never went live is refused rather "
-    "than seating a participant nowhere"
+    "than seating a player nowhere"
 ) {
     LoopbackRig rig(0);
     rig.mount();
     const Destination absent = a_scene(rig, StringName("Elsewhere"), false);
-    const Ref<NetwParticipant> traveller
+    const Ref<NetwPlayer> traveller
         = netw_test::seated_peer(rig.server(), 7);
 
     NETW_CHECK_EQ(
-        refusal_of(rig.server()->participant_travel(traveller, absent.view)),
+        refusal_of(rig.server()->player_travel(traveller, absent.view)),
         int(ERR_UNAVAILABLE)
     );
 
@@ -126,12 +126,12 @@ TEST_CASE(
     LoopbackRig rig(0);
     rig.mount();
     const Destination arena = a_scene(rig, StringName("Arena"), true);
-    Ref<NetwParticipant> stranger;
+    Ref<NetwPlayer> stranger;
     stranger.instantiate();
-    rig.server()->participant_adopt(4242, stranger);
+    rig.server()->player_adopt(4242, stranger);
 
     NETW_CHECK_EQ(
-        refusal_of(rig.server()->participant_travel(stranger, arena.view)),
+        refusal_of(rig.server()->player_travel(stranger, arena.view)),
         int(ERR_UNAUTHORIZED)
     );
 
@@ -146,11 +146,11 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     const Destination arena = a_scene(rig, StringName("Arena"), true);
-    const Ref<NetwParticipant> traveller
+    const Ref<NetwPlayer> traveller
         = netw_test::seated_peer(rig.client(0), 7);
 
     NETW_CHECK_EQ(
-        refusal_of(rig.client(0)->participant_travel(traveller, arena.view)),
+        refusal_of(rig.client(0)->player_travel(traveller, arena.view)),
         int(ERR_UNAUTHORIZED)
     );
 

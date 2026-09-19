@@ -16,8 +16,8 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 
-const char *BALL = "ball|0";
-const char *SPIN = "spin|0";
+const char *BALL = "ball";
+const char *SPIN = "spin";
 
 Node2D *rooted(Node *p_parent, const char *p_name, Node *p_owner) {
     Node2D *made = memnew(Node2D);
@@ -33,9 +33,9 @@ Node *build_nested_arena(const Variant &) {
     Node2D *ball = rooted(arena, BALL, arena);
     netw::script::model::configure_node_property(ball, StringName("position"))
         ->on_spawn();
-    NetwEntity::ensure(ball);
+    NetwEntity::ensure(ball)->set_entity_id(StringName(BALL));
     Node2D *spin = rooted(ball, SPIN, arena);
-    NetwEntity::ensure(spin);
+    NetwEntity::ensure(spin)->set_entity_id(StringName(SPIN));
     return arena;
 }
 
@@ -95,7 +95,7 @@ Nest read_nest(Node *p_arena) {
     Nest out;
     out.arena = route_of(p_arena);
     out.ball = route_of(descend(p_arena, BALL));
-    out.spin = route_of(descend(p_arena, "ball|0/spin|0"));
+    out.spin = route_of(descend(p_arena, "ball/spin"));
     return out;
 }
 
@@ -148,7 +148,7 @@ TEST_CASE(
     const bool ball_is_the_seat_child = seat_ball == descend(seat, BALL);
     CHECK(ball_is_the_seat_child);
     const bool spin_under_ball
-        = rig.route_node(int(host.spin), 0) == descend(seat, "ball|0/spin|0");
+        = rig.route_node(int(host.spin), 0) == descend(seat, "ball/spin");
     CHECK(spin_under_ball);
 }
 

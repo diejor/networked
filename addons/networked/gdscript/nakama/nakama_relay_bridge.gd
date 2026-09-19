@@ -133,7 +133,7 @@ func join_match(p_match_id: String) -> void:
 
 ## Creates or joins the named Nakama match.
 ##
-## The first participant claims host peer id [code]1[/code].
+## The first peer to arrive claims host peer id [code]1[/code].
 func join_named_match(_match_name: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error("Cannot join match when state is %s" % MatchState.keys()[_match_state])

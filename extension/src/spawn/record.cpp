@@ -65,6 +65,12 @@ Ref<NetwEntity> Record::stamp_header(
     }
     entity->set_entity_id(p_header.get(StringName("entity_id"), StringName()));
     entity->set_peer_id(int64_t(p_header.get(StringName("peer_id"), 0)));
+    if (NetwMultiplayer *session
+        = Object::cast_to<NetwMultiplayer>(p_session)) {
+        entity->set_player_id(
+            session->player_incarnation(entity->get_peer_id())
+        );
+    }
     entity->set_controller(int64_t(p_header.get(StringName("controller"), 0)));
     entity->set_action_spawn_tick(
         int64_t(p_header.get(StringName("action_spawn_tick"), -1))

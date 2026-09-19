@@ -67,13 +67,13 @@ func _scenario_client_is_admitted(world: NetwEmbeddingWorld) -> void:
 	var host := await world.host()
 	var client := await world.add_client("p1")
 
-	assert_object(client.local_participant).override_failure_message(
+	assert_object(client.local_player).override_failure_message(
 		"[%s] client was never admitted to its own session" % world.provider(),
 	).is_not_null()
 
 	var client_id := client.get_unique_id()
 	var seen := await world.pump_until(
-		func() -> bool: return host.peer_get_participant(client_id) != null
+		func() -> bool: return host.peer_get_player(client_id) != null
 	)
 	assert_bool(seen).override_failure_message(
 		"[%s] host admitted no roster row for the client" % world.provider(),
@@ -95,8 +95,8 @@ func _scenario_roster_crosses_both_ways(world: NetwEmbeddingWorld) -> void:
 
 	var host_sees_both := await world.pump_until(
 		func() -> bool:
-			return host.peer_get_participant(id1) != null \
-					and host.peer_get_participant(id2) != null
+			return host.peer_get_player(id1) != null \
+					and host.peer_get_player(id2) != null
 	)
 	assert_bool(host_sees_both).override_failure_message(
 		"[%s] host roster is missing one of the two clients" % world.provider(),
@@ -104,8 +104,8 @@ func _scenario_roster_crosses_both_ways(world: NetwEmbeddingWorld) -> void:
 
 	var clients_see_each_other := await world.pump_until(
 		func() -> bool:
-			return c1.peer_get_participant(id2) != null \
-					and c2.peer_get_participant(id1) != null
+			return c1.peer_get_player(id2) != null \
+					and c2.peer_get_player(id1) != null
 	)
 	assert_bool(clients_see_each_other).override_failure_message(
 		"[%s] client rosters did not cross (each should see the other)"

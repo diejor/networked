@@ -48,7 +48,7 @@ void NetwActionContext::open(
 }
 
 void NetwActionContext::bind_result(Node *p_node) {
-    NetwEntity::bind(p_node, key, 0);
+    NetwMultiplayer::wrapper_stamp_identity(p_node, key, 0);
     const Ref<NetwEntity> entity = NetwEntity::ensure(p_node);
     if (entity.is_valid()) {
         entity->set_action_spawn_tick(view_tick);

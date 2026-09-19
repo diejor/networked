@@ -27,7 +27,6 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -182,15 +181,7 @@ Ref<NetwEntity> NetwMultiplayer::wrapper_resolve(Node *p_node) {
     return wrapper_ensure(root);
 }
 
-Variant NetwMultiplayer::wrapper_held(
-    Node *p_node,
-    const StringName &p_entity_id,
-    int64_t p_peer_id
-) {
-    return gd::held(wrapper_bind(p_node, p_entity_id, p_peer_id));
-}
-
-Object *NetwMultiplayer::wrapper_bind(
+Object *NetwMultiplayer::wrapper_stamp_identity(
     Node *p_node,
     const StringName &p_entity_id,
     int64_t p_peer_id
@@ -199,16 +190,14 @@ Object *NetwMultiplayer::wrapper_bind(
     if (node == nullptr) {
         return nullptr;
     }
-    const String named
-        = entity::Identity::format(String(p_entity_id), p_peer_id);
     NETW_ERR_COND_V(
-        named.is_empty(),
+        String(p_entity_id).is_empty(),
         p_node,
         sys::ENTITY,
-        "'%s' cannot be named on the wire, so nothing is bound",
-        p_entity_id
+        "an entity id is what identifies '%s', so an empty one stamps nothing",
+        node->get_name()
     );
-    node->set_name(named);
+    node->set_name(String(p_entity_id));
     const Ref<NetwEntity> wrapper = wrapper_ensure(node);
     if (wrapper.is_valid()) {
         wrapper->set_entity_id(p_entity_id);
@@ -305,6 +294,28 @@ void configure_copy(Node *p_copy, const Callable &p_configure) {
     p_configure.call(NetwMultiplayer::wrapper_ensure(p_copy));
 }
 
+void rename_reserved_to_identity(
+    Node *p_owner,
+    const StringName &p_entity_id
+) {
+    const String seated = String(p_owner->get_name());
+    if (seated == seated.validate_node_name()) {
+        return;
+    }
+    const String identity = String(p_entity_id).validate_node_name();
+    if (identity.is_empty()) {
+        return;
+    }
+    p_owner->set_name(identity);
+    NETW_TRACE(
+        sys::ENTITY,
+        "'%s' is a name the engine reserves, so '%s' is taken from the "
+        "entity id instead",
+        seated,
+        p_owner->get_name()
+    );
+}
+
 } // namespace
 
 void NetwMultiplayer::entity_enter_tree(
@@ -318,6 +329,7 @@ void NetwMultiplayer::entity_enter_tree(
     if (owner == nullptr || p_wrapper == nullptr || p_record == nullptr) {
         return;
     }
+    rename_reserved_to_identity(owner, p_record->get_entity_id());
     const bool is_reparent
         = p_record->get_stage() == int64_t(entity::Stage::LIVE);
     p_record->hydrate_identity(owner);
@@ -453,7 +465,7 @@ void NetwMultiplayer::entity_request_control(const RID &p_entity) {
 RID NetwMultiplayer::spawn_fn(
     const Callable &p_function,
     const Array &p_args,
-    NetwParticipant *p_owner
+    NetwPlayer *p_owner
 ) {
     NETW_ZONE_NC("session spawn function", colors::LIVENESS);
     spawn::Pipeline *pipeline = spawn_plane();
@@ -464,7 +476,7 @@ RID NetwMultiplayer::spawn_fn(
         "a spawn function ran with no spawn pipeline installed"
     );
     Object *node
-        = pipeline->spawn(p_function, p_args, Ref<NetwParticipant>(p_owner));
+        = pipeline->spawn(p_function, p_args, Ref<NetwPlayer>(p_owner));
     return node != nullptr ? entity_of(node) : RID();
 }
 
@@ -506,7 +518,7 @@ RID NetwMultiplayer::spawn_registered(
     Object *node = pipeline->spawn_registered(
         p_id,
         p_args,
-        Ref<NetwParticipant>(Object::cast_to<NetwParticipant>(p_owner))
+        Ref<NetwPlayer>(Object::cast_to<NetwPlayer>(p_owner))
     );
     return node != nullptr ? entity_of(node) : RID();
 }
@@ -697,7 +709,7 @@ Node *seat_spawn(
         return nullptr;
     }
     if (!p_id.is_empty()) {
-        NetwMultiplayer::wrapper_bind(p_copy, p_id, 0);
+        NetwMultiplayer::wrapper_stamp_identity(p_copy, p_id, 0);
     } else {
         NetwMultiplayer::wrapper_ensure(p_copy);
     }
@@ -1818,17 +1830,17 @@ bool NetwMultiplayer::spawn_visible_to(
 Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
     spawn::Record *p_record,
     Node *p_node,
-    const Ref<NetwParticipant> &p_owner,
+    const Ref<NetwPlayer> &p_owner,
     const Callable &p_declare
 ) {
     if (p_record == nullptr || p_node == nullptr) {
         return Ref<NetwEntity>();
     }
     NETW_ERR_COND_V(
-        p_owner.is_valid() && !participant_holds(p_owner),
+        p_owner.is_valid() && !player_holds(p_owner),
         Ref<NetwEntity>(),
         sys::SPAWN,
-        "a spawn names participant '%s', which is not one this session "
+        "a spawn names player '%s', which is not one this session "
         "currently holds, so nothing is armed",
         String(p_owner->get_username())
     );
@@ -1850,17 +1862,27 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
     }
     entity->set_route(route);
     if (entity->get_entity_id() == StringName()) {
-        const String stem = spawn::Book::recipe_base(
-            p_record,
-            p_node->get_scene_file_path(),
-            String(p_node->get_name())
-        );
-        entity->set_entity_id(
-            StringName(stem + String("@") + String::num_int64(route))
-        );
+        const StringName claimed
+            = p_owner.is_valid() ? p_owner->get_username() : StringName();
+        if (claimed != StringName()) {
+            entity->set_entity_id(claimed);
+            if (!p_node->is_inside_tree()) {
+                p_node->set_name(String(claimed));
+            }
+        } else {
+            const String stem = spawn::Book::recipe_base(
+                p_record,
+                p_node->get_scene_file_path(),
+                String(p_node->get_name())
+            );
+            entity->set_entity_id(
+                StringName(stem + String("@") + String::num_int64(route))
+            );
+        }
     }
     if (p_owner.is_valid()) {
         entity->set_peer_id(p_owner->get_peer_id());
+        entity->set_player_id(p_owner->player_id());
         entity->set_controller(p_owner->get_peer_id());
     }
     p_record->set_route(route);

@@ -52,12 +52,11 @@ TEST_CASE(
         == session->session_get_config()->get_app_id()
     );
     CHECK(door->get_config() != session->session_get_config());
-    CHECK(door->get_auth_flow() == session->auth_effective_flow());
     NETW_CHECK_EQ(
-        door->get_participants().size(),
-        session->participant_joined_all().size()
+        door->get_players().size(),
+        session->player_joined_all().size()
     );
-    CHECK(door->get_local_participant() == session->participant_local());
+    CHECK(door->get_local_player() == session->player_local());
     CHECK(
         door->get_presented_scene()
         == session->scene_handle_of(session->scene_presented())
@@ -92,7 +91,7 @@ TEST_CASE(
             StringName("entered"),
             StringName("ended"),
             StringName("disconnecting"),
-            StringName("participant_joined"),
+            StringName("player_joined"),
             StringName("local_joined"),
         }
     );
@@ -112,13 +111,13 @@ TEST_CASE(
         == String("the host is going down")
     );
 
-    SUBCASE("a participant edge carries the row it is about") {
-        Ref<netw::NetwParticipant> who;
+    SUBCASE("a player edge carries the row it is about") {
+        Ref<netw::NetwPlayer> who;
         who.instantiate();
-        session->emit_signal(StringName("participant_joined"), who);
-        session->emit_signal(StringName("participant_local_joined"), who);
+        session->emit_signal(StringName("player_joined"), who);
+        session->emit_signal(StringName("player_local_joined"), who);
 
-        NETW_CHECK_EQ(heard.count(StringName("participant_joined")), 1);
+        NETW_CHECK_EQ(heard.count(StringName("player_joined")), 1);
         NETW_CHECK_EQ(heard.count(StringName("local_joined")), 1);
         NETW_CHECK_EQ(
             int(heard.args(StringName("local_joined"))[0].get_type()),
@@ -155,14 +154,12 @@ TEST_CASE(
     CHECK_FALSE(door->get_is_local_client());
     CHECK(door->get_root() == nullptr);
     CHECK(door->get_config().is_null());
-    CHECK(door->get_auth_flow().is_null());
-    CHECK(door->get_local_participant().is_null());
+    CHECK(door->get_local_player().is_null());
     CHECK(door->get_presented_scene().is_null());
-    NETW_CHECK_EQ(int(door->present(Ref<netw::NetwSceneHandle>())), int(ERR_UNCONFIGURED));
-    NETW_CHECK_EQ(door->get_participants().size(), 0);
+    NETW_CHECK_EQ(door->get_players().size(), 0);
     NETW_CHECK_EQ(door->get_scenes().size(), 0);
     NETW_CHECK_EQ(door->get_stats().size(), 0);
-    CHECK(door->participant_of(1).is_null());
+    CHECK(door->player_of(1).is_null());
     NETW_CHECK_EQ(
         int(door->bucket_of(1, Variant()).get_type()),
         int(Variant::NIL)

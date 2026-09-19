@@ -447,8 +447,9 @@ Error LocalMultiplayerPeer::_put_packet_script(
 
 void LocalMultiplayerPeer::_bind_methods() {
     ClassDB::bind_method(
-        D_METHOD("create_server"),
-        &LocalMultiplayerPeer::create_server
+        D_METHOD("create_server", "unique_id"),
+        &LocalMultiplayerPeer::create_server,
+        DEFVAL(1)
     );
     ClassDB::bind_method(
         D_METHOD("create_client", "client_id"),

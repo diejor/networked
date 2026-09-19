@@ -27,10 +27,10 @@ const KindRow &row_of(Kind p_kind) {
          "_netw_d_join_g",
          "configure_join",
          FORM_CALLABLE},
-        {"_netw_d_auth",
-         "_netw_d_auth_x",
-         "_netw_d_auth_g",
-         "configure_auth",
+        {"_netw_d_admit",
+         "_netw_d_admit_x",
+         "_netw_d_admit_g",
+         "configure_admission",
          FORM_CALLABLE},
         {"_netw_d_info",
          "_netw_d_info_x",
@@ -282,10 +282,6 @@ Error declare(
         install_now(Variant(p_scope));
     }
     return OK;
-}
-
-NetwMultiplayer *installed_api(Node *p_scope) {
-    return p_scope == nullptr ? nullptr : last_api_of(p_scope);
 }
 
 Variant payload_on(Node *p_scope, Kind p_kind) {

@@ -141,7 +141,7 @@ Signals
 
 This peer's own join was rejected, locally or by the server, and no player was seated for it. ``reason`` is the server's own words where the rejection came from one, and ``error`` is why.
 
-A rejection is not a disconnect notice: it is the result to the join this peer asked for, so a game shows it where it asked, beside its username field rather than in a lobby-lost banner. A server rejects when the handler declared through :ref:`Netw.configure_join()<class_Netw_method_configure_join>` is unavailable, when the join carried no arguments a declared handler needs, or when that handler returned something that is not a placement.
+A rejection is not a disconnect notice. It is the result to the join this peer asked for, so a game shows it where it asked, beside its username field rather than in a lobby-lost banner. A server rejects when the handler declared through :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` turns the join down, when the handler declared through :ref:`Netw.configure_join()<class_Netw_method_configure_join>` is unavailable, when the join carried no arguments a declared handler needs, or when that handler returned something that is not a placement.
 
 ::
 
@@ -168,9 +168,9 @@ Property Descriptions
 
 .. rst-class:: classref-property-setget
 
-- :godot:`Array` **endpoints**\ (\ )
+- :godot:`Array` **get_endpoints**\ (\ )
 
-Every row this session knows how to reach, as endpoint snapshots. Equivalent to :godot:`RefCounted.endpoints() <RefCounted#class_RefCounted_method_endpoints>`.
+Every row this session knows how to reach, as endpoint snapshots.
 
 .. rst-class:: classref-item-separator
 

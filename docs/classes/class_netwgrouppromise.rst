@@ -391,7 +391,7 @@ This is the idiom. Awaiting :ref:`completed<class_NetwGroupPromise_signal_comple
 
 ::
 
-    await destination.move_participants(peers).wait()
+    await destination.move_players(peers).wait()
 
 \ This never re-emits :ref:`completed<class_NetwGroupPromise_signal_completed>`, :ref:`failed<class_NetwGroupPromise_signal_failed>` or :ref:`settled<class_NetwGroupPromise_signal_settled>`, so an earlier subscriber is notified exactly once no matter how late anyone waits.
 

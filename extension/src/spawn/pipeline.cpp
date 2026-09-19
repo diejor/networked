@@ -279,7 +279,7 @@ Error Pipeline::declare_stage(const RID &p_handle, const Dictionary &p_facts) {
 Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
     Record *p_record,
     Node *p_node,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     NetwMultiplayer *plane = core();
     Object *shell = api();
@@ -320,21 +320,21 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
 }
 
 bool Pipeline::armed_owner_survives(int64_t p_route) {
-    const HashMap<int64_t, Ref<NetwParticipant>>::Iterator found
+    const HashMap<int64_t, Ref<NetwPlayer>>::Iterator found
         = armed_owners.find(p_route);
     if (found == armed_owners.end()) {
         return true;
     }
-    const Ref<NetwParticipant> owner = found->value;
+    const Ref<NetwPlayer> owner = found->value;
     armed_owners.remove(found);
     NetwMultiplayer *plane = core();
-    if (plane == nullptr || plane->participant_holds(owner)) {
+    if (plane == nullptr || plane->player_holds(owner)) {
         return true;
     }
-    NETW_ERROR(
+    NETW_INFO(
         sys::SPAWN,
-        "the spawn armed for participant '%s' is mounted after that "
-        "participant left, so its body is discarded rather than replicated",
+        "the spawn armed for player '%s' is mounted after that "
+        "player left, so its body is discarded rather than replicated",
         String(owner->get_username())
     );
     return false;
@@ -342,7 +342,7 @@ bool Pipeline::armed_owner_survives(int64_t p_route) {
 
 Ref<NetwEntity> Pipeline::replicate(
     Node *p_node,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     NETW_ZONE_NC("Spawn replicate", colors::LIVENESS);
     if (!is_server_authority()) {
@@ -407,7 +407,7 @@ Ref<NetwEntity> Pipeline::replicate(
 Node *Pipeline::spawn(
     const Callable &p_fn,
     const Array &p_args,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     NETW_ZONE_NC("Spawn construct", colors::LIVENESS);
     if (!is_server_authority()) {
@@ -541,7 +541,7 @@ Variant Pipeline::fn_script_schema(
 Node *Pipeline::spawn_registered(
     const StringName &p_id,
     const Array &p_args,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     if (!is_server_authority()) {
         NETW_ERR_V(nullptr, sys::SPAWN, "spawn_registered is server-only");
@@ -582,7 +582,7 @@ Ref<NetwEntity> Pipeline::adopt_in_place(Node *p_root) {
     Record record;
     record.set_recipe(Book::RECIPE_ADOPT);
     const Ref<NetwEntity> entity
-        = arm_authoritative_spawn(&record, p_root, Ref<NetwParticipant>());
+        = arm_authoritative_spawn(&record, p_root, Ref<NetwPlayer>());
     if (entity.is_valid()) {
         NetwMultiplayer *plane = core();
         if (plane != nullptr) {
@@ -604,7 +604,7 @@ Ref<NetwEntity> Pipeline::arm_consumed_spawn(
     record.bind_spawner(Object::cast_to<MultiplayerSpawner>(p_spawner));
     record.set_scene_index(p_scene_index);
     record.set_custom_data(p_data);
-    return arm_authoritative_spawn(&record, p_node, Ref<NetwParticipant>());
+    return arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>());
 }
 
 void Pipeline::on_armed_tree_entered(int64_t p_route) {
@@ -710,7 +710,7 @@ void Pipeline::publish_nested(Node *p_node) {
     }
     Record record;
     record.set_recipe(Book::RECIPE_ADOPT);
-    if (arm_authoritative_spawn(&record, p_node, Ref<NetwParticipant>())
+    if (arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>())
             .is_null()) {
         return;
     }

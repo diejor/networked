@@ -53,7 +53,7 @@ TEST_CASE(
     layer->add_entity(entity);
     rig.flush_interest();
 
-    NETW_CHECK_EQ(core->interest_participant_sees(LOCAL_VIEW, entity), false);
+    NETW_CHECK_EQ(core->interest_player_sees(LOCAL_VIEW, entity), false);
     CHECK_FALSE(owner->is_visible());
     NETW_CHECK_CLOSE(double(speaker->get_volume_db()), -80.0, 0.001);
     CHECK(core->entity_get_node(handle) == owner);
@@ -61,20 +61,20 @@ TEST_CASE(
     layer->add_viewer(LOCAL_VIEW);
     rig.flush_interest();
 
-    NETW_CHECK_EQ(core->interest_participant_sees(LOCAL_VIEW, entity), true);
+    NETW_CHECK_EQ(core->interest_player_sees(LOCAL_VIEW, entity), true);
     CHECK(owner->is_visible());
     NETW_CHECK_CLOSE(double(speaker->get_volume_db()), -12.0, 0.001);
     CHECK(core->entity_get_node(handle) == owner);
 
     layer->remove_viewer(LOCAL_VIEW);
     rig.flush_interest();
-    NETW_CHECK_EQ(core->interest_participant_sees(LOCAL_VIEW, entity), false);
+    NETW_CHECK_EQ(core->interest_player_sees(LOCAL_VIEW, entity), false);
 
     core->session_set_role(NetwMultiplayer::ROLE_CLIENT);
     REQUIRE(core->is_server());
     REQUIRE_FALSE(core->is_host());
 
-    NETW_CHECK_EQ(core->interest_participant_sees(LOCAL_VIEW, entity), true);
+    NETW_CHECK_EQ(core->interest_player_sees(LOCAL_VIEW, entity), true);
 }
 
 } // namespace TestNetwCoordinatorPerception

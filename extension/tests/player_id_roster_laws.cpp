@@ -5,7 +5,7 @@
 #include "netw/api/participant.hpp"
 #include "support/joined_peer.h"
 
-namespace TestParticipantMembershipRosterLaws {
+namespace TestPlayerIdRosterLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
@@ -21,7 +21,7 @@ Ref<NetwMultiplayer> peered_core() {
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] PJ1 a joined participant is one an accepted "
+    "[Networked][Session][Hosted] PJ1 a joined player is one an accepted "
     "membership names, so a peer that has connected and not joined is in "
     "neither the row book nor the roster the session publishes"
 ) {
@@ -29,24 +29,24 @@ TEST_CASE(
     const int64_t local = int64_t(core->get_unique_id());
     const int64_t guest = local + 7;
 
-    CHECK_FALSE(core->participant_has(guest));
-    CHECK(core->participant_joined_of(guest).is_null());
-    CHECK(core->participant_joined_all().is_empty());
-    CHECK(core->participant_local().is_null());
+    CHECK_FALSE(core->player_has(guest));
+    CHECK(core->player_joined_of(guest).is_null());
+    CHECK(core->player_joined_all().is_empty());
+    CHECK(core->player_local().is_null());
 
     netw_test::seated_peer(core.ptr(), guest, StringName("guest"));
-    CHECK(core->participant_has(guest));
-    CHECK(core->participant_joined_of(guest).is_valid());
-    NETW_CHECK_EQ(int(core->participant_joined_all().size()), 1);
-    CHECK(core->participant_local().is_null());
+    CHECK(core->player_has(guest));
+    CHECK(core->player_joined_of(guest).is_valid());
+    NETW_CHECK_EQ(int(core->player_joined_all().size()), 1);
+    CHECK(core->player_local().is_null());
 
     netw_test::seated_peer(core.ptr(), local, StringName("host"));
-    CHECK(core->participant_local().is_valid());
-    NETW_CHECK_EQ(int(core->participant_joined_all().size()), 2);
+    CHECK(core->player_local().is_valid());
+    NETW_CHECK_EQ(int(core->player_joined_all().size()), 2);
 
     core->session_forget_peer(guest);
-    CHECK(core->participant_joined_of(guest).is_null());
-    NETW_CHECK_EQ(int(core->participant_joined_all().size()), 1);
+    CHECK(core->player_joined_of(guest).is_null());
+    NETW_CHECK_EQ(int(core->player_joined_all().size()), 1);
 }
 
-} // namespace TestParticipantMembershipRosterLaws
+} // namespace TestPlayerIdRosterLaws

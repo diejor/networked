@@ -36,6 +36,25 @@ namespace {
 
 constexpr int ACK_WINDOW_MAX = 64;
 
+String participant_key(const Ref<NetwEntity> &p_entity) {
+    if (p_entity.is_null()) {
+        return String();
+    }
+    const String named = String(p_entity->get_entity_id());
+    if (!named.is_empty()) {
+        return named;
+    }
+    const int64_t route = p_entity->get_route();
+    if (route > 0) {
+        return String("route:") + String::num_int64(route);
+    }
+    Node *root = p_entity->get_owner();
+    if (root != nullptr) {
+        return String("path:") + String(root->get_path());
+    }
+    return String();
+}
+
 predict::StateRow state_row(const Array &p_values, int p_width) {
     predict::StateRow out;
     out.resize(p_width);
@@ -3663,7 +3682,7 @@ String NetwPredictionEngine::collider_identity(Object *p_collider) const {
     }
     const Ref<NetwEntity> entity = contact_entity(p_collider);
     if (entity.is_valid()) {
-        return String("entity:") + String(entity->get_entity_id());
+        return String("entity:") + participant_key(entity);
     }
     if (node != nullptr) {
         return String("path:") + String(node->get_path());
@@ -6130,7 +6149,7 @@ bool NetwPredictionEngine::contact_breaches_boundary(
     if (slot_of(entity) == p_slot) {
         return false;
     }
-    if (!p_participants.has(String(entity->get_entity_id()))) {
+    if (!p_participants.has(participant_key(entity))) {
         return true;
     }
     const Ref<NetwPredictionHandle> declared = entity->get_prediction();
@@ -7251,8 +7270,8 @@ Vector3 entity_position(const Ref<NetwEntity> &p_entity) {
 }
 
 bool entity_id_less(const Ref<NetwEntity> &p_a, const Ref<NetwEntity> &p_b) {
-    const String a_id = String(p_a->get_entity_id());
-    const String b_id = String(p_b->get_entity_id());
+    const String a_id = participant_key(p_a);
+    const String b_id = participant_key(p_b);
     if (a_id == b_id) {
         return p_a->get_instance_id() < p_b->get_instance_id();
     }
@@ -7366,7 +7385,7 @@ PackedStringArray NetwPredictionEngine::live_participant_ids(
     ids.resize(seated.size());
     String *names = ids.ptrw();
     for (int at = 0; at < seated.size(); ++at) {
-        names[at] = String(Ref<NetwEntity>(seated[at])->get_entity_id());
+        names[at] = participant_key(Ref<NetwEntity>(seated[at]));
     }
     return ids;
 }
@@ -7417,8 +7436,7 @@ bool same_roster(
 PackedStringArray sorted_ids(const TypedArray<NetwEntity> &p_roster) {
     PackedStringArray ids;
     for (int at = 0; at < p_roster.size(); ++at) {
-        const Ref<NetwEntity> member = p_roster[at];
-        ids.push_back(String(member->get_entity_id()));
+        ids.push_back(participant_key(Ref<NetwEntity>(p_roster[at])));
     }
     ids.sort();
     return ids;

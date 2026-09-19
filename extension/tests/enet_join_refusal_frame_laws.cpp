@@ -210,7 +210,7 @@ public:
                 return true;
             }
             case 1: {
-                if (host->is_online() && host->participant_local().is_valid()) {
+                if (host->is_online() && host->player_local().is_valid()) {
                     evidence.host_online = true;
                     evidence.host_seated_itself = true;
                     if (!arm_schema_refusing_policy()

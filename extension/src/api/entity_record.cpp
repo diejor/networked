@@ -1,7 +1,6 @@
 #include "netw/api/entity_record.hpp"
 
 #include "godot/node.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/entity/ids.hpp"
 #include "netw/entity/stage.hpp"
 #include "netw/log.hpp"
@@ -244,13 +243,6 @@ void NetwEntityRecord::hydrate_identity(Node *p_owner) {
     Node *owner = p_owner;
     if (owner == nullptr) {
         return;
-    }
-    const String named = String(owner->get_name());
-    if (entity_id == StringName()) {
-        entity_id = entity::Identity::parse_entity(named);
-    }
-    if (peer_id == 0) {
-        peer_id = entity::Identity::parse_peer(named);
     }
     const SceneDecl decl = declared_scene_of(owner);
     if (!decl.declared) {

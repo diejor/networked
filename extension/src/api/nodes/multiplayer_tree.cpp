@@ -392,15 +392,12 @@ void MultiplayerTree::debug_autoconnect() {
     if (api->session_get_state() != NetwMultiplayer::SESSION_STATE_OFFLINE) {
         return;
     }
-    NETW_INFO(
-        sys::SESSION,
-        "debug auto-connect as '%s'",
-        String(debug_join->get_username())
-    );
+    const StringName claiming = debug_join->submitted_username();
+    NETW_INFO(sys::SESSION, "debug auto-connect as '%s'", String(claiming));
     bring_up_here(
         NetwMultiplayer::TRANSPORT_MODE_HOST,
         String(),
-        debug_join->get_username(),
+        claiming,
         debug_join->get_join_args()
     );
 }

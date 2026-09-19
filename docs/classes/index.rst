@@ -86,7 +86,6 @@ Other classes
     :name: toc-class-ref-other-classes
 
     class_addons--networked--plugin.gd
-    class_authresult
     class_debugjoinconfig
     class_dictionaryrecord
     class_filesystemdatabase
@@ -99,7 +98,6 @@ Other classes
     class_netw
     class_netwaction
     class_netwactioncontext
-    class_netwauthflow
     class_netwauthprotocol
     class_netwbitstream
     class_netwchannel
@@ -114,7 +112,6 @@ Other classes
     class_netwdisplayhandle
     class_netwentity
     class_netwgrouppromise
-    class_netwidentity
     class_netwinteresthandle
     class_netwinterestlayer
     class_netwinterpolate
@@ -123,10 +120,10 @@ Other classes
     class_netwlinkconditions
     class_netwmemberconfig
     class_netwmultiplayer
-    class_netwparticipant
     class_netwpersistenceconfig
     class_netwpersistenceengine
     class_netwphysicsstepper
+    class_netwplayer
     class_netwpredict
     class_netwpredictcarrycontext
     class_netwpredictfieldrecovery

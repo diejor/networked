@@ -86,7 +86,7 @@ private:
 
     godot::HashMap<godot::StringName, godot::Callable> constructors;
     godot::HashMap<godot::StringName, godot::Array> constructor_schemas;
-    godot::HashMap<int64_t, godot::Ref<NetwParticipant>> armed_owners;
+    godot::HashMap<int64_t, godot::Ref<NetwPlayer>> armed_owners;
 
     int64_t drops_spawn_bad_sender = 0;
     int64_t drops_spawn_duplicate = 0;
@@ -132,7 +132,7 @@ private:
     godot::Ref<NetwEntity> arm_authoritative_spawn(
         Record *p_record,
         godot::Node *p_node,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     godot::Error declare_stage(
         const godot::RID &p_handle,
@@ -307,12 +307,12 @@ public:
 
     godot::Ref<NetwEntity> replicate(
         godot::Node *p_node,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     godot::Node *spawn(
         const godot::Callable &p_fn,
         const godot::Array &p_args,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     void register_spawn_constructor(
         const godot::StringName &p_id,
@@ -323,7 +323,7 @@ public:
     godot::Node *spawn_registered(
         const godot::StringName &p_id,
         const godot::Array &p_args,
-        const godot::Ref<NetwParticipant> &p_owner
+        const godot::Ref<NetwPlayer> &p_owner
     );
     godot::Ref<NetwEntity> adopt_in_place(godot::Node *p_root);
     godot::Ref<NetwEntity> arm_consumed_spawn(

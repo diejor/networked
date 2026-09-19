@@ -45,7 +45,7 @@ var pressed := {
 @onready var entity := NetwEntity.of(self)
 @onready var state := PhysicsServer3D.body_get_direct_state(get_rid())
 @onready var level: Node = entity.scene.root
-@onready var game: RocketGame = level.get_node(^"game|0")
+@onready var game: RocketGame = level.get_node(^"game")
 @onready var marker: Marker3D = level.get_node(
 	"Markers/%s%d" % ["r" if team == 0 else "b", slot + 1],
 )

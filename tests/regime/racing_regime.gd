@@ -62,7 +62,7 @@ func connect_session(role: String, port: int) -> Error:
 
 func await_local_ready() -> bool:
 	var deadline := Time.get_ticks_msec() + 40000
-	while session_handle.participants.size() < regime.peers \
+	while session_handle.players.size() < regime.peers \
 			and Time.get_ticks_msec() < deadline:
 		await session.get_tree().process_frame
 	while local_car() == null and Time.get_ticks_msec() < deadline:
@@ -143,7 +143,7 @@ func condition_evidence() -> Dictionary:
 		"car_model_travel": car_model_travel,
 		"car_samples": car_seen,
 		"remote_travel_min": remote_travel_min(),
-		"participants": session_handle.participants.size(),
+		"players": session_handle.players.size(),
 		"api_peers": Array(api.get_peers()),
 	}
 
@@ -170,8 +170,8 @@ func summary_handles() -> Dictionary:
 
 
 func local_car() -> Vehicle:
-	var here: NetwParticipant = session_handle.local_participant
-	var mine: Array[NetwEntity] = here.players if here else []
+	var here: NetwPlayer = session_handle.local_player
+	var mine: Array[NetwEntity] = here.bodies if here else []
 	return mine[0].owner as Vehicle if mine.size() == 1 else null
 
 

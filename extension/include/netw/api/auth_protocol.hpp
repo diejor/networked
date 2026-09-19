@@ -32,7 +32,6 @@ public:
     static Kind classify(const godot::PackedByteArray &p_data);
 
     static godot::PackedByteArray encode_client_hello(
-        const godot::PackedByteArray &p_provider_payload,
         int64_t p_app_tag,
         int p_flags
     );

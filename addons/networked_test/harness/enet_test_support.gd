@@ -31,16 +31,17 @@ const WAIT_TIMEOUT_MS := 5000
 ## assigned, so the port scan reads the bind result directly. No local player
 ## is seated, which is what a probe target wants.
 ##
-## [param parent] receives the tree as a child. [param info_provider] is
-## optionally declared as the hosted session's probe reply through
-## [method Netw.configure_server_info], scoped to the tree. [param auth_timeout]
-## overrides the host API auth cleanup timeout when greater than [code]0.0[/code].
+## [param parent] receives the tree as a child. [param info_source] is mounted
+## under that tree, so a [method Netw.configure_server_info] declaration it
+## made in [method Object._init] governs the hosted session's probe reply.
+## [param auth_timeout] overrides the host API auth cleanup timeout when
+## greater than [code]0.0[/code].
 ##
 ## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]),
 ## [code]port[/code] (the bound UDP port).
 static func start_host(
 		parent: Node,
-		info_provider: Callable = Callable(),
+		info_source: Node = null,
 		auth_timeout: float = -1.0,
 ) -> Dictionary:
 	var port_range_end := _PORT_RANGE_START + _PORT_RANGE_SIZE
@@ -56,13 +57,13 @@ static func start_host(
 		tree.transport_settings = { port = candidate }
 		parent.add_child(tree)
 
-		if info_provider.is_valid():
-			Netw.configure_server_info(tree, info_provider)
 		tree.api.multiplayer_peer = peer
 		if tree.api.multiplayer_peer != peer:
 			tree.queue_free()
 			await parent.get_tree().process_frame
 			continue
+		if info_source != null:
+			tree.add_child(info_source)
 		if auth_timeout > 0.0:
 			tree.api.inner.auth_timeout = auth_timeout
 		return { tree = tree, port = candidate }
@@ -99,7 +100,7 @@ static func make_client_tree(
 ## The local player is prepared before the peer is assigned, so the session
 ## holds its hello and submits exactly one request once the connection is
 ## admitted. Returns [constant @GlobalScope.OK] when
-## [member NetwMultiplayer.local_participant] arrives, the assignment refusal
+## [member NetwMultiplayer.local_player] arrives, the assignment refusal
 ## when the peer was refused, and [constant @GlobalScope.ERR_TIMEOUT] when the
 ## wait ran out.
 static func join_client(
@@ -119,7 +120,7 @@ static func join_client(
 	var api := tree.api
 	return await await_until(
 			tree,
-			func() -> bool: return api.local_participant != null,
+			func() -> bool: return api.local_player != null,
 	)
 
 

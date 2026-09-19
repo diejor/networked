@@ -1348,10 +1348,10 @@ TEST_CASE(
     session->session_flush_deferred();
     NETW_CHECK_EQ(session->settle_pending(), 0);
 
-    Ref<netw::NetwParticipant> local;
+    Ref<netw::NetwPlayer> local;
     local.instantiate();
     local->bind_to(session.ptr(), 7);
-    session->participant_adopt(7, local);
+    session->player_adopt(7, local);
 
     session->emit_signal("session_reclaimed");
     CHECK_FALSE(session->scene_presented().is_valid());
@@ -2487,13 +2487,13 @@ using netw_test::Recorder;
 
 Vector<StringName> join_edges() {
     return Vector<StringName>({
-        "participant_local_joined",
-        "participant_joined",
+        "player_local_joined",
+        "player_joined",
     });
 }
 
-Ref<netw::NetwParticipant> a_row() {
-    Ref<netw::NetwParticipant> row;
+Ref<netw::NetwPlayer> a_row() {
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
     return row;
 }
@@ -2511,21 +2511,21 @@ Ref<NetwMultiplayer> peered_core() {
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] one peer keeps one roster row, so two "
     "callers reading it never end up with two different objects for one "
-    "participant"
+    "player"
 ) {
     Ref<NetwMultiplayer> core = peered_core();
-    const Ref<netw::NetwParticipant> first = a_row();
+    const Ref<netw::NetwPlayer> first = a_row();
 
-    core->participant_adopt(7, first);
-    core->participant_adopt(7, a_row());
+    core->player_adopt(7, first);
+    core->player_adopt(7, a_row());
 
-    NETW_CHECK_EQ(core->participant_of(7).ptr(), first.ptr());
-    NETW_CHECK_EQ(core->participant_has(7), true);
+    NETW_CHECK_EQ(core->player_of(7).ptr(), first.ptr());
+    NETW_CHECK_EQ(core->player_has(7), true);
 
-    core->participant_forget(7);
+    core->player_forget(7);
 
-    NETW_CHECK_EQ(core->participant_has(7), false);
-    NETW_CHECK_EQ(core->participant_of(7).is_valid(), false);
+    NETW_CHECK_EQ(core->player_has(7), false);
+    NETW_CHECK_EQ(core->player_of(7).is_valid(), false);
 }
 
 TEST_CASE(
@@ -2535,19 +2535,19 @@ TEST_CASE(
 ) {
     Ref<NetwMultiplayer> core = peered_core();
     const int64_t mine = core->get_unique_id();
-    core->participant_adopt(mine, a_row());
-    core->participant_adopt(mine + 1, a_row());
+    core->player_adopt(mine, a_row());
+    core->player_adopt(mine + 1, a_row());
     Recorder session(core.ptr(), join_edges());
 
-    core->participant_publish_joined(mine + 1);
-    core->participant_publish_joined(mine);
+    core->player_publish_joined(mine + 1);
+    core->player_publish_joined(mine);
 
     CHECK(
         session.order()
         == Vector<StringName>({
-            "participant_joined",
-            "participant_local_joined",
-            "participant_joined",
+            "player_joined",
+            "player_local_joined",
+            "player_joined",
         })
     );
 }
@@ -2555,12 +2555,12 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] an unknown peer announces nothing, "
     "because it has not been admitted and announcing it would put a null "
-    "participant in front of every listener"
+    "player in front of every listener"
 ) {
     Ref<NetwMultiplayer> core = peered_core();
     Recorder session(core.ptr(), join_edges());
 
-    core->participant_publish_joined(9);
+    core->player_publish_joined(9);
 
     NETW_CHECK_EQ(session.order().size(), 0);
 }
@@ -2571,20 +2571,20 @@ TEST_CASE(
     "happened to hold"
 ) {
     Ref<NetwMultiplayer> core = peered_core();
-    const Ref<netw::NetwParticipant> low = a_row();
-    const Ref<netw::NetwParticipant> high = a_row();
+    const Ref<netw::NetwPlayer> low = a_row();
+    const Ref<netw::NetwPlayer> high = a_row();
 
-    core->participant_adopt(9, high);
-    core->participant_adopt(2, low);
+    core->player_adopt(9, high);
+    core->player_adopt(2, low);
 
-    const TypedArray<netw::NetwParticipant> all = core->participant_all();
+    const TypedArray<netw::NetwPlayer> all = core->player_all();
     REQUIRE(all.size() == 2);
     NETW_CHECK_EQ(Object::cast_to<Object>(all[0]), low.ptr());
     NETW_CHECK_EQ(Object::cast_to<Object>(all[1]), high.ptr());
 
-    core->participant_clear();
+    core->player_clear();
 
-    NETW_CHECK_EQ(core->participant_all().size(), 0);
+    NETW_CHECK_EQ(core->player_all().size(), 0);
 }
 
 } // namespace TestNetwMultiplayerParticipants
@@ -3024,8 +3024,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a bind names the node and stamps the "
-    "identity onto its wrapper"
+    "[Networked][Multiplayer][Hosted] stamping an identity names the node "
+    "after the entity id and writes both halves onto the wrapper"
 ) {
     netw_test::EntityFactories factories;
     Ref<netw::NetwEntity> wrapper;
@@ -3034,17 +3034,15 @@ TEST_CASE(
     NetwMultiplayer::set_wrapper_factory(log.answering("wrapper", wrapper));
     Node *node = memnew(Node);
 
-    NetwMultiplayer::wrapper_bind(node, "valeria", 7);
+    NetwMultiplayer::wrapper_stamp_identity(node, "valeria", 7);
 
-    CHECK(node->get_name() == StringName("valeria|7"));
+    CHECK(node->get_name() == StringName("valeria"));
     CHECK(wrapper->get_entity_id() == StringName("valeria"));
     NETW_CHECK_EQ(wrapper->get_peer_id(), 7);
 
     SUBCASE(
-        "an id the codec refuses binds nothing at all, because a name that "
-        "spells no identity would leave the node and the record "
-        "disagreeing about who the entity is, which is worse than not "
-        "binding"
+        "an empty id identifies nothing, so the node keeps its name and the "
+        "wrapper keeps its blank identity"
     ) {
         Ref<netw::NetwEntity> untouched;
         untouched.instantiate();
@@ -3055,7 +3053,7 @@ TEST_CASE(
         refused->set_name("Standing");
 
         ERR_PRINT_OFF;
-        NetwMultiplayer::wrapper_bind(refused, "a|b", 3);
+        NetwMultiplayer::wrapper_stamp_identity(refused, StringName(), 3);
         ERR_PRINT_ON;
 
         CHECK(refused->get_name() == StringName("Standing"));

@@ -11,6 +11,7 @@ var kickoff_tick := 0
 
 
 func _init() -> void:
+	NetwEntity.ensure(self).entity_id = &"game"
 	Netw.configure_property(self, &"score_red").state().on_spawn()
 	Netw.configure_property(self, &"score_blue").state().on_spawn()
 	Netw.configure_property(self, &"kickoff_tick").state().on_spawn()
@@ -19,7 +20,7 @@ func _init() -> void:
 func _ready() -> void:
 	if multiplayer.is_server():
 		queue_kickoff()
-		Netw.session(self).participant_joined.connect(on_participant_joined)
+		Netw.session(self).player_joined.connect(on_player_joined)
 
 
 func rule_goal(team: int, _tick: int) -> void:
@@ -46,5 +47,5 @@ func tickrate() -> float:
 	return clock.param(NetwMultiplayer.CLOCK_PARAM_TICKRATE)
 
 
-func on_participant_joined(_participant: NetwParticipant) -> void:
+func on_player_joined(_player: NetwPlayer) -> void:
 	queue_kickoff()

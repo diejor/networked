@@ -59,7 +59,7 @@ Methods
    +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`create_client<class_LocalMultiplayerPeer_method_create_client>`\ (\ client_id\: :godot:`int`\ )                                                                         |
    +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`create_server<class_LocalMultiplayerPeer_method_create_server>`\ (\ )                                                                                                   |
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`create_server<class_LocalMultiplayerPeer_method_create_server>`\ (\ unique_id\: :godot:`int` = 1\ )                                                                     |
    +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`force_connect_peer<class_LocalMultiplayerPeer_method_force_connect_peer>`\ (\ peer_id\: :godot:`int`, peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`\ ) |
    +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -115,9 +115,9 @@ Initializes this peer as a client with ``client_id``. The peer reports :godot:`M
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **create_server**\ (\ ) :ref:`🔗<class_LocalMultiplayerPeer_method_create_server>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **create_server**\ (\ unique_id\: :godot:`int` = 1\ ) :ref:`🔗<class_LocalMultiplayerPeer_method_create_server>`
 
-Initializes this peer as the server, whose id is always ``1``.
+Initializes this peer as the server under ``unique_id``, which a rig leaves at ``1``.
 
 .. rst-class:: classref-item-separator
 

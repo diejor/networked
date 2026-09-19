@@ -31,6 +31,7 @@ private:
     godot::RID handle;
     godot::StringName entity_id;
     int64_t peer_id = 0;
+    int64_t player_id = 0;
     int64_t route = 0;
     bool declares_scene = false;
     int64_t stage = int(entity::Stage::UNBOUND);
@@ -69,6 +70,13 @@ public:
     }
     void set_peer_id(int64_t p_peer_id) {
         peer_id = p_peer_id;
+    }
+
+    int64_t get_player_id() const {
+        return player_id;
+    }
+    void set_player_id(int64_t p_player_id) {
+        player_id = p_player_id;
     }
 
     int64_t get_route() const {

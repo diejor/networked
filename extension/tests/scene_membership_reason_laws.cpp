@@ -56,14 +56,14 @@ Ref<NetwMultiplayer> peered_core() {
     return core;
 }
 
-Ref<netw::NetwParticipant> adopted(
+Ref<netw::NetwPlayer> adopted(
     const Ref<NetwMultiplayer> &p_core,
     int64_t p_peer
 ) {
-    Ref<netw::NetwParticipant> row;
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
-    p_core->participant_adopt(p_peer, row);
-    REQUIRE(p_core->participant_has(p_peer));
+    p_core->player_adopt(p_peer, row);
+    REQUIRE(p_core->player_has(p_peer));
     return row;
 }
 
@@ -101,7 +101,7 @@ Declared declare_scene(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] JM1 two bodies of one participant in one "
+    "[Networked][Scene][Hosted] JM1 two bodies of one player in one "
     "scene are two reasons, so the first one leaving keeps the subscription "
     "and the last one leaving ends it, which is the count a single boolean "
     "could not carry"
@@ -147,9 +147,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] JM3 a participant subscribes to several "
+    "[Networked][Scene][Hosted] JM3 a player subscribes to several "
     "scenes at once, so watching one scene neither releases another nor "
-    "touches a second participant's reasons"
+    "touches a second player's reasons"
 ) {
     SceneMembership book;
     const Ref<netw::NetwLivenessCore> minted = handles();

@@ -548,6 +548,8 @@ The flat property set handle, or an invalid RID for a compatibility-only set.
 
 ``true`` after the compiler fixes the wire hash and freezes mutation.
 
+Writing ``true`` here is not :ref:`seal()<class_NetwPropertySet_method_seal>` and not :ref:`compile_against()<class_NetwPropertySet_method_compile_against>`. It sets the flag alone, leaving the column types exactly as they stood, so a set typed by neither call is frozen with untyped columns that can put no row on a wire. Reach for :ref:`compile_against()<class_NetwPropertySet_method_compile_against>`.
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -704,7 +706,9 @@ The two projections are subsequences of the declaration selected by :ref:`NetwPr
 
 |void| **seal**\ (\ ) :ref:`🔗<class_NetwPropertySet_method_seal>`
 
-Freezes the wire fingerprint after every column and axis is compiled. Sealing is what fixes membership order, and membership order is wire order.
+Freezes the wire fingerprint over the column types the set already carries. Sealing is what fixes membership order, and membership order is wire order.
+
+It stamps no types of its own. A set whose columns were never typed against a node seals with every one of them :ref:`NetwMultiplayer.COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>`, and a variant column has no wire width, so the lane cannot be planned and not one row of that set ever leaves this peer. Nothing reports this, because an unplannable set is silently carrying no rows rather than failing. :ref:`compile_against()<class_NetwPropertySet_method_compile_against>` is the call that types the columns and then seals, and it is what a caller wants unless :ref:`stamp_column_types()<class_NetwPropertySet_method_stamp_column_types>` already ran.
 
 .. rst-class:: classref-item-separator
 

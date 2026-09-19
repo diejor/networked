@@ -19,7 +19,7 @@ Editor authored stand in for the join arguments that auto connect a :ref:`Multip
 Description
 -----------
 
-The join intent stays coherent with the server because :ref:`join_args<class_DebugJoinConfig_property_join_args>` holds the very values a live client fills into the form drawn from :ref:`NetwMultiplayer.session_get_join_schema()<class_NetwMultiplayer_method_session_get_join_schema>`. Author one entry per parameter the installed handler declares after its :ref:`NetwParticipant<class_NetwParticipant>`.
+The join intent stays coherent with the server because :ref:`join_args<class_DebugJoinConfig_property_join_args>` holds the very values a live client fills into the form drawn from :ref:`NetwMultiplayer.session_get_join_schema()<class_NetwMultiplayer_method_session_get_join_schema>`. Author one entry per parameter the installed handler declares after its :ref:`NetwPlayer<class_NetwPlayer>`.
 
 ::
 
@@ -84,6 +84,8 @@ The typed join args the tree submits alongside :ref:`username<class_DebugJoinCon
 - :godot:`StringName` **get_username**\ (\ )
 
 Display name for the auto connected player, submitted alongside :ref:`join_args<class_DebugJoinConfig_property_join_args>`.
+
+Left at its default, the name actually submitted carries this process's id after it, so a dev loop launching the same build twice joins as two players holding two save keys rather than as one :ref:`NetwPlayer.username<class_NetwPlayer_property_username>` read and written from both windows. Write a name here and it is submitted exactly as written.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

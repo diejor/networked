@@ -62,11 +62,11 @@ Ref<NetwMultiplayer> peered_core() {
 }
 
 void adopt(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
-    Ref<netw::NetwParticipant> row;
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
-    p_core->participant_adopt(p_peer, row);
-    p_core->participant_publish_joined(p_peer);
-    REQUIRE(p_core->participant_admit(p_peer));
+    p_core->player_adopt(p_peer, row);
+    p_core->player_publish_joined(p_peer);
+    REQUIRE(p_core->player_admit(p_peer));
 }
 
 Array one_source(Node *p_source) {
@@ -77,7 +77,7 @@ Array one_source(Node *p_source) {
 
 TEST_CASE(
     "[Networked][Scene][Hosted] TL1 a session-scoped landing seats every "
-    "accepted participant on the destination, including one that was "
+    "accepted player on the destination, including one that was "
     "watching nothing at all, because converging is what the scope means"
 ) {
     const Ref<NetwMultiplayer> core = peered_core();
@@ -108,7 +108,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] TL2 a scene-scoped landing carries the "
-    "watches the source held and nobody else, so a participant watching "
+    "watches the source held and nobody else, so a player watching "
     "another world stays there and one watching nothing is left alone"
 ) {
     const Ref<NetwMultiplayer> core = peered_core();
@@ -172,7 +172,7 @@ TEST_CASE(
     );
 
     const Ref<netw::NetwPromise> refused = core->scene_apply_change(
-        core->participant_of(7),
+        core->player_of(7),
         target.owner,
         NetwMultiplayer::SCENE_CHANGE_SCENE,
         nullptr

@@ -79,15 +79,15 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] L3 moving an entity between scenes is "
-    "server authority's, and a client is answered a rejected promise"
+    "[Networked][Session][Hosted] L3 reparenting an entity is server "
+    "authority's, and a client is answered a rejected promise"
 ) {
     Ref<NetwMultiplayer> client;
     client.instantiate();
     client->session_set_role(NetwMultiplayer::ROLE_CLIENT);
 
     const Ref<NetwPromise> answered
-        = client->scene_move(RID(), RID());
+        = client->entity_reparent(RID(), nullptr);
     CHECK(answered.is_valid());
     CHECK(answered->get_is_failed());
     NETW_CHECK_EQ(answered->get_code(), ERR_UNAUTHORIZED);

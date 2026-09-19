@@ -54,11 +54,11 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` | :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_method_input_gate_deadline_ticks>`\ (\ ticks\: :godot:`int`\ ) |
-   +-------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` | :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_method_max_future_action_ticks>`\ (\ ticks\: :godot:`int`\ )     |
-   +-------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` | :ref:`input_gate_deadline<class_NetwLagCompensationConfig_method_input_gate_deadline>`\ (\ ticks\: :godot:`int`\ ) |
+   +-------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` | :ref:`max_future_action<class_NetwLagCompensationConfig_method_max_future_action>`\ (\ ticks\: :godot:`int`\ )     |
+   +-------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -108,11 +108,11 @@ How far ahead of the server's own tick an action may ask to happen before it is 
 Method Descriptions
 -------------------
 
-.. _class_NetwLagCompensationConfig_method_input_gate_deadline_ticks:
+.. _class_NetwLagCompensationConfig_method_input_gate_deadline:
 
 .. rst-class:: classref-method
 
-:ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **input_gate_deadline_ticks**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_input_gate_deadline_ticks>`
+:ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **input_gate_deadline**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_input_gate_deadline>`
 
 Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` and returns this same config, so a declaration reads as one chained expression.
 
@@ -120,11 +120,11 @@ Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_in
 
 ----
 
-.. _class_NetwLagCompensationConfig_method_max_future_action_ticks:
+.. _class_NetwLagCompensationConfig_method_max_future_action:
 
 .. rst-class:: classref-method
 
-:ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **max_future_action_ticks**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_max_future_action_ticks>`
+:ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **max_future_action**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_max_future_action>`
 
 Sets :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>` and returns this same config, so a declaration reads as one chained expression.
 

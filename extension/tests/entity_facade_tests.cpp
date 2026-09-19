@@ -1,7 +1,3 @@
-// Tests for the NetwEntity static facade: of, ensure, resolve, and bind.
-// Each method returns a NetwEntity or null. The internal RefCounted index may
-// hold wrapper types, but they are not exposed by this facade.
-
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -14,17 +10,18 @@ using namespace godot;
 using netw::NetwEntity;
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] F1 binding names the node and the record it "
-    "mints reads back what the name spells"
+    "[Networked][Entity][Hosted] F1 an identity is stamped onto the entity "
+    "and the node keeps the name it was given"
 ) {
     Node *root = memnew(Node);
     root->set_name("Player");
 
-    NETW_CHECK_EQ(NetwEntity::bind(root, "valeria", 42) == root, true);
-
-    CHECK(root->get_name() == StringName("valeria|42"));
-    const Ref<NetwEntity> entity = NetwEntity::of(root);
+    const Ref<NetwEntity> entity = NetwEntity::ensure(root);
     REQUIRE(entity.is_valid());
+    entity->set_entity_id("valeria");
+    entity->set_peer_id(42);
+
+    CHECK(root->get_name() == StringName("Player"));
     CHECK(entity->get_entity_id() == StringName("valeria"));
     NETW_CHECK_EQ(entity->get_peer_id(), 42);
 
@@ -42,7 +39,6 @@ TEST_CASE(
     const Ref<NetwEntity> minted = NetwEntity::ensure(clean);
     REQUIRE(minted.is_valid());
     CHECK(NetwEntity::of(clean) == minted);
-    // One node maps to one entity, so repeated calls return the same record.
     CHECK(NetwEntity::ensure(clean) == minted);
 
     memdelete(clean);
@@ -58,14 +54,11 @@ TEST_CASE(
     const Ref<NetwEntity> owned = NetwEntity::ensure(root);
     REQUIRE(owned.is_valid());
 
-    // The ask walks up, which is what makes a child part of the entity that
-    // encloses it rather than an entity of its own.
     CHECK(NetwEntity::of(child) == owned);
 
     const Ref<NetwEntity> own = NetwEntity::ensure(child);
     REQUIRE(own.is_valid());
     CHECK(own != owned);
-    // Creation does not search ancestors. The child gets its own entity.
     CHECK(NetwEntity::of(child) == own);
     CHECK(NetwEntity::of(root) == owned);
 
@@ -86,7 +79,6 @@ TEST_CASE(
     REQUIRE(provisioned.is_valid());
     CHECK(NetwEntity::of(parent) == provisioned);
     CHECK(NetwEntity::of(grandchild) == provisioned);
-    // Asking again answers the same record rather than provisioning a second.
     CHECK(NetwEntity::resolve(child) == provisioned);
 
     CHECK(NetwEntity::resolve(nullptr).is_null());

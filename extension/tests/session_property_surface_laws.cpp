@@ -79,11 +79,11 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] L3 a session with no peer connected lists "
-    "no participants at all"
+    "no players at all"
 ) {
     Ref<NetwMultiplayer> session = make_session();
 
-    NETW_CHECK_EQ(session->get_connected_participants().size(), 0);
+    NETW_CHECK_EQ(session->get_connected_players().size(), 0);
 }
 
 } // namespace TestNetwSessionPropertySurface

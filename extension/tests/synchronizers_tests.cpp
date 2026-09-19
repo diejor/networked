@@ -141,6 +141,25 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Sync][Hosted] a peer sees what it authors, so a "
+    "synchronizer replicating to nobody still answers yes for its own "
+    "holder and no for everyone else"
+) {
+    Node *root = memnew(Node);
+    MultiplayerSynchronizer *sync = sync_under(root, NodePath(".."));
+    sync->set_multiplayer_authority(1, false);
+    sync->set_visibility_public(false);
+
+    CHECK(synchronizers::visibility_verdict(root, 1, 1));
+    CHECK_FALSE(synchronizers::visibility_verdict(root, 2, 1));
+
+    sync->set_multiplayer_authority(7, false);
+    CHECK(synchronizers::visibility_verdict(root, 7, 7));
+    CHECK_FALSE(synchronizers::visibility_verdict(root, 1, 7));
+    memdelete(root);
+}
+
+TEST_CASE(
     "[Networked][Sync][Hosted] a synchronizer this peer does not hold does "
     "not vote, so a subtree holding only those reads as ungoverned"
 ) {

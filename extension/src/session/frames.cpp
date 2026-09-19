@@ -70,7 +70,7 @@ PackedByteArray viewers_write(
     }
     for (uint32_t at = 0; at < p_members.size(); ++at) {
         SceneViewerRow row;
-        row.membership = p_members[at];
+        row.player_id = p_members[at];
         if (!SceneViewerRow::wire.run(stream, row)) {
             return PackedByteArray();
         }
@@ -101,7 +101,7 @@ bool viewers_read(
         if (!SceneViewerRow::wire.run(stream, row)) {
             return false;
         }
-        staged.push_back(row.membership);
+        staged.push_back(row.player_id);
     }
     if (!stream.align_verify() || stream.bits_remaining() != 0) {
         return false;

@@ -7,8 +7,8 @@ var target: Vehicle
 
 func _ready() -> void:
 	var scene: NetwSceneHandle = Netw.scene(self)
-	scene.player_entered.connect(take_local_car)
-	for player: NetwEntity in scene.local_players:
+	scene.body_entered.connect(take_local_car)
+	for player: NetwEntity in scene.local_bodies:
 		take_local_car(player)
 
 

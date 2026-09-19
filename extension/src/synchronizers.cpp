@@ -288,6 +288,9 @@ bool visibility_verdict(Object *p_root, int64_t p_peer, int64_t p_local_id) {
     if (root == nullptr) {
         return false;
     }
+    if (p_peer == p_local_id) {
+        return true;
+    }
     bool found = false;
     LocalVector<Node *> stack;
     stack.push_back(root);

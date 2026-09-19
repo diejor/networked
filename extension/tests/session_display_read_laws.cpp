@@ -51,17 +51,17 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] L2 a participant is answered only for a "
+    "[Networked][Session][Hosted] L2 a player is answered only for a "
     "peer whose join the roster accepted"
 ) {
     Ref<NetwMultiplayer> session = make_session();
 
-    CHECK(session->peer_get_participant(7).is_null());
+    CHECK(session->peer_get_player(7).is_null());
     CHECK_FALSE(session->session_has_accepted(7));
 
     SUBCASE("forgetting a peer nobody knows is a no-op") {
         session->peer_forget(7);
-        CHECK(session->peer_get_participant(7).is_null());
+        CHECK(session->peer_get_player(7).is_null());
     }
 }
 

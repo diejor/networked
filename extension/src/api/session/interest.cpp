@@ -27,7 +27,6 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -190,7 +189,7 @@ void NetwMultiplayer::interest_refresh_perception(
     const Ref<NetwEntity> &p_entity,
     const Array &p_layer_ids
 ) {
-    const int64_t peer_id = interest_local_participant();
+    const int64_t peer_id = interest_local_player();
     if (peer_id == 0 || p_entity.is_null()
         || p_entity->get_owner() == nullptr) {
         return;
@@ -204,7 +203,7 @@ void NetwMultiplayer::interest_refresh_perception(
     } else if (interest_membership_ids(handle).is_empty()) {
         return;
     }
-    const bool visible = interest_participant_sees(peer_id, p_entity);
+    const bool visible = interest_player_sees(peer_id, p_entity);
     if (!interest_perception.set_visible(slot, visible)) {
         return;
     }
@@ -241,7 +240,7 @@ void NetwMultiplayer::interest_refresh_all_perception() {
         "NetwMultiplayer interest refresh all perception",
         colors::INTEREST
     );
-    if (interest_local_participant() == 0) {
+    if (interest_local_player() == 0) {
         return;
     }
     const PackedInt64Array keys = interest_engine.membership_keys();
@@ -277,7 +276,7 @@ void NetwMultiplayer::interest_clear_perception(
     const int64_t slot = p_entity->get_rid_handle().get_id();
     if (p_restore) {
         perception_restore(slot);
-        perception_dispatch_custom(slot, true, interest_local_participant());
+        perception_dispatch_custom(slot, true, interest_local_player());
     } else {
         perception_snapshots.erase(slot);
         interest_perception.disarm(slot);
@@ -295,7 +294,7 @@ void NetwMultiplayer::interest_clear_all_perception() {
         perception_restore(hidden[at]);
     }
     const PackedInt64Array armed = interest_perception.armed_keys();
-    const int64_t peer_id = interest_local_participant();
+    const int64_t peer_id = interest_local_player();
     for (int at = 0; at < int(armed.size()); ++at) {
         perception_dispatch_custom(armed[at], true, peer_id);
     }
@@ -564,7 +563,7 @@ void NetwMultiplayer::interest_apply_delta(const interest::Delta &p_delta) {
     }
 }
 
-int64_t NetwMultiplayer::interest_local_participant() {
+int64_t NetwMultiplayer::interest_local_player() {
     if (!is_local_client()) {
         return 0;
     }
@@ -670,7 +669,7 @@ interest::Decl *NetwMultiplayer::interest_decl_on(
     return facet != nullptr ? facet->declaration() : nullptr;
 }
 
-bool NetwMultiplayer::interest_participant_sees(
+bool NetwMultiplayer::interest_player_sees(
     int64_t p_peer_id,
     const Ref<NetwEntity> &p_entity
 ) {
@@ -824,7 +823,7 @@ bool NetwMultiplayer::interest_wire_admits(
     if (p_peer_id == session_authority_peer()) {
         return true;
     }
-    return interest_participant_sees(p_peer_id, p_entity);
+    return interest_player_sees(p_peer_id, p_entity);
 }
 
 bool NetwMultiplayer::interest_has_committed_intent(
@@ -997,9 +996,9 @@ void NetwMultiplayer::interest_sync_live_peers() {
             live.insert(peers[at]);
         }
     }
-    const int64_t local_participant = interest_local_participant();
-    if (session_get_role() == ROLE_LISTEN_SERVER && local_participant > 0) {
-        live.insert(local_participant);
+    const int64_t local_player = interest_local_player();
+    if (session_get_role() == ROLE_LISTEN_SERVER && local_player > 0) {
+        live.insert(local_player);
     }
     const PackedInt64Array viewers = interest_engine.viewer_peers();
     for (int at = 0; at < int(viewers.size()); ++at) {

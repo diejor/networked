@@ -51,9 +51,10 @@ Ref<NetwEntity> mount(
 ) {
     Node *owner = memnew(Node);
     owner->set_name(StringName(p_id));
-    NetwEntity::bind(owner, p_id, 1);
-    const Ref<NetwEntity> entity = NetwEntity::of(owner);
+    const Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     REQUIRE(entity.is_valid());
+    entity->set_entity_id(p_id);
+    entity->set_peer_id(1);
     entity->get_prediction()->set_archetype(p_archetype);
     p_branch.node->add_child(owner);
     return entity;

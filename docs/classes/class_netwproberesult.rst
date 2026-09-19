@@ -19,13 +19,12 @@ Categorical outcome of a server probe.
 Description
 -----------
 
-:godot:`NetwConnector.probe() <NetwConnector#class_NetwConnector_method_probe>` returns one, and :godot:`NetwServerBrowser` caches the latest one per target so a browser row can render before anyone commits to joining. A probe never throws and never half-returns: every route out of it, including a null target and a transport that cannot probe at all, ends at one :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` .. :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` value, so a caller branches on :ref:`status<class_NetwProbeResult_property_status>` rather than on whether it got a result.
+What a server browser holds for one row, so the row can render before anyone commits to joining it. A probe never throws and never half-returns: every route out of it, including a null target and a transport that cannot probe at all, ends at one :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` .. :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` value, so a caller branches on :ref:`status<class_NetwProbeResult_property_status>` rather than on whether it got a result.
 
 \ :ref:`status<class_NetwProbeResult_property_status>` decides which of the other members carries anything. Only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` and :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` carry an :ref:`info<class_NetwProbeResult_property_info>`, only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` carries a meaningful :ref:`latency_ms<class_NetwProbeResult_property_latency_ms>`, and :ref:`message<class_NetwProbeResult_property_message>` is diagnostic detail rather than text to show a player.
 
 ::
 
-    var result := await NetwConnector.of(api).probe(target)
     if result.is_ok():
         print("%d/%d players, %d ms" % [
             result.info.players, result.info.max_players, result.latency_ms,
@@ -287,7 +286,7 @@ Returns ``true`` when :ref:`status<class_NetwProbeResult_property_status>` is :r
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **ok**\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, latency_ms\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwProbeResult_method_ok>`
 
-Returns a :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` result advertising ``info``, measured at ``latency_ms``. A result discovered through a lobby directory rather than a round trip passes ``-1``, which is how :godot:`NetwServerBrowser` marks a row it has no ping for.
+Returns a :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` result advertising ``info``, measured at ``latency_ms``. A result discovered through a lobby directory rather than a round trip passes ``-1``, which is how a browser marks a row it has no ping for.
 
 .. rst-class:: classref-item-separator
 

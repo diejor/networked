@@ -264,7 +264,7 @@
 			<param index="1" name="reason" type="String" />
 			<description>
 				This peer's own join was rejected, locally or by the server, and no player was seated for it. [param reason] is the server's own words where the rejection came from one, and [param error] is why.
-				A rejection is not a disconnect notice: it is the result to the join this peer asked for, so a game shows it where it asked, beside its username field rather than in a lobby-lost banner. A server rejects when the handler declared through [method Netw.configure_join] is unavailable, when the join carried no arguments a declared handler needs, or when that handler returned something that is not a placement.
+				A rejection is not a disconnect notice. It is the result to the join this peer asked for, so a game shows it where it asked, beside its username field rather than in a lobby-lost banner. A server rejects when the handler declared through [method Netw.configure_admission] turns the join down, when the handler declared through [method Netw.configure_join] is unavailable, when the join carried no arguments a declared handler needs, or when that handler returned something that is not a placement.
 				[codeblock]
 				func _ready() -&gt; void:
 				    Netw.connection(self).join_failed.connect(show_refusal)

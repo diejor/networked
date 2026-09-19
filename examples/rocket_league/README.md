@@ -1,3 +1,6 @@
+## WIP
+There are a lot of bugs going on with prediction and rollback :)
+
 ## Attribution
 
 Ported from [godot-rocket-league](https://github.com/albertok/godot-rocket-league)

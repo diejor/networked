@@ -9,11 +9,10 @@ namespace Networked;
 /// Categorical outcome of a server probe.
 /// </summary>
 /// <remarks>
-/// <c>NetwConnector.probe</c> returns one, and <c>NetwServerBrowser</c> caches
-/// the latest one per target so a browser row can render before anyone commits
-/// to joining. A probe never throws and never half-returns: every route out of
-/// it, including a null target and a transport that cannot probe at all, ends
-/// at one <see cref="NetwProbeResult.StatusEnum.Ok"/> ..
+/// What a server browser holds for one row, so the row can render before anyone
+/// commits to joining it. A probe never throws and never half-returns: every
+/// route out of it, including a null target and a transport that cannot probe
+/// at all, ends at one <see cref="NetwProbeResult.StatusEnum.Ok"/> ..
 /// <see cref="NetwProbeResult.StatusEnum.Incompatible"/> value, so a caller
 /// branches on <see cref="NetwProbeResult.Status"/> rather than on whether it
 /// got a result. <see cref="NetwProbeResult.Status"/> decides which of the
@@ -26,7 +25,6 @@ namespace Networked;
 /// <see cref="NetwProbeResult.Message"/> is diagnostic detail rather than text
 /// to show a player.
 /// <code>
-/// var result := await NetwConnector.of(api).probe(target)
 /// if result.is_ok():
 ///     print("%d/%d players, %d ms" % [
 ///         result.info.players, result.info.max_players, result.latency_ms,
@@ -227,8 +225,7 @@ public sealed class NetwProbeResult : NetwRefCounted
     /// Returns a <see cref="NetwProbeResult.StatusEnum.Ok"/> result advertising
     /// <paramref name="info"/>, measured at <paramref name="latencyMs"/>. A
     /// result discovered through a lobby directory rather than a round trip
-    /// passes <c>-1</c>, which is how <c>NetwServerBrowser</c> marks a row it
-    /// has no ping for.
+    /// passes <c>-1</c>, which is how a browser marks a row it has no ping for.
     /// </summary>
     public static NetwProbeResult Ok(NetwServerInfo info, long latencyMs = 0)
     {

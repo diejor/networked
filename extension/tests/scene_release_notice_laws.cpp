@@ -47,10 +47,10 @@ Ref<NetwMultiplayer> watching_core(Node *p_root, RID &r_held, RID &r_other) {
     core.instantiate();
     r_held = mount(core, p_root);
     r_other = mount(core, p_root);
-    Ref<netw::NetwParticipant> row;
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
-    core->participant_adopt(core->get_unique_id(), row);
-    REQUIRE(core->participant_admit(core->get_unique_id()));
+    core->player_adopt(core->get_unique_id(), row);
+    REQUIRE(core->player_admit(core->get_unique_id()));
     REQUIRE(core->scene_admit_peer(r_held, core->get_unique_id()));
     return core;
 }
@@ -99,7 +99,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SL3 a notice reaches nothing while this peer "
-    "holds no admitted participant and nothing while that participant "
+    "holds no admitted player and nothing while that player "
     "subscribes to nothing, because a release is an edge on a membership that "
     "exists"
 ) {
@@ -112,13 +112,13 @@ TEST_CASE(
 
     CHECK_FALSE(core->scene_released_scene(honest, 1).is_valid());
 
-    Ref<netw::NetwParticipant> row;
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
-    core->participant_adopt(mine, row);
+    core->player_adopt(mine, row);
 
     CHECK_FALSE(core->scene_released_scene(honest, 1).is_valid());
 
-    REQUIRE(core->participant_admit(mine));
+    REQUIRE(core->player_admit(mine));
 
     CHECK_FALSE(core->scene_released_scene(honest, 1).is_valid());
 
@@ -139,10 +139,10 @@ TEST_CASE(
     core.instantiate();
     core->session_set_authority_peer(7);
     const RID seat = mount(core, root);
-    Ref<netw::NetwParticipant> row;
+    Ref<netw::NetwPlayer> row;
     row.instantiate();
-    core->participant_adopt(core->get_unique_id(), row);
-    REQUIRE(core->participant_admit(core->get_unique_id()));
+    core->player_adopt(core->get_unique_id(), row);
+    REQUIRE(core->player_admit(core->get_unique_id()));
     REQUIRE(core->scene_admit_peer(seat, core->get_unique_id()));
 
     const PackedByteArray honest = notice(route_of(core, seat));

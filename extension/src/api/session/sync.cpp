@@ -29,7 +29,6 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -352,7 +351,7 @@ RID NetwMultiplayer::entity_replicate(Object *p_node, Object *p_owner) {
     );
     const Ref<NetwEntity> wrapper = pipeline->replicate(
         Object::cast_to<Node>(p_node),
-        Ref<NetwParticipant>(Object::cast_to<NetwParticipant>(p_owner))
+        Ref<NetwPlayer>(Object::cast_to<NetwPlayer>(p_owner))
     );
     return wrapper.is_valid() ? wrapper->get_rid_handle() : RID();
 }

@@ -8,7 +8,11 @@ namespace netw {
 class DebugJoinConfig : public godot::Resource {
     GDCLASS(DebugJoinConfig, godot::Resource)
 
-    godot::StringName username = godot::StringName("DebugPlayer");
+public:
+    static constexpr const char *DEFAULT_USERNAME = "DebugPlayer";
+
+private:
+    godot::StringName username = godot::StringName(DEFAULT_USERNAME);
     godot::Array join_args;
 
 protected:
@@ -21,6 +25,8 @@ public:
     godot::StringName get_username() const {
         return username;
     }
+
+    godot::StringName submitted_username() const;
 
     void set_join_args(const godot::Array &p_join_args);
     godot::Array get_join_args() const;

@@ -9,7 +9,6 @@ namespace netw::auth {
 inline constexpr uint8_t PROTOCOL_VERSION = 4;
 inline constexpr int HELLO_HEADER_LEN = 14;
 inline constexpr int PROBE_HEADER_LEN = 6;
-inline constexpr int HELLO_BEARS_CREDENTIAL = 1 << 0;
 
 enum class Kind : int {
     UNKNOWN = 0,
@@ -36,7 +35,6 @@ struct Hello {
     int version = 0;
     uint64_t app_tag = 0;
     int flags = 0;
-    godot::PackedByteArray provider_payload;
 
     bool ok() const {
         return refusal == Refusal::NONE;
@@ -61,11 +59,7 @@ godot::PackedByteArray magic_probe();
 
 Kind classify(const godot::PackedByteArray &p_data);
 
-godot::PackedByteArray encode_client_hello(
-    const godot::PackedByteArray &p_provider_payload,
-    uint64_t p_app_tag,
-    int p_flags
-);
+godot::PackedByteArray encode_client_hello(uint64_t p_app_tag, int p_flags);
 
 Hello decode_client_hello(
     const godot::PackedByteArray &p_data,

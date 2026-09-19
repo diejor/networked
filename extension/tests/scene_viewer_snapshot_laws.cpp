@@ -80,7 +80,7 @@ TEST_CASE(
     NetwMultiplayer *host = rig.server();
     const int peer = rig.peer_id(0);
     netw_test::seated_peer(host, peer, StringName("ana"));
-    const int64_t membership = host->participant_incarnation(peer);
+    const int64_t membership = host->player_incarnation(peer);
     const int64_t route = host->scene_route_of(arena);
     REQUIRE(route > 0);
 
@@ -126,8 +126,8 @@ TEST_CASE(
     const int second = rig.peer_id(1);
     netw_test::seated_peer(host, first, StringName("ana"));
     netw_test::seated_peer(host, second, StringName("bo"));
-    const int64_t one = host->participant_incarnation(first);
-    const int64_t two = host->participant_incarnation(second);
+    const int64_t one = host->player_incarnation(first);
+    const int64_t two = host->player_incarnation(second);
     const int64_t route = host->scene_route_of(arena);
 
     host->scene_apply_viewers(
@@ -159,7 +159,7 @@ TEST_CASE(
     NetwMultiplayer *host = rig.server();
     const int peer = rig.peer_id(0);
     netw_test::seated_peer(host, peer, StringName("ana"));
-    const int64_t membership = host->participant_incarnation(peer);
+    const int64_t membership = host->player_incarnation(peer);
     const int64_t route = host->scene_route_of(arena);
 
     SceneViewersHead stale = head_for(host, route, 1);
@@ -187,7 +187,7 @@ TEST_CASE(
     NetwMultiplayer *host = rig.server();
     const int peer = rig.peer_id(0);
     netw_test::seated_peer(host, peer, StringName("ana"));
-    const int64_t membership = host->participant_incarnation(peer);
+    const int64_t membership = host->player_incarnation(peer);
     const int64_t route = host->scene_route_of(arena);
 
     host->scene_apply_viewers(

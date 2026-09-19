@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		A game subclasses this to save into something of its own, and [FileSystemDatabase] is the backend this addon ships.
-		Every method here returns a [NetwPromise] straight away and none of them may suspend. [NetwDatabase.TableRepository] is the layer above that waits on the promise, and that is where a coroutine belongs.
+		Every method here returns a [NetwPromise] straight away and none of them may suspend. [NetwDatabase] is the layer above that waits on the promise, and that is where a coroutine belongs.
 		That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot return a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
 		[codeblock]
 		# A backend that returns on the spot.

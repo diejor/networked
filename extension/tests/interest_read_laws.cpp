@@ -79,7 +79,7 @@ TEST_CASE(
 
     REQUIRE(core->session_get_role() == NetwMultiplayer::ROLE_LISTEN_SERVER);
     NETW_CHECK_EQ(core->get_unique_id(), 7);
-    NETW_CHECK_EQ(core->interest_local_participant(), int64_t(7));
+    NETW_CHECK_EQ(core->interest_local_player(), int64_t(7));
 
     core->interest_sync_live_peers();
     const PackedInt64Array seated = core->interest_known_peers();

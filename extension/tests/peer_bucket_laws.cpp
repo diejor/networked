@@ -125,16 +125,16 @@ TEST_CASE(
     REQUIRE(before.is_valid());
 
     SUBCASE(
-        "forgetting one peer drops its bucket and its participant, and "
+        "forgetting one peer drops its bucket and its player, and "
         "leaves the other peer's alone"
     ) {
-        NETW_CHECK_EQ(int(session->peer_get_participant(7).is_valid()), 1);
+        NETW_CHECK_EQ(int(session->peer_get_player(7).is_valid()), 1);
         session->peer_forget(7);
 
         CHECK_FALSE(session->peer_has_bucket(7, kind));
-        NETW_CHECK_EQ(int(session->peer_get_participant(7).is_valid()), 0);
+        NETW_CHECK_EQ(int(session->peer_get_player(7).is_valid()), 0);
         CHECK(session->peer_has_bucket(8, kind));
-        NETW_CHECK_EQ(int(session->peer_get_participant(8).is_valid()), 1);
+        NETW_CHECK_EQ(int(session->peer_get_player(8).is_valid()), 1);
 
         admit(session, 7);
         CHECK_FALSE(same_row(session->peer_get_bucket(7, kind), before));

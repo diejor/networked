@@ -38,7 +38,7 @@ Ref<NetwServerInfo> NetwServerInfo::from_session(NetwMultiplayer *p_api) {
     }
     info->set_is_local_listener(true);
     if (p_api != nullptr) {
-        info->set_players(p_api->get_connected_participants().size());
+        info->set_players(p_api->get_connected_players().size());
         info->set_app_id(p_api->session_get_app_id());
     }
     return info;

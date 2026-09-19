@@ -20,16 +20,16 @@ var peer_id: int = 0
 ## Username used to join the session.
 var username: StringName = &""
 
-## Every body this runner's participant represents.
-var local_players: Array[NetwEntity]:
+## Every body this runner's player represents.
+var local_bodies: Array[NetwEntity]:
 	get:
 		if not tree:
 			return []
-		var who: NetwParticipant = tree.api.local_participant
+		var who: NetwPlayer = tree.api.local_player
 		if who == null:
 			return []
 		var owned: Array[NetwEntity] = []
-		for player: NetwEntity in who.players:
+		for player: NetwEntity in who.bodies:
 			if is_instance_valid(player.owner):
 				owned.append(player)
 		return owned
@@ -38,7 +38,7 @@ var local_players: Array[NetwEntity]:
 ## several, because picking one of several would pick for the caller.
 var local_player: Node:
 	get:
-		var mine: Array[NetwEntity] = local_players
+		var mine: Array[NetwEntity] = local_bodies
 		return mine[0].owner if mine.size() == 1 else null
 
 
@@ -92,7 +92,7 @@ func find_player(player_username: StringName) -> Node:
 		return null
 
 	var player_name := StringName(str(player_username))
-	for player: NetwEntity in tree.api.players:
+	for player: NetwEntity in tree.api.bodies:
 		if player != null and is_instance_valid(player.owner):
 			if _player_matches_username(player.owner, player_name):
 				return player.owner
@@ -189,9 +189,7 @@ func _player_matches_username(
 		player_username: StringName,
 ) -> bool:
 	var entity := NetwEntity.of(player)
-	if entity and entity.entity_id == player_username:
-		return true
-	return StringName(NetwEntity.parse_entity(player.name)) == player_username
+	return entity != null and entity.entity_id == player_username
 
 
 func _on_slot_child_exiting(child: Node) -> void:

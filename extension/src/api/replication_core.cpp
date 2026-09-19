@@ -1109,7 +1109,7 @@ Dictionary ReplicationCore::counters() const {
 
 Ref<NetwEntity> ReplicationCore::replicate(
     Node *p_node,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
@@ -1122,7 +1122,7 @@ Ref<NetwEntity> ReplicationCore::replicate(
 Node *ReplicationCore::spawn(
     const Callable &p_fn,
     const Array &p_args,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
@@ -1145,7 +1145,7 @@ void ReplicationCore::register_spawn_constructor(
 Node *ReplicationCore::spawn_registered(
     const StringName &p_id,
     const Array &p_args,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {

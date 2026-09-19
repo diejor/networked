@@ -9,7 +9,6 @@
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/entity/control.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/entity/stage.hpp"
 #include "netw/log.hpp"
 #include "netw/repl/set_model.hpp"
@@ -109,44 +108,6 @@ Ref<NetwEntity> NetwEntity::by_route(
     return as_entity(p_api->wrapper_for_route(p_route));
 }
 
-StringName NetwEntity::parse_entity(const String &p_node_name) {
-    return entity::Identity::parse_entity(p_node_name);
-}
-
-int64_t NetwEntity::parse_peer(const String &p_node_name) {
-    return entity::Identity::parse_peer(p_node_name);
-}
-
-String NetwEntity::name_for(const Ref<NetwParticipant> &p_participant) {
-    if (p_participant.is_null()) {
-        return String();
-    }
-    return entity::Identity::format(
-        String(p_participant->get_username()),
-        p_participant->get_peer_id()
-    );
-}
-
-Node *NetwEntity::find(
-    Node *p_root,
-    const Ref<NetwParticipant> &p_participant
-) {
-    if (p_root == nullptr || p_participant.is_null()) {
-        return nullptr;
-    }
-    return p_root->get_node_or_null(NodePath(name_for(p_participant)));
-}
-
-Node *NetwEntity::bind(
-    Node *p_node,
-    const StringName &p_entity_id,
-    int64_t p_peer_id
-) {
-    return Object::cast_to<Node>(
-        NetwMultiplayer::wrapper_bind(p_node, p_entity_id, p_peer_id)
-    );
-}
-
 Node *NetwEntity::instantiate_from(
     Node *p_template,
     const Callable &p_configure
@@ -227,6 +188,14 @@ int64_t NetwEntity::get_peer_id() const {
 
 void NetwEntity::set_peer_id(int64_t p_peer_id) {
     record->set_peer_id(p_peer_id);
+}
+
+int64_t NetwEntity::get_player_id() const {
+    return record->get_player_id();
+}
+
+void NetwEntity::set_player_id(int64_t p_player_id) {
+    record->set_player_id(p_player_id);
 }
 
 int64_t NetwEntity::get_route() const {
@@ -310,13 +279,13 @@ bool NetwEntity::get_is_controlled_locally() const {
     return control()->controlled_by(local_peer(), get_peer_id());
 }
 
-Ref<NetwParticipant> NetwEntity::get_controller_participant() const {
+Ref<NetwPlayer> NetwEntity::get_controller_player() const {
     NetwMultiplayer *core = session_core();
     const int64_t steering = get_controller();
     if (core == nullptr || steering == 0) {
-        return Ref<NetwParticipant>();
+        return Ref<NetwPlayer>();
     }
-    return core->participant_of(steering);
+    return core->player_of(steering);
 }
 
 int64_t NetwEntity::local_peer() const {
@@ -513,13 +482,13 @@ bool NetwEntity::get_is_authority() const {
     return api->is_host();
 }
 
-Ref<NetwParticipant> NetwEntity::get_participant() const {
+Ref<NetwPlayer> NetwEntity::get_player() const {
     NetwMultiplayer *core = session_core();
     const int64_t represented = get_peer_id();
     if (core == nullptr || represented == 0) {
-        return Ref<NetwParticipant>();
+        return Ref<NetwPlayer>();
     }
-    return core->participant_of(represented);
+    return core->player_of(represented);
 }
 
 int64_t NetwEntity::get_ownership() const {
@@ -640,8 +609,7 @@ void NetwEntity::hydrate_components() {
     NetwCompTable &table = record->get_comp_table();
     table.assign(paths);
     table.set_table_hash(comp_structure_hash(table.sorted_paths()));
-    const bool unannounced = !get_is_authority() && table.get_wire_hash() == 0;
-    if (!unannounced && table.reconcile(get_is_authority())) {
+    if (table.reconcile(get_is_authority())) {
         NETW_WARN(
             sys::ENTITY,
             "component table hash mismatch on entity '%s': server=%d, "
@@ -1048,31 +1016,6 @@ void NetwEntity::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwEntity",
-        D_METHOD("parse_entity", "node_name"),
-        &NetwEntity::parse_entity
-    );
-    ClassDB::bind_static_method(
-        "NetwEntity",
-        D_METHOD("parse_peer", "node_name"),
-        &NetwEntity::parse_peer
-    );
-    ClassDB::bind_static_method(
-        "NetwEntity",
-        D_METHOD("name_for", "participant"),
-        &NetwEntity::name_for
-    );
-    ClassDB::bind_static_method(
-        "NetwEntity",
-        D_METHOD("find", "root", "participant"),
-        &NetwEntity::find
-    );
-    ClassDB::bind_static_method(
-        "NetwEntity",
-        D_METHOD("bind", "node", "entity_id", "peer_id"),
-        &NetwEntity::bind
-    );
-    ClassDB::bind_static_method(
-        "NetwEntity",
         D_METHOD("instantiate_from", "template", "configure"),
         &NetwEntity::instantiate_from,
         DEFVAL(Callable())
@@ -1260,18 +1203,18 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_controller_participant"),
-        &NetwEntity::get_controller_participant
+        D_METHOD("get_controller_player"),
+        &NetwEntity::get_controller_player
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
-            "controller_participant",
+            "controller_player",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwParticipant"
+            "NetwPlayer"
         ),
         "",
-        "get_controller_participant"
+        "get_controller_player"
     );
 
     ClassDB::bind_method(
@@ -1324,18 +1267,18 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_participant"),
-        &NetwEntity::get_participant
+        D_METHOD("get_player"),
+        &NetwEntity::get_player
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
-            "participant",
+            "player",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwParticipant"
+            "NetwPlayer"
         ),
         "",
-        "get_participant"
+        "get_player"
     );
 
     ClassDB::bind_method(D_METHOD("get_ownership"), &NetwEntity::get_ownership);

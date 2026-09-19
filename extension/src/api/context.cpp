@@ -42,6 +42,30 @@ Node *node_behind(const Variant &p_held) {
     return Object::cast_to<Node>(gd::live_object(p_held));
 }
 
+Node *handler_scope(const Callable &p_handler, const char *p_verb) {
+    NETW_ERR_COND_V(
+        !p_handler.is_valid(),
+        nullptr,
+        sys::SESSION,
+        "Netw.%s: a live handler is required, because the node it is written "
+        "on is the multiplayer branch this declaration governs. Declare it "
+        "again from that node when the game has one to declare.",
+        p_verb
+    );
+    Node *scope = Object::cast_to<Node>(p_handler.get_object());
+    NETW_ERR_COND_V(
+        scope == nullptr,
+        nullptr,
+        sys::SESSION,
+        "Netw.%s: the handler must be written on a Node, because the node it "
+        "lives on names the multiplayer branch this declaration governs and "
+        "bounds how long it lasts. Move the method onto a node inside the "
+        "session's branch and declare it from there.",
+        p_verb
+    );
+    return scope;
+}
+
 template <typename T>
 Ref<T> declare_config(
     Node *p_node,
@@ -446,9 +470,13 @@ Ref<NetwSceneHandle> Netw::scene(Node *p_node, const StringName &p_named) {
                                : Ref<NetwSceneHandle>();
 }
 
-Error Netw::configure_server_info(Node *p_node, const Callable &p_provider) {
+Error Netw::configure_server_info(const Callable &p_provider) {
+    Node *scope = handler_scope(p_provider, "configure_server_info");
+    if (scope == nullptr) {
+        return ERR_INVALID_PARAMETER;
+    }
     return session_decl::declare(
-        p_node,
+        scope,
         session_decl::KIND_SERVER_INFO,
         p_provider,
         Variant(),
@@ -456,30 +484,29 @@ Error Netw::configure_server_info(Node *p_node, const Callable &p_provider) {
     );
 }
 
-Ref<NetwJoinConfig> Netw::configure_join(
-    Node *p_node,
-    const Callable &p_handler
-) {
-    Ref<NetwJoinConfig> config;
-    if (!p_handler.is_null()) {
-        const Ref<Script> declaring
-            = netw::script::model::declaring_script(p_handler.get_object());
-        NETW_ERR_COND_V(
-            NetwMultiplayer::join_declared_arg_types(p_handler).is_empty()
-                && p_handler.get_argument_count() > 1,
-            Ref<NetwJoinConfig>(),
-            sys::SESSION,
-            "Netw.configure_join: a handler taking wire arguments must be a "
-            "named method, because its parameter types are the join's wire "
-            "schema and a lambda publishes none. Write 'func seat(who: "
-            "NetwParticipant, at: Vector3) -> void' and declare it by name."
-        );
-        config.instantiate();
-        config->set_context_script(declaring);
-        config->set_context_name(p_handler.get_method());
+Ref<NetwJoinConfig> Netw::configure_join(const Callable &p_handler) {
+    Node *scope = handler_scope(p_handler, "configure_join");
+    if (scope == nullptr) {
+        return Ref<NetwJoinConfig>();
     }
+    const Ref<Script> declaring
+        = netw::script::model::declaring_script(p_handler.get_object());
+    NETW_ERR_COND_V(
+        NetwMultiplayer::join_declared_arg_types(p_handler).is_empty()
+            && p_handler.get_argument_count() > 1,
+        Ref<NetwJoinConfig>(),
+        sys::SESSION,
+        "Netw.configure_join: a handler taking wire arguments must be a "
+        "named method, because its parameter types are the join's wire "
+        "schema and a lambda publishes none. Write 'func seat(who: "
+        "NetwPlayer, at: Vector3) -> void' and declare it by name."
+    );
+    Ref<NetwJoinConfig> config;
+    config.instantiate();
+    config->set_context_script(declaring);
+    config->set_context_name(p_handler.get_method());
     if (session_decl::declare(
-            p_node,
+            scope,
             session_decl::KIND_JOIN,
             p_handler,
             config,
@@ -491,13 +518,17 @@ Ref<NetwJoinConfig> Netw::configure_join(
     return config;
 }
 
-Error Netw::configure_auth(Node *p_node, const Callable &p_factory) {
+Error Netw::configure_admission(const Callable &p_handler) {
+    Node *scope = handler_scope(p_handler, "configure_admission");
+    if (scope == nullptr) {
+        return ERR_INVALID_PARAMETER;
+    }
     return session_decl::declare(
-        p_node,
-        session_decl::KIND_AUTH,
-        p_factory,
+        scope,
+        session_decl::KIND_ADMISSION,
+        p_handler,
         Variant(),
-        "configure_auth"
+        "configure_admission"
     );
 }
 
@@ -836,7 +867,7 @@ Ref<NetwChannel> Netw::channel(Node *p_node, int64_t p_channel_id) {
 
 Ref<NetwEntity> Netw::replicate(
     Node *p_node,
-    const Ref<NetwParticipant> &p_owner
+    const Ref<NetwPlayer> &p_owner
 ) {
     NetwMultiplayer *api = sole_session("replicate");
     if (api == nullptr) {
@@ -848,11 +879,11 @@ Ref<NetwEntity> Netw::replicate(
 }
 
 Node *Netw::spawn(const Callable &p_fn, const Array &p_args) {
-    return spawn_player(Ref<NetwParticipant>(), p_fn, p_args);
+    return spawn_player(Ref<NetwPlayer>(), p_fn, p_args);
 }
 
 Node *Netw::spawn_player(
-    const Ref<NetwParticipant> &p_player,
+    const Ref<NetwPlayer> &p_player,
     const Callable &p_fn,
     const Array &p_args
 ) {
@@ -897,6 +928,34 @@ Error Netw::despawn(Node *p_node, const Ref<NetwDespawnOpts> &p_opts) {
         return ERR_UNAVAILABLE;
     }
     return api->entity_despawn(entity->get_rid_handle(), p_opts);
+}
+
+Ref<NetwPromise> Netw::reparent(Node *p_node, Node *p_new_parent) {
+    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    if (entity.is_null()) {
+        NETW_ERROR(
+            sys::SCENE,
+            "Netw.reparent: '%s' is no entity of any session",
+            p_node != nullptr ? String(p_node->get_name()) : String("<null>")
+        );
+        return NetwPromise::rejected(
+            ERR_DOES_NOT_EXIST,
+            String("Netw.reparent: the node is no entity of any session")
+        );
+    }
+    NetwMultiplayer *api = NetwEntity::session_core_for(p_node);
+    if (api == nullptr) {
+        NETW_ERROR(
+            sys::SCENE,
+            "Netw.reparent: no session governs '%s'",
+            String(p_node->get_name())
+        );
+        return NetwPromise::rejected(
+            ERR_UNAVAILABLE,
+            String("Netw.reparent: no session governs the node")
+        );
+    }
+    return api->entity_reparent(entity->get_rid_handle(), p_new_parent);
 }
 
 Ref<NetwAction> Netw::action(const Callable &p_authority) {
@@ -1023,20 +1082,18 @@ Ref<NetwPromise> Netw::reload_current_scene(Node *p_node, SceneChange p_scope) {
     );
 }
 
-Error Netw::configure_scene_requests(Node *p_node, const Callable &p_handler) {
-    const Error declared = session_decl::declare(
-        p_node,
+Error Netw::configure_scene_requests(const Callable &p_handler) {
+    Node *scope = handler_scope(p_handler, "configure_scene_requests");
+    if (scope == nullptr) {
+        return ERR_INVALID_PARAMETER;
+    }
+    return session_decl::declare(
+        scope,
         session_decl::KIND_SCENE_REQUESTS,
         p_handler,
         Variant(),
         "configure_scene_requests"
     );
-    if (declared == OK && p_handler.is_null()) {
-        if (NetwMultiplayer *api = session_decl::installed_api(p_node)) {
-            api->scene_set_request_handler(Callable());
-        }
-    }
-    return declared;
 }
 
 Ref<NetwSceneConfig> Netw::configure_multiplayer_scene(Node *p_node) {
@@ -1127,18 +1184,18 @@ void Netw::_bind_methods() {
 
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_server_info", "node", "provider"),
+        D_METHOD("configure_server_info", "provider"),
         &Netw::configure_server_info
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_join", "node", "handler"),
+        D_METHOD("configure_join", "handler"),
         &Netw::configure_join
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_auth", "node", "factory"),
-        &Netw::configure_auth
+        D_METHOD("configure_admission", "handler"),
+        &Netw::configure_admission
     );
     ClassDB::bind_static_method(
         "Netw",
@@ -1257,7 +1314,7 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("replicate", "node", "owner"),
         &Netw::replicate,
-        DEFVAL(Ref<NetwParticipant>())
+        DEFVAL(Ref<NetwPlayer>())
     );
     gd::bind_static_vararg("Netw", D_METHOD("spawn", "fn"), &Netw::spawn);
     gd::bind_static_vararg(
@@ -1270,6 +1327,11 @@ void Netw::_bind_methods() {
         D_METHOD("despawn", "node", "opts"),
         &Netw::despawn,
         DEFVAL(Ref<NetwDespawnOpts>())
+    );
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("reparent", "node", "new_parent"),
+        &Netw::reparent
     );
 
     ClassDB::bind_static_method(
@@ -1313,12 +1375,12 @@ void Netw::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_scene_requests", "node", "handler"),
+        D_METHOD("configure_scene_requests", "handler"),
         &Netw::configure_scene_requests
     );
 
     BIND_ENUM_CONSTANT(SCENE_CHANGE_SESSION);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_PARTICIPANT);
+    BIND_ENUM_CONSTANT(SCENE_CHANGE_PLAYER);
     BIND_ENUM_CONSTANT(SCENE_CHANGE_SCENE);
     BIND_ENUM_CONSTANT(SCENE_ISOLATION_NONE);
     BIND_ENUM_CONSTANT(SCENE_ISOLATION_OWN_WORLD);

@@ -85,7 +85,7 @@ func test_connect_entry_flow() -> void:
 	assert_that(err).is_equal(OK)
 	assert_bool(server.api.is_online).is_true()
 	assert_that(server.api.role).is_equal(NetwMultiplayer.ROLE_DEDICATED_SERVER)
-	assert_object(server.api.local_participant).is_null()
+	assert_object(server.api.local_player).is_null()
 
 	var client := _make_tree(NetwMultiplayer.ROLE_CLIENT, "ConnectJoinClient")
 	err = await session.connect_tree(

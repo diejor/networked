@@ -52,8 +52,8 @@ Node *child_named(Node *p_parent, const char *p_name) {
     return node;
 }
 
-Callable provider(const CallLog &p_log, const StringName &p_tag) {
-    return p_log.minting<NetwServerInfo>(p_tag);
+Callable provider(const CallLog &p_log, Node *p_on, const StringName &p_tag) {
+    return p_log.minting_on<NetwServerInfo>(p_on, p_tag);
 }
 
 bool probe_answers(NetwMultiplayer *p_api) {
@@ -84,7 +84,7 @@ TEST_CASE(
     scope->set_name(StringName("Session"));
 
     NETW_CHECK_EQ(
-        Netw::configure_server_info(scope, provider(log, "info")),
+        Netw::configure_server_info(provider(log, scope, "info")),
         OK
     );
     NETW_CHECK_EQ(log.count("info"), 0);
@@ -109,7 +109,7 @@ TEST_CASE(
     Netw::configure_session(scope)->app(StringName("HD2App"));
     branch.api->config_settle();
 
-    Netw::configure_server_info(scope, provider(log, "info"));
+    Netw::configure_server_info(provider(log, scope, "info"));
 
     CHECK(probe_answers(branch.api.ptr()));
 
@@ -128,14 +128,10 @@ TEST_CASE(
     Branch second("HD3Second");
     const CallLog log;
 
-    Netw::configure_server_info(
-        child_named(first.node, "Session"),
-        provider(log, "first")
-    );
-    Netw::configure_server_info(
-        child_named(second.node, "Session"),
-        provider(log, "second")
-    );
+    Node *in_first = child_named(first.node, "Session");
+    Node *in_second = child_named(second.node, "Session");
+    Netw::configure_server_info(provider(log, in_first, "first"));
+    Netw::configure_server_info(provider(log, in_second, "second"));
 
     CHECK(probe_answers(first.api.ptr()));
     CHECK(probe_answers(second.api.ptr()));
@@ -154,7 +150,7 @@ TEST_CASE(
     Node *scope = child_named(branch, "Session");
     const CallLog log;
 
-    Netw::configure_server_info(scope, provider(log, "info"));
+    Netw::configure_server_info(provider(log, scope, "info"));
 
     Ref<SceneMultiplayer> inner;
     inner.instantiate();
@@ -178,27 +174,29 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Session][Hosted][SceneTree] HD5 two live declarations on one "
     "session refuse the probe rather than picking the later entrant, report "
-    "the conflict once, and answer again once one is cleared"
+    "the conflict once, and answer again once one of them leaves the branch"
 ) {
     Branch branch("HD5");
     const CallLog log;
     Node *first = child_named(branch.node, "First");
     Node *second = child_named(branch.node, "Second");
 
-    Netw::configure_server_info(first, provider(log, "first"));
-    Netw::configure_server_info(second, provider(log, "second"));
+    Netw::configure_server_info(provider(log, first, "first"));
+    Netw::configure_server_info(provider(log, second, "second"));
 
     CHECK_FALSE(probe_answers(branch.api.ptr()));
     NETW_CHECK_EQ(log.count("first"), 0);
     NETW_CHECK_EQ(log.count("second"), 0);
     CHECK_FALSE(reports_ambiguity(branch.api));
 
-    Netw::configure_server_info(second, Callable());
+    branch.node->remove_child(second);
 
     CHECK(probe_answers(branch.api.ptr()));
     NETW_CHECK_EQ(log.count("first"), 1);
     NETW_CHECK_EQ(log.count("second"), 0);
     CHECK(reports_ambiguity(branch.api));
+
+    memdelete(second);
 }
 
 TEST_CASE(
@@ -209,7 +207,7 @@ TEST_CASE(
     Branch branch("HD6");
     const CallLog log;
     Node *scope = child_named(branch.node, "Session");
-    Netw::configure_server_info(scope, provider(log, "info"));
+    Netw::configure_server_info(provider(log, scope, "info"));
 
     CHECK(probe_answers(branch.api.ptr()));
 
@@ -233,7 +231,7 @@ TEST_CASE(
     Branch second("HD7Second");
     const CallLog log;
     Node *scope = child_named(first.node, "Session");
-    Netw::configure_server_info(scope, provider(log, "info"));
+    Netw::configure_server_info(provider(log, scope, "info"));
 
     CHECK(probe_answers(first.api.ptr()));
 
@@ -247,25 +245,27 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted][SceneTree] HD8 the same scope node replaces "
-    "its declaration atomically, and clearing it selects the built-in reply "
-    "rather than leaving the old provider standing"
+    "its declaration atomically, and the node leaving the branch takes both "
+    "the replacement and the provider it replaced with it"
 ) {
     Branch branch("HD8");
     const CallLog log;
     Node *scope = child_named(branch.node, "Session");
 
-    Netw::configure_server_info(scope, provider(log, "old"));
+    Netw::configure_server_info(provider(log, scope, "old"));
     CHECK(probe_answers(branch.api.ptr()));
 
-    Netw::configure_server_info(scope, provider(log, "new"));
+    Netw::configure_server_info(provider(log, scope, "new"));
     CHECK(probe_answers(branch.api.ptr()));
     NETW_CHECK_EQ(log.count("old"), 1);
     NETW_CHECK_EQ(log.count("new"), 1);
 
-    Netw::configure_server_info(scope, Callable());
-    CHECK(probe_answers(branch.api.ptr()));
+    branch.node->remove_child(scope);
+    CHECK_FALSE(probe_answers(branch.api.ptr()));
     NETW_CHECK_EQ(log.count("old"), 1);
     NETW_CHECK_EQ(log.count("new"), 1);
+
+    memdelete(scope);
 }
 
 TEST_CASE(
@@ -276,7 +276,7 @@ TEST_CASE(
     Branch branch("HD9");
     const CallLog log;
     Node *scope = child_named(branch.node, "Session");
-    Netw::configure_server_info(scope, log.callable("info"));
+    Netw::configure_server_info(log.callable_on(scope, "info"));
 
     bool answered = true;
     const PackedByteArray payload = branch.api->probe_reply_payload(answered);
@@ -293,7 +293,7 @@ TEST_CASE(
     Branch branch("HD10");
     const CallLog log;
     Node *scope = memnew(Node);
-    Netw::configure_server_info(scope, provider(log, "info"));
+    Netw::configure_server_info(provider(log, scope, "info"));
     memdelete(scope);
 
     CHECK(probe_answers(branch.api.ptr()));
@@ -301,17 +301,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted][SceneTree] HD11 a declaration with no scope "
-    "node and one whose handler is already dead are both refused at the door, "
-    "and the declaration the node already carries survives the rejected edit"
+    "[Networked][Session][Hosted][SceneTree] HD11 a provider written on "
+    "something that is not a Node and one whose object is already dead are "
+    "both refused at the door, and the declaration a node already carries "
+    "survives the rejected edit"
 ) {
     Branch branch("HD11");
     const CallLog log;
     Node *scope = child_named(branch.node, "Session");
-    Netw::configure_server_info(scope, provider(log, "kept"));
+    Netw::configure_server_info(provider(log, scope, "kept"));
 
     NETW_CHECK_EQ(
-        Netw::configure_server_info(nullptr, log.callable("kept")),
+        Netw::configure_server_info(log.callable("kept")),
         ERR_INVALID_PARAMETER
     );
 
@@ -319,7 +320,7 @@ TEST_CASE(
     const Callable dead(doomed, StringName("get_name"));
     memdelete(doomed);
     NETW_CHECK_EQ(
-        Netw::configure_server_info(scope, dead),
+        Netw::configure_server_info(dead),
         ERR_INVALID_PARAMETER
     );
 

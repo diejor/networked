@@ -284,26 +284,26 @@ public:
         return prepared;
     }
 
-    godot::Ref<netw::NetwParticipant> submit_join(int p_id, int p_pumps = 8) {
+    godot::Ref<netw::NetwPlayer> submit_join(int p_id, int p_pumps = 8) {
         netw::NetwMultiplayer *joining = session_of(p_id);
         REQUIRE_MESSAGE(joining != nullptr, "a join needs a seated peer");
         netw::NetwMultiplayer *host = session_of(coordinator);
         REQUIRE_MESSAGE(host != nullptr, "a join needs a seated coordinator");
         if (joining == nullptr || host == nullptr) {
-            return godot::Ref<netw::NetwParticipant>();
+            return godot::Ref<netw::NetwPlayer>();
         }
         joining->session_submit_prepared_join();
         for (int round = 0; round < p_pumps; ++round) {
-            if (host->participant_of(p_id).is_valid()
-                && joining->participant_local().is_valid()) {
+            if (host->player_of(p_id).is_valid()
+                && joining->player_local().is_valid()) {
                 break;
             }
             pump(1);
         }
-        return joining->participant_local();
+        return joining->player_local();
     }
 
-    godot::Ref<netw::NetwParticipant> join_awaiting(
+    godot::Ref<netw::NetwPlayer> join_awaiting(
         int p_id,
         const godot::StringName &p_username,
         const godot::Array &p_args = godot::Array(),
@@ -312,7 +312,7 @@ public:
         const godot::Ref<netw::NetwPromise> prepared
             = prepare_join(p_id, p_username, p_args);
         if (prepared.is_null()) {
-            return godot::Ref<netw::NetwParticipant>();
+            return godot::Ref<netw::NetwPlayer>();
         }
         for (int round = 0; round < p_pumps && !prepared->get_is_settled();
              ++round) {
@@ -326,7 +326,7 @@ public:
         return submit_join(p_id, p_pumps);
     }
 
-    godot::Ref<netw::NetwParticipant> join(
+    godot::Ref<netw::NetwPlayer> join(
         int p_id,
         const godot::StringName &p_username,
         const godot::Array &p_args = godot::Array(),
@@ -335,21 +335,21 @@ public:
         const godot::Ref<netw::NetwPromise> prepared
             = prepare_join(p_id, p_username, p_args);
         if (prepared.is_null()) {
-            return godot::Ref<netw::NetwParticipant>();
+            return godot::Ref<netw::NetwPlayer>();
         }
         REQUIRE_MESSAGE(
             prepared->get_is_settled(),
             "the join preparation did not settle"
         );
         NETW_CHECK_EQ(int(prepared->get_code()), int(godot::OK));
-        const godot::Ref<netw::NetwParticipant> seated
+        const godot::Ref<netw::NetwPlayer> seated
             = submit_join(p_id, p_pumps);
         netw::NetwMultiplayer *host = session_of(coordinator);
         const bool host_seated_it
-            = host != nullptr && host->participant_of(p_id).is_valid();
+            = host != nullptr && host->player_of(p_id).is_valid();
         REQUIRE_MESSAGE(
             host_seated_it,
-            "the coordinator seated no participant for that peer"
+            "the coordinator seated no player for that peer"
         );
         return seated;
     }

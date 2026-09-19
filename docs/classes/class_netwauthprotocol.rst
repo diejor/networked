@@ -19,7 +19,7 @@ Wire-format codec for the packets Networked exchanges during :godot:`SceneMultip
 Description
 -----------
 
-Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single provider byte. A packet matching neither magic is :ref:`KIND_UNKNOWN<class_NetwAuthProtocol_constant_KIND_UNKNOWN>` and the receiver fails closed on it, because an auth phase that guesses at an unrecognised packet is an auth phase that can be walked past. Only the provider payload below reaches a :ref:`NetwAuthFlow<class_NetwAuthFlow>`.
+Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single byte of body. A packet matching neither magic is :ref:`KIND_UNKNOWN<class_NetwAuthProtocol_constant_KIND_UNKNOWN>` and the receiver fails closed on it, because an auth phase that guesses at an unrecognised packet is an auth phase that can be walked past.
 
 .. code:: text
 
@@ -47,27 +47,27 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`Kind<enum_NetwAuthProtocol_Kind>` | :ref:`classify<class_NetwAuthProtocol_method_classify>`\ (\ data\: :godot:`PackedByteArray`\ ) |static|                                                                                         |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                     | :ref:`decode_client_hello<class_NetwAuthProtocol_method_decode_client_hello>`\ (\ data\: :godot:`PackedByteArray`, local_app_tag\: :godot:`int` = 0\ ) |static|                                 |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                     | :ref:`decode_probe_reply<class_NetwAuthProtocol_method_decode_probe_reply>`\ (\ data\: :godot:`PackedByteArray`\ ) |static|                                                                     |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                     | :ref:`decode_probe_request<class_NetwAuthProtocol_method_decode_probe_request>`\ (\ data\: :godot:`PackedByteArray`\ ) |static|                                                                 |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedByteArray`                | :ref:`encode_client_hello<class_NetwAuthProtocol_method_encode_client_hello>`\ (\ provider_payload\: :godot:`PackedByteArray`, app_tag\: :godot:`int` = 0, flags\: :godot:`int` = 0\ ) |static| |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedByteArray`                | :ref:`encode_probe_reply<class_NetwAuthProtocol_method_encode_probe_reply>`\ (\ status\: :godot:`int`, payload\: :godot:`PackedByteArray` = PackedByteArray()\ ) |static|                       |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedByteArray`                | :ref:`encode_probe_request<class_NetwAuthProtocol_method_encode_probe_request>`\ (\ flags\: :godot:`int` = 0\ ) |static|                                                                        |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedByteArray`                | :ref:`magic_hello<class_NetwAuthProtocol_method_magic_hello>`\ (\ ) |static|                                                                                                                    |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedByteArray`                | :ref:`magic_probe<class_NetwAuthProtocol_method_magic_probe>`\ (\ ) |static|                                                                                                                    |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                            | :ref:`protocol_version<class_NetwAuthProtocol_method_protocol_version>`\ (\ ) |static|                                                                                                          |
-   +-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`Kind<enum_NetwAuthProtocol_Kind>` | :ref:`classify<class_NetwAuthProtocol_method_classify>`\ (\ data\: :godot:`PackedByteArray`\ ) |static|                                                                   |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                     | :ref:`decode_client_hello<class_NetwAuthProtocol_method_decode_client_hello>`\ (\ data\: :godot:`PackedByteArray`, local_app_tag\: :godot:`int` = 0\ ) |static|           |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                     | :ref:`decode_probe_reply<class_NetwAuthProtocol_method_decode_probe_reply>`\ (\ data\: :godot:`PackedByteArray`\ ) |static|                                               |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                     | :ref:`decode_probe_request<class_NetwAuthProtocol_method_decode_probe_request>`\ (\ data\: :godot:`PackedByteArray`\ ) |static|                                           |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedByteArray`                | :ref:`encode_client_hello<class_NetwAuthProtocol_method_encode_client_hello>`\ (\ app_tag\: :godot:`int` = 0, flags\: :godot:`int` = 0\ ) |static|                        |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedByteArray`                | :ref:`encode_probe_reply<class_NetwAuthProtocol_method_encode_probe_reply>`\ (\ status\: :godot:`int`, payload\: :godot:`PackedByteArray` = PackedByteArray()\ ) |static| |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedByteArray`                | :ref:`encode_probe_request<class_NetwAuthProtocol_method_encode_probe_request>`\ (\ flags\: :godot:`int` = 0\ ) |static|                                                  |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedByteArray`                | :ref:`magic_hello<class_NetwAuthProtocol_method_magic_hello>`\ (\ ) |static|                                                                                              |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedByteArray`                | :ref:`magic_probe<class_NetwAuthProtocol_method_magic_probe>`\ (\ ) |static|                                                                                              |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                            | :ref:`protocol_version<class_NetwAuthProtocol_method_protocol_version>`\ (\ ) |static|                                                                                    |
+   +-----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -186,8 +186,7 @@ Reads a hello packet, rejecting it when its build tag differs from ``local_app_t
     ┠╴reason            String           "framing", "version" or "app", empty when ok
     ┠╴version           int              the framing version the packet carried
     ┠╴app_tag           int              the 64-bit build tag the packet carried
-    ┠╴flags             int              reserved
-    ┖╴provider_payload  PackedByteArray  empty on a rejection
+    ┖╴flags             int              reserved
 
 \ A rejection still reports the ``version`` and ``app_tag`` it read, so the rejecting side can say what the peer claimed rather than only that it said no.
 
@@ -238,9 +237,9 @@ Reads a probe request. A packet with the wrong magic, a short header, or a forei
 
 .. rst-class:: classref-method
 
-:godot:`PackedByteArray` **encode_client_hello**\ (\ provider_payload\: :godot:`PackedByteArray`, app_tag\: :godot:`int` = 0, flags\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_encode_client_hello>`
+:godot:`PackedByteArray` **encode_client_hello**\ (\ app_tag\: :godot:`int` = 0, flags\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_encode_client_hello>`
 
-Wraps ``provider_payload`` in a hello header stamped with ``app_tag``, the 64-bit build tag folded from :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` and the wire identity by :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`. There is no ungated value. An empty :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` still carries the wire the build speaks, so two builds that disagree about the format or the channel table are rejected whether or not the game named itself. ``flags`` is reserved.
+Writes a hello header stamped with ``app_tag``, the 64-bit build tag folded from :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` and the wire identity by :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`. There is no ungated value. An empty :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` still carries the wire the build speaks, so two builds that disagree about the format or the channel table are rejected whether or not the game named itself. ``flags`` is reserved.
 
 .. rst-class:: classref-item-separator
 

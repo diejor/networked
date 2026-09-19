@@ -507,6 +507,11 @@ public sealed class NetwPropertySet : NetwRefCounted
 
     /// <summary>
     /// <c>true</c> after the compiler fixes the wire hash and freezes mutation.
+    /// Writing <c>true</c> here is not <see cref="NetwPropertySet.Seal"/> and
+    /// not <see cref="NetwPropertySet.CompileAgainst"/>. It sets the flag
+    /// alone, leaving the column types exactly as they stood, so a set typed by
+    /// neither call is frozen with untyped columns that can put no row on a
+    /// wire. Reach for <see cref="NetwPropertySet.CompileAgainst"/>.
     /// </summary>
     public bool Sealed
     {
@@ -725,9 +730,17 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "seal", 3218959716UL);
 
     /// <summary>
-    /// Freezes the wire fingerprint after every column and axis is compiled.
-    /// Sealing is what fixes membership order, and membership order is wire
-    /// order.
+    /// Freezes the wire fingerprint over the column types the set already
+    /// carries. Sealing is what fixes membership order, and membership order is
+    /// wire order. It stamps no types of its own. A set whose columns were
+    /// never typed against a node seals with every one of them
+    /// <see cref="NetwMultiplayer.ColumnType.Variant"/>, and a variant column
+    /// has no wire width, so the lane cannot be planned and not one row of that
+    /// set ever leaves this peer. Nothing reports this, because an unplannable
+    /// set is silently carrying no rows rather than failing.
+    /// <see cref="NetwPropertySet.CompileAgainst"/> is the call that types the
+    /// columns and then seals, and it is what a caller wants unless
+    /// <see cref="NetwPropertySet.StampColumnTypes"/> already ran.
     /// </summary>
     public void Seal()
     {

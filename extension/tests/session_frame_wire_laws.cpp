@@ -16,7 +16,7 @@ AcceptFrame row_of(int64_t p_peer, const char *p_name) {
     AcceptFrame row;
     row.peer_id = p_peer;
     row.username = StringName(p_name);
-    row.membership = uint64_t(p_peer);
+    row.player_id = uint64_t(p_peer);
     return row;
 }
 

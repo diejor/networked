@@ -1,19 +1,15 @@
-#include "support/auth_stand.h"
 #include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/promise.hpp"
 
 namespace TestNetwSessionPreparedJoin {
 
 using namespace godot;
 using netw::LocalMultiplayerPeer;
 using netw::NetwMultiplayer;
-using netw::NetwPromise;
 using netw_test::CallLog;
-using netw_test::NetwTestAuthFlow;
 
 Ref<NetwMultiplayer> a_session() {
     Ref<NetwMultiplayer> session;
@@ -204,7 +200,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] W1 a session that enters with no prepared "
-    "join, no submitted request and no local participant warns once, "
+    "join, no submitted request and no local player warns once, "
     "because an ordinary assignment with nothing arranged for the local "
     "player is a state a developer should be told about"
 ) {
@@ -223,30 +219,6 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> session = a_session();
     session->session_set_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
-    session->session_announce_entered();
-
-    NETW_CHECK_EQ(missing_join_warnings(session), 0);
-
-    session->embed_dispose();
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] W3 a session that enters while its join "
-    "preparation is still in flight does not warn, because the local player "
-    "is arranged and only waiting on the flow to settle"
-) {
-    Ref<NetwPromise> pending;
-    pending.instantiate();
-    Ref<NetwTestAuthFlow> flow;
-    flow.instantiate();
-    flow->set_prepared(pending);
-
-    const Ref<NetwMultiplayer> session = a_session();
-    session->auth_set_flow(flow);
-    session->session_prepare_join(StringName("ana"), Array());
-    REQUIRE_FALSE(session->session_prepared_join().has_value());
-
-    session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
     session->session_announce_entered();
 
     NETW_CHECK_EQ(missing_join_warnings(session), 0);
@@ -274,7 +246,7 @@ TEST_CASE(
     session->session_announce_entered();
 
     CHECK_FALSE(session->session_prepared_join().has_value());
-    CHECK(session->participant_local().is_null());
+    CHECK(session->player_local().is_null());
     NETW_CHECK_EQ(missing_join_warnings(session), 0);
 
     session->embed_dispose();
@@ -282,13 +254,13 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] W5 a session that already seated its local "
-    "participant before entering never warns, because the local player is "
+    "player before entering never warns, because the local player is "
     "already present"
 ) {
     const Ref<NetwMultiplayer> session = a_session();
     session->session_set_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
     session->session_submit_join(StringName("ana"), Array());
-    REQUIRE(session->participant_local().is_valid());
+    REQUIRE(session->player_local().is_valid());
 
     session->session_announce_entered();
 
@@ -327,7 +299,7 @@ TEST_CASE(
         int(session->session_get_state())
         != int(NetwMultiplayer::SESSION_STATE_OFFLINE)
     );
-    CHECK(session->participant_local().is_null());
+    CHECK(session->player_local().is_null());
 
     session->embed_dispose();
 }

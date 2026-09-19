@@ -33,14 +33,19 @@
 		    NetwEntity.of(self).despawning.connect(_on_despawning)
 		[/codeblock]
 		[b]Acting on an entity[/b]
-		The server drives the lifecycle. It creates entities through the spawn pipeline ([method ReplicationCore.replicate]) , moves one with [method Node.reparent] or [method NetwSceneHandle.move], and ends one with [method despawn]. A client asks the server through [method request_control] and reads whether it steers the entity from [member is_controlled_locally].
+		The server drives the lifecycle. It creates entities with [method Netw.spawn] and [method Netw.spawn_player], moves one with [method Node.reparent] or [method Netw.reparent], and ends one with [method despawn]. A client asks the server through [method request_control] and reads whether it steers the entity from [member is_controlled_locally].
 		[codeblock]
 		var entity := NetwEntity.of(hit_node)
 		if entity and entity.is_player:
 		    eliminate(entity.peer_id)
 		[/codeblock]
 		[b]Owning identity before the tree[/b]
-		A spawned [Node] must own its identity before it enters the tree. Replicated spawns carry it in the SPAWN frame and stamp it during reconstruction, and [method bind] stamps it when identity rides the [member Node.name] channel: call it inside a [member MultiplayerSpawner.spawn_function] before returning the node. A scene requires each spawned [Node] to own its record, which [method ensure] provides before the node joins the scene's subtree.
+		A spawned [Node] must own its identity before it enters the tree. A replicated spawn carries it in the SPAWN frame and stamps it during reconstruction, and [method Netw.spawn_player] stamps a player's body from the [member NetwPlayer.username] it was spawned for. A node the game authors into a scene declares its own, and one that declares none is inert.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_entity(self).entity_id = &amp;"ball"
+		[/codeblock]
+		A node name is never an identity. A scene requires each spawned [Node] to own its record, which [method ensure] provides before the node joins the scene's subtree.
 		[b]The facets it returns[/b]
 		[member scene], [member interest], [member prediction], and [member interpolation] are created once per entity. Repeated reads return the same object. They are [Variant] values because their types are implemented in scripts.
 	</description>
@@ -52,21 +57,7 @@
 			<param index="0" name="api" type="NetwMultiplayer" default="null" />
 			<description>
 				Seals the record and applies node authority, then marks it [constant STAGE_ARMED].
-				The single choke point every spawn path funnels through, called on the orphan before [method Node.add_child] on the pipeline paths so authority is recursive and correct in every child [method Node._enter_tree] and [method Node._ready], on every peer. The manual [method bind] flows arm at their owner's first tree entry instead.
-			</description>
-		</method>
-		<method name="bind" qualifiers="static">
-			<return type="Node" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="entity_id" type="StringName" />
-			<param index="2" name="peer_id" type="int" />
-			<description>
-				Binds [param entity_id] and [param peer_id] onto [param node] and returns it. This is the public identity binding surface; once bound, the node's name is owned by the synchronization system and must not be modified.
-				An invalid [param entity_id] binds nothing and leaves the record unchanged.
-				[codeblock]
-				var player := NetwEntity.bind(copy, username, peer_id)
-				NetwEntity.of(self).scene.root.add_child(player)
-				[/codeblock]
+				The single choke point every spawn path funnels through, called on the orphan before [method Node.add_child] on the pipeline paths so authority is recursive and correct in every child [method Node._enter_tree] and [method Node._ready], on every peer. An entity a game authors into a scene arms at its owner's first tree entry instead.
 			</description>
 		</method>
 		<method name="by_route" qualifiers="static">
@@ -122,15 +113,6 @@
 				Get-or-creates the record on the exact [param root] node, even when [param root] has an ambiguous owner or parent.
 			</description>
 		</method>
-		<method name="find" qualifiers="static">
-			<return type="Node" />
-			<param index="0" name="root" type="Node" />
-			<param index="1" name="participant" type="NetwParticipant" />
-			<description>
-				The node [param participant] plays, found under [param root], or [code]null[/code] when they have none there.
-				It resolves the one name [method name_for] builds, as a path under [param root], so it answers a body a spawn named by that convention and standing directly there. A body the game named itself, or parented deeper, is reached through [member NetwParticipant.players] instead, which is also the read for a participant holding more than one.
-			</description>
-		</method>
 		<method name="from_rid" qualifiers="static">
 			<return type="NetwEntity" />
 			<param index="0" name="entity" type="RID" />
@@ -174,13 +156,6 @@
 				The metadata key an entity root carries its record in. One spelling, shared by the record that writes it and every walk that reads it.
 			</description>
 		</method>
-		<method name="name_for" qualifiers="static">
-			<return type="String" />
-			<param index="0" name="participant" type="NetwParticipant" />
-			<description>
-				The node name a spawn gives the player [param participant] drives, built from their [member NetwParticipant.username] and their peer id, and empty when that username holds the separator the two are joined with.
-			</description>
-		</method>
 		<method name="of" qualifiers="static">
 			<return type="NetwEntity" />
 			<param index="0" name="node" type="Node" />
@@ -192,20 +167,6 @@
 			<return type="NetwEntity" />
 			<description>
 				The nearest ancestor [NetwEntity], or [code]null[/code]. The session walks the marked ancestors, so the mark and the walk that reads it stay one implementation and the result follows a move with nothing to invalidate.
-			</description>
-		</method>
-		<method name="parse_entity" qualifiers="static">
-			<return type="StringName" />
-			<param index="0" name="node_name" type="String" />
-			<description>
-				The entity id in an [code]entity_id|peer_id[/code] node name, empty for a name that spells no identity.
-			</description>
-		</method>
-		<method name="parse_peer" qualifiers="static">
-			<return type="int" />
-			<param index="0" name="node_name" type="String" />
-			<description>
-				The peer id in an [code]entity_id|peer_id[/code] node name, [code]0[/code] for a name that spells no identity and for an entity representing no player.
 			</description>
 		</method>
 		<method name="register_component">
@@ -240,10 +201,10 @@
 		</method>
 		<method name="spawn_player">
 			<return type="Node" />
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<param index="1" name="scene" type="NetwSceneHandle" />
 			<description>
-				Spawns a player copy of [member owner]'s scene into [param scene] from [param participant].
+				Spawns a player copy of [member owner]'s scene into [param scene] from [param player].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -294,11 +255,11 @@
 			[codeblock]
 			var entity := NetwEntity.of(ball)
 			if entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED:
-			    show_controller(entity.controller_participant)
+			    show_controller(entity.controller_player)
 			[/codeblock]
 		</member>
-		<member name="controller_participant" type="NetwParticipant" setter="" getter="get_controller_participant">
-			The participant steering [member controller], or [code]null[/code]. Independent from [member participant]: a server-owned entity can be controlled by a participant without representing that participant.
+		<member name="controller_player" type="NetwPlayer" setter="" getter="get_controller_player">
+			The player steering [member controller], or [code]null[/code]. Independent from [member player]: a server-owned entity can be controlled by a player without representing that player.
 		</member>
 		<member name="declares_scene" type="bool" setter="" getter="get_declares_scene" default="false">
 			[code]true[/code] when this entity is a scene: it owns an admission boundary every descendant entity inherits through the interest engine's parent clamp.
@@ -310,7 +271,8 @@
 			The flat door is [method NetwMultiplayer.scene_declare]. Read it through [method NetwMultiplayer.scene_is_declared].
 		</member>
 		<member name="entity_id" type="StringName" setter="set_entity_id" getter="get_entity_id" default="&amp;&quot;&quot;">
-			The stable display, save and debug label for this entity.
+			The stable display, save and debug label for this entity, and what identifies it across peers.
+			An entity a game authors into a scene sets it in [method Object._init], before the node enters the tree, because an entity carrying none never activates. A spawn leaves it to [method Netw.spawn_player], which stamps the player's [member NetwPlayer.username] onto the body it was spawned for. A game handing one player several bodies stamps a distinct id on each.
 		</member>
 		<member name="initial_controller" type="int" setter="set_initial_controller" getter="get_initial_controller" default="0">
 			The spawn-time control rule, as an [enum InitialController].
@@ -338,14 +300,14 @@
 			[code]true[/code] when the local peer controls this entity.
 		</member>
 		<member name="is_player" type="bool" setter="" getter="get_is_player">
-			[code]true[/code] when this entity represents a participant rather than a server-owned object. The canonical player test across the addon, equivalent to a non-zero [member peer_id].
+			[code]true[/code] when this entity represents a player rather than a server-owned object. The canonical player test across the addon, equivalent to a non-zero [member peer_id].
 		</member>
 		<member name="is_template" type="bool" setter="" getter="get_is_template">
 			[code]true[/code] when this record is a declared editor factory scene, which is a one-line read of [member stage]. Templates are deactivated on tree entry and skip the spawning lifecycle.
 		</member>
 		<member name="multiplayer" type="MultiplayerAPI" setter="" getter="get_multiplayer">
 			The [NetwMultiplayer] session this entity belongs to, or [code]null[/code] when it has none, which is an offline rig or an orphan before activation.
-			Mirrors [member Node.multiplayer] on the entity root once live, but handed over by the creator rather than re-discovered: stamped once at [method arm] when the spawn pipeline holds the api, or at first tree entry for a manual [method bind] flow. Immutable afterward, since an entity changes sessions only by despawn and respawn. Every session-derived member resolves through this one handle, so "no session" is the single condition [code]multiplayer == null[/code].
+			Mirrors [member Node.multiplayer] on the entity root once live, but handed over by the creator rather than re-discovered: stamped once at [method arm] when the spawn pipeline holds the api, or at first tree entry for an entity a game authored into a scene. Immutable afterward, since an entity changes sessions only by despawn and respawn. Every session-derived member resolves through this one handle, so "no session" is the single condition [code]multiplayer == null[/code].
 		</member>
 		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" default="0">
 			The lifetime rule for an entity whose controller disconnects, as a [enum DisconnectRule]. It applies only when the disconnected peer controls the entity without being represented by it: player representation still despawns through [member peer_id].
@@ -356,12 +318,12 @@
 		<member name="ownership" type="int" setter="" getter="get_ownership">
 			Derived from [member peer_id]. See [enum Ownership].
 		</member>
-		<member name="participant" type="NetwParticipant" setter="" getter="get_participant">
-			The participant [member peer_id] represents, or [code]null[/code]. This resolves the live session handle for player avatars; server-owned entities, props and NPCs return [code]null[/code].
+		<member name="player" type="NetwPlayer" setter="" getter="get_player">
+			The player [member peer_id] represents, or [code]null[/code]. This resolves the live session handle for player avatars; server-owned entities, props and NPCs return [code]null[/code].
 		</member>
 		<member name="peer_id" type="int" setter="set_peer_id" getter="get_peer_id" default="0">
 			The peer this entity represents, or [code]0[/code] for a server-owned entity such as an NPC, prop or world object.
-			A non-zero value drives [member NetwParticipant.players], the scene subscription a residing body grants, and an automatic [method despawn] when its peer disconnects. This is the source of the player test. See [member is_player].
+			A non-zero value drives [member NetwPlayer.bodies], the scene subscription a residing body grants, and an automatic [method despawn] when its peer disconnects. This is the source of the player test. See [member is_player].
 		</member>
 		<member name="persistence" type="NetwPersistenceEngine" setter="" getter="get_persistence">
 			The entity's [NetwPersistenceEngine], or [code]null[/code] when its archetype declared no [method Netw.configure_persistence]. The engine reads and writes the persisted columns on the live scene, so flush and hydrate operate on the same saved state. Resolves through the session, so it is [code]null[/code] before the owner is in a [MultiplayerTree] branch.
@@ -475,7 +437,7 @@
 		</signal>
 		<signal name="reparented">
 			<description>
-				Emitted once per settled move, after the session has made this entity's ancestry consistent, whether it was made with [method Node.reparent], with a bare [method Node.remove_child] followed by [method Node.add_child], or through [method NetwSceneHandle.move]. Standing up for the first time is not a move and reports nothing. Several hops before one settle are one move, reported at the parent the owner ended under. A component that unregisters in [code]_exit_tree[/code] reconnects its runtime service registration here, so a move self-heals without [method Node.request_ready].
+				Emitted once per settled move, after the session has made this entity's ancestry consistent, whether it was made with [method Node.reparent], with a bare [method Node.remove_child] followed by [method Node.add_child], or through [method Netw.reparent]. Standing up for the first time is not a move and reports nothing. Several hops before one settle are one move, reported at the parent the owner ended under. A component that unregisters in [code]_exit_tree[/code] reconnects its runtime service registration here, so a move self-heals without [method Node.request_ready].
 				The signal takes no argument. Its fact is that the owner has landed, so a listener reads the final parent or [member scene] off the live owner. What a move ASKED FOR is a command input, and it reaches an observer in the detail of [constant NetwMultiplayer.EVENT_REPARENTED] instead.
 				[code]_exit_tree[/code] fires on the first half of a move as well as on a real departure, and nothing readable at that moment tells them apart. So a PAIRED handler belongs there, because re-entry re-arms it, and a ONE-WAY teardown never does: hang that on [signal despawning] or [signal despawned], which fire for teardowns only, or on [signal hidden] for a body that may come back.
 				[codeblock]

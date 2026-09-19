@@ -4,31 +4,22 @@
 		The session plane of one session, gathered onto one object.
 	</brief_description>
 	<description>
-		A client over the [code]session_*[/code], [code]participant_*[/code], [code]peer_*[/code] and [code]stats_*[/code] families on [NetwMultiplayer], reached as [method Netw.session] from any [Node]. Every member forwards to a flat verb, and the flat verb is the stable spelling: this repository's own suites, examples and browser call [NetwMultiplayer] directly, and a game reaches for this when it would rather hold the plane as one object.
+		A client over the [code]session_*[/code], [code]player_*[/code], [code]peer_*[/code] and [code]stats_*[/code] families on [NetwMultiplayer], reached as [method Netw.session] from any [Node]. Every member forwards to a flat verb, and the flat verb is the stable spelling: this repository's own suites, examples and browser call [NetwMultiplayer] directly, and a game reaches for this when it would rather hold the plane as one object.
 		[codeblock]
 		var s := Netw.session(self)
 		s.entered.connect(on_entered)
 		s.disconnected.connect(on_over)
 		s.ended.connect(on_over)
-		for participant: NetwParticipant in s.participants:
-		        scoreboard.add(participant)
+		for player: NetwPlayer in s.players:
+		        scoreboard.add(player)
 		[/codeblock]
-		[b]What this object buys over the flat surface is its signals.[/b] [Netw] is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: [signal entered], [signal ended], [signal disconnected], [signal disconnecting], [signal participant_joined], [signal local_joined], [signal participant_left], [signal join_failed], [signal scene_live] and [signal presentation_changed], all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
+		[b]What this object buys over the flat surface is its signals.[/b] [Netw] is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: [signal entered], [signal ended], [signal disconnected], [signal disconnecting], [signal player_joined], [signal local_joined], [signal player_left], [signal join_failed], [signal scene_live] and [signal presentation_changed], all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
 		[signal disconnected] is the one member that relays a signal this framework does not own. [signal MultiplayerAPI.server_disconnected] is Godot's and stays reachable on [code]multiplayer[/code]; it is re-emitted here so one object returns every cause a session has to end, which is what a game pairing it with [signal ended] under one handler actually wants.
 		Bringing a session UP is not on this object. A session comes online the ordinary Godot way, by assigning a [MultiplayerPeer] to [member MultiplayerAPI.multiplayer_peer], the connect plane is [NetwConnectHandle] reached as [method Netw.connection], and joining is [method Netw.join], which routes prepare against submit off session state. This object is what a session already up admits, reports, and tears down.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="activate_scene">
-			<return type="NetwSceneHandle" />
-			<param index="0" name="destination" type="Variant" />
-			<description>
-				Brings [param destination] up if it is not already live and returns the [NetwSceneHandle] it settled on, [code]null[/code] when nothing could be activated. [method NetwMultiplayer.scene_activate] holds the law, including which kinds of [param destination] are rejected and why; what differs here is the result, which is the view a caller goes on to use rather than the container node it would have to resolve one from.
-				This verb is on the session rather than on a scene view because a recipe names no live scene yet, so there is no view to call it on. A scene already live is reached by [method Netw.scene].
-				[b]Server Only.[/b]
-			</description>
-		</method>
 		<method name="bucket_of" qualifiers="const">
 			<return type="Variant" />
 			<param index="0" name="peer" type="int" />
@@ -39,11 +30,11 @@
 		</method>
 		<method name="kick">
 			<return type="int" enum="Error" />
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<param index="1" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				[method NetwMultiplayer.participant_kick]: ends [param participant]'s membership and turns their peer away carrying [param reason], which holds the law and the errors.
-				This ends a membership rather than closing a connection, and [method leave] is how a peer ends its own. The local server's participant is refused here for that reason.
+				[method NetwMultiplayer.player_kick]: ends [param player]'s membership and turns their peer away carrying [param reason], which holds the law and the errors.
+				This ends a membership rather than closing a connection, and [method leave] is how a peer ends its own. The local server's player is refused here for that reason.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -53,42 +44,11 @@
 				[method NetwMultiplayer.session_leave]: leaves the session this handle was created by, returning the promise that resolves once the peer is down.
 			</description>
 		</method>
-		<method name="participant_of" qualifiers="const">
-			<return type="NetwParticipant" />
+		<method name="player_of" qualifiers="const">
+			<return type="NetwPlayer" />
 			<param index="0" name="peer" type="int" />
 			<description>
-				The [NetwParticipant] this session holds for [param peer], [code]null[/code] when it holds none. Forwards to [method NetwMultiplayer.peer_get_participant], which is the same result under the flat spelling.
-			</description>
-		</method>
-		<method name="present">
-			<return type="int" enum="Error" />
-			<param index="0" name="scene" type="NetwSceneHandle" default="null" />
-			<description>
-				Names the scene this peer looks at, and [code]null[/code] names none.
-				A local rendering choice and nothing else. It grants no viewership, sends nothing, and changes what no other peer sees, so a client presenting a scene it was never given still receives nothing of it. [method NetwSceneHandle.watch] is the verb that decides what reaches a participant.
-				The framework never chooses for the game. A session presents nothing until something names a scene, and the scene it presents retiring clears the choice without taking another, so a peer between worlds draws nothing rather than whatever is left standing.
-				[codeblock]
-				func _on_scene_live(arena: NetwSceneHandle) -&gt; void:
-				    Netw.session(self).present(arena)
-				[/codeblock]
-				That reads a scene going live as the scene to draw, which holds only while one world is live at a time. A game running several at once presents the world its own player stands in, or the last world any peer brought up takes the view from whoever was watching another.
-				[codeblock]
-				func _ready() -&gt; void:
-				    if not is_multiplayer_authority():
-				        return
-				    entity.reparented.connect(present_own_scene)
-				    present_own_scene()
-
-				func present_own_scene() -&gt; void:
-				    Netw.session(self).present(entity.scene)
-				[/codeblock]
-				On a listen server this is what [HostSceneView] draws, because only a host runs scenes in worlds of their own. Several bodies in the presented scene each hear [signal NetwEntity.view_activated], and the camera is adopted automatically only where exactly one of them is local.
-				[codeblock lang=text]
-				Error
-				┠╴OK              this peer now presents that scene, or none
-				┠╴ERR_UNAVAILABLE this session holds no live scene by that handle
-				┖╴ERR_UNCONFIGURED this handle outlived its session
-				[/codeblock]
+				The [NetwPlayer] this session holds for [param peer], [code]null[/code] when it holds none. Forwards to [method NetwMultiplayer.peer_get_player], which is the same result under the flat spelling.
 			</description>
 		</method>
 		<method name="request_scene">
@@ -111,9 +71,6 @@
 		</method>
 	</methods>
 	<members>
-		<member name="auth_flow" type="NetwAuthFlow" setter="" getter="get_auth_flow">
-			The [NetwAuthFlow] this session authenticates with, [code]null[/code] when it authenticates with none. [member NetwMultiplayer.auth_flow] under the flat spelling.
-		</member>
 		<member name="config" type="NetwSessionConfig" setter="" getter="get_config">
 			A [NetwSessionConfig] SNAPSHOT of what this session was configured with. Each read creates a new one and writing to it changes nothing, which is [method NetwMultiplayer.session_get_config]'s own contract: the live edits are [method Netw.configure_session] before the session comes up and [method set_server_info] after.
 		</member>
@@ -123,14 +80,23 @@
 		<member name="is_online" type="bool" setter="" getter="get_is_online" default="false">
 			Whether this session has a peer assigned and connected. [member NetwMultiplayer.is_online].
 		</member>
-		<member name="local_participant" type="NetwParticipant" setter="" getter="get_local_participant">
-			The [NetwParticipant] this session holds for this peer, [code]null[/code] before the local join is accepted. [signal local_joined] is the edge that fills it.
+		<member name="local_player" type="NetwPlayer" setter="" getter="get_local_player">
+			The [NetwPlayer] this session holds for this peer, [code]null[/code] before the local join is accepted. [signal local_joined] is the edge that fills it.
 		</member>
 		<member name="presented_scene" type="NetwSceneHandle" setter="" getter="get_presented_scene">
-			The scene [method present] last named, [code]null[/code] while this peer presents none. [method NetwMultiplayer.scene_presented].
+			The scene this peer draws, [code]null[/code] while it draws none. A game writes nothing to reach it. [signal presentation_changed] is its edge and [method NetwMultiplayer.scene_presented] is the flat reading.
+			It follows where this peer is, so it is a local reading and no other peer sees anything of it. [method NetwSceneHandle.watch] is the separate verb that decides what a player actually receives.
+			[codeblock lang=text]
+			one scene holds a body of this peer    that scene
+			no body, one scene this peer watches   that scene
+			bodies in two, or two watched          nothing, with a warning
+			neither                                nothing
+			[/codeblock]
+			Two worlds at once draw nothing rather than one of them, because a peer standing in two places is a question only the game can answer and a framework answering it draws the wrong world in silence.
+			On a listen server this is what [HostSceneView] draws, because only a host runs scenes in worlds of their own. Several bodies in the presented scene each hear [signal NetwEntity.view_activated], and the camera is adopted automatically only where exactly one of them is local.
 		</member>
-		<member name="participants" type="NetwParticipant[]" setter="" getter="get_participants" default="[]">
-			Every [NetwParticipant] that has joined, including rows whose peer has since gone, which is what [member NetwMultiplayer.participants] returns and is the roster a scoreboard wants. The rows still CONNECTED are [member NetwMultiplayer.connected_participants].
+		<member name="players" type="NetwPlayer[]" setter="" getter="get_players" default="[]">
+			Every [NetwPlayer] that has joined, including rows whose peer has since gone, which is what [member NetwMultiplayer.players] returns and is the roster a scoreboard wants. The rows still CONNECTED are [member NetwMultiplayer.connected_players].
 		</member>
 		<member name="role" type="int" setter="" getter="get_role" default="0">
 			What this peer is in the session, one of [enum NetwMultiplayer.Role]. [member NetwMultiplayer.role].
@@ -173,46 +139,44 @@
 			<param index="1" name="reason" type="String" />
 			<description>
 				This peer's own join was turned down, carrying the [param code] and the [param reason] the server gave. Relayed from [signal NetwMultiplayer.session_join_failed].
-				No membership was created, so [member local_participant] is still [code]null[/code] and [signal local_joined] never fires for that attempt. [method Netw.join]'s promise reports only that the request went out, so this is where a refusal arrives.
+				No membership was created, so [member local_player] is still [code]null[/code] and [signal local_joined] never fires for that attempt. [method Netw.join]'s promise reports only that the request went out, so this is where a refusal arrives.
 			</description>
 		</signal>
 		<signal name="local_joined">
-			<param index="0" name="participant" type="NetwParticipant" />
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				The [NetwParticipant] the session holds for THIS peer has joined, which is also when [member local_participant] starts returning. Relayed from [signal NetwMultiplayer.participant_local_joined].
+				The [NetwPlayer] the session holds for THIS peer has joined, which is also when [member local_player] starts returning. Relayed from [signal NetwMultiplayer.player_local_joined].
 			</description>
 		</signal>
 		<signal name="presentation_changed">
 			<param index="0" name="from" type="NetwSceneHandle" />
 			<param index="1" name="to" type="NetwSceneHandle" />
 			<description>
-				The scene this peer presents has changed, carrying the handle left and the one taken, either of which may be [code]null[/code]. Relayed from [signal NetwMultiplayer.scene_presentation_changed].
-				Spent on a change and never on a repeat, so presenting the scene already presented announces nothing. A scene retiring clears the choice and announces that, naming [code]null[/code] as the destination rather than picking another scene.
+				The scene this peer draws has changed, carrying the handle left and the one taken, either of which may be [code]null[/code]. Relayed from [signal NetwMultiplayer.scene_presentation_changed]. [member presented_scene] is what changed and how it is derived.
+				Spent on a change and never on a repeat. It is the edge a move across worlds lands on, because the body that arrives is a new object on the peer that owns it and this announces the arrival rather than the object.
 			</description>
 		</signal>
-		<signal name="participant_joined">
-			<param index="0" name="participant" type="NetwParticipant" />
+		<signal name="player_joined">
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				A [NetwParticipant] has joined, this peer's own row included. Relayed from [signal NetwMultiplayer.participant_joined].
+				A [NetwPlayer] has joined, this peer's own row included. Relayed from [signal NetwMultiplayer.player_joined].
 			</description>
 		</signal>
-		<signal name="participant_left">
-			<param index="0" name="participant" type="NetwParticipant" />
+		<signal name="player_left">
+			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				A [NetwParticipant]'s membership has ended, whether their peer disconnected or [method kick] ended it. Relayed from [signal NetwMultiplayer.participant_left], which carries the ordering.
-				[member NetwParticipant.is_active] already reads [code]false[/code] here, so this is the last edge at which a game can read the handle it filed that player under and erase its own row for them.
+				A [NetwPlayer]'s membership has ended, whether their peer disconnected or [method kick] ended it. Relayed from [signal NetwMultiplayer.player_left], which carries the ordering.
+				[member NetwPlayer.is_active] already reads [code]false[/code] here, so this is the last edge at which a game can read the handle it filed that player under and erase its own row for them.
 			</description>
 		</signal>
 		<signal name="scene_live">
 			<param index="0" name="scene" type="NetwSceneHandle" />
 			<description>
 				A scene is live and reachable, carrying the [NetwSceneHandle] it is read through. Relayed from [signal NetwMultiplayer.scene_live].
-				This is where a game puts what a scene needs, and the handle it is handed is the one to keep. Watching a participant, observing an edge, and reading the scene's entities are all members on it.
-				[b]It fires from the scene root's own tree entry, so the root's children have not entered yet.[/b] Their [member Node.multiplayer] is [code]null[/code] and their [code]@onready[/code] fields are unset, while [method Node.get_node] still answers with the unmounted node, so a helper reaching one reads a null session deep inside itself rather than failing here. Work that touches the scene's contents waits for the root's own [signal Node.ready], which [method Node.is_node_ready] says whether it has already had.
+				This is where a game puts what a scene needs, and the handle it is handed is the one to keep. Watching a player, observing an edge, and reading the scene's entities are all members on it.
+				It fires once the scene root is ready, so the whole scene is mounted and a handler may reach into it. Their [member Node.multiplayer] answers and their [code]@onready[/code] fields are set.
 				[codeblock]
 				func _on_scene_live(arena: NetwSceneHandle) -&gt; void:
-				    if not arena.root.is_node_ready():
-				        await arena.root.ready
 				    arena.root.get_node(^"Spawns").arrange()
 				[/codeblock]
 			</description>

@@ -62,15 +62,15 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`app_id<class_NetwSessionConfig_method_app_id>`\ (\ app_id\: :godot:`StringName`\ )                                                            |
-   +---------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`desired_role<class_NetwSessionConfig_method_desired_role>`\ (\ desired_role\: :godot:`int`\ )                                                 |
-   +---------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`link_conditions<class_NetwSessionConfig_method_link_conditions>`\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) |
-   +---------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`server_info<class_NetwSessionConfig_method_server_info>`\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )                     |
-   +---------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`app<class_NetwSessionConfig_method_app>`\ (\ app_id\: :godot:`StringName`\ )                                            |
+   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`link<class_NetwSessionConfig_method_link>`\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) |
+   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`role<class_NetwSessionConfig_method_role>`\ (\ desired_role\: :godot:`int`\ )                                           |
+   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`server<class_NetwSessionConfig_method_server>`\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )         |
+   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -175,11 +175,11 @@ This is the whole advert and its only door, authored in the inspector or declare
 Method Descriptions
 -------------------
 
-.. _class_NetwSessionConfig_method_app_id:
+.. _class_NetwSessionConfig_method_app:
 
 .. rst-class:: classref-method
 
-:ref:`NetwSessionConfig<class_NetwSessionConfig>` **app_id**\ (\ app_id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSessionConfig_method_app_id>`
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **app**\ (\ app_id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSessionConfig_method_app>`
 
 Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and returns this same draft, so a declaration reads as one chained expression.
 
@@ -187,23 +187,11 @@ Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and returns this sam
 
 ----
 
-.. _class_NetwSessionConfig_method_desired_role:
+.. _class_NetwSessionConfig_method_link:
 
 .. rst-class:: classref-method
 
-:ref:`NetwSessionConfig<class_NetwSessionConfig>` **desired_role**\ (\ desired_role\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionConfig_method_desired_role>`
-
-Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and returns this same draft, so a declaration reads as one chained expression.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSessionConfig_method_link_conditions:
-
-.. rst-class:: classref-method
-
-:ref:`NetwSessionConfig<class_NetwSessionConfig>` **link_conditions**\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) :ref:`🔗<class_NetwSessionConfig_method_link_conditions>`
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **link**\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) :ref:`🔗<class_NetwSessionConfig_method_link>`
 
 Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` and returns this same draft, so a declaration reads as one chained expression.
 
@@ -211,11 +199,23 @@ Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` an
 
 ----
 
-.. _class_NetwSessionConfig_method_server_info:
+.. _class_NetwSessionConfig_method_role:
 
 .. rst-class:: classref-method
 
-:ref:`NetwSessionConfig<class_NetwSessionConfig>` **server_info**\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) :ref:`🔗<class_NetwSessionConfig_method_server_info>`
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **role**\ (\ desired_role\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionConfig_method_role>`
+
+Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and returns this same draft, so a declaration reads as one chained expression.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionConfig_method_server:
+
+.. rst-class:: classref-method
+
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **server**\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) :ref:`🔗<class_NetwSessionConfig_method_server>`
 
 Sets :ref:`server_info<class_NetwSessionConfig_property_server_info>` and returns this same draft, so a declaration reads as one chained expression.
 

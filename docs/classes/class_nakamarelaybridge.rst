@@ -346,7 +346,7 @@ Joins the relay match named by ``p_match_id``.
 
 |void| **join_named_match**\ (\ _match_name\: :godot:`String`\ ) :ref:`🔗<class_NakamaRelayBridge_method_join_named_match>`
 
-Creates or joins the named Nakama match.  The first participant claims host peer id ``1``.
+Creates or joins the named Nakama match.  The first peer to arrive claims host peer id ``1``.
 
 .. rst-class:: classref-item-separator
 

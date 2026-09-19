@@ -9,7 +9,7 @@ namespace Networked;
 /// The session plane of one session, gathered onto one object.
 /// </summary>
 /// <remarks>
-/// A client over the <c>session_*</c>, <c>participant_*</c>, <c>peer_*</c> and
+/// A client over the <c>session_*</c>, <c>player_*</c>, <c>peer_*</c> and
 /// <c>stats_*</c> families on <see cref="NetwMultiplayer"/>, reached as
 /// <see cref="Netw.Session"/> from any <see cref="Node"/>. Every member
 /// forwards to a flat verb, and the flat verb is the stable spelling: this
@@ -21,8 +21,8 @@ namespace Networked;
 /// s.entered.connect(on_entered)
 /// s.disconnected.connect(on_over)
 /// s.ended.connect(on_over)
-/// for participant: NetwParticipant in s.participants:
-///         scoreboard.add(participant)
+/// for player: NetwPlayer in s.players:
+///         scoreboard.add(player)
 /// </code>
 /// <para>
 /// <b>What this object buys over the flat surface is its signals.</b>
@@ -33,9 +33,9 @@ namespace Networked;
 /// <see cref="NetwSessionHandle.Ended"/>,
 /// <see cref="NetwSessionHandle.Disconnected"/>,
 /// <see cref="NetwSessionHandle.Disconnecting"/>,
-/// <see cref="NetwSessionHandle.ParticipantJoined"/>,
+/// <see cref="NetwSessionHandle.PlayerJoined"/>,
 /// <see cref="NetwSessionHandle.LocalJoined"/>,
-/// <see cref="NetwSessionHandle.ParticipantLeft"/>,
+/// <see cref="NetwSessionHandle.PlayerLeft"/>,
 /// <see cref="NetwSessionHandle.JoinFailed"/>,
 /// <see cref="NetwSessionHandle.SceneLive"/> and
 /// <see cref="NetwSessionHandle.PresentationChanged"/>, all relayed from the
@@ -119,20 +119,19 @@ public sealed class NetwSessionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// A <see cref="NetwParticipant"/> has joined, this peer's own row
-    /// included. Relayed from <see cref="NetwMultiplayer.ParticipantJoined"/>.
+    /// A <see cref="NetwPlayer"/> has joined, this peer's own row included.
+    /// Relayed from <see cref="NetwMultiplayer.PlayerJoined"/>.
     /// </summary>
-    public event Action<Variant> ParticipantJoined
+    public event Action<Variant> PlayerJoined
     {
-        add => Connect("participant_joined", Callable.From(value));
-        remove => Disconnect("participant_joined", Callable.From(value));
+        add => Connect("player_joined", Callable.From(value));
+        remove => Disconnect("player_joined", Callable.From(value));
     }
 
     /// <summary>
-    /// The <see cref="NetwParticipant"/> the session holds for THIS peer has
-    /// joined, which is also when
-    /// <see cref="NetwSessionHandle.LocalParticipant"/> starts returning.
-    /// Relayed from <see cref="NetwMultiplayer.ParticipantLocalJoined"/>.
+    /// The <see cref="NetwPlayer"/> the session holds for THIS peer has joined,
+    /// which is also when <see cref="NetwSessionHandle.LocalPlayer"/> starts
+    /// returning. Relayed from <see cref="NetwMultiplayer.PlayerLocalJoined"/>.
     /// </summary>
     public event Action<Variant> LocalJoined
     {
@@ -141,25 +140,24 @@ public sealed class NetwSessionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// A <see cref="NetwParticipant"/>'s membership has ended, whether their
-    /// peer disconnected or <see cref="NetwSessionHandle.Kick"/> ended it.
-    /// Relayed from <see cref="NetwMultiplayer.ParticipantLeft"/>, which
-    /// carries the ordering. <see cref="NetwParticipant.IsActive"/> already
-    /// reads <c>false</c> here, so this is the last edge at which a game can
-    /// read the handle it filed that player under and erase its own row for
-    /// them.
+    /// A <see cref="NetwPlayer"/>'s membership has ended, whether their peer
+    /// disconnected or <see cref="NetwSessionHandle.Kick"/> ended it. Relayed
+    /// from <see cref="NetwMultiplayer.PlayerLeft"/>, which carries the
+    /// ordering. <see cref="NetwPlayer.IsActive"/> already reads <c>false</c>
+    /// here, so this is the last edge at which a game can read the handle it
+    /// filed that player under and erase its own row for them.
     /// </summary>
-    public event Action<Variant> ParticipantLeft
+    public event Action<Variant> PlayerLeft
     {
-        add => Connect("participant_left", Callable.From(value));
-        remove => Disconnect("participant_left", Callable.From(value));
+        add => Connect("player_left", Callable.From(value));
+        remove => Disconnect("player_left", Callable.From(value));
     }
 
     /// <summary>
     /// This peer's own join was turned down, carrying the <c>code</c> and the
     /// <c>reason</c> the server gave. Relayed from
     /// <see cref="NetwMultiplayer.SessionJoinFailed"/>. No membership was
-    /// created, so <see cref="NetwSessionHandle.LocalParticipant"/> is still
+    /// created, so <see cref="NetwSessionHandle.LocalPlayer"/> is still
     /// <c>null</c> and <see cref="NetwSessionHandle.LocalJoined"/> never fires
     /// for that attempt. <see cref="Netw.Join"/>'s promise reports only that
     /// the request went out, so this is where a refusal arrives.
@@ -175,19 +173,13 @@ public sealed class NetwSessionHandle : NetwRefCounted
     /// <see cref="NetwSceneHandle"/> it is read through. Relayed from
     /// <see cref="NetwMultiplayer.SceneLive"/>. This is where a game puts what
     /// a scene needs, and the handle it is handed is the one to keep. Watching
-    /// a participant, observing an edge, and reading the scene's entities are
-    /// all members on it. <b>It fires from the scene root's own tree entry, so
-    /// the root's children have not entered yet.</b> Their
-    /// <see cref="Node.Multiplayer"/> is <c>null</c> and their <c>@onready</c>
-    /// fields are unset, while <see cref="Node.GetNode"/> still answers with
-    /// the unmounted node, so a helper reaching one reads a null session deep
-    /// inside itself rather than failing here. Work that touches the scene's
-    /// contents waits for the root's own <see cref="Node.Ready"/>, which
-    /// <see cref="Node.IsNodeReady"/> says whether it has already had.
+    /// a player, observing an edge, and reading the scene's entities are all
+    /// members on it. It fires once the scene root is ready, so the whole scene
+    /// is mounted and a handler may reach into it. Their
+    /// <see cref="Node.Multiplayer"/> answers and their <c>@onready</c> fields
+    /// are set.
     /// <code>
     /// func _on_scene_live(arena: NetwSceneHandle) -&gt; void:
-    ///     if not arena.root.is_node_ready():
-    ///         await arena.root.ready
     ///     arena.root.get_node(^"Spawns").arrange()
     /// </code>
     /// </summary>
@@ -198,13 +190,14 @@ public sealed class NetwSessionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// The scene this peer presents has changed, carrying the handle left and
-    /// the one taken, either of which may be <c>null</c>. Relayed from
-    /// <see cref="NetwMultiplayer.ScenePresentationChanged"/>. Spent on a
-    /// change and never on a repeat, so presenting the scene already presented
-    /// announces nothing. A scene retiring clears the choice and announces
-    /// that, naming <c>null</c> as the destination rather than picking another
-    /// scene.
+    /// The scene this peer draws has changed, carrying the handle left and the
+    /// one taken, either of which may be <c>null</c>. Relayed from
+    /// <see cref="NetwMultiplayer.ScenePresentationChanged"/>.
+    /// <see cref="NetwSessionHandle.PresentedScene"/> is what changed and how
+    /// it is derived. Spent on a change and never on a repeat. It is the edge a
+    /// move across worlds lands on, because the body that arrives is a new
+    /// object on the peer that owns it and this announces the arrival rather
+    /// than the object.
     /// </summary>
     public event Action<Variant, Variant> PresentationChanged
     {
@@ -212,25 +205,21 @@ public sealed class NetwSessionHandle : NetwRefCounted
         remove => Disconnect("presentation_changed", Callable.From(value));
     }
 
-    private static readonly IntPtr _bindGetParticipants =
-        NetwApi.MethodBind(
-            "NetwSessionHandle",
-            "get_participants",
-            3995934104UL);
+    private static readonly IntPtr _bindGetPlayers =
+        NetwApi.MethodBind("NetwSessionHandle", "get_players", 3995934104UL);
 
     /// <summary>
-    /// Every <see cref="NetwParticipant"/> that has joined, including rows
-    /// whose peer has since gone, which is what
-    /// <see cref="NetwMultiplayer.Participants"/> returns and is the roster a
-    /// scoreboard wants. The rows still CONNECTED are
-    /// <see cref="NetwMultiplayer.ConnectedParticipants"/>.
+    /// Every <see cref="NetwPlayer"/> that has joined, including rows whose
+    /// peer has since gone, which is what <see cref="NetwMultiplayer.Players"/>
+    /// returns and is the roster a scoreboard wants. The rows still CONNECTED
+    /// are <see cref="NetwMultiplayer.ConnectedPlayers"/>.
     /// </summary>
-    public Godot.Collections.Array Participants
+    public Godot.Collections.Array Players
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetParticipants, Checked, ref answered);
+            NetwThunks.Call0(_bindGetPlayers, Checked, ref answered);
             Godot.Collections.Array result =
                 VariantUtils.ConvertToArray(answered);
             answered.Dispose();
@@ -238,27 +227,27 @@ public sealed class NetwSessionHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetLocalParticipant =
+    private static readonly IntPtr _bindGetLocalPlayer =
         NetwApi.MethodBind(
             "NetwSessionHandle",
-            "get_local_participant",
-            265848360UL);
+            "get_local_player",
+            1167648220UL);
 
     /// <summary>
-    /// The <see cref="NetwParticipant"/> this session holds for this peer,
+    /// The <see cref="NetwPlayer"/> this session holds for this peer,
     /// <c>null</c> before the local join is accepted.
     /// <see cref="NetwSessionHandle.LocalJoined"/> is the edge that fills it.
     /// </summary>
-    public NetwParticipant LocalParticipant
+    public NetwPlayer LocalPlayer
     {
         get
         {
             IntPtr answered = default;
             NetwThunks.Ptrcall0_IntPtr(
-                _bindGetLocalParticipant,
+                _bindGetLocalPlayer,
                 Checked,
                 ref answered);
-            return NetwParticipant.Adopt(answered);
+            return NetwPlayer.Adopt(answered);
         }
     }
 
@@ -269,9 +258,28 @@ public sealed class NetwSessionHandle : NetwRefCounted
             931191233UL);
 
     /// <summary>
-    /// The scene <see cref="NetwSessionHandle.Present"/> last named,
-    /// <c>null</c> while this peer presents none.
-    /// <see cref="NetwMultiplayer.ScenePresented"/>.
+    /// The scene this peer draws, <c>null</c> while it draws none. A game
+    /// writes nothing to reach it.
+    /// <see cref="NetwSessionHandle.PresentationChanged"/> is its edge and
+    /// <see cref="NetwMultiplayer.ScenePresented"/> is the flat reading. It
+    /// follows where this peer is, so it is a local reading and no other peer
+    /// sees anything of it. <see cref="NetwSceneHandle.Watch"/> is the separate
+    /// verb that decides what a player actually receives.
+    /// <code>
+    /// one scene holds a body of this peer    that scene
+    /// no body, one scene this peer watches   that scene
+    /// bodies in two, or two watched          nothing, with a warning
+    /// neither                                nothing
+    /// </code>
+    /// <para>
+    /// Two worlds at once draw nothing rather than one of them, because a peer
+    /// standing in two places is a question only the game can answer and a
+    /// framework answering it draws the wrong world in silence. On a listen
+    /// server this is what <see cref="HostSceneView"/> draws, because only a
+    /// host runs scenes in worlds of their own. Several bodies in the presented
+    /// scene each hear <see cref="NetwEntity.ViewActivated"/>, and the camera
+    /// is adopted automatically only where exactly one of them is local.
+    /// </para>
     /// </summary>
     public NetwSceneHandle PresentedScene
     {
@@ -408,24 +416,6 @@ public sealed class NetwSessionHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetAuthFlow =
-        NetwApi.MethodBind("NetwSessionHandle", "get_auth_flow", 788308154UL);
-
-    /// <summary>
-    /// The <see cref="NetwAuthFlow"/> this session authenticates with,
-    /// <c>null</c> when it authenticates with none.
-    /// <see cref="NetwMultiplayer.AuthFlow"/> under the flat spelling.
-    /// </summary>
-    public NetwAuthFlow AuthFlow
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(_bindGetAuthFlow, Checked, ref answered);
-            return NetwAuthFlow.Adopt(answered);
-        }
-    }
-
     private static readonly IntPtr _bindGetStats =
         NetwApi.MethodBind("NetwSessionHandle", "get_stats", 3102165223UL);
 
@@ -447,84 +437,25 @@ public sealed class NetwSessionHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindPresent =
-        NetwApi.MethodBind("NetwSessionHandle", "present", 430177080UL);
+    private static readonly IntPtr _bindPlayerOf =
+        NetwApi.MethodBind("NetwSessionHandle", "player_of", 8045813UL);
 
     /// <summary>
-    /// Names the scene this peer looks at, and <c>null</c> names none. A local
-    /// rendering choice and nothing else. It grants no viewership, sends
-    /// nothing, and changes what no other peer sees, so a client presenting a
-    /// scene it was never given still receives nothing of it.
-    /// <see cref="NetwSceneHandle.Watch"/> is the verb that decides what
-    /// reaches a participant. The framework never chooses for the game. A
-    /// session presents nothing until something names a scene, and the scene it
-    /// presents retiring clears the choice without taking another, so a peer
-    /// between worlds draws nothing rather than whatever is left standing.
-    /// <code>
-    /// func _on_scene_live(arena: NetwSceneHandle) -&gt; void:
-    ///     Netw.session(self).present(arena)
-    /// </code>
-    /// <para>
-    /// That reads a scene going live as the scene to draw, which holds only
-    /// while one world is live at a time. A game running several at once
-    /// presents the world its own player stands in, or the last world any peer
-    /// brought up takes the view from whoever was watching another.
-    /// <code>
-    /// func _ready() -&gt; void:
-    ///     if not is_multiplayer_authority():
-    ///         return
-    ///     entity.reparented.connect(present_own_scene)
-    ///     present_own_scene()
-    ///
-    /// func present_own_scene() -&gt; void:
-    ///     Netw.session(self).present(entity.scene)
-    /// </code>
-    /// </para>
-    /// <para>
-    /// On a listen server this is what <see cref="HostSceneView"/> draws,
-    /// because only a host runs scenes in worlds of their own. Several bodies
-    /// in the presented scene each hear <see cref="NetwEntity.ViewActivated"/>,
-    /// and the camera is adopted automatically only where exactly one of them
-    /// is local.
-    /// <code>
-    /// Error
-    /// ┠╴OK              this peer now presents that scene, or none
-    /// ┠╴ERR_UNAVAILABLE this session holds no live scene by that handle
-    /// ┖╴ERR_UNCONFIGURED this handle outlived its session
-    /// </code>
-    /// </para>
-    /// </summary>
-    public Error Present(NetwSceneHandle scene = null)
-    {
-        IntPtr slot0 = scene?.Native ?? IntPtr.Zero;
-        long answered = default;
-        NetwThunks.Ptrcall1_IntPtr_Long(
-            _bindPresent,
-            Checked,
-            in slot0,
-            ref answered);
-        return (Error)answered;
-    }
-
-    private static readonly IntPtr _bindParticipantOf =
-        NetwApi.MethodBind("NetwSessionHandle", "participant_of", 1769306878UL);
-
-    /// <summary>
-    /// The <see cref="NetwParticipant"/> this session holds for
+    /// The <see cref="NetwPlayer"/> this session holds for
     /// <paramref name="peer"/>, <c>null</c> when it holds none. Forwards to
-    /// <see cref="NetwMultiplayer.PeerGetParticipant"/>, which is the same
-    /// result under the flat spelling.
+    /// <see cref="NetwMultiplayer.PeerGetPlayer"/>, which is the same result
+    /// under the flat spelling.
     /// </summary>
-    public NetwParticipant ParticipantOf(long peer)
+    public NetwPlayer PlayerOf(long peer)
     {
         long slot0 = peer;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
-            _bindParticipantOf,
+            _bindPlayerOf,
             Checked,
             in slot0,
             ref answered);
-        return NetwParticipant.Adopt(answered);
+        return NetwPlayer.Adopt(answered);
     }
 
     private static readonly IntPtr _bindBucketOf =
@@ -592,57 +523,28 @@ public sealed class NetwSessionHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindKick =
-        NetwApi.MethodBind("NetwSessionHandle", "kick", 538576922UL);
+        NetwApi.MethodBind("NetwSessionHandle", "kick", 1232915396UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.ParticipantKick"/>: ends
-    /// <paramref name="participant"/>'s membership and turns their peer away
+    /// <see cref="NetwMultiplayer.PlayerKick"/>: ends
+    /// <paramref name="player"/>'s membership and turns their peer away
     /// carrying <paramref name="reason"/>, which holds the law and the errors.
     /// This ends a membership rather than closing a connection, and
     /// <see cref="NetwSessionHandle.Leave"/> is how a peer ends its own. The
-    /// local server's participant is refused here for that reason. <b>Server
+    /// local server's player is refused here for that reason. <b>Server
     /// Only.</b>
     /// </summary>
-    public Error Kick(NetwParticipant participant, string reason = "")
+    public Error Kick(NetwPlayer player, string reason = "")
     {
         godot_variant slot0 =
             VariantUtils.CreateFromGodotObjectPtr(
-                participant?.Native ?? IntPtr.Zero);
+                player?.Native ?? IntPtr.Zero);
         godot_variant slot1 = VariantUtils.CreateFromString(reason);
         godot_variant answered = default;
         NetwThunks.Call2(_bindKick, Checked, in slot0, in slot1, ref answered);
         slot0.Dispose();
         slot1.Dispose();
         Error result = (Error)VariantUtils.ConvertToInt64(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindActivateScene =
-        NetwApi.MethodBind("NetwSessionHandle", "activate_scene", 2839784183UL);
-
-    /// <summary>
-    /// Brings <paramref name="destination"/> up if it is not already live and
-    /// returns the <see cref="NetwSceneHandle"/> it settled on, <c>null</c>
-    /// when nothing could be activated.
-    /// <see cref="NetwMultiplayer.SceneActivate"/> holds the law, including
-    /// which kinds of <paramref name="destination"/> are rejected and why; what
-    /// differs here is the result, which is the view a caller goes on to use
-    /// rather than the container node it would have to resolve one from. This
-    /// verb is on the session rather than on a scene view because a recipe
-    /// names no live scene yet, so there is no view to call it on. A scene
-    /// already live is reached by <see cref="Netw.Scene"/>. <b>Server Only.</b>
-    /// </summary>
-    public NetwSceneHandle ActivateScene(Variant destination)
-    {
-        godot_variant slot0 = destination.CopyNativeVariant();
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindActivateScene, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        NetwSceneHandle result =
-            NetwSceneHandle.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
     }

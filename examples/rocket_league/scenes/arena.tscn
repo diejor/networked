@@ -6,7 +6,6 @@
 [ext_resource type="PackedScene" uid="uid://c7rlgoalarea1" path="res://examples/rocket_league/scenes/goal.tscn" id="4_goal"]
 [ext_resource type="PackedScene" uid="uid://c7rlballrktlg" path="res://examples/rocket_league/scenes/ball.tscn" id="5_ball"]
 [ext_resource type="Script" path="res://examples/rocket_league/scripts/game.gd" id="6_game"]
-[ext_resource type="Script" path="res://examples/rocket_league/scripts/player_spawner.gd" id="7_spawner"]
 [ext_resource type="Script" path="res://examples/rocket_league/scripts/arena_root.gd" id="8_root"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_arena"]
@@ -117,17 +116,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.5, -20)
 [node name="b3" type="Marker3D" parent="Markers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -50)
 
-[node name="ball|0" parent="." instance=ExtResource("5_ball")]
+[node name="ball" parent="." instance=ExtResource("5_ball")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.381, 0)
 
-[node name="game|0" type="Node" parent="."]
+[node name="game" type="Node" parent="."]
 script = ExtResource("6_game")
 
 [node name="Players" type="Node" parent="."]
-
-[node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
-_spawnable_scenes = PackedStringArray("uid://c7rlplayerrb1")
-spawn_path = NodePath("../Players")
-script = ExtResource("7_spawner")
 
 [editable path="field"]

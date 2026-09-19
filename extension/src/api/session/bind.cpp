@@ -29,7 +29,6 @@
 #include "netw/carrier_frame.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
-#include "netw/entity/identity.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -58,9 +57,9 @@ const char *SIG_ENTITY_DEAD = "entity_dead";
 const char *SIG_ENTITY_HIDDEN = "entity_hidden";
 const char *SIG_ENTITY_LINGERING = "entity_lingering";
 const char *SIG_ENTITY_LIVE = "entity_live";
-const char *SIG_PARTICIPANT_JOINED = "participant_joined";
-const char *SIG_PARTICIPANT_LOCAL_JOINED = "participant_local_joined";
-const char *SIG_PARTICIPANT_LEFT = "participant_left";
+const char *SIG_PLAYER_JOINED = "player_joined";
+const char *SIG_PLAYER_LOCAL_JOINED = "player_local_joined";
+const char *SIG_PLAYER_LEFT = "player_left";
 const char *SIG_PARTICIPANT_VIEWPORT_CHANGED = "participant_viewport_changed";
 const char *SIG_PEER_AUTHENTICATING = "peer_authenticating";
 const char *SIG_PEER_AUTHENTICATION_FAILED = "peer_authentication_failed";
@@ -116,8 +115,8 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::interest_layers
     );
     ClassDB::bind_method(
-        D_METHOD("interest_participant_sees", "peer_id", "entity"),
-        &NetwMultiplayer::interest_participant_sees
+        D_METHOD("interest_player_sees", "peer_id", "entity"),
+        &NetwMultiplayer::interest_player_sees
     );
     ClassDB::bind_method(
         D_METHOD("sync_gather_set_default", "entity", "comp"),
@@ -238,8 +237,8 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::attribution_snapshot
     );
     ClassDB::bind_method(
-        D_METHOD("scene_participant_viewport"),
-        &NetwMultiplayer::scene_participant_viewport
+        D_METHOD("scene_player_viewport"),
+        &NetwMultiplayer::scene_player_viewport
     );
     ClassDB::bind_method(
         D_METHOD("scene_observe", "scene", "event", "callback"),
@@ -431,14 +430,6 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("session_set_server_info", "info"),
         &NetwMultiplayer::session_set_server_info
-    );
-    ClassDB::bind_method(
-        D_METHOD("peer_set_identity", "peer", "identity"),
-        &NetwMultiplayer::peer_set_identity
-    );
-    ClassDB::bind_method(
-        D_METHOD("peer_get_identity", "peer"),
-        &NetwMultiplayer::peer_get_identity
     );
     ClassDB::bind_method(
         D_METHOD("session_get_authored_role"),
@@ -928,16 +919,16 @@ void NetwMultiplayer::_bind_methods() {
         PropertyInfo(Variant::OBJECT, "entity")
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_PARTICIPANT_JOINED,
-        PropertyInfo(Variant::OBJECT, "participant")
+        SIG_PLAYER_JOINED,
+        PropertyInfo(Variant::OBJECT, "player")
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_PARTICIPANT_LOCAL_JOINED,
-        PropertyInfo(Variant::OBJECT, "participant")
+        SIG_PLAYER_LOCAL_JOINED,
+        PropertyInfo(Variant::OBJECT, "player")
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_PARTICIPANT_LEFT,
-        PropertyInfo(Variant::OBJECT, "participant")
+        SIG_PLAYER_LEFT,
+        PropertyInfo(Variant::OBJECT, "player")
     ));
     ADD_SIGNAL(MethodInfo(
         SIG_SCENE_PRESENTATION_CHANGED,
@@ -1001,50 +992,50 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::entity_adopt
     );
     ClassDB::bind_method(
-        D_METHOD("participant_joined_all"),
-        &NetwMultiplayer::participant_joined_all
+        D_METHOD("player_joined_all"),
+        &NetwMultiplayer::player_joined_all
     );
     ClassDB::bind_method(
-        D_METHOD("participant_local"),
-        &NetwMultiplayer::participant_local
+        D_METHOD("player_local"),
+        &NetwMultiplayer::player_local
     );
     ClassDB::bind_method(
-        D_METHOD("participant_all"),
-        &NetwMultiplayer::participant_all
+        D_METHOD("player_all"),
+        &NetwMultiplayer::player_all
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "participants",
+            "players",
             PROPERTY_HINT_ARRAY_TYPE,
-            "NetwParticipant"
+            "NetwPlayer"
         ),
         "",
-        "participant_joined_all"
+        "player_joined_all"
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "connected_participants",
+            "connected_players",
             PROPERTY_HINT_ARRAY_TYPE,
-            "NetwParticipant"
+            "NetwPlayer"
         ),
         "",
-        "participant_all"
+        "player_all"
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
-            "local_participant",
+            "local_player",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwParticipant"
+            "NetwPlayer"
         ),
         "",
-        "participant_local"
+        "player_local"
     );
     ClassDB::bind_method(
-        D_METHOD("participant_players", "peer"),
-        &NetwMultiplayer::participant_players
+        D_METHOD("player_bodies", "peer"),
+        &NetwMultiplayer::player_bodies
     );
     BIND_ENUM_CONSTANT(SCENE_MOVE_REFUSED);
     BIND_ENUM_CONSTANT(SCENE_MOVE_ALREADY_THERE);
@@ -1118,10 +1109,10 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(SCENE_PARAM_ISOLATION);
     BIND_ENUM_CONSTANT(SCENE_PARAM_PROCESSING);
     BIND_ENUM_CONSTANT(SCENE_EVENT_VIEWER);
-    BIND_ENUM_CONSTANT(SCENE_EVENT_PLAYER);
+    BIND_ENUM_CONSTANT(SCENE_EVENT_BODY);
     BIND_ENUM_CONSTANT(SCENE_EVENT_ENTITY);
     BIND_ENUM_CONSTANT(SCENE_CHANGE_SESSION);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_PARTICIPANT);
+    BIND_ENUM_CONSTANT(SCENE_CHANGE_PLAYER);
     BIND_ENUM_CONSTANT(SCENE_CHANGE_SCENE);
     BIND_ENUM_CONSTANT(SCENE_ISOLATION_NONE);
     BIND_ENUM_CONSTANT(SCENE_ISOLATION_OWN_WORLD);
@@ -1214,10 +1205,6 @@ void NetwMultiplayer::_bind_methods() {
 #define NETW_SESSION_STAT_BIND(m_name, m_key) BIND_ENUM_CONSTANT(STAT_##m_name);
     NETW_SESSION_STAT_TABLE(NETW_SESSION_STAT_BIND)
 #undef NETW_SESSION_STAT_BIND
-    ClassDB::bind_method(
-        D_METHOD("scene_activate", "destination"),
-        &NetwMultiplayer::scene_activate
-    );
     ClassDB::bind_method(
         D_METHOD("scene_change_to_file", "requester", "path", "scope"),
         &NetwMultiplayer::scene_change_to_file,
@@ -1331,8 +1318,8 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::liveness_poll_now
     );
     ClassDB::bind_method(
-        D_METHOD("participant_kick", "participant", "reason"),
-        &NetwMultiplayer::participant_kick,
+        D_METHOD("player_kick", "player", "reason"),
+        &NetwMultiplayer::player_kick,
         DEFVAL(String())
     );
     ClassDB::bind_method(
@@ -1690,10 +1677,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::entity_create
     );
     ClassDB::bind_method(
-        D_METHOD("scene_move", "entity", "destination"),
-        &NetwMultiplayer::scene_move
-    );
-    ClassDB::bind_method(
         D_METHOD(
             "liveness_when_live",
             "route",
@@ -1784,8 +1767,8 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::peer_forget
     );
     ClassDB::bind_method(
-        D_METHOD("peer_get_participant", "peer"),
-        &NetwMultiplayer::peer_get_participant
+        D_METHOD("peer_get_player", "peer"),
+        &NetwMultiplayer::peer_get_player
     );
     ClassDB::bind_method(
         D_METHOD("display_declare", "entity", "comp", "track", "spec"),
@@ -1959,24 +1942,20 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_get_entities
     );
     ClassDB::bind_method(
-        D_METHOD("scene_get_players", "scene"),
-        &NetwMultiplayer::scene_get_players
+        D_METHOD("scene_get_bodies", "scene"),
+        &NetwMultiplayer::scene_get_bodies
     );
     ClassDB::bind_method(
         D_METHOD("scene_get_viewers", "scene"),
         &NetwMultiplayer::scene_get_viewers
     );
     ClassDB::bind_method(
-        D_METHOD("scene_get_local_players", "scene"),
-        &NetwMultiplayer::scene_get_local_players
+        D_METHOD("scene_get_local_bodies", "scene"),
+        &NetwMultiplayer::scene_get_local_bodies
     );
     ClassDB::bind_method(
         D_METHOD("scene_get_layer", "scene"),
         &NetwMultiplayer::scene_get_layer
-    );
-    ClassDB::bind_method(
-        D_METHOD("scene_present", "scene"),
-        &NetwMultiplayer::scene_present
     );
     ClassDB::bind_method(
         D_METHOD("scene_presented"),
@@ -1987,18 +1966,18 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_destroy
     );
     ClassDB::bind_method(
-        D_METHOD("scene_players_all"),
-        &NetwMultiplayer::scene_players_all
+        D_METHOD("scene_bodies_all"),
+        &NetwMultiplayer::scene_bodies_all
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "players",
+            "bodies",
             PROPERTY_HINT_ARRAY_TYPE,
             "NetwEntity"
         ),
         "",
-        "scene_players_all"
+        "scene_bodies_all"
     );
     ClassDB::bind_method(
         D_METHOD("scene_create", "recipe", "isolation"),
@@ -2142,28 +2121,6 @@ void NetwMultiplayer::_bind_methods() {
         "get_auth_callback"
     );
     ClassDB::bind_method(
-        D_METHOD("auth_set_flow", "flow"),
-        &NetwMultiplayer::auth_set_flow
-    );
-    ClassDB::bind_method(
-        D_METHOD("auth_effective_flow"),
-        &NetwMultiplayer::auth_effective_flow
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "auth_flow",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwAuthFlow"
-        ),
-        "",
-        "auth_effective_flow"
-    );
-    ClassDB::bind_method(
-        D_METHOD("auth_seat_host_identity"),
-        &NetwMultiplayer::auth_seat_host_identity
-    );
-    ClassDB::bind_method(
         D_METHOD("session_answer_probe", "peer"),
         &NetwMultiplayer::session_answer_probe
     );
@@ -2192,8 +2149,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(ROLE_CLIENT);
     BIND_ENUM_CONSTANT(ROLE_DEDICATED_SERVER);
     BIND_ENUM_CONSTANT(ROLE_LISTEN_SERVER);
-    BIND_ENUM_CONSTANT(NAME_RENAME);
-    BIND_ENUM_CONSTANT(NAME_REFUSE);
 
     BIND_ENUM_CONSTANT(TRANSPORT_MODE_HOST);
     BIND_ENUM_CONSTANT(TRANSPORT_MODE_CLIENT);

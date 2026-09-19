@@ -75,9 +75,12 @@ public sealed class NetwConnectHandle : NetwRefCounted
     /// This peer's own join was rejected, locally or by the server, and no
     /// player was seated for it. <c>reason</c> is the server's own words where
     /// the rejection came from one, and <c>error</c> is why. A rejection is not
-    /// a disconnect notice: it is the result to the join this peer asked for,
+    /// a disconnect notice. It is the result to the join this peer asked for,
     /// so a game shows it where it asked, beside its username field rather than
     /// in a lobby-lost banner. A server rejects when the handler declared
+    /// through <see cref="Netw.ConfigureAdmission"/> turns the join down, when
+    /// a member of the session already joined under the
+    /// <see cref="NetwPlayer.UserName"/> claimed, when the handler declared
     /// through <see cref="Netw.ConfigureJoin"/> is unavailable, when the join
     /// carried no arguments a declared handler needs, or when that handler
     /// returned something that is not a placement.

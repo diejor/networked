@@ -123,7 +123,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SV2 a session with no participant edge "
+    "[Networked][Scene][Hosted] SV2 a session with no player edge "
     "installed still writes the boundary and still requests the flush, so the "
     "announcement is the only thing an uninstalled reporter costs"
 ) {
@@ -165,9 +165,9 @@ TEST_CASE(
         declared_channel_id("SESSION_SCENE_RELEASED"),
         seen.callable("released")
     );
-    Ref<netw::NetwParticipant> local;
+    Ref<netw::NetwPlayer> local;
     local.instantiate();
-    core->participant_adopt(int64_t(core->get_unique_id()), local);
+    core->player_adopt(int64_t(core->get_unique_id()), local);
 
     CHECK_FALSE(core->scene_notify_released(arena.handle, 9));
     NETW_CHECK_EQ(seen.count("released"), 0);
