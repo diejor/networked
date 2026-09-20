@@ -112,9 +112,7 @@ func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	else:
 		velocity = motion.clamp(Vector2(-1, -1), Vector2(1, 1)) * MOTION_SPEED
 
-	var factor: float = Netw.clock(self).monitor(
-		NetwMultiplayer.CLOCK_MONITOR_PHYSICS_FACTOR,
-	)
+	var factor: float = Netw.clock(self).physics_factor
 	velocity *= factor
 	move_and_slide()
 	velocity /= factor

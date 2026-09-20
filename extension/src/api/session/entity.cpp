@@ -2280,7 +2280,7 @@ bool NetwMultiplayer::spawn_send_reparent(
         || !stream.align_verify()) {
         NETW_WARN(
             sys::SPAWN,
-            "reparented '%s' outside the MultiplayerTree, peers keep the old "
+            "reparented '%s' outside the session root, peers keep the old "
             "parent",
             String(p_node->get_name()).utf8().get_data()
         );

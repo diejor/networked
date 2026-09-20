@@ -2,6 +2,7 @@
 
 #include "godot/class_db.hpp"
 #include "godot/utility.hpp"
+#include "godot/vararg.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 
@@ -192,7 +193,7 @@ void NetwAction::run_denied() {
     emit_signal(sig_denied());
 }
 
-void NetwAction::request(int64_t p_view_tick, const Variant &p_data) {
+void NetwAction::request(int64_t p_view_tick, const Array &p_args) {
     const Ref<NetwEntity> entity
         = Object::cast_to<NetwEntity>(gd::object_of(entity_id));
     if (entity.is_null() || !entity->get_is_controlled_locally()) {
@@ -229,7 +230,7 @@ void NetwAction::request(int64_t p_view_tick, const Variant &p_data) {
         target_path,
         method,
         p_view_tick,
-        p_data,
+        p_args,
         key,
         timing_mode
     );
@@ -304,10 +305,9 @@ void NetwAction::_bind_methods() {
         "set_timing_mode",
         "get_timing_mode"
     );
-    ClassDB::bind_method(
-        D_METHOD("request", "view_tick", "data"),
-        &NetwAction::request,
-        DEFVAL(Variant())
+    gd::bind_vararg_method(
+        D_METHOD("request", "view_tick"),
+        &NetwAction::request
     );
 }
 

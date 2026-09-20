@@ -14,16 +14,14 @@ LobbyDirectory
 
 **Inherited By:** :ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>`, :ref:`SteamLobbyDirectory<class_SteamLobbyDirectory>`
 
-The peer source for one peer class, backed by a platform's lobbies.
+Base class for a lobby provider.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A directory is what the connect plane asks when a game names a :ref:`MultiplayerTree.peer_class<class_MultiplayerTree_property_peer_class>` the plane has no built-in transport for. Register one under a session and it becomes the provider for the peer class :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>` names, so hosting, joining and browsing that class all reach this node.
-
-Every request method returns ``void`` and completes later through :ref:`deliver()<class_LobbyDirectory_method_deliver>`, :ref:`fail()<class_LobbyDirectory_method_fail>`, or :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>`. Each request completes exactly once.
+Lobbies are discovered by listening signals from :godot:`NetwConnectHandler`. A lobby dicrectory is a :ref:`NetwService<class_NetwService>` that implements the :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`, :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`, :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` and :ref:`_leave_lobby()<class_LobbyDirectory_private_method__leave_lobby>` verbs. :godot:`NetwConnectHandler` can discover lobbies as any other endpoint.
 
 ::
 
@@ -55,8 +53,6 @@ Every request method returns ``void`` and completes later through :ref:`deliver(
 
     func _leave_lobby() -> void:
         Rooms.leave()
-
-\ Each seam has a default result, so a provider overrides only what it differs on. The reading verbs are C++ and the plane calls them directly; a script reads its own override.
 
 .. rst-class:: classref-reftable-group
 

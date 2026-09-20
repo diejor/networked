@@ -4,8 +4,7 @@
 		A predicted discrete action bound to one authority method.
 	</brief_description>
 	<description>
-		Pairs a local [member predict] effect with a reliable server request. The server receives a [NetwActionContext], validates at [member NetwActionContext.view_tick], and either binds an authoritative spawned [NetwEntity] result with [method NetwActionContext.bind] or denies it with [method NetwActionContext.deny].
-		Each authority method on an entity has its own slot, so actions created at one view tick use distinct effect keys. Create one with [method Netw.action]. The authority method must be a plain [Callable], not an RPC.
+		Pairs a local [member predict] effect with a reliable server request.
 		[codeblock]
 		@onready var place_bomb := Netw.action(_place_bomb)
 
@@ -25,13 +24,17 @@
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="request">
+		<method name="request" qualifiers="vararg">
 			<return type="void" />
 			<param index="0" name="view_tick" type="int" />
-			<param index="1" name="data" type="Variant" default="null" />
 			<description>
-				Requests the server authority method for [param view_tick], carrying [param data] as its second argument.
-				The local controller gets an immediate [member predict] effect. Non-owning peers do nothing, so server consume and remote display passes cannot double fire a command.
+				Requests the server authority method for [param view_tick]. Every argument after [param view_tick] reaches that method in the order it was written, after the [NetwActionContext] the method always takes first.
+				[codeblock]
+				place_bomb.request(tick, position, fuse)
+
+				func _place_bomb(ctx: NetwActionContext, pos: Vector2, fuse: float) -&gt; void:
+				[/codeblock]
+				The local controller gets an immediate [member predict] effect. Non-owning peers do nothing.
 				[b]Player request.[/b]
 			</description>
 		</method>

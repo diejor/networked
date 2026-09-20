@@ -31,10 +31,6 @@ Description
     var copy := DictionaryRecord.new()
     copy.deserialize(bytes)
 
-\ It is the concrete end of the chain, so it implements the :ref:`NetwRecord<class_NetwRecord>` and :ref:`Serde<class_Serde>` verbs natively rather than through their virtuals. A script that needs different storage extends :ref:`NetwRecord<class_NetwRecord>` and overrides the virtuals there.
-
-\ :ref:`data<class_DictionaryRecord_property_data>` is a declared property, so it is the one name :ref:`NetwRecord.set_value()<class_NetwRecord_method_set_value>` cannot be reached through by assignment. Store a value under ``&"data"`` with :ref:`NetwRecord.set_value()<class_NetwRecord_method_set_value>` itself.
-
 .. rst-class:: classref-reftable-group
 
 Properties

@@ -202,11 +202,19 @@ Methods
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Variant`                                                    | :ref:`clock_get_param<class_NetwMultiplayer_method_clock_get_param>`\ (\ param\: :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>`\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                     |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`float`                                                      | :ref:`clock_get_physics_factor<class_NetwMultiplayer_method_clock_get_physics_factor>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                                               |
+   +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`int`                                                        | :ref:`clock_get_physics_steps_per_tick<class_NetwMultiplayer_method_clock_get_physics_steps_per_tick>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                               |
+   +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                                                        | :ref:`clock_get_recommended_display_offset<class_NetwMultiplayer_method_clock_get_recommended_display_offset>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                       |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`int`                                                        | :ref:`clock_get_simulation_behind_count<class_NetwMultiplayer_method_clock_get_simulation_behind_count>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                             |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`int`                                                        | :ref:`clock_get_tick<class_NetwMultiplayer_method_clock_get_tick>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+   +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`float`                                                      | :ref:`clock_get_tick_factor<class_NetwMultiplayer_method_clock_get_tick_factor>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+   +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`float`                                                      | :ref:`clock_get_tick_phase<class_NetwMultiplayer_method_clock_get_tick_phase>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                                                       |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Dictionary`                                                 | :ref:`clock_ingest_pong<class_NetwMultiplayer_method_clock_ingest_pong>`\ (\ sample\: :godot:`float`, server_tick_at_pong\: :godot:`int`, server_tick_phase\: :godot:`float`, apply_lead\: :godot:`bool`\ )                                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2840,7 +2848,7 @@ The explicit margin, in ticks, the calibration target is placed ahead of the ser
 
 :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>` **CLOCK_PARAM_JITTER_MULTIPLIER** = ``9``
 
-How strongly measured jitter widens :ref:`CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET<class_NetwMultiplayer_constant_CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET>`, as a :godot:`float`.
+How strongly measured jitter widens :ref:`clock_get_recommended_display_offset()<class_NetwMultiplayer_method_clock_get_recommended_display_offset>`, as a :godot:`float`.
 
 .. _class_NetwMultiplayer_constant_CLOCK_PARAM_JITTER_WINDOW:
 
@@ -2888,7 +2896,7 @@ Whether the schedule ignores frame pumps so a rig can own it, as a :godot:`bool`
 
 :ref:`ClockParam<enum_NetwMultiplayer_ClockParam>` **CLOCK_PARAM_TICK_FACTOR_OVERRIDE** = ``15``
 
-A fixed value for :ref:`CLOCK_MONITOR_TICK_FACTOR<class_NetwMultiplayer_constant_CLOCK_MONITOR_TICK_FACTOR>` in place of the measured one, as a :godot:`float`. Negative restores the measurement.
+A fixed value for :ref:`clock_get_tick_factor()<class_NetwMultiplayer_method_clock_get_tick_factor>` in place of the measured one, as a :godot:`float`. Negative restores the measurement.
 
 .. rst-class:: classref-item-separator
 
@@ -2940,51 +2948,19 @@ Half of :ref:`CLOCK_MONITOR_RTT_AVG<class_NetwMultiplayer_constant_CLOCK_MONITOR
 
 One tick's worth of simulated time, in seconds, which is one divided by :ref:`CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>`.
 
-.. _class_NetwMultiplayer_constant_CLOCK_MONITOR_TICK_FACTOR:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_TICK_FACTOR** = ``5``
-
-How far the current frame has advanced between the last tick and the next, from zero to one.
-
-.. _class_NetwMultiplayer_constant_CLOCK_MONITOR_TICK_PHASE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_TICK_PHASE** = ``6``
-
-Where the clock sits inside the current tick, from zero to one. What a pong carries so a calibration target can be a continuous position rather than a whole tick.
-
 .. _class_NetwMultiplayer_constant_CLOCK_MONITOR_TICK_ACCUMULATOR:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_TICK_ACCUMULATOR** = ``7``
+:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_TICK_ACCUMULATOR** = ``5``
 
 The frame time banked toward the next tick, in seconds.
-
-.. _class_NetwMultiplayer_constant_CLOCK_MONITOR_PHYSICS_FACTOR:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_PHYSICS_FACTOR** = ``8``
-
-Physics frames per tick, unrounded. :ref:`clock_get_physics_steps_per_tick()<class_NetwMultiplayer_method_clock_get_physics_steps_per_tick>` is this as a whole number.
-
-.. _class_NetwMultiplayer_constant_CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET** = ``9``
-
-The display offset the measured jitter suggests, in ticks. It is a recommendation, and :ref:`CLOCK_PARAM_DISPLAY_OFFSET<class_NetwMultiplayer_constant_CLOCK_PARAM_DISPLAY_OFFSET>` is what the clock actually uses.
 
 .. _class_NetwMultiplayer_constant_CLOCK_MONITOR_PHYSICS_FRAMES:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_PHYSICS_FRAMES** = ``10``
+:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_PHYSICS_FRAMES** = ``6``
 
 How many physics frames this process has run since the clock started counting.
 
@@ -2992,7 +2968,7 @@ How many physics frames this process has run since the clock started counting.
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_POLLS** = ``11``
+:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_POLLS** = ``7``
 
 How many session polls it has run over the same span.
 
@@ -3000,7 +2976,7 @@ How many session polls it has run over the same span.
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_WALL_SECONDS** = ``12``
+:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_WALL_SECONDS** = ``8``
 
 The wall-clock seconds that span covers.
 
@@ -3008,7 +2984,7 @@ The wall-clock seconds that span covers.
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_PHYSICS_HZ** = ``13``
+:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_PHYSICS_HZ** = ``9``
 
 :ref:`CLOCK_MONITOR_PHYSICS_FRAMES<class_NetwMultiplayer_constant_CLOCK_MONITOR_PHYSICS_FRAMES>` over :ref:`CLOCK_MONITOR_WALL_SECONDS<class_NetwMultiplayer_constant_CLOCK_MONITOR_WALL_SECONDS>`. What the engine actually delivered, which is how a starved host is told apart from a mistuned one.
 
@@ -3016,7 +2992,7 @@ The wall-clock seconds that span covers.
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_POLL_HZ** = ``14``
+:ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>` **CLOCK_MONITOR_POLL_HZ** = ``10``
 
 :ref:`CLOCK_MONITOR_POLLS<class_NetwMultiplayer_constant_CLOCK_MONITOR_POLLS>` over :ref:`CLOCK_MONITOR_WALL_SECONDS<class_NetwMultiplayer_constant_CLOCK_MONITOR_WALL_SECONDS>`.
 
@@ -5396,15 +5372,43 @@ The current value of one tunable clock knob. The vocabulary is :ref:`ClockParam<
 
 ----
 
+.. _class_NetwMultiplayer_method_clock_get_physics_factor:
+
+.. rst-class:: classref-method
+
+:godot:`float` **clock_get_physics_factor**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_physics_factor>`
+
+Physics frames per tick, unrounded. It is the engine's physics rate divided by :ref:`CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>`, so 60 Hz physics under a 30 Hz tickrate answers 2.0.
+
+A body that moves once per frame covers this many frames of ground per tick, which is why a per-frame velocity is scaled by it.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwMultiplayer_method_clock_get_physics_steps_per_tick:
 
 .. rst-class:: classref-method
 
 :godot:`int` **clock_get_physics_steps_per_tick**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_physics_steps_per_tick>`
 
-:ref:`CLOCK_MONITOR_PHYSICS_FACTOR<class_NetwMultiplayer_constant_CLOCK_MONITOR_PHYSICS_FACTOR>` as a whole number, never below one.
+:ref:`clock_get_physics_factor()<class_NetwMultiplayer_method_clock_get_physics_factor>` as a whole number, never below one.
 
 The physics server runs exactly one step per frame, so a tick can be worth one step or two but never one and a fifth. A fractional factor is a declaration the engine cannot honour, and the gate's step budget rounds it here rather than pretending otherwise.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_clock_get_recommended_display_offset:
+
+.. rst-class:: classref-method
+
+:godot:`int` **clock_get_recommended_display_offset**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_recommended_display_offset>`
+
+The display offset the measured link suggests, in ticks. It is one-way latency plus jitter times :ref:`CLOCK_PARAM_JITTER_MULTIPLIER<class_NetwMultiplayer_constant_CLOCK_PARAM_JITTER_MULTIPLIER>`, converted to ticks and rounded up.
+
+It is a recommendation and nothing applies it. :ref:`CLOCK_PARAM_DISPLAY_OFFSET<class_NetwMultiplayer_constant_CLOCK_PARAM_DISPLAY_OFFSET>` is what the clock actually uses, and :ref:`clock_auto_configure_offset()<class_NetwMultiplayer_method_clock_auto_configure_offset>` is what copies one into the other.
 
 .. rst-class:: classref-item-separator
 
@@ -5431,6 +5435,34 @@ A gated clock announces one tick per frame at most, so a peer whose physics cann
 :godot:`int` **clock_get_tick**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_tick>`
 
 The current server-calibrated simulation tick.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_clock_get_tick_factor:
+
+.. rst-class:: classref-method
+
+:godot:`float` **clock_get_tick_factor**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_tick_factor>`
+
+How far the simulation has advanced past the last tick, in ticks. It counts the banked frame time plus the part of the current frame already drawn, so it crosses 1.0 on the frame a tick is about to be announced.
+
+This is the number a renderer interpolates with. :ref:`CLOCK_PARAM_TICK_FACTOR_OVERRIDE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICK_FACTOR_OVERRIDE>` replaces it with a fixed value when a rig needs the frame to be reproducible.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_clock_get_tick_phase:
+
+.. rst-class:: classref-method
+
+:godot:`float` **clock_get_tick_phase**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_tick_phase>`
+
+Where the clock sits inside the current tick, from zero to one. It is the banked frame time divided by one tick's worth of seconds, clamped.
+
+A pong carries this so the calibration target is a continuous position rather than a whole tick. :ref:`clock_get_tick_factor()<class_NetwMultiplayer_method_clock_get_tick_factor>` is the same quantity without the clamp and with the current frame counted in.
 
 .. rst-class:: classref-item-separator
 

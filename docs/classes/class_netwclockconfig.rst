@@ -12,25 +12,19 @@ NetwClockConfig
 
 **Inherits:** :godot:`Resource`
 
-Draft the session clock is initialized from, declared on a scope node.
+Configuration for the clock of :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` returns a draft the scope node owns. Edit it in place or through the fluent methods, and the session copies its values once, at a deferred boundary after the declaring call stack has finished. From then on the clock holds owned values and this Resource is a spent authoring snapshot: a later setter reports the late write and moves nothing.
+Use :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` to configure the clock.
 
 ::
 
     func _init() -> void:
         Netw.configure_clock(self).tickrate(60).display_offset(2)
-
-\ Consuming one also arms the session's AUTOMATIC pump: the clock advances on the :godot:`SceneTree`'s own physics frame, reading that frame's actual delta, and the session's poll advances nothing. The pump runs only while the session is mounted on a branch, its peer is connected, :ref:`NetwMultiplayer.CLOCK_PARAM_MANUAL_TICK<class_NetwMultiplayer_constant_CLOCK_PARAM_MANUAL_TICK>` is off, the editor is not authoring and the tree is not paused, so a paused game's clock stands still and resumes without catching up. A manual driver still advances it deliberately with :ref:`NetwMultiplayer.clock_physics_step()<class_NetwMultiplayer_method_clock_physics_step>`.
-
-\ :ref:`NetwMultiplayer.clock_get_config()<class_NetwMultiplayer_method_clock_get_config>` returns a detached snapshot of the running values. Live tuning goes through :ref:`NetwMultiplayer.clock_set_param()<class_NetwMultiplayer_method_clock_set_param>`, which updates the engine and shows up in that snapshot without ever reopening this draft. Tickrate is not tunable that way: it is initialization.
-
-A preset handed to the verb is copied rather than kept, so one ``.tres`` may seed several scenes. :ref:`NetwMultiplayer.clock_configured<class_NetwMultiplayer_signal_clock_configured>` fires once, after consumption and runtime setup.
 
 .. rst-class:: classref-reftable-group
 
@@ -346,7 +340,7 @@ Method Descriptions
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **display_offset_ticks**\ (\ display_offset\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_display_offset_ticks>`
 
-Sets :ref:`display_offset<class_NetwClockConfig_property_display_offset>` and returns this same draft, so a declaration reads as one chained expression.
+The number of ticks the visual display lags behind the simulation, normally used to hide jitter and lag. The interpolation engine has its own techniques to hide jitter and lag. Still, a small display offset is recommended.
 
 .. rst-class:: classref-item-separator
 
@@ -358,7 +352,7 @@ Sets :ref:`display_offset<class_NetwClockConfig_property_display_offset>` and re
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **physics_interpolation**\ (\ use_physics_interpolation\: :godot:`bool`\ ) :ref:`🔗<class_NetwClockConfig_method_physics_interpolation>`
 
-Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_interpolation>` and returns this same draft, so a declaration reads as one chained expression.
+When ``true``, the engine's physics interpolation fraction is used when available instead of a wall-clock estimate.
 
 .. rst-class:: classref-item-separator
 
@@ -370,7 +364,7 @@ Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **sync**\ (\ sync_mode\: :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`\ ) :ref:`🔗<class_NetwClockConfig_method_sync>`
 
-Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this same draft, so a declaration reads as one chained expression.
+The strategy used to align the local clock with the server, one of :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`.
 
 .. rst-class:: classref-item-separator
 
@@ -382,7 +376,7 @@ Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **ticks_per_second**\ (\ tickrate\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_ticks_per_second>`
 
-Sets :ref:`tickrate<class_NetwClockConfig_property_tickrate>` and returns this same draft, so a declaration reads as one chained expression.
+How many simulation ticks to run per second. Increasing this value increases the simulation fidelity, but also increases the network traffic and CPU usage.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

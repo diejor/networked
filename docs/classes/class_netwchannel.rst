@@ -19,7 +19,7 @@ A raw byte channel multiplexed over the session carrier, addressed by a channel 
 Description
 -----------
 
-Use this for session-scoped traffic that has no entity to associate with, such as a voice stream, a chat line, or a compressed world grid. Ids run ``100`` to ``254``. Give each channel a distinct :ref:`id<class_NetwChannel_property_id>` and call :ref:`register()<class_NetwChannel_method_register>` once per peer.
+Channels are used to send and receive custom data between peers in a networked game. Use this for session-scoped traffic that has no entity to associate with, such as a voice stream, a chat line, or a compressed world grid. Ids run ``100`` to ``254``. Give each channel a distinct :ref:`id<class_NetwChannel_property_id>` and call :ref:`register()<class_NetwChannel_method_register>` once per peer.
 
 ::
 
@@ -31,8 +31,6 @@ Use this for session-scoped traffic that has no entity to associate with, such a
 
     # any peer, any time:
     chat.broadcast("gg".to_utf8_buffer())
-
-\ Pass ``batched`` as ``true`` to :ref:`send()<class_NetwChannel_method_send>` or :ref:`broadcast()<class_NetwChannel_method_broadcast>` to aggregate payloads into the shared peer buffers the session flushes at the end of its frame.
 
 .. rst-class:: classref-reftable-group
 
@@ -113,7 +111,7 @@ Broadcasts the custom channel payload to all other connected peers.
 
 :ref:`NetwChannel<class_NetwChannel>` **of**\ (\ node\: :godot:`Node`, id\: :godot:`int`\ ) |static| :ref:`🔗<class_NetwChannel_method_of>`
 
-Opens channel ``id`` over the session governing ``node``, or returns ``null`` and reports when no session governs it or ``id`` is outside ``100`` to ``254``. :ref:`Netw.channel()<class_Netw_method_channel>` is the front door and this is what it returns.
+Opens channel ``id`` over the session governing ``node``.
 
 .. rst-class:: classref-item-separator
 

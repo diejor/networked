@@ -64,9 +64,7 @@ func sync_ticks(ticks: int) -> void:
 	var ratios: Array[int] = []
 	var max_ratio := 1
 	for api in sessions:
-		var ratio := maxi(1, int(round(api.clock_get_monitor(
-			NetwMultiplayer.CLOCK_MONITOR_PHYSICS_FACTOR
-		))))
+		var ratio := maxi(1, int(round(api.clock_get_physics_factor())))
 		ratios.append(ratio)
 		max_ratio = maxi(max_ratio, ratio)
 		api.clock_set_param(NetwMultiplayer.CLOCK_PARAM_MANUAL_TICK, true)

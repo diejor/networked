@@ -33,7 +33,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Clock][Door][Hosted] C2 every read on the clock door "
-    "answers what the flat verb answers, param and monitor included"
+    "answers what the flat verb answers, settings and monitor included"
 ) {
     Ref<NetwMultiplayer> session = make_session();
     const Ref<NetwClockHandle> door = session->get_clock();
@@ -54,42 +54,80 @@ TEST_CASE(
         ==
     );
     NETW_CHECK_EQ(
-        int64_t(door->param(NetwMultiplayer::CLOCK_PARAM_TICKRATE)),
+        door->get_tickrate(),
         int64_t(session->clock_get_param(NetwMultiplayer::CLOCK_PARAM_TICKRATE))
+    );
+    NETW_CHECK_EQ(
+        door->get_display_offset(),
+        int64_t(session->clock_get_param(
+            NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET
+        ))
+    );
+    NETW_CHECK_EQ(door->get_sync_mode(), NetwMultiplayer::SYNC_MODE_STRETCH);
+    NETW_CHECK_ORDER(
+        door->get_ping_interval(),
+        double(session->clock_get_param(
+            NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL
+        )),
+        ==
+    );
+    NETW_CHECK_ORDER(
+        door->get_physics_factor(),
+        session->clock_get_physics_factor(),
+        ==
+    );
+    NETW_CHECK_ORDER(
+        door->get_tick_factor(),
+        session->clock_get_tick_factor(),
+        ==
+    );
+    NETW_CHECK_ORDER(
+        door->get_tick_phase(),
+        session->clock_get_tick_phase(),
+        ==
+    );
+    NETW_CHECK_EQ(
+        door->get_recommended_display_offset(),
+        session->clock_get_recommended_display_offset()
     );
 }
 
 TEST_CASE(
-    "[Networked][Clock][Door][Hosted] C3 a param written through the door "
-    "is the same param the flat verb reads back"
+    "[Networked][Clock][Door][Hosted] C3 a setting written through the door "
+    "is the same setting the flat verb reads back"
 ) {
     Ref<NetwMultiplayer> session = make_session();
     const Ref<NetwClockHandle> door = session->get_clock();
 
-    NETW_CHECK_EQ(
-        door->set_param(NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET, 3),
-        OK
-    );
+    door->set_display_offset(3);
     NETW_CHECK_EQ(
         int64_t(session->clock_get_param(
             NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET
         )),
         3
     );
+    NETW_CHECK_EQ(door->get_display_offset(), 3);
+
+    door->set_sync_mode(NetwMultiplayer::SYNC_MODE_SNAP);
     NETW_CHECK_EQ(
-        int64_t(door->param(NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET)),
-        3
+        int64_t(session->clock_get_param(NetwMultiplayer::CLOCK_PARAM_SYNC_MODE)
+        ),
+        NetwMultiplayer::SYNC_MODE_SNAP
     );
 
-    SUBCASE("a refusal reaches the caller rather than being swallowed") {
-        NETW_CHECK_EQ(
-            door->set_param(NetwMultiplayer::CLOCK_PARAM_TICKRATE, 45),
-            session->clock_set_param(NetwMultiplayer::CLOCK_PARAM_TICKRATE, 45)
-        );
-        NETW_CHECK_EQ(
-            door->set_param(NetwMultiplayer::CLOCK_PARAM_TICKRATE, 45),
-            ERR_UNAUTHORIZED
-        );
+    door->set_ping_interval(0.25);
+    NETW_CHECK_ORDER(
+        double(session->clock_get_param(
+            NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL
+        )),
+        0.25,
+        ==
+    );
+
+    SUBCASE("the tickrate the declaration owns has no setter to reach it") {
+        const int64_t declared = door->get_tickrate();
+        door->set(StringName("tickrate"), 45);
+        NETW_CHECK_EQ(door->get_tickrate(), declared);
     }
 }
 
@@ -137,14 +175,12 @@ TEST_CASE(
         0.0,
         ==
     );
-    NETW_CHECK_EQ(
-        int(door->param(NetwMultiplayer::CLOCK_PARAM_TICKRATE).get_type()),
-        int(Variant::NIL)
-    );
-    NETW_CHECK_EQ(
-        door->set_param(NetwMultiplayer::CLOCK_PARAM_TICKRATE, 45),
-        ERR_UNCONFIGURED
-    );
+    NETW_CHECK_EQ(door->get_tickrate(), 0);
+    NETW_CHECK_EQ(door->get_display_offset(), 0);
+    NETW_CHECK_EQ(door->get_recommended_display_offset(), 0);
+
+    door->set_display_offset(3);
+    NETW_CHECK_EQ(door->get_display_offset(), 0);
 }
 
 TEST_CASE(

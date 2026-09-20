@@ -12,25 +12,7 @@ DebugJoinConfig
 
 **Inherits:** :godot:`Resource`
 
-Editor authored stand in for the join arguments that auto connect a :ref:`MultiplayerTree<class_MultiplayerTree>` in debug builds.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-The join intent stays coherent with the server because :ref:`join_args<class_DebugJoinConfig_property_join_args>` holds the very values a live client fills into the form drawn from :ref:`NetwMultiplayer.session_get_join_schema()<class_NetwMultiplayer_method_session_get_join_schema>`. Author one entry per parameter the installed handler declares after its :ref:`NetwPlayer<class_NetwPlayer>`.
-
-::
-
-    # On a debug MultiplayerTree, assign a DebugJoinConfig and the tree hosts
-    # straight into the game on play, skipping ConnectBrowser.
-    debug_join.username = &"Dev"
-    debug_join.join_args = [&"Arena", ^"Player"]
-
-\ The array is copied on the way in and on the way out, so a tree that hosts twice off one config cannot have its second join mutated by whatever the first did with the args.
-
-\ :ref:`MultiplayerTree.debug_join<class_MultiplayerTree_property_debug_join>` is the one place it is read, and only when :godot:`OS.has_feature() <OS#class_OS_method_has_feature>` returns ``true`` for ``"debug"``, so a release build never auto connects.
+Used by :ref:`MultiplayerTree<class_MultiplayerTree>` in debug builds to auto connect a peer with a given name and join intent.
 
 .. rst-class:: classref-reftable-group
 
@@ -66,7 +48,7 @@ Property Descriptions
 - |void| **set_join_args**\ (\ value\: :godot:`Array`\ )
 - :godot:`Array` **get_join_args**\ (\ )
 
-The typed join args the tree submits alongside :ref:`username<class_DebugJoinConfig_property_username>`, one per wire parameter the handler :ref:`Netw.configure_join()<class_Netw_method_configure_join>` installed declares. Leave it empty to express no join intent.
+The typed join args the tree submits alongside :ref:`username<class_DebugJoinConfig_property_username>`.
 
 .. rst-class:: classref-item-separator
 
@@ -83,9 +65,7 @@ The typed join args the tree submits alongside :ref:`username<class_DebugJoinCon
 - |void| **set_username**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_username**\ (\ )
 
-Display name for the auto connected player, submitted alongside :ref:`join_args<class_DebugJoinConfig_property_join_args>`.
-
-Left at its default, the name actually submitted carries this process's id after it, so a dev loop launching the same build twice joins as two players holding two save keys rather than as one :ref:`NetwPlayer.username<class_NetwPlayer_property_username>` read and written from both windows. Write a name here and it is submitted exactly as written.
+Display name for the auto connected player, submitted alongside :ref:`join_args<class_DebugJoinConfig_property_join_args>`. Changes by process-id to avoid collisions when multiple debug builds run on the same machine.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

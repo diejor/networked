@@ -4,11 +4,11 @@
 		Declarative inbound impairment for one loopback link.
 	</brief_description>
 	<description>
-		One spec describes a link in human units and feeds the simulator directly, so there is no compile step. [member latency_ms], [member jitter_ms] and [member packet_loss] are read at receive time and never quantized to the physics rate, which is what keeps a latency shorter than one frame expressible.
+		Describes a link condition in human units and feeds the simulator directly. Used for tests using [class LocalLoopbackSession].
 		[codeblock]
 		var conditions := LocalLinkConditions.wifi()
 		conditions.packet_loss = 0.05
-		session.set_link_conditions(server, conditions)
+		loopback_session.set_link_conditions(server, conditions)
 		[/codeblock]
 		[member packet_loss] drops an unreliable packet outright. A reliable one is never dropped, and pays [method effective_retransmit_ms] instead.
 		[member seed] names the random streams this spec draws from, so two runs of the same scenario deliver packets in the same order.

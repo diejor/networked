@@ -19,7 +19,7 @@ Wire-format codec for the packets Networked exchanges during :godot:`SceneMultip
 Description
 -----------
 
-Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single byte of body. A packet matching neither magic is :ref:`KIND_UNKNOWN<class_NetwAuthProtocol_constant_KIND_UNKNOWN>` and the receiver fails closed on it, because an auth phase that guesses at an unrecognised packet is an auth phase that can be walked past.
+Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single byte of body. A packet matching neither magic is :ref:`KIND_UNKNOWN<class_NetwAuthProtocol_constant_KIND_UNKNOWN>` and the receiver fails.
 
 .. code:: text
 
@@ -35,9 +35,7 @@ Every packet is framed with a four-byte magic prefix naming its purpose, so a se
          ┠╴ version(1)
          ┖╴ status-or-flags(1), then the reply payload
 
-\ A probe peer receives a response and disconnects without completing authentication, so it never enters :godot:`MultiplayerPeer.get_unique_id() <MultiplayerPeer#class_MultiplayerPeer_method_get_unique_id>`'s peer list. This class reads and writes the framing for both sides.
-
-Every verb is static and the class is never instantiated.
+\ A probe peer receives a response and disconnects without completing authentication, so it never enters the :godot:`MultiplayerAPI`
 
 .. rst-class:: classref-reftable-group
 
@@ -188,7 +186,7 @@ Reads a hello packet, rejecting it when its build tag differs from ``local_app_t
     ┠╴app_tag           int              the 64-bit build tag the packet carried
     ┖╴flags             int              reserved
 
-\ A rejection still reports the ``version`` and ``app_tag`` it read, so the rejecting side can say what the peer claimed rather than only that it said no.
+\ A rejection still reports the ``version`` and ``app_tag`` it read.
 
 .. rst-class:: classref-item-separator
 
@@ -239,7 +237,7 @@ Reads a probe request. A packet with the wrong magic, a short header, or a forei
 
 :godot:`PackedByteArray` **encode_client_hello**\ (\ app_tag\: :godot:`int` = 0, flags\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_encode_client_hello>`
 
-Writes a hello header stamped with ``app_tag``, the 64-bit build tag folded from :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` and the wire identity by :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`. There is no ungated value. An empty :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` still carries the wire the build speaks, so two builds that disagree about the format or the channel table are rejected whether or not the game named itself. ``flags`` is reserved.
+Writes a hello header stamped with ``app_tag``, the 64-bit build tag folded from :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` and the wire identity by :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`.
 
 .. rst-class:: classref-item-separator
 
@@ -299,7 +297,7 @@ The four bytes a probe packet opens with, ``"NPRB"``.
 
 :godot:`int` **protocol_version**\ (\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_protocol_version>`
 
-The framing version this build writes and is the only one it accepts. It is bumped when the framing changes in a way an older peer cannot read, which is what makes a version mismatch a clean rejection rather than a misparse.
+The framing version this build writes and is the only one it accepts.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -36,15 +36,11 @@ func queue_kickoff() -> void:
 
 
 func countdown_seconds() -> float:
-	return maxf(0.0, kickoff_tick - clock.tick) / tickrate()
+	return maxf(0.0, kickoff_tick - clock.tick) / float(clock.tickrate)
 
 
 func seconds_to_ticks(seconds: float) -> int:
-	return int(seconds * tickrate())
-
-
-func tickrate() -> float:
-	return clock.param(NetwMultiplayer.CLOCK_PARAM_TICKRATE)
+	return int(seconds * float(clock.tickrate))
 
 
 func on_player_joined(_player: NetwPlayer) -> void:

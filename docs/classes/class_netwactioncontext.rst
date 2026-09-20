@@ -19,7 +19,7 @@ The server-side request context of one :ref:`NetwAction<class_NetwAction>`.
 Description
 -----------
 
-Carries the requester, the clamped view tick, and the correlation key the optimistic effect was armed under. An authority method calls :ref:`bind()<class_NetwActionContext_method_bind>` before adding a spawned entity to the tree, or :ref:`deny()<class_NetwActionContext_method_deny>` when validation rejects the request.
+Carries the requester, the clamped view tick, and the correlation key the optimistic effect was armed under. An authority method takes it first, ahead of whatever arguments :ref:`NetwAction.request()<class_NetwAction_method_request>` carried, and calls :ref:`bind()<class_NetwActionContext_method_bind>` before adding a spawned entity to the tree, or :ref:`deny()<class_NetwActionContext_method_deny>` when validation rejects the request.
 
 ::
 

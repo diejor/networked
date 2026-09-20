@@ -36,6 +36,7 @@ class Carrier : public godot::Node2D {
     int64_t last_view_tick = -1;
     int64_t last_requested_tick = -1;
     int64_t last_execution_tick = -1;
+    godot::Array carried;
     bool denies = true;
 
 protected:
@@ -71,6 +72,10 @@ protected:
         godot::ClassDB::bind_method(
             D_METHOD("_server_action", "ctx"),
             &Carrier::server_action
+        );
+        godot::ClassDB::bind_method(
+            D_METHOD("_server_action_carrying", "ctx", "first", "second"),
+            &Carrier::server_action_carrying
         );
         godot::ClassDB::bind_method(
             D_METHOD("_note_confirmed"),
@@ -195,6 +200,21 @@ public:
         }
     }
 
+    void server_action_carrying(
+        netw::NetwActionContext *p_ctx,
+        const godot::Variant &p_first,
+        const godot::Variant &p_second
+    ) {
+        carried.clear();
+        carried.push_back(p_first);
+        carried.push_back(p_second);
+        server_action(p_ctx);
+    }
+
+    godot::Array carried_arguments() const {
+        return carried;
+    }
+
     void note_confirmed() {
         confirmed_count += 1;
     }
@@ -203,11 +223,14 @@ public:
         denied_count += 1;
     }
 
-    void arm_action(netw::NetwMultiplayer *p_api) {
+    void arm_action(
+        netw::NetwMultiplayer *p_api,
+        const godot::StringName &p_authority = godot::StringName(
+            "_server_action"
+        )
+    ) {
         REQUIRE_MESSAGE(p_api != nullptr, "an action needs a session");
-        action = p_api->lagcomp_action(
-            godot::Callable(this, godot::StringName("_server_action"))
-        );
+        action = p_api->lagcomp_action(godot::Callable(this, p_authority));
         REQUIRE_MESSAGE(action.is_valid(), "the session minted no action");
         if (action.is_null()) {
             return;
@@ -229,13 +252,17 @@ public:
         return action;
     }
 
-    void fire(int64_t p_view_tick, int p_timing_mode) {
+    void fire(
+        int64_t p_view_tick,
+        int p_timing_mode,
+        const godot::Array &p_args = godot::Array()
+    ) {
         REQUIRE_MESSAGE(action.is_valid(), "a fire needs an armed action");
         if (action.is_null()) {
             return;
         }
         action->set_timing_mode(netw::NetwAction::TimingMode(p_timing_mode));
-        action->request(p_view_tick, godot::Variant());
+        action->request(p_view_tick, p_args);
     }
 
     godot::Node *ghost() const {

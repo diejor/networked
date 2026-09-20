@@ -14,8 +14,6 @@
 		var copy := DictionaryRecord.new()
 		copy.deserialize(bytes)
 		[/codeblock]
-		It is the concrete end of the chain, so it implements the [NetwRecord] and [Serde] verbs natively rather than through their virtuals. A script that needs different storage extends [NetwRecord] and overrides the virtuals there.
-		[member data] is a declared property, so it is the one name [method NetwRecord.set_value] cannot be reached through by assignment. Store a value under [code]&amp;"data"[/code] with [method NetwRecord.set_value] itself.
 	</description>
 	<tutorials>
 	</tutorials>

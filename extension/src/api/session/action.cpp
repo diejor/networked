@@ -132,11 +132,13 @@ void NetwMultiplayer::execute_action(
         p_tick,
         p_request.key
     );
-    if (p_request.data.get_type() == Variant::NIL) {
-        target->call(p_request.method, context);
-        return;
+    Array arguments;
+    arguments.resize(p_request.args.size() + 1);
+    arguments[0] = context;
+    for (int at = 0; at < p_request.args.size(); ++at) {
+        arguments[at + 1] = p_request.args[at];
     }
-    target->call(p_request.method, context, p_request.data);
+    Callable(target, p_request.method).callv(arguments);
 }
 
 int64_t NetwMultiplayer::action_slot_of(const Callable &p_authority) {
@@ -173,7 +175,7 @@ void NetwMultiplayer::action_send_request(
     const NodePath &p_target_path,
     const StringName &p_method,
     int64_t p_view_tick,
-    const Variant &p_data,
+    const Array &p_args,
     const StringName &p_key,
     int p_timing_mode
 ) {
@@ -203,7 +205,7 @@ void NetwMultiplayer::action_send_request(
             route,
             p_method,
             p_view_tick,
-            p_data,
+            p_args,
             p_key,
             p_timing_mode,
             0
@@ -221,7 +223,7 @@ void NetwMultiplayer::action_send_request(
     session::ActionRequest body;
     body.method = p_method;
     body.view_tick = p_view_tick;
-    body.data = gd::var_to_bytes(p_data);
+    body.data = gd::var_to_bytes(p_args);
     body.key = p_key;
     body.timing = p_timing_mode;
     plane->send_to(
@@ -240,7 +242,7 @@ void NetwMultiplayer::submit_action(
     int64_t p_route,
     const StringName &p_method,
     int64_t p_view_tick,
-    const Variant &p_data,
+    const Array &p_args,
     const StringName &p_key,
     int p_timing_mode,
     int64_t p_requester
@@ -254,7 +256,7 @@ void NetwMultiplayer::submit_action(
 
     PendingAction request;
     request.method = p_method;
-    request.data = p_data;
+    request.args = p_args;
     request.key = p_key;
     request.view_tick = p_view_tick;
     request.requester = requester;

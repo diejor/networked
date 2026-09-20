@@ -19,7 +19,7 @@ An in-process session that links :ref:`LocalMultiplayerPeer<class_LocalMultiplay
 Description
 -----------
 
-Session time advances only when something advances it, which is what makes a delay countable in polls instead of in wall clock and a run reproducible.
+Session time advances only when something advances it.
 
 ::
 
@@ -29,18 +29,6 @@ Session time advances only when something advances it, which is what makes a del
     session.poll()
 
     session.set_link_conditions(server, LocalLinkConditions.wifi())
-
-\ Conditions are installed on the receiving peer, optionally narrowed to one sender, and they apply when the packet arrives rather than when it was sent.
-
-.. code:: text
-
-    put_packet
-      ┖╴the receiving peer offers the packet to its session
-         ┠╴no conditions      the packet queues immediately
-         ┖╴conditions         the packet waits in flight until it is due
-                              and a poll releases it
-
-\ Peer ids are drawn rather than counted, so nothing may hardcode one. Read it back with :godot:`MultiplayerPeer.get_unique_id() <MultiplayerPeer#class_MultiplayerPeer_method_get_unique_id>`.
 
 .. rst-class:: classref-reftable-group
 

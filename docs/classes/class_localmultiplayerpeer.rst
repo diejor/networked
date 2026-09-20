@@ -30,11 +30,7 @@ Opens no socket. It implements the same peer IDs, connection status, and packet 
     server.force_connect_peer(42, client)
     client.force_connect_peer(1, server)
 
-\ The links form a star and not a mesh: a client is linked to the server and to nobody else, so a packet addressed to another client reaches the server for relaying and costs a second poll.
-
-Connection events are queued and emitted on :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>`, which is what makes them land at a point the caller chose.
-
-Setting :ref:`loopback_session<class_LocalMultiplayerPeer_property_loopback_session>` gives that session first rejection on every inbound packet, so :ref:`LocalLinkConditions<class_LocalLinkConditions>` can hold or drop one before it is ever visible here.
+\ The links form a star and not a mesh.
 
 .. rst-class:: classref-reftable-group
 

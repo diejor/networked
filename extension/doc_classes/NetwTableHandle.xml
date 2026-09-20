@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwTableHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		One replicated table, holding a row per route and a packed array per column.
+		One replicated table holding rows and packed arrays of column data.
 	</brief_description>
 	<description>
-		Thousands of rows that have no node of their own travel as whole columns here rather than as one message each. [NetwSchema] declares the columns and [method Netw.table] opens the table.
+		Data travels as columns in one message. [NetwSchema] declares the columns and [method Netw.table] opens the table.
 		[codeblock]
 		class Mobs:
 		    static var schema := Netw.configure_schema(&amp;"Mob")
@@ -13,9 +13,12 @@
 
 		@onready var mobs := Netw.table(self, &amp;"Mob")
 		[/codeblock]
-		One session hands out one handle per table. Connect [signal received] once and keep the handle in a field.
+		There is one [NetwTableHandle] per table. Connect [signal received] once and keep the handle in a field.
+
+		A route is a session-stable row identity, a row index would be unstable because tables can add and remove rows.
+
 		[b]Writing[/b]
-		Every column the schema declares is staged each wave, and every staged array holds one element per route. [method commit] stamps the wave with the session's tick.
+		Every column the schema declares crosses the wire in waves. [method commit] stamps the wave with the session's tick.
 		[codeblock]
 		func _on_tick() -&gt; void:
 		    mobs.write_routes(routes)
@@ -23,7 +26,7 @@
 		    mobs.write_column(Mobs.hp, health)
 		    mobs.commit()
 		[/codeblock]
-		Any peer commits its own rows. Only the peer holding authority sends them to the others, so a commit off authority stays local.
+
 		[b]Reading[/b]
 		A column comes back as the packed array it was written as, in row order.
 		[codeblock]
@@ -46,14 +49,14 @@
 		<method name="commit">
 			<return type="int" enum="Error" />
 			<description>
-				Fixes the written routes and columns as the applied state readers compare against, stamped with the session's own tick.
+				Fixes the columns as the applied state readers compare against, stamped with the session's own tick.
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the wave was applied
 				┠╴ERR_DOES_NOT_EXIST  the session this handle names is gone
-				┖╴ERR_INVALID_DATA    the schema is open, a route wave was never written, a column was
+				┖╴ERR_INVALID_DATA    the schema is open, a route was never written, a column was
 				                     not written this wave, or a column's element count disagrees
-				                     with the route count times its declared stride
+				                     with the row ID count times its declared stride
 				[/codeblock]
 			</description>
 		</method>
@@ -64,7 +67,13 @@
 			<param index="2" name="ids" type="PackedStringArray" />
 			<description>
 				Saves the committed rows into [param into] as one record of [param database], settling with an [enum @GlobalScope.Error].
-				[param ids] names the row whose route is [code]read_routes()[i][/code]. The caller created the rows, so the caller owns their stable identity. [method NetwDatabase.table_flush] documents the record's shape.
+				[param ids] names the row whose route is [member read_routes].
+				[codeblock lang=text]
+				Error
+				┠╴OK                  the record was saved
+				┠╴ERR_DOES_NOT_EXIST  the session this handle names is gone
+				┖╴ERR_UNCONFIGURED    the database has no [member backend]
+				[/codeblock]
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -74,7 +83,6 @@
 			<param index="1" name="into" type="StringName" />
 			<description>
 				Loads the saved record from [param into] of [param database], creates fresh routes for its rows, and commits them.
-				Routes are session-scoped, so a hydrate claims new ones rather than restoring the saved ones. Pair them back to the save keys through the settled [Dictionary].
 				[codeblock lang=text]
 				Dictionary
 				┠╴routes  PackedInt64Array    freshly claimed, the committed row order
@@ -88,7 +96,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="name" type="StringName" />
 			<description>
-				The table declared under [param name] in the session governing [param node]. Returns [code]null[/code] and reports when no session governs [param node], or when no schema carries that name. [method Netw.table] is the front door and this is what it returns.
+				The table declared under [param name] in [member Node.multiplayer].
 			</description>
 		</method>
 		<method name="row_of" qualifiers="const">
@@ -108,14 +116,14 @@
 		<method name="read_births" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<description>
-				The routes added by the latest admitted wave.
+				The routes added by the latest admitted wave. See [method read_routes] for the order of elements.
 			</description>
 		</method>
 		<method name="read_column" qualifiers="const">
 			<return type="Variant" />
 			<param index="0" name="column" type="int" />
 			<description>
-				The packed values stored in [param column]. A column is addressed by the index its [NetwSchema] declaration returned.
+				The packed values stored in [param column]. See [NetwSchema] for the column's storage type and stride.
 			</description>
 		</method>
 		<method name="read_deaths" qualifiers="const">
@@ -165,7 +173,7 @@
 			The name this table was declared under, which is the name [method Netw.table] takes.
 		</member>
 		<member name="table" type="RID" setter="" getter="get_table">
-			The session's handle for this table, which is what the flat [code]table_*[/code] verbs on [NetwMultiplayer] take.
+			The session's handle for this table.
 		</member>
 		<member name="tick" type="int" setter="" getter="get_tick" default="-1">
 			The tick carried by the latest committed wave, or [code]-1[/code] before the first commit.

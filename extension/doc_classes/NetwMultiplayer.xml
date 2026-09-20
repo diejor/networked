@@ -392,11 +392,25 @@
 				The current value of one tunable clock knob. The vocabulary is [enum ClockParam], and the return type follows the knob. A count returns an [int], a duration or a factor returns a [float], and a switch returns a [bool].
 			</description>
 		</method>
+		<method name="clock_get_physics_factor" qualifiers="const">
+			<return type="float" />
+			<description>
+				Physics frames per tick, unrounded. It is the engine's physics rate divided by [constant CLOCK_PARAM_TICKRATE], so 60 Hz physics under a 30 Hz tickrate answers 2.0.
+				A body that moves once per frame covers this many frames of ground per tick, which is why a per-frame velocity is scaled by it.
+			</description>
+		</method>
 		<method name="clock_get_physics_steps_per_tick" qualifiers="const">
 			<return type="int" />
 			<description>
-				[constant CLOCK_MONITOR_PHYSICS_FACTOR] as a whole number, never below one.
+				[method clock_get_physics_factor] as a whole number, never below one.
 				The physics server runs exactly one step per frame, so a tick can be worth one step or two but never one and a fifth. A fractional factor is a declaration the engine cannot honour, and the gate's step budget rounds it here rather than pretending otherwise.
+			</description>
+		</method>
+		<method name="clock_get_recommended_display_offset" qualifiers="const">
+			<return type="int" />
+			<description>
+				The display offset the measured link suggests, in ticks. It is one-way latency plus jitter times [constant CLOCK_PARAM_JITTER_MULTIPLIER], converted to ticks and rounded up.
+				It is a recommendation and nothing applies it. [constant CLOCK_PARAM_DISPLAY_OFFSET] is what the clock actually uses, and [method clock_auto_configure_offset] is what copies one into the other.
 			</description>
 		</method>
 		<method name="clock_get_simulation_behind_count" qualifiers="const">
@@ -410,6 +424,20 @@
 			<return type="int" />
 			<description>
 				The current server-calibrated simulation tick.
+			</description>
+		</method>
+		<method name="clock_get_tick_factor" qualifiers="const">
+			<return type="float" />
+			<description>
+				How far the simulation has advanced past the last tick, in ticks. It counts the banked frame time plus the part of the current frame already drawn, so it crosses 1.0 on the frame a tick is about to be announced.
+				This is the number a renderer interpolates with. [constant CLOCK_PARAM_TICK_FACTOR_OVERRIDE] replaces it with a fixed value when a rig needs the frame to be reproducible.
+			</description>
+		</method>
+		<method name="clock_get_tick_phase" qualifiers="const">
+			<return type="float" />
+			<description>
+				Where the clock sits inside the current tick, from zero to one. It is the banked frame time divided by one tick's worth of seconds, clamped.
+				A pong carries this so the calibration target is a continuous position rather than a whole tick. [method clock_get_tick_factor] is the same quantity without the clamp and with the current frame counted in.
 			</description>
 		</method>
 		<method name="clock_ingest_pong">
@@ -4239,7 +4267,7 @@
 			The explicit margin, in ticks, the calibration target is placed ahead of the server's own position, as a [float].
 		</constant>
 		<constant name="CLOCK_PARAM_JITTER_MULTIPLIER" value="9" enum="ClockParam">
-			How strongly measured jitter widens [constant CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET], as a [float].
+			How strongly measured jitter widens [method clock_get_recommended_display_offset], as a [float].
 		</constant>
 		<constant name="CLOCK_PARAM_JITTER_WINDOW" value="10" enum="ClockParam">
 			How many recent round-trip samples the average and the jitter are taken over, as an [int].
@@ -4257,7 +4285,7 @@
 			Whether the schedule ignores frame pumps so a rig can own it, as a [bool]. What a deterministic stepper holds while it drives.
 		</constant>
 		<constant name="CLOCK_PARAM_TICK_FACTOR_OVERRIDE" value="15" enum="ClockParam">
-			A fixed value for [constant CLOCK_MONITOR_TICK_FACTOR] in place of the measured one, as a [float]. Negative restores the measurement.
+			A fixed value for [method clock_get_tick_factor] in place of the measured one, as a [float]. Negative restores the measurement.
 		</constant>
 		<constant name="CLOCK_MONITOR_RTT" value="0" enum="ClockMonitor">
 			The most recent round-trip time, in seconds.
@@ -4274,34 +4302,22 @@
 		<constant name="CLOCK_MONITOR_TICKTIME" value="4" enum="ClockMonitor">
 			One tick's worth of simulated time, in seconds, which is one divided by [constant CLOCK_PARAM_TICKRATE].
 		</constant>
-		<constant name="CLOCK_MONITOR_TICK_FACTOR" value="5" enum="ClockMonitor">
-			How far the current frame has advanced between the last tick and the next, from zero to one.
-		</constant>
-		<constant name="CLOCK_MONITOR_TICK_PHASE" value="6" enum="ClockMonitor">
-			Where the clock sits inside the current tick, from zero to one. What a pong carries so a calibration target can be a continuous position rather than a whole tick.
-		</constant>
-		<constant name="CLOCK_MONITOR_TICK_ACCUMULATOR" value="7" enum="ClockMonitor">
+		<constant name="CLOCK_MONITOR_TICK_ACCUMULATOR" value="5" enum="ClockMonitor">
 			The frame time banked toward the next tick, in seconds.
 		</constant>
-		<constant name="CLOCK_MONITOR_PHYSICS_FACTOR" value="8" enum="ClockMonitor">
-			Physics frames per tick, unrounded. [method clock_get_physics_steps_per_tick] is this as a whole number.
-		</constant>
-		<constant name="CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET" value="9" enum="ClockMonitor">
-			The display offset the measured jitter suggests, in ticks. It is a recommendation, and [constant CLOCK_PARAM_DISPLAY_OFFSET] is what the clock actually uses.
-		</constant>
-		<constant name="CLOCK_MONITOR_PHYSICS_FRAMES" value="10" enum="ClockMonitor">
+		<constant name="CLOCK_MONITOR_PHYSICS_FRAMES" value="6" enum="ClockMonitor">
 			How many physics frames this process has run since the clock started counting.
 		</constant>
-		<constant name="CLOCK_MONITOR_POLLS" value="11" enum="ClockMonitor">
+		<constant name="CLOCK_MONITOR_POLLS" value="7" enum="ClockMonitor">
 			How many session polls it has run over the same span.
 		</constant>
-		<constant name="CLOCK_MONITOR_WALL_SECONDS" value="12" enum="ClockMonitor">
+		<constant name="CLOCK_MONITOR_WALL_SECONDS" value="8" enum="ClockMonitor">
 			The wall-clock seconds that span covers.
 		</constant>
-		<constant name="CLOCK_MONITOR_PHYSICS_HZ" value="13" enum="ClockMonitor">
+		<constant name="CLOCK_MONITOR_PHYSICS_HZ" value="9" enum="ClockMonitor">
 			[constant CLOCK_MONITOR_PHYSICS_FRAMES] over [constant CLOCK_MONITOR_WALL_SECONDS]. What the engine actually delivered, which is how a starved host is told apart from a mistuned one.
 		</constant>
-		<constant name="CLOCK_MONITOR_POLL_HZ" value="14" enum="ClockMonitor">
+		<constant name="CLOCK_MONITOR_POLL_HZ" value="10" enum="ClockMonitor">
 			[constant CLOCK_MONITOR_POLLS] over [constant CLOCK_MONITOR_WALL_SECONDS].
 		</constant>
 		<constant name="DISPLAY_PARAM_ROLE" value="0" enum="DisplayParam">

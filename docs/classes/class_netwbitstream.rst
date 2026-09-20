@@ -12,14 +12,14 @@ NetwBitStream
 
 **Inherits:** :godot:`RefCounted`
 
-One bit vocabulary in three modes, so a payload is described once and written, read and measured by the same code.
+A payload is described once and written, read and measured by the same code.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Every verb takes the value and returns the value, so a description written once runs in all three :ref:`Mode<enum_NetwBitStream_Mode>` values: :ref:`writer()<class_NetwBitStream_method_writer>` spends bits, :ref:`reader()<class_NetwBitStream_method_reader>` takes them back, and :ref:`measurer()<class_NetwBitStream_method_measurer>` counts what they would cost without storing anything. Write the description as one function over a **NetwBitStream** and call it three times rather than writing an encoder and a decoder that must be kept in step.
+Write descriptions that run once in all three :ref:`Mode<enum_NetwBitStream_Mode>` values. :ref:`writer()<class_NetwBitStream_method_writer>` spends bits, :ref:`reader()<class_NetwBitStream_method_reader>` takes them back, and :ref:`measurer()<class_NetwBitStream_method_measurer>` counts what they would cost without storing anything. Write the description as one function over a **NetwBitStream** and call it three times rather than writing an encoder and a decoder that must be kept in step.
 
 ::
 
@@ -38,15 +38,11 @@ Every verb takes the value and returns the value, so a description written once 
     if not back.ok() or back.bits_remaining() != 0:
         push_error("rejected")
 
-\ **A failed read poisons the stream.** Every verb after the failure is a no-op returning the value it was given, so a decoder checks :ref:`ok()<class_NetwBitStream_method_ok>` once at the end rather than after each call. This is what makes a hand-written decoder safe against a remote sender: the values a poisoned read returns are the caller's own defaults and never bytes that were not there.
+\ Every verb after the failure is a no-op returning the value it was given. A decoder checks :ref:`ok()<class_NetwBitStream_method_ok>` once at the end rather than after each call.
 
 After decoding a complete payload, :ref:`bits_remaining()<class_NetwBitStream_method_bits_remaining>` must return ``0``. Reject payloads with unread bits.
 
-\ :ref:`align_verify()<class_NetwBitStream_method_align_verify>` pads to the next byte on a write and, on a read, rejects padding that is not zero. A payload ends with it so its length is a whole number of bytes and its tail cannot carry anything undeclared.
-
-\ :ref:`varuint()<class_NetwBitStream_method_varuint>` and :ref:`svarint()<class_NetwBitStream_method_svarint>` are canonical and bounded by the ``max_bytes`` the field declares: a value too large to spell in that many groups is rejected rather than truncated, and a redundant final group is rejected rather than accepted as a second spelling of one number.
-
-This is the same vocabulary the framework's own frames are written in, and ``extension/WIRE.md`` states them field for field in it.
+\ :ref:`align_verify()<class_NetwBitStream_method_align_verify>` pads to the next byte on a write and, on a read, rejects padding that is not zero. A payload always has tp end with :ref:`align_verify()<class_NetwBitStream_method_align_verify>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -204,7 +200,7 @@ Spends one bit.
 
 :godot:`PackedByteArray` **bytes_capped**\ (\ value\: :godot:`PackedByteArray`, cap\: :godot:`int`\ ) :ref:`🔗<class_NetwBitStream_method_bytes_capped>`
 
-Spends a length wide enough for ``cap``, then the bytes. A run longer than ``cap`` is rejected by the writer, and a declared length above ``cap`` is rejected by the reader, so the bound is checked on both sides rather than trusted from the wire.
+Spends a length wide enough for ``cap``, then the bytes. A contiguous sequence of bytes longer than ``cap`` is rejected by the writer, and a declared length above ``cap`` is rejected by the reader.
 
 .. rst-class:: classref-item-separator
 

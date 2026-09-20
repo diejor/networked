@@ -201,16 +201,12 @@ public:
         CLOCK_MONITOR_RTT_JITTER = 2,
         CLOCK_MONITOR_ONE_WAY_LATENCY = 3,
         CLOCK_MONITOR_TICKTIME = 4,
-        CLOCK_MONITOR_TICK_FACTOR = 5,
-        CLOCK_MONITOR_TICK_PHASE = 6,
-        CLOCK_MONITOR_TICK_ACCUMULATOR = 7,
-        CLOCK_MONITOR_PHYSICS_FACTOR = 8,
-        CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET = 9,
-        CLOCK_MONITOR_PHYSICS_FRAMES = 10,
-        CLOCK_MONITOR_POLLS = 11,
-        CLOCK_MONITOR_WALL_SECONDS = 12,
-        CLOCK_MONITOR_PHYSICS_HZ = 13,
-        CLOCK_MONITOR_POLL_HZ = 14,
+        CLOCK_MONITOR_TICK_ACCUMULATOR = 5,
+        CLOCK_MONITOR_PHYSICS_FRAMES = 6,
+        CLOCK_MONITOR_POLLS = 7,
+        CLOCK_MONITOR_WALL_SECONDS = 8,
+        CLOCK_MONITOR_PHYSICS_HZ = 9,
+        CLOCK_MONITOR_POLL_HZ = 10,
     };
 
     enum LayerParam {
@@ -448,7 +444,7 @@ private:
     struct PendingAction {
         godot::NodePath target_path;
         godot::StringName method;
-        godot::Variant data;
+        godot::Array args;
         godot::StringName key;
         int64_t view_tick = 0;
         int64_t requester = 0;
@@ -1909,7 +1905,7 @@ public:
         int64_t p_route,
         const godot::StringName &p_method,
         int64_t p_view_tick,
-        const godot::Variant &p_data,
+        const godot::Array &p_args,
         const godot::StringName &p_key,
         int p_timing_mode,
         int64_t p_requester
@@ -1918,7 +1914,7 @@ public:
         const godot::NodePath &p_target_path,
         const godot::StringName &p_method,
         int64_t p_view_tick,
-        const godot::Variant &p_data,
+        const godot::Array &p_args,
         const godot::StringName &p_key,
         int p_timing_mode
     );
@@ -2533,6 +2529,11 @@ public:
         const godot::Variant &p_value
     );
     double clock_get_monitor(ClockMonitor p_monitor) const;
+
+    double clock_get_tick_factor() const;
+    double clock_get_tick_phase() const;
+    double clock_get_physics_factor() const;
+    int64_t clock_get_recommended_display_offset() const;
 
     int64_t clock_get_tick() const;
     int64_t clock_get_display_tick() const;

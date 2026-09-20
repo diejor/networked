@@ -206,8 +206,7 @@ void NetwMultiplayer::clock_step_auto_config(double p_delta) {
     if (clock_auto_config_left <= 0.0) {
         return;
     }
-    const int64_t seen
-        = int64_t(clock_get_monitor(CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET));
+    const int64_t seen = clock_get_recommended_display_offset();
     clock_auto_config_best
         = seen > clock_auto_config_best ? seen : clock_auto_config_best;
     clock_auto_config_left -= p_delta;

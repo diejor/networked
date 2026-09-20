@@ -128,7 +128,7 @@ public:
         return slot;
     }
 
-    void request(int64_t p_view_tick, const godot::Variant &p_data);
+    void request(int64_t p_view_tick, const godot::Array &p_args);
 };
 
 } // namespace netw

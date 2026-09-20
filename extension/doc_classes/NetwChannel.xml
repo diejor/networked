@@ -4,7 +4,7 @@
 		A raw byte channel multiplexed over the session carrier, addressed by a channel [member id].
 	</brief_description>
 	<description>
-		Use this for session-scoped traffic that has no entity to associate with, such as a voice stream, a chat line, or a compressed world grid. Ids run [code]100[/code] to [code]254[/code]. Give each channel a distinct [member id] and call [method register] once per peer.
+		Channels are used to send and receive custom data between peers in a networked game. Use this for session-scoped traffic that has no entity to associate with, such as a voice stream, a chat line, or a compressed world grid. Ids run [code]100[/code] to [code]254[/code]. Give each channel a distinct [member id] and call [method register] once per peer.
 		[codeblock]
 		# both peers, once:
 		var chat := Netw.channel(self, 120)
@@ -15,7 +15,6 @@
 		# any peer, any time:
 		chat.broadcast("gg".to_utf8_buffer())
 		[/codeblock]
-		Pass [code]batched[/code] as [code]true[/code] to [method send] or [method broadcast] to aggregate payloads into the shared peer buffers the session flushes at the end of its frame.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -34,7 +33,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="id" type="int" />
 			<description>
-				Opens channel [param id] over the session governing [param node], or returns [code]null[/code] and reports when no session governs it or [param id] is outside [code]100[/code] to [code]254[/code]. [method Netw.channel] is the front door and this is what it returns.
+				Opens channel [param id] over the session governing [param node].
 			</description>
 		</method>
 		<method name="register">

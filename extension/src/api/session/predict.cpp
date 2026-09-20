@@ -952,11 +952,20 @@ void NetwMultiplayer::action_receive_carrier(
         );
         return;
     }
+    const Variant carried = gd::bytes_to_var(body.data);
+    if (carried.get_type() != Variant::ARRAY) {
+        NETW_TRACE(
+            sys::PREDICTION,
+            "peer %d sent action arguments that are not an argument list",
+            int(p_sender)
+        );
+        return;
+    }
     submit_action(
         p_entity->get_route(),
         body.method,
         body.view_tick,
-        gd::bytes_to_var(body.data),
+        Array(carried),
         body.key,
         int(body.timing),
         p_sender

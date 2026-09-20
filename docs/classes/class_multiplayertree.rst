@@ -12,18 +12,14 @@ MultiplayerTree
 
 **Inherits:** :godot:`Node`
 
-The node one session's branch is rooted at.
+The node one :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` branch is rooted at.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A tree owns one :ref:`NetwMultiplayer<class_NetwMultiplayer>` and installs it on its own branch of the :godot:`SceneTree`, so every descendant returns :ref:`Netw.of()<class_Netw_method_of>` with that session and two trees in one :godot:`SceneTree` are two independent sessions. It carries the exports that configure the session and nothing else: the state, the role, the roster and the service registry all belong to :ref:`api<class_MultiplayerTree_property_api>`.
-
-Assign a :godot:`MultiplayerPeer` to start a session. Assigning one while configuration is still being declared fails. Use :ref:`Netw.connection()<class_Netw_method_connection>` or wait until configuration is complete.
-
-\ :ref:`app_id<class_MultiplayerTree_property_app_id>`, :ref:`desired_role<class_MultiplayerTree_property_desired_role>` and :ref:`link_conditions<class_MultiplayerTree_property_link_conditions>` are the session's whole FALLBACK, used when no node declared one through :ref:`Netw.configure_session()<class_Netw_method_configure_session>`. An explicit declaration replaces them whole: no field is merged, and any non-default export it discards is named once in a warning. Once the session has consumed its configuration these exports are immutable, and a setter reports the late write and keeps its old value.
+A tree owns one :godot:`MultiplayerAPI` and installs it on its own branch of the :godot:`SceneTree`, so every descendant returns :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` with that session and two trees in one :godot:`SceneTree` are two independent sessions.
 
 ::
 
@@ -48,8 +44,6 @@ Assign a :godot:`MultiplayerPeer` to start a session. Assigning one while config
                 tree.api.session_prepare_join(&"PlayerOne", [])
                 tree.api.multiplayer_peer = peer,
     )
-
-\ The tree brings itself up in exactly two cases, both of which have no caller to return to: a headless build with :ref:`auto_host_headless<class_MultiplayerTree_property_auto_host_headless>` set, and a debug build carrying a :ref:`debug_join<class_MultiplayerTree_property_debug_join>`. Everything else is the game's own composition.
 
 .. rst-class:: classref-reftable-group
 
@@ -114,8 +108,6 @@ Property Descriptions
 
 The :ref:`NetwMultiplayer<class_NetwMultiplayer>` this tree owns and installs on its branch.
 
-Built once when the tree is constructed and never replaced, so a reference taken from it stays valid for the tree's whole life. A backend bringing its own transport swaps :ref:`NetwMultiplayer.inner<class_NetwMultiplayer_property_inner>` rather than this. A tree whose installed API is not a :ref:`NetwMultiplayer<class_NetwMultiplayer>` is unrepresentable.
-
 .. rst-class:: classref-item-separator
 
 ----
@@ -132,8 +124,6 @@ Built once when the tree is constructed and never replaced, so a reference taken
 - :godot:`Script` **get_api_script**\ (\ )
 
 An optional :ref:`NetwMultiplayer<class_NetwMultiplayer>` implementation script, passed to :ref:`NetwMultiplayer.make()<class_NetwMultiplayer_method_make>`.
-
-The one door a game replaces this session's stages through. Immutable once the tree is inside the :godot:`SceneTree`, so assign it before adding a programmatically created tree.
 
 .. rst-class:: classref-item-separator
 
@@ -152,11 +142,7 @@ The one door a game replaces this session's stages through. Immutable once the t
 
 A game-build tag that gates admission, baked into every build.
 
-A joining peer whose tag differs is rejected during the auth handshake before it reaches :godot:`MultiplayerAPI.get_peers() <MultiplayerAPI#class_MultiplayerAPI_method_get_peers>`, so an incompatible build never corrupts a session. The tag folds this name together with the wire identity the build speaks, so no value turns the gate off: leaving this empty still rejects a peer whose format version or channel table differs, and naming it adds the game's own compatibility on top. Bump it when the game's own payloads break in a way the wire identity cannot see.
-
-This export is part of the tree's session FALLBACK, not a live setting. It is immutable once the session has consumed its configuration.
-
-The tag also scopes room codes for signaled transports. Builds with different tags do not share rendezvous rooms. Changing the tag invalidates room codes created with the previous value.
+A joining peer whose tag differs is rejected during the auth handshake before it reaches the :godot:`MultiplayerAPI`.
 
 .. rst-class:: classref-item-separator
 
@@ -175,8 +161,6 @@ The tag also scopes room codes for signaled transports. Builds with different ta
 
 On a headless build, hosts from :ref:`peer_class<class_MultiplayerTree_property_peer_class>` and :ref:`transport_settings<class_MultiplayerTree_property_transport_settings>` without waiting to be asked.
 
-Only a :ref:`NetwMultiplayer.ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_ROLE_LISTEN_SERVER>` or :ref:`NetwMultiplayer.ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>` tree does this, and only one naming a :ref:`peer_class<class_MultiplayerTree_property_peer_class>`, so a tree nobody configured never opens a socket on its own.
-
 .. rst-class:: classref-item-separator
 
 ----
@@ -194,8 +178,6 @@ Only a :ref:`NetwMultiplayer.ROLE_LISTEN_SERVER<class_NetwMultiplayer_constant_R
 
 An auto-connect applied on play, in debug builds only.
 
-When set, the tree hosts on ready under the username and join arguments it carries, skipping the server browser. A release build strips this path because :godot:`OS.has_feature() <OS#class_OS_method_has_feature>` returns ``false`` for ``"debug"``, which is also what keeps :ref:`link_conditions<class_MultiplayerTree_property_link_conditions>` free of a release cost.
-
 .. rst-class:: classref-item-separator
 
 ----
@@ -211,9 +193,7 @@ When set, the tree hosts on ready under the username and join arguments it carri
 - |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )
 - :ref:`Role<enum_NetwMultiplayer_Role>` **get_desired_role**\ (\ )
 
-The :ref:`Role<enum_NetwMultiplayer_Role>` this tree intends to play, carried in the tree's session fallback as :ref:`NetwSessionConfig.desired_role<class_NetwSessionConfig_property_desired_role>`.
-
-Configured intent rather than live state: the role a session is actually running is :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>`, and it is assigned when the session comes online.
+The :ref:`Role<enum_NetwMultiplayer_Role>` this tree intends to play.
 
 .. rst-class:: classref-item-separator
 
@@ -232,8 +212,6 @@ Configured intent rather than live state: the role a session is actually running
 
 Latency and loss to simulate on this tree's peer.
 
-Carried in the tree's session fallback as :ref:`NetwSessionConfig.link_conditions<class_NetwSessionConfig_property_link_conditions>`, which is the one home the session reads when it wraps an assigned peer. A release export never wraps at all, because :ref:`NetwLinkConditions.wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` gates the impairment itself, so authoring one here carries no shipped cost.
-
 .. rst-class:: classref-item-separator
 
 ----
@@ -250,8 +228,6 @@ Carried in the tree's session fallback as :ref:`NetwSessionConfig.link_condition
 - :godot:`StringName` **get_peer_class**\ (\ )
 
 The class of peer this tree brings itself up with, such as ``&"ENetMultiplayerPeer"``.
-
-Passed to :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>`, so a tree naming no peer class has nothing to bring itself up with and reports a configuration warning. Read :ref:`NetwConnectHandle.transports()<class_NetwConnectHandle_method_transports>` for the names a running build has registered. It does not constrain a peer the game assigns itself.
 
 .. rst-class:: classref-item-separator
 
@@ -270,8 +246,6 @@ Passed to :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_c
 
 The settings :ref:`peer_class<class_MultiplayerTree_property_peer_class>`'s transport is created with, such as ``{ port = 21253 }`` for an ENet server.
 
-Passed to :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>` beside :ref:`peer_class<class_MultiplayerTree_property_peer_class>`, and carried as the advert, so the ``name``, ``max_players`` and ``visibility`` keys ride here alongside the transport's own. Read the ``host_settings`` entry of :ref:`NetwConnectHandle.transport()<class_NetwConnectHandle_method_transport>` for the keys a given peer class accepts.
-
 .. rst-class:: classref-section-separator
 
 ----
@@ -287,9 +261,7 @@ Method Descriptions
 
 |void| **dispose**\ (\ ) :ref:`🔗<class_MultiplayerTree_method_dispose>`
 
-Clears the service registry and the roster, breaking the reference cycles a session accumulates so a torn-down branch can be freed.
-
-Called for you when the tree leaves the :godot:`SceneTree` for good. Call it directly only when a rig tears a session down without freeing its node.
+Clears the service registry and the roster.
 
 .. rst-class:: classref-item-separator
 
@@ -302,8 +274,6 @@ Called for you when the tree leaves the :godot:`SceneTree` for good. Call it dir
 :ref:`MultiplayerTree<class_MultiplayerTree>` **raise_embedded_server**\ (\ ) :ref:`🔗<class_MultiplayerTree_method_raise_embedded_server>`
 
 Duplicates this tree as a :ref:`NetwMultiplayer.ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>` sibling named ``Server`` and adds it beside this one.
-
-Node work only. The sibling is raised with :ref:`auto_host_headless<class_MultiplayerTree_property_auto_host_headless>` cleared and returned, and bringing it online is an ordinary peer assignment on its own :ref:`api<class_MultiplayerTree_property_api>`, which is what keeps one bring-up from being written twice. Returns ``null`` when this tree has no parent to add a sibling to. The sibling is freed when this tree's session ends.
 
 ::
 

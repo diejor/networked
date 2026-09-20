@@ -1,28 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="DebugJoinConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Editor authored stand in for the join arguments that auto connect a [MultiplayerTree] in debug builds.
+		Used by [MultiplayerTree] in debug builds to auto connect a peer with a given name and join intent.
 	</brief_description>
-	<description>
-		The join intent stays coherent with the server because [member join_args] holds the very values a live client fills into the form drawn from [method NetwMultiplayer.session_get_join_schema]. Author one entry per parameter the installed handler declares after its [NetwPlayer].
-		[codeblock]
-		# On a debug MultiplayerTree, assign a DebugJoinConfig and the tree hosts
-		# straight into the game on play, skipping ConnectBrowser.
-		debug_join.username = &amp;"Dev"
-		debug_join.join_args = [&amp;"Arena", ^"Player"]
-		[/codeblock]
-		The array is copied on the way in and on the way out, so a tree that hosts twice off one config cannot have its second join mutated by whatever the first did with the args.
-		[member MultiplayerTree.debug_join] is the one place it is read, and only when [method OS.has_feature] returns [code]true[/code] for [code]"debug"[/code], so a release build never auto connects.
-	</description>
 	<tutorials>
 	</tutorials>
 	<members>
 		<member name="join_args" type="Array" setter="set_join_args" getter="get_join_args" default="[]">
-			The typed join args the tree submits alongside [member username], one per wire parameter the handler [method Netw.configure_join] installed declares. Leave it empty to express no join intent.
+			The typed join args the tree submits alongside [member username].
 		</member>
 		<member name="username" type="StringName" setter="set_username" getter="get_username" default="&amp;&quot;DebugPlayer&quot;">
-			Display name for the auto connected player, submitted alongside [member join_args].
-			Left at its default, the name actually submitted carries this process's id after it, so a dev loop launching the same build twice joins as two players holding two save keys rather than as one [member NetwPlayer.username] read and written from both windows. Write a name here and it is submitted exactly as written.
+			Display name for the auto connected player, submitted alongside [member join_args]. Changes by process-id to avoid collisions when multiple debug builds run on the same machine.
 		</member>
 	</members>
 </class>

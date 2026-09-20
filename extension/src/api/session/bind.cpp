@@ -1143,11 +1143,7 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_RTT_JITTER);
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_ONE_WAY_LATENCY);
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_TICKTIME);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_TICK_FACTOR);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_TICK_PHASE);
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_TICK_ACCUMULATOR);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_PHYSICS_FACTOR);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET);
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_PHYSICS_FRAMES);
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_POLLS);
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_WALL_SECONDS);
@@ -1811,6 +1807,22 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("clock_get_monitor", "monitor"),
         &NetwMultiplayer::clock_get_monitor
+    );
+    ClassDB::bind_method(
+        D_METHOD("clock_get_tick_factor"),
+        &NetwMultiplayer::clock_get_tick_factor
+    );
+    ClassDB::bind_method(
+        D_METHOD("clock_get_tick_phase"),
+        &NetwMultiplayer::clock_get_tick_phase
+    );
+    ClassDB::bind_method(
+        D_METHOD("clock_get_physics_factor"),
+        &NetwMultiplayer::clock_get_physics_factor
+    );
+    ClassDB::bind_method(
+        D_METHOD("clock_get_recommended_display_offset"),
+        &NetwMultiplayer::clock_get_recommended_display_offset
     );
     ClassDB::bind_method(
         D_METHOD("clock_get_tick"),

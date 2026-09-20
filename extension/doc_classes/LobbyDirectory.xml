@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="LobbyDirectory" inherits="NetwService" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The peer source for one peer class, backed by a platform's lobbies.
+		Base class for a lobby provider.
 	</brief_description>
 	<description>
-		A directory is what the connect plane asks when a game names a [member MultiplayerTree.peer_class] the plane has no built-in transport for. Register one under a session and it becomes the provider for the peer class [method _peer_class] names, so hosting, joining and browsing that class all reach this node.
-		Every request method returns [code]void[/code] and completes later through [method deliver], [method fail], or [method publish_lobbies]. Each request completes exactly once.
+		Lobbies are discovered by listening signals from [NetwConnectHandler]. A lobby dicrectory is a [NetwService] that implements the [method _host_lobby], [method _join_lobby], [method _list_lobbies] and [method _leave_lobby] verbs. [NetwConnectHandler] can discover lobbies as any other endpoint.
 		[codeblock]
 		extends LobbyDirectory
 
@@ -36,7 +35,6 @@
 		func _leave_lobby() -&gt; void:
 		    Rooms.leave()
 		[/codeblock]
-		Each seam has a default result, so a provider overrides only what it differs on. The reading verbs are C++ and the plane calls them directly; a script reads its own override.
 	</description>
 	<tutorials>
 	</tutorials>

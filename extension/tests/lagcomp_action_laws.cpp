@@ -5,6 +5,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "godot/variant.hpp"
 #include "netw/api/action.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/timeline.hpp"
@@ -36,7 +37,10 @@ struct ActionRig {
     Carrier *owner = nullptr;
     Carrier *authority = nullptr;
 
-    explicit ActionRig(netw::MissingInput p_policy = netw::MissingInput::STALL)
+    explicit ActionRig(
+        netw::MissingInput p_policy = netw::MissingInput::STALL,
+        const StringName &p_authority = StringName("_server_action")
+    )
         : rig(1) {
         rig.mount();
         WorldDecl world;
@@ -51,8 +55,8 @@ struct ActionRig {
         authority = Object::cast_to<Carrier>(rig.node_of(rig.entity_of("P")));
         REQUIRE(owner != nullptr);
         REQUIRE(authority != nullptr);
-        owner->arm_action(rig.shell_at(0));
-        authority->arm_action(rig.shell());
+        owner->arm_action(rig.shell_at(0), p_authority);
+        authority->arm_action(rig.shell(), p_authority);
     }
 
     int64_t owner_tick() const {
@@ -128,6 +132,31 @@ TEST_CASE(
     NETW_CHECK_EQ(fixture.authority->requests(), 1);
     NETW_CHECK_EQ(fixture.owner->denials(), 1);
     CHECK(fixture.owner->ghost()->is_queued_for_deletion());
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Action] AC1b every argument a request carries "
+    "reaches the authority method in the order it was written, after the "
+    "context, so a game passes a call's arguments rather than packing them"
+) {
+    ActionRig fixture(
+        netw::MissingInput::STALL,
+        StringName("_server_action_carrying")
+    );
+
+    fixture.owner->fire(
+        fixture.owner_tick(),
+        IMMEDIATE,
+        netw::gd::array_of(Vector2(3.0, -4.0), 7)
+    );
+    fixture.rig.step_ticks(30);
+
+    NETW_CHECK_EQ(fixture.authority->requests(), 1);
+    const Array carried = fixture.authority->carried_arguments();
+    REQUIRE(carried.size() == 2);
+    const bool first_arrived = Vector2(carried[0]) == Vector2(3.0, -4.0);
+    CHECK(first_arrived);
+    NETW_CHECK_EQ(int(carried[1]), 7);
 }
 
 TEST_CASE(
@@ -279,7 +308,7 @@ TEST_CASE(
         fixture.rig.branch(-1)->get_path_to(fixture.authority),
         StringName("_server_action"),
         view_tick,
-        Variant(),
+        Array(),
         key,
         STATE_READY
     );

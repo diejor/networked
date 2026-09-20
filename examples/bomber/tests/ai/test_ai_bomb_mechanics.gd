@@ -28,11 +28,7 @@ func test_bomb_rate_limit_holds_with_four_bombers() -> void:
 
 	# Each player starts off cooldown, then can spawn once per BOMB_RATE.
 	# The rate limit keeps the total far below one bomb per AI tick.
-	var tickrate := int(
-		Netw.clock(game.host.tree).param(
-			NetwMultiplayer.CLOCK_PARAM_TICKRATE,
-		),
-	)
+	var tickrate: int = Netw.clock(game.host.tree).tickrate
 	var seconds := float(ticks) / float(tickrate)
 	var max_bombs_per_player := 1 + ceili(seconds / PLAYER_SCRIPT.BOMB_RATE)
 	assert_int(host_bombs).is_less_equal(

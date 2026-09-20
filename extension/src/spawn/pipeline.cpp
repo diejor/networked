@@ -1076,7 +1076,7 @@ PackedByteArray Pipeline::encode_spawn_frame(int64_t p_route, Node *p_node) {
     if (!parent_is_spawn_target && !plane->anchor_encode(stream, parent)) {
         NETW_ERROR(
             sys::SPAWN,
-            "parent of '%s' is outside the MultiplayerTree, the spawn cannot "
+            "parent of '%s' is outside the session root, the spawn cannot "
             "be addressed",
             p_node->get_name()
         );
@@ -1093,7 +1093,7 @@ PackedByteArray Pipeline::encode_spawn_frame(int64_t p_route, Node *p_node) {
             NETW_ERROR(
                 sys::SPAWN,
                 "consumed spawner for route %d is gone or outside the "
-                "MultiplayerTree",
+                "session root",
                 p_record->get_route()
             );
             return PackedByteArray();
@@ -1145,7 +1145,7 @@ PackedByteArray Pipeline::encode_spawn_frame(int64_t p_route, Node *p_node) {
             NETW_ERROR(
                 sys::SPAWN,
                 "spawn function host for route %d is gone or outside the "
-                "MultiplayerTree",
+                "session root",
                 p_record->get_route()
             );
             return PackedByteArray();

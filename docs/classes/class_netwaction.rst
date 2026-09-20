@@ -19,9 +19,7 @@ A predicted discrete action bound to one authority method.
 Description
 -----------
 
-Pairs a local :ref:`predict<class_NetwAction_property_predict>` effect with a reliable server request. The server receives a :ref:`NetwActionContext<class_NetwActionContext>`, validates at :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>`, and either binds an authoritative spawned :ref:`NetwEntity<class_NetwEntity>` result with :ref:`NetwActionContext.bind()<class_NetwActionContext_method_bind>` or denies it with :ref:`NetwActionContext.deny()<class_NetwActionContext_method_deny>`.
-
-Each authority method on an entity has its own slot, so actions created at one view tick use distinct effect keys. Create one with :ref:`Netw.action()<class_Netw_method_action>`. The authority method must be a plain :godot:`Callable`, not an RPC.
+Pairs a local :ref:`predict<class_NetwAction_property_predict>` effect with a reliable server request.
 
 ::
 
@@ -67,9 +65,9 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+-----------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`request<class_NetwAction_method_request>`\ (\ view_tick\: :godot:`int`, data\: :godot:`Variant` = null\ ) |
-   +--------+-----------------------------------------------------------------------------------------------------------------+
+   +--------+-----------------------------------------------------------------------------------------------+
+   | |void| | :ref:`request<class_NetwAction_method_request>`\ (\ view_tick\: :godot:`int`, ...\ ) |vararg| |
+   +--------+-----------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -248,11 +246,17 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **request**\ (\ view_tick\: :godot:`int`, data\: :godot:`Variant` = null\ ) :ref:`🔗<class_NetwAction_method_request>`
+|void| **request**\ (\ view_tick\: :godot:`int`, ...\ ) |vararg| :ref:`🔗<class_NetwAction_method_request>`
 
-Requests the server authority method for ``view_tick``, carrying ``data`` as its second argument.
+Requests the server authority method for ``view_tick``. Every argument after ``view_tick`` reaches that method in the order it was written, after the :ref:`NetwActionContext<class_NetwActionContext>` the method always takes first.
 
-The local controller gets an immediate :ref:`predict<class_NetwAction_property_predict>` effect. Non-owning peers do nothing, so server consume and remote display passes cannot double fire a command.
+::
+
+    place_bomb.request(tick, position, fuse)
+
+    func _place_bomb(ctx: NetwActionContext, pos: Vector2, fuse: float) -> void:
+
+\ The local controller gets an immediate :ref:`predict<class_NetwAction_property_predict>` effect. Non-owning peers do nothing.
 
 \ **Player request.**
 

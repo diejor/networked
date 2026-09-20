@@ -4,7 +4,7 @@
 		The server-side request context of one [NetwAction].
 	</brief_description>
 	<description>
-		Carries the requester, the clamped view tick, and the correlation key the optimistic effect was armed under. An authority method calls [method bind] before adding a spawned entity to the tree, or [method deny] when validation rejects the request.
+		Carries the requester, the clamped view tick, and the correlation key the optimistic effect was armed under. An authority method takes it first, ahead of whatever arguments [method NetwAction.request] carried, and calls [method bind] before adding a spawned entity to the tree, or [method deny] when validation rejects the request.
 		[codeblock]
 		func _place_bomb(ctx: NetwActionContext) -&gt; void:
 		    var past := lag.sample(entity, ctx.view_tick)

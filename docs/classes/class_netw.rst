@@ -21,252 +21,6 @@ Description
 
 The interface provided by this class is optional and is supposed to work with the default :godot:`SceneMultiplayer`.
 
-\ **Joining a session**\ 
-
-Connect as you would normally. Use :ref:`prepare_join()<class_Netw_method_prepare_join>` to send extra arguments from a pre-connected to a post-connected state that you can then use by declaring a :godot:`Callable` with :ref:`configure_join()<class_Netw_method_configure_join>`.
-
-::
-
-    func host() -> void:
-        var peer := ENetMultiplayerPeer.new()
-        peer.create_server(21253)
-        # The peer will "save" the username "Mario" and the extra argument "red" for the join Callable
-        Netw.prepare_join(self, &"Mario", &"red")
-        multiplayer.multiplayer_peer = peer
-
-\ The server runs the :godot:`Callable` declared by :ref:`configure_join()<class_Netw_method_configure_join>` once for every peer that successfully connects. The first argument is :ref:`NetwPlayer<class_NetwPlayer>`, an object tied to the lifecycle of the peer's connection, the rest are extra arguments from :ref:`prepare_join()<class_Netw_method_prepare_join>`.
-
-::
-
-    func _init() -> void:
-        # Declare the join and spawn Callables, so the server knows what to do with every peer that connects
-        Netw.configure_join(player_joined)
-        Netw.configure_spawn(make_player)
-
-    # Here `NetwPlayer.username="Mario"` and `team="red"`
-    # `NetwPlayer` is useful to keep track of the connected peer status for gameplay purposes
-    # and to spawn nodes tied to the peer's connection lifecycle using `Netw.spawn_player`
-    func player_joined(who: NetwPlayer, team: StringName) -> void:
-        arena.add_child(Netw.spawn_player(who, make_player, team))
-
-    func make_player(team: StringName) -> Node:
-        var player := PLAYER.instantiate()
-        player.team = team
-        return player
-
-\ **Declare in _init**\ 
-
-Networked is designed so functionality is declared through :godot:`Object._init() <Object#class_Object_private_method__init>`. The server and clients need to agree in their declarations as soon as possible, spawn packets can arrive before :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>`, if peers don't agree in their declarations Networked will behave unpredictably.
-
-::
-
-    func _init() -> void:
-        Netw.configure_property(self, &"position").state().quantize(
-                NetwQuantizeScalar.new().limits(-64.0, 64.0).step(0.01),
-        )
-
-    func _ready() -> void:
-        # too late. the first position for this node may already have
-        # arrived and been read on the wrong grid
-        pass
-
-\ **Replicated Properties**\ 
-
-\ :ref:`configure_property()<class_Netw_method_configure_property>` declares a variable to be synchronized.
-
-::
-
-    func _init() -> void:
-        Netw.configure_property(self, &"position").broadcast() # sent every tick
-        Netw.configure_property(self, &"fuel")                 # sent when pushed
-
-    func refuel() -> void:
-        fuel = 100.0
-        Netw.sync_property(self, &"fuel")
-
-\ Please read :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` for possible configurations.
-
-\ **RPCs, requests and signals**\ t is
-
-Calls are addressed through a stable :ref:`NetwEntity.route<class_NetwEntity_property_route>` rather than by :godot:`NodePath`, so it never errors on a node that has not spawned yet. A call to every peer is narrowed by the interest layer the node is subscribed to. :ref:`configure_rpc()<class_Netw_method_configure_rpc>` can be used to declare what the :godot:`@GDScript.@rpc <@GDScript#class_@GDScript_annotation_@rpc>` annotation has no spelling for, such as a :ref:`NetwMemberConfig.controller()<class_NetwMemberConfig_method_controller>` write policy or a :ref:`NetwQuantize<class_NetwQuantize>` per argument.
-
-::
-
-    func _init() -> void:
-        # only the controller is allowed to call the rpc
-        Netw.configure_rpc(self.aim).controller().quantize(
-                NetwQuantizeAngle.new().bits(12).centered(),
-        )
-
-    # here @rpc already writes some configuration, such as `channel="unreliable"`
-    @rpc("any_peer", "unreliable")
-    func aim(yaw: float) -> void:
-        turret.rotation.y = yaw
-
-\ A signal replicates the same way once declared by :ref:`configure_signal()<class_Netw_method_configure_signal>`, it emits on the local sender too.
-
-::
-
-    func _init() -> void:
-        Netw.configure_signal(self.exploded)
-
-    # exploded also emits on the local sender
-    Netw.emit_entity_signal(self.exploded, position)
-
-\ **Spawning and despawning**\ 
-
-A spawn function runs on every peer and constructs from its arguments alone, similarly to :godot:`MultiplayerSpawner.spawn() <MultiplayerSpawner#class_MultiplayerSpawner_method_spawn>`, without needing the :godot:`RefCounted.MultiplayerSpawner() <RefCounted#class_RefCounted_method_MultiplayerSpawner>` node itself. The caller of :ref:`spawn()<class_Netw_method_spawn>` is in the responsability to place the returned node in the :godot:`SceneTree`.
-
-::
-
-    func _init() -> void:
-        Netw.configure_spawn(_spawn_bullet)
-
-    func _spawn_bullet(dir: Vector2) -> Node:
-        var bullet := BULLET.instantiate()
-        bullet.setup(dir)
-        return bullet
-
-::
-
-    muzzle.add_child(Netw.spawn(_spawn_bullet, dir))   # server only
-    # ...
-    Netw.despawn(bullet)
-
-\ If you declared a property with :ref:`NetwPropertyConfig.on_spawn()<class_NetwPropertyConfig_method_on_spawn>` through :ref:`configure_property()<class_Netw_method_configure_property>`, those properties will travel with the node when it is spawned with :ref:`spawn()<class_Netw_method_spawn>`. :ref:`spawn_player()<class_Netw_method_spawn_player>` behaves very similarly however it conveniently ties the lifecycle of the spawned node to the peer's connection, mediated by :ref:`NetwPlayer<class_NetwPlayer>`.
-
-\ **Scenes**\ 
-
-A multiplayer scene is simply a node with a :ref:`NetwInterestLayer<class_NetwInterestLayer>`, nodes spawned inside are automatically isolated from other multiplayer scenes. You can spawn a multiplayer scene like any other entity, make nodes behave like multiplayer scenes by declaring :ref:`configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>`.
-
-::
-
-    func _init() -> void:
-        Netw.configure_multiplayer_scene(self).labeled(&"Arena")
-
-::
-
-    var arena := Netw.scene(self, &"Arena")   # by label, or Netw.scene(self)
-    arena.watch(player)
-    arena.body_entered.connect(_on_car_entered)
-
-\ **Scene Changes**\ 
-
-\ :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>` opens a scene and makes players watch it. It moves no entity, and the scenes it replaces retire with everything in them. :ref:`NetwSessionHandle.scene_changed<class_NetwSessionHandle_signal_scene_changed>` names who arrived, and the server spawns them there.
-
-::
-
-    func _init() -> void:
-        Netw.configure_scene_requests(authorize)
-
-    func _ready() -> void:
-        Netw.session(self).scene_changed.connect(_on_scene_changed)
-
-    func authorize(
-            who: NetwPlayer, destination: String,
-            _scope: Netw.SceneChange) -> Error:
-        return OK if unlocked(who, destination) else ERR_UNAUTHORIZED
-
-    func _on_scene_changed(
-            scene: NetwSceneHandle, arrived: Array[NetwPlayer]) -> void:
-        for who in arrived:
-            scene.root.add_child(Netw.spawn_player(who, make_player))
-
-    Netw.change_scene_to_file(self, "res://match.tscn")
-
-\ **Interest**\ 
-
-A :ref:`NetwInterestLayer<class_NetwInterestLayer>` decides which peers are told about which entities, so what a player cannot see is never sent to them at all. Every peer declares the layers a node belongs to, and the server owns the real membership and the viewers.
-
-::
-
-    func _init() -> void:
-        Netw.configure_interest(self) \
-                .join(&"team:red", NetwMultiplayer.LEAVE_POLICY_RETAIN) \
-                .on_enter(_on_seen)
-
-::
-
-    var sight := Netw.of(self).interest_layer(&"sight")   # server only
-    sight.add_entity(NetwEntity.of(target))
-    sight.add_viewer(peer_id)
-
-\ **Prediction**\ 
-
-A predicted node runs the same simulation locally that the server will run, so it moves the moment a player presses something instead of a round trip later. The property marks are what make that possible. A :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` property is what this peer authors and replays, and a :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property is what the server corrects when the two disagree.
-
-::
-
-    func _init() -> void:
-        var entity := Netw.configure_entity(self)
-        entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
-        entity.prediction.archetype = NetwPredict.ARCHETYPE_KINEMATIC
-
-        Netw.configure_property(self, &"position").state().on_spawn()
-        Netw.configure_property(self, &"move_dir").input()
-
-\ :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`, reached as :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`, holds every prediction setting one node has and the evidence of its last comparison. :ref:`NetwPredict<class_NetwPredict>` names the values those settings are written with.
-
-\ **Interpolation**\ 
-
-\ :ref:`NetwMemberConfig.interpolate()<class_NetwMemberConfig_method_interpolate>` declares how one property is smoothed. :ref:`NetwEntity.interpolation<class_NetwEntity_property_interpolation>` holds declarations for the whole node, such as the :ref:`NetwDisplayHandle.visual_root<class_NetwDisplayHandle_property_visual_root>` that receives the smoothed writes while the body keeps its own.
-
-::
-
-    func _init() -> void:
-        Netw.configure_entity(self).interpolation.visual_root = ^"Sprite"
-        Netw.configure_property(self, &"position").state().interpolate(
-                NetwInterpolate.new().lerp().smooth(0.05),
-        )
-
-\ :ref:`NetwInterpolate<class_NetwInterpolate>` is the spec for one value and :ref:`NetwDisplayHandle<class_NetwDisplayHandle>` is the one for the whole node.
-
-\ **Lag compensation**\ 
-
-The server keeps what every node held over the last few seconds, so a shot can be judged against the world the shooter was actually looking at rather than the one that has arrived since. :ref:`sample()<class_Netw_method_sample>` reads one node's past. :ref:`rewind()<class_Netw_method_rewind>` puts a set of them back for the length of one call and always restores the present afterwards.
-
-::
-
-    func _fire(ctx: NetwActionContext) -> void:
-        var past := Netw.sample(target_entity, ctx.view_tick)
-        if not past.has_value(&"position"):
-            ctx.deny()
-
-\ :ref:`action()<class_Netw_method_action>` is the same idea for a one-off act such as firing or placing something. It plays the effect declared on :ref:`NetwAction.predict<class_NetwAction_property_predict>` right away, sends the server a request it judges at :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>`, and takes the effect back when the server returns :ref:`NetwActionContext.deny()<class_NetwActionContext_method_deny>`. :ref:`configure_lagcomp()<class_Netw_method_configure_lagcomp>` only tunes this, since the recording starts itself as soon as anything asks for it.
-
-::
-
-    @onready var place_bomb := Netw.action(_place_bomb)
-
-    func _place_bomb(ctx: NetwActionContext) -> void:
-        var bomb := BOMB.instantiate()
-        ctx.bind(bomb)
-        bombs.add_child(bomb)
-
-\ **Everything else**\ 
-
-The sections above are what a game needs in order to play. Each row below is something else this addon owns, and the class named is where it is documented.
-
-- :ref:`NetwConnectHandle<class_NetwConnectHandle>` building a peer and listing the servers to connect to
-
-- :ref:`configure_admission()<class_Netw_method_configure_admission>` turning a join down before the player exists
-
-- :ref:`NetwSessionHandle<class_NetwSessionHandle>` who is playing, and the session's state
-
-- :ref:`NetwChannel<class_NetwChannel>` bytes belonging to no node
-
-- :ref:`NetwService<class_NetwService>` one part of a game reaching another without a node path
-
-- :ref:`NetwDatabase<class_NetwDatabase>` persistence, saving a field and loading it back
-
-- :ref:`NetwSchema<class_NetwSchema>` many rows of one shape, sent and stored together as a table
-
-- :ref:`ParticipantViewport<class_ParticipantViewport>` split screen, several players sharing one machine, one viewport each
-
-- :ref:`LocalLoopbackSession<class_LocalLoopbackSession>` local testing, a whole session running in one process
-
-- :ref:`NetwMultiplayer<class_NetwMultiplayer>` the verbs, the flat call behind every door on this class
-
 .. rst-class:: classref-reftable-group
 
 Methods
@@ -394,7 +148,7 @@ enum **SceneChange**: :ref:`🔗<enum_Netw_SceneChange>`
 
 :ref:`SceneChange<enum_Netw_SceneChange>` **SCENE_CHANGE_SESSION** = ``0``
 
-Every admitted player watches the destination, and every other live scene retires with the entities standing in it.
+All peers watch the destination multiplayer scene.
 
 .. _class_Netw_constant_SCENE_CHANGE_PLAYER:
 
@@ -402,7 +156,7 @@ Every admitted player watches the destination, and every other live scene retire
 
 :ref:`SceneChange<enum_Netw_SceneChange>` **SCENE_CHANGE_PLAYER** = ``1``
 
-One player watches the destination and stops watching everything else. The bodies in :ref:`NetwPlayer.bodies<class_NetwPlayer_property_bodies>` that player left behind are despawned, and no scene retires. A change at this scope with no player to resolve is rejected rather than widened to the session.
+The local peer watches the destination multiplayer scene.
 
 .. _class_Netw_constant_SCENE_CHANGE_SCENE:
 
@@ -410,7 +164,7 @@ One player watches the destination and stops watching everything else. The bodie
 
 :ref:`SceneChange<enum_Netw_SceneChange>` **SCENE_CHANGE_SCENE** = ``2``
 
-Everyone in the caller's own scene watches the destination, and that scene alone retires with the entities standing in it. The source is the scene the calling node sits in, and a caller sitting in none is refused rather than widened to the session.
+All peers from the same scene the requester node is in watch the destination multiplayer scene.
 
 .. rst-class:: classref-item-separator
 
@@ -428,7 +182,7 @@ enum **SceneIsolation**: :ref:`🔗<enum_Netw_SceneIsolation>`
 
 :ref:`SceneIsolation<enum_Netw_SceneIsolation>` **SCENE_ISOLATION_NONE** = ``0``
 
-The scene shares the physics and render world of whatever it is parented into.
+The multiplayer scene shares the physics and render world of whatever it is parented into.
 
 .. _class_Netw_constant_SCENE_ISOLATION_OWN_WORLD:
 
@@ -436,7 +190,7 @@ The scene shares the physics and render world of whatever it is parented into.
 
 :ref:`SceneIsolation<enum_Netw_SceneIsolation>` **SCENE_ISOLATION_OWN_WORLD** = ``1``
 
-The scene simulates in a world of its own, so geometry overlapping another scene's cannot interact with it.
+The multiplayer scene simulates in a world of its own using a :godot:`SubViewport`, so geometry overlapping another scene's cannot interact with it.
 
 .. rst-class:: classref-section-separator
 
@@ -453,9 +207,9 @@ Method Descriptions
 
 :ref:`NetwAction<class_NetwAction>` **action**\ (\ authority\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_action>`
 
-A :ref:`NetwAction<class_NetwAction>` for a one-off action such as firing or placing something, bound to the method ``authority`` the server runs to judge it.
+A :ref:`NetwAction<class_NetwAction>` for a one-off action such as firing or placing something, bound to ``authority`` the server runs to judge it.
 
-Repeated calls for the same method return the same :ref:`NetwAction<class_NetwAction>`.
+Repeated calls return the same :ref:`NetwAction<class_NetwAction>`.
 
 ::
 
@@ -479,11 +233,11 @@ Repeated calls for the same method return the same :ref:`NetwAction<class_NetwAc
 
 :ref:`NetwPromise<class_NetwPromise>` **change_scene_to_file**\ (\ node\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_file>`
 
-Opens ``path`` and makes players watch it. No entity moves, so spawn the arrivals from :ref:`NetwSessionHandle.scene_changed<class_NetwSessionHandle_signal_scene_changed>`.
+Opens ``path`` and makes players watch it. No node moves, spawn the arrivals from :ref:`NetwSessionHandle.scene_changed<class_NetwSessionHandle_signal_scene_changed>`.
 
-\ ``scope`` says who watches and what retires. :ref:`SCENE_CHANGE_SESSION<class_Netw_constant_SCENE_CHANGE_SESSION>` takes every player and retires every other scene, :ref:`SCENE_CHANGE_PLAYER<class_Netw_constant_SCENE_CHANGE_PLAYER>` takes one player and retires nothing, and :ref:`SCENE_CHANGE_SCENE<class_Netw_constant_SCENE_CHANGE_SCENE>` takes whoever is in the scene ``node`` sits in and retires that scene.
+\ ``scope`` says who watches and what retires. :ref:`SCENE_CHANGE_SESSION<class_Netw_constant_SCENE_CHANGE_SESSION>` takes every peer and retires every other scene, :ref:`SCENE_CHANGE_PLAYER<class_Netw_constant_SCENE_CHANGE_PLAYER>` takes one peer and retires nothing, and :ref:`SCENE_CHANGE_SCENE<class_Netw_constant_SCENE_CHANGE_SCENE>` takes whoever is in the scene ``node`` sits in and retires that scene.
 
-The server's own call applies. A client's call is a request that :ref:`configure_scene_requests()<class_Netw_method_configure_scene_requests>` decides, so a session declaring no handler rejects it.
+A server call always succeeds. A client call is a request that :ref:`configure_scene_requests()<class_Netw_method_configure_scene_requests>` decides, so a session declaring no handler rejects it.
 
 ::
 
@@ -502,7 +256,7 @@ The server's own call applies. A client's call is a request that :ref:`configure
 
 :ref:`NetwPromise<class_NetwPromise>` **change_scene_to_packed**\ (\ node\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_packed>`
 
-The same change as :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>`, from a :godot:`PackedScene` that came from a file. A :godot:`PackedScene` built in memory is rejected, because a client can only ask for a scene by path.
+The same change as :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>`, from a :godot:`PackedScene` that came from a file. A :godot:`PackedScene` built in memory is rejected.
 
 .. rst-class:: classref-item-separator
 
@@ -514,9 +268,9 @@ The same change as :ref:`change_scene_to_file()<class_Netw_method_change_scene_t
 
 :ref:`NetwChannel<class_NetwChannel>` **channel**\ (\ node\: :godot:`Node`, channel_id\: :godot:`int`\ ) |static| :ref:`🔗<class_Netw_method_channel>`
 
-A :ref:`NetwChannel<class_NetwChannel>` for sending bytes that belong to no node, such as voice or chat.
+A :ref:`NetwChannel<class_NetwChannel>` for sending raw bytes in batches.
 
-\ ``channel_id`` runs from ``100`` to ``254``, and both peers open the same number to talk to each other.
+\ ``channel_id`` runs from ``100`` to ``254``.
 
 ::
 
@@ -533,9 +287,7 @@ A :ref:`NetwChannel<class_NetwChannel>` for sending bytes that belong to no node
 
 :ref:`NetwClockHandle<class_NetwClockHandle>` **clock**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_clock>`
 
-The :ref:`NetwClockHandle<class_NetwClockHandle>` of the session ``node`` is in, which is the tick every peer counts together.
-
-A session has one clock, so every caller in it is handed the same handle and a component may connect once and keep it. :ref:`NetwClockHandle.before_tick<class_NetwClockHandle_signal_before_tick>` is where input is read and :ref:`NetwClockHandle.on_tick<class_NetwClockHandle_signal_on_tick>` is where the tick is simulated.
+A :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` has one clock, ticks are synchronized across every peer.
 
 ::
 
@@ -545,7 +297,7 @@ A session has one clock, so every caller in it is handed the same handle and a c
         clock.before_tick.connect(_sample_input)
         clock.on_tick.connect(_simulate)
 
-\ :ref:`configure_clock()<class_Netw_method_configure_clock>` is where the clock is set up before the session starts. This is how a running one is reached.
+\ :ref:`configure_clock()<class_Netw_method_configure_clock>` is where the clock is set up before :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` connects.
 
 .. rst-class:: classref-item-separator
 
@@ -557,23 +309,18 @@ A session has one clock, so every caller in it is handed the same handle and a c
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_admission**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_admission>`
 
-Declares who this session lets in, which is the only place a join can be turned down.
+Gates if a :ref:`NetwPlayer<class_NetwPlayer>` is created, arguments come from :ref:`prepare_join()<class_Netw_method_prepare_join>`. 
 
-\ ``handler`` is given the transport peer the join arrived on, the username it claimed, and any arguments the join carried. Returning :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` admits it and any other :godot:`Error <@GlobalScope#enum_@globalscope_Error>` turns it down. A ``handler`` returning something that is not an :godot:`Error <@GlobalScope#enum_@globalscope_Error>` turns the join down and reports a fault, which is how a broken one reads apart from a strict one.
+Return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` to admit.
 
-It runs before the membership exists, so a turned-down join mints none, seats no :ref:`NetwPlayer<class_NetwPlayer>`, and reaches no other peer. The client learns its own refusal through :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>`. That is what :ref:`configure_join()<class_Netw_method_configure_join>` cannot do, because a join handler runs after the acceptance has already reached every peer.
-
-A username becomes server-authoritative by refusing one this session does not believe, so the client always holds the name it asked for. The peer is what the connection says it is and cannot be claimed, so the check reads the table an authentication phase filled rather than anything the join carried. That phase is Godot's own, :ref:`NetwMultiplayer.auth_callback<class_NetwMultiplayer_property_auth_callback>` with :ref:`NetwMultiplayer.send_auth()<class_NetwMultiplayer_method_send_auth>` and :ref:`NetwMultiplayer.complete_auth()<class_NetwMultiplayer_method_complete_auth>`, and it may take as long as it likes. This handler may not, since it answers in the call.
-
-The host's own join is judged the same way, so a handler that turns everyone down locks its own host out through :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>` rather than seating one player under a rule it refused every other player by.
-
-A session declaring nothing admits every join. Declare it from :godot:`Object._init() <Object#class_Object_private_method__init>` on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a ``handler`` written on something that is not a :godot:`Node` is refused.
+Use :godot:`auth_callback() <Netw#class_Netw_method_auth_callback>` instead, as you would normally do with :godot:`SceneMultiplayer` to gate peers from entering the :godot:`MultiplayerAPI` such as firing :godot:`MultiplayerAPI.peer_entered <MultiplayerAPI#class_MultiplayerAPI_signal_peer_entered>`\ 
 
 ::
 
     func _init() -> void:
         Netw.configure_admission(admit)
 
+    # Here `Netw.prepare_join` was called with `username` as the second argument with no extra arguments.
     func admit(peer_id: int, username: StringName) -> Error:
         if nakama.username_for_peer(peer_id) != username:
             return ERR_UNAUTHORIZED
@@ -591,7 +338,7 @@ A session declaring nothing admits every join. Declare it from :godot:`Object._i
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **configure_clock**\ (\ node\: :godot:`Node`, preset\: :ref:`NetwClockConfig<class_NetwClockConfig>` = null\ ) |static| :ref:`🔗<class_Netw_method_configure_clock>`
 
-Sets up the clock of the session ``node`` belongs to, and returns the :ref:`NetwClockConfig<class_NetwClockConfig>` to fill in.
+Sets up the clock for the :godot:`Node.multiplayer` and returns the :ref:`NetwClockConfig<class_NetwClockConfig>` to fill in.
 
 ::
 
@@ -600,9 +347,7 @@ Sets up the clock of the session ``node`` belongs to, and returns the :ref:`Netw
                 .tickrate(60) \
                 .display_offset(2)
 
-\ Declaring this is what starts the clock. From then on the session steps it once per physics frame, and a rig that wants to step the ticks itself turns that off with :ref:`NetwMultiplayer.CLOCK_PARAM_MANUAL_TICK<class_NetwMultiplayer_constant_CLOCK_PARAM_MANUAL_TICK>`.
-
-Declare it from :godot:`Object._init() <Object#class_Object_private_method__init>`. A ``preset`` is copied as it is taken, so chaining onto what comes back never edits a shared ``.tres``. To fill it in from the inspector instead, hold the returned config in an exported field and declare from :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>`, since an exported value cannot be read during :godot:`Object._init() <Object#class_Object_private_method__init>`. Declaring twice for one ``node`` is an error and returns the first config unchanged. A value written after the session has read the config is reported and changes nothing. :ref:`NetwClockConfig<class_NetwClockConfig>` documents every field, and :ref:`NetwMultiplayer.clock_get_config()<class_NetwMultiplayer_method_clock_get_config>` is what the running session holds.
+\ ``preset`` can be used to :godot:`GDScript.export <GDScript#class_GDScript_annotation_export>` a :ref:`NetwClockConfig<class_NetwClockConfig>` from the inspector and declare it from :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>` instead of :godot:`Object._init() <Object#class_Object_private_method__init>`.
 
 .. rst-class:: classref-item-separator
 
@@ -631,18 +376,14 @@ Declares what the other peers do with ``node`` when :ref:`despawn()<class_Netw_m
 
 :ref:`NetwEntity<class_NetwEntity>` **configure_entity**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_entity>`
 
-The :ref:`NetwEntity<class_NetwEntity>` for ``node``, created if this is the first call, so the node can be set up before it exists on any other peer.
+The :ref:`NetwEntity<class_NetwEntity>` that represents ``node`` in the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` session, and returns it to configure.
 
 ::
 
     func _init() -> void:
-        Netw.configure_entity(self).initial_controller = \
-                NetwEntity.INITIAL_REPRESENTED_PEER
-        Netw.configure_property(self, &"position").on_spawn()
-
-\ Call it from :godot:`Object._init() <Object#class_Object_private_method__init>`, while the node has no parent yet. It walks up to the topmost parentless node and puts the :ref:`NetwEntity<class_NetwEntity>` there, which is what makes a whole scene one entity rather than one per script. A node the tree already holds is past the moment one could be created for it, so it returns what :ref:`NetwEntity.of()<class_NetwEntity_method_of>` would. A component under a root with no script has no parents to walk during :godot:`Object._init() <Object#class_Object_private_method__init>`, so it declares at :godot:`Node.NOTIFICATION_PARENTED <Node#class_Node_constant_NOTIFICATION_PARENTED>` instead.
-
-\ :ref:`NetwEntity.of()<class_NetwEntity_method_of>` is the everyday read and creates nothing. :ref:`NetwEntity.ensure()<class_NetwEntity_method_ensure>` puts the :ref:`NetwEntity<class_NetwEntity>` on the exact node given rather than walking up.
+        var entity := Netw.configure_entity(self)
+        # the node now behaves like `Node.set_multiplayer_authority(peer_id)`
+        entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 
 .. rst-class:: classref-item-separator
 
@@ -654,9 +395,7 @@ The :ref:`NetwEntity<class_NetwEntity>` for ``node``, created if this is the fir
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **configure_interest**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_interest>`
 
-Declares which :ref:`NetwInterestLayer<class_NetwInterestLayer>` groups ``node`` belongs to, and returns the :ref:`NetwInterestHandle<class_NetwInterestHandle>` that is also :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`.
-
-Call it from :godot:`Object._init() <Object#class_Object_private_method__init>` so every peer names the same groups and the same callbacks. The server decides the real membership. A group joined or left later goes through this same handle.
+Declares which :ref:`NetwInterestLayer<class_NetwInterestLayer>` layer ``node`` belongs to, and returns the :ref:`NetwInterestHandle<class_NetwInterestHandle>` that is also :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`.
 
 ::
 
@@ -680,7 +419,7 @@ Call it from :godot:`Object._init() <Object#class_Object_private_method__init>` 
 
 :ref:`NetwJoinConfig<class_NetwJoinConfig>` **configure_join**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_join>`
 
-Declares what the server does with each player it lets in, and returns the :ref:`NetwJoinConfig<class_NetwJoinConfig>` that can :ref:`NetwJoinConfig.quantize()<class_NetwJoinConfig_method_quantize>` the extra values they sent.
+Declares what the server does with each peer that joins.
 
 ::
 
@@ -690,11 +429,7 @@ Declares what the server does with each player it lets in, and returns the :ref:
     func spawn_at(who: NetwPlayer, point: StringName, team: int) -> void:
         arena.add_child(Netw.spawn_player(who, _spawn_avatar, team))
 
-\ ``handler`` takes the :ref:`NetwPlayer<class_NetwPlayer>` first and the values passed to :godot:`RefCounted.join() <RefCounted#class_RefCounted_method_join>` after it. The player is already a member when the handler runs, so it is the player's own handle.
-
-Those values reach this server and nobody else. What every peer receives names the membership and the :ref:`NetwPlayer.username<class_NetwPlayer_property_username>`, so a value a game wants other players to see is replicated by the game rather than carried by the join.
-
-Declare it from :godot:`Object._init() <Object#class_Object_private_method__init>` on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a ``handler`` written on something that is not a :godot:`Node` is refused. A ``handler`` taking extra values is a named method rather than a lambda, because its parameter types are how both sides agree on what those values are. A session declaring nothing accepts every join and places nobody. Two live declarations on one session turn every join down rather than placing players somewhere the game never chose.
+\ ``handler`` takes the :ref:`NetwPlayer<class_NetwPlayer>` first and the values passed to :ref:`prepare_join()<class_Netw_method_prepare_join>`. :ref:`NetwPlayer.username<class_NetwPlayer_property_username>` takes the second argument of :ref:`prepare_join()<class_Netw_method_prepare_join>` and the rest are the extra arguments.
 
 \ **Server Only.**
 
@@ -708,16 +443,14 @@ Declare it from :godot:`Object._init() <Object#class_Object_private_method__init
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **configure_lagcomp**\ (\ node\: :godot:`Node`, preset\: :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` = null\ ) |static| :ref:`🔗<class_Netw_method_configure_lagcomp>`
 
-Tunes how far back the session records what every node held, and returns the :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` to fill in.
+Tunes how far back the session records what every node held.
 
 ::
 
     func _init() -> void:
         Netw.configure_lagcomp(self).input_gate_deadline(16)
 
-\ This is optional. The recording starts itself as soon as a predicted node or a :ref:`NetwAction<class_NetwAction>` needs it, using this config if one was declared and the defaults otherwise. Declare one to move a tick count off its default, or to bound the :ref:`NetwAction<class_NetwAction>` traffic in a game that predicts nothing of its own. Once the session has read it there is no way to take it back, and the recording ends with the session.
-
-Declare it from :godot:`Object._init() <Object#class_Object_private_method__init>`. A ``preset`` is copied as it is taken, so chaining onto what comes back never edits a shared ``.tres``. To fill it in from the inspector instead, hold the returned config in an exported field and declare from :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>`. Declaring twice for one ``node`` is an error and returns the first config unchanged. :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` documents every field.
+\ Similarly to :ref:`configure_clock()<class_Netw_method_configure_clock>`, ``preset`` can be used to :godot:`GDScript.export <GDScript#class_GDScript_annotation_export>` a :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` from the inspector and declare it from :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>` instead of :godot:`Object._init() <Object#class_Object_private_method__init>`.
 
 .. rst-class:: classref-item-separator
 
@@ -729,16 +462,14 @@ Declare it from :godot:`Object._init() <Object#class_Object_private_method__init
 
 :ref:`NetwSceneConfig<class_NetwSceneConfig>` **configure_multiplayer_scene**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_multiplayer_scene>`
 
-Makes ``node`` a world players are shown, and returns the :ref:`NetwSceneConfig<class_NetwSceneConfig>` to fill in.
+Makes ``node`` adopt a :ref:`NetwInterestLayer<class_NetwInterestLayer>`, children are automatically isolated from other multiplayer scenes.
 
 ::
 
     func _init() -> void:
         Netw.configure_multiplayer_scene(self).labeled(&"Arena")
 
-\ Every node under ``node`` belongs to this world, and a player receives what is inside once a body of theirs stands in it or :ref:`NetwSceneHandle.watch()<class_NetwSceneHandle_method_watch>` shows it to them. Call it from the scene root's :godot:`Object._init() <Object#class_Object_private_method__init>`, because this has to be true before the scene is sent to anyone. Nothing else about the node changes, so it still replicates its own properties.
-
-\ :ref:`NetwSceneConfig.labeled()<class_NetwSceneConfig_method_labeled>` gives it a name :ref:`scene()<class_Netw_method_scene>` can look up, and :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>` gives it a physics world of its own. A node with no script returns ``null``, since there would be nothing to hold the declaration.
+\ Use :ref:`NetwSceneHandle.watch()<class_NetwSceneHandle_method_watch>` to show the scene to a specific peer.
 
 .. rst-class:: classref-item-separator
 
@@ -750,7 +481,7 @@ Makes ``node`` a world players are shown, and returns the :ref:`NetwSceneConfig<
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **configure_persistence**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_persistence>`
 
-Declares where ``node`` is saved and loaded, and returns the :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` to fill in.
+Declares where ``node`` is saved and loaded.
 
 ::
 
@@ -760,7 +491,7 @@ Declares where ``node`` is saved and loaded, and returns the :ref:`NetwPersisten
                 .table(&"players")
         Netw.configure_property(self, &"gold").persisted()
 
-\ It names the database, the table, how often a snapshot is written and when a saved value is loaded back, for every field marked :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>`. The server does the saving through :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>`, and :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` documents every field.
+\ Read :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` for a picture of what saves and loads mean for a node, and :ref:`NetwDatabase<class_NetwDatabase>` for the database architecture.
 
 .. rst-class:: classref-item-separator
 
@@ -772,18 +503,18 @@ Declares where ``node`` is saved and loaded, and returns the :ref:`NetwPersisten
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **configure_property**\ (\ node\: :godot:`Node`, property\: :godot:`StringName`, warn_late\: :godot:`bool` = true\ ) |static| :ref:`🔗<class_Netw_method_configure_property>`
 
-Declares how ``property`` travels between peers, and returns the :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` to fill in.
+Declares how ``property`` is synchronized.
 
 ::
 
     func _init() -> void:
-        Netw.configure_property(self, &"position").state()       # sent every tick
-        Netw.configure_property(self, &"fuel")                    # sent when pushed, by the server
-        Netw.configure_property(self, &"steering").controller()   # sent when pushed, by the driver
+        Netw.configure_property(self, &"fuel")
 
-\ A plain declaration only opens the field to :ref:`sync_property()<class_Netw_method_sync_property>`. Marking it :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>`, :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` or :ref:`NetwPropertyConfig.broadcast()<class_NetwPropertyConfig_method_broadcast>` puts it in a set the session sends every tick, with no send call in the gameplay code at all.
+    func refuel() -> void:
+        fuel = 100.0
+        Netw.sync_property(self, &"fuel")
 
-The declaration belongs to the script rather than to the node, so every instance declares the same thing from :godot:`Object._init() <Object#class_Object_private_method__init>`. Pass ``false`` for ``warn_late`` when a field is only ever received and drawn, which is the one case where declaring after the node is in the tree races nothing.
+\ :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` documents every configuration and talks more about the replication model.
 
 .. rst-class:: classref-item-separator
 
@@ -795,7 +526,7 @@ The declaration belongs to the script rather than to the node, so every instance
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **configure_rpc**\ (\ callable\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_rpc>`
 
-Registers ``callable`` so :ref:`rpc()<class_Netw_method_rpc>` and :ref:`request()<class_Netw_method_request>` may call it, and returns the :ref:`NetwMemberConfig<class_NetwMemberConfig>` that declares what ``@rpc`` cannot.
+Declares extra configuration for ``callable`` that :godot:`@GDScript.@rpc <@GDScript#class_@GDScript_annotation_@rpc>` does not cover.
 
 ::
 
@@ -808,8 +539,6 @@ Registers ``callable`` so :ref:`rpc()<class_Netw_method_rpc>` and :ref:`request(
     func aim(yaw: float) -> void:
         turret.rotation.y = yaw
 
-\ The declaration belongs to the script rather than to the node, so every instance declares the same thing from :godot:`Object._init() <Object#class_Object_private_method__init>`. A method on a child of the entity root also becomes a component through :ref:`NetwEntity.register_component()<class_NetwEntity_method_register_component>`, which is what lets a call name it with one byte rather than a path.
-
 .. rst-class:: classref-item-separator
 
 ----
@@ -820,13 +549,7 @@ Registers ``callable`` so :ref:`rpc()<class_Netw_method_rpc>` and :ref:`request(
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_scene_requests**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_scene_requests>`
 
-Declares who is allowed to ask this session to change scenes, which nothing else grants.
-
-\ ``handler`` is given the :ref:`NetwPlayer<class_NetwPlayer>` asking, the scene path they asked for, and the :ref:`SceneChange<enum_Netw_SceneChange>` they asked at. Returning :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` lets it through and any other :godot:`Error <@GlobalScope#enum_@globalscope_Error>` turns it down. The player comes from the connection rather than from anything the client sent, so it cannot be claimed. A ``handler`` returning something that is not an :godot:`Error <@GlobalScope#enum_@globalscope_Error>` turns the request down and warns, which is how a broken one reads apart from a strict one.
-
-Only a client's request arrives here. The server's own :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>` applies, on a dedicated server and on a listen host alike, so a game that drives every change from the server declares nothing and is never asked. A game that wants its host player held to the same rule calls its own check in both places.
-
-A session declaring nothing turns every request down and warns once. Two live declarations on one session do the same. Declare it from :godot:`Object._init() <Object#class_Object_private_method__init>` on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a ``handler`` written on something that is not a :godot:`Node` is refused.
+Allows clients to request a scene change, and returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` if the declaration was accepted.
 
 ::
 
@@ -842,6 +565,8 @@ A session declaring nothing turns every request down and warns once. Two live de
             return ERR_UNAUTHORIZED
         return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
 
+\ ``handler`` is called on the server for every client request.
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -852,9 +577,7 @@ A session declaring nothing turns every request down and warns once. Two live de
 
 :ref:`NetwSchema<class_NetwSchema>` **configure_schema**\ (\ name\: :godot:`StringName`\ ) |static| :ref:`🔗<class_Netw_method_configure_schema>`
 
-Declares a :ref:`NetwSchema<class_NetwSchema>`, which is a fixed set of named columns that many rows of the same shape are sent and stored as.
-
-This takes no node and reaches no session, because a schema is declared where the code using it lives, usually a ``static var`` that runs before any session exists. Every session builds its own table from the same declaration, and declaring one name twice extends that one declaration rather than making a second.
+Declares a schema for a table of records.
 
 ::
 
@@ -865,7 +588,7 @@ This takes no node and reaches no session, because a schema is declared where th
 
     @onready var mobs := Netw.table(self, &"Mob")
 
-\ One declaration serves the replicated table, the properties bound to its columns, and :ref:`NetwDatabase<class_NetwDatabase>`. A column holds a value of a fixed size, so anything of a length that varies goes on a :ref:`channel()<class_Netw_method_channel>` instead. :ref:`table()<class_Netw_method_table>` is the session's handle for the rows, and :ref:`NetwTableHandle.commit()<class_NetwTableHandle_method_commit>` is how they are published.
+\ Schemas are used for creating :ref:`NetwTableHandle<class_NetwTableHandle>` instances.
 
 .. rst-class:: classref-item-separator
 
@@ -878,10 +601,6 @@ This takes no node and reaches no session, because a schema is declared where th
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_server_info**\ (\ provider\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_server_info>`
 
 Declares what this server says about itself when another peer probes it with :ref:`NetwConnectHandle.endpoint_probe()<class_NetwConnectHandle_method_endpoint_probe>`.
-
-\ ``provider`` is handed a :ref:`NetwServerInfo<class_NetwServerInfo>` already filled in from the session and returns what to send back, normally the same one with a few fields edited.
-
-A session with no provider uses :ref:`NetwServerInfo.from_session()<class_NetwServerInfo_method_from_session>`. Conflicting providers or an invalid return value report an error. Declare the provider from :godot:`Object._init() <Object#class_Object_private_method__init>` on the node the method is written on. That node names the session's branch and holds the declaration for exactly as long as it stays inside the tree, so a ``provider`` written on something that is not a :godot:`Node` is refused.
 
 ::
 
@@ -903,7 +622,7 @@ A session with no provider uses :ref:`NetwServerInfo.from_session()<class_NetwSe
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **configure_session**\ (\ node\: :godot:`Node`, preset\: :ref:`NetwSessionConfig<class_NetwSessionConfig>` = null\ ) |static| :ref:`🔗<class_Netw_method_configure_session>`
 
-Sets up the session ``node`` belongs to, and returns the :ref:`NetwSessionConfig<class_NetwSessionConfig>` to fill in.
+Configures the :godot:`Node.multiplayer` session with extra settings that :godot:`SceneMultiplayer` does not cover.
 
 ::
 
@@ -912,9 +631,7 @@ Sets up the session ``node`` belongs to, and returns the :ref:`NetwSessionConfig
                 .app_id(&"bomber-v2") \
                 .desired_role(NetwMultiplayer.ROLE_LISTEN_SERVER)
 
-\ The fields exported on a :ref:`MultiplayerTree<class_MultiplayerTree>` are only what a session falls back to when nothing declares this. Declaring it replaces those fields together rather than one at a time, so a tree field left out of the config is dropped and named once in a warning.
-
-Declare it from :godot:`Object._init() <Object#class_Object_private_method__init>`. A ``preset`` is copied as it is taken, so chaining onto what comes back never edits a shared ``.tres``. To fill it in from the inspector instead, hold the returned config in an exported field and declare from :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>`, since an exported value cannot be read during :godot:`Object._init() <Object#class_Object_private_method__init>`. Declaring twice for one ``node`` is an error and returns the first config unchanged. A value written after the session has read the config is reported and changes nothing. :ref:`NetwSessionConfig<class_NetwSessionConfig>` documents every field, and :ref:`NetwMultiplayer.session_get_config()<class_NetwMultiplayer_method_session_get_config>` is what the running session holds.
+\ For more information on the available settings, see :ref:`NetwSessionConfig<class_NetwSessionConfig>`.
 
 .. rst-class:: classref-item-separator
 
@@ -926,7 +643,7 @@ Declare it from :godot:`Object._init() <Object#class_Object_private_method__init
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **configure_signal**\ (\ sig\: :godot:`Signal`\ ) |static| :ref:`🔗<class_Netw_method_configure_signal>`
 
-Registers ``sig`` so :ref:`emit_entity_signal()<class_Netw_method_emit_entity_signal>` may emit it on every peer, and returns the :ref:`NetwMemberConfig<class_NetwMemberConfig>` that declares who is allowed to.
+Registers ``sig`` so :ref:`emit_entity_signal()<class_Netw_method_emit_entity_signal>` may emit it on every peer.
 
 ::
 
@@ -956,8 +673,13 @@ Registers ``callable`` as a function :ref:`spawn()<class_Netw_method_spawn>` may
         var bullet := BulletScene.instantiate()
         bullet.setup(dir, tier)
         return bullet
+    
+    # ...
 
-\ It lives on a node that exists on every peer, and it builds the new node from its arguments alone, since those arguments are all the other peers receive. What a field was holding travels separately, through :ref:`NetwPropertyConfig.on_spawn()<class_NetwPropertyConfig_method_on_spawn>`, and is applied once the function has run.
+    var bullet := Netw.spawn(_spawn_bullet, dir, tier) # server only
+    muzzle.add_child(bullet)
+
+    # Clients -> build the same node with the same arguments and mount it in the same place
 
 .. rst-class:: classref-item-separator
 
@@ -969,7 +691,7 @@ Registers ``callable`` as a function :ref:`spawn()<class_Netw_method_spawn>` may
 
 :ref:`NetwConnectHandle<class_NetwConnectHandle>` **connection**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_connection>`
 
-The :ref:`NetwConnectHandle<class_NetwConnectHandle>` of the session ``node`` is in, which is where the servers this peer can reach are listed and where its :godot:`MultiplayerPeer` is built.
+The :ref:`NetwConnectHandle<class_NetwConnectHandle>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, used to connect to other peers and probe servers.
 
 ::
 
@@ -983,7 +705,7 @@ The :ref:`NetwConnectHandle<class_NetwConnectHandle>` of the session ``node`` is
         if error == OK:
             Netw.of(self).multiplayer_peer = peer
 
-\ The callback runs once, in a later frame. Assign the peer inside it or let it go, since :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>` hands it over exactly once.
+\ This connection model is optional, you can also assign a :godot:`MultiplayerPeer` to :godot:`Node.multiplayer_peer <Node#class_Node_property_multiplayer_peer>` directly, like you would normally do with :godot:`SceneMultiplayer`.
 
 .. rst-class:: classref-item-separator
 
@@ -1001,9 +723,9 @@ Removes the node :ref:`spawn()<class_Netw_method_spawn>` or :ref:`replicate()<cl
 
     Netw.despawn(bullet)
 
-\ ``opts`` changes how this one removal goes, such as how long the node lingers before it is freed and whether what it held is saved first. :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` documents every field, and :ref:`configure_despawn()<class_Netw_method_configure_despawn>` is where the same choices are declared once for a whole script.
+\ ``opts`` configures what happens to the node on every peer, see :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` for the options.
 
-It returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a node that is not a spawned one and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` for a node in no session.
+It returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a node that is not a spawned one and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` for a node in no :godot:`MultiplayerAPI`.
 
 \ **Server Only.**
 
@@ -1017,17 +739,21 @@ It returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalSc
 
 |void| **emit_entity_signal**\ (\ sig\: :godot:`Signal`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_emit_entity_signal>`
 
-Emits ``sig`` on every peer, on that peer's copy of the same node, carrying the arguments given after it.
-
-Register the signal with :ref:`configure_signal()<class_Netw_method_configure_signal>` first, which is also what decides whether this peer is allowed to emit it. A registered signal fires locally as well, so calling ``sig.emit()`` beside this would fire the local listeners twice.
+Emits ``sig`` on every peer, including the local one, with the arguments that follow.
 
 ::
 
-    Netw.emit_entity_signal(exploded)     # local listeners AND every peer's copy
+    signal exploded(position: Vector2)
 
-    # only when the signal is configured .call_remote(): emit locally yourself
-    exploded.emit()
-    Netw.emit_entity_signal(exploded)     # remote peers only
+    func _init() -> void:
+        Netw.configure_signal(self.exploded)
+    
+    # ...
+
+    # `exploded` emits on every peer and also locally
+    Netw.emit_entity_signal(self.exploded, position)
+
+\ A registered signal fires locally as well, so calling ``sig.emit()`` beside this would fire the local listeners twice.
 
 .. rst-class:: classref-item-separator
 
@@ -1046,16 +772,7 @@ Asks the session for a place in the game as ``username``. Every argument after t
     Netw.prepare_join(self, &"Dev", &"red")
     multiplayer.multiplayer_peer = peer
 
-\ An Array passed here is one argument, not an argument list. Code that has collected a list calls through a :godot:`Callable`, which is also how a form built from :ref:`NetwJoinConfig<class_NetwJoinConfig>` submits what a player filled in.
-
-::
-
-    var submit: Callable = Netw.prepare_join
-    submit.callv([self, username] + join_args)
-
-\ A :godot:`Callable` over a static method answers false to :godot:`Callable.is_valid() <Callable#class_Callable_method_is_valid>` and still calls, so do not guard the submission with it.
-
-Call it before or after the peer is assigned. A session that is not online yet holds the request and sends it once it is, so the login cannot outrun it either way. The :ref:`NetwPromise<class_NetwPromise>` reports local preparation or submission and never waits for the server, so a refusal announces as :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>` instead. An empty ``username`` is rejected with :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>`.
+\ Call it before or after the :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` is assigned. The :ref:`NetwPromise<class_NetwPromise>` reports local preparation, :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` for a failure to submit, and :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` for a duplicate request. An empty ``username`` is rejected with :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>`.
 
 \ **Player request.**
 
@@ -1069,14 +786,14 @@ Call it before or after the peer is assigned. A session that is not online yet h
 
 :ref:`NetwMultiplayer<class_NetwMultiplayer>` **of**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_of>`
 
-The :ref:`NetwMultiplayer<class_NetwMultiplayer>` running the session ``node`` is in, which is every session, entity, layer and display method under one object.
+The :ref:`NetwMultiplayer<class_NetwMultiplayer>` running the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` is in.
 
 ::
 
     var api := Netw.of(self)
     api.entity_despawn(route)
 
-\ A node that is in no tree, and a node whose branch runs no session, both return ``null``. The rest of **Netw** is built on this, so :ref:`session()<class_Netw_method_session>`, :ref:`clock()<class_Netw_method_clock>`, :ref:`connection()<class_Netw_method_connection>` and :ref:`scene()<class_Netw_method_scene>` return ``null`` in the same two cases.
+\ A node that is in no tree returns ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -1088,9 +805,7 @@ The :ref:`NetwMultiplayer<class_NetwMultiplayer>` running the session ``node`` i
 
 :ref:`NetwPromise<class_NetwPromise>` **reload_current_scene**\ (\ node\: :godot:`Node`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_reload_current_scene>`
 
-Opens the scene this peer presents again, the way :godot:`SceneTree.reload_current_scene() <SceneTree#class_SceneTree_method_reload_current_scene>` does, with the same ``scope`` as :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>`. A peer presenting nothing has no scene to rebuild and is refused.
-
-The scene is built from scratch even though the path is the same, so the old one retires with everything standing in it and a :ref:`NetwSceneHandle<class_NetwSceneHandle>` held on it does not follow.
+Opens the scene this peer presents again, the way :godot:`SceneTree.reload_current_scene() <SceneTree#class_SceneTree_method_reload_current_scene>` does.
 
 .. rst-class:: classref-item-separator
 
@@ -1108,13 +823,11 @@ Moves ``node`` under ``new_parent`` the way :godot:`Node.reparent() <Node#class_
 
     await Netw.reparent(body, level2.get_node(^"Players")).wait()
 
-\ What it adds over :godot:`Node.reparent() <Node#class_Node_method_reparent>` is a window that masks the mover off the physics server across the parent swap, spending two :godot:`SceneTree.physics_frame <SceneTree#class_SceneTree_signal_physics_frame>`\ s on each side of it. A body leaves an :godot:`Area2D`'s overlap tracking only on a step, so a body still tracked re-emits :godot:`Area2D.body_entered <Area2D#class_Area2D_signal_body_entered>` out of its own :godot:`Node.tree_entered <Node#class_Node_signal_tree_entered>` as the swap remounts it, which is godot#14578. The half of the window that precedes the swap is why this verb exists, since :godot:`Node.reparent() <Node#class_Node_method_reparent>` offers no hook before it commits.
+\ What it adds over :godot:`Node.reparent() <Node#class_Node_method_reparent>` is a window that masks the mover off the physics server across the parent swap, basically a workaround for this `issue <https://github.com/godotengine/godot/issues/14578>`__.
 
-A mover carrying neither :godot:`CollisionObject2D.collision_layer <CollisionObject2D#class_CollisionObject2D_property_collision_layer>` nor :godot:`CollisionObject2D.collision_mask <CollisionObject2D#class_CollisionObject2D_property_collision_mask>` has nothing to evict, so it spends no frames and the promise is already settled when this returns.
+\ :godot:`Node.reparent() <Node#class_Node_method_reparent>` stays fully supported and is the right verb for anything that doesn't depend on area signals.
 
-\ :godot:`Node.reparent() <Node#class_Node_method_reparent>` stays fully supported and is the right verb for anything that is not a physics body. Membership of a :ref:`NetwSceneHandle<class_NetwSceneHandle>` follows it either way. What it does not carry is the window or a :ref:`NetwPromise<class_NetwPromise>`.
-
-A ``node`` that is no entity answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` and one in no session answers :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`, both on a promise that has already settled.
+A ``node`` that is no entity answers :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` and one in no session answers :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`.
 
 \ **Server Only.**
 
@@ -1138,8 +851,6 @@ Sends a node the game built itself to every peer, which rebuild it from its :god
     var entity := Netw.replicate(body, player)
     await save.hydrate(entity)
     scene.add_child(body)
-
-\ A node with no parent is in no session, so this one finds the only session running and reports an error when there is more than one. A host running several calls :ref:`NetwMultiplayer.entity_replicate()<class_NetwMultiplayer_method_entity_replicate>` on the one it means.
 
 \ **Server Only.**
 
@@ -1173,7 +884,7 @@ Calls ``callable`` on the server and returns a :ref:`NetwPromise<class_NetwPromi
 
 Calls ``callable`` on every peer that can see the node, and returns a :ref:`NetwGroupPromise<class_NetwGroupPromise>` gathering what they each returned.
 
-Which peers are waited for is decided when the call goes out, so a peer arriving afterwards is not one of them. :ref:`NetwGroupPromise<class_NetwGroupPromise>` is where one reply and the whole set are read.
+Which peers are waited for is decided when the call goes out, so a peer arriving afterwards is not one of them.
 
 .. rst-class:: classref-item-separator
 
@@ -1185,7 +896,7 @@ Which peers are waited for is decided when the call goes out, so a peer arriving
 
 :ref:`NetwPromise<class_NetwPromise>` **request_controller**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_request_controller>`
 
-Calls ``callable`` on the peer driving the node, its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`, and returns a :ref:`NetwPromise<class_NetwPromise>` carrying what it returned.
+Calls ``callable`` on the peer driving the node, its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1216,10 +927,6 @@ Puts every entity in ``entities`` back where it was at ``tick``, runs ``body`` a
     func _fire(ctx: NetwActionContext) -> void:
         Netw.rewind(Netw.scene(self).entities, ctx.view_tick, _trace_shot)
 
-\ :ref:`NetwSceneHandle.entities<class_NetwSceneHandle_property_entities>` hands back the set this takes, so a caller judging a shot against a whole scene passes it straight through.
-
-Putting back and restoring always happen inside the one call, so the world is never left in the past. The session is found through ``body``'s own node, which is therefore a node in one. :ref:`NetwMultiplayer.lagcomp_rewind()<class_NetwMultiplayer_method_lagcomp_rewind>` says what happens to an entity with nothing recorded at ``tick``.
-
 .. rst-class:: classref-item-separator
 
 ----
@@ -1230,13 +937,11 @@ Putting back and restoring always happen inside the one call, so the world is ne
 
 |void| **rpc**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_rpc>`
 
-Calls ``callable`` on every peer that can see the node, carrying the arguments given after it.
+Calls ``callable`` on every peer that can see the node.
 
 ::
 
     Netw.rpc(turret.aim, yaw)
-
-\ Whether the call is reliable follows the method's own ``@rpc`` annotation. Register it with :ref:`configure_rpc()<class_Netw_method_configure_rpc>` first. A :ref:`NetwEntity<class_NetwEntity>` or entity root :godot:`Node` passed as an argument arrives as that peer's own copy of it.
 
 .. rst-class:: classref-item-separator
 
@@ -1248,7 +953,7 @@ Calls ``callable`` on every peer that can see the node, carrying the arguments g
 
 |void| **rpc_controller**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_rpc_controller>`
 
-Calls ``callable`` on the peer driving the node, its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`, and on nobody else.
+Calls ``callable`` on the peer driving the node, its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1294,11 +999,9 @@ What ``entity`` held at ``tick``, read back as a copy that the game may keep.
 
 :ref:`NetwSceneHandle<class_NetwSceneHandle>` **scene**\ (\ node\: :godot:`Node`, named\: :godot:`StringName` = &""\ ) |static| :ref:`🔗<class_Netw_method_scene>`
 
-The :ref:`NetwSceneHandle<class_NetwSceneHandle>` for a world, which is how a game reads who is in it, lets players in, and hears when that changes.
+The :ref:`NetwSceneHandle<class_NetwSceneHandle>` for a multiplayer scene, a node with a :ref:`NetwInterestLayer<class_NetwInterestLayer>` and a :ref:`NetwSceneConfig<class_NetwSceneConfig>`.
 
-Left empty, ``named`` means the world ``node`` is in, which is also :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. Given a name, it means the one live world carrying that :ref:`NetwSceneConfig.labeled()<class_NetwSceneConfig_method_labeled>` name, whether or not ``node`` is inside it.
-
-A name identifies a kind of world, not an instance. If two live worlds share a name, the lookup fails. Use the handle returned when the world was spawned to select an instance.
+When ``named`` is not given, the closest :ref:`NetwSceneHandle<class_NetwSceneHandle>` ancestor is returned.
 
 ::
 
@@ -1316,13 +1019,13 @@ A name identifies a kind of world, not an instance. If two live worlds share a n
 
 :godot:`Variant` **service**\ (\ node\: :godot:`Node`, type\: :godot:`Object`\ ) |static| :ref:`🔗<class_Netw_method_service>`
 
-The object the session is holding under ``type``, which is how one part of a game reaches another without either knowing where it sits in the tree.
+Services are objects tied to :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` lifecycle, similar to singletons but per :godot:`MultiplayerAPI`.
 
 ::
 
     var gamestate := Netw.service(self, MyGamestate) as MyGamestate
 
-\ A session holding nothing under ``type`` returns ``null``, and so does one whose service has since been freed. :ref:`service_register()<class_Netw_method_service_register>` and :ref:`service_unregister()<class_Netw_method_service_unregister>` are the other two halves, and :ref:`NetwMultiplayer.service_get()<class_NetwMultiplayer_method_service_get>` says what ``type`` may be.
+\ A session holding nothing under ``type`` returns ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -1334,9 +1037,13 @@ The object the session is holding under ``type``, which is how one part of a gam
 
 |void| **service_register**\ (\ node\: :godot:`Node`, service\: :godot:`Object`, type\: :godot:`Object` = null\ ) |static| :ref:`🔗<class_Netw_method_service_register>`
 
-Hands ``service`` to the session ``node`` is in, so :ref:`service()<class_Netw_method_service>` can find it under ``type``, or under the service's own script when ``type`` is left out.
+Registers ``service`` with the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, so :ref:`service()<class_Netw_method_service>` finds it. 
 
-A :ref:`NetwService<class_NetwService>` does this for itself as it enters the tree and needs no call here. This is for an object a game keeps some other way, and for a node already sitting in the session that is becoming its service now.
+::
+
+    Netw.service_register(self, MyGamestate.new())
+
+\ ``type`` defaults to the class of ``service``, so a session may hold one instance of each class. A session holding a service under ``type`` already replaces it with the new one.
 
 .. rst-class:: classref-item-separator
 
@@ -1348,7 +1055,7 @@ A :ref:`NetwService<class_NetwService>` does this for itself as it enters the tr
 
 |void| **service_unregister**\ (\ node\: :godot:`Node`, service\: :godot:`Object`, type\: :godot:`Object` = null\ ) |static| :ref:`🔗<class_Netw_method_service_unregister>`
 
-Takes ``service`` back from the session ``node`` is in, so :ref:`service()<class_Netw_method_service>` no longer finds it. A service withdrawing itself passes itself as both arguments, since ``node`` says which session and ``service`` says which object.
+Unregisters ``service`` from the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, so :ref:`service()<class_Netw_method_service>` no longer finds it.
 
 .. rst-class:: classref-item-separator
 
@@ -1360,7 +1067,7 @@ Takes ``service`` back from the session ``node`` is in, so :ref:`service()<class
 
 :ref:`NetwSessionHandle<class_NetwSessionHandle>` **session**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_session>`
 
-The :ref:`NetwSessionHandle<class_NetwSessionHandle>` of the session ``node`` is in, which is who is playing and what the session is doing.
+The :ref:`NetwSessionHandle<class_NetwSessionHandle>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. Mostly useful for connecting signals.
 
 ::
 
@@ -1368,8 +1075,6 @@ The :ref:`NetwSessionHandle<class_NetwSessionHandle>` of the session ``node`` is
     s.entered.connect(_on_entered)
     s.disconnected.connect(_on_over)
     s.ended.connect(_on_over)
-
-\ Every caller in one session is handed the same handle, so a game may connect these signals once and keep it. **Netw** is static and has no signals of its own, which is why they live here.
 
 .. rst-class:: classref-item-separator
 
@@ -1387,9 +1092,7 @@ Builds the same node on every peer by running ``fn`` with the arguments given af
 
     muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 
-\ Register ``fn`` with :ref:`configure_spawn()<class_Netw_method_configure_spawn>` first. An :godot:`Array` after ``fn`` is one argument rather than a list of them, an empty one included. The session is found through the node ``fn`` lives on, so this works with any number of sessions running at once. :ref:`spawn_player()<class_Netw_method_spawn_player>` is the same call for the node a player drives.
-
-What comes back is what ``fn`` built, except for a world declared :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, which comes back as the :godot:`SubViewport` holding it, since only a :godot:`Viewport` can own a physics world. Parent what comes back either way.
+\ Register ``fn`` with :ref:`configure_spawn()<class_Netw_method_configure_spawn>` first, the caller must be the server, and the node returned must be parented before the next tick.
 
 \ **Server Only.**
 
@@ -1411,11 +1114,7 @@ Builds the node ``player`` drives, the same way :ref:`spawn()<class_Netw_method_
         Netw.spawn_player(player, _spawn_avatar, character_class)
     )
 
-\ It fills :ref:`NetwEntity.peer_id<class_NetwEntity_property_peer_id>` and :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` from ``player`` before the node enters the tree, so the node is counted as that player's and is removed when they disconnect. A ``fn`` that stamped no :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>` gets the :ref:`NetwPlayer.username<class_NetwPlayer_property_username>`, and the node is named the same. A parent that already holds a child under that name seats the body under a numbered variant of it, because a node name is unique among its siblings while :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>` stays the identity. To remember who fired a bullet without making that bullet theirs to drive, pass the player as an argument to :ref:`spawn()<class_Netw_method_spawn>` instead.
-
-\ ``player`` must be a membership this session currently holds, and a handle to one that has left builds nothing. The check names the membership rather than the peer, so a reconnection handed the same transport peer is a different player here.
-
-The node comes back unparented, so a game that restores saved state does it before :godot:`Node.add_child() <Node#class_Node_method_add_child>`. :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>` answers on the orphan, and what it applies is in place before the first spawn snapshot is taken. A body armed for a player who leaves before it is parented is discarded rather than replicated.
+\ The node becomes tied to ``player`` lifecycle.
 
 ::
 
@@ -1424,8 +1123,6 @@ The node comes back unparented, so a game that restores saved state does it befo
     if saved:
         await saved.hydrate().wait()
     players.add_child(body)
-
-\ The record that :ref:`NetwPersistenceEngine.hydrate()<class_NetwPersistenceEngine_method_hydrate>` reads is named by :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>`, so a save loads under the player's username unless ``fn`` stamped an id of its own. A game handing one player several bodies stamps a distinct id on each, because the username names only one of them.
 
 \ **Server Only.**
 
@@ -1439,7 +1136,7 @@ The node comes back unparented, so a game that restores saved state does it befo
 
 :ref:`NetwTableHandle<class_NetwTableHandle>` **table**\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static| :ref:`🔗<class_Netw_method_table>`
 
-The :ref:`NetwTableHandle<class_NetwTableHandle>` for the replicated table declared under ``name``, which is how a game publishes and reads rows that have no node of their own.
+The :ref:`NetwTableHandle<class_NetwTableHandle>` for the replicated table declared under ``name``.
 
 ::
 
@@ -1448,7 +1145,7 @@ The :ref:`NetwTableHandle<class_NetwTableHandle>` for the replicated table decla
     func _ready() -> void:
         mobs.received.connect(_on_mobs)
 
-\ :ref:`configure_schema()<class_Netw_method_configure_schema>` is where ``name`` is declared, and one declaration serves the table, the properties bound to its columns, and :ref:`NetwDatabase<class_NetwDatabase>`. Every caller in one session is handed the same handle, so a game may connect :ref:`NetwTableHandle.received<class_NetwTableHandle_signal_received>` once and keep it.
+\ :ref:`configure_schema()<class_Netw_method_configure_schema>` is where ``name`` is declared.
 
 .. rst-class:: classref-item-separator
 
@@ -1460,7 +1157,7 @@ The :ref:`NetwTableHandle<class_NetwTableHandle>` for the replicated table decla
 
 |void| **sync_property**\ (\ node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static| :ref:`🔗<class_Netw_method_sync_property>`
 
-Sends what ``property`` is holding right now to the other peers, for a field that changes on events rather than every tick.
+Sends what ``property`` is holding right now to the other peers, for a property that changes on events rather than every tick.
 
 ::
 
@@ -1468,7 +1165,7 @@ Sends what ``property`` is holding right now to the other peers, for a field tha
         fuel = 100.0
         Netw.sync_property(self, &"fuel")
 
-\ Declare the field with :ref:`configure_property()<class_Netw_method_configure_property>` first, which is also what decides whether this peer is allowed to push it. The server sends it on to everyone, and a client asks the server to. A field marked :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>`, :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` or :ref:`NetwPropertyConfig.broadcast()<class_NetwPropertyConfig_method_broadcast>` never needs this call, since the session is already sending it every tick.
+\ :ref:`configure_property()<class_Netw_method_configure_property>` must be declared first.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

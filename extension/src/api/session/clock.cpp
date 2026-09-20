@@ -137,7 +137,6 @@ Error NetwMultiplayer::clock_set_param(
         case CLOCK_PARAM_TICK_FACTOR_OVERRIDE:
             engine.set_tick_factor_override(double(p_value));
             return OK;
-            return OK;
     }
     return ERR_INVALID_PARAMETER;
 }
@@ -155,16 +154,8 @@ double NetwMultiplayer::clock_get_monitor(ClockMonitor p_monitor) const {
             return engine.one_way_latency();
         case CLOCK_MONITOR_TICKTIME:
             return engine.ticktime();
-        case CLOCK_MONITOR_TICK_FACTOR:
-            return engine.tick_factor();
-        case CLOCK_MONITOR_TICK_PHASE:
-            return engine.tick_phase();
         case CLOCK_MONITOR_TICK_ACCUMULATOR:
             return engine.tick_accumulator();
-        case CLOCK_MONITOR_PHYSICS_FACTOR:
-            return engine.physics_factor();
-        case CLOCK_MONITOR_RECOMMENDED_DISPLAY_OFFSET:
-            return double(engine.recommended_display_offset());
         case CLOCK_MONITOR_PHYSICS_FRAMES:
             return double(engine.cadence()[StringName("physics_frames")]);
         case CLOCK_MONITOR_POLLS:
@@ -177,6 +168,22 @@ double NetwMultiplayer::clock_get_monitor(ClockMonitor p_monitor) const {
             return double(engine.cadence()[StringName("poll_hz")]);
     }
     return 0.0;
+}
+
+double NetwMultiplayer::clock_get_tick_factor() const {
+    return clock_engine().tick_factor();
+}
+
+double NetwMultiplayer::clock_get_tick_phase() const {
+    return clock_engine().tick_phase();
+}
+
+double NetwMultiplayer::clock_get_physics_factor() const {
+    return clock_engine().physics_factor();
+}
+
+int64_t NetwMultiplayer::clock_get_recommended_display_offset() const {
+    return clock_engine().recommended_display_offset();
 }
 
 int64_t NetwMultiplayer::clock_get_tick() const {

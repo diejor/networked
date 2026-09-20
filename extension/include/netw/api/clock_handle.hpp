@@ -30,9 +30,21 @@ public:
     bool get_is_synchronized() const;
     bool get_is_configured() const;
     int64_t get_behind_count() const;
+
+    int64_t get_tickrate() const;
+    double get_physics_factor() const;
+    double get_tick_factor() const;
+    double get_tick_phase() const;
+    int64_t get_recommended_display_offset() const;
+
+    int64_t get_display_offset() const;
+    void set_display_offset(int64_t p_ticks);
+    int64_t get_sync_mode() const;
+    void set_sync_mode(int64_t p_mode);
+    double get_ping_interval() const;
+    void set_ping_interval(double p_seconds);
+
     double monitor(int64_t p_monitor) const;
-    godot::Variant param(int64_t p_param) const;
-    godot::Error set_param(int64_t p_param, const godot::Variant &p_value);
 };
 
 } // namespace netw
