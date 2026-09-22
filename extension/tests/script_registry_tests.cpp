@@ -9,7 +9,6 @@
 #include "godot/script.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/member_config.hpp"
-#include "netw/api/persistence_config.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/scene_decl.hpp"
 #include "netw/script/registry.hpp"
@@ -19,7 +18,6 @@ namespace TestNetwScriptRegistry {
 using namespace godot;
 using netw::NetwDespawnConfig;
 using netw::NetwMemberConfig;
-using netw::NetwPersistenceConfig;
 using netw::NetwPropertyConfig;
 using netw::SceneDecl;
 namespace registry = netw::script::registry;
@@ -99,9 +97,6 @@ TEST_CASE(
     );
     CHECK(nothing_declared(
         registry::script_config(script, registry::SCRIPT_DESPAWN)
-    ));
-    CHECK(nothing_declared(
-        registry::script_config(script, registry::SCRIPT_PERSISTENCE)
     ));
     CHECK_FALSE(registry::scene_decl(script).declared);
 }
@@ -212,34 +207,24 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Declared] SR5 a despawn and a persistence "
-    "declaration are found by walking the base scripts, and a script carrying "
-    "its own answers that one rather than the inherited one"
+    "[Networked][Session][Declared] SR5 a despawn declaration is found by "
+    "walking the base scripts, and a script carrying its own answers that one "
+    "rather than the inherited one"
 ) {
     const Ref<Script> leaf = a_script_extending(CHAIN_BASE);
     const Ref<Script> base = leaf->get_base_script();
     CHECK(base.is_valid());
 
     const Ref<NetwDespawnConfig> base_despawn = a_despawn_config();
-    Ref<NetwPersistenceConfig> base_persistence;
-    base_persistence.instantiate();
     registry::declare_script_config(
         base,
         registry::SCRIPT_DESPAWN,
         base_despawn
     );
-    registry::declare_script_config(
-        base,
-        registry::SCRIPT_PERSISTENCE,
-        base_persistence
-    );
 
     const Ref<NetwDespawnConfig> inherited
         = registry::script_config(leaf, registry::SCRIPT_DESPAWN);
     CHECK(bool(inherited == base_despawn));
-    const Ref<NetwPersistenceConfig> inherited_persistence
-        = registry::script_config(leaf, registry::SCRIPT_PERSISTENCE);
-    CHECK(bool(inherited_persistence == base_persistence));
 
     const Ref<NetwDespawnConfig> leaf_despawn = a_despawn_config();
     registry::declare_script_config(

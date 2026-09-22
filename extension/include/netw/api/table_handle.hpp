@@ -60,14 +60,14 @@ public:
         const godot::PackedInt64Array &p_routes
     ) const;
 
-    godot::Ref<NetwPromise> flush(
+    godot::Ref<NetwPromise> save(
         const godot::Ref<NetwDatabase> &p_database,
-        const godot::StringName &p_into,
+        const godot::StringName &p_key,
         const godot::PackedStringArray &p_ids
     );
-    godot::Ref<NetwPromise> hydrate(
+    godot::Ref<NetwPromise> load(
         const godot::Ref<NetwDatabase> &p_database,
-        const godot::StringName &p_into
+        const godot::StringName &p_key
     );
 };
 

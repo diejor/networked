@@ -33,6 +33,12 @@ Ref<NetwQuantize> make_quantizer() {
     return packer;
 }
 
+Ref<netw::NetwColumnRef> a_column() {
+    const Ref<netw::NetwSchema> schema = netw::NetwSchema::create("carried");
+    schema->f32("gold", Ref<NetwQuantize>(), 1);
+    return schema->column_ref(0);
+}
+
 Ref<NetwInterpolate> make_interpolator(double p_smoothing) {
     Ref<NetwInterpolate> smoother;
     smoother.instantiate();
@@ -67,7 +73,7 @@ TEST_CASE(
     CHECK_FALSE(config->get_in_input_set());
     CHECK_FALSE(config->get_in_broadcast_set());
     CHECK_FALSE(config->get_is_spawn_state());
-    CHECK_FALSE(config->get_is_persisted());
+    CHECK(config->get_persist_column().is_null());
     CHECK_FALSE(config->get_set_masked());
     NETW_CHECK_EQ(int(config->get_lane()), int(NetwPropertySet::VOLATILE));
     NETW_CHECK_EQ(
@@ -82,7 +88,6 @@ TEST_CASE(
     CHECK_FALSE(config->get_explicit_teleport_only());
     CHECK_FALSE(config->get_explicit_reconcile_only());
     NETW_CHECK_CLOSE(config->get_converge_stiffness(), 0.0, 0.0);
-    NETW_CHECK_CLOSE(config->get_persist_interval(), 0.0, 0.0);
 }
 
 TEST_CASE(
@@ -122,7 +127,7 @@ TEST_CASE(
         int(config->get_set_audience()),
         int(NetwPropertySet::AUDIENCE_PUBLIC)
     );
-    CHECK_FALSE(config->get_is_persisted());
+    CHECK(config->get_persist_column().is_null());
 }
 
 TEST_CASE(
@@ -190,7 +195,7 @@ TEST_CASE(
     config->windowed(3);
     config->audience(true);
     config->masked();
-    config->persisted(30.0);
+    config->persisted(a_column());
     config->on_spawn();
 
     NETW_CHECK_EQ(int(config->get_lane()), int(NetwPropertySet::RETAINED));
@@ -215,8 +220,7 @@ TEST_CASE(
         int(NetwPropertySet::AUDIENCE_SERVER_ONLY)
     );
     CHECK(config->get_set_masked());
-    CHECK(config->get_is_persisted());
-    NETW_CHECK_CLOSE(config->get_persist_interval(), 30.0, 1e-9);
+    CHECK(config->get_persist_column().is_valid());
     CHECK(config->get_is_spawn_state());
 }
 
@@ -360,7 +364,7 @@ TEST_CASE(
     CHECK(bool(config->windowed(3) == config));
     CHECK(bool(config->audience(true) == config));
     CHECK(bool(config->masked() == config));
-    CHECK(bool(config->persisted(0.0) == config));
+    CHECK(bool(config->persisted(a_column()) == config));
     CHECK(bool(config->on_spawn() == config));
 }
 

@@ -6,41 +6,39 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Everything one entity <see cref="Script"/> declares about how the server
-/// saves and restores its rows.
+/// Which row of which <see cref="NetwDatabase"/> one entity loads and saves.
 /// </summary>
 /// <remarks>
-/// The policy is authored on a <see cref="Script"/> and read back for every
-/// node that script drives, because <see cref="Netw.ConfigurePersistence"/>
-/// runs from <c>Object._init</c> while the flushing and the hydrating happen
-/// later, on the server, through <see cref="NetwPersistenceEngine"/>. Routing
-/// is a fact about the archetype rather than about one field, so the database
-/// and the table live here and every field marked
-/// <see cref="NetwPropertyConfig.Persisted"/> shares them. An author who
-/// declared nothing already carries a
-/// <see cref="NetwPersistenceConfig.DefaultInterval"/> of <c>5.0</c> and a
-/// <see cref="NetwPersistenceConfig.HydrateOnSpawnEnabled"/> of <c>true</c>.
-/// Those are the policy a reader applies, not an absence it branches on: a
-/// script that names only a database and a table snapshots every five seconds
-/// and restores its saved row before the spawn frame is taken.
-/// <see cref="NetwPersistenceConfig.RecordId"/> stores only the method name, so
-/// the config does not retain a <see cref="Node"/> and can be reused for other
-/// instances. The server resolves the method on the entity root. Without a
-/// provider, it uses <see cref="NetwEntity.EntityId"/> and then the node name.
-/// <see cref="NetwPersistenceConfig.Db"/> is typed <see cref="Variant"/>
-/// because <see cref="NetwDatabase"/> is a GDScript class with no native
-/// counterpart, so the config carries whatever the author handed it without
-/// narrowing it, and GDScript resolves the real script type on the way back
-/// out.
+/// The declaration belongs to the node that made it, so two players running one
+/// script keep two record ids. Every column of
+/// <see cref="NetwPersistenceConfig.Schema"/> is filled by one property that
+/// named it through <see cref="NetwPropertyConfig.Persisted"/>, and a column
+/// left unbound refuses the whole entity. <see cref="Netw.ConfigureDatabase"/>
+/// and <see cref="Netw.Database"/> resolve the session through the
+/// <see cref="SceneTree"/>, so a database is declared from <c>Node._ready</c>
+/// rather than from <c>Object._init</c>.
 /// <code>
-/// func _init() -&gt; void:
+/// func _ready() -&gt; void:
+///     Netw.configure_property(self, &amp;"position", false) \
+///             .persisted(game.save_schema.column_ref(0))
 ///     Netw.configure_persistence(self) \
-///             .database(preload("res://data/game.tres")) \
-///             .table(&amp;"players") \
-///             .interval(5.0) \
-///             .record_id(_account_id)
-///     Netw.configure_property(self, &amp;"gold").persisted()
+///             .database(&amp;"saves") \
+///             .schema(game.save_schema) \
+///             .record_id(account_name) \
+///             .interval(5.0)
+///
+/// func account_name() -&gt; StringName:
+///     return entity.entity_id
 /// </code>
+/// <para>
+/// <see cref="NetwPersistenceConfig.RecordId"/> is read once, when the entity
+/// binds, and the id it answered is the row every later save writes. Moving the
+/// account the provider reads never retargets an enrolled save. A key that
+/// changes between sessions, such as a peer id, reads a different row every
+/// time the player joins. The row is reached through
+/// <see cref="NetwPersistenceHandle"/>, as
+/// <see cref="NetwEntity.Persistence"/>.
+/// </para>
 /// </remarks>
 public sealed class NetwPersistenceConfig : NetwRefCounted
 {
@@ -58,234 +56,65 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    private static readonly IntPtr _bindGetDb =
-        NetwApi.MethodBind("NetwPersistenceConfig", "get_db", 2928407163UL);
-
-    private static readonly IntPtr _bindSetDb =
-        NetwApi.MethodBind("NetwPersistenceConfig", "set_db", 2911477420UL);
-
-    /// <summary>
-    /// The <see cref="NetwDatabase"/> every flush and hydrate reads and writes,
-    /// or <c>null</c> for an archetype that persists nowhere. Typed
-    /// <see cref="Variant"/> because <see cref="NetwDatabase"/> is a GDScript
-    /// class, so the config holds the author's object without narrowing it.
-    /// Declared through <see cref="NetwPersistenceConfig.Database"/>.
-    /// </summary>
-    public NetwDatabase Db
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(_bindGetDb, Checked, ref answered);
-            return NetwDatabase.Adopt(answered);
-        }
-        set
-        {
-            IntPtr slot0 = value?.Native ?? IntPtr.Zero;
-            long discarded = default;
-            NetwThunks.Ptrcall1_IntPtr_Long(
-                _bindSetDb,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetTableName =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "get_table_name",
-            2002593661UL);
-
-    private static readonly IntPtr _bindSetTableName =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "set_table_name",
-            3304788590UL);
-
-    /// <summary>
-    /// Table the archetype's rows are keyed under. Declared through
-    /// <see cref="NetwPersistenceConfig.Table"/>.
-    /// </summary>
-    public StringName TableName
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetTableName, Checked, ref answered);
-            StringName result = VariantUtils.ConvertToStringName(answered);
-            answered.Dispose();
-            return result;
-        }
-        set
-        {
-            godot_variant slot0 = VariantUtils.CreateFromStringName(value);
-            godot_variant answered = default;
-            NetwThunks.Call1(
-                _bindSetTableName,
-                Checked,
-                in slot0,
-                ref answered);
-            slot0.Dispose();
-            answered.Dispose();
-        }
-    }
-
-    private static readonly IntPtr _bindGetDefaultInterval =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "get_default_interval",
-            1740695150UL);
-
-    private static readonly IntPtr _bindSetDefaultInterval =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "set_default_interval",
-            373806689UL);
-
-    /// <summary>
-    /// Snapshot cadence in seconds for persisted columns that name no cadence
-    /// of their own. Declared through
-    /// <see cref="NetwPersistenceConfig.Interval"/>.
-    /// </summary>
-    public double DefaultInterval
-    {
-        get
-        {
-            double answered = default;
-            NetwThunks.Ptrcall0_Double(
-                _bindGetDefaultInterval,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            double slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Double_Long(
-                _bindSetDefaultInterval,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetHydrateOnSpawnEnabled =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "get_hydrate_on_spawn_enabled",
-            36873697UL);
-
-    private static readonly IntPtr _bindSetHydrateOnSpawnEnabled =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "set_hydrate_on_spawn_enabled",
-            2586408642UL);
-
-    /// <summary>
-    /// When true, the server restores the saved row before the entity's SPAWN
-    /// frame snapshots spawn state, so peers see the stored values from the
-    /// first frame. Declared through
-    /// <see cref="NetwPersistenceConfig.HydrateOnSpawn"/>.
-    /// </summary>
-    public bool HydrateOnSpawnEnabled
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetHydrateOnSpawnEnabled,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-        set
-        {
-            byte slot0 = value ? (byte)1 : (byte)0;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Byte_Long(
-                _bindSetHydrateOnSpawnEnabled,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetRecordIdProvider =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "get_record_id_provider",
-            2002593661UL);
-
-    private static readonly IntPtr _bindSetRecordIdProvider =
-        NetwApi.MethodBind(
-            "NetwPersistenceConfig",
-            "set_record_id_provider",
-            3304788590UL);
-
-    /// <summary>
-    /// Method called on the entity root to compute the record id, or empty to
-    /// fall back to <see cref="NetwEntity.EntityId"/> and then the node name.
-    /// Declared through <see cref="NetwPersistenceConfig.RecordId"/>, which is
-    /// the only spelling that keeps the object out of the record.
-    /// </summary>
-    public StringName RecordIdProvider
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetRecordIdProvider, Checked, ref answered);
-            StringName result = VariantUtils.ConvertToStringName(answered);
-            answered.Dispose();
-            return result;
-        }
-        set
-        {
-            godot_variant slot0 = VariantUtils.CreateFromStringName(value);
-            godot_variant answered = default;
-            NetwThunks.Call1(
-                _bindSetRecordIdProvider,
-                Checked,
-                in slot0,
-                ref answered);
-            slot0.Dispose();
-            answered.Dispose();
-        }
-    }
-
     private static readonly IntPtr _bindDatabase =
-        NetwApi.MethodBind("NetwPersistenceConfig", "database", 1122191723UL);
+        NetwApi.MethodBind("NetwPersistenceConfig", "database", 3751466617UL);
 
     /// <summary>
-    /// Declares the <see cref="NetwDatabase"/> every flush and hydrate reads
-    /// and writes, into <see cref="NetwPersistenceConfig.Db"/>. Returns the
-    /// same config so the declaration chains.
+    /// Names the <see cref="NetwDatabase"/> this entity's row lives in. The
+    /// name resolves in the same session, so
+    /// <see cref="Netw.ConfigureDatabase"/> declares it first. Returns the same
+    /// config so the declaration chains.
     /// </summary>
-    public NetwPersistenceConfig Database(NetwDatabase database)
+    public NetwPersistenceConfig Database(StringName name)
     {
-        IntPtr slot0 = database?.Native ?? IntPtr.Zero;
+        godot_variant slot0 = VariantUtils.CreateFromStringName(name);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindDatabase, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        NetwPersistenceConfig result =
+            NetwPersistenceConfig.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindSchema =
+        NetwApi.MethodBind("NetwPersistenceConfig", "schema", 2962147809UL);
+
+    /// <summary>
+    /// Declares the shape of this entity's row. Every
+    /// <see cref="NetwColumnRef"/> a property binds comes from this same
+    /// <see cref="NetwSchema"/>, and one taken from another schema refuses the
+    /// binding whatever its index. Returns the same config so the declaration
+    /// chains.
+    /// </summary>
+    public NetwPersistenceConfig Schema(NetwSchema schema)
+    {
+        IntPtr slot0 = schema?.Native ?? IntPtr.Zero;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindDatabase,
+            _bindSchema,
             Checked,
             in slot0,
             ref answered);
         return NetwPersistenceConfig.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindTable =
-        NetwApi.MethodBind("NetwPersistenceConfig", "table", 3751466617UL);
+    private static readonly IntPtr _bindRecordId =
+        NetwApi.MethodBind("NetwPersistenceConfig", "record_id", 2383254644UL);
 
     /// <summary>
-    /// Declares <see cref="NetwPersistenceConfig.TableName"/>. Returns the same
-    /// config so the declaration chains.
+    /// Answers the key this entity's row is stored under. It is called once,
+    /// when the entity binds, and must answer a nonempty
+    /// <see cref="StringName"/>. Returns the same config so the declaration
+    /// chains.
     /// </summary>
-    public NetwPersistenceConfig Table(StringName name)
+    public NetwPersistenceConfig RecordId(Callable provider)
     {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(name);
+        godot_variant slot0 = VariantUtils.CreateFromCallable(provider);
         godot_variant answered = default;
-        NetwThunks.Call1(_bindTable, Checked, in slot0, ref answered);
+        NetwThunks.Call1(_bindRecordId, Checked, in slot0, ref answered);
         slot0.Dispose();
         NetwPersistenceConfig result =
             NetwPersistenceConfig.Adopt(
@@ -299,8 +128,10 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "interval", 3557262514UL);
 
     /// <summary>
-    /// Declares <see cref="NetwPersistenceConfig.DefaultInterval"/>. Returns
-    /// the same config so the declaration chains.
+    /// Saves the whole row this often while anything in it has changed.
+    /// <c>0.0</c> saves only when the game calls
+    /// <see cref="NetwPersistenceHandle.Save"/>. Returns the same config so the
+    /// declaration chains. <b>Server Only.</b>
     /// </summary>
     public NetwPersistenceConfig Interval(double seconds)
     {
@@ -314,49 +145,38 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         return NetwPersistenceConfig.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindHydrateOnSpawn =
+    private static readonly IntPtr _bindLoadOnSpawn =
         NetwApi.MethodBind(
             "NetwPersistenceConfig",
-            "hydrate_on_spawn",
+            "load_on_spawn",
             1161358066UL);
 
     /// <summary>
-    /// Declares <see cref="NetwPersistenceConfig.HydrateOnSpawnEnabled"/>.
-    /// Returns the same config so the declaration chains.
+    /// Whether the stored row is read before the entity plays. Returns the same
+    /// config so the declaration chains. The session authority starts the read
+    /// when the entity's node is ready, and no peer receives the entity until
+    /// it settles.
+    /// <code>
+    /// read settles
+    /// ┠╴row found    the row is applied, then the entity is sent to peers
+    /// ┠╴no row       the entity is sent with the values it spawned with
+    /// ┖╴failed       the entity is not sent until a retried load succeeds
+    /// </code>
+    /// <para>
+    /// <see cref="NetwPersistenceHandle.Load"/> retries a failed read. A bound
+    /// property that changes while the row is being read fails the read, and
+    /// the stored row is not applied over it.
+    /// </para>
     /// </summary>
-    public NetwPersistenceConfig HydrateOnSpawn(bool enabled = true)
+    public NetwPersistenceConfig LoadOnSpawn(bool enabled = true)
     {
         byte slot0 = enabled ? (byte)1 : (byte)0;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Byte_IntPtr(
-            _bindHydrateOnSpawn,
+            _bindLoadOnSpawn,
             Checked,
             in slot0,
             ref answered);
         return NetwPersistenceConfig.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindRecordId =
-        NetwApi.MethodBind("NetwPersistenceConfig", "record_id", 2383254644UL);
-
-    /// <summary>
-    /// Declares that <paramref name="callable"/>'s method on the entity root
-    /// computes the record id rows are keyed by. Only
-    /// <see cref="Callable.Method"/> is kept, into
-    /// <see cref="NetwPersistenceConfig.RecordIdProvider"/>. Returns the same
-    /// config so the declaration chains.
-    /// </summary>
-    public NetwPersistenceConfig RecordId(Callable callable)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindRecordId, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        NetwPersistenceConfig result =
-            NetwPersistenceConfig.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
     }
 }

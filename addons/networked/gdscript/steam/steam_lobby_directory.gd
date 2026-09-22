@@ -5,8 +5,9 @@
 ## and joins Steam lobbies through the connect plane with nothing else
 ## registered. A lobby's address is its Steam lobby id.
 ## [br][br]
-## Only one instance may exist per process. [member browser_filter_uid] tags
-## hosted lobbies so browsers only return lobbies created by the same game.
+## Steam allows one instance per process. A second one unregisters itself and
+## is freed, so its peer has no Steam directory. [member browser_filter_uid]
+## tags hosted lobbies so browsers only return lobbies created by the same game.
 ## [codeblock]
 ## MultiplayerTree
 ## └── SteamLobbyDirectory
@@ -83,7 +84,7 @@ func _should_register() -> bool:
 func _service_entered(_api: NetwMultiplayer) -> void:
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:
-		push_error(
+		push_warning(
 			"SteamLobbyDirectory: only one instance is allowed. " +
 			"Queueing duplicate for deletion.",
 		)

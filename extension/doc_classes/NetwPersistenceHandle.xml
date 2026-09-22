@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwPersistenceHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One entity's stored row, reached as [member NetwEntity.persistence].
+	</brief_description>
+	<description>
+		The session authority compiles the entity's [NetwPersistenceConfig] and every [method NetwPropertyConfig.persisted] declaration under it into one row when the entity's node is ready. A declaration that does not hold refuses the whole entity with an error naming the property and the column, so an entity either saves its whole row or saves nothing.
+		Code that depends on the stored values waits for [signal loaded]. [method Node._ready] runs before the row is read.
+		A save freezes its values at the moment it is submitted. A property that moved while the write was in flight leaves the entity [member dirty] after the acknowledgement, so the next save carries the newer value.
+		[codeblock]
+		func _on_chest_opened() -&gt; void:
+		    var row := entity.persistence
+		    row.saved.connect(func() -&gt; void: print("stored as ", row.record_id))
+		    row.save()
+		[/codeblock]
+		[method NetwPersistenceConfig.interval] saves the row on its own cadence, and an entity that changed nothing submits no write at all.
+		An entity whose node leaves the tree for good writes the values it held as it left, and the write completes after the node is freed. A move to another parent writes nothing and keeps the row bound. A final write the database refuses stays owed, and [method NetwSessionHandle.save_entities] writes it again.
+		A load or save that fails emits [signal NetwDatabase.failed] on the entity's database. The interval and the final write have no caller to answer, so that signal is where their failures arrive.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="load">
+			<return type="NetwPromise" />
+			<description>
+				Reads the stored row and applies it to the bound properties. The promise answers [code]true[/code] when a row was found and [code]false[/code] when none was stored, which leaves the entity's own values standing.
+				While the read started by [method NetwPersistenceConfig.load_on_spawn] is outstanding, this returns that same promise. A failed load fails the promise, and [method NetwPromise.wait] answers the code.
+				[codeblock lang=text]
+				Error
+				┠╴ERR_UNCONFIGURED       the entity binds no persistence, the database is not open,
+				│                        or the schema declares no migration from the stored row
+				┠╴ERR_UNAUTHORIZED       this peer holds no session authority
+				┠╴ERR_BUSY               a bound property changed since the last load or save, a
+				│                        write is in flight, a property changed while the row was
+				│                        read, or the database is full
+				┠╴ERR_DOES_NOT_EXIST     a bound node was freed while the row was applied
+				┠╴ERR_FILE_UNRECOGNIZED  the stored row is not in this library's format, or carries
+				│                        a newer storage version than the schema
+				┠╴ERR_INVALID_DATA       the stored row does not match the schema
+				┠╴ERR_UNAVAILABLE        session authority moved, the database closed or the session
+				│                        ended while the row was read, so the load was canceled
+				┖╴backend-defined        the backend could not read the row
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="save">
+			<return type="NetwPromise" />
+			<description>
+				Writes the bound properties as this entity's row. The promise answers [code]false[/code] when nothing had changed and no write was submitted. A write the database refused never becomes the saved values, so the entity stays [member dirty] and the next save carries them again.
+				A failed save fails the promise, and [method NetwPromise.wait] answers the code.
+				[codeblock lang=text]
+				Error
+				┠╴ERR_UNCONFIGURED    the entity binds no persistence, or the database is not open
+				┠╴ERR_UNAUTHORIZED    this peer holds no session authority, so its values are a
+				│                     replicated copy
+				┠╴ERR_BUSY            a write is in flight, the spawn load has not succeeded, or
+				│                     the database is full
+				┠╴ERR_INVALID_DATA    the bound values do not match the schema, or the connection
+				│                     answered no outcome for the row
+				┠╴ERR_UNAVAILABLE     the bound nodes are gone, or authority moved or the database
+				│                     closed before the write settled. The write may still have
+				│                     reached storage
+				┖╴backend-defined     the backend refused or could not complete the write
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="database" type="StringName" setter="" getter="get_database">
+			The [NetwDatabase] this row lives in, as [method NetwPersistenceConfig.database] named it.
+		</member>
+		<member name="dirty" type="bool" setter="" getter="get_dirty">
+			Whether any bound property differs from what was last saved.
+		</member>
+		<member name="record_id" type="StringName" setter="" getter="get_record_id">
+			The key this row is stored under, as [method NetwPersistenceConfig.record_id] answered it when the entity bound.
+		</member>
+	</members>
+	<signals>
+		<signal name="loaded">
+			<param index="0" name="found" type="bool" />
+			<description>
+				Emitted once a load has applied the stored row, including the read [method NetwPersistenceConfig.load_on_spawn] starts. [param found] is [code]false[/code] when the database held no row for [member record_id]. A failed load emits [signal NetwDatabase.failed] instead.
+			</description>
+		</signal>
+		<signal name="saved">
+			<description>
+				Emitted once a write has been acknowledged and its values have become the saved ones. A refused write emits [signal NetwDatabase.failed] instead.
+			</description>
+		</signal>
+	</signals>
+</class>

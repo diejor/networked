@@ -6,6 +6,7 @@
 #include "godot/utility.hpp"
 #include "netw/api/interest_handle.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/persistence_handle.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/entity/control.hpp"
@@ -679,7 +680,8 @@ void NetwEntity::_on_owner_ready() {
         apply_control();
     }
     hydrate_components();
-    if (NetwMultiplayer *core = session_core()) {
+    NetwMultiplayer *core = session_core();
+    if (core != nullptr && !core->persist_enroll(get_owner())) {
         core->predict_reconcile_declaration(this);
     }
     emit_signal(SIG_SPAWNED);
@@ -725,14 +727,15 @@ void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
         return;
     }
     note_stage(from);
-    if (opts->get_flush_save()) {
-        const Ref<NetwPersistenceEngine> engine = get_persistence();
-        if (engine.is_valid()) {
-            engine->flush(Array());
-        }
-    }
     if (owner == nullptr) {
         return;
+    }
+    NetwMultiplayer *api = session_core();
+    if (api != nullptr) {
+        api->persist_depart(
+            api->get_bindings()->find(owner),
+            opts->get_flush_save()
+        );
     }
     if (owner->get_multiplayer_authority() != 1) {
         owner->set_multiplayer_authority(1);
@@ -849,13 +852,6 @@ NodePath NetwEntity::property_path(
     );
 }
 
-Ref<NetwPersistenceEngine> NetwEntity::get_persistence() const {
-    NetwMultiplayer *core = session_core();
-    if (core == nullptr) {
-        return Ref<NetwPersistenceEngine>();
-    }
-    return core->persistence_engine_for(const_cast<NetwEntity *>(this));
-}
 
 Ref<NetwPropertySetBinding> NetwEntity::derived_binding(
     int64_t p_record
@@ -906,6 +902,13 @@ Ref<NetwSceneHandle> NetwEntity::get_scene() const {
 Ref<NetwPredictionHandle> NetwEntity::get_prediction() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_PREDICTION,
+        const_cast<NetwEntity *>(this)
+    );
+}
+
+Ref<NetwPersistenceHandle> NetwEntity::get_persistence() const {
+    return const_cast<NetwEntity *>(this)->record->part(
+        NetwEntityRecord::PART_PERSISTENCE,
         const_cast<NetwEntity *>(this)
     );
 }
@@ -1408,20 +1411,6 @@ void NetwEntity::_bind_methods() {
         &NetwEntity::comp_path_of
     );
 
-    ClassDB::bind_method(
-        D_METHOD("get_persistence"),
-        &NetwEntity::get_persistence
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "persistence",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwPersistenceEngine"
-        ),
-        "",
-        "get_persistence"
-    );
 
     ClassDB::bind_method(
         D_METHOD("get_state_binding"),
@@ -1507,6 +1496,21 @@ void NetwEntity::_bind_methods() {
         ),
         "",
         "get_prediction"
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_persistence"),
+        &NetwEntity::get_persistence
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::OBJECT,
+            "persistence",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwPersistenceHandle",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_persistence"
     );
     ClassDB::bind_method(
         D_METHOD("get_interpolation"),

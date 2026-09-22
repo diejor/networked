@@ -12,6 +12,8 @@ var pressed := {
 @onready var teleport: TPComponent = %TPComponent
 @onready var entity := NetwEntity.of(self)
 
+var game: MultipleLevelsSession
+
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -20,11 +22,23 @@ func _init() -> void:
 	declared.interpolation.visual_root = ^"Icon"
 	declared.prediction.consume_buffer_ticks = 0
 
-	Netw.configure_persistence(self) \
-			.database(preload("res://examples/multiple_levels/multiple_levels_database.tres")) \
-			.table(&"players")
-	Netw.configure_property(self, &"position").persisted().on_spawn() \
+	Netw.configure_property(self, &"position").on_spawn() \
 			.interpolate(NetwInterpolate.new().lerp())
+
+
+func _ready() -> void:
+	game = Netw.service(self, MultipleLevelsSession)
+	Netw.configure_property(self, &"position", false) \
+			.persisted(game.save_schema.column_ref(MultipleLevelsSession.WHERE))
+	Netw.configure_persistence(self) \
+			.database(MultipleLevelsSession.SAVES) \
+			.schema(game.save_schema) \
+			.record_id(account_name) \
+			.interval(5.0)
+
+
+func account_name() -> StringName:
+	return entity.entity_id
 
 
 func _unhandled_input(event: InputEvent) -> void:

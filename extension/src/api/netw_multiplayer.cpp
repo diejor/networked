@@ -297,6 +297,7 @@ void NetwMultiplayer::embed_dispose() {
         return;
     }
     session_flush_deferred();
+    persist_dispose();
     set_auth_callback(Callable());
     scene_dispose();
     session_dispose();
@@ -2526,7 +2527,6 @@ NetwMultiplayer::~NetwMultiplayer() {
     clock_release();
     lagcomp_release();
     declaration_slots.release();
-    persistence_drain_forget();
     if (replication_owner != nullptr) {
         memdelete(replication_owner);
         replication_owner = nullptr;
@@ -2595,15 +2595,15 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
         clock_attach_pump();
     }
     advance_frame();
-    ReplicationCore *plane = (get_replication_plane());
-    if (plane != nullptr) {
-        plane->on_poll();
-    }
     Object *seam = session_seam(StringName("_persist_tick"));
     if (seam != nullptr) {
         seam->call("_persist_tick", frame_delta);
     } else {
         persist_pump(frame_delta);
+    }
+    ReplicationCore *plane = (get_replication_plane());
+    if (plane != nullptr) {
+        plane->on_poll();
     }
     sink_verdict(display_pump(frame_delta), 0);
     return err;
@@ -3538,14 +3538,6 @@ int NetwMultiplayer::declared_quantum() const {
     return MAX(1, int(Math::round(clock_engine().physics_factor())));
 }
 
-void NetwMultiplayer::persist_set_quit_guard(const Callable &p_guard) {
-    persistence.quit_guard = p_guard;
-}
-
-void NetwMultiplayer::persist_set_drain(const Callable &p_drain) {
-    persistence.drain = p_drain;
-}
-
 NetwMultiplayer::SessionState NetwMultiplayer::session_get_state() const {
     return SessionState(session_core.get_state());
 }
@@ -4177,9 +4169,59 @@ Ref<NetwPromise> NetwMultiplayer::session_leave() {
     if (session_get_state() == SESSION_STATE_OFFLINE) {
         return NetwPromise::resolved(OK);
     }
+    if (session_leaving.is_valid()) {
+        return session_leaving;
+    }
+    if (!is_host() || get_bindings()->enrolled().is_empty()) {
+        return session_close_peer();
+    }
+    Ref<NetwPromise> left;
+    left.instantiate();
+    session_leaving = left;
+    const Ref<NetwPromise> drained = persist_flush_all();
+    drained->when_settled(
+        callable_mp(this, &NetwMultiplayer::session_leave_drained)
+            .bind(drained, left)
+    );
+    return left;
+}
+
+void NetwMultiplayer::session_leave_drained(
+    const Ref<NetwPromise> &p_drained,
+    const Ref<NetwPromise> &p_left
+) {
+    session_leaving.unref();
+    const Error drained = Error(int(p_drained->get_result()));
+    if (drained != OK) {
+        NETW_ERROR(
+            sys::SESSION,
+            "the session stays online, because an entity row could not be "
+            "saved. Leave again to retry, or close the peer to disconnect "
+            "without saving"
+        );
+        p_left->resolve(int(drained));
+        return;
+    }
+    const Ref<NetwPromise> closed = session_close_peer();
+    closed->when_settled(
+        callable_mp(this, &NetwMultiplayer::session_leave_closed)
+            .bind(closed, p_left)
+    );
+}
+
+void NetwMultiplayer::session_leave_closed(
+    const Ref<NetwPromise> &p_closed,
+    const Ref<NetwPromise> &p_left
+) {
+    p_left->resolve(p_closed->get_result());
+}
+
+Ref<NetwPromise> NetwMultiplayer::session_close_peer() {
+    if (session_get_state() == SESSION_STATE_OFFLINE) {
+        return NetwPromise::resolved(OK);
+    }
     NETW_TRACE(sys::SESSION, "Session: leave called.");
     NETW_INFO(sys::SESSION, "Disconnecting player.");
-    persistence_flush_all();
     session_transition(SESSION_STATE_DISCONNECTING);
     if (effective_peer.is_valid()) {
         effective_peer->close();

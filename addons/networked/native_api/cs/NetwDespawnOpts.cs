@@ -74,10 +74,12 @@ public sealed class NetwDespawnOpts : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnOpts", "set_flush_save", 2586408642UL);
 
     /// <summary>
-    /// When <c>true</c> (default), <see cref="NetwPersistenceEngine.Flush"/>
-    /// runs on the despawning entity before authority revert and queue_free. A
-    /// non-OK return is logged at error level and the despawn proceeds, so from
-    /// the caller's perspective despawn is infallible.
+    /// When <c>true</c> (default), the entity's row is read at the despawn call
+    /// and written once the node has left the tree. <c>false</c> writes nothing
+    /// for this departure. The despawn never waits for the write, so a caller
+    /// that needs the row stored awaits
+    /// <see cref="NetwPersistenceHandle.Save"/> before despawning. See
+    /// <see cref="NetwPersistenceHandle"/>.
     /// </summary>
     public bool FlushSave
     {

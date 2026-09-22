@@ -117,6 +117,20 @@
 				 [param preset] can be used to [annotation GDScript.export] a [NetwClockConfig] from the inspector and declare it from [method Node._enter_tree] instead of [method Object._init]. 
 			</description>
 		</method>
+		<method name="configure_database" qualifiers="static">
+			<return type="NetwDatabaseConfig" />
+			<param index="0" name="node" type="Node" />
+			<param index="1" name="name" type="StringName" />
+			<param index="2" name="preset" type="NetwDatabaseConfig" default="null" />
+			<description>
+				Declares a [NetwDatabase] named [param name] on [param node]'s session, and returns the [NetwDatabaseConfig] to fill in.
+				[codeblock]
+				func _ready() -&gt; void:
+				    Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
+				[/codeblock]
+				[method database] reaches the declared database. [param preset] copies an exported [NetwDatabaseConfig] in rather than filling in the returned one.
+			</description>
+		</method>
 		<method name="configure_despawn" qualifiers="static">
 			<return type="NetwDespawnConfig" />
 			<param index="0" name="node" type="Node" />
@@ -204,15 +218,17 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares where [param node] is saved and loaded.
+				Declares which row of which [NetwDatabase] [param node] loads and saves.
 				[codeblock]
-				func _init() -&gt; void:
+				func _ready() -&gt; void:
+				    Netw.configure_property(self, &amp;"gold", false) \
+				            .persisted(game.save_schema.column_ref(0))
 				    Netw.configure_persistence(self) \
-				            .database(preload("res://data/game.tres")) \
-				            .table(&amp;"players")
-				    Netw.configure_property(self, &amp;"gold").persisted()
+				            .database(&amp;"saves") \
+				            .schema(game.save_schema) \
+				            .record_id(account_name)
 				[/codeblock]
-				Read [NetwPersistenceConfig] for a picture of what saves and loads mean for a node, and [NetwDatabase] for the database architecture.
+				The declaration belongs to [param node] itself, so two entities running one script keep two record ids. Read [NetwPersistenceConfig] for what an entity declares, [NetwPersistenceHandle] for reaching the row, and [NetwDatabase] for the database architecture.
 			</description>
 		</method>
 		<method name="configure_property" qualifiers="static">
@@ -372,6 +388,18 @@
 				This connection model is optional, you can also assign a [MultiplayerPeer] to [member Node.multiplayer_peer] directly, like you would normally do with [SceneMultiplayer].
 			</description>
 		</method>
+		<method name="database" qualifiers="static">
+			<return type="NetwDatabase" />
+			<param index="0" name="node" type="Node" />
+			<param index="1" name="name" type="StringName" />
+			<description>
+				The [NetwDatabase] declared under [param name] in [param node]'s session. Returns the same cached handle on every call.
+				[codeblock]
+				var db: NetwDatabase = Netw.database(self, &amp;"saves")
+				[/codeblock]
+				[method configure_database] declares [param name] first.
+			</description>
+		</method>
 		<method name="despawn" qualifiers="static">
 			<return type="int" enum="Error" />
 			<param index="0" name="node" type="Node" />
@@ -460,11 +488,11 @@
 			<param index="1" name="owner" type="NetwPlayer" default="null" />
 			<description>
 				Sends a node the game built itself to every peer, which rebuild it from its [member Node.scene_file_path], and returns its [NetwEntity].
-				[param node] has no parent yet. [member NetwEntity.route], [member NetwEntity.entity_id], [member NetwEntity.peer_id] and [member NetwEntity.controller] are all filled in by the time this returns, and the other peers are not told anything until the node enters the tree. That gap is where a save is loaded and where the node's first values are written.
+				[param node] has no parent yet. [member NetwEntity.route], [member NetwEntity.entity_id], [member NetwEntity.peer_id] and [member NetwEntity.controller] are all filled in by the time this returns, and the other peers are not told anything until the node enters the tree. That gap is where the node's first values are written.
 				[codeblock]
 				var body := PlayerScene.instantiate()
 				var entity := Netw.replicate(body, player)
-				await save.hydrate(entity)
+				body.position = spawn_point
 				scene.add_child(body)
 				[/codeblock]
 				[b]Server Only.[/b]
@@ -642,14 +670,7 @@
 				    Netw.spawn_player(player, _spawn_avatar, character_class)
 				)
 				[/codeblock]
-				The node becomes tied to [param player] lifecycle.
-				[codeblock]
-				var body := Netw.spawn_player(player, _spawn_avatar, character_class)
-				var saved := NetwEntity.of(body).persistence
-				if saved:
-				    await saved.hydrate().wait()
-				players.add_child(body)
-				[/codeblock]
+				The node becomes tied to [param player] lifecycle. A node that declares [method NetwPersistenceConfig.load_on_spawn] reaches the other peers once its stored row is applied.
 				[b]Server Only.[/b]
 			</description>
 		</method>

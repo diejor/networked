@@ -1,5 +1,7 @@
 #include "netw/schema_core.hpp"
 
+#include <cstdint>
+
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -27,6 +29,7 @@ const Variant::Type STORAGE_TYPES[SchemaCore::COLUMN_TYPE_COUNT] = {
     Variant::PACKED_VECTOR4_ARRAY,
     Variant::PACKED_INT64_ARRAY,
     Variant::ARRAY,
+    Variant::PACKED_STRING_ARRAY,
 };
 
 const Variant::Type ELEMENT_TYPES[SchemaCore::COLUMN_TYPE_COUNT] = {
@@ -46,10 +49,96 @@ const Variant::Type ELEMENT_TYPES[SchemaCore::COLUMN_TYPE_COUNT] = {
     Variant::QUATERNION,
     Variant::INT,
     Variant::NIL,
+    Variant::STRING,
 };
 
 bool in_range(int type) {
     return type >= 0 && type < SchemaCore::COLUMN_TYPE_COUNT;
+}
+
+bool integer_fits(int type, int64_t value) {
+    switch (type) {
+        case SchemaCore::I8:
+            return value >= -128 && value <= 127;
+        case SchemaCore::U8:
+            return value >= 0 && value <= 255;
+        case SchemaCore::I16:
+            return value >= -32768 && value <= 32767;
+        case SchemaCore::U16:
+            return value >= 0 && value <= 65535;
+        case SchemaCore::I32:
+            return value >= INT32_MIN && value <= INT32_MAX;
+        default:
+            return true;
+    }
+}
+
+Error storable(const Variant &value, int depth, int &r_budget) {
+    if (depth > SchemaCore::MAX_VALUE_DEPTH) {
+        return ERR_CYCLIC_LINK;
+    }
+    if (--r_budget < 0) {
+        return ERR_OUT_OF_MEMORY;
+    }
+    switch (value.get_type()) {
+        case Variant::OBJECT:
+        case Variant::RID:
+        case Variant::CALLABLE:
+        case Variant::SIGNAL:
+            return ERR_INVALID_DATA;
+        case Variant::ARRAY: {
+            const Array list = value;
+            for (int at = 0; at < list.size(); ++at) {
+                const Error nested = storable(list[at], depth + 1, r_budget);
+                if (nested != OK) {
+                    return nested;
+                }
+            }
+            return OK;
+        }
+        case Variant::DICTIONARY: {
+            const Dictionary map = value;
+            const Array keys = map.keys();
+            for (int at = 0; at < keys.size(); ++at) {
+                Error nested = storable(keys[at], depth + 1, r_budget);
+                if (nested != OK) {
+                    return nested;
+                }
+                nested = storable(map[keys[at]], depth + 1, r_budget);
+                if (nested != OK) {
+                    return nested;
+                }
+            }
+            return OK;
+        }
+        default:
+            return OK;
+    }
+}
+
+Error validate_element(int type, const Variant &value) {
+    if (type == SchemaCore::VARIANT) {
+        return SchemaCore::validate_storable(value);
+    }
+    if (type == SchemaCore::STRING) {
+        const Variant::Type given = value.get_type();
+        const bool text = given == Variant::STRING
+            || given == Variant::STRING_NAME;
+        return text ? OK : ERR_INVALID_DATA;
+    }
+    const Variant::Type want
+        = static_cast<Variant::Type>(SchemaCore::element_type(type));
+    const Variant::Type given = value.get_type();
+    if (want == Variant::FLOAT && given == Variant::INT) {
+        return OK;
+    }
+    if (given != want) {
+        return ERR_INVALID_DATA;
+    }
+    if (want == Variant::INT && !integer_fits(type, int64_t(value))) {
+        return ERR_PARAMETER_RANGE_ERROR;
+    }
+    return OK;
 }
 
 } // namespace
@@ -80,6 +169,37 @@ void SchemaCore::set_column_quantizer(
     const Ref<NetwQuantize> &quantizer
 ) {
     assign_quantizer(record_of(schema), column, quantizer);
+}
+
+void SchemaCore::set_storage_version(const RID &schema, int version) {
+    assign_storage_version(record_of(schema), version);
+}
+
+void SchemaCore::add_migration(
+    const RID &schema,
+    int from_version,
+    const Callable &step
+) {
+    append_migration(record_of(schema), from_version, step);
+}
+
+int SchemaCore::storage_version_of(const RID &schema) const {
+    const SchemaRecord *record = record_of(schema);
+    return record != nullptr ? record->storage_version : 0;
+}
+
+Callable SchemaCore::migration_from(const RID &schema, int from_version)
+    const {
+    const SchemaRecord *record = record_of(schema);
+    if (record == nullptr) {
+        return Callable();
+    }
+    for (const SchemaMigration &step : record->migrations) {
+        if (step.from_version == from_version) {
+            return step.step;
+        }
+    }
+    return Callable();
 }
 
 Error SchemaCore::seal(const RID &schema) {
@@ -250,6 +370,46 @@ void SchemaCore::assign_quantizer(
     found->quantizer = quantizer;
 }
 
+void SchemaCore::assign_storage_version(SchemaRecord *record, int version) {
+    if (record == nullptr || version < 1) {
+        return;
+    }
+    if (record->sealed) {
+        if (record->storage_version != version) {
+            record->redeclare_failed = true;
+        }
+        return;
+    }
+    record->storage_version = version;
+}
+
+void SchemaCore::append_migration(
+    SchemaRecord *record,
+    int from_version,
+    const Callable &step
+) {
+    if (record == nullptr || from_version < 1 || step.is_null()) {
+        return;
+    }
+    for (const SchemaMigration &existing : record->migrations) {
+        if (existing.from_version != from_version) {
+            continue;
+        }
+        if (record->sealed && existing.step != step) {
+            record->redeclare_failed = true;
+        }
+        return;
+    }
+    if (record->sealed) {
+        record->redeclare_failed = true;
+        return;
+    }
+    SchemaMigration made;
+    made.from_version = from_version;
+    made.step = step;
+    record->migrations.push_back(made);
+}
+
 Error SchemaCore::fix(SchemaRecord *record) {
     if (record == nullptr) {
         return ERR_DOES_NOT_EXIST;
@@ -386,6 +546,8 @@ Variant SchemaCore::make_storage(int type) {
             return PackedVector4Array();
         case Variant::PACKED_COLOR_ARRAY:
             return PackedColorArray();
+        case Variant::PACKED_STRING_ARRAY:
+            return PackedStringArray();
         case Variant::ARRAY:
             return Array();
         default:
@@ -399,6 +561,38 @@ int SchemaCore::storage_type(int type) {
 
 int SchemaCore::element_type(int type) {
     return in_range(type) ? static_cast<int>(ELEMENT_TYPES[type]) : -1;
+}
+
+bool SchemaCore::is_sized(int type) {
+    return in_range(type) && type != VARIANT && type != STRING;
+}
+
+Error SchemaCore::validate_storable(const Variant &value) {
+    int budget = MAX_VALUE_ELEMENTS;
+    return storable(value, 0, budget);
+}
+
+Error SchemaCore::validate_value(int type, int stride, const Variant &value) {
+    if (!in_range(type) || stride < 1) {
+        return ERR_INVALID_PARAMETER;
+    }
+    if (stride == 1) {
+        return validate_element(type, value);
+    }
+    if (value.get_type() != Variant::ARRAY) {
+        return ERR_INVALID_DATA;
+    }
+    const Array elements = value;
+    if (elements.size() != stride) {
+        return ERR_INVALID_DATA;
+    }
+    for (int at = 0; at < elements.size(); ++at) {
+        const Error nested = validate_element(type, elements[at]);
+        if (nested != OK) {
+            return nested;
+        }
+    }
+    return OK;
 }
 
 } // namespace netw

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "godot/callable.hpp"
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/quantize.hpp"
@@ -23,6 +24,11 @@ struct SchemaColumn {
     godot::Ref<NetwQuantize> quantizer;
 };
 
+struct SchemaMigration {
+    int from_version = 0;
+    godot::Callable step;
+};
+
 class SchemaRecord {
     friend class netw::SchemaCore;
 
@@ -33,6 +39,8 @@ class SchemaRecord {
 public:
     godot::StringName name;
     godot::LocalVector<SchemaColumn> columns;
+    godot::LocalVector<SchemaMigration> migrations;
+    int storage_version = 1;
     bool sealed = false;
     int shape_hash = 0;
 

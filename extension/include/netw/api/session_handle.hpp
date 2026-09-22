@@ -69,6 +69,7 @@ public:
     godot::Dictionary get_stats() const;
 
     godot::Ref<NetwPromise> leave();
+    godot::Ref<NetwPromise> save_entities();
     godot::Error kick(
         const godot::Ref<NetwPlayer> &p_who,
         const godot::String &p_reason

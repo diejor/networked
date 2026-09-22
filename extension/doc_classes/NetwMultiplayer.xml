@@ -17,7 +17,7 @@
 		- [code]clock_*[/code]: [NetwClockHandle]
 		- [code]predict_*[/code]: [NetwPredictionHandle]
 		- [code]entity_*[/code], [code]liveness_*[/code], and [code]spawn_*[/code]: [NetwEntity]
-		- [code]table_*[/code]: [NetwRecordTable]
+		- [code]table_*[/code]: [NetwTableHandle]
 		- [code]schema_*[/code]: [NetwSchema]
 		- [code]lagcomp_*[/code]: [NetwAction]
 		- [code]peer_*[/code]: [NetwPlayer]
@@ -27,7 +27,7 @@
 		- [code]rpc_*[/code] and [code]sync_*[/code]: [NetwMemberConfig]
 		- [code]property_set_*[/code]: [NetwPropertySet]
 		- [code]service_*[/code]: [NetwService]
-		- [code]persist_*[/code]: [NetwDatabase]
+		- [code]database_*[/code] and [code]persist_*[/code]: [NetwDatabase] and [NetwPersistenceHandle]
 		- [code]stats_*[/code] and [code]attribution_*[/code]: [NetwPredictStats]
 		Methods beginning with an underscore are virtual extension points. Override one in a [Script] and call its corresponding [code]_default[/code] method to use the default implementation.
 		[codeblock]
@@ -78,8 +78,8 @@
 			<return type="void" />
 			<param index="0" name="delta" type="float" />
 			<description>
-				Advances the persistence snapshot loop by [param delta] seconds. With no override this returns [method persist_tick_default].
-				[method MultiplayerAPI.poll] reaches persistence through this stage with the wall-clock gap since the last poll, so a session saves on its own cadence with no frame behind it. Override it to observe or replace that cadence, and call [method persist_tick_default] for the stock pass.
+				Runs the entity save pass. [method MultiplayerAPI.poll] calls it once per poll with [param delta], the seconds since the last poll. With no override this runs [method persist_tick_default].
+				Override it to decide when entity rows save. Call [method persist_tick_default] from the override to run the stock pass.
 			</description>
 		</method>
 		<method name="_predict_admit_frame" qualifiers="virtual">
@@ -592,6 +592,130 @@
 			<param index="0" name="node" type="Node" />
 			<description>
 				The same session [method of] resolves, as the [NetwMultiplayer] itself rather than as the object it publishes. This is what a caller wants when it is about to call a session verb, and [method of] is what it wants when it is about to compare against an installed [MultiplayerAPI].
+			</description>
+		</method>
+		<method name="database_close">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<description>
+				Stops [param database] admitting work, waits for what it already admitted, releases its slot and settles with an [enum @GlobalScope.Error]. [method NetwDatabase.close] lists the codes.
+			</description>
+		</method>
+		<method name="database_create">
+			<return type="RID" />
+			<param index="0" name="name" type="StringName" />
+			<param index="1" name="config" type="NetwDatabaseConfig" />
+			<description>
+				Declares a database named [param name] from [param config] and returns its [RID]. A name already declared returns the [RID] it has, or an invalid one when [param config] names a different backend.
+			</description>
+		</method>
+		<method name="database_delete_slot">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="slot" type="StringName" />
+			<description>
+				Removes [param slot] and everything stored in it, then settles with an [enum @GlobalScope.Error]. It works before [method database_open], and the slot [param database] holds open answers [constant @GlobalScope.ERR_BUSY]. [method NetwDatabase.delete_slot] lists the codes.
+			</description>
+		</method>
+		<method name="database_erase">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="schema" type="RID" />
+			<param index="2" name="id" type="StringName" />
+			<description>
+				Removes the record at [param id] and settles with an [enum @GlobalScope.Error]. Erasing a record that is not there succeeds. [method NetwDatabase.erase] lists the codes.
+			</description>
+		</method>
+		<method name="database_find" qualifiers="const">
+			<return type="RID" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				The database declared as [param name], or an invalid [RID] when none is.
+			</description>
+		</method>
+		<method name="database_flush">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<description>
+				Settles with an [enum @GlobalScope.Error] once every operation [param database] admitted before this call has settled. [method NetwDatabase.flush] lists the codes.
+			</description>
+		</method>
+		<method name="database_get_slot" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="database" type="RID" />
+			<description>
+				The slot [param database] holds open, or empty when it is not open.
+			</description>
+		</method>
+		<method name="database_get_state" qualifiers="const">
+			<return type="int" enum="NetwMultiplayer.DatabaseState" />
+			<param index="0" name="database" type="RID" />
+			<description>
+				Whether [param database] is closed, opening, open, closing or faulted, as a [enum DatabaseState].
+			</description>
+		</method>
+		<method name="database_list_slots">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<description>
+				Settles with the slots reply drawn in [method NetwDatabase.list_slots], naming every slot the backend of [param database] holds. It works before [method database_open].
+			</description>
+		</method>
+		<method name="database_open">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="slot" type="StringName" />
+			<description>
+				Opens [param slot] and settles with an [enum @GlobalScope.Error]. [param database] admits no work before it settles. Opening a different slot while one is open answers [constant @GlobalScope.ERR_BUSY]. [method NetwDatabase.open] lists the codes.
+			</description>
+		</method>
+		<method name="database_patch">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="schema" type="RID" />
+			<param index="2" name="id" type="StringName" />
+			<param index="3" name="values" type="Dictionary" />
+			<description>
+				Replaces the fields [param values] names in the record at [param id], keeps the rest, and settles with an [enum @GlobalScope.Error]. A record that is not there answers [constant @GlobalScope.ERR_DOES_NOT_EXIST]. [method NetwDatabase.patch] lists the codes.
+			</description>
+		</method>
+		<method name="database_read">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="schema" type="RID" />
+			<param index="2" name="id" type="StringName" />
+			<description>
+				Reads the record at [param id] and settles with the read reply drawn in [method NetwDatabase.read]. [param schema] is a sealed schema, as [method schema_find] answers it.
+				A [param database] that is not open fails the promise with [constant @GlobalScope.ERR_UNCONFIGURED], an unsealed [param schema] with [constant @GlobalScope.ERR_DOES_NOT_EXIST], and an empty [param id] with [constant @GlobalScope.ERR_INVALID_PARAMETER].
+			</description>
+		</method>
+		<method name="database_scan">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="schema" type="RID" />
+			<param index="2" name="filter" type="Dictionary" />
+			<param index="3" name="cursor" type="String" />
+			<param index="4" name="limit" type="int" />
+			<description>
+				Reads up to [param limit] records matching [param filter] and settles with the page reply drawn in [method NetwDatabase.scan], which also lists the codes that fail the promise. Pass the page's cursor back as [param cursor] to continue, and an empty [param cursor] to start.
+			</description>
+		</method>
+		<method name="database_submit">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="operations" type="Array" />
+			<description>
+				Applies [param operations] in order and settles with the batch reply drawn in [method NetwWriteBatch.submit]. The operations are the ones drawn in [method NetwDatabaseConnection._write_batch], and [NetwWriteBatch] is what builds them from a [NetwSchema].
+			</description>
+		</method>
+		<method name="database_write">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="schema" type="RID" />
+			<param index="2" name="id" type="StringName" />
+			<param index="3" name="values" type="Dictionary" />
+			<description>
+				Replaces the whole record at [param id] and settles with an [enum @GlobalScope.Error]. [param values] carries every column [param schema] declares and nothing else, and a row that does not is refused before storage sees it. [method NetwDatabase.write] lists the codes.
 			</description>
 		</method>
 		<method name="disconnect_peer">
@@ -1835,56 +1959,56 @@
 				The request rides a session control channel rather than a node [code]@rpc[/code], so a session with no scene tree still asks. A session that already holds authority publishes the request to itself, so the server's own handler is the single place the decision is taken.
 			</description>
 		</method>
-		<method name="persist_set_drain">
-			<return type="void" />
-			<param index="0" name="drain" type="Callable" />
+		<method name="persist_flush_all">
+			<return type="NetwPromise" />
 			<description>
-				Replaces the drain a session runs at shutdown, called with no arguments and owning the whole flush of every enrolled persistence engine.
-				With none installed the session drains on its own timer, which is the default behavior when nothing else knows when the write is finished. Install one when the game owns the shutdown story, for example to await a backend the session cannot see, and note that the installed [Callable] replaces the stock drain rather than running beside it.
+				Writes every entity row that changed since its last save and settles with an [enum @GlobalScope.Error] once each database has settled them. It is [constant @GlobalScope.OK] when every row is stored, and the error of the first row still unsaved otherwise. [method NetwSessionHandle.save_entities] lists the codes.
+				[b]Server Only.[/b]
 			</description>
 		</method>
-		<method name="persist_set_quit_guard">
-			<return type="void" />
-			<param index="0" name="guard" type="Callable" />
+		<method name="persist_get_record_id" qualifiers="const">
+			<return type="StringName" />
+			<param index="0" name="entity" type="RID" />
 			<description>
-				Replaces the guard a session arms so a quit cannot close the window before persistence has drained, called with no arguments.
-				With none installed a host arms the tree's own quit handling. Install one when the game already owns that story, or when the session runs somewhere no [SceneTree] quit request arrives. Like [method persist_set_drain] it replaces the stock path rather than adding to it, so an installed guard is responsible for holding the quit itself.
+				The key [param entity]'s row is stored under, or empty when [param entity] binds no persistence.
 			</description>
 		</method>
-		<method name="persist_shutdown">
-			<return type="void" />
+		<method name="persist_is_dirty">
+			<return type="bool" />
+			<param index="0" name="entity" type="RID" />
 			<description>
-				Writes out every entity the session is saving, and does nothing on a session that saves nothing or is already shutting down. A [Callable] installed through [method persist_set_drain] replaces this and is called with no arguments. With none installed the session writes out on its own timer.
-				Calling this more than once is safe, because the second call finds shutdown already underway and does nothing.
+				Whether any property [param entity] binds differs from what was last saved. An entity that binds no persistence answers [code]false[/code].
 			</description>
 		</method>
-		<method name="persist_table_commit">
-			<return type="Dictionary" />
-			<param index="0" name="table" type="RID" />
-			<param index="1" name="schema" type="RID" />
-			<param index="2" name="data" type="Dictionary" />
+		<method name="persist_load">
+			<return type="NetwPromise" />
+			<param index="0" name="entity" type="RID" />
 			<description>
-				Claims fresh routes for the rows [param data] was saved under, writes every column of [param schema] back beneath them, and returns the route-to-save-key pairing a caller rebuilds its indexes from. An empty [param data] claims nothing and returns both empty, which is what the first play looks like.
-				Routes are claimed fresh rather than restored, because a saved route names a row in the session that saved it and nothing in the one loading it. A column that [param data] does not carry, carries at the wrong type, or carries at the wrong length is written as zeroed storage of the declared type instead, so a save written by an older schema loads as a row with defaults rather than rejecting the whole table. A [constant COLUMN_ENTITY] column is always zeroed, because a stored entity reference names a route this load has just replaced.
-				The whole write is fixed by one [method table_commit], so readers never observe a half-written load.
-				[codeblock lang=text]
-				Dictionary (param data)
-				┠╴ids  PackedStringArray  the save key for each row, in order
-				┖╴...  Array              one entry per schema column, keyed by that column's name
-				[/codeblock]
-				[codeblock lang=text]
-				Dictionary (the result)
-				┠╴routes  PackedInt64Array  the route claimed for each row, same order as ids
-				┖╴ids     PackedStringArray  the save keys just claimed
-				[/codeblock]
+				Reads [param entity]'s stored row and applies it to the properties it binds. The promise answers [code]true[/code] when a row was found and [code]false[/code] when none was stored. [method NetwPersistenceHandle.load] lists the errors it fails with.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="persist_save">
+			<return type="NetwPromise" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Writes the properties [param entity] binds as its row. The promise answers [code]true[/code] once the write is stored and [code]false[/code] when nothing had changed. [method NetwPersistenceHandle.save] lists the errors it fails with.
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="persist_tick_default">
 			<return type="void" />
 			<param index="0" name="delta" type="float" />
 			<description>
-				The persistence pass [method _persist_tick] runs when nothing overrides it, reachable so an override can defer to it. It advances every registered engine's snapshot loop by [param delta] seconds on a session that serves persistence, and does nothing on one that does not.
-				A GDScript subclass cannot [code]super[/code] into a [code]GDVIRTUAL[/code], so this is an override's only route back to stock behaviour. An override that wants to observe the cadence rather than replace it calls this and returns.
+				The entity save pass [method _persist_tick] runs when nothing overrides it. It advances each entity's [method NetwPersistenceConfig.interval] by [param delta] seconds and writes the due rows that changed, batched per [NetwDatabase]. A peer that holds no session authority writes nothing.
+				A GDScript subclass cannot call [code]super[/code] on a [code]GDVIRTUAL[/code], so an override calls this to run the stock pass.
+				[codeblock]
+				extends NetwMultiplayer
+
+				func _persist_tick(delta: float) -&gt; void:
+				    if not saving_paused:
+				        persist_tick_default(delta)
+				[/codeblock]
 			</description>
 		</method>
 		<method name="predict_admit_frame_default">
@@ -2842,12 +2966,15 @@
 		<method name="session_leave">
 			<return type="NetwPromise" />
 			<description>
-				Flushes persistence, closes the active peer, and returns to [constant SESSION_STATE_OFFLINE].
-				It waits up to three seconds for the server to acknowledge the departure, so a caller that awaits the returned promise knows the peer is closed rather than closing. A session already at [constant SESSION_STATE_OFFLINE], and one with no scene tree to time the window with, both return a promise that is already settled.
+				Saves every entity row this peer holds as session authority, closes the active peer, and returns to [constant SESSION_STATE_OFFLINE]. The promise resolves with an [enum @GlobalScope.Error].
+				When the database refuses a row, the session stays online and the promise resolves with that error. Call it again to retry, or close [member MultiplayerAPI.multiplayer_peer] to disconnect without saving.
+				Once the rows are saved it waits up to three seconds for the server to acknowledge the departure, so a caller that awaits the promise knows the peer is closed. A session already at [constant SESSION_STATE_OFFLINE], and one with no scene tree to time the window with, return a promise that is already settled.
 				[codeblock]
 				var left := api.session_leave()
 				if not left.is_settled:
 				    await left.wait()
+				if left.result != OK:
+				    push_error("still online: %s" % error_string(left.result))
 				[/codeblock]
 			</description>
 		</method>
@@ -3218,6 +3345,16 @@
 				The sealed schema hash [param table] carries on the wire.
 			</description>
 		</method>
+		<method name="table_load">
+			<return type="NetwPromise" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="database" type="RID" />
+			<param index="2" name="key" type="StringName" />
+			<description>
+				Replaces every row of [param table] with the snapshot stored under [param key] in [param database], and settles with the load reply drawn in [method NetwTableHandle.load]. Each loaded row gets a new route.
+				[b]Server Only.[/b]
+			</description>
+		</method>
 		<method name="table_read_births" qualifiers="const">
 			<return type="PackedInt64Array" />
 			<param index="0" name="table" type="RID" />
@@ -3245,6 +3382,17 @@
 			<param index="0" name="table" type="RID" />
 			<description>
 				The routes stored in [param table], in row order.
+			</description>
+		</method>
+		<method name="table_save">
+			<return type="NetwPromise" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="database" type="RID" />
+			<param index="2" name="key" type="StringName" />
+			<param index="3" name="ids" type="PackedStringArray" />
+			<description>
+				Stores [param table]'s committed rows as one snapshot under [param key] in [param database], and settles with an [enum @GlobalScope.Error]. [param ids] names each row in the order of [method table_read_routes]. [method NetwTableHandle.save] lists the codes.
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="table_set_param">
@@ -3568,6 +3716,14 @@
 				Neither other action announces it. [constant MISMATCH_ACTION_WARN] only logs the mismatch, and [constant MISMATCH_ACTION_DISCONNECT] closes the peer.
 			</description>
 		</signal>
+		<signal name="database_failed">
+			<param index="0" name="database" type="RID" />
+			<param index="1" name="error" type="int" enum="Error" />
+			<param index="2" name="detail" type="String" />
+			<description>
+				Emitted when an entity row in [param database] fails to load or save. [param detail] names the record and follows it with the storage's own explanation. [signal NetwDatabase.failed] is this signal for one database.
+			</description>
+		</signal>
 		<signal name="embed_phase_changed">
 			<param index="0" name="phase" type="int" enum="NetwMultiplayer.EmbedPhase" />
 			<description>
@@ -3686,6 +3842,19 @@
 			<param index="1" name="packet" type="PackedByteArray" />
 			<description>
 				Emitted for a datagram this session did not frame, so a game's own byte traffic reaches it over the same transport. A datagram that is this session's own and cannot be read is never announced here.
+			</description>
+		</signal>
+		<signal name="persist_loaded">
+			<param index="0" name="entity" type="RID" />
+			<param index="1" name="found" type="bool" />
+			<description>
+				Emitted once a load has applied [param entity]'s stored row. [param found] is [code]false[/code] when the database held no row for it. A failed load emits [signal database_failed] instead.
+			</description>
+		</signal>
+		<signal name="persist_saved">
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Emitted once a write of [param entity]'s row has been acknowledged. A refused write emits [signal database_failed] instead.
 			</description>
 		</signal>
 		<signal name="predict_owner_divergence">
@@ -4441,7 +4610,7 @@
 		</constant>
 		<constant name="COLUMN_F32" value="0" enum="ColumnType">
 			32-bit float. Every [enum ColumnType] is passed to [method schema_add_column] and says what a value is stored as and how wide it travels.
-			All of them but [constant COLUMN_VARIANT] are a fixed width, which is what makes a column a block of bytes and lets the session compute how many rows fit in a frame. Send anything of a length that varies through [method Netw.channel] instead.
+			All of them but [constant COLUMN_VARIANT] and [constant COLUMN_STRING] are a fixed width, which is what makes a column a block of bytes and lets the session compute how many rows fit in a frame. Send anything of a length that varies through [method Netw.channel] instead.
 		</constant>
 		<constant name="COLUMN_F64" value="1" enum="ColumnType">
 			64-bit float, for a value whose precision is the caller's to decide.
@@ -4486,7 +4655,25 @@
 			A route, the link one table draws to another. Resolve one back to a handle with [method entity_from_route].
 		</constant>
 		<constant name="COLUMN_VARIANT" value="15" enum="ColumnType">
-			The self-describing tier, what a [String] or a [Dictionary] compiles to. Legal in a schema and in a property set, rejected by [method table_create], because variable width has no memcpy and no rows-per-frame budget.
+			The self-describing tier, what a [Dictionary] or a nested [Array] compiles to. Legal in a schema and in a property set, rejected by [method table_create], because variable width has no memcpy and no rows-per-frame budget.
+		</constant>
+		<constant name="COLUMN_STRING" value="16" enum="ColumnType">
+			Text. Rejected by [method table_create] for the same reason [constant COLUMN_VARIANT] is, and cheaper than it when the value is only ever a name or a path.
+		</constant>
+		<constant name="DATABASE_CLOSED" value="0" enum="DatabaseState">
+			No slot is open, and the database admits no work.
+		</constant>
+		<constant name="DATABASE_OPENING" value="1" enum="DatabaseState">
+			[method database_open] has not settled yet.
+		</constant>
+		<constant name="DATABASE_OPEN" value="2" enum="DatabaseState">
+			A slot is open, and the database admits work.
+		</constant>
+		<constant name="DATABASE_CLOSING" value="3" enum="DatabaseState">
+			[method database_close] is waiting for admitted work to settle.
+		</constant>
+		<constant name="DATABASE_FAULTED" value="4" enum="DatabaseState">
+			The storage is unavailable, and [method database_open] fails with [constant @GlobalScope.ERR_CANT_ACQUIRE_RESOURCE].
 		</constant>
 		<constant name="STAT_DROPS_UNKNOWN_ROUTE" value="0" enum="Stat">
 			Counter. Frames addressed to a route this peer never saw issued.

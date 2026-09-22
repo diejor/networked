@@ -56,53 +56,61 @@ Methods
 .. table::
    :widths: auto
 
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                   | :ref:`use_session<class_NakamaWrapper_method_use_session>`\ (\ session\: :ref:`NakamaSessionService<class_NakamaSessionService>`\ )                                         |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`            | :ref:`is_addon_present<class_NakamaWrapper_method_is_addon_present>`\ (\ ) |static|                                                                                         |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`      | :ref:`connect_async<class_NakamaWrapper_method_connect_async>`\ (\ host\: :godot:`Node`, config\: :godot:`Dictionary`\ )                                                    |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`            | :ref:`is_ready<class_NakamaWrapper_method_is_ready>`\ (\ )                                                                                                                  |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                   | :ref:`create_match<class_NakamaWrapper_method_create_match>`\ (\ )                                                                                                          |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                   | :ref:`join_match<class_NakamaWrapper_method_join_match>`\ (\ match_id\: :godot:`String`\ )                                                                                  |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`MultiplayerPeer` | :ref:`peer<class_NakamaWrapper_method_peer>`\ (\ )                                                                                                                          |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`          | :ref:`match_id<class_NakamaWrapper_method_match_id>`\ (\ )                                                                                                                  |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`          | :ref:`username_for_peer<class_NakamaWrapper_method_username_for_peer>`\ (\ peer_id\: :godot:`int`\ )                                                                        |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`          | :ref:`user_id_for_peer<class_NakamaWrapper_method_user_id_for_peer>`\ (\ peer_id\: :godot:`int`\ )                                                                          |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`           | :ref:`list_matches<class_NakamaWrapper_method_list_matches>`\ (\ min_size\: :godot:`int` = 0, max_size\: :godot:`int` = 100, limit\: :godot:`int` = 100\ )                  |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`            | :ref:`write_public_storage<class_NakamaWrapper_method_write_public_storage>`\ (\ collection\: :godot:`String`, key\: :godot:`String`, value\: :godot:`Dictionary`\ )        |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`      | :ref:`read_public_storage<class_NakamaWrapper_method_read_public_storage>`\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100\ )                                  |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`           | :ref:`list_public_storage<class_NakamaWrapper_method_list_public_storage>`\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100\ )                                  |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                   | :ref:`delete_public_storage<class_NakamaWrapper_method_delete_public_storage>`\ (\ collection\: :godot:`String`, key\: :godot:`String`\ )                                   |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`            | :ref:`write_lobby_card<class_NakamaWrapper_method_write_lobby_card>`\ (\ match_id\: :godot:`String`, card\: :godot:`Dictionary`\ )                                          |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`      | :ref:`read_lobby_cards<class_NakamaWrapper_method_read_lobby_cards>`\ (\ limit\: :godot:`int` = 100\ )                                                                      |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                   | :ref:`delete_lobby_card<class_NakamaWrapper_method_delete_lobby_card>`\ (\ match_id\: :godot:`String`\ )                                                                    |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`            | :ref:`write_storage_objects<class_NakamaWrapper_method_write_storage_objects>`\ (\ objects\: :godot:`Array`\ )                                                              |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`           | :ref:`read_storage_objects<class_NakamaWrapper_method_read_storage_objects>`\ (\ ids\: :godot:`Array`\ )                                                                    |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`      | :ref:`list_storage_objects<class_NakamaWrapper_method_list_storage_objects>`\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100, cursor\: :godot:`String` = ""\ ) |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`            | :ref:`delete_storage_objects<class_NakamaWrapper_method_delete_storage_objects>`\ (\ ids\: :godot:`Array`\ )                                                                |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                   | :ref:`leave<class_NakamaWrapper_method_leave>`\ (\ )                                                                                                                        |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`use_session<class_NakamaWrapper_method_use_session>`\ (\ session\: :ref:`NakamaSessionService<class_NakamaSessionService>`\ )                                                                       |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`            | :ref:`is_addon_present<class_NakamaWrapper_method_is_addon_present>`\ (\ ) |static|                                                                                                                       |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`connect_async<class_NakamaWrapper_method_connect_async>`\ (\ host\: :godot:`Node`, config\: :godot:`Dictionary`\ )                                                                                  |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`            | :ref:`is_ready<class_NakamaWrapper_method_is_ready>`\ (\ )                                                                                                                                                |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`create_match<class_NakamaWrapper_method_create_match>`\ (\ )                                                                                                                                        |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`join_match<class_NakamaWrapper_method_join_match>`\ (\ match_id\: :godot:`String`\ )                                                                                                                |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`MultiplayerPeer` | :ref:`peer<class_NakamaWrapper_method_peer>`\ (\ )                                                                                                                                                        |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`          | :ref:`match_id<class_NakamaWrapper_method_match_id>`\ (\ )                                                                                                                                                |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`          | :ref:`username_for_peer<class_NakamaWrapper_method_username_for_peer>`\ (\ peer_id\: :godot:`int`\ )                                                                                                      |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`          | :ref:`user_id_for_peer<class_NakamaWrapper_method_user_id_for_peer>`\ (\ peer_id\: :godot:`int`\ )                                                                                                        |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Array`           | :ref:`list_matches<class_NakamaWrapper_method_list_matches>`\ (\ min_size\: :godot:`int` = 0, max_size\: :godot:`int` = 100, limit\: :godot:`int` = 100\ )                                                |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`            | :ref:`write_public_storage<class_NakamaWrapper_method_write_public_storage>`\ (\ collection\: :godot:`String`, key\: :godot:`String`, value\: :godot:`Dictionary`\ )                                      |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`read_public_storage<class_NakamaWrapper_method_read_public_storage>`\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100\ )                                                                |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Array`           | :ref:`list_public_storage<class_NakamaWrapper_method_list_public_storage>`\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100\ )                                                                |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`delete_public_storage<class_NakamaWrapper_method_delete_public_storage>`\ (\ collection\: :godot:`String`, key\: :godot:`String`\ )                                                                 |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`            | :ref:`write_lobby_card<class_NakamaWrapper_method_write_lobby_card>`\ (\ match_id\: :godot:`String`, card\: :godot:`Dictionary`\ )                                                                        |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`read_lobby_cards<class_NakamaWrapper_method_read_lobby_cards>`\ (\ limit\: :godot:`int` = 100\ )                                                                                                    |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`delete_lobby_card<class_NakamaWrapper_method_delete_lobby_card>`\ (\ match_id\: :godot:`String`\ )                                                                                                  |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`storage_answer<class_NakamaWrapper_method_storage_answer>`\ (\ error\: :godot:`int`, detail\: :godot:`String`, uncertain\: :godot:`bool`\ ) |static|                                                |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`unsent<class_NakamaWrapper_method_unsent>`\ (\ error\: :godot:`int`, detail\: :godot:`String`\ ) |static|                                                                                           |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`unauthenticated<class_NakamaWrapper_method_unauthenticated>`\ (\ ) |static|                                                                                                                         |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`          | :ref:`own_user_id<class_NakamaWrapper_method_own_user_id>`\ (\ )                                                                                                                                          |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`write_storage_objects<class_NakamaWrapper_method_write_storage_objects>`\ (\ objects\: :godot:`Array`\ )                                                                                            |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`read_storage_objects<class_NakamaWrapper_method_read_storage_objects>`\ (\ ids\: :godot:`Array`\ )                                                                                                  |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`list_storage_objects<class_NakamaWrapper_method_list_storage_objects>`\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100, cursor\: :godot:`String` = "", owner\: :godot:`String` = ""\ ) |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`      | :ref:`delete_storage_objects<class_NakamaWrapper_method_delete_storage_objects>`\ (\ ids\: :godot:`Array`\ )                                                                                              |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`leave<class_NakamaWrapper_method_leave>`\ (\ )                                                                                                                                                      |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -466,11 +474,66 @@ Deletes the local lobby card keyed by ``match_id``.
 
 ----
 
+.. _class_NakamaWrapper_method_storage_answer:
+
+.. rst-class:: classref-method
+
+:godot:`Dictionary` **storage_answer**\ (\ error\: :godot:`int`, detail\: :godot:`String`, uncertain\: :godot:`bool`\ ) |static| :ref:`🔗<class_NakamaWrapper_method_storage_answer>`
+
+Answers the result shape every storage helper on this wrapper resolves.  ``uncertain`` is true when the request left the process and the service never said whether it applied, so a caller must not retry it blindly and reports the outcome as unknown rather than guessing.
+
+::
+
+    Dictionary
+    ├── error (int)        # @GlobalScope.Error
+    ├── detail (String)
+    └── uncertain (bool)
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaWrapper_method_unsent:
+
+.. rst-class:: classref-method
+
+:godot:`Dictionary` **unsent**\ (\ error\: :godot:`int`, detail\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaWrapper_method_unsent>`
+
+The answer for a request that never reached the service, so nothing applied.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaWrapper_method_unauthenticated:
+
+.. rst-class:: classref-method
+
+:godot:`Dictionary` **unauthenticated**\ (\ ) |static| :ref:`🔗<class_NakamaWrapper_method_unauthenticated>`
+
+The answer for a request no authenticated session could carry.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaWrapper_method_own_user_id:
+
+.. rst-class:: classref-method
+
+:godot:`String` **own_user_id**\ (\ ) :ref:`🔗<class_NakamaWrapper_method_own_user_id>`
+
+Returns the authenticated user's id, or an empty :godot:`String` before auth.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NakamaWrapper_method_write_storage_objects:
 
 .. rst-class:: classref-method
 
-:godot:`bool` **write_storage_objects**\ (\ objects\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_write_storage_objects>`
+:godot:`Dictionary` **write_storage_objects**\ (\ objects\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_write_storage_objects>`
 
 Writes a batch of storage ``objects`` in one call.  Resolves the client from :ref:`NakamaSessionService<class_NakamaSessionService>` when bound, so a storage-only wrapper never opens a match socket.
 
@@ -484,6 +547,8 @@ Writes a batch of storage ``objects`` in one call.  Resolves the client from :re
         ├── read (int)       # Optional. Default 1.
         └── write (int)      # Optional. Default 1.
 
+\ Answers the shape :ref:`storage_answer()<class_NakamaWrapper_method_storage_answer>` draws.
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -492,9 +557,9 @@ Writes a batch of storage ``objects`` in one call.  Resolves the client from :re
 
 .. rst-class:: classref-method
 
-:godot:`Array` **read_storage_objects**\ (\ ids\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_read_storage_objects>`
+:godot:`Dictionary` **read_storage_objects**\ (\ ids\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_read_storage_objects>`
 
-Reads a batch of storage objects named by ``ids``.  ``user_id`` defaults to the session user. Empty before the session is authenticated.
+Reads a batch of storage objects named by ``ids``.  ``user_id`` defaults to the session user.
 
 ::
 
@@ -504,11 +569,20 @@ Reads a batch of storage objects named by ``ids``.  ``user_id`` defaults to the 
         ├── key (String)
         └── user_id (String)
 
-    Returns (Array)
-    └── Dictionary
-        ├── collection (String)
-        ├── key (String)
-        └── value (Variant)
+    Returns the shape [method storage_answer] draws, with the rows the service
+    held. A row the service does not hold is simply absent, at
+    [constant @GlobalScope.OK].
+    [codeblock]
+    Dictionary
+    ├── error (int)
+    ├── detail (String)
+    ├── uncertain (bool)
+    └── objects (Array)
+        └── Dictionary
+            ├── collection (String)
+            ├── key (String)
+            ├── user_id (String)
+            └── value (Variant)
 
 .. rst-class:: classref-item-separator
 
@@ -518,16 +592,20 @@ Reads a batch of storage objects named by ``ids``.  ``user_id`` defaults to the 
 
 .. rst-class:: classref-method
 
-:godot:`Dictionary` **list_storage_objects**\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100, cursor\: :godot:`String` = ""\ ) :ref:`🔗<class_NakamaWrapper_method_list_storage_objects>`
+:godot:`Dictionary` **list_storage_objects**\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100, cursor\: :godot:`String` = "", owner\: :godot:`String` = ""\ ) :ref:`🔗<class_NakamaWrapper_method_list_storage_objects>`
 
-Lists every storage object under ``collection`` for the session user.  Pass ``cursor`` to page. Empty before the session is authenticated.
+Lists one remote page of ``collection``, owned by ``owner``.  An empty ``owner`` lists every owner's objects. Pass :ref:`own_user_id()<class_NakamaWrapper_method_own_user_id>` for the session user alone. ``cursor`` is empty on the first page, and the answer's own cursor continues it. A page shorter than ``limit`` with a nonempty cursor is not exhaustion.
 
 ::
 
     Dictionary
+    ├── error (int)
+    ├── detail (String)
+    ├── uncertain (bool)
     ├── objects (Array)
     │   └── Dictionary
     │       ├── key (String)
+    │       ├── user_id (String)
     │       └── value (Variant)
     └── cursor (String)
 
@@ -539,7 +617,7 @@ Lists every storage object under ``collection`` for the session user.  Pass ``cu
 
 .. rst-class:: classref-method
 
-:godot:`bool` **delete_storage_objects**\ (\ ids\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_delete_storage_objects>`
+:godot:`Dictionary` **delete_storage_objects**\ (\ ids\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_delete_storage_objects>`
 
 Deletes a batch of storage objects named by ``ids``.  The operation is idempotent on the server side.
 
@@ -549,6 +627,8 @@ Deletes a batch of storage objects named by ``ids``.  The operation is idempoten
     └── Dictionary
         ├── collection (String)
         └── key (String)
+
+\ Answers the shape :ref:`storage_answer()<class_NakamaWrapper_method_storage_answer>` draws.
 
 .. rst-class:: classref-item-separator
 

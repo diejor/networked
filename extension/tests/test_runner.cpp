@@ -12,7 +12,6 @@
 #include "godot/project_settings.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/file_system_database.hpp"
 #include "netw/api/interest_handle.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -386,11 +385,6 @@ void NetwNativeTests::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
-        D_METHOD("file_system_database_forget_roots"),
-        &NetwNativeTests::file_system_database_forget_roots
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
         D_METHOD("tracker_book_clear"),
         &NetwNativeTests::tracker_book_clear
     );
@@ -575,10 +569,6 @@ bool NetwNativeTests::frame_advance() {
 
 void NetwNativeTests::schema_model_clear() {
     schema_model::clear();
-}
-
-void NetwNativeTests::file_system_database_forget_roots() {
-    FileSystemDatabase::forget_claimed_roots();
 }
 
 void NetwNativeTests::tracker_book_clear() {

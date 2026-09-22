@@ -10,10 +10,9 @@ namespace Networked;
 /// script subclasses to supply its own storage.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwRecord"/> is the shared value object behind
-/// <see cref="NetwPersistenceEngine"/> persistence, <see cref="NetwDatabase"/>
-/// rows, and detached state samples. It stores named values without owning the
-/// scene object those values came from.
+/// <see cref="NetwRecord"/> is the shared value object behind saved entity
+/// rows, <see cref="NetwDatabase"/> rows, and detached state samples. It stores
+/// named values without owning the scene object those values came from.
 /// <code>
 /// var row: NetwRecord = await db.table(&amp;"players").fetch(username)
 /// var health: int = row.get_value(&amp;"health", 100)

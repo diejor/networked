@@ -280,7 +280,10 @@ class DerivationRun {
             config->retained();
         }
         if (p_field.persisted) {
-            config->persisted(0.0);
+            const Ref<netw::NetwSchema> schema
+                = netw::NetwSchema::create("derived_rows");
+            schema->f32("value", Ref<netw::NetwQuantize>(), 1);
+            config->persisted(schema->column_ref(0));
         }
         if (p_field.masked) {
             config->masked();

@@ -81,8 +81,9 @@ TEST_CASE(
     SUBCASE("the column types are the schema core's") {
         NETW_CHECK_EQ(NetwMultiplayer::COLUMN_F32, SchemaCore::F32);
         NETW_CHECK_EQ(NetwMultiplayer::COLUMN_VARIANT, SchemaCore::VARIANT);
+        NETW_CHECK_EQ(NetwMultiplayer::COLUMN_STRING, SchemaCore::STRING);
         NETW_CHECK_EQ(
-            NetwMultiplayer::COLUMN_VARIANT + 1,
+            NetwMultiplayer::COLUMN_STRING + 1,
             SchemaCore::COLUMN_TYPE_COUNT
         );
     }

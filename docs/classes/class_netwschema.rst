@@ -38,7 +38,7 @@ Column methods return an :godot:`int` index because schema declarations have no 
 
 \ A column with no quantizer crosses the wire as a raw little-endian copy of its buffer, which is the cheapest path in both directions. A quantizer buys bandwidth by paying per element, so reach for one on the columns a link actually cares about.
 
-One schema serves three consumers, so a declaration that only wants the database says so with :ref:`replicated()<class_NetwSchema_method_replicated>` and creates no table at all. :ref:`NetwDatabase.declare_table()<class_NetwDatabase_method_declare_table>` takes this object directly. :ref:`variant()<class_NetwSchema_method_variant>` is the tier a table rejects and the other two accept.
+One schema serves three consumers, so a declaration that only wants the database says so with :ref:`replicated()<class_NetwSchema_method_replicated>` and creates no table at all. :ref:`NetwDatabase.read()<class_NetwDatabase_method_read>` and the rest of the record verbs take this object directly. :ref:`variant()<class_NetwSchema_method_variant>` and :ref:`string()<class_NetwSchema_method_string>` are the tiers a table rejects and the other two accept.
 
 These method names are convenience and never freeze. They compile into :ref:`NetwMultiplayer.schema_add_column()<class_NetwMultiplayer_method_schema_add_column>` and :ref:`NetwMultiplayer.schema_set_column_quantizer()<class_NetwMultiplayer_method_schema_set_column_quantizer>`, which do.
 
@@ -64,55 +64,63 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`boolean<class_NetwSchema_method_boolean>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                      |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`color<class_NetwSchema_method_color>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                              |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`column<class_NetwSchema_method_column>`\ (\ key\: :godot:`StringName`, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`, stride\: :godot:`int` = 1, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null\ ) |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSchema<class_NetwSchema>` | :ref:`create<class_NetwSchema_method_create>`\ (\ name\: :godot:`StringName`\ ) |static|                                                                                                                                         |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSchema<class_NetwSchema>` | :ref:`declare<class_NetwSchema_method_declare>`\ (\ name\: :godot:`StringName`\ ) |static|                                                                                                                                       |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`entity<class_NetwSchema_method_entity>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                        |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`f32<class_NetwSchema_method_f32>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                                  |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`f64<class_NetwSchema_method_f64>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                                  |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`i8<class_NetwSchema_method_i8>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                                |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`i16<class_NetwSchema_method_i16>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`i32<class_NetwSchema_method_i32>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`i64<class_NetwSchema_method_i64>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                       | :ref:`is_reliable<class_NetwSchema_method_is_reliable>`\ (\ ) |const|                                                                                                                                                            |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                       | :ref:`is_replicated<class_NetwSchema_method_is_replicated>`\ (\ ) |const|                                                                                                                                                        |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`quaternion<class_NetwSchema_method_quaternion>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                    |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSchema<class_NetwSchema>` | :ref:`register<class_NetwSchema_method_register>`\ (\ )                                                                                                                                                                          |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSchema<class_NetwSchema>` | :ref:`reliable<class_NetwSchema_method_reliable>`\ (\ value\: :godot:`bool` = true\ )                                                                                                                                            |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSchema<class_NetwSchema>` | :ref:`replicated<class_NetwSchema_method_replicated>`\ (\ value\: :godot:`bool` = true\ )                                                                                                                                        |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`u8<class_NetwSchema_method_u8>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                                |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`u16<class_NetwSchema_method_u16>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`variant<class_NetwSchema_method_variant>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                      |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`vector2<class_NetwSchema_method_vector2>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                          |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`vector3<class_NetwSchema_method_vector3>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                          |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                        | :ref:`vector4<class_NetwSchema_method_vector4>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                          |
-   +-------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`boolean<class_NetwSchema_method_boolean>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                      |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`color<class_NetwSchema_method_color>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                              |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`column<class_NetwSchema_method_column>`\ (\ key\: :godot:`StringName`, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`, stride\: :godot:`int` = 1, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null\ ) |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwColumnRef<class_NetwColumnRef>` | :ref:`column_ref<class_NetwSchema_method_column_ref>`\ (\ index\: :godot:`int`\ )                                                                                                                                                |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`create<class_NetwSchema_method_create>`\ (\ name\: :godot:`StringName`\ ) |static|                                                                                                                                         |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`declare<class_NetwSchema_method_declare>`\ (\ name\: :godot:`StringName`\ ) |static|                                                                                                                                       |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`entity<class_NetwSchema_method_entity>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                        |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`f32<class_NetwSchema_method_f32>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                                  |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`f64<class_NetwSchema_method_f64>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                                  |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`i8<class_NetwSchema_method_i8>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                                |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`i16<class_NetwSchema_method_i16>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`i32<class_NetwSchema_method_i32>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`i64<class_NetwSchema_method_i64>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                             | :ref:`is_reliable<class_NetwSchema_method_is_reliable>`\ (\ ) |const|                                                                                                                                                            |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                             | :ref:`is_replicated<class_NetwSchema_method_is_replicated>`\ (\ ) |const|                                                                                                                                                        |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`migrate<class_NetwSchema_method_migrate>`\ (\ from_version\: :godot:`int`, step\: :godot:`Callable`\ )                                                                                                                     |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`quaternion<class_NetwSchema_method_quaternion>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                    |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`register<class_NetwSchema_method_register>`\ (\ )                                                                                                                                                                          |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`reliable<class_NetwSchema_method_reliable>`\ (\ value\: :godot:`bool` = true\ )                                                                                                                                            |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`replicated<class_NetwSchema_method_replicated>`\ (\ value\: :godot:`bool` = true\ )                                                                                                                                        |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`storage_version<class_NetwSchema_method_storage_version>`\ (\ version\: :godot:`int`\ )                                                                                                                                    |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`u8<class_NetwSchema_method_u8>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                                |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`u16<class_NetwSchema_method_u16>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`string<class_NetwSchema_method_string>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                        |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`variant<class_NetwSchema_method_variant>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                      |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`vector2<class_NetwSchema_method_vector2>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                          |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`vector3<class_NetwSchema_method_vector3>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                          |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`vector4<class_NetwSchema_method_vector4>`\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, stride\: :godot:`int` = 1\ )                                                          |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -133,7 +141,7 @@ Property Descriptions
 
 - :godot:`Array`\[:ref:`NetwSchemaColumn<class_NetwSchemaColumn>`\] **get_columns**\ (\ )
 
-The declared columns in address order. A consumer that types its own storage from a schema, as :ref:`NetwDatabase.declare_table()<class_NetwDatabase_method_declare_table>` does, reads this list.
+The declared columns in address order. A consumer that types its own storage from a schema reads this list.
 
 .. rst-class:: classref-item-separator
 
@@ -193,6 +201,20 @@ Declares a :ref:`NetwMultiplayer.COLUMN_COLOR<class_NetwMultiplayer_constant_COL
 Appends one column of an :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` named at runtime and returns its index, which is the wire address readers and writers both name it by. The typed verbs beside it are this call with the type filled in.
 
 A ``key`` already declared with the SAME ``type`` and ``stride`` returns the index it already holds, which is what makes a script reload idempotent: every static initializer runs again and every column lands on the address it had. A ``key`` already declared with a DIFFERENT shape returns ``-1`` and appends nothing, because a column index is a stable wire address and silently shifting it would leave two peers reading each other's bytes at the wrong offsets.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSchema_method_column_ref:
+
+.. rst-class:: classref-method
+
+:ref:`NetwColumnRef<class_NetwColumnRef>` **column_ref**\ (\ index\: :godot:`int`\ ) :ref:`🔗<class_NetwSchema_method_column_ref>`
+
+Returns a :ref:`NetwColumnRef<class_NetwColumnRef>` naming the column at ``index``, or ``null`` when this schema has no such column.
+
+A configuration call takes the reference rather than the :godot:`int`, because the reference carries this schema and the :godot:`int` does not. Wrap the index the declaring method returned, in the same ``static var`` line.
 
 .. rst-class:: classref-item-separator
 
@@ -330,6 +352,33 @@ Whether an adopting session creates a replicated table from this schema, as :ref
 
 ----
 
+.. _class_NetwSchema_method_migrate:
+
+.. rst-class:: classref-method
+
+:ref:`NetwSchema<class_NetwSchema>` **migrate**\ (\ from_version\: :godot:`int`, step\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSchema_method_migrate>`
+
+Installs the step that reads a record saved under ``from_version`` and returns it shaped for the next version, and returns this schema.
+
+\ ``step`` takes one :godot:`Dictionary` and returns one :godot:`Dictionary`. It advances exactly one version, so a save two versions behind runs two steps in order. A read with a step missing fails and touches nothing.
+
+::
+
+    static var schema := NetwSchema.create(&"players") \
+        .replicated(false) \
+        .storage_version(2) \
+        .migrate(1, PlayerSave.add_position)
+
+    static func add_position(row: Dictionary) -> Dictionary:
+        row[&"position"] = Vector2.ZERO
+        return row
+
+\ Migration does not rewrite what it read. The next save writes the current version.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSchema_method_quaternion:
 
 .. rst-class:: classref-method
@@ -384,6 +433,22 @@ Declaring a schema costs no wire on its own. Passing ``false`` is how a schema t
 
 ----
 
+.. _class_NetwSchema_method_storage_version:
+
+.. rst-class:: classref-method
+
+:ref:`NetwSchema<class_NetwSchema>` **storage_version**\ (\ version\: :godot:`int`\ ) :ref:`🔗<class_NetwSchema_method_storage_version>`
+
+Sets the version saved records of this schema carry, and returns this schema. The first version is ``1``, which is the default.
+
+Raise it whenever the saved shape changes, adding a field included, and supply the :ref:`migrate()<class_NetwSchema_method_migrate>` step that reads the version below. A record saved under a version this schema cannot reach fails its read and stays untouched.
+
+The version is storage only. It does not enter the wire hash, so two peers on different storage versions still replicate.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSchema_method_u8:
 
 .. rst-class:: classref-method
@@ -408,15 +473,31 @@ Declares a :ref:`NetwMultiplayer.COLUMN_U16<class_NetwMultiplayer_constant_COLUM
 
 ----
 
+.. _class_NetwSchema_method_string:
+
+.. rst-class:: classref-method
+
+:godot:`int` **string**\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ ) :ref:`🔗<class_NetwSchema_method_string>`
+
+Declares a :ref:`NetwMultiplayer.COLUMN_STRING<class_NetwMultiplayer_constant_COLUMN_STRING>` column of text.
+
+Text has no fixed width, so a schema holding one cannot become a table for the same reason :ref:`variant()<class_NetwSchema_method_variant>` cannot. Reach for it when the saved value is a name or a path and the self-describing tier would buy nothing.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSchema_method_variant:
 
 .. rst-class:: classref-method
 
 :godot:`int` **variant**\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ ) :ref:`🔗<class_NetwSchema_method_variant>`
 
-Declares a :ref:`NetwMultiplayer.COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>` column, the self-describing tier a :godot:`String` or a :godot:`Dictionary` takes.
+Declares a :ref:`NetwMultiplayer.COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>` column, the self-describing tier a :godot:`Dictionary` or a nested :godot:`Array` takes.
 
 A schema holding one cannot become a table, because variable width has no memcpy and no rows-per-frame budget. Reach for it on a schema the database and the property binding consume, and leave the wire's fixed-width tier to the columns that can carry it.
+
+A saved value carries data only. An :godot:`Object`, a :godot:`Resource`, a :godot:`Callable`, a :godot:`Signal` and a :godot:`RID` are all refused, including nested inside an :godot:`Array` or a :godot:`Dictionary`.
 
 .. rst-class:: classref-item-separator
 

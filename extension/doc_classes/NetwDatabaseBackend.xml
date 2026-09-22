@@ -1,191 +1,91 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDatabaseBackend" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Where a [NetwDatabase] actually stores what it saves, as nine methods each returning a [NetwPromise].
+		Where a [NetwDatabase] keeps its saves.
 	</brief_description>
 	<description>
-		A game subclasses this to save into something of its own, and [FileSystemDatabase] is the backend this addon ships.
-		Every method here returns a [NetwPromise] straight away and none of them may suspend. [NetwDatabase] is the layer above that waits on the promise, and that is where a coroutine belongs.
-		That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot return a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
+		Subclass this to store records in a file, in memory, or on a server.
 		[codeblock]
-		# A backend that returns on the spot.
-		func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
-		    return NetwPromise.resolved(_read(table, id))
+		extends NetwDatabaseBackend
 
-		# A backend that returns later. The caller waits on the promise.
-		# the coroutine is deliberately not awaited here.
-		func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
-		    var settling := NetwPromise.new()
-		    _settle_later(settling, table, id)
-		    return settling
+		@export var root := "user://saves"
 
-		func _settle_later(settling: NetwPromise, table, id) -&gt; void:
-		    settling.resolve(await _service.read(table, id))
+		func _open(session: Object, slot: StringName) -&gt; NetwPromise:
+		    return NetwPromise.resolved(MyConnection.new(root, slot))
 		[/codeblock]
-		A method returning [enum @GlobalScope.Error] resolves its promise with that code. A rejected promise means the operation could not run.
-		Two refusals ship from the dispatcher rather than from any backend, and both are observable:
-		- An override that returns no promise is rejected with [constant @GlobalScope.ERR_INVALID_DATA], because a null would be waited on forever.
-		- The default [method commit], the one a backend gets when it overrides no [method _commit], rejects with [constant @GlobalScope.ERR_UNAVAILABLE] when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
+		A method left unimplemented rejects with [constant @GlobalScope.ERR_UNAVAILABLE] rather than succeeding quietly.
+		Read [NetwDatabaseConnection] for the interface a backend must implement to perform record I/O.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="_commit" qualifiers="virtual">
+		<method name="_delete_slot" qualifiers="virtual">
 			<return type="NetwPromise" />
-			<param index="0" name="operations" type="Array" />
+			<param index="0" name="session" type="Object" />
+			<param index="1" name="slot" type="StringName" />
 			<description>
-				Override to sequence a batch of writes as one unit, each entry shaped as [method commit] takes it. The default [method commit] calls this if overridden, otherwise it plays the batch through [method upsert] one entry at a time.
-			</description>
-		</method>
-		<method name="_delete" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<description>
-				Override to remove one record. [method erase] calls this.
-			</description>
-		</method>
-		<method name="_delete_namespace" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="slot" type="String" />
-			<description>
-				Override to drop every table stored under [param slot]. [method delete_namespace] calls this.
-			</description>
-		</method>
-		<method name="_find_all" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="filter" type="Dictionary" />
-			<description>
-				Override to return every record of [param table] whose fields match [param filter]. [method find_all] calls this.
-			</description>
-		</method>
-		<method name="_find_by_id" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<description>
-				Override to return one record by its [param id]. [method find_by_id] calls this.
-			</description>
-		</method>
-		<method name="_initialize" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="schema" type="Dictionary" />
-			<param index="1" name="slot" type="String" />
-			<description>
-				Override to prepare the backend for [param slot] against [param schema], creating whatever storage the backend needs before any other verb runs. [method initialize] calls this.
-			</description>
-		</method>
-		<method name="_list_namespaces" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<description>
-				Override to return every slot the backend currently holds. [method list_namespaces] calls this.
-			</description>
-		</method>
-		<method name="_upsert" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<param index="2" name="data" type="Dictionary" />
-			<description>
-				Override to write [param data] into the record named by [param id] in [param table], creating the record if it does not exist and merging fields into it if it does. [method upsert] calls this.
-			</description>
-		</method>
-		<method name="_warm" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="directives" type="Array" />
-			<description>
-				Override to preload records the backend expects to need soon, as a caching hint rather than a correctness requirement. [method warm] calls this.
-			</description>
-		</method>
-		<method name="commit">
-			<return type="NetwPromise" />
-			<param index="0" name="operations" type="Array" default="[]" />
-			<description>
-				Writes a batch of [param operations] as one unit.
+				Removes [param slot], and resolves an [enum @GlobalScope.Error]. Failed cleanup must stay discoverable and retryable rather than reporting success.
+				[param session] is the [NetwMultiplayer] asking. [method NetwDatabase.delete_slot] settles with what this answers.
 				[codeblock lang=text]
-				Array[Dictionary]
-				┖╴entry
-				  ┠╴table  StringName  the table the write targets
-				  ┠╴id     StringName  the record written
-				  ┖╴data   Dictionary  the fields to merge in
+				this promise              NetwDatabase.delete_slot settles with
+				┠╴resolves an Error       that Error
+				┠╴rejects                 the reject's code
+				┖╴is null                 ERR_INVALID_DATA
 				[/codeblock]
-				Calls [method _commit] when a backend overrides it. Otherwise plays the batch through [method upsert] in order and rejects with [constant @GlobalScope.ERR_UNAVAILABLE] the instant a write has not settled by the time its [NetwPromise] is checked, since a backend whose writes settle later owns its own [method _commit] to sequence them.
 			</description>
 		</method>
-		<method name="delete_namespace">
+		<method name="_list_slots" qualifiers="virtual">
 			<return type="NetwPromise" />
-			<param index="0" name="slot" type="String" />
+			<param index="0" name="session" type="Object" />
 			<description>
-				Drops every table stored under [param slot]. Calls [method _delete_namespace].
-			</description>
-		</method>
-		<method name="erase">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<description>
-				Removes the record named by [param id] from [param table]. Calls [method _delete].
-			</description>
-		</method>
-		<method name="find_all">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="filter" type="Dictionary" default="{}" />
-			<description>
-				Returns every record of [param table] whose fields match [param filter]. Calls [method _find_all].
-			</description>
-		</method>
-		<method name="find_by_id">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<description>
-				Returns one record of [param table] by its [param id]. Calls [method _find_by_id].
-			</description>
-		</method>
-		<method name="in_memory" qualifiers="static">
-			<return type="NetwDatabaseBackend" />
-			<description>
-				A backend that keeps every namespace in memory and writes no file, which is what a test wants when two databases would otherwise contend for one path on disk.
-				Nothing it holds survives the process, so a game that means to keep a save uses a backend with storage behind it.
-			</description>
-		</method>
-		<method name="initialize">
-			<return type="NetwPromise" />
-			<param index="0" name="schema" type="Dictionary" />
-			<param index="1" name="slot" type="String" default="&quot;&quot;" />
-			<description>
-				Prepares the backend for [param slot] against [param schema] before any other verb runs on it. Calls [method _initialize].
-			</description>
-		</method>
-		<method name="list_namespaces">
-			<return type="NetwPromise" />
-			<description>
-				Returns every slot the backend currently holds. Calls [method _list_namespaces].
-			</description>
-		</method>
-		<method name="upsert">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<param index="2" name="data" type="Dictionary" />
-			<description>
-				Writes [param data] into the record named by [param id] in [param table], creating it if it does not exist and merging fields into it if it does. Calls [method _upsert].
-			</description>
-		</method>
-		<method name="warm">
-			<return type="NetwPromise" />
-			<param index="0" name="directives" type="Array" default="[]" />
-			<description>
-				Preloads records the backend expects to need soon, as a caching hint rather than a correctness requirement.
+				Resolves a [PackedStringArray] of every slot this storage holds. Read it from storage, so a slot written by an earlier run appears.
+				[param session] is the [NetwMultiplayer] asking. [method NetwDatabase.list_slots] builds its reply from what this answers.
 				[codeblock lang=text]
-				Array[Dictionary]
-				┖╴entry
-				  ┠╴table    StringName   the table to warm
-				  ┖╴request  WarmRequest  what to preload for it
+				this promise                   the reply's error
+				┠╴resolves a PackedStringArray OK, and the array becomes slots
+				┠╴resolves anything else       ERR_INVALID_DATA
+				┠╴rejects                      the reject's code, and its detail becomes detail
+				┖╴is null                      ERR_INVALID_DATA
 				[/codeblock]
-				Calls [method _warm].
+			</description>
+		</method>
+		<method name="_open" qualifiers="virtual">
+			<return type="NetwPromise" />
+			<param index="0" name="session" type="Object" />
+			<param index="1" name="slot" type="StringName" />
+			<description>
+				Resolves a fresh [NetwDatabaseConnection] over [param slot], or rejects with why it could not. Build a new connection every time, rather than handing back one that was already open.
+				[param session] is the [NetwMultiplayer] opening the slot. [method NetwDatabase.open] settles with what this answers, and the database stays closed on any answer but a connection.
+				[codeblock lang=text]
+				this promise                   NetwDatabase.open settles with
+				┠╴resolves a connection        OK
+				┠╴resolves anything else       ERR_CANT_CREATE
+				┠╴rejects                      the reject's code and detail
+				┖╴is null                      ERR_INVALID_DATA
+				[/codeblock]
+			</description>
+		</method>
+		<method name="delete_slot_default">
+			<return type="NetwPromise" />
+			<param index="0" name="session" type="Object" />
+			<param index="1" name="slot" type="StringName" />
+			<description>
+				The stock [method _delete_slot], which rejects with [constant @GlobalScope.ERR_UNAVAILABLE]. A subclass overriding [method _delete_slot] calls this to reach it.
+			</description>
+		</method>
+		<method name="list_slots_default">
+			<return type="NetwPromise" />
+			<param index="0" name="session" type="Object" />
+			<description>
+				The stock [method _list_slots], which rejects with [constant @GlobalScope.ERR_UNAVAILABLE]. A subclass overriding [method _list_slots] calls this to reach it.
+			</description>
+		</method>
+		<method name="open_default">
+			<return type="NetwPromise" />
+			<param index="0" name="session" type="Object" />
+			<param index="1" name="slot" type="StringName" />
+			<description>
+				The stock [method _open], which rejects with [constant @GlobalScope.ERR_UNAVAILABLE]. A subclass overriding [method _open] calls this to reach it.
 			</description>
 		</method>
 	</methods>

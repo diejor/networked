@@ -27,7 +27,7 @@
 			When [code]true[/code] (default), the [method Node.queue_free] call is deferred. This guarantees the engine's next process step sees the authority change before the node leaves the tree, which fixes the race where a [MultiplayerSynchronizer] tries to push state from a freed authority peer.
 		</member>
 		<member name="flush_save" type="bool" setter="set_flush_save" getter="get_flush_save" default="true">
-			When [code]true[/code] (default), [method NetwPersistenceEngine.flush] runs on the despawning entity before authority revert and queue_free. A non-OK return is logged at error level and the despawn proceeds, so from the caller's perspective despawn is infallible.
+			When [code]true[/code] (default), the entity's row is read at the despawn call and written once the node has left the tree. [code]false[/code] writes nothing for this departure. The despawn never waits for the write, so a caller that needs the row stored awaits [method NetwPersistenceHandle.save] before despawning. See [NetwPersistenceHandle].
 		</member>
 		<member name="linger" type="bool" setter="set_linger" getter="get_linger" default="false">
 			When [code]true[/code], the entity deactivates now but is freed only after [member linger_seconds], so a late shooter can still validate against where it was. Its [NetwTimeline] freezes at the despawn boundary and expires when the node frees. Default [code]false[/code] keeps the cheap rule: you cannot be shot after the server saw you die.

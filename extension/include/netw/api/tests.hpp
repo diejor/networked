@@ -40,7 +40,6 @@ public:
     bool frame_advance();
     void instrumentation_probe(int64_t value) const;
     static void schema_model_clear();
-    static void file_system_database_forget_roots();
     static void tracker_book_clear();
     static godot::TypedArray<godot::StringName> property_set_keys_of_script(
         const godot::Ref<godot::Script> &script,

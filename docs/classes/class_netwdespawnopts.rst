@@ -96,7 +96,7 @@ When ``true`` (default), the :godot:`Node.queue_free() <Node#class_Node_method_q
 - |void| **set_flush_save**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_flush_save**\ (\ )
 
-When ``true`` (default), :ref:`NetwPersistenceEngine.flush()<class_NetwPersistenceEngine_method_flush>` runs on the despawning entity before authority revert and queue_free. A non-OK return is logged at error level and the despawn proceeds, so from the caller's perspective despawn is infallible.
+When ``true`` (default), the entity's row is read at the despawn call and written once the node has left the tree. ``false`` writes nothing for this departure. The despawn never waits for the write, so a caller that needs the row stored awaits :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>` before despawning. See :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>`.
 
 .. rst-class:: classref-item-separator
 

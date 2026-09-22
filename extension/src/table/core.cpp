@@ -18,10 +18,10 @@ constexpr int64_t MEMO_AGE_TICKS = 256;
 constexpr int64_t REORDER_WINDOW_TICKS = 8;
 
 const int WIRE_BITS[SchemaCore::COLUMN_TYPE_COUNT]
-    = {32, 64, 8, 8, 16, 16, 32, 64, 1, 64, 96, 128, 128, 128, 40, 0};
+    = {32, 64, 8, 8, 16, 16, 32, 64, 1, 64, 96, 128, 128, 128, 40, 0, 0};
 
 const int MEMCPY_BYTES[SchemaCore::COLUMN_TYPE_COUNT]
-    = {4, 8, 0, 0, 0, 0, 4, 8, 0, 8, 12, 16, 16, 16, 0, 0};
+    = {4, 8, 0, 0, 0, 0, 4, 8, 0, 8, 12, 16, 16, 16, 0, 0, 0};
 
 int element_count(const Variant &data) {
     switch (data.get_type()) {
@@ -43,6 +43,8 @@ int element_count(const Variant &data) {
             return PackedVector4Array(data).size();
         case Variant::PACKED_COLOR_ARRAY:
             return PackedColorArray(data).size();
+        case Variant::PACKED_STRING_ARRAY:
+            return PackedStringArray(data).size();
         case Variant::ARRAY:
             return Array(data).size();
         default:
@@ -447,10 +449,11 @@ Error Core::declare(const RID &table, const SchemaRecord *schema) {
     }
     for (int i = 0; i < schema->column_count(); i++) {
         const SchemaColumn *column = schema->at(i);
-        if (column->type == SchemaCore::VARIANT) {
+        if (!SchemaCore::is_sized(column->type)) {
             NETW_DEBUG(
                 sys::TABLE,
-                "Column '%s' is a Variant, which no column layout can size.",
+                "Column '%s' varies in width, and no column layout can size "
+                "it.",
                 String(column->key).utf8().get_data()
             );
             return ERR_INVALID_DATA;
@@ -629,6 +632,100 @@ Error Core::write_column(const RID &table, int column, const Variant &data) {
     return OK;
 }
 
+Error Core::replace_rows(
+    const RID &table,
+    const PackedInt64Array &routes,
+    const LocalVector<Variant> &columns,
+    int64_t tick
+) {
+    NETW_ZONE_NC("table::Core replace rows", colors::TABLE);
+    Record *record = record_of(table);
+    if (record == nullptr) {
+        return ERR_DOES_NOT_EXIST;
+    }
+    if (!record->schema.sealed) {
+        NETW_DEBUG(
+            sys::TABLE,
+            "Table '%s' is replaced from a schema that is still open.",
+            String(record->schema.name).utf8().get_data()
+        );
+        return ERR_UNCONFIGURED;
+    }
+    if (columns.size() != record->shapes.size()) {
+        NETW_DEBUG(
+            sys::TABLE,
+            "Table '%s' declares %d columns and the replacement carries %d.",
+            String(record->schema.name).utf8().get_data(),
+            int(record->shapes.size()),
+            int(columns.size())
+        );
+        return ERR_INVALID_DATA;
+    }
+
+    HashMap<int64_t, int> placed;
+    for (int at = 0; at < routes.size(); ++at) {
+        if (routes[at] <= 0 || placed.has(routes[at])) {
+            NETW_DEBUG(
+                sys::TABLE,
+                "Table '%s' is replaced with a route that is absent or "
+                "repeated.",
+                String(record->schema.name).utf8().get_data()
+            );
+            return ERR_INVALID_DATA;
+        }
+        placed[routes[at]] = at;
+    }
+
+    for (uint32_t at = 0; at < columns.size(); ++at) {
+        const ColumnShape &shape = record->shapes[at];
+        if (int(columns[at].get_type())
+            != SchemaCore::storage_type(shape.type)) {
+            NETW_DEBUG(
+                sys::TABLE,
+                "Column '%s' is declared as storage type %d and the "
+                "replacement carries a %d.",
+                String(shape.key).utf8().get_data(),
+                SchemaCore::storage_type(shape.type),
+                int(columns[at].get_type())
+            );
+            return ERR_INVALID_DATA;
+        }
+        if (element_count(columns[at]) != routes.size() * shape.stride) {
+            NETW_DEBUG(
+                sys::TABLE,
+                "Column '%s' carries %d elements and %d rows of stride %d "
+                "need %d.",
+                String(shape.key).utf8().get_data(),
+                element_count(columns[at]),
+                int(routes.size()),
+                shape.stride,
+                int(routes.size()) * shape.stride
+            );
+            return ERR_INVALID_DATA;
+        }
+    }
+
+    record->revision += 1;
+    record->routes = routes;
+    record->columns_data.clear();
+    record->columns_data.resize(columns.size());
+    for (uint32_t at = 0; at < columns.size(); ++at) {
+        record->columns_data[at] = columns[at];
+    }
+    record->row_of = placed;
+    record->row_ticks.clear();
+    record->row_ticks.resize(routes.size());
+    for (uint32_t at = 0; at < record->row_ticks.size(); ++at) {
+        record->row_ticks[at] = tick;
+    }
+    record->removal_memos.clear();
+    record->births = routes;
+    record->deaths = PackedInt64Array();
+    record->tick = tick;
+    record->dirty = true;
+    return OK;
+}
+
 Error Core::commit(const RID &table, int64_t tick) {
     NETW_ZONE_NC("table::Core commit", colors::TABLE);
     Record *record = record_of(table);
@@ -760,6 +857,20 @@ PackedInt64Array Core::read_births(const RID &table) const {
 PackedInt64Array Core::read_deaths(const RID &table) const {
     const Record *record = record_of(table);
     return record != nullptr ? record->deaths : PackedInt64Array();
+}
+
+int64_t Core::revision(const RID &table) const {
+    const Record *record = record_of(table);
+    return record != nullptr ? record->revision : -1;
+}
+
+bool Core::holds_elsewhere(const RID &table, int64_t route) const {
+    for (const KeyValue<RID, Record> &entry : tables) {
+        if (entry.key != table && entry.value.row_of.has(route)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int Core::row_of(const RID &table, int64_t route) const {
@@ -1409,6 +1520,7 @@ Dictionary Core::counters() const {
 }
 
 void Core::clear_rows(Record &record) {
+    record.revision += 1;
     record.routes = PackedInt64Array();
     record.row_of.clear();
     record.row_ticks.clear();
@@ -1427,6 +1539,7 @@ void Core::apply_wave(
     LocalVector<Variant> &buffers,
     int64_t tick
 ) {
+    record.revision += 1;
     HashMap<int64_t, int> next;
     PackedInt64Array births;
     for (int i = 0; i < routes.size(); i++) {
@@ -1499,6 +1612,7 @@ void Core::swap_remove_row(Record &record, int64_t route, int row) {
         sys::TABLE,
         "Column stores and shapes have different lengths."
     );
+    record.revision += 1;
     const int last = record.routes.size() - 1;
     const int64_t moved = record.routes[last];
     record.routes.set(row, moved);
@@ -1528,6 +1642,7 @@ PackedInt64Array Core::apply_upsert(
     const LocalVector<Variant> &values,
     int64_t tick
 ) {
+    record.revision += 1;
     PackedInt64Array bound;
     for (int i = 0; i < routes.size(); i++) {
         const int64_t route = routes[i];

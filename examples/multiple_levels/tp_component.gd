@@ -22,11 +22,12 @@ func _init() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PARENTED:
-		Netw.configure_property(self, &"current_scene_path") \
-				.on_spawn().persisted()
+		Netw.configure_property(self, &"current_scene_path").on_spawn()
 
 
 func _ready() -> void:
+	Netw.configure_property(self, &"current_scene_path", false) \
+			.persisted(game.save_schema.column_ref(MultipleLevelsSession.LEVEL))
 	entity.reparented.connect(apply_arrival_marker)
 	layer = Netw.service(self, TPLayer)
 
@@ -109,5 +110,5 @@ func finish_teleport() -> void:
 	owner.reset_physics_interpolation()
 	arrival_marker = NodePath()
 	if multiplayer.is_server():
-		entity.persistence.flush()
+		entity.persistence.save()
 	teleport_committed.emit()

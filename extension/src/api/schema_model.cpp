@@ -10,6 +10,70 @@ using namespace godot;
 
 namespace netw {
 
+Ref<NetwColumnRef> NetwColumnRef::make(
+    const Ref<NetwSchema> &p_schema,
+    int p_index
+) {
+    Ref<NetwColumnRef> made;
+    made.instantiate();
+    made->schema = p_schema;
+    made->index = p_index;
+    return made;
+}
+
+StringName NetwColumnRef::get_key() const {
+    if (!is_valid()) {
+        return StringName();
+    }
+    const Ref<NetwSchemaColumn> column = schema->get_columns()[index];
+    return column.is_valid() ? column->get_key() : StringName();
+}
+
+bool NetwColumnRef::is_valid() const {
+    return schema.is_valid() && index >= 0
+        && index < schema->get_columns().size();
+}
+
+void NetwColumnRef::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_schema"), &NetwColumnRef::get_schema);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::OBJECT,
+            "schema",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwSchema",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_schema"
+    );
+    ClassDB::bind_method(D_METHOD("get_index"), &NetwColumnRef::get_index);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "index",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_index"
+    );
+    ClassDB::bind_method(D_METHOD("get_key"), &NetwColumnRef::get_key);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::STRING_NAME,
+            "key",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_key"
+    );
+    ClassDB::bind_method(D_METHOD("is_valid"), &NetwColumnRef::is_valid);
+}
+
 void NetwSchemaColumn::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("set_key", "key"),
@@ -259,6 +323,59 @@ int NetwSchema::variant(const StringName &p_key, int p_stride) {
     );
 }
 
+int NetwSchema::string(const StringName &p_key, int p_stride) {
+    return column(
+        p_key,
+        NetwMultiplayer::COLUMN_STRING,
+        p_stride,
+        Ref<NetwQuantize>()
+    );
+}
+
+Ref<NetwColumnRef> NetwSchema::column_ref(int p_index) {
+    if (p_index < 0 || p_index >= columns.size()) {
+        NETW_ERROR(
+            sys::TABLE,
+            "schema '%s' has no column %d to reference",
+            String(name),
+            p_index
+        );
+        return Ref<NetwColumnRef>();
+    }
+    return NetwColumnRef::make(Ref<NetwSchema>(this), p_index);
+}
+
+Ref<NetwSchema> NetwSchema::storage_version(int p_version) {
+    if (p_version < 1) {
+        NETW_ERROR(
+            sys::TABLE,
+            "schema '%s' asks for storage version %d and the first is 1",
+            String(name),
+            p_version
+        );
+        return Ref<NetwSchema>(this);
+    }
+    version = p_version;
+    return Ref<NetwSchema>(this);
+}
+
+Ref<NetwSchema> NetwSchema::migrate(
+    int p_from_version,
+    const Callable &p_step
+) {
+    if (p_from_version < 1 || p_step.is_null()) {
+        NETW_ERROR(
+            sys::TABLE,
+            "schema '%s' declares an unusable migration from version %d",
+            String(name),
+            p_from_version
+        );
+        return Ref<NetwSchema>(this);
+    }
+    migrations[p_from_version] = p_step;
+    return Ref<NetwSchema>(this);
+}
+
 Ref<NetwSchema> NetwSchema::register_declaration() {
     schema_model::adopt(Ref<NetwSchema>(this));
     return Ref<NetwSchema>(this);
@@ -377,6 +494,38 @@ void NetwSchema::_bind_methods() {
         D_METHOD("variant", "key", "stride"),
         &NetwSchema::variant,
         DEFVAL(1)
+    );
+    ClassDB::bind_method(
+        D_METHOD("string", "key", "stride"),
+        &NetwSchema::string,
+        DEFVAL(1)
+    );
+    ClassDB::bind_method(
+        D_METHOD("column_ref", "index"),
+        &NetwSchema::column_ref
+    );
+    ClassDB::bind_method(
+        D_METHOD("storage_version", "version"),
+        &NetwSchema::storage_version
+    );
+    ClassDB::bind_method(
+        D_METHOD("migrate", "from_version", "step"),
+        &NetwSchema::migrate
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_storage_version"),
+        &NetwSchema::get_storage_version
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "stored_version",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_storage_version"
     );
     ClassDB::bind_method(
         D_METHOD("register"),

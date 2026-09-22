@@ -349,24 +349,21 @@ func list_matches(min_size := 0, max_size := 100, limit := 100) -> Array:
 ## [method list_public_storage] preserves every owner entry. Use it when
 ## concurrent writers can publish the same key.
 func write_public_storage(collection: String, key: String, value: Dictionary) -> bool:
-	var client = _resolve_client()
-	var session = _resolve_session()
-	if client == null or session == null or collection.is_empty() or key.is_empty():
-		return false
-	var write_script: Variant = _nakama_class("NakamaWriteStorageObject")
-	if write_script == null:
+	if collection.is_empty() or key.is_empty():
 		return false
 	# permission_read 2 = public, permission_write 1 = owner only.
-	var obj: Variant = write_script.new(
-		collection,
-		key,
-		2,
-		1,
-		JSON.stringify(value),
-		"",
+	var answer := await write_storage_objects(
+		[
+			{
+				"collection": collection,
+				"key": key,
+				"read": 2,
+				"write": 1,
+				"value": JSON.stringify(value),
+			},
+		],
 	)
-	var res = await client.write_storage_objects_async(session, [obj])
-	return res != null and not res.is_exception()
+	return int(answer["error"]) == OK
 
 
 ## Reads public objects under [param collection] across all owners.
@@ -380,22 +377,15 @@ func write_public_storage(collection: String, key: String, value: Dictionary) ->
 ## [/codeblock]
 func read_public_storage(collection: String, limit := 100) -> Dictionary:
 	var out := { }
-	var client = _resolve_client()
-	var session = _resolve_session()
-	if client == null or session == null or collection.is_empty():
+	if collection.is_empty():
 		return out
-	var res = await client.list_storage_objects_async(
-		session,
-		collection,
-		"",
-		limit,
-	)
-	if res == null or res.is_exception():
+	var answer := await list_storage_objects(collection, limit)
+	if int(answer["error"]) != OK:
 		return out
-	for object in res.objects:
-		var parsed: Variant = JSON.parse_string(String(object.value))
+	for object in answer["objects"]:
+		var parsed: Variant = object["value"]
 		if typeof(parsed) == TYPE_DICTIONARY:
-			out[String(object.key)] = parsed
+			out[String(object["key"])] = parsed
 	return out
 
 
@@ -415,31 +405,17 @@ func read_public_storage(collection: String, limit := 100) -> Dictionary:
 ## [/codeblock]
 func list_public_storage(collection: String, limit := 100) -> Array:
 	var out: Array = []
-	var client = _resolve_client()
-	var session = _resolve_session()
-	if client == null or session == null or collection.is_empty():
+	if collection.is_empty():
 		return out
-	var cursor: Variant = null
+	var cursor := ""
 	while true:
-		var res = await client.list_storage_objects_async(
-			session,
-			collection,
-			"",
-			limit,
-			cursor,
-		)
-		if res == null or res.is_exception():
+		var answer := await list_storage_objects(collection, limit, cursor)
+		if int(answer["error"]) != OK:
 			return out
-		for object in res.objects:
-			out.append(
-				{
-					"key": String(object.key),
-					"value": JSON.parse_string(String(object.value)),
-					"user_id": String(object.user_id),
-				},
-			)
-		var next := String(res.cursor) if res.cursor != null else ""
-		if next.is_empty() or res.objects.is_empty():
+		var objects: Array = answer["objects"]
+		out.append_array(objects)
+		var next := String(answer["cursor"])
+		if next.is_empty() or objects.is_empty():
 			break
 		cursor = next
 	return out
@@ -449,15 +425,9 @@ func list_public_storage(collection: String, limit := 100) -> Array:
 ##
 ## The operation is best effort and idempotent on the server side.
 func delete_public_storage(collection: String, key: String) -> void:
-	var client = _resolve_client()
-	var session = _resolve_session()
-	if client == null or session == null or collection.is_empty() or key.is_empty():
+	if collection.is_empty() or key.is_empty():
 		return
-	var id_script: Variant = _nakama_class("NakamaStorageObjectId")
-	if id_script == null:
-		return
-	var id: Variant = id_script.new(collection, key, "", "")
-	await client.delete_storage_objects_async(session, [id])
+	await delete_storage_objects([{ "collection": collection, "key": key }])
 
 
 ## Writes a public relay lobby card keyed by [param match_id].
@@ -488,6 +458,78 @@ func delete_lobby_card(match_id: String) -> void:
 # Generic storage objects.
 
 
+## Answers the result shape every storage helper on this wrapper resolves.
+##
+## [code]uncertain[/code] is true when the request left the process and the
+## service never said whether it applied, so a caller must not retry it blindly
+## and reports the outcome as unknown rather than guessing.
+## [codeblock]
+## Dictionary
+## ├── error (int)        # @GlobalScope.Error
+## ├── detail (String)
+## └── uncertain (bool)
+## [/codeblock]
+static func storage_answer(
+		error: int,
+		detail: String,
+		uncertain: bool,
+) -> Dictionary:
+	return { "error": error, "detail": detail, "uncertain": uncertain }
+
+
+## The answer for a request that never reached the service, so nothing applied.
+static func unsent(error: int, detail: String) -> Dictionary:
+	return storage_answer(error, detail, false)
+
+
+## The answer for a request no authenticated session could carry.
+static func unauthenticated() -> Dictionary:
+	return unsent(ERR_UNAUTHORIZED, "no authenticated Nakama session")
+
+
+# Translates a Nakama exception into an engine error, an explanation a person
+# can read, and whether the request it belongs to may still have applied.
+static func _storage_fault(exception: Variant) -> Dictionary:
+	if exception == null:
+		return storage_answer(ERR_CONNECTION_ERROR, "Nakama answered nothing", true)
+	var detail := String(exception.message)
+	if bool(exception.cancelled):
+		return storage_answer(ERR_TIMEOUT, detail, true)
+	var status := int(exception.status_code)
+	if status < 0:
+		return storage_answer(ERR_TIMEOUT, detail, true)
+	if status == 401 or status == 403:
+		return storage_answer(ERR_UNAUTHORIZED, detail, false)
+	if status >= 500:
+		return storage_answer(ERR_CONNECTION_ERROR, detail, true)
+	if status >= 400:
+		return storage_answer(ERR_INVALID_DATA, detail, false)
+	return storage_answer(FAILED, detail, true)
+
+
+# Adds the rows a read answered to a storage answer.
+static func _with_objects(answer: Dictionary, objects: Array) -> Dictionary:
+	answer["objects"] = objects
+	return answer
+
+
+# Adds the rows and continuation cursor a list answered to a storage answer.
+static func _with_page(
+		answer: Dictionary,
+		objects: Array,
+		cursor: String,
+) -> Dictionary:
+	answer["objects"] = objects
+	answer["cursor"] = cursor
+	return answer
+
+
+## Returns the authenticated user's id, or an empty [String] before auth.
+func own_user_id() -> String:
+	var session = _resolve_session()
+	return String(session.user_id) if session != null else ""
+
+
 ## Writes a batch of storage [param objects] in one call.
 ##
 ## Resolves the client from [NakamaSessionService] when bound, so a storage-only
@@ -501,14 +543,17 @@ func delete_lobby_card(match_id: String) -> void:
 ##     ├── read (int)       # Optional. Default 1.
 ##     └── write (int)      # Optional. Default 1.
 ## [/codeblock]
-func write_storage_objects(objects: Array) -> bool:
+## Answers the shape [method storage_answer] draws.
+func write_storage_objects(objects: Array) -> Dictionary:
 	var client = _resolve_client()
 	var session = _resolve_session()
-	if client == null or session == null or objects.is_empty():
-		return false
+	if client == null or session == null:
+		return unauthenticated()
+	if objects.is_empty():
+		return storage_answer(OK, "", false)
 	var write_script: Variant = _nakama_class("NakamaWriteStorageObject")
 	if write_script == null:
-		return false
+		return unsent(ERR_UNAVAILABLE, "the Nakama addon is absent")
 	var payload: Array = []
 	for entry in objects:
 		payload.append(
@@ -522,13 +567,16 @@ func write_storage_objects(objects: Array) -> bool:
 			),
 		)
 	var res = await client.write_storage_objects_async(session, payload)
-	return res != null and not res.is_exception()
+	if res == null:
+		return storage_answer(ERR_CONNECTION_ERROR, "Nakama answered nothing", true)
+	if res.is_exception():
+		return _storage_fault(res.get_exception())
+	return storage_answer(OK, "", false)
 
 
 ## Reads a batch of storage objects named by [param ids].
 ##
-## [code]user_id[/code] defaults to the session user. Empty before the session is
-## authenticated.
+## [code]user_id[/code] defaults to the session user.
 ## [codeblock]
 ## ids (Array)
 ## └── Dictionary
@@ -536,22 +584,38 @@ func write_storage_objects(objects: Array) -> bool:
 ##     ├── key (String)
 ##     └── user_id (String)
 ##
-## Returns (Array)
-## └── Dictionary
-##     ├── collection (String)
-##     ├── key (String)
-##     └── value (Variant)
+## Returns the shape [method storage_answer] draws, with the rows the service
+## held. A row the service does not hold is simply absent, at
+## [constant @GlobalScope.OK].
+## [codeblock]
+## Dictionary
+## ├── error (int)
+## ├── detail (String)
+## ├── uncertain (bool)
+## └── objects (Array)
+##     └── Dictionary
+##         ├── collection (String)
+##         ├── key (String)
+##         ├── user_id (String)
+##         └── value (Variant)
 ## [/codeblock]
-func read_storage_objects(ids: Array) -> Array:
-	var out: Array = []
+func read_storage_objects(ids: Array) -> Dictionary:
 	var client = _resolve_client()
 	var session = _resolve_session()
-	if client == null or session == null or ids.is_empty():
-		return out
+	if client == null or session == null:
+		return _with_objects(
+			unauthenticated(),
+			[],
+		)
+	if ids.is_empty():
+		return _with_objects(storage_answer(OK, "", false), [])
 	var id_script: Variant = _nakama_class("NakamaStorageObjectId")
 	if id_script == null:
-		return out
-	var own := _own_user_id()
+		return _with_objects(
+			unsent(ERR_UNAVAILABLE, "the Nakama addon is absent"),
+			[],
+		)
+	var own := own_user_id()
 	var query: Array = []
 	for entry in ids:
 		query.append(
@@ -563,56 +627,84 @@ func read_storage_objects(ids: Array) -> Array:
 			),
 		)
 	var res = await client.read_storage_objects_async(session, query)
-	if res == null or res.is_exception():
-		return out
+	if res == null:
+		return _with_objects(
+			storage_answer(ERR_CONNECTION_ERROR, "Nakama answered nothing", false),
+			[],
+		)
+	if res.is_exception():
+		return _with_objects(_storage_fault(res.get_exception()), [])
+	var out: Array = []
 	for object in res.objects:
 		out.append(
 			{
 				"collection": String(object.collection),
 				"key": String(object.key),
+				"user_id": String(object.user_id),
 				"value": JSON.parse_string(String(object.value)),
 			},
 		)
-	return out
+	return _with_objects(storage_answer(OK, "", false), out)
 
 
-## Lists every storage object under [param collection] for the session user.
+## Lists one remote page of [param collection], owned by [param owner].
 ##
-## Pass [param cursor] to page. Empty before the session is authenticated.
+## An empty [param owner] lists every owner's objects. Pass [method own_user_id]
+## for the session user alone. [param cursor] is empty on the first page, and
+## the answer's own cursor continues it. A page shorter than [param limit] with
+## a nonempty cursor is not exhaustion.
 ## [codeblock]
 ## Dictionary
+## ├── error (int)
+## ├── detail (String)
+## ├── uncertain (bool)
 ## ├── objects (Array)
 ## │   └── Dictionary
 ## │       ├── key (String)
+## │       ├── user_id (String)
 ## │       └── value (Variant)
 ## └── cursor (String)
 ## [/codeblock]
-func list_storage_objects(collection: String, limit := 100, cursor := "") -> Dictionary:
-	var out := { "objects": [], "cursor": "" }
+func list_storage_objects(
+		collection: String,
+		limit := 100,
+		cursor := "",
+		owner := "",
+) -> Dictionary:
 	var client = _resolve_client()
 	var session = _resolve_session()
 	if client == null or session == null:
-		return out
+		return _with_page(
+			unauthenticated(),
+			[],
+			"",
+		)
 	var res = await client.list_storage_objects_async(
 		session,
 		collection,
-		_own_user_id(),
+		owner,
 		limit,
 		cursor,
 	)
-	if res == null or res.is_exception():
-		return out
+	if res == null:
+		return _with_page(
+			storage_answer(ERR_CONNECTION_ERROR, "Nakama answered nothing", false),
+			[],
+			"",
+		)
+	if res.is_exception():
+		return _with_page(_storage_fault(res.get_exception()), [], "")
 	var objects: Array = []
 	for object in res.objects:
 		objects.append(
 			{
 				"key": String(object.key),
+				"user_id": String(object.user_id),
 				"value": JSON.parse_string(String(object.value)),
 			},
 		)
-	out["objects"] = objects
-	out["cursor"] = String(res.cursor) if res.cursor != null else ""
-	return out
+	var next := String(res.cursor) if res.cursor != null else ""
+	return _with_page(storage_answer(OK, "", false), objects, next)
 
 
 ## Deletes a batch of storage objects named by [param ids].
@@ -624,14 +716,17 @@ func list_storage_objects(collection: String, limit := 100, cursor := "") -> Dic
 ##     ├── collection (String)
 ##     └── key (String)
 ## [/codeblock]
-func delete_storage_objects(ids: Array) -> bool:
+## Answers the shape [method storage_answer] draws.
+func delete_storage_objects(ids: Array) -> Dictionary:
 	var client = _resolve_client()
 	var session = _resolve_session()
-	if client == null or session == null or ids.is_empty():
-		return false
+	if client == null or session == null:
+		return unauthenticated()
+	if ids.is_empty():
+		return storage_answer(OK, "", false)
 	var id_script: Variant = _nakama_class("NakamaStorageObjectId")
 	if id_script == null:
-		return false
+		return unsent(ERR_UNAVAILABLE, "the Nakama addon is absent")
 	var payload: Array = []
 	for entry in ids:
 		payload.append(
@@ -643,7 +738,11 @@ func delete_storage_objects(ids: Array) -> bool:
 			),
 		)
 	var res = await client.delete_storage_objects_async(session, payload)
-	return res != null and not res.is_exception()
+	if res == null:
+		return storage_answer(ERR_CONNECTION_ERROR, "Nakama answered nothing", true)
+	if res.is_exception():
+		return _storage_fault(res.get_exception())
+	return storage_answer(OK, "", false)
 
 
 # Resolves the active client, preferring the shared session when bound.
@@ -655,11 +754,6 @@ func _resolve_client():
 func _resolve_session():
 	return _shared_session.session() if _shared_session != null else _session
 
-
-# Returns the authenticated user's id, or an empty string before auth.
-func _own_user_id() -> String:
-	var session = _resolve_session()
-	return String(session.user_id) if session != null else ""
 
 
 # Resolves a Nakama API class by its global name through the engine class

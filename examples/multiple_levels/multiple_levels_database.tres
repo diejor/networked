@@ -1,7 +1,0 @@
-[gd_resource type="NetwDatabase" format=3 uid="uid://yv4uuygdxogs"]
-
-[sub_resource type="FileSystemDatabase" id="FileSystemDatabase_oudfo"]
-base_dir = "res://examples/multiple_levels/saves"
-
-[resource]
-backend = SubResource("FileSystemDatabase_oudfo")

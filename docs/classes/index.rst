@@ -66,6 +66,7 @@ Gdscript
     class_menu
     class_nakamaauth
     class_nakamadatabase
+    class_nakamadatabase.connection
     class_nakamalobbydirectory
     class_nakamalobbydirectory.lobbycard
     class_nakamarelaybridge
@@ -94,6 +95,7 @@ Other classes
     class_locallinkconditions
     class_localloopbacksession
     class_localmultiplayerpeer
+    class_memorydatabase
     class_multiplayertree
     class_netw
     class_netwaction
@@ -102,11 +104,13 @@ Other classes
     class_netwbitstream
     class_netwchannel
     class_netwclockconfig
-    class_netwclockhandle
+    class_netwcolumnref
     class_netwconnecthandle
     class_netwcontrolrequest
     class_netwdatabase
     class_netwdatabasebackend
+    class_netwdatabaseconfig
+    class_netwdatabaseconnection
     class_netwdespawnconfig
     class_netwdespawnopts
     class_netwdisplayhandle
@@ -121,7 +125,7 @@ Other classes
     class_netwmemberconfig
     class_netwmultiplayer
     class_netwpersistenceconfig
-    class_netwpersistenceengine
+    class_netwpersistencehandle
     class_netwphysicsstepper
     class_netwplayer
     class_netwpredict
@@ -147,7 +151,6 @@ Other classes
     class_netwquantizetransform2d
     class_netwquantizetransform3d
     class_netwrecord
-    class_netwrecordtable
     class_netwringbuffer
     class_netwsceneconfig
     class_netwscenehandle
@@ -159,13 +162,11 @@ Other classes
     class_netwsessionhandle
     class_netwtablehandle
     class_netwtimeline
-    class_netwtransaction
     class_netwtransport
     class_netwwebrtcsignaler
+    class_netwwritebatch
     class_participantview
     class_participantviewport
     class_participantwindow
     class_serde
-    class_warmpolicy
-    class_warmrequest
 

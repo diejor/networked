@@ -12,32 +12,26 @@ FileSystemDatabase
 
 **Inherits:** :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **<** :godot:`Resource`
 
-A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that stores each record as one :ref:`DictionaryRecord<class_DictionaryRecord>` file.
+A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in files under one directory.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A record lives at ``<root>/<table>/<id>.<ext>``. The root folds :ref:`app_id<class_FileSystemDatabase_property_app_id>` and the open slot into :ref:`base_dir<class_FileSystemDatabase_property_base_dir>`, so two saves of one game never meet.
-
-.. code:: text
-
-    base_dir
-    └── app_id
-        └── slot
-            └── table
-                └── id.res
-
-\ Every read and write goes straight to disk through :godot:`ResourceLoader` and :godot:`ResourceSaver`. There is no cache, so :ref:`NetwDatabase.warm_policy<class_NetwDatabase_property_warm_policy>` is ignored and a write is durable the moment it returns.
+Records outlive the process, so this is the backend a shipped single player or listen server game saves into.
 
 ::
 
-    var db := NetwDatabase.new()
-    var fs := FileSystemDatabase.new()
-    fs.base_dir = "user://saves"
-    fs.use_text_format = true   # readable .tres instead of binary .res
-    db.backend = fs
+    var backend := FileSystemDatabase.new()
+    backend.root = "user://saves"
+    Netw.configure_database(self, &"saves").backend(backend)
+
+\ Each slot is a directory under :ref:`root<class_FileSystemDatabase_property_root>`, and each record is one file inside it. A record is replaced by writing a new file beside it and renaming over the target, so a write that fails partway leaves the previous record readable rather than a half-written one.
+
+A file this library did not write is reported as present and refused as unrecognized. It is never read as an empty save and it is never overwritten by the read that found it.
+
+\ :ref:`NetwDatabaseBackend._list_slots()<class_NetwDatabaseBackend_private_method__list_slots>` reads :ref:`root<class_FileSystemDatabase_property_root>` itself, so a slot written by an earlier run of the game appears without being opened first.
 
 .. rst-class:: classref-reftable-group
 
@@ -47,13 +41,9 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------+---------------------------------------------------------------------------+-------------------+
-   | :godot:`String` | :ref:`app_id<class_FileSystemDatabase_property_app_id>`                   | ``""``            |
-   +-----------------+---------------------------------------------------------------------------+-------------------+
-   | :godot:`String` | :ref:`base_dir<class_FileSystemDatabase_property_base_dir>`               | ``"res://saves"`` |
-   +-----------------+---------------------------------------------------------------------------+-------------------+
-   | :godot:`bool`   | :ref:`use_text_format<class_FileSystemDatabase_property_use_text_format>` | ``false``         |
-   +-----------------+---------------------------------------------------------------------------+-------------------+
+   +-----------------+-----------------------------------------------------+--------------------+
+   | :godot:`String` | :ref:`root<class_FileSystemDatabase_property_root>` | ``"user://saves"`` |
+   +-----------------+-----------------------------------------------------+--------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -64,52 +54,18 @@ Properties
 Property Descriptions
 ---------------------
 
-.. _class_FileSystemDatabase_property_app_id:
+.. _class_FileSystemDatabase_property_root:
 
 .. rst-class:: classref-property
 
-:godot:`String` **app_id** = ``""`` :ref:`🔗<class_FileSystemDatabase_property_app_id>`
+:godot:`String` **root** = ``"user://saves"`` :ref:`🔗<class_FileSystemDatabase_property_root>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_app_id**\ (\ value\: :godot:`String`\ )
-- :godot:`String` **get_app_id**\ (\ )
+- |void| **set_root**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_root**\ (\ )
 
-Application scope folded into the storage path ahead of the save slot. Leave it empty to store slots directly under :ref:`base_dir<class_FileSystemDatabase_property_base_dir>`. Set it to keep several games sharing one :ref:`base_dir<class_FileSystemDatabase_property_base_dir>` from colliding.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_FileSystemDatabase_property_base_dir:
-
-.. rst-class:: classref-property
-
-:godot:`String` **base_dir** = ``"res://saves"`` :ref:`🔗<class_FileSystemDatabase_property_base_dir>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_base_dir**\ (\ value\: :godot:`String`\ )
-- :godot:`String` **get_base_dir**\ (\ )
-
-Root directory for every table subdirectory. Point it at ``user://saves`` for a shipped game: a ``res://`` root is rewritten to ``user://`` outside the editor.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_FileSystemDatabase_property_use_text_format:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **use_text_format** = ``false`` :ref:`🔗<class_FileSystemDatabase_property_use_text_format>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_use_text_format**\ (\ value\: :godot:`bool`\ )
-- :godot:`bool` **get_use_text_format**\ (\ )
-
-Picks the record file extension. ``true`` writes the readable ``.tres`` text form, and ``false`` the compact binary ``.res``.
+The directory every slot lives under. A path under ``user://`` is the one a shipped game can write to on every platform.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

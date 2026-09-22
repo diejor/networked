@@ -325,4 +325,179 @@ TEST_CASE("[Networked][Table][Hosted] Re-declaring a name reaches its record") {
     NETW_CHECK_EQ(core->column_count(handle), 1);
 }
 
+TEST_CASE(
+    "[Networked][Table][Hosted] A string column is stored and never sized"
+) {
+    SchemaRecord record = make_record("Named");
+    NETW_CHECK_EQ(
+        SchemaCore::append_column(&record, "label", SchemaCore::STRING, 1),
+        0
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::storage_type(SchemaCore::STRING),
+        int(Variant::PACKED_STRING_ARRAY)
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::element_type(SchemaCore::STRING),
+        int(Variant::STRING)
+    );
+    CHECK_FALSE(SchemaCore::is_sized(SchemaCore::STRING));
+    CHECK_FALSE(SchemaCore::is_sized(SchemaCore::VARIANT));
+    CHECK(SchemaCore::is_sized(SchemaCore::VECTOR3));
+    NETW_CHECK_EQ(
+        int(SchemaCore::make_storage(SchemaCore::STRING).get_type()),
+        int(Variant::PACKED_STRING_ARRAY)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] A value is checked against its column before "
+    "anything stores it"
+) {
+    NETW_CHECK_EQ(SchemaCore::validate_value(SchemaCore::I64, 1, 7), OK);
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::VECTOR3, 1, Vector3(1, 2, 3)),
+        OK
+    );
+    NETW_CHECK_EQ(SchemaCore::validate_value(SchemaCore::F32, 1, 2), OK);
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::STRING, 1, String("gold")),
+        OK
+    );
+
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::U8, 1, 256),
+        ERR_PARAMETER_RANGE_ERROR
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::I8, 1, -129),
+        ERR_PARAMETER_RANGE_ERROR
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::I16, 1, 40000),
+        ERR_PARAMETER_RANGE_ERROR
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::VECTOR3, 1, Vector2(1, 2)),
+        ERR_INVALID_DATA
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::STRING, 1, 5),
+        ERR_INVALID_DATA
+    );
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] A stride column takes exactly that many "
+    "elements"
+) {
+    Array three;
+    three.push_back(1.0);
+    three.push_back(2.0);
+    three.push_back(3.0);
+    NETW_CHECK_EQ(SchemaCore::validate_value(SchemaCore::F32, 3, three), OK);
+
+    Array two;
+    two.push_back(1.0);
+    two.push_back(2.0);
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::F32, 3, two),
+        ERR_INVALID_DATA
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::F32, 3, 1.0),
+        ERR_INVALID_DATA
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::F32, 0, 1.0),
+        ERR_INVALID_PARAMETER
+    );
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] A stored value carries no object, and nesting "
+    "does not hide one"
+) {
+    NetwHandleLedger held;
+    Dictionary nested;
+    nested["deep"] = held.rid_create();
+    Array outer;
+    outer.push_back(nested);
+
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::VARIANT, 1, outer),
+        ERR_INVALID_DATA
+    );
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::VARIANT, 1, Callable()),
+        ERR_INVALID_DATA
+    );
+
+    Dictionary plain;
+    plain["gold"] = 12;
+    plain["where"] = Vector2(3, 4);
+    NETW_CHECK_EQ(SchemaCore::validate_value(SchemaCore::VARIANT, 1, plain), OK);
+}
+
+TEST_CASE("[Networked][Table][Hosted] A self-nesting value terminates") {
+    Array loop;
+    loop.push_back(Array());
+    Array inner = loop[0];
+    inner.push_back(loop);
+
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::VARIANT, 1, loop),
+        ERR_CYCLIC_LINK
+    );
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] A storage version travels with the schema and "
+    "stays out of the wire hash"
+) {
+    SchemaCore held_core;
+    SchemaCore *const core = &held_core;
+    NetwHandleLedger held;
+    const RID plain = held.rid_create();
+    core->declare(plain, "Versioned");
+    core->add_column(plain, "gold", SchemaCore::I64, 1);
+    NETW_CHECK_EQ(core->seal(plain), OK);
+    NETW_CHECK_EQ(core->storage_version_of(plain), 1);
+    const int plain_hash = core->hash_of(plain);
+
+    SchemaCore other_core;
+    const RID bumped = held.rid_create();
+    other_core.declare(bumped, "Versioned");
+    other_core.add_column(bumped, "gold", SchemaCore::I64, 1);
+    other_core.set_storage_version(bumped, 3);
+    NETW_CHECK_EQ(other_core.seal(bumped), OK);
+    NETW_CHECK_EQ(other_core.storage_version_of(bumped), 3);
+    NETW_CHECK_EQ(other_core.hash_of(bumped), plain_hash);
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] A redeclared schema keeps its version, and a "
+    "second version refuses the whole declaration"
+) {
+    SchemaCore held_core;
+    SchemaCore *const core = &held_core;
+    NetwHandleLedger held;
+    const RID handle = held.rid_create();
+    core->declare(handle, "Stable");
+    core->add_column(handle, "gold", SchemaCore::I64, 1);
+    core->set_storage_version(handle, 2);
+    NETW_CHECK_EQ(core->seal(handle), OK);
+
+    core->declare(handle, "Stable");
+    core->add_column(handle, "gold", SchemaCore::I64, 1);
+    core->set_storage_version(handle, 2);
+    NETW_CHECK_EQ(core->seal(handle), OK);
+
+    core->declare(handle, "Stable");
+    core->add_column(handle, "gold", SchemaCore::I64, 1);
+    core->set_storage_version(handle, 5);
+    NETW_CHECK_EQ(core->seal(handle), ERR_UNCONFIGURED);
+    NETW_CHECK_EQ(core->storage_version_of(handle), 2);
+}
+
 } // namespace TestSchemaCore

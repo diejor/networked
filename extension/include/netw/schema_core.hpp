@@ -8,6 +8,7 @@
 namespace netw {
 
 using table::SchemaColumn;
+using table::SchemaMigration;
 using table::SchemaRecord;
 
 class SchemaCore {
@@ -29,10 +30,13 @@ public:
         QUATERNION = 13,
         ENTITY = 14,
         VARIANT = 15,
+        STRING = 16,
     };
 
-    static constexpr int COLUMN_TYPE_COUNT = 16;
+    static constexpr int COLUMN_TYPE_COUNT = 17;
     static constexpr int MAX_COLUMNS = 64;
+    static constexpr int MAX_VALUE_DEPTH = 16;
+    static constexpr int MAX_VALUE_ELEMENTS = 65536;
 
 private:
     godot::HashMap<godot::RID, SchemaRecord> schemas;
@@ -58,7 +62,17 @@ public:
         int column,
         const godot::Ref<NetwQuantize> &quantizer
     );
+    void set_storage_version(const godot::RID &schema, int version);
+    void add_migration(
+        const godot::RID &schema,
+        int from_version,
+        const godot::Callable &step
+    );
     godot::Error seal(const godot::RID &schema);
+
+    int storage_version_of(const godot::RID &schema) const;
+    godot::Callable migration_from(const godot::RID &schema, int from_version)
+        const;
 
     bool is_valid(const godot::RID &schema) const;
     godot::RID find(const godot::StringName &name) const;
@@ -96,6 +110,12 @@ public:
         int column,
         const godot::Ref<NetwQuantize> &quantizer
     );
+    static void assign_storage_version(SchemaRecord *record, int version);
+    static void append_migration(
+        SchemaRecord *record,
+        int from_version,
+        const godot::Callable &step
+    );
     static godot::Error fix(SchemaRecord *record);
     static const SchemaColumn *column_at(
         const SchemaRecord *record,
@@ -109,6 +129,14 @@ public:
 
     static int storage_type(int type);
     static int element_type(int type);
+    static bool is_sized(int type);
+
+    static godot::Error validate_value(
+        int type,
+        int stride,
+        const godot::Variant &value
+    );
+    static godot::Error validate_storable(const godot::Variant &value);
 };
 
 } // namespace netw

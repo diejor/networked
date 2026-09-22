@@ -14,6 +14,7 @@
 #include "netw/api/clock_config.hpp"
 #include "netw/api/clock_handle.hpp"
 #include "netw/api/connect_handle.hpp"
+#include "netw/api/database.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
@@ -176,6 +177,16 @@ public:
         int64_t p_channel_id
     );
     static godot::Ref<NetwTableHandle> table(
+        godot::Node *p_node,
+        const godot::StringName &p_name
+    );
+    static godot::Ref<NetwDatabaseConfig> configure_database(
+        godot::Node *p_node,
+        const godot::StringName &p_name,
+        const godot::Ref<NetwDatabaseConfig> &p_preset
+        = godot::Ref<NetwDatabaseConfig>()
+    );
+    static godot::Ref<NetwDatabase> database(
         godot::Node *p_node,
         const godot::StringName &p_name
     );

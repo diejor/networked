@@ -2,7 +2,6 @@ class_name TestNakamaReplication
 extends NetwTestSuite
 
 const MAIN := preload("res://examples/multiple_levels/Main.tscn")
-const DATABASE := preload("res://examples/multiple_levels/multiple_levels_database.tres")
 const _TIMEOUT := 10.0
 
 var _trees: Array = []
@@ -15,11 +14,7 @@ func before(
 		do_skip = NakamaTestSupport.skip_reason(MAIN) != "",
 		skip_reason = NakamaTestSupport.skip_reason(MAIN),
 ) -> void:
-	# The multiple_levels SaveComponents persist into the repo-local saves dir.
-	# Redirect the shared database resource to a gdUnit temp dir so a stale
-	# save (for example valeria parked in Level2) can't shape this run's spawns.
-	var fs := DATABASE.backend as FileSystemDatabase
-	fs.base_dir = create_temp_dir("multiple_levels_saves")
+	pass
 
 
 func after_test() -> void:

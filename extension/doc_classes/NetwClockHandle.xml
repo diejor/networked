@@ -131,4 +131,3 @@
 		</signal>
 	</signals>
 </class>
-_STRETCH_NUDGE_FACTOR] is that fraction. At 0.05 the clock closes a twentieth of the gap per frame, so it runs slightly fast or slightly slow until the gap is spent and the tick never jumps. Above [constant NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD] ticks of gap it snaps instead, because a gap that large is a desync and not drift.

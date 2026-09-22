@@ -37,7 +37,8 @@ namespace Networked;
 /// <see cref="NetwSessionHandle.LocalJoined"/>,
 /// <see cref="NetwSessionHandle.PlayerLeft"/>,
 /// <see cref="NetwSessionHandle.JoinFailed"/>,
-/// <see cref="NetwSessionHandle.SceneLive"/>, <c>scene_changed</c> and
+/// <see cref="NetwSessionHandle.SceneLive"/>,
+/// <see cref="NetwSessionHandle.SceneChanged"/> and
 /// <see cref="NetwSessionHandle.PresentationChanged"/>, all relayed from the
 /// session that created it. One handle exists per session for the life of that
 /// session, so a game may hold it across an await.
@@ -187,6 +188,31 @@ public sealed class NetwSessionHandle : NetwRefCounted
     {
         add => Connect("scene_live", Callable.From(value));
         remove => Disconnect("scene_live", Callable.From(value));
+    }
+
+    /// <summary>
+    /// A <see cref="Netw.ChangeSceneToFile"/> has landed. <c>scene</c> is the
+    /// destination and <c>arrived</c> holds the players it brought there.
+    /// Relayed from <see cref="NetwMultiplayer.SceneChanged"/>. A change
+    /// carries no body, so this is where the server gives the arrivals one. A
+    /// player already watching the destination is not in <c>arrived</c>, so a
+    /// repeated change announces nobody and the spawn happens once.
+    /// <code>
+    /// func _on_scene_changed(
+    ///         scene: NetwSceneHandle,
+    ///         arrived: Array[NetwPlayer]) -&gt; void:
+    ///     for who in arrived:
+    ///         scene.root.add_child(
+    ///                 Netw.spawn_player(who, make_player))
+    /// </code>
+    /// <para>
+    /// <b>Server Only.</b>
+    /// </para>
+    /// </summary>
+    public event Action<Variant, Godot.Collections.Array> SceneChanged
+    {
+        add => Connect("scene_changed", Callable.From(value));
+        remove => Disconnect("scene_changed", Callable.From(value));
     }
 
     /// <summary>
@@ -511,14 +537,38 @@ public sealed class NetwSessionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSessionHandle", "leave", 1931563502UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.SessionLeave"/>: leaves the session this
-    /// handle was created by, returning the promise that resolves once the peer
-    /// is down.
+    /// Leaves the session this handle was created by. The session authority
+    /// saves its entity rows first, and a row the database refuses keeps the
+    /// session online. The promise resolves with an <c>@GlobalScope.Error</c>
+    /// once the peer is down or the save failed. Forwards to
+    /// <see cref="NetwMultiplayer.SessionLeave"/>.
     /// </summary>
     public NetwPromise Leave()
     {
         IntPtr answered = default;
         NetwThunks.Ptrcall0_IntPtr(_bindLeave, Checked, ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindSaveEntities =
+        NetwApi.MethodBind("NetwSessionHandle", "save_entities", 1931563502UL);
+
+    /// <summary>
+    /// Writes every entity row that changed since its last save, including the
+    /// final rows of entities that already left, and waits for the writes each
+    /// <see cref="NetwDatabase"/> had already admitted. The promise resolves
+    /// with an <c>@GlobalScope.Error</c>. It is <c>@GlobalScope.OK</c> when
+    /// every row is stored, and the error of the first row still unsaved
+    /// otherwise. <c>NetwMultiplayer.persist_flush_all</c>. Call it again to
+    /// retry a row the database refused. <see cref="NetwSessionHandle.Leave"/>
+    /// runs the same save before the peer goes down. A peer that holds no
+    /// session authority gets <c>@GlobalScope.ERR_UNAUTHORIZED</c>. <b>Server
+    /// Only.</b>
+    /// </summary>
+    public NetwPromise SaveEntities()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindSaveEntities, Checked, ref answered);
         return NetwPromise.Adopt(answered);
     }
 

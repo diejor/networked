@@ -16,9 +16,10 @@ namespace Networked;
 /// <see cref="NetwSchema.Columns"/> is the address order, and it is the address
 /// order every adopting session seals in, so two peers built from the same
 /// scripts agree on layout without negotiating it. Column methods return an
-/// [int] index because schema declarations have no session state. Each session
-/// creates its own <see cref="Rid"/> for the schema. Use
-/// <see cref="NetwMultiplayer.TableFind"/> to retrieve it.
+/// [int] index because schema declarations have no session state. That index is
+/// the wire address a writer and a reader both name the column by. Each session
+/// builds its own table from the declaration, and <see cref="Netw.Table"/> is
+/// how a game reaches one.
 /// <code>
 /// class Mobs:
 ///     static var schema := Netw.configure_schema(&amp;"Mob")
@@ -29,8 +30,7 @@ namespace Networked;
 ///     static var vel := schema.vector3(&amp;"vel")   # unquantized, the memcpy path
 ///     static var hp  := schema.u16(&amp;"hp")
 ///
-/// func _ready() -&gt; void:
-///     mobs = Netw.of(self).table_find(Mobs.schema.schema_name)
+/// @onready var mobs := Netw.table(self, Mobs.schema.schema_name)
 /// </code>
 /// <para>
 /// A column with no quantizer crosses the wire as a raw little-endian copy of
@@ -39,8 +39,9 @@ namespace Networked;
 /// actually cares about. One schema serves three consumers, so a declaration
 /// that only wants the database says so with
 /// <see cref="NetwSchema.Replicated"/> and creates no table at all.
-/// <see cref="NetwDatabase.DeclareTable"/> takes this object directly.
-/// <see cref="NetwSchema.Variant"/> is the tier a table rejects and the other
+/// <see cref="NetwDatabase.Read"/> and the rest of the record verbs take this
+/// object directly. <see cref="NetwSchema.Variant"/> and
+/// <see cref="NetwSchema.String"/> are the tiers a table rejects and the other
 /// two accept. These method names are convenience and never freeze. They
 /// compile into <see cref="NetwMultiplayer.SchemaAddColumn"/> and
 /// <see cref="NetwMultiplayer.SchemaSetColumnQuantizer"/>, which do.
@@ -60,6 +61,22 @@ public sealed class NetwSchema : NetwRefCounted
     public static NetwSchema From(Variant value)
     {
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
+    }
+
+    private static readonly IntPtr _bindGetStorageVersion =
+        NetwApi.MethodBind("NetwSchema", "get_storage_version", 3905245786UL);
+
+    public int StoredVersion
+    {
+        get
+        {
+            int answered = default;
+            NetwThunks.Ptrcall0_Int(
+                _bindGetStorageVersion,
+                Checked,
+                ref answered);
+            return answered;
+        }
     }
 
     private static readonly IntPtr _bindGetSchemaName =
@@ -86,8 +103,7 @@ public sealed class NetwSchema : NetwRefCounted
 
     /// <summary>
     /// The declared columns in address order. A consumer that types its own
-    /// storage from a schema, as <see cref="NetwDatabase.DeclareTable"/> does,
-    /// reads this list.
+    /// storage from a schema reads this list.
     /// </summary>
     public Godot.Collections.Array Columns
     {
@@ -593,12 +609,17 @@ public sealed class NetwSchema : NetwRefCounted
 
     /// <summary>
     /// Declares a <see cref="NetwMultiplayer.ColumnType.Variant"/> column, the
-    /// self-describing tier a <see cref="string"/> or a
-    /// <see cref="Godot.Collections.Dictionary"/> takes. A schema holding one
+    /// self-describing tier a <see cref="Godot.Collections.Dictionary"/> or a
+    /// nested <see cref="Godot.Collections.Array"/> takes. A schema holding one
     /// cannot become a table, because variable width has no memcpy and no
     /// rows-per-frame budget. Reach for it on a schema the database and the
     /// property binding consume, and leave the wire's fixed-width tier to the
-    /// columns that can carry it.
+    /// columns that can carry it. A saved value carries data only. An
+    /// <see cref="GodotObject"/>, a <see cref="Resource"/>, a
+    /// <see cref="Callable"/>, a <see cref="Signal"/> and a <see cref="Rid"/>
+    /// are all refused, including nested inside an
+    /// <see cref="Godot.Collections.Array"/> or a
+    /// <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
     public int Variant(StringName key, int stride = 1)
     {
@@ -614,6 +635,128 @@ public sealed class NetwSchema : NetwRefCounted
         slot0.Dispose();
         slot1.Dispose();
         int result = VariantUtils.ConvertToInt32(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindString =
+        NetwApi.MethodBind("NetwSchema", "string", 518967810UL);
+
+    /// <summary>
+    /// Declares a <see cref="NetwMultiplayer.ColumnType.String"/> column of
+    /// text. Text has no fixed width, so a schema holding one cannot become a
+    /// table for the same reason <see cref="NetwSchema.Variant"/> cannot. Reach
+    /// for it when the saved value is a name or a path and the self-describing
+    /// tier would buy nothing.
+    /// </summary>
+    public int String(StringName key, int stride = 1)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromStringName(key);
+        godot_variant slot1 = VariantUtils.CreateFromInt((long)stride);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindString,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        int result = VariantUtils.ConvertToInt32(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindColumnRef =
+        NetwApi.MethodBind("NetwSchema", "column_ref", 4233560099UL);
+
+    /// <summary>
+    /// Returns a <see cref="NetwColumnRef"/> naming the column at
+    /// <paramref name="index"/>, or <c>null</c> when this schema has no such
+    /// column. A configuration call takes the reference rather than the [int],
+    /// because the reference carries this schema and the [int] does not. Wrap
+    /// the index the declaring method returned, in the same <c>static var</c>
+    /// line.
+    /// </summary>
+    public NetwColumnRef ColumnRef(int index)
+    {
+        int slot0 = index;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Int_IntPtr(
+            _bindColumnRef,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwColumnRef.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindStorageVersion =
+        NetwApi.MethodBind("NetwSchema", "storage_version", 1645291142UL);
+
+    /// <summary>
+    /// Sets the version saved records of this schema carry, and returns this
+    /// schema. The first version is <c>1</c>, which is the default. Raise it
+    /// whenever the saved shape changes, adding a field included, and supply
+    /// the <see cref="NetwSchema.Migrate"/> step that reads the version below.
+    /// A record saved under a version this schema cannot reach fails its read
+    /// and stays untouched. The version is storage only. It does not enter the
+    /// wire hash, so two peers on different storage versions still replicate.
+    /// </summary>
+    public NetwSchema StorageVersion(int version)
+    {
+        int slot0 = version;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Int_IntPtr(
+            _bindStorageVersion,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwSchema.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindMigrate =
+        NetwApi.MethodBind("NetwSchema", "migrate", 3083647625UL);
+
+    /// <summary>
+    /// Installs the step that reads a record saved under
+    /// <paramref name="fromVersion"/> and returns it shaped for the next
+    /// version, and returns this schema. <paramref name="step"/> takes one
+    /// <see cref="Godot.Collections.Dictionary"/> and returns one
+    /// <see cref="Godot.Collections.Dictionary"/>. It advances exactly one
+    /// version, so a save two versions behind runs two steps in order. A read
+    /// with a step missing fails and touches nothing.
+    /// <code>
+    /// static var schema := NetwSchema.create(&amp;"players") \
+    ///     .replicated(false) \
+    ///     .storage_version(2) \
+    ///     .migrate(1, PlayerSave.add_position)
+    ///
+    /// static func add_position(row: Dictionary) -&gt; Dictionary:
+    ///     row[&amp;"position"] = Vector2.ZERO
+    ///     return row
+    /// </code>
+    /// <para>
+    /// Migration does not rewrite what it read. The next save writes the
+    /// current version.
+    /// </para>
+    /// </summary>
+    public NetwSchema Migrate(int fromVersion, Callable step)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromInt((long)fromVersion);
+        godot_variant slot1 = VariantUtils.CreateFromCallable(step);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindMigrate,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwSchema result =
+            NetwSchema.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
     }

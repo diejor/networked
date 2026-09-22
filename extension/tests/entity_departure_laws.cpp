@@ -8,7 +8,6 @@
 
 #include "support/loopback_rig.h"
 #include "support/netw_call_log.h"
-#include "support/persistence_stand.h"
 #include "support/value_flow_stand.h"
 
 #include "godot/node.hpp"
@@ -16,7 +15,6 @@
 #include "netw/api/entity_options.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/persistence_engine.hpp"
 #include "netw/interest/decl.hpp"
 
 #include <godot_cpp/classes/node2d.hpp>
@@ -28,7 +26,6 @@ using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwInterestLayer;
 using netw::NetwMultiplayer;
-using netw::NetwPersistenceEngine;
 using netw::interest::Decl;
 
 constexpr const char *MOVING_BODY = netw_test::gdsrc::STATE_AND_INPUT;
@@ -233,13 +230,8 @@ TEST_CASE(
 }
 
 constexpr const char *WATCHED_ID = "watched_body";
-constexpr const char *SAVED_TABLE = "players";
 constexpr const char *GATE_LAYER = "gate";
 
-DatabaseStand *client_database = nullptr;
-
-void declare_no_schema(Object *, const StringName &, const Array &) {
-}
 
 Array position_columns() {
     Array out;
@@ -271,26 +263,11 @@ Array one_string() {
 Node *build_saved_body(const Variant &p_name) {
     Node2D *made = memnew(Node2D);
     made->set_name(String(p_name));
-    if (client_database != nullptr) {
-        made->set_meta(
-            NetwPersistenceEngine::meta_columns(),
-            position_column()
-        );
-        made->set_meta(
-            NetwPersistenceEngine::meta_database(),
-            client_database->db
-        );
-        made->set_meta(
-            NetwPersistenceEngine::meta_table(),
-            StringName(SAVED_TABLE)
-        );
-    }
     return made;
 }
 
 struct Watching {
     LoopbackRig rig;
-    DatabaseStand database;
     Node *arena = nullptr;
     Ref<NetwInterestLayer> gate;
     int64_t watcher = 0;
@@ -298,12 +275,6 @@ struct Watching {
 
     Watching() : rig(1) {
         rig.mount();
-        database.declare(StringName(SAVED_TABLE), position_columns());
-        NetwPersistenceEngine::forget_claims();
-        NetwPersistenceEngine::set_schema_declarer(
-            callable_mp_static(&declare_no_schema)
-        );
-
         arena = rig.mirror_child("Arena");
         route = rig.spawn_registered(
             StringName(WATCHED_ID),
@@ -314,7 +285,6 @@ struct Watching {
             Variant(),
             false
         );
-        client_database = &database;
         gate = rig.server()->interest_layer(StringName(GATE_LAYER));
         REQUIRE(gate.is_valid());
         gate->set_default_leave_policy(Decl::LEAVE_HIDE);
@@ -322,12 +292,6 @@ struct Watching {
         watcher = rig.peer_id(0);
         show();
         REQUIRE(held() != nullptr);
-    }
-
-    ~Watching() {
-        client_database = nullptr;
-        NetwPersistenceEngine::set_schema_declarer(Callable());
-        NetwPersistenceEngine::forget_claims();
     }
 
     NetwMultiplayer *client() const {
@@ -348,13 +312,6 @@ struct Watching {
 
     int64_t state() const {
         return client()->liveness_route_state(route);
-    }
-
-    Ref<NetwPersistenceEngine> saved() const {
-        const Ref<NetwEntity> held_view = wrapper();
-        return held_view.is_valid()
-            ? client()->persistence_engine_for(held_view.ptr())
-            : Ref<NetwPersistenceEngine>();
     }
 
     Ref<NetwInterestLayer> local() const {
@@ -384,17 +341,13 @@ TEST_CASE(
     REQUIRE(standing.is_valid());
     const Ref<NetwEntity> body = stand.wrapper();
     REQUIRE(body.is_valid());
-    const Ref<NetwPersistenceEngine> first = stand.saved();
-    REQUIRE(first.is_valid());
     CHECK(stand.local()->has_entity(body));
-    const int written = stand.database.upserts().size();
 
     stand.conceal();
 
     NETW_CHECK_EQ(stand.state(), int64_t(NetwMultiplayer::ENTITY_STATE_ABSENT));
     CHECK(stand.held() == nullptr);
     CHECK_FALSE(stand.local()->has_entity(body));
-    NETW_CHECK_EQ(stand.database.upserts().size(), written);
 
     SUBCASE("the route still names the entity it named while it was here") {
         CHECK(stand.entity() == standing);
@@ -417,9 +370,6 @@ TEST_CASE(
         );
         CHECK(stand.entity() == standing);
         CHECK(stand.held() != nullptr);
-        const Ref<NetwPersistenceEngine> again = stand.saved();
-        NETW_CHECK_EQ(int(again.is_valid()), 1);
-        NETW_CHECK_EQ(int(again != first), 1);
     }
 }
 
@@ -441,7 +391,6 @@ TEST_CASE(
     NETW_CHECK_EQ(stand.state(), int64_t(NetwMultiplayer::ENTITY_STATE_ABSENT));
     CHECK(stand.entity() == standing);
     CHECK_FALSE(stand.local()->has_entity(body));
-    NETW_CHECK_EQ(stand.database.upserts().size(), 0);
 
     SUBCASE("the server never heard a death it did not author") {
         NETW_CHECK_EQ(

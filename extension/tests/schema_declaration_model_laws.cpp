@@ -293,4 +293,63 @@ TEST_CASE(
     );
 }
 
+TEST_CASE(
+    "[Networked][Table][Hosted] A column reference names its own schema, so "
+    "index 0 of one is not index 0 of another"
+) {
+    Registry registry;
+    const Ref<NetwSchema> players = declare("RefPlayers");
+    const Ref<NetwSchema> chests = declare("RefChests");
+    const Ref<netw::NetwColumnRef> gold
+        = players->column_ref(players->i64("gold", 1));
+    const Ref<netw::NetwColumnRef> loot
+        = chests->column_ref(chests->i64("loot", 1));
+
+    NETW_CHECK_EQ(gold->get_index(), 0);
+    NETW_CHECK_EQ(loot->get_index(), 0);
+    CHECK(gold->is_valid());
+    CHECK(bool(gold->get_key() == StringName("gold")));
+    CHECK(gold->get_schema() == players);
+    CHECK(loot->get_schema() != players);
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] A column reference holds its schema alive and "
+    "refuses an index the schema does not have"
+) {
+    Registry registry;
+    Ref<netw::NetwColumnRef> held;
+    {
+        const Ref<NetwSchema> schema = NetwSchema::create("RefDetached");
+        held = schema->column_ref(schema->vector2("where", Ref<netw::NetwQuantize>(), 1));
+        CHECK(schema->column_ref(1).is_null());
+        CHECK(schema->column_ref(-1).is_null());
+    }
+    CHECK(held.is_valid());
+    CHECK(held->is_valid());
+    CHECK(bool(held->get_key() == StringName("where")));
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] A declared storage version and its migrations "
+    "reach the session's compiled schema"
+) {
+    Registry registry;
+    const Ref<NetwSchema> schema = declare("RefMigrated");
+    schema->i64("gold", 1);
+    schema->storage_version(2);
+    schema->migrate(1, Callable(schema.ptr(), "get_schema_name"));
+
+    const Ref<NetwMultiplayer> here = session();
+    const RID compiled = here->schema_find_or_adopt("RefMigrated");
+    NETW_CHECK_EQ(int(compiled.is_valid()), 1);
+    if (!compiled.is_valid()) {
+        return;
+    }
+    SchemaCore *const core = here->get_schema_core();
+    NETW_CHECK_EQ(core->storage_version_of(compiled), 2);
+    CHECK_FALSE(core->migration_from(compiled, 1).is_null());
+    CHECK(core->migration_from(compiled, 2).is_null());
+}
+
 } // namespace TestSchemaDeclarationModel

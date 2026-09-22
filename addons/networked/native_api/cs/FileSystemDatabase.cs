@@ -6,43 +6,27 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// A <see cref="NetwDatabaseBackend"/> that stores each record as one
-/// <see cref="DictionaryRecord"/> file.
+/// A <see cref="NetwDatabaseBackend"/> that keeps records in files under one
+/// directory.
 /// </summary>
 /// <remarks>
-/// A record lives at <c>&lt;root&gt;/&lt;table&gt;/&lt;id&gt;.&lt;ext&gt;</c>.
-/// The root folds <see cref="FileSystemDatabase.AppId"/> and the open slot into
-/// <see cref="FileSystemDatabase.BaseDir"/>, so two saves of one game never
-/// meet.
+/// Records outlive the process, so this is the backend a shipped single player
+/// or listen server game saves into.
 /// <code>
-/// base_dir
-/// └── app_id
-///     └── slot
-///         └── table
-///             └── id.res
+/// var backend := FileSystemDatabase.new()
+/// backend.root = "user://saves"
+/// Netw.configure_database(self, &amp;"saves").backend(backend)
 /// </code>
 /// <para>
-/// Every read and write goes straight to disk through
-/// <see cref="ResourceLoader"/> and <see cref="ResourceSaver"/>. There is no
-/// cache, so <see cref="NetwDatabase.WarmPolicy"/> is ignored and a write is
-/// durable the moment it returns.
-/// <code>
-/// var db := NetwDatabase.new()
-/// var fs := FileSystemDatabase.new()
-/// fs.base_dir = "user://saves"
-/// fs.use_text_format = true   # readable .tres instead of binary .res
-/// db.backend = fs
-/// </code>
-/// </para>
-/// <para>
-/// A subdirectory under the slot root that no registered table claims is a
-/// ghost table. Initialization reports each one as a warning and never deletes
-/// data on its own, because a directory the schema stopped naming is more often
-/// a migration than garbage. Two live backends pointing at one slot root is
-/// rejected with an error rather than tolerated: both would write the same
-/// files and each would report the other's tables as ghosts. Share one
-/// <see cref="NetwDatabase"/> instead, or give them different
-/// <see cref="FileSystemDatabase.BaseDir"/>.
+/// Each slot is a directory under <see cref="FileSystemDatabase.Root"/>, and
+/// each record is one file inside it. A record is replaced by writing a new
+/// file beside it and renaming over the target, so a write that fails partway
+/// leaves the previous record readable rather than a half-written one. A file
+/// this library did not write is reported as present and refused as
+/// unrecognized. It is never read as an empty save and it is never overwritten
+/// by the read that found it. <c>NetwDatabaseBackend._list_slots</c> reads
+/// <see cref="FileSystemDatabase.Root"/> itself, so a slot written by an
+/// earlier run of the game appears without being opened first.
 /// </para>
 /// </remarks>
 public sealed class FileSystemDatabase : NetwDatabaseBackend
@@ -61,24 +45,22 @@ public sealed class FileSystemDatabase : NetwDatabaseBackend
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    private static readonly IntPtr _bindGetBaseDir =
-        NetwApi.MethodBind("FileSystemDatabase", "get_base_dir", 201670096UL);
+    private static readonly IntPtr _bindGetRoot =
+        NetwApi.MethodBind("FileSystemDatabase", "get_root", 201670096UL);
 
-    private static readonly IntPtr _bindSetBaseDir =
-        NetwApi.MethodBind("FileSystemDatabase", "set_base_dir", 83702148UL);
+    private static readonly IntPtr _bindSetRoot =
+        NetwApi.MethodBind("FileSystemDatabase", "set_root", 83702148UL);
 
     /// <summary>
-    /// Root directory for every table subdirectory. Point it at
-    /// <c>user://saves</c> for a shipped game: a <c>res://</c> root is
-    /// rewritten to <c>user://</c> outside the editor, because an exported
-    /// project's resources are read-only.
+    /// The directory every slot lives under. A path under <c>user://</c> is the
+    /// one a shipped game can write to on every platform.
     /// </summary>
-    public string BaseDir
+    public string Root
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetBaseDir, Checked, ref answered);
+            NetwThunks.Call0(_bindGetRoot, Checked, ref answered);
             string result = VariantUtils.ConvertToString(answered);
             answered.Dispose();
             return result;
@@ -87,83 +69,9 @@ public sealed class FileSystemDatabase : NetwDatabaseBackend
         {
             godot_variant slot0 = VariantUtils.CreateFromString(value);
             godot_variant answered = default;
-            NetwThunks.Call1(_bindSetBaseDir, Checked, in slot0, ref answered);
+            NetwThunks.Call1(_bindSetRoot, Checked, in slot0, ref answered);
             slot0.Dispose();
             answered.Dispose();
-        }
-    }
-
-    private static readonly IntPtr _bindGetAppId =
-        NetwApi.MethodBind("FileSystemDatabase", "get_app_id", 201670096UL);
-
-    private static readonly IntPtr _bindSetAppId =
-        NetwApi.MethodBind("FileSystemDatabase", "set_app_id", 83702148UL);
-
-    /// <summary>
-    /// Application scope folded into the storage path ahead of the save slot.
-    /// Leave it empty to store slots directly under
-    /// <see cref="FileSystemDatabase.BaseDir"/>. Set it to keep several games
-    /// sharing one <see cref="FileSystemDatabase.BaseDir"/> from colliding.
-    /// </summary>
-    public string AppId
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetAppId, Checked, ref answered);
-            string result = VariantUtils.ConvertToString(answered);
-            answered.Dispose();
-            return result;
-        }
-        set
-        {
-            godot_variant slot0 = VariantUtils.CreateFromString(value);
-            godot_variant answered = default;
-            NetwThunks.Call1(_bindSetAppId, Checked, in slot0, ref answered);
-            slot0.Dispose();
-            answered.Dispose();
-        }
-    }
-
-    private static readonly IntPtr _bindGetUseTextFormat =
-        NetwApi.MethodBind(
-            "FileSystemDatabase",
-            "get_use_text_format",
-            36873697UL);
-
-    private static readonly IntPtr _bindSetUseTextFormat =
-        NetwApi.MethodBind(
-            "FileSystemDatabase",
-            "set_use_text_format",
-            2586408642UL);
-
-    /// <summary>
-    /// Picks the record file extension. <c>true</c> writes the readable
-    /// <c>.tres</c> text form, and <c>false</c> the compact binary <c>.res</c>.
-    /// <see cref="ResourceSaver"/> dispatches on the extension and rejects one
-    /// it does not recognize, so these are the engine's own two and not a
-    /// format this class invents.
-    /// </summary>
-    public bool UseTextFormat
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetUseTextFormat,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-        set
-        {
-            byte slot0 = value ? (byte)1 : (byte)0;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Byte_Long(
-                _bindSetUseTextFormat,
-                Checked,
-                in slot0,
-                ref discarded);
         }
     }
 }

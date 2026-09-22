@@ -36,6 +36,7 @@ private:
     Role desired_role = ROLE_LISTEN_SERVER;
     NetwMultiplayer *host = nullptr;
     uint64_t generation = 1;
+    uint64_t tenure = 1;
     AuthorityState authority;
 
     RateWindow join_window;
@@ -60,6 +61,8 @@ public:
     void transition(State next);
 
     uint64_t get_generation() const;
+    uint64_t get_tenure() const;
+    void end_tenure();
 
     void on_peer_assigned(bool has_live_peer, bool connected, int unique_id);
 

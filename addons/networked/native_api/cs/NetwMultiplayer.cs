@@ -26,7 +26,7 @@ namespace Networked;
 /// - <c>predict_*</c>: <see cref="NetwPredictionHandle"/>
 /// - <c>entity_*</c>, <c>liveness_*</c>, and <c>spawn_*</c>:
 /// <see cref="NetwEntity"/>
-/// - <c>table_*</c>: <see cref="NetwRecordTable"/>
+/// - <c>table_*</c>: <see cref="NetwTableHandle"/>
 /// - <c>schema_*</c>: <see cref="NetwSchema"/>
 /// - <c>lagcomp_*</c>: <see cref="NetwAction"/>
 /// - <c>peer_*</c>: <see cref="NetwPlayer"/>
@@ -36,7 +36,8 @@ namespace Networked;
 /// - <c>rpc_*</c> and <c>sync_*</c>: <see cref="NetwMemberConfig"/>
 /// - <c>property_set_*</c>: <see cref="NetwPropertySet"/>
 /// - <c>service_*</c>: <see cref="NetwService"/>
-/// - <c>persist_*</c>: <see cref="NetwDatabase"/>
+/// - <c>database_*</c> and <c>persist_*</c>: <see cref="NetwDatabase"/> and
+/// <see cref="NetwPersistenceHandle"/>
 /// - <c>stats_*</c> and <c>attribution_*</c>: <see cref="NetwPredictStats"/>
 /// Methods beginning with an underscore are virtual extension points. Override
 /// one in a <see cref="Script"/> and call its corresponding <c>_default</c>
@@ -1025,8 +1026,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         LeadTicks = 8,
         /// <summary>
         /// How strongly measured jitter widens
-        /// <see cref="NetwMultiplayer.ClockMonitor.RecommendedDisplayOffset"/>,
-        /// as a [float].
+        /// <see cref="NetwMultiplayer.ClockGetRecommendedDisplayOffset"/>, as a
+        /// [float].
         /// </summary>
         JitterMultiplier = 9,
         /// <summary>
@@ -1055,9 +1056,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         ManualTick = 14,
         /// <summary>
-        /// A fixed value for
-        /// <see cref="NetwMultiplayer.ClockMonitor.TickFactor"/> in place of
-        /// the measured one, as a [float]. Negative restores the measurement.
+        /// A fixed value for <see cref="NetwMultiplayer.ClockGetTickFactor"/>
+        /// in place of the measured one, as a [float]. Negative restores the
+        /// measurement.
         /// </summary>
         TickFactorOverride = 15,
     }
@@ -1089,58 +1090,34 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Ticktime = 4,
         /// <summary>
-        /// How far the current frame has advanced between the last tick and the
-        /// next, from zero to one.
-        /// </summary>
-        TickFactor = 5,
-        /// <summary>
-        /// Where the clock sits inside the current tick, from zero to one. What
-        /// a pong carries so a calibration target can be a continuous position
-        /// rather than a whole tick.
-        /// </summary>
-        TickPhase = 6,
-        /// <summary>
         /// The frame time banked toward the next tick, in seconds.
         /// </summary>
-        TickAccumulator = 7,
-        /// <summary>
-        /// Physics frames per tick, unrounded.
-        /// <see cref="NetwMultiplayer.ClockGetPhysicsStepsPerTick"/> is this as
-        /// a whole number.
-        /// </summary>
-        PhysicsFactor = 8,
-        /// <summary>
-        /// The display offset the measured jitter suggests, in ticks. It is a
-        /// recommendation, and
-        /// <see cref="NetwMultiplayer.ClockParam.DisplayOffset"/> is what the
-        /// clock actually uses.
-        /// </summary>
-        RecommendedDisplayOffset = 9,
+        TickAccumulator = 5,
         /// <summary>
         /// How many physics frames this process has run since the clock started
         /// counting.
         /// </summary>
-        PhysicsFrames = 10,
+        PhysicsFrames = 6,
         /// <summary>
         /// How many session polls it has run over the same span.
         /// </summary>
-        Polls = 11,
+        Polls = 7,
         /// <summary>
         /// The wall-clock seconds that span covers.
         /// </summary>
-        WallSeconds = 12,
+        WallSeconds = 8,
         /// <summary>
         /// <see cref="NetwMultiplayer.ClockMonitor.PhysicsFrames"/> over
         /// <see cref="NetwMultiplayer.ClockMonitor.WallSeconds"/>. What the
         /// engine actually delivered, which is how a starved host is told apart
         /// from a mistuned one.
         /// </summary>
-        PhysicsHz = 13,
+        PhysicsHz = 9,
         /// <summary>
         /// <see cref="NetwMultiplayer.ClockMonitor.Polls"/> over
         /// <see cref="NetwMultiplayer.ClockMonitor.WallSeconds"/>.
         /// </summary>
-        PollHz = 14,
+        PollHz = 10,
     }
 
     public enum DisplayParam : long
@@ -1392,7 +1369,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// 32-bit float. Every <see cref="NetwMultiplayer.ColumnType"/> is
         /// passed to <see cref="NetwMultiplayer.SchemaAddColumn"/> and says
         /// what a value is stored as and how wide it travels. All of them but
-        /// <see cref="NetwMultiplayer.ColumnType.Variant"/> are a fixed width,
+        /// <see cref="NetwMultiplayer.ColumnType.Variant"/> and
+        /// <see cref="NetwMultiplayer.ColumnType.String"/> are a fixed width,
         /// which is what makes a column a block of bytes and lets the session
         /// compute how many rows fit in a frame. Send anything of a length that
         /// varies through <see cref="Netw.Channel"/> instead.
@@ -1458,13 +1436,45 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Entity = 14,
         /// <summary>
-        /// The self-describing tier, what a <see cref="string"/> or a
-        /// <see cref="Godot.Collections.Dictionary"/> compiles to. Legal in a
-        /// schema and in a property set, rejected by
+        /// The self-describing tier, what a
+        /// <see cref="Godot.Collections.Dictionary"/> or a nested
+        /// <see cref="Godot.Collections.Array"/> compiles to. Legal in a schema
+        /// and in a property set, rejected by
         /// <see cref="NetwMultiplayer.TableCreate"/>, because variable width
         /// has no memcpy and no rows-per-frame budget.
         /// </summary>
         Variant = 15,
+        /// <summary>
+        /// Text. Rejected by <see cref="NetwMultiplayer.TableCreate"/> for the
+        /// same reason <see cref="NetwMultiplayer.ColumnType.Variant"/> is, and
+        /// cheaper than it when the value is only ever a name or a path.
+        /// </summary>
+        String = 16,
+    }
+
+    public enum DatabaseState : long
+    {
+        /// <summary>
+        /// No slot is open, and the database admits no work.
+        /// </summary>
+        Closed = 0,
+        /// <summary>
+        /// <c>database_open</c> has not settled yet.
+        /// </summary>
+        Opening = 1,
+        /// <summary>
+        /// A slot is open, and the database admits work.
+        /// </summary>
+        Open = 2,
+        /// <summary>
+        /// <c>database_close</c> is waiting for admitted work to settle.
+        /// </summary>
+        Closing = 3,
+        /// <summary>
+        /// The storage is unavailable, and <c>database_open</c> fails with
+        /// <c>@GlobalScope.ERR_CANT_ACQUIRE_RESOURCE</c>.
+        /// </summary>
+        Faulted = 4,
     }
 
     public enum Stat : long
@@ -2675,6 +2685,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
     {
         add => Connect("scene_live", Callable.From(value));
         remove => Disconnect("scene_live", Callable.From(value));
+    }
+
+    /// <summary>
+    /// Emitted on server authority once a
+    /// <see cref="NetwMultiplayer.SceneChangeToFile"/> has landed. <c>scene</c>
+    /// is the destination and <c>arrived</c> holds the <see cref="NetwPlayer"/>
+    /// rows it brought there. A player already watching the destination is not
+    /// in <c>arrived</c>, so a repeated change announces nobody.
+    /// </summary>
+    public event Action<Variant, Godot.Collections.Array> SceneChanged
+    {
+        add => Connect("scene_changed", Callable.From(value));
+        remove => Disconnect("scene_changed", Callable.From(value));
     }
 
     private static readonly IntPtr _bindRpcGetRelaySender =
@@ -4569,105 +4592,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered != 0;
     }
 
-    private static readonly IntPtr _bindPersistSetQuitGuard =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "persist_set_quit_guard",
-            1611583062UL);
-
-    /// <summary>
-    /// Replaces the guard a session arms so a quit cannot close the window
-    /// before persistence has drained, called with no arguments. With none
-    /// installed a host arms the tree's own quit handling. Install one when the
-    /// game already owns that story, or when the session runs somewhere no
-    /// <see cref="SceneTree"/> quit request arrives. Like
-    /// <see cref="NetwMultiplayer.PersistSetDrain"/> it replaces the stock path
-    /// rather than adding to it, so an installed guard is responsible for
-    /// holding the quit itself.
-    /// </summary>
-    public void PersistSetQuitGuard(Callable guard)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromCallable(guard);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindPersistSetQuitGuard,
-            Checked,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindPersistSetDrain =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "persist_set_drain",
-            1611583062UL);
-
-    /// <summary>
-    /// Replaces the drain a session runs at shutdown, called with no arguments
-    /// and owning the whole flush of every enrolled persistence engine. With
-    /// none installed the session drains on its own timer, which is the default
-    /// behavior when nothing else knows when the write is finished. Install one
-    /// when the game owns the shutdown story, for example to await a backend
-    /// the session cannot see, and note that the installed
-    /// <see cref="Callable"/> replaces the stock drain rather than running
-    /// beside it.
-    /// </summary>
-    public void PersistSetDrain(Callable drain)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromCallable(drain);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindPersistSetDrain, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindPersistTickDefault =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "persist_tick_default",
-            373806689UL);
-
-    /// <summary>
-    /// The persistence pass <c>_persist_tick</c> runs when nothing overrides
-    /// it, reachable so an override can defer to it. It advances every
-    /// registered engine's snapshot loop by <paramref name="delta"/> seconds on
-    /// a session that serves persistence, and does nothing on one that does
-    /// not. A GDScript subclass cannot <c>super</c> into a <c>GDVIRTUAL</c>, so
-    /// this is an override's only route back to stock behaviour. An override
-    /// that wants to observe the cadence rather than replace it calls this and
-    /// returns.
-    /// </summary>
-    public void PersistTickDefault(double delta)
-    {
-        double slot0 = delta;
-        long discarded = default;
-        NetwThunks.Ptrcall1_Double_Long(
-            _bindPersistTickDefault,
-            Checked,
-            in slot0,
-            ref discarded);
-    }
-
-    private static readonly IntPtr _bindPersistShutdown =
-        NetwApi.MethodBind("NetwMultiplayer", "persist_shutdown", 3218959716UL);
-
-    /// <summary>
-    /// Writes out every entity the session is saving, and does nothing on a
-    /// session that saves nothing or is already shutting down. A
-    /// <see cref="Callable"/> installed through
-    /// <see cref="NetwMultiplayer.PersistSetDrain"/> replaces this and is
-    /// called with no arguments. With none installed the session writes out on
-    /// its own timer. Calling this more than once is safe, because the second
-    /// call finds shutdown already underway and does nothing.
-    /// </summary>
-    public void PersistShutdown()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindPersistShutdown, Checked, ref discarded);
-    }
-
     private static readonly IntPtr _bindSessionSetRoot =
         NetwApi.MethodBind("NetwMultiplayer", "session_set_root", 1611583062UL);
 
@@ -5576,6 +5500,39 @@ public sealed class NetwMultiplayer : NetwRefCounted
             Checked,
             in slot0,
             in slot1,
+            ref discarded);
+    }
+
+    private static readonly IntPtr _bindPersistTickDefault =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "persist_tick_default",
+            373806689UL);
+
+    /// <summary>
+    /// The entity save pass <c>_persist_tick</c> runs when nothing overrides
+    /// it. It advances each entity's
+    /// <see cref="NetwPersistenceConfig.Interval"/> by <paramref name="delta"/>
+    /// seconds and writes the due rows that changed, batched per
+    /// <see cref="NetwDatabase"/>. A peer that holds no session authority
+    /// writes nothing. A GDScript subclass cannot call <c>super</c> on a
+    /// <c>GDVIRTUAL</c>, so an override calls this to run the stock pass.
+    /// <code>
+    /// extends NetwMultiplayer
+    ///
+    /// func _persist_tick(delta: float) -&gt; void:
+    ///     if not saving_paused:
+    ///         persist_tick_default(delta)
+    /// </code>
+    /// </summary>
+    public void PersistTickDefault(double delta)
+    {
+        double slot0 = delta;
+        long discarded = default;
+        NetwThunks.Ptrcall1_Double_Long(
+            _bindPersistTickDefault,
+            Checked,
+            in slot0,
             ref discarded);
     }
 
@@ -6731,65 +6688,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return (Error)answered;
     }
 
-    private static readonly IntPtr _bindPersistTableCommit =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "persist_table_commit",
-            1610197525UL);
-
-    /// <summary>
-    /// Claims fresh routes for the rows <paramref name="data"/> was saved
-    /// under, writes every column of <paramref name="schema"/> back beneath
-    /// them, and returns the route-to-save-key pairing a caller rebuilds its
-    /// indexes from. An empty <paramref name="data"/> claims nothing and
-    /// returns both empty, which is what the first play looks like. Routes are
-    /// claimed fresh rather than restored, because a saved route names a row in
-    /// the session that saved it and nothing in the one loading it. A column
-    /// that <paramref name="data"/> does not carry, carries at the wrong type,
-    /// or carries at the wrong length is written as zeroed storage of the
-    /// declared type instead, so a save written by an older schema loads as a
-    /// row with defaults rather than rejecting the whole table. A
-    /// <see cref="NetwMultiplayer.ColumnType.Entity"/> column is always zeroed,
-    /// because a stored entity reference names a route this load has just
-    /// replaced. The whole write is fixed by one
-    /// <see cref="NetwMultiplayer.TableCommit"/>, so readers never observe a
-    /// half-written load.
-    /// <code>
-    /// Dictionary (param data)
-    /// ┠╴ids  PackedStringArray  the save key for each row, in order
-    /// ┖╴...  Array              one entry per schema column, keyed by that column's name
-    /// </code>
-    /// <code>
-    /// Dictionary (the result)
-    /// ┠╴routes  PackedInt64Array  the route claimed for each row, same order as ids
-    /// ┖╴ids     PackedStringArray  the save keys just claimed
-    /// </code>
-    /// </summary>
-    public Godot.Collections.Dictionary PersistTableCommit(
-        Rid table,
-        Rid schema,
-        Godot.Collections.Dictionary data)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromRid(table);
-        godot_variant slot1 = VariantUtils.CreateFromRid(schema);
-        godot_variant slot2 = VariantUtils.CreateFromDictionary(data);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindPersistTableCommit,
-            Checked,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        Godot.Collections.Dictionary result =
-            VariantUtils.ConvertToDictionary(answered);
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindTableReadRoutes =
         NetwApi.MethodBind("NetwMultiplayer", "table_read_routes", 597398690UL);
 
@@ -7353,10 +7251,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Opens the file-backed scene at <paramref name="path"/> and makes players
     /// watch it, under server authority. No entity moves, so spawn the arrivals
-    /// from <c>scene_changed</c>. <paramref name="scope"/> says who the change
-    /// is for and nothing infers it, so the same call means the same thing on a
-    /// listen host and on a dedicated server. <paramref name="requester"/>
-    /// names the node the change is asked from, which resolves the player a
+    /// from <see cref="NetwMultiplayer.SceneChanged"/>.
+    /// <paramref name="scope"/> says who the change is for and nothing infers
+    /// it, so the same call means the same thing on a listen host and on a
+    /// dedicated server. <paramref name="requester"/> names the node the change
+    /// is asked from, which resolves the player a
     /// <see cref="NetwMultiplayer.SceneChange.Player"/> change acts on and the
     /// source scene a <see cref="NetwMultiplayer.SceneChange.Scene"/> change
     /// replaces. A scope that needs one and finds none is rejected rather than
@@ -8155,18 +8054,24 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "session_leave", 1931563502UL);
 
     /// <summary>
-    /// Flushes persistence, closes the active peer, and returns to
-    /// <see cref="NetwMultiplayer.SessionState.Offline"/>. It waits up to three
+    /// Saves every entity row this peer holds as session authority, closes the
+    /// active peer, and returns to
+    /// <see cref="NetwMultiplayer.SessionState.Offline"/>. The promise resolves
+    /// with an <c>@GlobalScope.Error</c>. When the database refuses a row, the
+    /// session stays online and the promise resolves with that error. Call it
+    /// again to retry, or close <see cref="MultiplayerApi.MultiplayerPeer"/> to
+    /// disconnect without saving. Once the rows are saved it waits up to three
     /// seconds for the server to acknowledge the departure, so a caller that
-    /// awaits the returned promise knows the peer is closed rather than
-    /// closing. A session already at
+    /// awaits the promise knows the peer is closed. A session already at
     /// <see cref="NetwMultiplayer.SessionState.Offline"/>, and one with no
-    /// scene tree to time the window with, both return a promise that is
-    /// already settled.
+    /// scene tree to time the window with, return a promise that is already
+    /// settled.
     /// <code>
     /// var left := api.session_leave()
     /// if not left.is_settled:
     ///     await left.wait()
+    /// if left.result != OK:
+    ///     push_error("still online: %s" % error_string(left.result))
     /// </code>
     /// </summary>
     public NetwPromise SessionLeave()
@@ -10328,6 +10233,103 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered;
     }
 
+    private static readonly IntPtr _bindClockGetTickFactor =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "clock_get_tick_factor",
+            1740695150UL);
+
+    /// <summary>
+    /// How far the simulation has advanced past the last tick, in ticks. It
+    /// counts the banked frame time plus the part of the current frame already
+    /// drawn, so it crosses 1.0 on the frame a tick is about to be announced.
+    /// This is the number a renderer interpolates with.
+    /// <see cref="NetwMultiplayer.ClockParam.TickFactorOverride"/> replaces it
+    /// with a fixed value when a rig needs the frame to be reproducible.
+    /// </summary>
+    public double ClockGetTickFactor()
+    {
+        double answered = default;
+        NetwThunks.Ptrcall0_Double(
+            _bindClockGetTickFactor,
+            Checked,
+            ref answered);
+        return answered;
+    }
+
+    private static readonly IntPtr _bindClockGetTickPhase =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "clock_get_tick_phase",
+            1740695150UL);
+
+    /// <summary>
+    /// Where the clock sits inside the current tick, from zero to one. It is
+    /// the banked frame time divided by one tick's worth of seconds, clamped. A
+    /// pong carries this so the calibration target is a continuous position
+    /// rather than a whole tick.
+    /// <see cref="NetwMultiplayer.ClockGetTickFactor"/> is the same quantity
+    /// without the clamp and with the current frame counted in.
+    /// </summary>
+    public double ClockGetTickPhase()
+    {
+        double answered = default;
+        NetwThunks.Ptrcall0_Double(
+            _bindClockGetTickPhase,
+            Checked,
+            ref answered);
+        return answered;
+    }
+
+    private static readonly IntPtr _bindClockGetPhysicsFactor =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "clock_get_physics_factor",
+            1740695150UL);
+
+    /// <summary>
+    /// Physics frames per tick, unrounded. It is the engine's physics rate
+    /// divided by <see cref="NetwMultiplayer.ClockParam.Tickrate"/>, so 60 Hz
+    /// physics under a 30 Hz tickrate answers 2.0. A body that moves once per
+    /// frame covers this many frames of ground per tick, which is why a
+    /// per-frame velocity is scaled by it.
+    /// </summary>
+    public double ClockGetPhysicsFactor()
+    {
+        double answered = default;
+        NetwThunks.Ptrcall0_Double(
+            _bindClockGetPhysicsFactor,
+            Checked,
+            ref answered);
+        return answered;
+    }
+
+    private static readonly IntPtr _bindClockGetRecommendedDisplayOffset =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "clock_get_recommended_display_offset",
+            3905245786UL);
+
+    /// <summary>
+    /// The display offset the measured link suggests, in ticks. It is one-way
+    /// latency plus jitter times
+    /// <see cref="NetwMultiplayer.ClockParam.JitterMultiplier"/>, converted to
+    /// ticks and rounded up. It is a recommendation and nothing applies it.
+    /// <see cref="NetwMultiplayer.ClockParam.DisplayOffset"/> is what the clock
+    /// actually uses, and
+    /// <see cref="NetwMultiplayer.ClockAutoConfigureOffset"/> is what copies
+    /// one into the other.
+    /// </summary>
+    public long ClockGetRecommendedDisplayOffset()
+    {
+        long answered = default;
+        NetwThunks.Ptrcall0_Long(
+            _bindClockGetRecommendedDisplayOffset,
+            Checked,
+            ref answered);
+        return answered;
+    }
+
     private static readonly IntPtr _bindClockGetTick =
         NetwApi.MethodBind("NetwMultiplayer", "clock_get_tick", 3905245786UL);
 
@@ -10370,10 +10372,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.ClockMonitor.PhysicsFactor"/> as a whole
-    /// number, never below one. The physics server runs exactly one step per
-    /// frame, so a tick can be worth one step or two but never one and a fifth.
-    /// A fractional factor is a declaration the engine cannot honour, and the
+    /// <see cref="NetwMultiplayer.ClockGetPhysicsFactor"/> as a whole number,
+    /// never below one. The physics server runs exactly one step per frame, so
+    /// a tick can be worth one step or two but never one and a fifth. A
+    /// fractional factor is a declaration the engine cannot honour, and the
     /// gate's step budget rounds it here rather than pretending otherwise.
     /// </summary>
     public long ClockGetPhysicsStepsPerTick()

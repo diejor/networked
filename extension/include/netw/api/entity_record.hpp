@@ -24,7 +24,8 @@ public:
         PART_INTEREST = 1,
         PART_PREDICTION = 2,
         PART_DISPLAY = 3,
-        PART_MAX = 4,
+        PART_PERSISTENCE = 4,
+        PART_MAX = 5,
     };
 
 private:

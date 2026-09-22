@@ -1,202 +1,191 @@
 #include "netw/api/database_backend.hpp"
+
 #include "godot/class_db.hpp"
-#include "netw/database_backend_dict.hpp"
-#include "netw/log.hpp"
-#include "netw/subsystems.hpp"
+#include "netw/persist/file_store.hpp"
+#include "netw/persist/memory_store.hpp"
 
 using namespace godot;
-using namespace netw;
 
 namespace netw {
 
 namespace {
 
-Ref<NetwPromise> answered(const Ref<NetwPromise> &p_ret, const char *p_verb) {
-    if (p_ret.is_valid()) {
-        return p_ret;
-    }
-    NETW_WARN(
-        sys::SESSION,
-        "a backend's %s override answered no promise, so the operation has "
-        "no result to settle",
-        p_verb
+Ref<NetwPromise> unimplemented(const char *p_verb) {
+    return NetwPromise::rejected(
+        ERR_UNAVAILABLE,
+        String("this backend implements no ") + p_verb
     );
-    return NetwPromise::rejected(ERR_INVALID_DATA, String(p_verb));
+}
+
+Ref<NetwPromise> answered(const Ref<NetwPromise> &p_answer, const char *p_verb) {
+    if (p_answer.is_valid()) {
+        return p_answer;
+    }
+    return NetwPromise::rejected(
+        ERR_INVALID_DATA,
+        String(p_verb) + " answered no promise"
+    );
 }
 
 } // namespace
 
-Ref<NetwDatabaseBackend> NetwDatabaseBackend::in_memory() {
-    return Ref<NetwDatabaseBackend>(memnew(DatabaseBackendDict));
+Ref<NetwPromise> NetwDatabaseBackend::open_default(
+    Object *p_session,
+    const StringName &p_slot
+) {
+    return unimplemented("_open");
+}
+
+Ref<NetwPromise> NetwDatabaseBackend::list_slots_default(Object *p_session) {
+    return unimplemented("_list_slots");
+}
+
+Ref<NetwPromise> NetwDatabaseBackend::delete_slot_default(
+    Object *p_session,
+    const StringName &p_slot
+) {
+    return unimplemented("_delete_slot");
+}
+
+Ref<NetwPromise> NetwDatabaseBackend::open(
+    Object *p_session,
+    const StringName &p_slot
+) {
+    Ref<NetwPromise> answer;
+    if (GDVIRTUAL_CALL(_open, p_session, p_slot, answer)) {
+        return answered(answer, "_open");
+    }
+    return open_default(p_session, p_slot);
+}
+
+Ref<NetwPromise> NetwDatabaseBackend::list_slots(Object *p_session) {
+    Ref<NetwPromise> answer;
+    if (GDVIRTUAL_CALL(_list_slots, p_session, answer)) {
+        return answered(answer, "_list_slots");
+    }
+    return list_slots_default(p_session);
+}
+
+Ref<NetwPromise> NetwDatabaseBackend::delete_slot(
+    Object *p_session,
+    const StringName &p_slot
+) {
+    Ref<NetwPromise> answer;
+    if (GDVIRTUAL_CALL(_delete_slot, p_session, p_slot, answer)) {
+        return answered(answer, "_delete_slot");
+    }
+    return delete_slot_default(p_session, p_slot);
 }
 
 void NetwDatabaseBackend::_bind_methods() {
-    ClassDB::bind_static_method(
-        "NetwDatabaseBackend",
-        D_METHOD("in_memory"),
-        &NetwDatabaseBackend::in_memory
-    );
-    ClassDB::bind_method(
-        D_METHOD("initialize", "schema", "slot"),
-        &NetwDatabaseBackend::initialize,
-        DEFVAL("")
-    );
-    ClassDB::bind_method(
-        D_METHOD("upsert", "table", "id", "data"),
-        &NetwDatabaseBackend::upsert
-    );
-    ClassDB::bind_method(
-        D_METHOD("commit", "operations"),
-        &NetwDatabaseBackend::commit,
-        DEFVAL(Array())
-    );
-    ClassDB::bind_method(
-        D_METHOD("find_by_id", "table", "id"),
-        &NetwDatabaseBackend::find_by_id
-    );
-    ClassDB::bind_method(
-        D_METHOD("find_all", "table", "filter"),
-        &NetwDatabaseBackend::find_all,
-        DEFVAL(Dictionary())
-    );
-    ClassDB::bind_method(
-        D_METHOD("erase", "table", "id"),
-        &NetwDatabaseBackend::erase
-    );
-    ClassDB::bind_method(
-        D_METHOD("warm", "directives"),
-        &NetwDatabaseBackend::warm,
-        DEFVAL(Array())
-    );
-    ClassDB::bind_method(
-        D_METHOD("list_namespaces"),
-        &NetwDatabaseBackend::list_namespaces
-    );
-    ClassDB::bind_method(
-        D_METHOD("delete_namespace", "slot"),
-        &NetwDatabaseBackend::delete_namespace
-    );
+    GDVIRTUAL_BIND(_open, "session", "slot");
+    GDVIRTUAL_BIND(_list_slots, "session");
+    GDVIRTUAL_BIND(_delete_slot, "session", "slot");
 
-    GDVIRTUAL_BIND(_initialize, "schema", "slot");
-    GDVIRTUAL_BIND(_upsert, "table", "id", "data");
-    GDVIRTUAL_BIND(_commit, "operations");
-    GDVIRTUAL_BIND(_find_by_id, "table", "id");
-    GDVIRTUAL_BIND(_find_all, "table", "filter");
-    GDVIRTUAL_BIND(_delete, "table", "id");
-    GDVIRTUAL_BIND(_warm, "directives");
-    GDVIRTUAL_BIND(_list_namespaces);
-    GDVIRTUAL_BIND(_delete_namespace, "slot");
+    ClassDB::bind_method(
+        D_METHOD("open_default", "session", "slot"),
+        &NetwDatabaseBackend::open_default
+    );
+    ClassDB::bind_method(
+        D_METHOD("list_slots_default", "session"),
+        &NetwDatabaseBackend::list_slots_default
+    );
+    ClassDB::bind_method(
+        D_METHOD("delete_slot_default", "session", "slot"),
+        &NetwDatabaseBackend::delete_slot_default
+    );
 }
 
-Ref<NetwPromise> NetwDatabaseBackend::initialize(
-    const Dictionary &schema,
-    const String &slot
+void MemoryDatabase::set_store(const StringName &p_store) {
+    store = p_store;
+}
+
+Ref<NetwPromise> MemoryDatabase::open_default(
+    Object *p_session,
+    const StringName &p_slot
 ) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_initialize, schema, slot, ret)) {
-        return answered(ret, "_initialize");
-    }
-    return NetwPromise::resolved(OK);
+    return NetwPromise::resolved(
+        persist::MemoryConnection::opened(String(store), String(p_slot))
+    );
 }
 
-Ref<NetwPromise> NetwDatabaseBackend::upsert(
-    const StringName &table,
-    const StringName &id,
-    const Dictionary &data
+Ref<NetwPromise> MemoryDatabase::list_slots_default(Object *p_session) {
+    return NetwPromise::resolved(
+        persist::store_named(String(store)).slot_names()
+    );
+}
+
+Ref<NetwPromise> MemoryDatabase::delete_slot_default(
+    Object *p_session,
+    const StringName &p_slot
 ) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_upsert, table, id, data, ret)) {
-        return answered(ret, "_upsert");
-    }
+    persist::store_named(String(store)).erase_slot(String(p_slot));
     return NetwPromise::resolved(OK);
 }
 
-Ref<NetwPromise> NetwDatabaseBackend::commit(const Array &operations) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_commit, operations, ret)) {
-        return answered(ret, "_commit");
-    }
-    for (int i = 0; i < operations.size(); ++i) {
-        Dictionary entry = operations[i];
-        StringName table = entry.get("table", StringName());
-        StringName id = entry.get("id", StringName());
-        Dictionary data = entry.get("data", Dictionary());
-        const Ref<NetwPromise> wrote = upsert(table, id, data);
-        if (wrote.is_null() || !wrote->get_is_settled()) {
-            NETW_WARN(
-                sys::SESSION,
-                "a backend whose writes settle later owes its own _commit to "
-                "sequence them; this one left operation %d in flight",
-                i
-            );
-            return NetwPromise::rejected(ERR_UNAVAILABLE, String("_commit"));
-        }
-        if (wrote->get_is_failed()) {
-            return wrote;
-        }
-        const Variant err = wrote->get_result();
-        if (err.get_type() == Variant::INT && Error(int(err)) != OK) {
-            return wrote;
-        }
-    }
-    return NetwPromise::resolved(OK);
+void MemoryDatabase::_bind_methods() {
+    ClassDB::bind_method(
+        D_METHOD("set_store", "store"),
+        &MemoryDatabase::set_store
+    );
+    ClassDB::bind_method(D_METHOD("get_store"), &MemoryDatabase::get_store);
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING_NAME, "store"),
+        "set_store",
+        "get_store"
+    );
 }
 
-Ref<NetwPromise> NetwDatabaseBackend::find_by_id(
-    const StringName &table,
-    const StringName &id
+void FileSystemDatabase::set_root(const String &p_root) {
+    root = p_root;
+}
+
+Ref<NetwPromise> FileSystemDatabase::open_default(
+    Object *p_session,
+    const StringName &p_slot
 ) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_find_by_id, table, id, ret)) {
-        return answered(ret, "_find_by_id");
+    persist::FileStore store(root);
+    const Error made = store.open_slot(String(p_slot));
+    if (made != OK) {
+        return NetwPromise::rejected(
+            made,
+            vformat("the slot directory '%s' could not be created", root)
+        );
     }
-    return NetwPromise::resolved(Dictionary());
+    return NetwPromise::resolved(
+        persist::FileConnection::opened(root, String(p_slot))
+    );
 }
 
-Ref<NetwPromise> NetwDatabaseBackend::find_all(
-    const StringName &table,
-    const Dictionary &filter
+Ref<NetwPromise> FileSystemDatabase::list_slots_default(Object *p_session) {
+    return NetwPromise::resolved(persist::FileStore(root).slot_names());
+}
+
+Ref<NetwPromise> FileSystemDatabase::delete_slot_default(
+    Object *p_session,
+    const StringName &p_slot
 ) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_find_all, table, filter, ret)) {
-        return answered(ret, "_find_all");
+    persist::FileStore store(root);
+    if (!store.has_slot(String(p_slot))) {
+        return NetwPromise::resolved(OK);
     }
-    return NetwPromise::resolved(TypedArray<Dictionary>());
+    store.erase_slot(String(p_slot));
+    return NetwPromise::resolved(
+        store.has_slot(String(p_slot)) ? FAILED : OK
+    );
 }
 
-Ref<NetwPromise> NetwDatabaseBackend::erase(
-    const StringName &table,
-    const StringName &id
-) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_delete, table, id, ret)) {
-        return answered(ret, "_delete");
-    }
-    return NetwPromise::resolved(OK);
-}
-
-Ref<NetwPromise> NetwDatabaseBackend::warm(const Array &directives) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_warm, directives, ret)) {
-        return answered(ret, "_warm");
-    }
-    return NetwPromise::resolved(OK);
-}
-
-Ref<NetwPromise> NetwDatabaseBackend::list_namespaces() {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_list_namespaces, ret)) {
-        return answered(ret, "_list_namespaces");
-    }
-    return NetwPromise::resolved(TypedArray<StringName>());
-}
-
-Ref<NetwPromise> NetwDatabaseBackend::delete_namespace(const String &slot) {
-    Ref<NetwPromise> ret;
-    if (GDVIRTUAL_CALL(_delete_namespace, slot, ret)) {
-        return answered(ret, "_delete_namespace");
-    }
-    return NetwPromise::resolved(OK);
+void FileSystemDatabase::_bind_methods() {
+    ClassDB::bind_method(
+        D_METHOD("set_root", "root"),
+        &FileSystemDatabase::set_root
+    );
+    ClassDB::bind_method(D_METHOD("get_root"), &FileSystemDatabase::get_root);
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING, "root", PROPERTY_HINT_DIR),
+        "set_root",
+        "get_root"
+    );
 }
 
 } // namespace netw

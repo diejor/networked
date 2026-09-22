@@ -6,48 +6,35 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Where a <see cref="NetwDatabase"/> actually stores what it saves, as nine
-/// methods each returning a <see cref="NetwPromise"/>.
+/// Where a <see cref="NetwDatabase"/> keeps its saves, and how a slot of them
+/// is opened.
 /// </summary>
 /// <remarks>
-/// A game subclasses this to save into something of its own, and
-/// <see cref="FileSystemDatabase"/> is the backend this addon ships. Every
-/// method here returns a <see cref="NetwPromise"/> straight away and none of
-/// them may suspend. <see cref="NetwDatabase"/> is the layer above that waits
-/// on the promise, and that is where a coroutine belongs. That is what makes a
-/// backend allowed to be slow. A backend talking to a service over a socket
-/// cannot return a record on the calling frame, and a method that promised the
-/// record directly would hand its caller whatever a suspended GDScript call
-/// turns into, which is an empty record and a miss nothing reports.
+/// A backend describes storage. It holds no open slot, no queue and no cached
+/// record, which is what lets one backend Resource serve several sessions at
+/// once. Opening it answers a fresh <see cref="NetwDatabaseConnection"/>, and
+/// that connection owns all the I/O. Two ship, and a game written against
+/// either runs unchanged on the other.
+/// - <see cref="FileSystemDatabase"/> keeps records in files under one
+/// directory, and is what a shipped game saves into
+/// - <see cref="MemoryDatabase"/> keeps them in this process, for a test or a
+/// prototype
+/// Subclass this to reach storage the shipped backends do not cover. Implement
+/// the three methods below and hand back a connection.
 /// <code>
-/// # A backend that returns on the spot.
-/// func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
-///     return NetwPromise.resolved(_read(table, id))
+/// extends NetwDatabaseBackend
 ///
-/// # A backend that returns later. The caller waits on the promise.
-/// # the coroutine is deliberately not awaited here.
-/// func _find_by_id(table: StringName, id: StringName) -&gt; NetwPromise:
-///     var settling := NetwPromise.new()
-///     _settle_later(settling, table, id)
-///     return settling
+/// @export var root := "user://saves"
 ///
-/// func _settle_later(settling: NetwPromise, table, id) -&gt; void:
-///     settling.resolve(await _service.read(table, id))
+/// func _open(session: Object, slot: StringName) -&gt; NetwPromise:
+///     return NetwPromise.resolved(MyConnection.new(root, slot))
 /// </code>
 /// <para>
-/// A method returning <c>@GlobalScope.Error</c> resolves its promise with that
-/// code. A rejected promise means the operation could not run. Two refusals
-/// ship from the dispatcher rather than from any backend, and both are
-/// observable:
-/// - An override that returns no promise is rejected with
-/// <c>@GlobalScope.ERR_INVALID_DATA</c>, because a null would be waited on
-/// forever.
-/// - The default <see cref="NetwDatabaseBackend.Commit"/>, the one a backend
-/// gets when it overrides no <c>_commit</c>, rejects with
-/// <c>@GlobalScope.ERR_UNAVAILABLE</c> when a write it looped over has not
-/// settled. Sequencing writes that settle later is the backend's own job: the
-/// loop would have to wait, and waiting is the one thing this boundary keeps
-/// out of C++.
+/// A method left unimplemented rejects with <c>@GlobalScope.ERR_UNAVAILABLE</c>
+/// rather than succeeding quietly, so a missing verb is visible the first time
+/// a game reaches for it. <b>Permissions</b> A backend enforces whatever its
+/// storage actually allows. Holding session authority locally does not grant
+/// permission to write someone else's remote save.
 /// </para>
 /// </remarks>
 public class NetwDatabaseBackend : NetwRefCounted
@@ -66,39 +53,21 @@ public class NetwDatabaseBackend : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    private static readonly IntPtr _bindInMemory =
-        NetwApi.MethodBind("NetwDatabaseBackend", "in_memory", 4232134696UL);
+    private static readonly IntPtr _bindOpenDefault =
+        NetwApi.MethodBind("NetwDatabaseBackend", "open_default", 4122934444UL);
 
     /// <summary>
-    /// A backend that keeps every namespace in memory and writes no file, which
-    /// is what a test wants when two databases would otherwise contend for one
-    /// path on disk. Nothing it holds survives the process, so a game that
-    /// means to keep a save uses a backend with storage behind it.
+    /// The stock <c>_open</c>, which rejects with
+    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>. A subclass overriding <c>_open</c>
+    /// calls this to reach it.
     /// </summary>
-    public static NetwDatabaseBackend InMemory()
+    public NetwPromise OpenDefault(GodotObject session, StringName slot)
     {
-        IntPtr answered = default;
-        NetwThunks.Ptrcall0_IntPtr(_bindInMemory, IntPtr.Zero, ref answered);
-        return NetwDatabaseBackend.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindInitialize =
-        NetwApi.MethodBind("NetwDatabaseBackend", "initialize", 191837310UL);
-
-    /// <summary>
-    /// Prepares the backend for <paramref name="slot"/> against
-    /// <paramref name="schema"/> before any other verb runs on it. Calls
-    /// <c>_initialize</c>.
-    /// </summary>
-    public NetwPromise Initialize(
-        Godot.Collections.Dictionary schema,
-        string slot = "")
-    {
-        godot_variant slot0 = VariantUtils.CreateFromDictionary(schema);
-        godot_variant slot1 = VariantUtils.CreateFromString(slot);
+        godot_variant slot0 = VariantUtils.CreateFromGodotObject(session);
+        godot_variant slot1 = VariantUtils.CreateFromStringName(slot);
         godot_variant answered = default;
         NetwThunks.Call2(
-            _bindInitialize,
+            _bindOpenDefault,
             Checked,
             in slot0,
             in slot1,
@@ -113,224 +82,53 @@ public class NetwDatabaseBackend : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindUpsert =
-        NetwApi.MethodBind("NetwDatabaseBackend", "upsert", 47413932UL);
-
-    /// <summary>
-    /// Writes <paramref name="data"/> into the record named by
-    /// <paramref name="id"/> in <paramref name="table"/>, creating it if it
-    /// does not exist and merging fields into it if it does. Calls
-    /// <c>_upsert</c>.
-    /// </summary>
-    public NetwPromise Upsert(
-        StringName table,
-        StringName id,
-        Godot.Collections.Dictionary data)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(id);
-        godot_variant slot2 = VariantUtils.CreateFromDictionary(data);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindUpsert,
-            Checked,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindCommit =
-        NetwApi.MethodBind("NetwDatabaseBackend", "commit", 2510200384UL);
-
-    /// <summary>
-    /// Writes a batch of <paramref name="operations"/> as one unit.
-    /// <code>
-    /// Array[Dictionary]
-    /// ┖╴entry
-    ///   ┠╴table  StringName  the table the write targets
-    ///   ┠╴id     StringName  the record written
-    ///   ┖╴data   Dictionary  the fields to merge in
-    /// </code>
-    /// <para>
-    /// Calls <c>_commit</c> when a backend overrides it. Otherwise plays the
-    /// batch through <see cref="NetwDatabaseBackend.Upsert"/> in order and
-    /// rejects with <c>@GlobalScope.ERR_UNAVAILABLE</c> the instant a write has
-    /// not settled by the time its <see cref="NetwPromise"/> is checked, since
-    /// a backend whose writes settle later owns its own <c>_commit</c> to
-    /// sequence them.
-    /// </para>
-    /// </summary>
-    public NetwPromise Commit(Godot.Collections.Array operations = null)
-    {
-        operations ??= new Godot.Collections.Array();
-        godot_variant slot0 = VariantUtils.CreateFromArray(operations);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindCommit, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindFindById =
-        NetwApi.MethodBind("NetwDatabaseBackend", "find_by_id", 2772463521UL);
-
-    /// <summary>
-    /// Returns one record of <paramref name="table"/> by its
-    /// <paramref name="id"/>. Calls <c>_find_by_id</c>.
-    /// </summary>
-    public NetwPromise FindById(StringName table, StringName id)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(id);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindFindById,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindFindAll =
-        NetwApi.MethodBind("NetwDatabaseBackend", "find_all", 137978769UL);
-
-    /// <summary>
-    /// Returns every record of <paramref name="table"/> whose fields match
-    /// <paramref name="filter"/>. Calls <c>_find_all</c>.
-    /// </summary>
-    public NetwPromise FindAll(
-        StringName table,
-        Godot.Collections.Dictionary filter = null)
-    {
-        filter ??= new Godot.Collections.Dictionary();
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(filter);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindFindAll,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindErase =
-        NetwApi.MethodBind("NetwDatabaseBackend", "erase", 2772463521UL);
-
-    /// <summary>
-    /// Removes the record named by <paramref name="id"/> from
-    /// <paramref name="table"/>. Calls <c>_delete</c>.
-    /// </summary>
-    public NetwPromise Erase(StringName table, StringName id)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(id);
-        godot_variant answered = default;
-        NetwThunks.Call2(_bindErase, Checked, in slot0, in slot1, ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindWarm =
-        NetwApi.MethodBind("NetwDatabaseBackend", "warm", 2510200384UL);
-
-    /// <summary>
-    /// Preloads records the backend expects to need soon, as a caching hint
-    /// rather than a correctness requirement.
-    /// <code>
-    /// Array[Dictionary]
-    /// ┖╴entry
-    ///   ┠╴table    StringName   the table to warm
-    ///   ┖╴request  WarmRequest  what to preload for it
-    /// </code>
-    /// <para>
-    /// Calls <c>_warm</c>.
-    /// </para>
-    /// </summary>
-    public NetwPromise Warm(Godot.Collections.Array directives = null)
-    {
-        directives ??= new Godot.Collections.Array();
-        godot_variant slot0 = VariantUtils.CreateFromArray(directives);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindWarm, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindListNamespaces =
+    private static readonly IntPtr _bindListSlotsDefault =
         NetwApi.MethodBind(
             "NetwDatabaseBackend",
-            "list_namespaces",
-            1931563502UL);
+            "list_slots_default",
+            3111021262UL);
 
     /// <summary>
-    /// Returns every slot the backend currently holds. Calls
-    /// <c>_list_namespaces</c>.
+    /// The stock <c>_list_slots</c>, which rejects with
+    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>. A subclass overriding
+    /// <c>_list_slots</c> calls this to reach it.
     /// </summary>
-    public NetwPromise ListNamespaces()
+    public NetwPromise ListSlotsDefault(GodotObject session)
     {
+        IntPtr slot0 = session?.NativeInstance ?? IntPtr.Zero;
         IntPtr answered = default;
-        NetwThunks.Ptrcall0_IntPtr(_bindListNamespaces, Checked, ref answered);
+        NetwThunks.Ptrcall1_IntPtr_IntPtr(
+            _bindListSlotsDefault,
+            Checked,
+            in slot0,
+            ref answered);
         return NetwPromise.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindDeleteNamespace =
+    private static readonly IntPtr _bindDeleteSlotDefault =
         NetwApi.MethodBind(
             "NetwDatabaseBackend",
-            "delete_namespace",
-            3241331237UL);
+            "delete_slot_default",
+            4122934444UL);
 
     /// <summary>
-    /// Drops every table stored under <paramref name="slot"/>. Calls
-    /// <c>_delete_namespace</c>.
+    /// The stock <c>_delete_slot</c>, which rejects with
+    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>. A subclass overriding
+    /// <c>_delete_slot</c> calls this to reach it.
     /// </summary>
-    public NetwPromise DeleteNamespace(string slot)
+    public NetwPromise DeleteSlotDefault(GodotObject session, StringName slot)
     {
-        godot_variant slot0 = VariantUtils.CreateFromString(slot);
+        godot_variant slot0 = VariantUtils.CreateFromGodotObject(session);
+        godot_variant slot1 = VariantUtils.CreateFromStringName(slot);
         godot_variant answered = default;
-        NetwThunks.Call1(_bindDeleteNamespace, Checked, in slot0, ref answered);
+        NetwThunks.Call2(
+            _bindDeleteSlotDefault,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
         slot0.Dispose();
+        slot1.Dispose();
         NetwPromise result =
             NetwPromise.Adopt(
                 NetwApi.Retained(

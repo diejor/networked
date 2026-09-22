@@ -10,6 +10,7 @@ using ::HashMap;
 using ::KeyValue;
 using ::RID;
 using ::RID_Owner;
+using ::RID_PtrOwner;
 } // namespace godot
 #elif defined(NETW_GDEXTENSION)
 #include <godot_cpp/templates/hash_map.hpp>

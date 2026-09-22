@@ -5,19 +5,15 @@ const MAIN := preload("res://examples/multiple_levels/Main.tscn")
 const LEVEL_1 := preload("res://examples/multiple_levels/Level1.tscn")
 const LEVEL_2 := preload("res://examples/multiple_levels/Level2.tscn")
 const PLAYER := preload("res://examples/multiple_levels/Player.tscn")
-const DATABASE := preload("res://examples/multiple_levels/multiple_levels_database.tres")
 const _LEVEL_1_PATH := "res://examples/multiple_levels/Level1.tscn"
 const _LEVEL_2_PATH := "res://examples/multiple_levels/Level2.tscn"
 const _TP_MARKER := ^"%Teleporter/Marker2D"
 
 var game: NetwGameHarness
-var saves := 0
 
 
 func before_test() -> void:
-	saves += 1
-	var fs := DATABASE.backend as FileSystemDatabase
-	fs.base_dir = create_temp_dir("multiple_levels_saves/%d" % saves)
+	MemoryDatabase.new().delete_slot_default(null, &"campaign")
 	game = make_game_harness(MAIN)
 	await game.setup()
 	game.show_views()

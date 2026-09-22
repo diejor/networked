@@ -1150,30 +1150,6 @@ public sealed class NetwEntity : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetPersistence =
-        NetwApi.MethodBind("NetwEntity", "get_persistence", 1107218105UL);
-
-    /// <summary>
-    /// The entity's <see cref="NetwPersistenceEngine"/>, or <c>null</c> when
-    /// its archetype declared no <see cref="Netw.ConfigurePersistence"/>. The
-    /// engine reads and writes the persisted columns on the live scene, so
-    /// flush and hydrate operate on the same saved state. Resolves through the
-    /// session, so it is <c>null</c> before the owner is in a
-    /// <see cref="MultiplayerTree"/> branch.
-    /// </summary>
-    public NetwPersistenceEngine Persistence
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindGetPersistence,
-                Checked,
-                ref answered);
-            return NetwPersistenceEngine.Adopt(answered);
-        }
-    }
-
     private static readonly IntPtr _bindGetStateBinding =
         NetwApi.MethodBind("NetwEntity", "get_state_binding", 2351227813UL);
 
@@ -1314,6 +1290,28 @@ public sealed class NetwEntity : NetwRefCounted
                 Checked,
                 ref answered);
             return NetwPredictionHandle.Adopt(answered);
+        }
+    }
+
+    private static readonly IntPtr _bindGetPersistence =
+        NetwApi.MethodBind("NetwEntity", "get_persistence", 1183214497UL);
+
+    /// <summary>
+    /// The entity's stored row. Reaching it compiles the
+    /// <see cref="NetwPersistenceConfig"/> this entity declared together with
+    /// every <see cref="NetwPropertyConfig.Persisted"/> declaration under it,
+    /// and the row is read and written on the live scene.
+    /// </summary>
+    public NetwPersistenceHandle Persistence
+    {
+        get
+        {
+            IntPtr answered = default;
+            NetwThunks.Ptrcall0_IntPtr(
+                _bindGetPersistence,
+                Checked,
+                ref answered);
+            return NetwPersistenceHandle.Adopt(answered);
         }
     }
 

@@ -106,7 +106,6 @@ func _reset_global_test_state() -> void:
 		LocalLoopbackSession.get_shared_session().reset()
 		LocalLoopbackSession.set_shared_session(null)
 
-	NetwNativeTests.file_system_database_forget_roots()
 	NetwNativeTests.tracker_book_clear()
 
 

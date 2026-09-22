@@ -325,8 +325,8 @@
 			The peer this entity represents, or [code]0[/code] for a server-owned entity such as an NPC, prop or world object.
 			A non-zero value drives [member NetwPlayer.bodies], the scene subscription a residing body grants, and an automatic [method despawn] when its peer disconnects. This is the source of the player test. See [member is_player].
 		</member>
-		<member name="persistence" type="NetwPersistenceEngine" setter="" getter="get_persistence">
-			The entity's [NetwPersistenceEngine], or [code]null[/code] when its archetype declared no [method Netw.configure_persistence]. The engine reads and writes the persisted columns on the live scene, so flush and hydrate operate on the same saved state. Resolves through the session, so it is [code]null[/code] before the owner is in a [MultiplayerTree] branch.
+		<member name="persistence" type="NetwPersistenceHandle" setter="" getter="get_persistence">
+			The entity's stored row. Reaching it compiles the [NetwPersistenceConfig] this entity declared together with every [method NetwPropertyConfig.persisted] declaration under it, and the row is read and written on the live scene.
 		</member>
 		<member name="prediction" type="NetwPredictionHandle" setter="" getter="get_prediction">
 			The entity-level prediction handle. It holds the prediction and reconciliation config the prediction block a scene declares on its [MultiplayerSynchronizer] supplies, or a caller sets in code, plus the live counters [method NetwMultiplayer.lagcomp_metrics] reads. The stepping kernel lives in [NetwMultiplayer]. Never [code]null[/code], and it reports itself unregistered until an engine wires.

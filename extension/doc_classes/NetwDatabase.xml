@@ -1,267 +1,300 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="NetwDatabase" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+<class name="NetwDatabase" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The schema registry and read/write surface of the persistence layer.
+		The client for persistent storage.
 	</brief_description>
 	<description>
-		Save one as a [code].tres[/code] file in the FileSystem, give it a [member backend], and name it from [method Netw.configure_persistence].
-
+		[NetwDatabase] lets multiple Networked objects like [NetwEntity] and [NetwTableHandle] store and retrieve their state from a durable backend. A [NetwDatabase] needs a [NetwDatabaseBackend] which implements the actual storage and retrieval.
+		A database holds records. A record is a [Dictionary] created from a [NetwSchema] that can represent a [NetwEntity], a [NetwTableHandle] or any type of tabular data, stored under a durable [StringName] id. A [NetwSchema] can be interpreted as the table definition or shape and records as rows in this table.
+		A database admits no work until its [method open] has settled. Await it before starting play.
 		[codeblock]
-		var db := preload("res://data/game.tres").duplicate()
+		func _ready() -&gt; void:
+		    Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
 
-		db.open_slot(&"slot_2")
-		db.declare_table(&"players", Netw.configure_schema(&"players"))
-		
-		var record: NetwRecord = await db.table(&amp;"players").fetch("valeria").wait()
+		func start_game(slot: StringName) -&gt; void:
+		    var db: NetwDatabase = Netw.database(self, &amp;"saves")
+		    var error: Error = await db.open(slot).wait()
+		    if error != OK:
+		        show_load_error(error)
+		        return
+		    enter_game()
 		[/codeblock]
-
-		[b]Slots[/b]
-		A slot is one independent save namespace. Choose one with [method open_slot] before the first schema registration locks the backend. Backends receive the selected slot when they initialize and scope every record under it.
-		[codeblock lang=text]
-		NetwDatabase
-		└── open_slot(&amp;"slot_2")
-
-		Backend namespace
-		└── slot_2
-		    ├── players
-		    │   └── valeria
-		    └── world
-		        └── chest_01
-		[/codeblock]
-		[b]Schema drift[/b]
-		When a loaded record carries columns the current schema does not declare, [member mismatch_policy] decides what happens to it.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="current_slot" qualifiers="const">
-			<return type="StringName" />
+		<method name="batch">
+			<return type="NetwWriteBatch" />
 			<description>
-				The active slot, [code]&amp;"default"[/code] when [method open_slot] never ran.
+				Returns a [NetwWriteBatch] that submits several writes and erasures to this database in one call. It is synchronous, and nothing reaches storage until the batch is submitted.
 			</description>
 		</method>
-		<method name="declare_table">
-			<return type="void" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="schema" type="Variant" default="null" />
-			<param index="2" name="record_script" type="Script" default="null" />
+		<method name="close">
+			<return type="NetwPromise" />
 			<description>
-				Declares [param table] from [param schema], optionally binding [param record_script] as the [NetwRecord] subclass its reads hydrate into.
-				[param schema] is a [NetwSchema], this is what gives the database the column types it needs to reject a value of the wrong shape instead of assigning it. A bare [Array] of column names is accepted as the untyped form, and a table declared that way coerces nothing.
-				[codeblock]
-				db.declare_table(&amp;"rocks", Netw.configure_schema(&amp;"rocks")
-				        .replicated(false), RockRecord)
-
-				db.declare_table(&amp;"rocks", [&amp;"health", &amp;"position"])   # untyped
+				Stops admitting work, waits for everything already admitted to settle and settles with a [enum @GlobalScope.Error].
+				An operation issued before the close settles normally. One that was still going on when the connection closed settles as canceled and never as a save.
+				[codeblock lang=text]
+				Error
+				┠╴OK               the database is closed
+				┖╴ERR_UNAVAILABLE  this handle outlived the session that issued it
 				[/codeblock]
-				Declaring the same table again merges the new columns in.
 			</description>
 		</method>
 		<method name="delete_slot">
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="StringName" />
 			<description>
-				Permanently removes [param slot] and every record under it, settling with an [enum @GlobalScope.Error]. Works before [method open_slot].
+				Removes [param slot] and everything stored in it, then settles with a [enum @GlobalScope.Error]. Deleting the slot this process holds open is refused with [constant @GlobalScope.ERR_BUSY].
+				Useful to delete a save the game has not loaded.
+				[codeblock lang=text]
+				Error
+				┠╴OK                the backend removed the slot
+				┠╴ERR_BUSY          slot is the one this database holds open
+				┠╴ERR_UNCONFIGURED  the database declares no backend
+				┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend
+				│                   implements no _delete_slot
+				┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
+				┖╴backend-defined   the backend could not remove the slot
+				[/codeblock]
 			</description>
 		</method>
 		<method name="erase">
 			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
+			<param index="0" name="schema" type="NetwSchema" />
 			<param index="1" name="id" type="StringName" />
 			<description>
-				Permanently removes [param id] from [param table], settling with an [enum @GlobalScope.Error]. A database with no [member backend] rejects with [constant @GlobalScope.ERR_UNCONFIGURED].
-			</description>
-		</method>
-		<method name="find">
-			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<description>
-				Reads the stored record for [param id] in [param table] and settles with it as a [Dictionary]. An absent record settles as an empty [Dictionary].
-				Rejects with [constant @GlobalScope.ERR_UNCONFIGURED] when the table has no declared schema or the database has no [member backend].
-				[codeblock]
-				db.find(&amp;"players", username).then(
-				    func(record: Dictionary) -&gt; void:
-				        engine.apply(record),
-				)
+				Removes the record at [param id] and settles with a [enum @GlobalScope.Error].
+				[codeblock lang=text]
+				Error
+				┠╴OK                  the backend acknowledged the erase
+				┠╴ERR_UNCONFIGURED    the database is not open
+				┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+				┠╴ERR_INVALID_PARAMETER
+				│                     id is empty
+				┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
+				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
+				│                     database closed before it settled
+				┖╴backend-defined     the backend rejected or could not complete the erase
 				[/codeblock]
 			</description>
 		</method>
-		<method name="find_all">
+		<method name="flush">
 			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="filter" type="Dictionary" default="{}" />
 			<description>
-				Reads every stored record in [param table] matching [param filter] and settles with them as an [Array] of [Dictionary]. An empty [param filter] returns the whole table.
-				Similarly to [method find], rejects with [constant @GlobalScope.ERR_UNCONFIGURED] when the table has no declared schema or the database has no [member backend].
-			</description>
-		</method>
-		<method name="get_column_type" qualifiers="const">
-			<return type="int" enum="NetwMultiplayer.ColumnType" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="column" type="StringName" />
-			<description>
-				The declared [enum NetwMultiplayer.ColumnType] of one column, or [code]-1[/code] when the table was declared without types.
-			</description>
-		</method>
-		<method name="get_registered_columns" qualifiers="const">
-			<return type="StringName[]" />
-			<param index="0" name="table" type="StringName" />
-			<description>
-				The column names registered for [param table], or an empty array when nothing has declared it yet.
+				Settles with an [enum @GlobalScope.Error] once every operation admitted before this call has settled. A value changed after the call is not included.
+				[codeblock lang=text]
+				Error
+				┠╴OK               every earlier operation settled, whatever each one settled with
+				┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
+				[/codeblock]
 			</description>
 		</method>
 		<method name="list_slots">
 			<return type="NetwPromise" />
 			<description>
-				Lists all the slots backend holds, as an [Array] of [StringName]. 
-				[codeblock]
-				for slot in await db.list_slots().wait():
-				    print(slot)
-				[/codeblock]
-			</description>
-		</method>
-		<method name="open_slot">
-			<return type="void" />
-			<param index="0" name="slot" type="StringName" />
-			<description>
-				Opens [param slot] as the active save namespace. The first call fixes the slot for this database instance.
-			</description>
-		</method>
-		<method name="table">
-			<return type="NetwRecordTable" />
-			<param index="0" name="table" type="StringName" />
-			<description>
-				A [NetwRecordTable] for [param table]. The handle is created per call and holds no cache, so asking twice costs one small object and returns the same table.
-			</description>
-		</method>
-		<method name="table_flush">
-			<return type="NetwPromise" />
-			<param index="0" name="session" type="MultiplayerAPI" />
-			<param index="1" name="table" type="RID" />
-			<param index="2" name="into" type="StringName" />
-			<param index="3" name="ids" type="PackedStringArray" />
-			<description>
-				Saves [param table]'s committed rows into [param into] as one record.
-				The unit of commit and of hydrate is the whole table, because routes must be re-created as a set, so a table saves as one record rather than one record per row. Two thousand rows are one file on the file-system backend, not two thousand.
-				[codeblock lang=text]
-				db.&lt;into&gt;
-				 ┖╴&lt;schema name&gt;          the one record
-				      ┠╴ids               PackedStringArray, parallel to the row order
-				      ┖╴&lt;column key&gt;      the committed storage array, verbatim
-				[/codeblock]
-				[param ids] names the row whose route is [code]session.table_read_routes(table)[i][/code]. Stable identity is the caller's domain, since they created the rows, and it is what lets a fresh session rebuild its own indexes from [method table_hydrate]. Save keys never ride the wire and routes never touch the disk.
-				Values are the committed storage arrays, which quantization never touches, so a quantized column saves at full precision. A [constant NetwMultiplayer.COLUMN_ENTITY] column is skipped with one warning, because a route is meaningless in the session that loads it.
-				The result is a [NetwPromise] because the write is a database write, and it settles with the [enum @GlobalScope.Error] the write reached.
-				[codeblock lang=text]
-				Error
-				┠╴OK                  written
-				┠╴ERR_UNCONFIGURED    no table name, or session is not the server
-				┠╴ERR_DOES_NOT_EXIST  the handle names no table
-				┖╴ERR_INVALID_DATA    ids.size() disagrees with the committed row count
-				[/codeblock]
-				[b]Server Only.[/b]
-			</description>
-		</method>
-		<method name="table_hydrate">
-			<return type="NetwPromise" />
-			<param index="0" name="session" type="MultiplayerAPI" />
-			<param index="1" name="table" type="RID" />
-			<param index="2" name="into" type="StringName" />
-			<description>
-				Loads [param table]'s saved record from [param into], creates fresh routes for its rows, and commits them into [param session].
-				See [NetwTableHandle] for more details on what table route are.
+				All the slots the [NetwDatabaseBackend] holds, whether or not this process wrote them, settles with a [Dictionary].
 				[codeblock lang=text]
 				Dictionary
-				┠╴routes  PackedInt64Array    freshly claimed, the committed row order
-				┖╴ids     PackedStringArray   parallel, the keys the flush wrote
+				┠╴error    Error         		@GlobalScope.Error. Check it before reading slots
+				│ ┠╴OK                   		listing succeeded
+				│ ┠╴ERR_UNAVAILABLE      		the backend does not implement slot listing
+				│ ┖╴backend-defined      		the backend could not read its storage
+				┠╴detail   String        		empty when error is OK, otherwise a human-readable
+				│                            		explanation from the backend
+				┖╴slots    PackedStringArray  	every slot the backend holds when error is OK
 				[/codeblock]
-				Both arrays are empty when no record exists, which is the first-play case rather than an error. A [constant NetwMultiplayer.COLUMN_ENTITY] column zero-fills, matching the skip at [method table_flush].
-				The result is a [NetwPromise] settling with that [Dictionary], because the read is a database read and the rows are committed on the edge it settles.
-				[b]Server Only.[/b]
+				A backend-specific error is defined by the [method NetwDatabaseBackend._list_slots] implementation, see the concrete backend's documentation for its error mapping.
 			</description>
 		</method>
-		<method name="transaction">
+		<method name="open">
 			<return type="NetwPromise" />
-			<param index="0" name="body" type="Callable" />
+			<param index="0" name="slot" type="StringName" />
 			<description>
-				Collects writes inside [param body] and commits them as one batch.
-				[param body] receives a [NetwTransaction] and calls [method NetwTransaction.queue_upsert] for each record to write. The commit runs once [param body] returns, which is what makes it happen exactly once however the body exits.
-				The promise resolves with an [enum @GlobalScope.Error]. Read the code from [member NetwPromise.result]. [signal transaction_committed] is emitted only after a commit returns [constant @GlobalScope.OK].
+				Opens [param slot] and settles with an [enum @GlobalScope.Error].
+				Opening a different slot is refused with [constant @GlobalScope.ERR_BUSY], so [method close] the one that is open first.
+				[codeblock lang=text]
+				Error
+				┠╴OK                slot is open, or was open already
+				┠╴ERR_BUSY          another slot is open or opening, or the database is closing
+				┠╴ERR_UNCONFIGURED  the database declares no backend
+				┠╴ERR_CANT_CREATE   the backend resolved no connection
+				┠╴ERR_INVALID_DATA  the backend's _open answered no promise
+				┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend implements
+				│                   no _open
+				┖╴backend-defined   the backend could not open slot
+				[/codeblock]
+			</description>
+		</method>
+		<method name="patch">
+			<return type="NetwPromise" />
+			<param index="0" name="schema" type="NetwSchema" />
+			<param index="1" name="id" type="StringName" />
+			<param index="2" name="values" type="Dictionary" />
+			<description>
+				Replaces the fields [param values] names in the record at [param id], keeps the rest, and settles with an [enum @GlobalScope.Error].
+				A record that is not there is refused with [constant @GlobalScope.ERR_DOES_NOT_EXIST]. An empty [param values] succeeds without touching storage. A field the schema does not declare refuses the whole patch.
+				[codeblock lang=text]
+				Dictionary
+				┠╴column_name  replacement value
+				┖╴...          ...                   ...
+				[/codeblock]
+				The dictionary may contain any subset of the columns in [param schema], including none.
+				[codeblock lang=text]
+				Error
+				┠╴OK                  the backend acknowledged the merged record, or values is empty
+				┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
+				│                     migration from the stored record's storage version
+				┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
+				┠╴ERR_INVALID_PARAMETER
+				│                     id is empty
+				┠╴ERR_INVALID_DATA    values names an undeclared column or a value its column
+				│                     refuses, or the stored record does not match the schema
+				┠╴ERR_FILE_UNRECOGNIZED
+				│                     the stored record is not in this library's format, or
+				│                     carries a newer storage version than the schema
+				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
+				│                     database closed before it settled
+				┖╴backend-defined     the backend could not read or write the record
+				[/codeblock]
+			</description>
+		</method>
+		<method name="read">
+			<return type="NetwPromise" />
+			<param index="0" name="schema" type="NetwSchema" />
+			<param index="1" name="id" type="StringName" />
+			<description>
+				Reads the record at [param id] and settles with a [Dictionary] snapshot.
+				Absence and failure are separate answers. A record not saved yet settles with [code]found=false[/code] and [code]error[/code] [constant @GlobalScope.OK].
+				A record that cannot be read due to a problem with the database, schema, or id fails the promise.
+				[codeblock lang=text]
+				Dictionary
+				┠╴error    Error       @GlobalScope.Error. Check it before reading anything else
+				┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
+				┠╴found    bool        whether a record was stored under id. False on any failure
+				┠╴id       StringName  the record id the read asked for
+				┖╴values   Dictionary  the stored row, keyed by column name, complete against the
+				                    	schema that read it. Empty unless found is true
+				[/codeblock]
 				[codeblock]
-				var err: Error = await db.transaction(
-				    func(tx: NetwTransaction) -&gt; void:
-				        tx.queue_upsert(&amp;"rocks", &amp;"rock_1", {&amp;"health": 50})
-				).wait()
+				var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
+				if read.error != OK:
+				    show_load_error(read.error)
+				    return
+				if read.found:
+				    player.gold = read.values[&amp;"gold"]
 				[/codeblock]
-				A caller that must not suspend, such as a pump that would let its next round start inside this one, chains [method NetwPromise.then] on the same result instead of awaiting it.
 			</description>
 		</method>
-		<method name="warm">
+		<method name="scan">
 			<return type="NetwPromise" />
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="request" type="WarmRequest" />
+			<param index="0" name="schema" type="NetwSchema" />
+			<param index="1" name="filter" type="Dictionary" default="{}" />
+			<param index="2" name="cursor" type="String" default="&quot;&quot;" />
+			<param index="3" name="limit" type="int" default="100" />
 			<description>
-				Warms [param table] into the backend cache per [param request] at runtime, settling with an [enum @GlobalScope.Error].
-				This is the escape hatch for driving warming from a game's own hooks, a scene load or a menu, rather than from [member warm_policy] at initialization. A synchronous backend has no cache to fill and returns [constant @GlobalScope.OK] without doing anything.
+				Reads storage a page at a time, settling with a [Dictionary] of up to [param limit] records matching [param filter].
+				A page fails whole a single record the schema cannot read leaves [code]records[/code] empty and [code]error[/code] set. The scan is finished when [code]cursor[/code] is empty.
+				Pass the page's cursor back as [param cursor] to continue. A [param cursor] is an opaque string that the [NetwDatabaseBackend] returns to continue a scan.
+				[codeblock lang=text]
+				Dictionary
+				┠╴error    Error             @GlobalScope.Error. Check it before reading records
+				│ ┠╴OK                     the page was read
+				│ ┠╴ERR_FILE_UNRECOGNIZED  a record is not in this library's format, or carries
+				│ │                        a newer storage version than the schema
+				│ ┠╴ERR_INVALID_DATA       a record does not match the schema
+				│ ┠╴ERR_UNCONFIGURED       the schema declares no migration from a record's
+				│ │                        storage version
+				│ ┠╴ERR_UNAVAILABLE        this handle outlived its session, or the connection
+				│ │                        implements no _scan
+				│ ┖╴backend-defined        the backend could not read the page
+				┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
+				┠╴records  Array[Dictionary]  each one a read reply, drawn on read
+				┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
+				[/codeblock]
+				These fail the promise, and [method NetwPromise.wait] answers the code.
+				[codeblock lang=text]
+				Error
+				┠╴ERR_UNCONFIGURED       the database is not open
+				┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+				┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
+				┠╴ERR_INVALID_PARAMETER  limit is below 1
+				┖╴ERR_UNAVAILABLE        the database closed before the page settled
+				[/codeblock]
+				[codeblock]
+				var cursor := ""
+				while true:
+				    var page: Dictionary = await db.scan(PlayerSave.schema, {}, cursor).wait()
+				    if page.error != OK:
+				        show_load_error(page.error)
+				        return
+				    for read in page.records:
+				        roster.append(read.values)
+				    if page.cursor.is_empty():
+				        break
+				    cursor = page.cursor
+				[/codeblock]
+			</description>
+		</method>
+		<method name="write">
+			<return type="NetwPromise" />
+			<param index="0" name="schema" type="NetwSchema" />
+			<param index="1" name="id" type="StringName" />
+			<param index="2" name="values" type="Dictionary" />
+			<description>
+				Replaces the whole record at [param id] and settles with an [enum @GlobalScope.Error].
+				[param values] must carry every column [param schema] declares, at the declared type and stride, and nothing else. A row that does not is refused before the backend sees it, so a bad write never reaches storage. A successful write means the backing store acknowledged it.
+				[codeblock lang=text]
+				Error
+				┠╴OK                  the backend acknowledged the write
+				┠╴ERR_UNCONFIGURED    the database is not open
+				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+				┠╴ERR_INVALID_PARAMETER
+				│                     id is empty
+				┠╴ERR_INVALID_DATA    values do not exactly match the schema
+				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the write
+				┖╴backend-defined     the backend rejected or could not complete the write
+				[/codeblock]
+				[codeblock]
+				var error: Error = await db.write(PlayerSave.schema, account_id, {
+				    &amp;"gold": player.gold,
+				    &amp;"position": player.position,
+				}).wait()
+				[/codeblock]
 			</description>
 		</method>
 	</methods>
 	<members>
-		<member name="backend" type="NetwDatabaseBackend" setter="set_backend" getter="get_backend">
-			The storage this database reads and writes through. Assign it before the first read or write, which is what initializes the backend and locks the slot. A database with no backend rejects every call rather than dropping writes quietly.
+		<member name="is_valid" type="bool" setter="" getter="get_is_valid">
+			Whether the [NetwMultiplayer] that issued this handle still holds this database.
 		</member>
-		<member name="mismatch_policy" type="int" setter="set_mismatch_policy" getter="get_mismatch_policy" enum="NetwDatabase.SchemaMismatchPolicy" default="1">
-			What happens when a loaded record carries columns the current schema does not declare.
-			The default is the least destructive reading: a stray column is dropped and the rest of the row loads, because a save file is the player's and a schema that grew a column is the ordinary case rather than corruption.
+		<member name="name" type="StringName" setter="" getter="get_database_name">
+			The name this database was declared under.
 		</member>
-		<member name="warm_policy" type="WarmPolicy" setter="set_warm_policy" getter="get_warm_policy">
-			The per-table cache-warming strategy applied when the backend initializes, which is the first read or write. Assign [code]null[/code] to leave every table to lazy fetch-on-miss. Synchronous backends ignore it.
-			Never assigned, this reads [code]null[/code] and warming runs through a stock [WarmPolicy], which warms everything. Assigning [code]null[/code] is therefore not the same as leaving it alone, and the two read alike from the getter: one turns warming off and the other is the untouched default.
+		<member name="slot" type="StringName" setter="" getter="get_slot">
+			The open slot, or empty when this database is not open.
+		</member>
+		<member name="state" type="int" setter="" getter="get_state">
+			The state of the connection to the [NetwDatabaseBackend].
 		</member>
 	</members>
 	<signals>
-		<signal name="record_loaded">
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<param index="2" name="hit" type="bool" />
+		<signal name="failed">
+			<param index="0" name="error" type="int" enum="Error" />
+			<param index="1" name="detail" type="String" />
 			<description>
-				Emitted after a record is read from the backend. [param hit] is [code]false[/code] when no record was found, which is a miss rather than a failure.
-			</description>
-		</signal>
-		<signal name="schema_mismatch">
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="id" type="StringName" />
-			<param index="2" name="missing" type="Array" />
-			<param index="3" name="unknown" type="Array" />
-			<description>
-				Emitted when a loaded record disagrees with the current schema. [param missing] is the columns the schema declares that the record does not carry. [param unknown] is the columns the record carries that the schema does not declare, which is what [member mismatch_policy] judges.
-			</description>
-		</signal>
-		<signal name="schema_registered">
-			<param index="0" name="table" type="StringName" />
-			<param index="1" name="columns" type="Array" />
-			<description>
-				Emitted whenever a table's declared columns change. [param columns] is the full merged column list, not only the columns this declaration added.
-			</description>
-		</signal>
-		<signal name="transaction_committed">
-			<param index="0" name="table_count" type="int" />
-			<param index="1" name="record_count" type="int" />
-			<description>
-				Emitted after a [method transaction] commits successfully, counting the tables and records the batch touched. A commit that returned an error announces nothing.
+				Emitted when an entity row in this database fails to load or save. [param detail] names the record.
+				[param error] is one of the codes [method NetwPersistenceHandle.load] and [method NetwPersistenceHandle.save] list. [param detail] follows the record id with the storage's own explanation, and counts the rows when one save left several unsaved.
+				[codeblock]
+				func _ready() -&gt; void:
+				    Netw.database(self, &amp;"saves").failed.connect(show_save_error)
+
+				func show_save_error(_error: Error, detail: String) -&gt; void:
+				    status.text = detail
+				[/codeblock]
 			</description>
 		</signal>
 	</signals>
-	<constants>
-		<constant name="PURGE" value="0" enum="SchemaMismatchPolicy">
-			Delete the record and start fresh.
-		</constant>
-		<constant name="LOAD_PARTIAL" value="1" enum="SchemaMismatchPolicy">
-			Strip the undeclared columns from the loaded data and proceed with the known ones. Columns the schema declares that the record does not carry take their scene defaults.
-		</constant>
-		<constant name="FAIL" value="2" enum="SchemaMismatchPolicy">
-			Reject the read with [constant @GlobalScope.ERR_UNCONFIGURED] and leave the record unchanged.
-		</constant>
-	</constants>
 </class>

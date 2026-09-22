@@ -67,6 +67,7 @@ private:
         godot::PackedInt64Array routes;
         godot::LocalVector<godot::Variant> columns_data;
         int64_t tick = -1;
+        int64_t revision = 0;
         godot::PackedInt64Array births;
         godot::PackedInt64Array deaths;
         bool dirty = false;
@@ -188,12 +189,20 @@ public:
         const godot::Variant &data
     );
     godot::Error commit(const godot::RID &table, int64_t tick);
+    godot::Error replace_rows(
+        const godot::RID &table,
+        const godot::PackedInt64Array &routes,
+        const godot::LocalVector<godot::Variant> &columns,
+        int64_t tick
+    );
     void clear_dirty(const godot::RID &table);
     godot::TypedArray<godot::RID> dirty_tables() const;
     godot::TypedArray<godot::RID> published_tables() const;
     godot::PackedInt64Array take_pending_removals(const godot::RID &table);
 
     godot::PackedInt64Array read_routes(const godot::RID &table) const;
+    int64_t revision(const godot::RID &table) const;
+    bool holds_elsewhere(const godot::RID &table, int64_t route) const;
     godot::Variant read_column(const godot::RID &table, int column) const;
     godot::PackedInt64Array read_births(const godot::RID &table) const;
     godot::PackedInt64Array read_deaths(const godot::RID &table) const;

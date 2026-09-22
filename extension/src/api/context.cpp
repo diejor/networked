@@ -279,7 +279,8 @@ void schedule_derived_registration(Node *p_node) {
 }
 
 bool is_persist_only(const Ref<NetwPropertyConfig> &p_config) {
-    return p_config->get_is_persisted() && !p_config->is_policy_declared()
+    return p_config->get_persist_column().is_valid()
+        && !p_config->is_policy_declared()
         && !p_config->is_transfer_declared()
         && p_config->get_quantizers().is_empty();
 }
@@ -725,19 +726,14 @@ Ref<NetwDespawnConfig> Netw::configure_despawn(Node *p_node) {
 }
 
 Ref<NetwPersistenceConfig> Netw::configure_persistence(Node *p_node) {
-    const Ref<Script> script = script_of(p_node);
-    if (script.is_null()) {
-        return netw::script::model::configure_node_persistence(p_node);
-    }
-    const Ref<NetwPersistenceConfig> existing
-        = netw::script::model::get_own_persistence_config(script);
-    if (existing.is_valid()) {
-        return existing;
-    }
-    Ref<NetwPersistenceConfig> config;
-    config.instantiate();
-    netw::script::model::declare_persistence_config(script, config);
-    return config;
+    NETW_ERR_COND_V(
+        p_node == nullptr,
+        Ref<NetwPersistenceConfig>(),
+        sys::TABLE,
+        "Netw.configure_persistence: a persistence declaration belongs to one "
+        "node, so it needs the node it is declared for"
+    );
+    return netw::script::model::configure_node_persistence(p_node);
 }
 
 Ref<NetwInterestHandle> Netw::configure_interest(Node *p_node) {
@@ -867,6 +863,41 @@ Ref<NetwChannel> Netw::channel(Node *p_node, int64_t p_channel_id) {
 
 Ref<NetwTableHandle> Netw::table(Node *p_node, const StringName &p_name) {
     return NetwTableHandle::of(p_node, p_name);
+}
+
+Ref<NetwDatabaseConfig> Netw::configure_database(
+    Node *p_node,
+    const StringName &p_name,
+    const Ref<NetwDatabaseConfig> &p_preset
+) {
+    NetwMultiplayer *api = NetwMultiplayer::of(p_node);
+    NETW_ERR_COND_V(
+        api == nullptr,
+        Ref<NetwDatabaseConfig>(),
+        sys::TABLE,
+        "Netw.configure_database: no session governs '%s'. A database is "
+        "declared from a node that is already in the tree",
+        p_node != nullptr ? String(p_node->get_name()) : String("a freed node")
+    );
+    NETW_ERR_COND_V(
+        String(p_name).is_empty(),
+        Ref<NetwDatabaseConfig>(),
+        sys::TABLE,
+        "Netw.configure_database: a database name may not be empty"
+    );
+    Ref<NetwDatabaseConfig> draft;
+    draft.instantiate();
+    if (p_preset.is_valid()) {
+        draft->copy_values_from(**p_preset);
+    }
+    if (!api->database_create(p_name, draft).is_valid()) {
+        return Ref<NetwDatabaseConfig>();
+    }
+    return draft;
+}
+
+Ref<NetwDatabase> Netw::database(Node *p_node, const StringName &p_name) {
+    return NetwDatabase::of(p_node, p_name);
 }
 
 Ref<NetwEntity> Netw::replicate(
@@ -1317,6 +1348,17 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("table", "node", "name"),
         &Netw::table
+    );
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("configure_database", "node", "name", "preset"),
+        &Netw::configure_database,
+        DEFVAL(Ref<NetwDatabaseConfig>())
+    );
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("database", "node", "name"),
+        &Netw::database
     );
 
     ClassDB::bind_static_method(

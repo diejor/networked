@@ -12,44 +12,39 @@ NetwDatabaseBackend
 
 **Inherits:** :godot:`Resource`
 
-**Inherited By:** :ref:`FileSystemDatabase<class_FileSystemDatabase>`, :ref:`NakamaDatabase<class_NakamaDatabase>`
+**Inherited By:** :ref:`FileSystemDatabase<class_FileSystemDatabase>`, :ref:`MemoryDatabase<class_MemoryDatabase>`, :ref:`NakamaDatabase<class_NakamaDatabase>`
 
-Where a :ref:`NetwDatabase<class_NetwDatabase>` actually stores what it saves, as nine methods each returning a :ref:`NetwPromise<class_NetwPromise>`.
+Where a :ref:`NetwDatabase<class_NetwDatabase>` keeps its saves, and how a slot of them is opened.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A game subclasses this to save into something of its own, and :ref:`FileSystemDatabase<class_FileSystemDatabase>` is the backend this addon ships.
+A backend describes storage. It holds no open slot, no queue and no cached record, which is what lets one backend Resource serve several sessions at once. Opening it answers a fresh :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>`, and that connection owns all the I/O.
 
-Every method here returns a :ref:`NetwPromise<class_NetwPromise>` straight away and none of them may suspend. :ref:`NetwDatabase<class_NetwDatabase>` is the layer above that waits on the promise, and that is where a coroutine belongs.
+Two ship, and a game written against either runs unchanged on the other.
 
-That is what makes a backend allowed to be slow. A backend talking to a service over a socket cannot return a record on the calling frame, and a method that promised the record directly would hand its caller whatever a suspended GDScript call turns into, which is an empty record and a miss nothing reports.
+- :ref:`FileSystemDatabase<class_FileSystemDatabase>` keeps records in files under one directory, and is what a shipped game saves into
+
+- :ref:`MemoryDatabase<class_MemoryDatabase>` keeps them in this process, for a test or a prototype
+
+Subclass this to reach storage the shipped backends do not cover. Implement the three methods below and hand back a connection.
 
 ::
 
-    # A backend that returns on the spot.
-    func _find_by_id(table: StringName, id: StringName) -> NetwPromise:
-        return NetwPromise.resolved(_read(table, id))
+    extends NetwDatabaseBackend
 
-    # A backend that returns later. The caller waits on the promise.
-    # the coroutine is deliberately not awaited here.
-    func _find_by_id(table: StringName, id: StringName) -> NetwPromise:
-        var settling := NetwPromise.new()
-        _settle_later(settling, table, id)
-        return settling
+    @export var root := "user://saves"
 
-    func _settle_later(settling: NetwPromise, table, id) -> void:
-        settling.resolve(await _service.read(table, id))
+    func _open(session: Object, slot: StringName) -> NetwPromise:
+        return NetwPromise.resolved(MyConnection.new(root, slot))
 
-\ A method returning :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` resolves its promise with that code. A rejected promise means the operation could not run.
+\ A method left unimplemented rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` rather than succeeding quietly, so a missing verb is visible the first time a game reaches for it.
 
-Two refusals ship from the dispatcher rather than from any backend, and both are observable:
+\ **Permissions**\ 
 
-- An override that returns no promise is rejected with :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`, because a null would be waited on forever.
-
-- The default :ref:`commit()<class_NetwDatabaseBackend_method_commit>`, the one a backend gets when it overrides no :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>`, rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when a write it looped over has not settled. Sequencing writes that settle later is the backend's own job: the loop would have to wait, and waiting is the one thing this boundary keeps out of C++.
+A backend enforces whatever its storage actually allows. Holding session authority locally does not grant permission to write someone else's remote save.
 
 .. rst-class:: classref-reftable-group
 
@@ -59,45 +54,19 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_commit<class_NetwDatabaseBackend_private_method__commit>`\ (\ operations\: :godot:`Array`\ ) |virtual|                                                       |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_delete<class_NetwDatabaseBackend_private_method__delete>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) |virtual|                             |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_delete_namespace<class_NetwDatabaseBackend_private_method__delete_namespace>`\ (\ slot\: :godot:`String`\ ) |virtual|                                        |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_find_all<class_NetwDatabaseBackend_private_method__find_all>`\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary`\ ) |virtual|                     |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_find_by_id<class_NetwDatabaseBackend_private_method__find_by_id>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) |virtual|                     |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_initialize<class_NetwDatabaseBackend_private_method__initialize>`\ (\ schema\: :godot:`Dictionary`, slot\: :godot:`String`\ ) |virtual|                      |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_list_namespaces<class_NetwDatabaseBackend_private_method__list_namespaces>`\ (\ ) |virtual|                                                                  |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_upsert<class_NetwDatabaseBackend_private_method__upsert>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, data\: :godot:`Dictionary`\ ) |virtual| |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`_warm<class_NetwDatabaseBackend_private_method__warm>`\ (\ directives\: :godot:`Array`\ ) |virtual|                                                           |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`commit<class_NetwDatabaseBackend_method_commit>`\ (\ operations\: :godot:`Array` = []\ )                                                                      |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`delete_namespace<class_NetwDatabaseBackend_method_delete_namespace>`\ (\ slot\: :godot:`String`\ )                                                            |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`erase<class_NetwDatabaseBackend_method_erase>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ )                                                   |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`find_all<class_NetwDatabaseBackend_method_find_all>`\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ )                                    |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`find_by_id<class_NetwDatabaseBackend_method_find_by_id>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ )                                         |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` | :ref:`in_memory<class_NetwDatabaseBackend_method_in_memory>`\ (\ ) |static|                                                                                         |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`initialize<class_NetwDatabaseBackend_method_initialize>`\ (\ schema\: :godot:`Dictionary`, slot\: :godot:`String` = ""\ )                                     |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`list_namespaces<class_NetwDatabaseBackend_method_list_namespaces>`\ (\ )                                                                                      |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`upsert<class_NetwDatabaseBackend_method_upsert>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, data\: :godot:`Dictionary`\ )                     |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`warm<class_NetwDatabaseBackend_method_warm>`\ (\ directives\: :godot:`Array` = []\ )                                                                          |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete_slot<class_NetwDatabaseBackend_private_method__delete_slot>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_list_slots<class_NetwDatabaseBackend_private_method__list_slots>`\ (\ session\: :godot:`Object`\ ) |virtual|                               |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_open<class_NetwDatabaseBackend_private_method__open>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual|               |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`delete_slot_default<class_NetwDatabaseBackend_method_delete_slot_default>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ )     |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`list_slots_default<class_NetwDatabaseBackend_method_list_slots_default>`\ (\ session\: :godot:`Object`\ )                                   |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`open_default<class_NetwDatabaseBackend_method_open_default>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ )                   |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -108,250 +77,73 @@ Methods
 Method Descriptions
 -------------------
 
-.. _class_NetwDatabaseBackend_private_method__commit:
+.. _class_NetwDatabaseBackend_private_method__delete_slot:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_commit**\ (\ operations\: :godot:`Array`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__commit>`
+:ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__delete_slot>`
 
-Override to sequence a batch of writes as one unit, each entry shaped as :ref:`commit()<class_NetwDatabaseBackend_method_commit>` takes it. The default :ref:`commit()<class_NetwDatabaseBackend_method_commit>` calls this if overridden, otherwise it plays the batch through :ref:`upsert()<class_NetwDatabaseBackend_method_upsert>` one entry at a time.
+Removes ``slot`` and everything under it, and resolves an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Failed cleanup must stay discoverable and retryable rather than reporting success.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabaseBackend_private_method__delete:
+.. _class_NetwDatabaseBackend_private_method__list_slots:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_delete**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__delete>`
+:ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__list_slots>`
 
-Override to remove one record. :ref:`erase()<class_NetwDatabaseBackend_method_erase>` calls this.
+Resolves a :godot:`PackedStringArray` of every slot this storage holds. Read it from storage, so a slot written by an earlier run appears.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabaseBackend_private_method__delete_namespace:
+.. _class_NetwDatabaseBackend_private_method__open:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_delete_namespace**\ (\ slot\: :godot:`String`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__delete_namespace>`
+:ref:`NetwPromise<class_NetwPromise>` **_open**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__open>`
 
-Override to drop every table stored under ``slot``. :ref:`delete_namespace()<class_NetwDatabaseBackend_method_delete_namespace>` calls this.
+Resolves a fresh :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` over ``slot``, or rejects with why it could not. Build a new connection every time, rather than handing back one that was already open.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabaseBackend_private_method__find_all:
+.. _class_NetwDatabaseBackend_method_delete_slot_default:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_find_all**\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__find_all>`
+:ref:`NetwPromise<class_NetwPromise>` **delete_slot_default**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_delete_slot_default>`
 
-Override to return every record of ``table`` whose fields match ``filter``. :ref:`find_all()<class_NetwDatabaseBackend_method_find_all>` calls this.
+The stock :ref:`_delete_slot()<class_NetwDatabaseBackend_private_method__delete_slot>`, which rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`. A subclass overriding :ref:`_delete_slot()<class_NetwDatabaseBackend_private_method__delete_slot>` calls this to reach it.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabaseBackend_private_method__find_by_id:
+.. _class_NetwDatabaseBackend_method_list_slots_default:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_find_by_id**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__find_by_id>`
+:ref:`NetwPromise<class_NetwPromise>` **list_slots_default**\ (\ session\: :godot:`Object`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_list_slots_default>`
 
-Override to return one record by its ``id``. :ref:`find_by_id()<class_NetwDatabaseBackend_method_find_by_id>` calls this.
+The stock :ref:`_list_slots()<class_NetwDatabaseBackend_private_method__list_slots>`, which rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`. A subclass overriding :ref:`_list_slots()<class_NetwDatabaseBackend_private_method__list_slots>` calls this to reach it.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabaseBackend_private_method__initialize:
+.. _class_NetwDatabaseBackend_method_open_default:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_initialize**\ (\ schema\: :godot:`Dictionary`, slot\: :godot:`String`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__initialize>`
+:ref:`NetwPromise<class_NetwPromise>` **open_default**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_open_default>`
 
-Override to prepare the backend for ``slot`` against ``schema``, creating whatever storage the backend needs before any other verb runs. :ref:`initialize()<class_NetwDatabaseBackend_method_initialize>` calls this.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_private_method__list_namespaces:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_list_namespaces**\ (\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__list_namespaces>`
-
-Override to return every slot the backend currently holds. :ref:`list_namespaces()<class_NetwDatabaseBackend_method_list_namespaces>` calls this.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_private_method__upsert:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_upsert**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, data\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__upsert>`
-
-Override to write ``data`` into the record named by ``id`` in ``table``, creating the record if it does not exist and merging fields into it if it does. :ref:`upsert()<class_NetwDatabaseBackend_method_upsert>` calls this.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_private_method__warm:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_warm**\ (\ directives\: :godot:`Array`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__warm>`
-
-Override to preload records the backend expects to need soon, as a caching hint rather than a correctness requirement. :ref:`warm()<class_NetwDatabaseBackend_method_warm>` calls this.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_commit:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **commit**\ (\ operations\: :godot:`Array` = []\ ) :ref:`🔗<class_NetwDatabaseBackend_method_commit>`
-
-Writes a batch of ``operations`` as one unit.
-
-.. code:: text
-
-    Array[Dictionary]
-    ┖╴entry
-      ┠╴table  StringName  the table the write targets
-      ┠╴id     StringName  the record written
-      ┖╴data   Dictionary  the fields to merge in
-
-\ Calls :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>` when a backend overrides it. Otherwise plays the batch through :ref:`upsert()<class_NetwDatabaseBackend_method_upsert>` in order and rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` the instant a write has not settled by the time its :ref:`NetwPromise<class_NetwPromise>` is checked, since a backend whose writes settle later owns its own :ref:`_commit()<class_NetwDatabaseBackend_private_method__commit>` to sequence them.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_delete_namespace:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **delete_namespace**\ (\ slot\: :godot:`String`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_delete_namespace>`
-
-Drops every table stored under ``slot``. Calls :ref:`_delete_namespace()<class_NetwDatabaseBackend_private_method__delete_namespace>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_erase:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **erase**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_erase>`
-
-Removes the record named by ``id`` from ``table``. Calls :ref:`_delete()<class_NetwDatabaseBackend_private_method__delete>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_find_all:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **find_all**\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwDatabaseBackend_method_find_all>`
-
-Returns every record of ``table`` whose fields match ``filter``. Calls :ref:`_find_all()<class_NetwDatabaseBackend_private_method__find_all>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_find_by_id:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **find_by_id**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_find_by_id>`
-
-Returns one record of ``table`` by its ``id``. Calls :ref:`_find_by_id()<class_NetwDatabaseBackend_private_method__find_by_id>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_in_memory:
-
-.. rst-class:: classref-method
-
-:ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **in_memory**\ (\ ) |static| :ref:`🔗<class_NetwDatabaseBackend_method_in_memory>`
-
-A backend that keeps every namespace in memory and writes no file, which is what a test wants when two databases would otherwise contend for one path on disk.
-
-Nothing it holds survives the process, so a game that means to keep a save uses a backend with storage behind it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_initialize:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **initialize**\ (\ schema\: :godot:`Dictionary`, slot\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwDatabaseBackend_method_initialize>`
-
-Prepares the backend for ``slot`` against ``schema`` before any other verb runs on it. Calls :ref:`_initialize()<class_NetwDatabaseBackend_private_method__initialize>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_list_namespaces:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **list_namespaces**\ (\ ) :ref:`🔗<class_NetwDatabaseBackend_method_list_namespaces>`
-
-Returns every slot the backend currently holds. Calls :ref:`_list_namespaces()<class_NetwDatabaseBackend_private_method__list_namespaces>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_upsert:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **upsert**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, data\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabaseBackend_method_upsert>`
-
-Writes ``data`` into the record named by ``id`` in ``table``, creating it if it does not exist and merging fields into it if it does. Calls :ref:`_upsert()<class_NetwDatabaseBackend_private_method__upsert>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabaseBackend_method_warm:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **warm**\ (\ directives\: :godot:`Array` = []\ ) :ref:`🔗<class_NetwDatabaseBackend_method_warm>`
-
-Preloads records the backend expects to need soon, as a caching hint rather than a correctness requirement.
-
-.. code:: text
-
-    Array[Dictionary]
-    ┖╴entry
-      ┠╴table    StringName   the table to warm
-      ┖╴request  WarmRequest  what to preload for it
-
-\ Calls :ref:`_warm()<class_NetwDatabaseBackend_private_method__warm>`.
+The stock :ref:`_open()<class_NetwDatabaseBackend_private_method__open>`, which rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`. A subclass overriding :ref:`_open()<class_NetwDatabaseBackend_private_method__open>` calls this to reach it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

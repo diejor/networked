@@ -12,14 +12,14 @@ NetwTableHandle
 
 **Inherits:** :godot:`RefCounted`
 
-One replicated table, holding a row per route and a packed array per column.
+One replicated table holding rows and packed arrays of column data.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Thousands of rows that have no node of their own travel as whole columns here rather than as one message each. :ref:`NetwSchema<class_NetwSchema>` declares the columns and :ref:`Netw.table()<class_Netw_method_table>` opens the table.
+Data travels as columns in one message. :ref:`NetwSchema<class_NetwSchema>` declares the columns and :ref:`Netw.table()<class_Netw_method_table>` opens the table.
 
 ::
 
@@ -30,11 +30,17 @@ Thousands of rows that have no node of their own travel as whole columns here ra
 
     @onready var mobs := Netw.table(self, &"Mob")
 
-\ One session hands out one handle per table. Connect :ref:`received<class_NetwTableHandle_signal_received>` once and keep the handle in a field.
+\ There is one **NetwTableHandle** per table. Connect :ref:`received<class_NetwTableHandle_signal_received>` once and keep the handle in a field.
+
+
+
+A route is a session-stable row identity, a row index would be unstable because tables can add and remove rows.
+
+
 
 \ **Writing**\ 
 
-Every column the schema declares is staged each wave, and every staged array holds one element per route. :ref:`commit()<class_NetwTableHandle_method_commit>` stamps the wave with the session's tick.
+Every column the schema declares crosses the wire in waves. :ref:`commit()<class_NetwTableHandle_method_commit>` stamps the wave with the session's tick.
 
 ::
 
@@ -44,7 +50,7 @@ Every column the schema declares is staged each wave, and every staged array hol
         mobs.write_column(Mobs.hp, health)
         mobs.commit()
 
-\ Any peer commits its own rows. Only the peer holding authority sends them to the others, so a commit off authority stays local.
+
 
 \ **Reading**\ 
 
@@ -65,7 +71,31 @@ A column comes back as the packed array it was written as, in row order.
 
 \ **Saving**\ 
 
-\ :ref:`flush()<class_NetwTableHandle_method_flush>` writes the committed rows into a :ref:`NetwDatabase<class_NetwDatabase>` as one record and :ref:`hydrate()<class_NetwTableHandle_method_hydrate>` loads them back under fresh routes. Both settle through a :ref:`NetwPromise<class_NetwPromise>`.
+\ :ref:`save()<class_NetwTableHandle_method_save>` stores the committed rows in a :ref:`NetwDatabase<class_NetwDatabase>` under a key, and :ref:`load()<class_NetwTableHandle_method_load>` replaces the whole table with them. Routes are new in every session, so the game names each row with a stable id and pairs the ids with the routes a load hands back.
+
+\ :ref:`load()<class_NetwTableHandle_method_load>` settles with one of these. The row saved as ``ids[i]`` now lives at ``routes[i]``.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error    int                @GlobalScope.Error. Check it before reading anything else
+    ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
+    ┠╴found    bool               whether a snapshot was stored under the key
+    ┠╴ids      PackedStringArray  the id each loaded row was saved under
+    ┖╴routes   PackedInt64Array   the route each loaded row now lives at
+
+::
+
+    func save_forest() -> Error:
+        return await mobs.save(db, &"forest", mob_ids).wait()
+
+    func load_forest() -> void:
+        var loaded: Dictionary = await mobs.load(db, &"forest").wait()
+        if loaded.error != OK:
+            show_load_error(loaded.error)
+            return
+        if loaded.found:
+            rebuild_mob_index(loaded.ids, loaded.routes)
 
 .. rst-class:: classref-reftable-group
 
@@ -97,31 +127,31 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`commit<class_NetwTableHandle_method_commit>`\ (\ )                                                                                                                 |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`flush<class_NetwTableHandle_method_flush>`\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, into\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`hydrate<class_NetwTableHandle_method_hydrate>`\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, into\: :godot:`StringName`\ )                               |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwTableHandle<class_NetwTableHandle>`         | :ref:`of<class_NetwTableHandle_method_of>`\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static|                                                              |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                          | :ref:`row_of<class_NetwTableHandle_method_row_of>`\ (\ route\: :godot:`int`\ ) |const|                                                                                   |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedInt32Array`                             | :ref:`rows_of<class_NetwTableHandle_method_rows_of>`\ (\ routes\: :godot:`PackedInt64Array`\ ) |const|                                                                   |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedInt64Array`                             | :ref:`read_births<class_NetwTableHandle_method_read_births>`\ (\ ) |const|                                                                                               |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                      | :ref:`read_column<class_NetwTableHandle_method_read_column>`\ (\ column\: :godot:`int`\ ) |const|                                                                        |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedInt64Array`                             | :ref:`read_deaths<class_NetwTableHandle_method_read_deaths>`\ (\ ) |const|                                                                                               |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedInt64Array`                             | :ref:`read_routes<class_NetwTableHandle_method_read_routes>`\ (\ ) |const|                                                                                               |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`write_column<class_NetwTableHandle_method_write_column>`\ (\ column\: :godot:`int`, data\: :godot:`Variant`\ )                                                     |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`write_routes<class_NetwTableHandle_method_write_routes>`\ (\ routes\: :godot:`PackedInt64Array`\ )                                                                 |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`commit<class_NetwTableHandle_method_commit>`\ (\ )                                                                                                              |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`load<class_NetwTableHandle_method_load>`\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`\ )                                   |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwTableHandle<class_NetwTableHandle>`         | :ref:`of<class_NetwTableHandle_method_of>`\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static|                                                           |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                                          | :ref:`row_of<class_NetwTableHandle_method_row_of>`\ (\ route\: :godot:`int`\ ) |const|                                                                                |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedInt32Array`                             | :ref:`rows_of<class_NetwTableHandle_method_rows_of>`\ (\ routes\: :godot:`PackedInt64Array`\ ) |const|                                                                |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedInt64Array`                             | :ref:`read_births<class_NetwTableHandle_method_read_births>`\ (\ ) |const|                                                                                            |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                      | :ref:`read_column<class_NetwTableHandle_method_read_column>`\ (\ column\: :godot:`int`\ ) |const|                                                                     |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedInt64Array`                             | :ref:`read_deaths<class_NetwTableHandle_method_read_deaths>`\ (\ ) |const|                                                                                            |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedInt64Array`                             | :ref:`read_routes<class_NetwTableHandle_method_read_routes>`\ (\ ) |const|                                                                                            |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`save<class_NetwTableHandle_method_save>`\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`write_column<class_NetwTableHandle_method_write_column>`\ (\ column\: :godot:`int`, data\: :godot:`Variant`\ )                                                  |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`write_routes<class_NetwTableHandle_method_write_routes>`\ (\ routes\: :godot:`PackedInt64Array`\ )                                                              |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -208,7 +238,7 @@ The name this table was declared under, which is the name :ref:`Netw.table()<cla
 
 - :godot:`RID` **get_table**\ (\ )
 
-The session's handle for this table, which is what the flat ``table_*`` verbs on :ref:`NetwMultiplayer<class_NetwMultiplayer>` take.
+The session's handle for this table.
 
 .. rst-class:: classref-item-separator
 
@@ -257,52 +287,34 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **commit**\ (\ ) :ref:`🔗<class_NetwTableHandle_method_commit>`
 
-Fixes the written routes and columns as the applied state readers compare against, stamped with the session's own tick.
+Fixes the columns as the applied state readers compare against, stamped with the session's own tick.
 
 .. code:: text
 
     Error
     ┠╴OK                  the wave was applied
     ┠╴ERR_DOES_NOT_EXIST  the session this handle names is gone
-    ┖╴ERR_INVALID_DATA    the schema is open, a route wave was never written, a column was
+    ┖╴ERR_INVALID_DATA    the schema is open, a route was never written, a column was
                          not written this wave, or a column's element count disagrees
-                         with the route count times its declared stride
+                         with the row ID count times its declared stride
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwTableHandle_method_flush:
+.. _class_NetwTableHandle_method_load:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **flush**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, into\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) :ref:`🔗<class_NetwTableHandle_method_flush>`
+:ref:`NetwPromise<class_NetwPromise>` **load**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`\ ) :ref:`🔗<class_NetwTableHandle_method_load>`
 
-Saves the committed rows into ``into`` as one record of ``database``, settling with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Replaces every row of the table with the snapshot stored under ``key`` in ``database``, and settles with the load reply drawn in this class's description. Each loaded row gets a new route. :ref:`NetwMultiplayer.table_load()<class_NetwMultiplayer_method_table_load>`.
 
-\ ``ids`` names the row whose route is ``read_routes()[i]``. The caller created the rows, so the caller owns their stable identity. :ref:`NetwDatabase.table_flush()<class_NetwDatabase_method_table_flush>` documents the record's shape.
+The table is untouched unless the whole snapshot is applied. A missing snapshot answers ``found`` false, and a snapshot that does not decode against the schema answers its error.
 
-\ **Server Only.**
+A :ref:`commit()<class_NetwTableHandle_method_commit>` while the snapshot is being read makes the load answer :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>`, so a load never overwrites rows written after it started.
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwTableHandle_method_hydrate:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **hydrate**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, into\: :godot:`StringName`\ ) :ref:`🔗<class_NetwTableHandle_method_hydrate>`
-
-Loads the saved record from ``into`` of ``database``, creates fresh routes for its rows, and commits them.
-
-Routes are session-scoped, so a hydrate claims new ones rather than restoring the saved ones. Pair them back to the save keys through the settled :godot:`Dictionary`.
-
-.. code:: text
-
-    Dictionary
-    ┠╴routes  PackedInt64Array    freshly claimed, the committed row order
-    ┖╴ids     PackedStringArray   parallel, the keys the flush wrote
+Routes an earlier load handed out are released once no other table holds them. Routes the game wrote itself are never released by a load.
 
 \ **Server Only.**
 
@@ -316,7 +328,7 @@ Routes are session-scoped, so a hydrate claims new ones rather than restoring th
 
 :ref:`NetwTableHandle<class_NetwTableHandle>` **of**\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static| :ref:`🔗<class_NetwTableHandle_method_of>`
 
-The table declared under ``name`` in the session governing ``node``. Returns ``null`` and reports when no session governs ``node``, or when no schema carries that name. :ref:`Netw.table()<class_Netw_method_table>` is the front door and this is what it returns.
+The table declared under ``name`` in :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`.
 
 .. rst-class:: classref-item-separator
 
@@ -352,7 +364,7 @@ The row for each entry in ``routes``, preserving input order and returning ``-1`
 
 :godot:`PackedInt64Array` **read_births**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_births>`
 
-The routes added by the latest admitted wave.
+The routes added by the latest admitted wave. See :ref:`read_routes()<class_NetwTableHandle_method_read_routes>` for the order of elements.
 
 .. rst-class:: classref-item-separator
 
@@ -364,7 +376,7 @@ The routes added by the latest admitted wave.
 
 :godot:`Variant` **read_column**\ (\ column\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_column>`
 
-The packed values stored in ``column``. A column is addressed by the index its :ref:`NetwSchema<class_NetwSchema>` declaration returned.
+The packed values stored in ``column``. See :ref:`NetwSchema<class_NetwSchema>` for the column's storage type and stride.
 
 .. rst-class:: classref-item-separator
 
@@ -389,6 +401,31 @@ The routes removed by the latest admitted wave.
 :godot:`PackedInt64Array` **read_routes**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_routes>`
 
 The routes stored in this table, in row order.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwTableHandle_method_save:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **save**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) :ref:`🔗<class_NetwTableHandle_method_save>`
+
+Stores the committed rows as one snapshot under ``key`` in ``database``, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``ids`` names each row in the order of :ref:`read_routes()<class_NetwTableHandle_method_read_routes>`. The rows are copied before this returns, so a later :ref:`commit()<class_NetwTableHandle_method_commit>` does not change what is written. :ref:`NetwMultiplayer.table_save()<class_NetwMultiplayer_method_table_save>`.
+
+A snapshot of zero rows is stored, and loading it empties the table. Values are stored at full precision whatever the column's wire quantizer.
+
+.. code:: text
+
+    Error
+    ┠╴OK                     the snapshot was stored
+    ┠╴ERR_UNAUTHORIZED       this peer holds no session authority
+    ┠╴ERR_INVALID_DATA       an id is empty or repeated, or the ids and rows disagree in count
+    ┠╴ERR_INVALID_PARAMETER  the key is empty, or the schema has a COLUMN_ENTITY column
+    ┖╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions
+
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

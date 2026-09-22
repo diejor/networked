@@ -10,53 +10,121 @@
 NetwDatabase
 ============
 
-**Inherits:** :godot:`Resource`
+**Inherits:** :godot:`RefCounted`
 
-The schema registry and read/write surface of the persistence layer.
+One named save store of one session, reached by :ref:`Netw.database()<class_Netw_method_database>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Save one as a ``.tres`` file, give it a :ref:`backend<class_NetwDatabase_property_backend>`, and name it from an archetype through :ref:`Netw.configure_persistence()<class_Netw_method_configure_persistence>` so a :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` persists into it.
+A database holds records. A record is a :godot:`Dictionary` complete against a :ref:`NetwSchema<class_NetwSchema>`, stored under a durable :godot:`StringName` id, inside one slot. A slot is one independent set of records, which is what a game draws as a save file.
 
-Every verb that reaches the backend returns a :ref:`NetwPromise<class_NetwPromise>` rather than the value, because a backend may be a disk or a socket and native code cannot suspend on the caller's behalf. :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` is how the value arrives.
-
-::
-
-    var record: NetwRecord = await db.table(&"players").fetch(username).wait()
-
-\ **Tables**\ 
-
-A table is a named set of records reached through :ref:`table()<class_NetwDatabase_method_table>`, which returns a :ref:`NetwRecordTable<class_NetwRecordTable>`. A registered table name also resolves as a property, so ``db.players`` is ``db.table(&"players")`` with autocompletion.
+A database admits no work until its :ref:`open()<class_NetwDatabase_method_open>` has settled. Await it before starting play.
 
 ::
 
-    var record := await db.table(&"players").fetch(username).wait()
-    var same := await db.players.fetch(username).wait()
+    func _ready() -> void:
+        Netw.configure_database(self, &"saves").backend(preload("res://save_backend.tres"))
 
-\ **Slots**\ 
+    func start_game(slot: StringName) -> void:
+        var db: NetwDatabase = Netw.database(self, &"saves")
+        var error: Error = await db.open(slot).wait()
+        if error != OK:
+            show_load_error(error)
+            return
+        enter_game()
 
-A slot is one independent save namespace. Choose one with :ref:`open_slot()<class_NetwDatabase_method_open_slot>` before the first schema registration locks the backend, which is what makes the choice startup-only. Backends receive the selected slot when they initialize and scope every record under it.
+\ Every asynchronous method answers a :ref:`NetwPromise<class_NetwPromise>`. Read its settled value with ``await promise.wait()``. A call refused on entry fails the promise, and ``wait()`` then answers the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
-    NetwDatabase
-    └── open_slot(&"slot_2")
+    open, close, flush, write, patch, erase, delete_slot   Error
+    read                                                   Dictionary, the read reply
+    scan                                                   Dictionary, the page reply
+    list_slots                                             Dictionary, the slots reply
+    batch().submit()                                       Dictionary, the batch reply
 
-    Backend namespace
-    └── slot_2
-        ├── players
-        │   └── valeria
-        └── world
-            └── chest_01
+\ :ref:`NetwWriteBatch.submit()<class_NetwWriteBatch_method_submit>` draws the batch reply.
 
-\ :ref:`list_slots()<class_NetwDatabase_method_list_slots>` and :ref:`delete_slot()<class_NetwDatabase_method_delete_slot>` work before a slot is open, because they read and remove backend namespaces by name. That is what a save-select menu needs.
+\ **Records**\ 
 
-\ **Schema drift**\ 
+\ :ref:`write()<class_NetwDatabase_method_write>` replaces a whole record and refuses a row that is not complete against its schema. :ref:`patch()<class_NetwDatabase_method_patch>` replaces only the fields it names and refuses a record that is not there. Neither adds to a stored value.
 
-When a loaded record carries columns the current schema does not declare, :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` decides what happens to it. When a column's stored value disagrees with the type its :ref:`NetwSchema<class_NetwSchema>` declared, that one column is dropped with a warning and the live scene keeps its default, so a save written by an older build stays partly readable rather than wholly rejected.
+::
+
+    var error: Error = await db.write(PlayerSave.schema, account_id, {
+        &"gold": player.gold,
+        &"position": player.position,
+    }).wait()
+
+\ **Ordering**\ 
+
+Operations on one record settle in the order they were admitted, however long an earlier one takes, and that includes a read after a write. Operations on different records do not wait for each other. The values a write submits are frozen when it is admitted, so changing the :godot:`Dictionary` afterwards cannot change what is stored.
+
+\ **The read reply**\ 
+
+An admitted :ref:`read()<class_NetwDatabase_method_read>` settles with one of these, including when storage fails. A read on a closed database, with an unsealed schema or an empty id, fails the promise. Absence and failure are separate answers. A record nobody has saved yet is ``found`` false with ``error`` OK, and a record the storage could not be asked about carries the error.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error    int         @GlobalScope.Error. Check it before reading anything else
+    ┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
+    ┠╴found    bool        whether a record was stored under id. False on any failure
+    ┠╴id       StringName  the record id the read asked for
+    ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
+                          schema that read it. Empty unless found is true
+
+\ The reply is a snapshot. ``values`` is the caller's own copy, so changing it cannot reach stored state.
+
+\ **The page reply**\ 
+
+\ :ref:`scan()<class_NetwDatabase_method_scan>` reads storage a page at a time so a large collection never arrives as one allocation. A page fails whole, so a single record the schema cannot read leaves ``records`` empty and ``error`` set. A partial page never reads as complete.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error    int               @GlobalScope.Error. Check it before reading records
+    ┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
+    ┠╴records  Array[Dictionary]  each one a read reply, drawn above
+    ┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
+
+\ An empty ``records`` with a nonempty ``cursor`` means this page matched nothing, not that the scan is finished. The scan is finished when ``cursor`` is empty.
+
+::
+
+    var cursor := ""
+    while true:
+        var page: Dictionary = await db.scan(PlayerSave.schema, {}, cursor).wait()
+        if page.error != OK:
+            show_load_error(page.error)
+            return
+        for read in page.records:
+            roster.append(read.values)
+        if page.cursor.is_empty():
+            break
+        cursor = page.cursor
+
+\ **The slots reply**\ 
+
+\ :ref:`list_slots()<class_NetwDatabase_method_list_slots>` answers every slot this backend holds, including a slot written by an earlier run. It works before :ref:`open()<class_NetwDatabase_method_open>`.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error   int                @GlobalScope.Error. Check it before reading slots
+    ┠╴detail  String             what went wrong, for a person to read. Empty when error is OK
+    ┖╴slots   PackedStringArray  every slot this backend holds, whether or not this process wrote it
+
+\ **Failure and absence**\ 
+
+A record nobody has saved is a miss, not a failure. The read reply carries both facts separately, so a first-time player and an unreachable disk never look alike.
+
+A successful write means the backing store acknowledged it. It does not promise survival of every machine or service failure.
+
+An entity row that fails to load or save emits :ref:`failed<class_NetwDatabase_signal_failed>`. Rows also save on their own interval and when their entity leaves, so this signal is where a game hears about a save nobody awaited.
 
 .. rst-class:: classref-reftable-group
 
@@ -66,13 +134,15 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------------------------------------------------------+---------------------------------------------------------------------+-------+
-   | :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`               | :ref:`backend<class_NetwDatabase_property_backend>`                 |       |
-   +---------------------------------------------------------------------+---------------------------------------------------------------------+-------+
-   | :ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>` | :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` | ``1`` |
-   +---------------------------------------------------------------------+---------------------------------------------------------------------+-------+
-   | :ref:`WarmPolicy<class_WarmPolicy>`                                 | :ref:`warm_policy<class_NetwDatabase_property_warm_policy>`         |       |
-   +---------------------------------------------------------------------+---------------------------------------------------------------------+-------+
+   +---------------------+-------------------------------------------------------+
+   | :godot:`bool`       | :ref:`is_valid<class_NetwDatabase_property_is_valid>` |
+   +---------------------+-------------------------------------------------------+
+   | :godot:`StringName` | :ref:`name<class_NetwDatabase_property_name>`         |
+   +---------------------+-------------------------------------------------------+
+   | :godot:`StringName` | :ref:`slot<class_NetwDatabase_property_slot>`         |
+   +---------------------+-------------------------------------------------------+
+   | :godot:`int`        | :ref:`state<class_NetwDatabase_property_state>`       |
+   +---------------------+-------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -82,37 +152,29 @@ Methods
 .. table::
    :widths: auto
 
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                                | :ref:`current_slot<class_NetwDatabase_method_current_slot>`\ (\ ) |const|                                                                                                              |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                             | :ref:`declare_table<class_NetwDatabase_method_declare_table>`\ (\ table\: :godot:`StringName`, schema\: :godot:`Variant` = null, record_script\: :godot:`Script` = null\ )             |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`delete_slot<class_NetwDatabase_method_delete_slot>`\ (\ slot\: :godot:`StringName`\ )                                                                                            |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`erase<class_NetwDatabase_method_erase>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ )                                                                             |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`find<class_NetwDatabase_method_find>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ )                                                                               |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`find_all<class_NetwDatabase_method_find_all>`\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ )                                                              |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` | :ref:`get_column_type<class_NetwDatabase_method_get_column_type>`\ (\ table\: :godot:`StringName`, column\: :godot:`StringName`\ ) |const|                                             |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`\[:godot:`StringName`\]              | :ref:`get_registered_columns<class_NetwDatabase_method_get_registered_columns>`\ (\ table\: :godot:`StringName`\ ) |const|                                                             |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`list_slots<class_NetwDatabase_method_list_slots>`\ (\ )                                                                                                                          |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                             | :ref:`open_slot<class_NetwDatabase_method_open_slot>`\ (\ slot\: :godot:`StringName`\ )                                                                                                |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwRecordTable<class_NetwRecordTable>`      | :ref:`table<class_NetwDatabase_method_table>`\ (\ table\: :godot:`StringName`\ )                                                                                                       |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`table_flush<class_NetwDatabase_method_table_flush>`\ (\ session\: :godot:`MultiplayerAPI`, table\: :godot:`RID`, into\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`table_hydrate<class_NetwDatabase_method_table_hydrate>`\ (\ session\: :godot:`MultiplayerAPI`, table\: :godot:`RID`, into\: :godot:`StringName`\ )                               |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`transaction<class_NetwDatabase_method_transaction>`\ (\ body\: :godot:`Callable`\ )                                                                                              |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`              | :ref:`warm<class_NetwDatabase_method_warm>`\ (\ table\: :godot:`StringName`, request\: :ref:`WarmRequest<class_WarmRequest>`\ )                                                        |
-   +----------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwWriteBatch<class_NetwWriteBatch>` | :ref:`batch<class_NetwDatabase_method_batch>`\ (\ )                                                                                                                                           |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`close<class_NetwDatabase_method_close>`\ (\ )                                                                                                                                           |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`delete_slot<class_NetwDatabase_method_delete_slot>`\ (\ slot\: :godot:`StringName`\ )                                                                                                   |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`erase<class_NetwDatabase_method_erase>`\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ )                                                                   |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`flush<class_NetwDatabase_method_flush>`\ (\ )                                                                                                                                           |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`list_slots<class_NetwDatabase_method_list_slots>`\ (\ )                                                                                                                                 |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`open<class_NetwDatabase_method_open>`\ (\ slot\: :godot:`StringName`\ )                                                                                                                 |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`patch<class_NetwDatabase_method_patch>`\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ )                                     |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`read<class_NetwDatabase_method_read>`\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ )                                                                     |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`scan<class_NetwDatabase_method_scan>`\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, filter\: :godot:`Dictionary` = {}, cursor\: :godot:`String` = "", limit\: :godot:`int` = 100\ ) |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`       | :ref:`write<class_NetwDatabase_method_write>`\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ )                                     |
+   +---------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -123,88 +185,25 @@ Methods
 Signals
 -------
 
-.. _class_NetwDatabase_signal_record_loaded:
+.. _class_NetwDatabase_signal_failed:
 
 .. rst-class:: classref-signal
 
-**record_loaded**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, hit\: :godot:`bool`\ ) :ref:`🔗<class_NetwDatabase_signal_record_loaded>`
+**failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwDatabase_signal_failed>`
 
-Emitted after a record is read from the backend. ``hit`` is ``false`` when no record was found, which is a miss rather than a failure.
+Emitted when an entity row in this database fails to load or save. ``detail`` names the record. A failed load emits no :ref:`NetwPersistenceHandle.loaded<class_NetwPersistenceHandle_signal_loaded>` and a failed save emits no :ref:`NetwPersistenceHandle.saved<class_NetwPersistenceHandle_signal_saved>`. :ref:`NetwMultiplayer.database_failed<class_NetwMultiplayer_signal_database_failed>`.
 
-.. rst-class:: classref-item-separator
+A load or save that settles after session authority moved or the database closed is canceled and emits nothing.
 
-----
+::
 
-.. _class_NetwDatabase_signal_schema_mismatch:
+    func _ready() -> void:
+        Netw.database(self, &"saves").failed.connect(show_save_error)
 
-.. rst-class:: classref-signal
+    func show_save_error(_error: Error, detail: String) -> void:
+        status.text = detail
 
-**schema_mismatch**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, missing\: :godot:`Array`, unknown\: :godot:`Array`\ ) :ref:`🔗<class_NetwDatabase_signal_schema_mismatch>`
-
-Emitted when a loaded record disagrees with the current schema. ``missing`` is the columns the schema declares that the record does not carry, which is safe and takes scene defaults. ``unknown`` is the columns the record carries that the schema does not declare, which is what :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` judges.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_signal_schema_registered:
-
-.. rst-class:: classref-signal
-
-**schema_registered**\ (\ table\: :godot:`StringName`, columns\: :godot:`Array`\ ) :ref:`🔗<class_NetwDatabase_signal_schema_registered>`
-
-Emitted whenever a table's declared columns change. ``columns`` is the full merged column list, not only the columns this declaration added.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_signal_transaction_committed:
-
-.. rst-class:: classref-signal
-
-**transaction_committed**\ (\ table_count\: :godot:`int`, record_count\: :godot:`int`\ ) :ref:`🔗<class_NetwDatabase_signal_transaction_committed>`
-
-Emitted after a :ref:`transaction()<class_NetwDatabase_method_transaction>` commits successfully, counting the tables and records the batch touched. A commit that returned an error announces nothing.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Enumerations
-------------
-
-.. _enum_NetwDatabase_SchemaMismatchPolicy:
-
-.. rst-class:: classref-enumeration
-
-enum **SchemaMismatchPolicy**: :ref:`🔗<enum_NetwDatabase_SchemaMismatchPolicy>`
-
-.. _class_NetwDatabase_constant_PURGE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>` **PURGE** = ``0``
-
-Delete the record and start fresh.
-
-.. _class_NetwDatabase_constant_LOAD_PARTIAL:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>` **LOAD_PARTIAL** = ``1``
-
-Strip the undeclared columns from the loaded data and proceed with the known ones. Columns the schema declares that the record does not carry take their scene defaults.
-
-.. _class_NetwDatabase_constant_FAIL:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>` **FAIL** = ``2``
-
-Reject the read with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` and leave the record unchanged.
+\ A row that failed to save stays owed, and :ref:`NetwSessionHandle.save_entities()<class_NetwSessionHandle_method_save_entities>` writes it again.
 
 .. rst-class:: classref-section-separator
 
@@ -215,56 +214,65 @@ Reject the read with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@
 Property Descriptions
 ---------------------
 
-.. _class_NetwDatabase_property_backend:
+.. _class_NetwDatabase_property_is_valid:
 
 .. rst-class:: classref-property
 
-:ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **backend** :ref:`🔗<class_NetwDatabase_property_backend>`
+:godot:`bool` **is_valid** :ref:`🔗<class_NetwDatabase_property_is_valid>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_backend**\ (\ value\: :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`\ )
-- :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **get_backend**\ (\ )
+- :godot:`bool` **get_is_valid**\ (\ )
 
-The storage this database reads and writes through. Assign it before the first read or write, which is what initializes the backend and locks the slot. A database with no backend rejects every call rather than dropping writes quietly.
+Whether the session that issued this handle still holds this database.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabase_property_mismatch_policy:
+.. _class_NetwDatabase_property_name:
 
 .. rst-class:: classref-property
 
-:ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>` **mismatch_policy** = ``1`` :ref:`🔗<class_NetwDatabase_property_mismatch_policy>`
+:godot:`StringName` **name** :ref:`🔗<class_NetwDatabase_property_name>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_mismatch_policy**\ (\ value\: :ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>`\ )
-- :ref:`SchemaMismatchPolicy<enum_NetwDatabase_SchemaMismatchPolicy>` **get_mismatch_policy**\ (\ )
+- :godot:`StringName` **get_database_name**\ (\ )
 
-What happens when a loaded record carries columns the current schema does not declare.
-
-The default is the least destructive reading: a stray column is dropped and the rest of the row loads, because a save file is the player's and a schema that grew a column is the ordinary case rather than corruption.
+The name this database was declared under.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabase_property_warm_policy:
+.. _class_NetwDatabase_property_slot:
 
 .. rst-class:: classref-property
 
-:ref:`WarmPolicy<class_WarmPolicy>` **warm_policy** :ref:`🔗<class_NetwDatabase_property_warm_policy>`
+:godot:`StringName` **slot** :ref:`🔗<class_NetwDatabase_property_slot>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_warm_policy**\ (\ value\: :ref:`WarmPolicy<class_WarmPolicy>`\ )
-- :ref:`WarmPolicy<class_WarmPolicy>` **get_warm_policy**\ (\ )
+- :godot:`StringName` **get_slot**\ (\ )
 
-The per-table cache-warming strategy applied when the backend initializes, which is the first read or write. Assign ``null`` to leave every table to lazy fetch-on-miss. Synchronous backends ignore it.
+The open slot, or empty when this database is not open. :ref:`NetwMultiplayer.database_get_slot()<class_NetwMultiplayer_method_database_get_slot>`.
 
-Never assigned, this reads ``null`` and warming runs through a stock :ref:`WarmPolicy<class_WarmPolicy>`, which warms everything. Assigning ``null`` is therefore not the same as leaving it alone, and the two read alike from the getter: one turns warming off and the other is the untouched default.
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwDatabase_property_state:
+
+.. rst-class:: classref-property
+
+:godot:`int` **state** :ref:`🔗<class_NetwDatabase_property_state>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`int` **get_state**\ (\ )
+
+A :ref:`DatabaseState<enum_NetwMultiplayer_DatabaseState>` saying whether this database is closed, opening, open, closing or faulted. :ref:`NetwMultiplayer.database_get_state()<class_NetwMultiplayer_method_database_get_state>`.
 
 .. rst-class:: classref-section-separator
 
@@ -275,38 +283,27 @@ Never assigned, this reads ``null`` and warming runs through a stock :ref:`WarmP
 Method Descriptions
 -------------------
 
-.. _class_NetwDatabase_method_current_slot:
+.. _class_NetwDatabase_method_batch:
 
 .. rst-class:: classref-method
 
-:godot:`StringName` **current_slot**\ (\ ) |const| :ref:`🔗<class_NetwDatabase_method_current_slot>`
+:ref:`NetwWriteBatch<class_NetwWriteBatch>` **batch**\ (\ ) :ref:`🔗<class_NetwDatabase_method_batch>`
 
-The active slot, ``&"default"`` when :ref:`open_slot()<class_NetwDatabase_method_open_slot>` never ran.
+Returns a :ref:`NetwWriteBatch<class_NetwWriteBatch>` that submits several writes and erasures to this database in one call. It is synchronous, and nothing reaches storage until the batch is submitted.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabase_method_declare_table:
+.. _class_NetwDatabase_method_close:
 
 .. rst-class:: classref-method
 
-|void| **declare_table**\ (\ table\: :godot:`StringName`, schema\: :godot:`Variant` = null, record_script\: :godot:`Script` = null\ ) :ref:`🔗<class_NetwDatabase_method_declare_table>`
+:ref:`NetwPromise<class_NetwPromise>` **close**\ (\ ) :ref:`🔗<class_NetwDatabase_method_close>`
 
-Declares ``table`` from ``schema``, optionally binding ``record_script`` as the :ref:`NetwRecord<class_NetwRecord>` subclass its reads hydrate into.
+Stops admitting work, waits for everything already admitted to settle, releases the slot and advances this database's generation, then settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. :ref:`NetwMultiplayer.database_close()<class_NetwMultiplayer_method_database_close>`.
 
-This is the build-time entry point for declaring a table before any runtime query, which is what keeps a first read from meeting an undeclared table and rejecting it.
-
-\ ``schema`` is a :ref:`NetwSchema<class_NetwSchema>`, the same declaration a replicated table and a property binding compile from, and it is what gives the database the column types it needs to reject a value of the wrong shape instead of assigning it. A bare :godot:`Array` of column names is accepted as the untyped form, and a table declared that way coerces nothing.
-
-::
-
-    db.declare_table(&"rocks", Netw.configure_schema(&"rocks")
-            .replicated(false), RockRecord)
-
-    db.declare_table(&"rocks", [&"health", &"position"])   # untyped
-
-\ Declaring the same table again merges the new columns in. Declaring costs nothing on its own: the backend initializes on the first read or write instead, so every table declared before then is part of one initialization and one warm pass however many engines registered.
+An operation issued before the close settles normally. One that was still outstanding when the connection went away settles as canceled and never as a save.
 
 .. rst-class:: classref-item-separator
 
@@ -318,7 +315,9 @@ This is the build-time entry point for declaring a table before any runtime quer
 
 :ref:`NetwPromise<class_NetwPromise>` **delete_slot**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_delete_slot>`
 
-Permanently removes ``slot`` and every record under it, settling with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Works before :ref:`open_slot()<class_NetwDatabase_method_open_slot>`, because it names a backend namespace rather than the open one.
+Removes ``slot`` and everything stored in it, then settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Deleting the slot this process holds open is refused with :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>`. :ref:`NetwMultiplayer.database_delete_slot()<class_NetwMultiplayer_method_database_delete_slot>`.
+
+This is an administration call. It works before :ref:`open()<class_NetwDatabase_method_open>`, which is how a menu deletes a save the game has not loaded.
 
 .. rst-class:: classref-item-separator
 
@@ -328,70 +327,21 @@ Permanently removes ``slot`` and every record under it, settling with an :godot:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **erase**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_erase>`
+:ref:`NetwPromise<class_NetwPromise>` **erase**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_erase>`
 
-Permanently removes ``id`` from ``table``, settling with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. A database with no :ref:`backend<class_NetwDatabase_property_backend>` rejects with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_method_find:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **find**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_find>`
-
-Reads the stored record for ``id`` in ``table`` and settles with it as a :godot:`Dictionary`, which is the read :ref:`NetwRecordTable.fetch()<class_NetwRecordTable_method_fetch>` hydrates into a :ref:`NetwRecord<class_NetwRecord>`.
-
-The record is storage currency rather than domain currency, so a caller reads columns off it without knowing the table's record script. An absent record settles as an empty :godot:`Dictionary`, because a first play has nothing saved and that is a result rather than a failure.
-
-Two states reject instead, since no read can run in them at all: a table with no declared schema, and a record :ref:`mismatch_policy<class_NetwDatabase_property_mismatch_policy>` rejected outright.
-
-::
-
-    db.find(&"players", username).then(
-        func(record: Dictionary) -> void:
-            engine.apply(record),
-    )
+Removes the record at ``id`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Erasing a record that is not there succeeds. :ref:`NetwMultiplayer.database_erase()<class_NetwMultiplayer_method_database_erase>`.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabase_method_find_all:
+.. _class_NetwDatabase_method_flush:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **find_all**\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwDatabase_method_find_all>`
+:ref:`NetwPromise<class_NetwPromise>` **flush**\ (\ ) :ref:`🔗<class_NetwDatabase_method_flush>`
 
-Reads every stored record in ``table`` matching ``filter`` and settles with them as an :godot:`Array` of :godot:`Dictionary`. An empty ``filter`` returns the whole table.
-
-Rejects with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when the table has no declared schema or the database has no :ref:`backend<class_NetwDatabase_property_backend>`, on the same reading as :ref:`find()<class_NetwDatabase_method_find>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_method_get_column_type:
-
-.. rst-class:: classref-method
-
-:ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **get_column_type**\ (\ table\: :godot:`StringName`, column\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwDatabase_method_get_column_type>`
-
-The declared :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` of one column, or ``-1`` when the table was declared without types. An untyped table coerces nothing, which is what keeps the bare-names form of :ref:`declare_table()<class_NetwDatabase_method_declare_table>` from silently changing a game's saves.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_method_get_registered_columns:
-
-.. rst-class:: classref-method
-
-:godot:`Array`\[:godot:`StringName`\] **get_registered_columns**\ (\ table\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwDatabase_method_get_registered_columns>`
-
-The column names registered for ``table``, or an empty array when nothing has declared it yet.
+Settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once every operation admitted before this call has settled. It gathers no new state, so a value changed after the call is not included. :ref:`NetwMultiplayer.database_flush()<class_NetwMultiplayer_method_database_flush>`.
 
 .. rst-class:: classref-item-separator
 
@@ -403,140 +353,82 @@ The column names registered for ``table``, or an empty array when nothing has de
 
 :ref:`NetwPromise<class_NetwPromise>` **list_slots**\ (\ ) :ref:`🔗<class_NetwDatabase_method_list_slots>`
 
-Settles with every save-slot namespace the backend holds, as an :godot:`Array` of :godot:`StringName`. Works before :ref:`open_slot()<class_NetwDatabase_method_open_slot>`, because it queries backend namespace metadata rather than the open slot.
+Settles with the slots reply drawn in this class's description, naming every slot this backend holds, including slots written by an earlier run. Works before :ref:`open()<class_NetwDatabase_method_open>`. :ref:`NetwMultiplayer.database_list_slots()<class_NetwMultiplayer_method_database_list_slots>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwDatabase_method_open:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **open**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_open>`
+
+Opens ``slot`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Nothing this database admits reaches storage before it settles. :ref:`NetwMultiplayer.database_open()<class_NetwMultiplayer_method_database_open>`.
+
+Opening the slot that is already open succeeds without reopening it. A second open of the same slot while the first is still running shares that first result. Opening a different slot is refused with :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>`, so close the one that is open first. An open that fails leaves the database closed, which is what makes a retry safe.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwDatabase_method_patch:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **patch**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_patch>`
+
+Replaces the fields ``values`` names in the record at ``id``, keeps the rest, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. :ref:`NetwMultiplayer.database_patch()<class_NetwMultiplayer_method_database_patch>`.
+
+A record that is not there is refused with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>`, because a patch has nothing to merge into. An empty ``values`` succeeds without touching storage. A field the schema does not declare refuses the whole patch.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwDatabase_method_read:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **read**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_read>`
+
+Settles with the read reply drawn in this class's description, for the record at ``id``. :ref:`NetwMultiplayer.database_read()<class_NetwMultiplayer_method_database_read>`.
 
 ::
 
-    for slot in await db.list_slots().wait():
-        print(slot)
+    var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
+    if read.error != OK:
+        show_load_error(read.error)
+        return
+    if read.found:
+        player.gold = read.values[&"gold"]
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabase_method_open_slot:
+.. _class_NetwDatabase_method_scan:
 
 .. rst-class:: classref-method
 
-|void| **open_slot**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_open_slot>`
+:ref:`NetwPromise<class_NetwPromise>` **scan**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, filter\: :godot:`Dictionary` = {}, cursor\: :godot:`String` = "", limit\: :godot:`int` = 100\ ) :ref:`🔗<class_NetwDatabase_method_scan>`
 
-Opens ``slot`` as the active save namespace.
-
-Startup-only: it must run before the first read or write initializes the backend, which locks the choice. A call after that point is rejected with an error and the open slot stands, because re-pointing a live database at another save is a data loss with no way back. Declaring a table does not lock it, so a slot can still be chosen after the archetypes have registered.
+Settles with the page reply drawn in this class's description, of up to ``limit`` records matching ``filter``. Pass the page's cursor back as ``cursor`` to continue. :ref:`NetwMultiplayer.database_scan()<class_NetwMultiplayer_method_database_scan>`.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwDatabase_method_table:
+.. _class_NetwDatabase_method_write:
 
 .. rst-class:: classref-method
 
-:ref:`NetwRecordTable<class_NetwRecordTable>` **table**\ (\ table\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_table>`
+:ref:`NetwPromise<class_NetwPromise>` **write**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_write>`
 
-A :ref:`NetwRecordTable<class_NetwRecordTable>` onto ``table``. The handle is created per call and holds no cache, so asking twice costs one small object and returns the same table. The table does not need to be registered first: registration happens through :ref:`declare_table()<class_NetwDatabase_method_declare_table>` or through the archetype a :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` declares.
+Replaces the whole record at ``id`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. :ref:`NetwMultiplayer.database_write()<class_NetwMultiplayer_method_database_write>`.
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_method_table_flush:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **table_flush**\ (\ session\: :godot:`MultiplayerAPI`, table\: :godot:`RID`, into\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) :ref:`🔗<class_NetwDatabase_method_table_flush>`
-
-Saves ``table``'s committed rows into ``into`` as one record.
-
-The unit of commit and of hydrate is the whole table, because routes must be re-created as a set, so a table saves as one record rather than one record per row. Two thousand rows are one file on the file-system backend, not two thousand.
-
-.. code:: text
-
-    db.<into>
-     ┖╴<schema name>          the one record
-          ┠╴ids               PackedStringArray, parallel to the row order
-          ┖╴<column key>      the committed storage array, verbatim
-
-\ ``ids`` names the row whose route is ``session.table_read_routes(table)[i]``. Stable identity is the caller's domain, since they created the rows, and it is what lets a fresh session rebuild its own indexes from :ref:`table_hydrate()<class_NetwDatabase_method_table_hydrate>`. Save keys never ride the wire and routes never touch the disk.
-
-Values are the committed storage arrays, which quantization never touches, so a quantized column saves at full precision. A :ref:`NetwMultiplayer.COLUMN_ENTITY<class_NetwMultiplayer_constant_COLUMN_ENTITY>` column is skipped with one warning, because a route is meaningless in the session that loads it.
-
-The result is a :ref:`NetwPromise<class_NetwPromise>` because the write is a database write, and it settles with the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` the write reached.
-
-.. code:: text
-
-    Error
-    ┠╴OK                  written
-    ┠╴ERR_UNCONFIGURED    no table name, or session is not the server
-    ┠╴ERR_DOES_NOT_EXIST  the handle names no table
-    ┖╴ERR_INVALID_DATA    ids.size() disagrees with the committed row count
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_method_table_hydrate:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **table_hydrate**\ (\ session\: :godot:`MultiplayerAPI`, table\: :godot:`RID`, into\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_table_hydrate>`
-
-Loads ``table``'s saved record from ``into``, creates fresh routes for its rows, and commits them into ``session``.
-
-Routes are session-scoped, so a hydrate claims new ones rather than restoring the ones that were saved. The returned pairing is how a caller rebuilds its own indexes against the save keys it wrote.
-
-.. code:: text
-
-    Dictionary
-    ┠╴routes  PackedInt64Array    freshly claimed, the committed row order
-    ┖╴ids     PackedStringArray   parallel, the keys the flush wrote
-
-\ Both arrays are empty when no record exists, which is the first-play case rather than an error. A :ref:`NetwMultiplayer.COLUMN_ENTITY<class_NetwMultiplayer_constant_COLUMN_ENTITY>` column zero-fills, matching the skip at :ref:`table_flush()<class_NetwDatabase_method_table_flush>`.
-
-The result is a :ref:`NetwPromise<class_NetwPromise>` settling with that :godot:`Dictionary`, because the read is a database read and the rows are committed on the edge it settles.
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_method_transaction:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **transaction**\ (\ body\: :godot:`Callable`\ ) :ref:`🔗<class_NetwDatabase_method_transaction>`
-
-Collects writes inside ``body`` and commits them as one batch.
-
-\ ``body`` receives a :ref:`NetwTransaction<class_NetwTransaction>` and calls :ref:`NetwTransaction.queue_upsert()<class_NetwTransaction_method_queue_upsert>` for each record to write. The commit runs once ``body`` returns, which is what makes it happen exactly once however the body exits.
-
-The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Read the code from :ref:`NetwPromise.result<class_NetwPromise_property_result>`. :ref:`transaction_committed<class_NetwDatabase_signal_transaction_committed>` is emitted only after a commit returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
-
-::
-
-    var err: Error = await db.transaction(
-        func(tx: NetwTransaction) -> void:
-            tx.queue_upsert(&"rocks", &"rock_1", {&"health": 50})
-    ).wait()
-
-\ A caller that must not suspend, such as a pump that would let its next round start inside this one, chains :ref:`NetwPromise.then()<class_NetwPromise_method_then>` on the same result instead of awaiting it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDatabase_method_warm:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **warm**\ (\ table\: :godot:`StringName`, request\: :ref:`WarmRequest<class_WarmRequest>`\ ) :ref:`🔗<class_NetwDatabase_method_warm>`
-
-Warms ``table`` into the backend cache per ``request`` at runtime, settling with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
-
-This is the escape hatch for driving warming from a game's own hooks, a scene load or a menu, rather than from :ref:`warm_policy<class_NetwDatabase_property_warm_policy>` at initialization. A synchronous backend has no cache to fill and returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` without doing anything.
+\ ``values`` must carry every column ``schema`` declares, at the declared type and stride, and nothing else. A row that does not is refused before the backend sees it, so a bad write never reaches storage.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

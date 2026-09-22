@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwColumnRef" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One column of one schema, as a value a configuration call can hold.
+	</brief_description>
+	<description>
+		A column index is a bare [int], so index 0 of one schema and index 0 of another are the same value. A reference carries the schema too, which is what lets a binding refuse a column the entity never declared.
+		[method NetwSchema.column_ref] mints one, and the reference holds its schema alive. The schema holds no reference back, so a [code]static var[/code] can keep both.
+		[codeblock]
+		class_name PlayerSave
+		extends RefCounted
+
+		static var schema := NetwSchema.create(&amp;"players").replicated(false)
+		static var gold := schema.column_ref(schema.i64(&amp;"gold"))
+		static var position := schema.column_ref(schema.vector2(&amp;"position"))
+		[/codeblock]
+		Per-tick code keeps using the [int] the declaration returned. A reference is for configuration, which runs once.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="is_valid" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether [member schema] still declares a column at [member index]. A reference minted by [method NetwSchema.column_ref] is valid when it is made.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="index" type="int" setter="" getter="get_index">
+			The column's address in [member schema], the same [int] its declaring method returned.
+		</member>
+		<member name="key" type="StringName" setter="" getter="get_key">
+			The column's declared name, or empty when [method is_valid] is [code]false[/code].
+		</member>
+		<member name="schema" type="NetwSchema" setter="" getter="get_schema">
+			The schema this column belongs to.
+		</member>
+	</members>
+</class>

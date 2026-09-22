@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwDatabaseConnection" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One open slot's storage, and the only object that performs storage I/O.
+	</brief_description>
+	<description>
+		A backend describes where saves live. A connection is one open slot of that storage, and it is what a game subclasses to reach storage the shipped backends do not cover. Opening the same backend twice makes two connections, so nothing a connection holds is shared with the next one.
+		The connection performs four acts. [method _read] reads one address, [method _scan] reads a page of them, [method _write_batch] applies complete replacements and erasures, and [method _close] releases the slot. Every other verb [NetwDatabase] publishes is built from those, including [method NetwDatabase.patch], which is an ordered read, merge and replace.
+		Every method answers a [NetwPromise]. A method this connection does not implement rejects with [constant @GlobalScope.ERR_UNAVAILABLE], and never a successful empty answer.
+		[b]Address[/b]
+		Every read, scan and operation names what it is about with the same three fields.
+		[codeblock lang=text]
+		Dictionary
+		┠╴kind          int     0 for a record, 1 for a table snapshot
+		┠╴schema_name   String  the schema the record belongs to
+		┖╴key           String  the record's durable id
+		[/codeblock]
+		An envelope is a stored record as [NetwDatabase] sealed it. Store it as given and answer it back unchanged.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_close" qualifiers="virtual">
+			<return type="NetwPromise" />
+			<description>
+				Releases this slot. It is called once the database has settled every operation it admitted, so nothing is outstanding when it runs. Closing an already closed connection succeeds.
+				[method NetwDatabase.close] settles without waiting for this promise, and nothing reads what it resolves.
+			</description>
+		</method>
+		<method name="_read" qualifiers="virtual">
+			<return type="NetwPromise" />
+			<param index="0" name="address" type="Dictionary" />
+			<description>
+				Reads the record at [param address] and resolves a reply. Report a record that is not stored as [code]found[/code] false at [constant @GlobalScope.OK]. An error means storage could not be asked, and it is never read as absence.
+				[codeblock lang=text]
+				Dictionary
+				┠╴error      Error       OK, or why storage could not be asked
+				┠╴detail     String      a human-readable explanation, empty when error is OK
+				┠╴found      bool        whether a record is stored at address
+				┖╴envelope   Dictionary  the envelope last written to address, only when found
+				[/codeblock]
+				[method NetwDatabase.read] answers [code]error[/code] and [code]detail[/code] as its own. A reject reaches it as the reject's code and detail.
+			</description>
+		</method>
+		<method name="_scan" qualifiers="virtual">
+			<return type="NetwPromise" />
+			<param index="0" name="request" type="Dictionary" />
+			<description>
+				Reads one page of records matching [param request] and resolves a reply. Bound the remote work each call performs, and answer a cursor whenever records remain.
+				[codeblock lang=text]
+				Dictionary
+				┠╴schema_name   String      the schema every record in the page belongs to
+				┠╴kind          int         the address kind, 0 for a record
+				┠╴filter        Dictionary  the filter the game passed to NetwDatabase.scan
+				┠╴cursor        String      the previous page's cursor, empty on the first page
+				┖╴limit         int         the most records one page may carry
+				[/codeblock]
+				The reply carries the page and where the next one starts. A page shorter than [code]limit[/code] with a nonempty [code]cursor[/code] is not the end of the scan.
+				[codeblock lang=text]
+				Dictionary
+				┠╴error     Error              OK, or why the page could not be read
+				┠╴detail    String             a human-readable explanation, empty when error is OK
+				┠╴records   Array[Dictionary]
+				│ ┖╴record
+				│   ┠╴key        String       the record's durable id
+				│   ┖╴envelope   Dictionary   the envelope last written to it
+				┖╴cursor    String             where the next page starts, empty when the scan is done
+				[/codeblock]
+				[method NetwDatabase.scan] answers [code]error[/code] and [code]detail[/code] as its own. A reject, or one record whose envelope does not open against the schema, fails the whole page.
+			</description>
+		</method>
+		<method name="_write_batch" qualifiers="virtual">
+			<return type="NetwPromise" />
+			<param index="0" name="operations" type="Array" />
+			<description>
+				Applies [param operations] in order and resolves one outcome per operation, in that same order. Each is a complete replacement or erasure, because [NetwDatabase] has already merged anything a patch needed.
+				[codeblock lang=text]
+				Array[Dictionary]
+				┖╴operation
+				  ┠╴kind       String      "replace" or "erase"
+				  ┠╴address    Dictionary  the address drawn in this class's description
+				  ┖╴envelope   Dictionary  the record to store, replace only
+				[/codeblock]
+				Report [constant @GlobalScope.OK] only for an operation the backing store acknowledged, never for one that is only queued. When a timeout or a lost link leaves an outcome unknown, mark it uncertain.
+				[codeblock lang=text]
+				Dictionary
+				┠╴error       Error              OK, or a failure of the whole batch
+				┠╴detail      String             a human-readable explanation, empty when error is OK
+				┠╴errors      PackedInt32Array   one Error per operation
+				┖╴uncertain   PackedByteArray    1 where the outcome is unknown, 0 otherwise
+				[/codeblock]
+				An [code]errors[/code] of the wrong length fails every operation with [constant @GlobalScope.ERR_INVALID_DATA], and a reject fails every operation with the reject's code. An entity row whose outcome is uncertain stays [member NetwPersistenceHandle.dirty].
+			</description>
+		</method>
+		<method name="close_default">
+			<return type="NetwPromise" />
+			<description>
+				The stock [method _close], which succeeds without doing anything. A subclass overriding [method _close] calls this to reach it.
+			</description>
+		</method>
+		<method name="read_default">
+			<return type="NetwPromise" />
+			<param index="0" name="address" type="Dictionary" />
+			<description>
+				The stock [method _read], which rejects with [constant @GlobalScope.ERR_UNAVAILABLE]. A subclass overriding [method _read] calls this to reach it.
+			</description>
+		</method>
+		<method name="scan_default">
+			<return type="NetwPromise" />
+			<param index="0" name="request" type="Dictionary" />
+			<description>
+				The stock [method _scan], which rejects with [constant @GlobalScope.ERR_UNAVAILABLE]. A subclass overriding [method _scan] calls this to reach it.
+			</description>
+		</method>
+		<method name="write_batch_default">
+			<return type="NetwPromise" />
+			<param index="0" name="operations" type="Array" />
+			<description>
+				The stock [method _write_batch], which rejects with [constant @GlobalScope.ERR_UNAVAILABLE]. A subclass overriding [method _write_batch] calls this to reach it.
+			</description>
+		</method>
+	</methods>
+</class>

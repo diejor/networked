@@ -7,10 +7,23 @@ const PLAYER := preload("res://examples/multiple_levels/Player.tscn")
 const START_POSE := Vector2(359, 70)
 const START_STRIDE := Vector2(48, 0)
 
+const SAVES := &"saves"
+const WHERE := 0
+const LEVEL := 1
+
 var makers: Dictionary = {}
 var levels: Dictionary = {}
+var save_schema: NetwSchema
 
 @onready var session: NetwSessionHandle = Netw.session(self)
+
+
+func declare_save_schema() -> NetwSchema:
+	var declared := Netw.configure_schema(&"multiple_levels_players")
+	declared.replicated(false)
+	declared.vector2(&"where")
+	declared.string(&"level")
+	return declared
 
 
 func _init() -> void:
@@ -26,12 +39,24 @@ func _init() -> void:
 
 func _ready() -> void:
 	NetwService.register(self)
+	save_schema = declare_save_schema()
+	Netw.configure_database(self, SAVES).backend(MemoryDatabase.new())
+	Netw.database(self, SAVES).open(&"campaign")
 	session.scene_live.connect(remember_level)
 	session.scene_changed.connect(place_arrivals)
+	get_tree().auto_accept_quit = false
 
 
 func _exit_tree() -> void:
 	NetwService.unregister(self)
+	save_schema = null
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_WM_CLOSE_REQUEST:
+		return
+	await session.save_entities().wait()
+	get_tree().quit()
 
 
 func spawn_level1() -> Node:
@@ -92,6 +117,9 @@ func spawn_player(player: NetwPlayer) -> void:
 	var body := Netw.spawn_player(player, spawn_avatar)
 	var roster: Array[NetwPlayer] = session.players
 	(body as Node2D).position = START_POSE + START_STRIDE * roster.size()
-	await NetwEntity.of(body).persistence.hydrate().wait()
 	var tp: TPComponent = body.get_node("%TPComponent")
-	open_level(tp.current_scene_path).root.add_child(body)
+	tp.current_scene_path = LEVEL_1.resource_path
+	open_level(LEVEL_1.resource_path).root.add_child(body)
+	await NetwEntity.of(body).persistence.load().wait()
+	if tp.current_scene_path != LEVEL_1.resource_path:
+		Netw.reparent(body, open_level(tp.current_scene_path).root)

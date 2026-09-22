@@ -40,10 +40,6 @@ void declare_despawn_config(
     const godot::Ref<godot::Script> &p_script,
     const godot::Ref<NetwDespawnConfig> &p_config
 );
-void declare_persistence_config(
-    const godot::Ref<godot::Script> &p_script,
-    const godot::Ref<NetwPersistenceConfig> &p_config
-);
 void declare_scene(
     const godot::Ref<godot::Script> &p_script,
     const SceneDecl &p_decl
@@ -82,10 +78,6 @@ godot::Ref<NetwDespawnConfig> get_despawn_config(
 godot::Ref<NetwDespawnConfig> get_own_despawn_config(
     const godot::Ref<godot::Script> &p_script
 );
-godot::Ref<NetwPersistenceConfig> get_own_persistence_config(
-    const godot::Ref<godot::Script> &p_script
-);
-
 godot::Ref<NetwPersistenceConfig> get_persistence_config(godot::Node *p_node);
 godot::Ref<NetwPersistenceConfig> configure_node_persistence(
     godot::Node *p_node

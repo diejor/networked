@@ -12,33 +12,24 @@ NakamaDatabase
 
 **Inherits:** :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **<** :godot:`Resource`
 
-:ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that persists records to Nakama storage, host-only.
+A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in Nakama storage.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Nakama storage has no partial-field update and every write is a network round trip, so this backend never blocks a gameplay write. :ref:`_upsert()<class_NakamaDatabase_private_method__upsert>`, :godot:`Resource._commit() <Resource#class_Resource_private_method__commit>`, and :ref:`_delete()<class_NakamaDatabase_private_method__delete>` mutate an in-memory mirror of the open slot and return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` at once, while a debounced loop flushes the dirty records every :ref:`flush_interval<class_NakamaDatabase_property_flush_interval>` seconds. A read serves the mirror first and falls back to a remote fetch only on a miss.
+Every record is one Nakama storage object owned by the authenticated user, so a save follows the account rather than the device. A slot is one storage collection, and :ref:`app<class_NakamaDatabase_property_app>` names the manifest collection that lists them.
 
 ::
 
-    upsert/commit/delete ─╴ mutate mirror, mark dirty ─╴ return OK (no await)
-                                     │
-                       flush_interval│ debounced
-                                     ▼
-            await write/delete storage objects through NakamaWrapper
+    var backend := NakamaDatabase.new()
+    backend.wrapper = wrapper
+    Netw.configure_database(self, &"saves").backend(backend)
 
-\ The backend needs an authenticated :ref:`NakamaSessionService<class_NakamaSessionService>`, which it resolves lazily through :ref:`NakamaSessionService.of()<class_NakamaSessionService_method_of>` and :ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>` sets up during connection. Records cross Nakama's JSON-only storage as a :godot:`JSON` envelope wrapping a :godot:`Marshalls` base64 of the record, so a :godot:`Vector2` or a :godot:`Color` survives the round trip. Queries filter the mirror locally instead of pushing the predicate to the server, the same as :ref:`FileSystemDatabase<class_FileSystemDatabase>`.  
 
-The :ref:`NetwDatabase.open_slot()<class_NetwDatabase_method_open_slot>` namespace becomes part of the Nakama collection name.
 
-::
-
-    Collection
-    └── app_id.slot.table
-        └── id
-            └── { "v": "<base64 Variant>" }
+\ Nakama cannot enumerate its own collections, so :godot:`Resource._list_slots() <Resource#class_Resource_private_method__list_slots>` reads a manifest this backend maintains. :godot:`Resource._open() <Resource#class_Resource_private_method__open>` writes a slot's manifest entry before any record under it, so a slot that holds data is always listed.
 
 .. rst-class:: classref-reftable-group
 
@@ -48,11 +39,11 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------+---------------------------------------------------------------------+-----------------+
-   | :godot:`String` | :ref:`app_id<class_NakamaDatabase_property_app_id>`                 | ``"networked"`` |
-   +-----------------+---------------------------------------------------------------------+-----------------+
-   | :godot:`float`  | :ref:`flush_interval<class_NakamaDatabase_property_flush_interval>` | ``5.0``         |
-   +-----------------+---------------------------------------------------------------------+-----------------+
+   +------------------+-------------------------------------------------------+------------------+
+   | :godot:`String`  | :ref:`app<class_NakamaDatabase_property_app>`         | ``"netw_saves"`` |
+   +------------------+-------------------------------------------------------+------------------+
+   | :godot:`Variant` | :ref:`wrapper<class_NakamaDatabase_property_wrapper>` |                  |
+   +------------------+-------------------------------------------------------+------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -62,27 +53,36 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_initialize<class_NakamaDatabase_private_method__initialize>`\ (\ schema\: :godot:`Dictionary`, slot\: :godot:`String` = ""\ )                 |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_upsert<class_NakamaDatabase_private_method__upsert>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, data\: :godot:`Dictionary`\ ) |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_find_by_id<class_NakamaDatabase_private_method__find_by_id>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ )                     |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_find_all<class_NakamaDatabase_private_method__find_all>`\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ )                |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete<class_NakamaDatabase_private_method__delete>`\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ )                             |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_warm<class_NakamaDatabase_private_method__warm>`\ (\ directives\: :godot:`Array`\ )                                                           |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_list_namespaces<class_NakamaDatabase_private_method__list_namespaces>`\ (\ )                                                                  |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete_namespace<class_NakamaDatabase_private_method__delete_namespace>`\ (\ slot\: :godot:`String`\ )                                        |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`drain<class_NakamaDatabase_method_drain>`\ (\ timeout_s\: :godot:`float` = 5.0\ )                                                              |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                | :ref:`stop<class_NakamaDatabase_method_stop>`\ (\ )                                                                                                  |
-   +---------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`encoded<class_NakamaDatabase_method_encoded>`\ (\ text\: :godot:`String`\ ) |static|                                           |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`address_key<class_NakamaDatabase_method_address_key>`\ (\ address\: :godot:`Dictionary`\ ) |static|                            |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`address_prefix<class_NakamaDatabase_method_address_prefix>`\ (\ kind\: :godot:`int`, schema_name\: :godot:`String`\ ) |static| |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`packed<class_NakamaDatabase_method_packed>`\ (\ envelope\: :godot:`Dictionary`\ ) |static|                                     |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`unpacked<class_NakamaDatabase_method_unpacked>`\ (\ value\: :godot:`Variant`\ ) |static|                                       |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`collection_for<class_NakamaDatabase_method_collection_for>`\ (\ slot\: :godot:`String`\ )                                      |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Constants
+---------
+
+.. _class_NakamaDatabase_constant_FORMAT_VERSION:
+
+.. rst-class:: classref-constant
+
+**FORMAT_VERSION** = ``1`` :ref:`🔗<class_NakamaDatabase_constant_FORMAT_VERSION>`
+
+Version stamped into every stored value, refused on read when it disagrees.
 
 .. rst-class:: classref-section-separator
 
@@ -93,25 +93,25 @@ Methods
 Property Descriptions
 ---------------------
 
-.. _class_NakamaDatabase_property_app_id:
+.. _class_NakamaDatabase_property_app:
 
 .. rst-class:: classref-property
 
-:godot:`String` **app_id** = ``"networked"`` :ref:`🔗<class_NakamaDatabase_property_app_id>`
+:godot:`String` **app** = ``"netw_saves"`` :ref:`🔗<class_NakamaDatabase_property_app>`
 
-Application scope folded into every collection name ahead of the save slot.
+The manifest collection, and the prefix every slot's collection carries.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NakamaDatabase_property_flush_interval:
+.. _class_NakamaDatabase_property_wrapper:
 
 .. rst-class:: classref-property
 
-:godot:`float` **flush_interval** = ``5.0`` :ref:`🔗<class_NakamaDatabase_property_flush_interval>`
+:godot:`Variant` **wrapper** :ref:`🔗<class_NakamaDatabase_property_wrapper>`
 
-Seconds between debounced flushes of dirty records to Nakama. A shutdown forces an immediate flush through :ref:`drain()<class_NakamaDatabase_method_drain>` regardless of this cadence.
+The :ref:`NakamaWrapper<class_NakamaWrapper>` this backend performs its storage through.  A backend with no wrapper rejects every verb with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` rather than answering an empty save.
 
 .. rst-class:: classref-section-separator
 
@@ -122,121 +122,73 @@ Seconds between debounced flushes of dirty records to Nakama. A shutdown forces 
 Method Descriptions
 -------------------
 
-.. _class_NakamaDatabase_private_method__initialize:
+.. _class_NakamaDatabase_method_encoded:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_initialize**\ (\ schema\: :godot:`Dictionary`, slot\: :godot:`String` = ""\ ) :ref:`🔗<class_NakamaDatabase_private_method__initialize>`
+:godot:`String` **encoded**\ (\ text\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_encoded>`
 
-Overrides :ref:`NetwDatabaseBackend._initialize()<class_NetwDatabaseBackend_private_method__initialize>` to declare the schema, open the specified save ``slot``, register it in the slot index, and start the debounced flush loop.
+Encodes ``text`` so it survives as one Nakama collection or key segment.  The encoding is injective, so two different names never meet in one key.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NakamaDatabase_private_method__upsert:
+.. _class_NakamaDatabase_method_address_key:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_upsert**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`, data\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaDatabase_private_method__upsert>`
+:godot:`String` **address_key**\ (\ address\: :godot:`Dictionary`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_address_key>`
 
-Overrides :ref:`NetwDatabaseBackend._upsert()<class_NetwDatabaseBackend_private_method__upsert>` to write or update a record in the local cache and mark it dirty for the next debounced flush.
+Returns the storage key naming ``address``.  ``kind`` leads, so a record and a table snapshot spelled with the same key are two objects.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NakamaDatabase_private_method__find_by_id:
+.. _class_NakamaDatabase_method_address_prefix:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_find_by_id**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NakamaDatabase_private_method__find_by_id>`
+:godot:`String` **address_prefix**\ (\ kind\: :godot:`int`, schema_name\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_address_prefix>`
 
-Overrides :ref:`NetwDatabaseBackend._find_by_id()<class_NetwDatabaseBackend_private_method__find_by_id>` to read a record from the local cache, falling back to a remote read from Nakama storage if it is not cached.
+Returns the key prefix every record of ``schema_name`` at ``kind`` carries.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NakamaDatabase_private_method__find_all:
+.. _class_NakamaDatabase_method_packed:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_find_all**\ (\ table\: :godot:`StringName`, filter\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NakamaDatabase_private_method__find_all>`
+:godot:`String` **packed**\ (\ envelope\: :godot:`Dictionary`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_packed>`
 
-Overrides :ref:`NetwDatabaseBackend._find_all()<class_NetwDatabaseBackend_private_method__find_all>` to return all cached records matching ``filter``.
+Encodes ``envelope`` into the JSON string Nakama stores.  The payload is a :godot:`Variant` the game declared, which JSON cannot carry, so the envelope travels as base64 of its binary form.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NakamaDatabase_private_method__delete:
+.. _class_NakamaDatabase_method_unpacked:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_delete**\ (\ table\: :godot:`StringName`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NakamaDatabase_private_method__delete>`
+:godot:`Dictionary` **unpacked**\ (\ value\: :godot:`Variant`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_unpacked>`
 
-Overrides :ref:`NetwDatabaseBackend._delete()<class_NetwDatabaseBackend_private_method__delete>` to remove a record from the local cache and queue its deletion on Nakama during the next flush.
+Decodes a stored ``value`` back into an envelope.  A value this library did not write answers an empty :godot:`Dictionary`, which the reading session refuses as :godot:`@GlobalScope.ERR_FILE_UNRECOGNIZED <@GlobalScope#class_@GlobalScope_constant_ERR_FILE_UNRECOGNIZED>` rather than reading as an empty save.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NakamaDatabase_private_method__warm:
+.. _class_NakamaDatabase_method_collection_for:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **_warm**\ (\ directives\: :godot:`Array`\ ) :ref:`🔗<class_NakamaDatabase_private_method__warm>`
+:godot:`String` **collection_for**\ (\ slot\: :godot:`String`\ ) :ref:`🔗<class_NakamaDatabase_method_collection_for>`
 
-Overrides :ref:`NetwDatabaseBackend._warm()<class_NetwDatabaseBackend_private_method__warm>` to pre-load database records into the local cache according to the provided ``directives``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaDatabase_private_method__list_namespaces:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_list_namespaces**\ (\ ) :ref:`🔗<class_NakamaDatabase_private_method__list_namespaces>`
-
-Lists registered save-slot names from the Nakama slot index.  See :ref:`NetwDatabase.open_slot()<class_NetwDatabase_method_open_slot>` for the slot namespace model.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaDatabase_private_method__delete_namespace:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_delete_namespace**\ (\ slot\: :godot:`String`\ ) :ref:`🔗<class_NakamaDatabase_private_method__delete_namespace>`
-
-Deletes every known-table storage object under ``slot``.  Also removes the slot from the Nakama slot index. See :ref:`NetwDatabase.open_slot()<class_NetwDatabase_method_open_slot>` for the slot namespace model.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaDatabase_method_drain:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **drain**\ (\ timeout_s\: :godot:`float` = 5.0\ ) :ref:`🔗<class_NakamaDatabase_method_drain>`
-
-Flushes the queue and waits for acknowledgment, bounded by ``timeout_s``.  A write returns before it reaches Nakama, so a quit or a player leave would otherwise drop the last :ref:`flush_interval<class_NakamaDatabase_property_flush_interval>` window. The :ref:`NetwMultiplayer.persist_shutdown()<class_NetwMultiplayer_method_persist_shutdown>` calls this so that final batch lands. Answers a :ref:`NetwPromise<class_NetwPromise>` resolving :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when the queue drained or :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` when it did not within the bound. It is a promise for the same reason every other verb on this backend is one: the wait belongs above the boundary, never through it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaDatabase_method_stop:
-
-.. rst-class:: classref-method
-
-|void| **stop**\ (\ ) :ref:`🔗<class_NakamaDatabase_method_stop>`
-
-Stops the debounced flush loop. Call after a final :ref:`drain()<class_NakamaDatabase_method_drain>` when retiring the backend so the timer loop does not outlive it.
+Returns the storage collection holding ``slot``'s records.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

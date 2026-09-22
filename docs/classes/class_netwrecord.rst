@@ -21,7 +21,7 @@ The named-value row a persisted or sampled value travels as, and the base a scri
 Description
 -----------
 
-**NetwRecord** is the shared value object behind :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` persistence, :ref:`NetwDatabase<class_NetwDatabase>` rows, and detached state samples. It stores named values without owning the scene object those values came from.
+**NetwRecord** is the shared value object behind saved entity rows, :ref:`NetwDatabase<class_NetwDatabase>` rows, and detached state samples. It stores named values without owning the scene object those values came from.
 
 ::
 

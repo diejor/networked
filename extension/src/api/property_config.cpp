@@ -177,9 +177,18 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::masked() {
     return Ref<NetwPropertyConfig>(this);
 }
 
-Ref<NetwPropertyConfig> NetwPropertyConfig::persisted(double p_interval) {
-    is_persisted = true;
-    persist_interval = p_interval;
+Ref<NetwPropertyConfig> NetwPropertyConfig::persisted(
+    const Ref<NetwColumnRef> &p_column
+) {
+    NETW_ERR_COND_V(
+        p_column.is_null() || !p_column->is_valid(),
+        Ref<NetwPropertyConfig>(this),
+        sys::TABLE,
+        "NetwPropertyConfig.persisted: '%s' needs the column of a schema, "
+        "which Netw.configure_schema(name).column_ref(index) answers",
+        String(get_context_name()).utf8().get_data()
+    );
+    persist_column = p_column;
     return Ref<NetwPropertyConfig>(this);
 }
 
@@ -249,9 +258,8 @@ void NetwPropertyConfig::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("masked"), &NetwPropertyConfig::masked);
     ClassDB::bind_method(
-        D_METHOD("persisted", "interval"),
-        &NetwPropertyConfig::persisted,
-        DEFVAL(0.0)
+        D_METHOD("persisted", "column"),
+        &NetwPropertyConfig::persisted
     );
     ClassDB::bind_method(D_METHOD("on_spawn"), &NetwPropertyConfig::on_spawn);
 
@@ -332,8 +340,6 @@ void NetwPropertyConfig::_bind_methods() {
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::INT, set_heartbeat_ticks);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::INT, set_window);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::BOOL, set_masked);
-    NETW_PROPERTY_CONFIG_PROPERTY(Variant::BOOL, is_persisted);
-    NETW_PROPERTY_CONFIG_PROPERTY(Variant::FLOAT, persist_interval);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::FLOAT, converge_stiffness);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::STRING_NAME, carry_channel);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::BOOL, explicit_teleport_only);

@@ -26,7 +26,6 @@
 #include "netw/api/join_request.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/persistence_engine.hpp"
 #include "netw/api/physics_stepper.hpp"
 #include "netw/api/predict_runner.hpp"
 #include "netw/api/predict_slot_engine.hpp"
@@ -63,8 +62,9 @@
 #include "netw/join_roster.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/liveness_core.hpp"
-#include "netw/persist/drain.hpp"
-#include "netw/persist/loop.hpp"
+#include "netw/api/database_config.hpp"
+#include "netw/persist/binding.hpp"
+#include "netw/persist/database.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/relay_book.hpp"
 #include "netw/predict/tap.hpp"
@@ -92,7 +92,9 @@
 
 namespace netw {
 
+class NetwDatabase;
 class NetwSceneHandle;
+class NetwSchema;
 class ParticipantView;
 class ReplicationCore;
 class NetwJoinConfig;
@@ -425,6 +427,15 @@ public:
         COLUMN_QUATERNION = SchemaCore::QUATERNION,
         COLUMN_ENTITY = SchemaCore::ENTITY,
         COLUMN_VARIANT = SchemaCore::VARIANT,
+        COLUMN_STRING = SchemaCore::STRING,
+    };
+
+    enum DatabaseState {
+        DATABASE_CLOSED = 0,
+        DATABASE_OPENING = 1,
+        DATABASE_OPEN = 2,
+        DATABASE_CLOSING = 3,
+        DATABASE_FAULTED = 4,
     };
 
     static constexpr int64_t CHANNEL_USER_FIRST = 100;
@@ -496,7 +507,6 @@ private:
 
     godot::PackedInt32Array peer_ids;
     godot::Ref<NetwLivenessCore> liveness_core;
-    persist::Drain *persistence_drain = nullptr;
     JoinRoster join_roster;
     ProbeGuard probe_guard;
     session_decl::Book declaration_slots;
@@ -625,7 +635,106 @@ private:
         int64_t p_route,
         int64_t p_txn
     );
-    persist::Plane persistence;
+    persist::Databases databases;
+    godot::HashMap<godot::StringName, godot::Ref<NetwDatabaseConfig>>
+        database_configs;
+    godot::HashMap<godot::RID, godot::Ref<godot::RefCounted>>
+        database_handles;
+    bool databases_bound = false;
+
+    void database_settled(const godot::RID &p_database, int64_t p_sequence);
+    void database_connected(
+        const godot::RID &p_database,
+        int64_t p_generation
+    );
+
+    persist::Bindings bindings;
+    bool bindings_bound = false;
+    godot::ObjectID persist_enrolling;
+
+    godot::Ref<NetwPromise> persist_begin_load(const godot::RID &p_binding);
+    void persist_load_failed(
+        const godot::RID &p_binding,
+        const godot::Ref<NetwPromise> &p_answer,
+        godot::Error p_error,
+        const godot::String &p_detail
+    );
+    void persist_publish(const godot::RID &p_binding);
+    godot::RID persist_entity_of_binding(const godot::RID &p_binding) const;
+    void persist_notify_failed(
+        const godot::RID &p_database,
+        godot::Error p_error,
+        const godot::String &p_detail
+    );
+    void persist_write(const godot::LocalVector<godot::RID> &p_bindings);
+    godot::HashMap<godot::RID, godot::PackedInt64Array> table_snapshot_routes;
+    void persist_table_saved(
+        const godot::Ref<NetwPromise> &p_asked,
+        const godot::Ref<NetwPromise> &p_answer
+    );
+    void persist_table_read(
+        const godot::RID &p_table,
+        int64_t p_revision,
+        const godot::Ref<NetwPromise> &p_asked,
+        const godot::Ref<NetwPromise> &p_answer,
+        int64_t p_tenure,
+        const godot::RID &p_database,
+        int64_t p_generation
+    );
+    void persist_table_retire(
+        const godot::RID &p_table,
+        const godot::PackedInt64Array &p_routes
+    );
+    bool persist_current(
+        int64_t p_tenure,
+        const godot::RID &p_database,
+        int64_t p_generation
+    ) const;
+    godot::Ref<NetwPromise> persist_submit(
+        const godot::RID &p_database,
+        const godot::Array &p_rows
+    );
+    void persist_write_rows(
+        const godot::RID &p_database,
+        const godot::Array &p_rows,
+        const godot::Ref<NetwPromise> &p_answer,
+        const godot::Dictionary &p_tally
+    );
+    void persist_batch_settled(
+        const godot::Array &p_rows,
+        const godot::Ref<NetwPromise> &p_asked,
+        const godot::Ref<NetwPromise> &p_answer,
+        godot::Dictionary p_tally,
+        int64_t p_tenure,
+        const godot::RID &p_database,
+        int64_t p_generation
+    );
+    void persist_read_settled(
+        const godot::RID &p_binding,
+        const godot::Ref<NetwPromise> &p_asked,
+        const godot::Ref<NetwPromise> &p_answer,
+        int64_t p_tenure,
+        int64_t p_generation
+    );
+    void persist_finish(const godot::RID &p_binding);
+    void persist_flush_waited(
+        const godot::Ref<NetwPromise> &p_answer,
+        godot::Dictionary p_tally
+    );
+    void persist_flush_judge(const godot::Ref<NetwPromise> &p_answer);
+    void persist_dispose();
+    godot::Ref<NetwPromise> session_leaving;
+    godot::Ref<NetwPromise> session_close_peer();
+    void session_leave_drained(
+        const godot::Ref<NetwPromise> &p_drained,
+        const godot::Ref<NetwPromise> &p_left
+    );
+    void session_leave_closed(
+        const godot::Ref<NetwPromise> &p_closed,
+        const godot::Ref<NetwPromise> &p_left
+    );
+    void persist_notify_loaded(const godot::RID &p_binding, bool p_found);
+    void persist_notify_saved(const godot::RID &p_binding);
 
     int64_t sent_packets = 0;
     int64_t sent_bytes = 0;
@@ -734,8 +843,6 @@ private:
         bool terminal = false;
         bool hidden = false;
         bool received = false;
-        godot::Ref<NetwPersistenceEngine> saved;
-        PersistedWrite saved_write;
         godot::LocalVector<DepartedResidency> residencies;
     };
     godot::HashMap<uint64_t, EntityDeparture> entity_departures;
@@ -2014,12 +2121,7 @@ public:
 
     godot::Array interest_membership_ids(const godot::RID &p_entity);
 
-    void persist_set_quit_guard(const godot::Callable &p_guard);
-    void persist_set_drain(const godot::Callable &p_drain);
 
-    void persistence_drain_start(double p_notify_delay);
-    void persistence_drain_advance();
-    void persistence_drain_forget();
 
     spawn::Pipeline *spawn_plane() const;
     void spawn_on_peer_connected(int64_t p_peer_id);
@@ -2152,8 +2254,6 @@ public:
         const godot::Callable &p_original
     );
 
-    bool persistence_serves();
-    void persistence_arm_quit_guard();
     godot::Error write_scene_facet(const godot::RID &p_entity, bool p_declared);
     void apply_pending_scene_facet(
         const godot::RID &p_entity,
@@ -2437,21 +2537,6 @@ public:
         const godot::RID &p_set
     ) const;
     godot::Ref<NetwPropertySet> mutable_property_set(const godot::RID &p_set);
-
-    godot::Ref<NetwPromise> persist_hydrate(const godot::RID &p_entity);
-    godot::Ref<NetwPromise> persist_flush(
-        const godot::RID &p_entity,
-        const godot::Array &p_keys
-    );
-    godot::Ref<NetwPersistenceEngine> persistence_engine_for(
-        NetwEntity *p_entity
-    );
-    void persist_tick_default(double p_delta);
-    void persist_pump(double p_delta);
-    GDVIRTUAL1(_persist_tick, double)
-    void persistence_flush_all();
-    godot::TypedArray<NetwPersistenceEngine> persistence_live_engines();
-    void persist_shutdown();
 
     SessionState session_get_state() const;
     Role session_get_role() const;
@@ -2907,6 +2992,120 @@ public:
     void session_flush_deferred();
 
     SchemaCore *get_schema_core();
+    persist::Databases *get_databases();
+
+    godot::RID schema_of_declaration(const godot::Ref<NetwSchema> &p_schema);
+
+    godot::RID database_create(
+        const godot::StringName &p_name,
+        const godot::Ref<NetwDatabaseConfig> &p_config
+    );
+    godot::RID database_find(const godot::StringName &p_name) const;
+    godot::Ref<NetwDatabase> database_handle(const godot::RID &p_database);
+    godot::Ref<NetwPromise> database_open(
+        const godot::RID &p_database,
+        const godot::StringName &p_slot
+    );
+    godot::Ref<NetwPromise> database_close(const godot::RID &p_database);
+    godot::Ref<NetwPromise> database_flush(const godot::RID &p_database);
+    godot::Ref<NetwPromise> database_read(
+        const godot::RID &p_database,
+        const godot::RID &p_schema,
+        const godot::StringName &p_id
+    );
+    godot::Ref<NetwPromise> database_write(
+        const godot::RID &p_database,
+        const godot::RID &p_schema,
+        const godot::StringName &p_id,
+        const godot::Dictionary &p_values
+    );
+    godot::Ref<NetwPromise> database_patch(
+        const godot::RID &p_database,
+        const godot::RID &p_schema,
+        const godot::StringName &p_id,
+        const godot::Dictionary &p_values
+    );
+    godot::Ref<NetwPromise> database_erase(
+        const godot::RID &p_database,
+        const godot::RID &p_schema,
+        const godot::StringName &p_id
+    );
+    godot::Ref<NetwPromise> database_scan(
+        const godot::RID &p_database,
+        const godot::RID &p_schema,
+        const godot::Dictionary &p_filter,
+        const godot::String &p_cursor,
+        int p_limit
+    );
+    godot::Ref<NetwPromise> database_submit(
+        const godot::RID &p_database,
+        const godot::Array &p_operations
+    );
+    godot::Ref<NetwPromise> database_list_slots(const godot::RID &p_database);
+    void database_slots_settled(
+        const godot::Ref<NetwPromise> &p_asked,
+        const godot::Ref<NetwPromise> &p_answer
+    );
+    godot::Ref<NetwPromise> database_delete_slot(
+        const godot::RID &p_database,
+        const godot::StringName &p_slot
+    );
+    godot::StringName database_get_name(const godot::RID &p_database) const;
+    godot::StringName database_get_slot(const godot::RID &p_database) const;
+    DatabaseState database_get_state(const godot::RID &p_database) const;
+    bool database_is_valid(const godot::RID &p_database) const;
+
+    godot::Error database_batch_write(
+        godot::Array &r_operations,
+        const godot::RID &p_schema,
+        const godot::StringName &p_id,
+        const godot::Dictionary &p_values
+    );
+    godot::Error database_batch_erase(
+        godot::Array &r_operations,
+        const godot::RID &p_schema,
+        const godot::StringName &p_id
+    );
+    godot::Ref<NetwDatabaseBackend> database_backend_of(
+        const godot::RID &p_database
+    ) const;
+
+    persist::Bindings *get_bindings();
+
+    godot::RID persist_bind(godot::Node *p_root);
+    bool persist_enroll(godot::Node *p_root);
+    bool persist_withholds(godot::Node *p_root) const;
+    godot::RID persist_binding_of_entity(const godot::RID &p_entity) const;
+    godot::Ref<NetwPromise> persist_load_binding(const godot::RID &p_binding);
+    godot::Ref<NetwPromise> persist_save_binding(const godot::RID &p_binding);
+    bool persist_is_dirty_binding(const godot::RID &p_binding);
+    godot::RID persist_get_database(const godot::RID &p_binding) const;
+    godot::StringName persist_get_record_id_binding(
+        const godot::RID &p_binding
+    ) const;
+    godot::Ref<NetwPromise> persist_load(const godot::RID &p_entity);
+    godot::Ref<NetwPromise> persist_save(const godot::RID &p_entity);
+    bool persist_is_dirty(const godot::RID &p_entity);
+    godot::StringName persist_get_record_id(const godot::RID &p_entity) const;
+    godot::Ref<NetwPromise> persist_flush_all();
+    godot::Ref<NetwPromise> table_save(
+        const godot::RID &p_table,
+        const godot::RID &p_database,
+        const godot::StringName &p_key,
+        const godot::PackedStringArray &p_ids
+    );
+    godot::Ref<NetwPromise> table_load(
+        const godot::RID &p_table,
+        const godot::RID &p_database,
+        const godot::StringName &p_key
+    );
+    int64_t persist_tenure() const;
+    void persist_depart(const godot::RID &p_binding, bool p_save);
+    void persist_capture_exit(godot::Node *p_owner);
+    void persist_settle_departure(godot::ObjectID p_owner, bool p_terminal);
+    void persist_pump(double p_delta);
+    void persist_tick_default(double p_delta);
+    GDVIRTUAL1(_persist_tick, double)
 
     static godot::Error configuration_door_refuses_config(
         godot::Object *p_config
@@ -2969,11 +3168,6 @@ public:
         const godot::Variant &p_data
     );
     godot::Error table_commit(const godot::RID &p_table);
-    godot::Dictionary persist_table_commit(
-        const godot::RID &p_table,
-        const godot::RID &p_schema,
-        const godot::Dictionary &p_data
-    );
     godot::PackedInt64Array table_read_routes(const godot::RID &p_table) const;
     godot::Variant table_read_column(
         const godot::RID &p_table,
@@ -4194,7 +4388,6 @@ private:
     entity::Outcome entity_departure_outcome(
         const EntityDeparture &p_row
     ) const;
-    void entity_capture_persistence(EntityDeparture &r_row);
     void entity_capture_residency(EntityDeparture &r_row, NetwEntity *p_entity);
     void entity_release_residencies(
         const EntityDeparture &p_row,
@@ -4289,4 +4482,5 @@ VARIANT_ENUM_CAST(netw::NetwMultiplayer::WritePolicy);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::ColumnParam);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::PropertySetParam);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::ColumnType);
+VARIANT_ENUM_CAST(netw::NetwMultiplayer::DatabaseState);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::Stat);

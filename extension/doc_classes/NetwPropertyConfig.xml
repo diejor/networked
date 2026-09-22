@@ -221,23 +221,25 @@
 		</method>
 		<method name="persisted">
 			<return type="NetwPropertyConfig" />
-			<param index="0" name="interval" type="float" default="0.0" />
+			<param index="0" name="column" type="NetwColumnRef" />
 			<description>
-				Marks this field a column [NetwPersistenceEngine] snapshots and hydrates, independent of whether it also syncs, by writing [member is_persisted] and [member persist_interval].
-				The database only ever sees the value the server sees.
+				Fills [param column] of this entity's saved row with this property, independent of whether the property also syncs. The database only ever sees the value the server sees.
+				[param column] comes from the same [NetwSchema] the entity handed [method NetwPersistenceConfig.schema], and one taken from another schema is refused whatever its index. The property's declared type and stride have to be what that column stores.
 				[codeblock]
-				Netw.configure_persistence(self).database(db).table(&amp;"players")
+				var schema := game.save_schema
 
-				# never syncs, a server secret the database still keeps
-				Netw.configure_property(self, &amp;"gold").persisted()
+				# never syncs, a server secret the row still keeps
+				Netw.configure_property(self, &amp;"gold").persisted(schema.column_ref(0))
 
-				# synced per tick, snapshotted every 30 seconds
-				Netw.configure_property(self, &amp;"position").state().persisted(30.0)
+				# synced per tick, and saved on the entity's own cadence
+				Netw.configure_property(self, &amp;"position") \
+				        .state().persisted(schema.column_ref(1))
 
-				# client-authored, persistable because input() delivers it to the server
-				Netw.configure_property(self, &amp;"loadout").input().persisted()
+				# client-authored, savable because input() delivers it to the server
+				Netw.configure_property(self, &amp;"loadout") \
+				        .input().persisted(schema.column_ref(2))
 				[/codeblock]
-				[param interval] of [code]0.0[/code] inherits [member NetwPersistenceConfig.default_interval].
+				The cadence belongs to the whole row, through [method NetwPersistenceConfig.interval], so a column names no interval of its own.
 			</description>
 		</method>
 		<method name="reconcile_only">
@@ -345,9 +347,6 @@
 		<member name="in_state_set" type="bool" setter="set_in_state_set" getter="get_in_state_set" default="false">
 			Whether [method state] marked this property into its script's state set.
 		</member>
-		<member name="is_persisted" type="bool" setter="set_is_persisted" getter="get_is_persisted" default="false">
-			Whether [method persisted] marked this field a persistence column. The field becomes a schema column [NetwPersistenceEngine] snapshots and hydrates, independent of whether it also syncs.
-		</member>
 		<member name="is_property" type="bool" setter="set_is_property" getter="get_is_property" default="true">
 			Always [code]true[/code] on a property config, which is how a registry holding both kinds tells this apart from the plain [NetwMemberConfig] an RPC or a signal returns when only the base type is known.
 		</member>
@@ -356,9 +355,6 @@
 		</member>
 		<member name="lane" type="int" setter="set_lane" getter="get_lane" enum="NetwPropertySet.Lane" default="0">
 			The field's delivery lane: [constant NetwPropertySet.VOLATILE] freshest wins, [constant NetwPropertySet.RETAINED] reliable on change. Declared through [method volatile] and [method retained], and written by every kind mark.
-		</member>
-		<member name="persist_interval" type="float" setter="set_persist_interval" getter="get_persist_interval" default="0.0">
-			Per-field snapshot cadence in seconds, or [code]0.0[/code] to inherit the archetype's [member NetwPersistenceConfig.default_interval]. Declared through [method persisted].
 		</member>
 		<member name="property_class" type="int" setter="set_property_class" getter="get_property_class" enum="NetwPropertySet.PropertyClass" default="0">
 			What the value does in the simulation, which decides whether a reconciliation compares and restores it. Declared through [method causal], [method derived] and [method cosmetic].

@@ -517,11 +517,6 @@ void MultiplayerTree::_notification(int p_what) {
                 api->embed_dispose();
             }
             break;
-        case NOTIFICATION_WM_CLOSE_REQUEST:
-            if (!in_editor() && api.is_valid()) {
-                api->persist_shutdown();
-            }
-            break;
         default:
             break;
     }

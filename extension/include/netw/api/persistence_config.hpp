@@ -3,7 +3,7 @@
 #include "godot/callable.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/database.hpp"
+#include "netw/api/schema_model.hpp"
 
 namespace netw {
 
@@ -11,60 +11,60 @@ class NetwPersistenceConfig : public godot::RefCounted {
     GDCLASS(NetwPersistenceConfig, godot::RefCounted)
 
 private:
-    godot::Ref<NetwDatabase> db;
-    godot::StringName table_name;
-    double default_interval = 5.0;
-    bool hydrate_on_spawn_enabled = true;
-    godot::StringName record_id_provider;
+    godot::StringName database_name;
+    godot::Ref<NetwSchema> declared_schema;
+    godot::Callable id_provider;
+    double save_interval = 0.0;
+    bool load_at_spawn = true;
 
 protected:
     static void _bind_methods();
 
 public:
-    void set_db(const godot::Ref<NetwDatabase> &p_db) {
-        db = p_db;
+    void set_database_name(const godot::StringName &p_name) {
+        database_name = p_name;
     }
-    godot::Ref<NetwDatabase> get_db() const {
-        return db;
-    }
-
-    void set_table_name(const godot::StringName &p_table_name) {
-        table_name = p_table_name;
-    }
-    godot::StringName get_table_name() const {
-        return table_name;
+    godot::StringName get_database_name() const {
+        return database_name;
     }
 
-    void set_default_interval(double p_default_interval) {
-        default_interval = p_default_interval;
+    void set_schema(const godot::Ref<NetwSchema> &p_schema) {
+        declared_schema = p_schema;
     }
-    double get_default_interval() const {
-        return default_interval;
-    }
-
-    void set_hydrate_on_spawn_enabled(bool p_enabled) {
-        hydrate_on_spawn_enabled = p_enabled;
-    }
-    bool get_hydrate_on_spawn_enabled() const {
-        return hydrate_on_spawn_enabled;
+    godot::Ref<NetwSchema> get_schema() const {
+        return declared_schema;
     }
 
-    void set_record_id_provider(const godot::StringName &p_provider) {
-        record_id_provider = p_provider;
+    void set_id_provider(const godot::Callable &p_provider) {
+        id_provider = p_provider;
     }
-    godot::StringName get_record_id_provider() const {
-        return record_id_provider;
+    godot::Callable get_id_provider() const {
+        return id_provider;
     }
 
-    godot::Ref<NetwPersistenceConfig> database(
-        const godot::Ref<NetwDatabase> &p_database
+    void set_save_interval(double p_seconds) {
+        save_interval = p_seconds;
+    }
+    double get_save_interval() const {
+        return save_interval;
+    }
+
+    void set_load_at_spawn(bool p_enabled) {
+        load_at_spawn = p_enabled;
+    }
+    bool get_load_at_spawn() const {
+        return load_at_spawn;
+    }
+
+    godot::Ref<NetwPersistenceConfig> database(const godot::StringName &p_name);
+    godot::Ref<NetwPersistenceConfig> schema(
+        const godot::Ref<NetwSchema> &p_schema
     );
-    godot::Ref<NetwPersistenceConfig> table(const godot::StringName &p_name);
-    godot::Ref<NetwPersistenceConfig> interval(double p_seconds);
-    godot::Ref<NetwPersistenceConfig> hydrate_on_spawn(bool p_enabled);
     godot::Ref<NetwPersistenceConfig> record_id(
-        const godot::Callable &p_callable
+        const godot::Callable &p_provider
     );
+    godot::Ref<NetwPersistenceConfig> interval(double p_seconds);
+    godot::Ref<NetwPersistenceConfig> load_on_spawn(bool p_enabled);
 };
 
 } // namespace netw

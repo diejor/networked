@@ -1292,6 +1292,7 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
     if (entity == nullptr) {
         return;
     }
+    persist_capture_exit(entity->get_owner());
     if (entity->get_declares_scene()) {
         scene_root_offline(entity->get_owner());
     }
@@ -1315,7 +1316,6 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
                 = plane->get_spawn_pipeline()->holds_received_route(row.route);
         }
     }
-    entity_capture_persistence(row);
     entity_capture_residency(row, entity);
     if (standing == nullptr) {
         entity_departures.insert(instance, row);
@@ -1327,15 +1327,6 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
     );
 }
 
-void NetwMultiplayer::entity_capture_persistence(EntityDeparture &r_row) {
-    const Ref<NetwPersistenceEngine> engine
-        = persistence.engines.engine_of(r_row.entity);
-    if (engine.is_null() || !persistence_serves()) {
-        return;
-    }
-    r_row.saved = engine;
-    r_row.saved_write = engine->capture_write();
-}
 
 void NetwMultiplayer::entity_capture_residency(
     EntityDeparture &r_row,
@@ -1389,7 +1380,8 @@ void NetwMultiplayer::entity_settle_departure(int64_t p_instance) {
 #if defined(NETW_TESTS)
     membership_audit_held += 1;
 #endif
-    switch (entity_departure_outcome(row)) {
+    const entity::Outcome outcome = entity_departure_outcome(row);
+    switch (outcome) {
         case entity::Outcome::MOVE:
             entity_commit_move(row);
             break;
@@ -1400,6 +1392,7 @@ void NetwMultiplayer::entity_settle_departure(int64_t p_instance) {
             entity_commit_hide(row);
             break;
     }
+    persist_settle_departure(row.owner_id, outcome == entity::Outcome::DEATH);
 #if defined(NETW_TESTS)
     membership_audit_held -= 1;
     membership_audit();
@@ -1479,9 +1472,6 @@ void NetwMultiplayer::entity_commit_death(const EntityDeparture &p_row) {
         liveness_drop_hooks(p_row.route);
         liveness_release(p_row.route);
     }
-    if (p_row.saved.is_valid() && p_row.saved_write.is_addressed()) {
-        p_row.saved->submit(p_row.saved_write);
-    }
     entity_release_residencies(p_row, RID());
     entity_release_body(p_row.entity, p_row.wrapper, p_row.route, false);
     if (p_row.wrapper.is_valid()) {
@@ -1502,7 +1492,6 @@ void NetwMultiplayer::entity_release_body(
     int64_t p_route,
     bool p_owner_live
 ) {
-    persistence.engines.drop(p_entity);
     membership_drop_body(p_wrapper);
     interest_release_body(p_wrapper);
     unregister_prediction(p_wrapper);
@@ -1821,7 +1810,8 @@ bool NetwMultiplayer::spawn_visible_to(
     int64_t p_peer_id,
     Node *p_node
 ) {
-    if (p_book == nullptr || !p_book->parent_admits(p_route, p_peer_id)) {
+    if (p_book == nullptr || !p_book->parent_admits(p_route, p_peer_id)
+        || persist_withholds(p_node)) {
         return false;
     }
     return spawn_locally_desired(p_peer_id, p_node);
@@ -2466,7 +2456,8 @@ TypedArray<Dictionary> NetwMultiplayer::spawn_reconcile_rows(
             continue;
         }
         Node *node = record->node();
-        if (node == nullptr || !node->is_inside_tree()) {
+        if (node == nullptr || !node->is_inside_tree()
+            || persist_withholds(node)) {
             continue;
         }
         const Ref<NetwEntity> entity = NetwEntity::of(node);

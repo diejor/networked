@@ -6,6 +6,7 @@
 #include "godot/variant.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/property_set.hpp"
+#include "netw/api/schema_model.hpp"
 
 namespace netw {
 
@@ -30,8 +31,7 @@ private:
     int64_t set_window = UNSET;
     NetwPropertySet::Audience set_audience = NetwPropertySet::AUDIENCE_PUBLIC;
     bool set_masked = false;
-    bool is_persisted = false;
-    double persist_interval = 0.0;
+    godot::Ref<NetwColumnRef> persist_column;
     NetwPropertySet::PropertyClass property_class = NetwPropertySet::CAUSAL;
     double converge_stiffness = 0.0;
     godot::StringName carry_channel;
@@ -144,18 +144,11 @@ public:
         return set_masked;
     }
 
-    void set_is_persisted(bool p_is_persisted) {
-        is_persisted = p_is_persisted;
+    void set_persist_column(const godot::Ref<NetwColumnRef> &p_column) {
+        persist_column = p_column;
     }
-    bool get_is_persisted() const {
-        return is_persisted;
-    }
-
-    void set_persist_interval(double p_persist_interval) {
-        persist_interval = p_persist_interval;
-    }
-    double get_persist_interval() const {
-        return persist_interval;
+    godot::Ref<NetwColumnRef> get_persist_column() const {
+        return persist_column;
     }
 
     void set_property_class(NetwPropertySet::PropertyClass p_property_class) {
@@ -216,7 +209,9 @@ public:
     godot::Ref<NetwPropertyConfig> windowed(int64_t p_samples);
     godot::Ref<NetwPropertyConfig> audience(bool p_server_only);
     godot::Ref<NetwPropertyConfig> masked();
-    godot::Ref<NetwPropertyConfig> persisted(double p_interval);
+    godot::Ref<NetwPropertyConfig> persisted(
+        const godot::Ref<NetwColumnRef> &p_column
+    );
     godot::Ref<NetwPropertyConfig> on_spawn();
 };
 

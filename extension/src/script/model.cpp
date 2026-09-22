@@ -170,17 +170,6 @@ void declare_despawn_config(
     );
 }
 
-void declare_persistence_config(
-    const Ref<Script> &p_script,
-    const Ref<NetwPersistenceConfig> &p_config
-) {
-    registry::declare_script_config(
-        p_script,
-        registry::SCRIPT_PERSISTENCE,
-        p_config
-    );
-}
-
 void declare_scene(const Ref<Script> &p_script, const SceneDecl &p_decl) {
     registry::declare_scene(p_script, p_decl);
 }
@@ -253,21 +242,10 @@ Ref<NetwDespawnConfig> get_own_despawn_config(const Ref<Script> &p_script) {
     return registry::own_script_config(p_script, registry::SCRIPT_DESPAWN);
 }
 
-Ref<NetwPersistenceConfig> get_own_persistence_config(
-    const Ref<Script> &p_script
-) {
-    return registry::own_script_config(p_script, registry::SCRIPT_PERSISTENCE);
-}
-
 Ref<NetwPersistenceConfig> get_persistence_config(Node *p_node) {
     const NodeOverlay *overlay = overlay_for(p_node, false);
-    if (overlay != nullptr && overlay->persistence.is_valid()) {
-        return overlay->persistence;
-    }
-    return registry::script_config(
-        script_of(p_node),
-        registry::SCRIPT_PERSISTENCE
-    );
+    return overlay != nullptr ? overlay->persistence
+                              : Ref<NetwPersistenceConfig>();
 }
 
 Ref<NetwPersistenceConfig> configure_node_persistence(Node *p_node) {

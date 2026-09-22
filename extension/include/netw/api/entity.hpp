@@ -14,7 +14,6 @@
 #include "netw/api/entity_options.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/persistence_engine.hpp"
 #include "netw/api/property_set_binding.hpp"
 #include "netw/api/scene_handle.hpp"
 #include "netw/api/timeline.hpp"
@@ -24,6 +23,7 @@ namespace netw {
 
 class NetwInterestHandle;
 class NetwMultiplayer;
+class NetwPersistenceHandle;
 class NetwPredictionHandle;
 class ReplicationCore;
 
@@ -193,13 +193,13 @@ public:
         const godot::StringName &p_property,
         godot::Node *p_base
     ) const;
-    godot::Ref<NetwPersistenceEngine> get_persistence() const;
     godot::Ref<NetwPropertySetBinding> get_state_binding() const;
     godot::Ref<NetwPropertySetBinding> get_input_binding() const;
     godot::Ref<NetwPropertySetBinding> get_broadcast_binding() const;
     godot::Ref<NetwInterestHandle> get_interest() const;
     godot::Ref<NetwSceneHandle> get_scene() const;
     godot::Ref<NetwPredictionHandle> get_prediction() const;
+    godot::Ref<NetwPersistenceHandle> get_persistence() const;
     godot::Ref<NetwDisplayHandle> get_interpolation() const;
     godot::Ref<NetwTimeline> get_timeline() const;
     void set_timeline(const godot::Ref<NetwTimeline> &p_timeline);

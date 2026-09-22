@@ -1,77 +1,73 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPersistenceConfig" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Everything one entity [Script] declares about how the server saves and restores its rows.
+		Which row of which [NetwDatabase] one entity loads and saves.
 	</brief_description>
 	<description>
-		The policy is authored on a [Script] and read back for every node that script drives, because [method Netw.configure_persistence] runs from [method Object._init] while the flushing and the hydrating happen later, on the server, through [NetwPersistenceEngine]. Routing is a fact about the archetype rather than about one field, so the database and the table live here and every field marked [method NetwPropertyConfig.persisted] shares them.
-		An author who declared nothing already carries a [member default_interval] of [code]5.0[/code] and a [member hydrate_on_spawn_enabled] of [code]true[/code]. Those are the policy a reader applies, not an absence it branches on: a script that names only a database and a table snapshots every five seconds and restores its saved row before the spawn frame is taken.
-		[method record_id] stores only the method name, so the config does not retain a [Node] and can be reused for other instances. The server resolves the method on the entity root. Without a provider, it uses [member NetwEntity.entity_id] and then the node name.
-		[member db] is typed [Variant] because [NetwDatabase] is a GDScript class with no native counterpart, so the config carries whatever the author handed it without narrowing it, and GDScript resolves the real script type on the way back out.
+		The declaration belongs to the node that made it, so two players running one script keep two record ids. Every column of [method schema] is filled by one property that named it through [method NetwPropertyConfig.persisted], and a column left unbound refuses the whole entity.
+		[method Netw.configure_database] and [method Netw.database] resolve the session through the [SceneTree], so a database is declared from [method Node._ready] rather than from [method Object._init].
 		[codeblock]
-		func _init() -&gt; void:
+		func _ready() -&gt; void:
+		    Netw.configure_property(self, &amp;"position", false) \
+		            .persisted(game.save_schema.column_ref(0))
 		    Netw.configure_persistence(self) \
-		            .database(preload("res://data/game.tres")) \
-		            .table(&amp;"players") \
-		            .interval(5.0) \
-		            .record_id(_account_id)
-		    Netw.configure_property(self, &amp;"gold").persisted()
+		            .database(&amp;"saves") \
+		            .schema(game.save_schema) \
+		            .record_id(account_name) \
+		            .interval(5.0)
+
+		func account_name() -&gt; StringName:
+		    return entity.entity_id
 		[/codeblock]
+		[method record_id] is read once, when the entity binds, and the id it answered is the row every later save writes. Moving the account the provider reads never retargets an enrolled save. A key that changes between sessions, such as a peer id, reads a different row every time the player joins.
+		The row is reached through [NetwPersistenceHandle], as [member NetwEntity.persistence].
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
 		<method name="database">
 			<return type="NetwPersistenceConfig" />
-			<param index="0" name="database" type="NetwDatabase" />
+			<param index="0" name="name" type="StringName" />
 			<description>
-				Declares the [NetwDatabase] every flush and hydrate reads and writes, into [member db]. Returns the same config so the declaration chains.
-			</description>
-		</method>
-		<method name="hydrate_on_spawn">
-			<return type="NetwPersistenceConfig" />
-			<param index="0" name="enabled" type="bool" default="true" />
-			<description>
-				Declares [member hydrate_on_spawn_enabled]. Returns the same config so the declaration chains.
+				Names the [NetwDatabase] this entity's row lives in. The name resolves in the same session, so [method Netw.configure_database] declares it first. Returns the same config so the declaration chains.
 			</description>
 		</method>
 		<method name="interval">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="seconds" type="float" />
 			<description>
-				Declares [member default_interval]. Returns the same config so the declaration chains.
+				Saves the whole row this often while anything in it has changed. [code]0.0[/code] saves only when the game calls [method NetwPersistenceHandle.save]. Returns the same config so the declaration chains.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="load_on_spawn">
+			<return type="NetwPersistenceConfig" />
+			<param index="0" name="enabled" type="bool" default="true" />
+			<description>
+				Whether the stored row is read before the entity plays. Returns the same config so the declaration chains.
+				The session authority starts the read when the entity's node is ready, and no peer receives the entity until it settles.
+				[codeblock lang=text]
+				read settles
+				┠╴row found    the row is applied, then the entity is sent to peers
+				┠╴no row       the entity is sent with the values it spawned with
+				┖╴failed       the entity is not sent until a retried load succeeds
+				[/codeblock]
+				[method NetwPersistenceHandle.load] retries a failed read. A bound property that changes while the row is being read fails the read, and the stored row is not applied over it.
 			</description>
 		</method>
 		<method name="record_id">
 			<return type="NetwPersistenceConfig" />
-			<param index="0" name="callable" type="Callable" />
+			<param index="0" name="provider" type="Callable" />
 			<description>
-				Declares that [param callable]'s method on the entity root computes the record id rows are keyed by. Only [method Callable.get_method] is kept, into [member record_id_provider]. Returns the same config so the declaration chains.
+				Answers the key this entity's row is stored under. It is called once, when the entity binds, and must answer a nonempty [StringName]. Returns the same config so the declaration chains.
 			</description>
 		</method>
-		<method name="table">
+		<method name="schema">
 			<return type="NetwPersistenceConfig" />
-			<param index="0" name="name" type="StringName" />
+			<param index="0" name="schema" type="NetwSchema" />
 			<description>
-				Declares [member table_name]. Returns the same config so the declaration chains.
+				Declares the shape of this entity's row. Every [NetwColumnRef] a property binds comes from this same [NetwSchema], and one taken from another schema refuses the binding whatever its index. Returns the same config so the declaration chains.
 			</description>
 		</method>
 	</methods>
-	<members>
-		<member name="db" type="NetwDatabase" setter="set_db" getter="get_db">
-			The [NetwDatabase] every flush and hydrate reads and writes, or [code]null[/code] for an archetype that persists nowhere. Typed [Variant] because [NetwDatabase] is a GDScript class, so the config holds the author's object without narrowing it. Declared through [method database].
-		</member>
-		<member name="default_interval" type="float" setter="set_default_interval" getter="get_default_interval" default="5.0">
-			Snapshot cadence in seconds for persisted columns that name no cadence of their own. Declared through [method interval].
-		</member>
-		<member name="hydrate_on_spawn_enabled" type="bool" setter="set_hydrate_on_spawn_enabled" getter="get_hydrate_on_spawn_enabled" default="true">
-			When true, the server restores the saved row before the entity's SPAWN frame snapshots spawn state, so peers see the stored values from the first frame. Declared through [method hydrate_on_spawn].
-		</member>
-		<member name="record_id_provider" type="StringName" setter="set_record_id_provider" getter="get_record_id_provider" default="&amp;&quot;&quot;">
-			Method called on the entity root to compute the record id, or empty to fall back to [member NetwEntity.entity_id] and then the node name. Declared through [method record_id], which is the only spelling that keeps the object out of the record.
-		</member>
-		<member name="table_name" type="StringName" setter="set_table_name" getter="get_table_name" default="&amp;&quot;&quot;">
-			Table the archetype's rows are keyed under. Declared through [method table].
-		</member>
-	</members>
 </class>

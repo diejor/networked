@@ -85,6 +85,8 @@ Methods
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`request_scene<class_NetwSessionHandle_method_request_scene>`\ (\ path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` = 0\ ) |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`save_entities<class_NetwSessionHandle_method_save_entities>`\ (\ )                                                                                           |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`set_server_info<class_NetwSessionHandle_method_set_server_info>`\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )                                   |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -476,7 +478,7 @@ This ends a membership rather than closing a connection, and :ref:`leave()<class
 
 :ref:`NetwPromise<class_NetwPromise>` **leave**\ (\ ) :ref:`🔗<class_NetwSessionHandle_method_leave>`
 
-:ref:`NetwMultiplayer.session_leave()<class_NetwMultiplayer_method_session_leave>`: leaves the session this handle was created by, returning the promise that resolves once the peer is down.
+Leaves the session this handle was created by. The session authority saves its entity rows first, and a row the database refuses keeps the session online. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is down or the save failed. Forwards to :ref:`NetwMultiplayer.session_leave()<class_NetwMultiplayer_method_session_leave>`.
 
 .. rst-class:: classref-item-separator
 
@@ -505,6 +507,22 @@ The :ref:`NetwPlayer<class_NetwPlayer>` this session holds for ``peer``, ``null`
 A scene already live is reached by :ref:`Netw.scene()<class_Netw_method_scene>` and read through its own :ref:`NetwSceneHandle<class_NetwSceneHandle>`; this verb is the asking.
 
 \ **Player request.**
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionHandle_method_save_entities:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **save_entities**\ (\ ) :ref:`🔗<class_NetwSessionHandle_method_save_entities>`
+
+Writes every entity row that changed since its last save, including the final rows of entities that already left, and waits for the writes each :ref:`NetwDatabase<class_NetwDatabase>` had already admitted. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. It is :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when every row is stored, and the error of the first row still unsaved otherwise. :ref:`NetwMultiplayer.persist_flush_all()<class_NetwMultiplayer_method_persist_flush_all>`.
+
+Call it again to retry a row the database refused. :ref:`leave()<class_NetwSessionHandle_method_leave>` runs the same save before the peer goes down. A peer that holds no session authority gets :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`.
+
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

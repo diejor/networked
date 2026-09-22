@@ -1107,16 +1107,6 @@ void NetwMultiplayer::scene_arrive(
     const Ref<NetwPromise> &p_promise
 ) {
     NETW_ZONE_NC("session scene arrive", colors::SCENE);
-    bool flushed_persistence = false;
-    if (p_entity.is_valid()) {
-        const Ref<NetwPersistenceEngine> stored
-            = persistence_engine_for(p_entity.ptr());
-        if (stored.is_valid()) {
-            stored->flush(Array());
-            flushed_persistence = true;
-        }
-    }
-    NETW_ZONE_VALUE(int64_t(flushed_persistence));
     emit_signal(SIG_SCENE_ENTITY_MOVED, p_entity, p_source, p_target);
     if (p_promise.is_valid()) {
         p_promise->resolve(OK);

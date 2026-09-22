@@ -141,7 +141,7 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`peer_id<class_NetwEntity_property_peer_id>`                                   | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>`   | :ref:`persistence<class_NetwEntity_property_persistence>`                           |                      |
+   | :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>`   | :ref:`persistence<class_NetwEntity_property_persistence>`                           |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`     | :ref:`prediction<class_NetwEntity_property_prediction>`                             |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -1032,13 +1032,13 @@ A non-zero value drives :ref:`NetwPlayer.bodies<class_NetwPlayer_property_bodies
 
 .. rst-class:: classref-property
 
-:ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` **persistence** :ref:`🔗<class_NetwEntity_property_persistence>`
+:ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>` **persistence** :ref:`🔗<class_NetwEntity_property_persistence>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>` **get_persistence**\ (\ )
+- :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>` **get_persistence**\ (\ )
 
-The entity's :ref:`NetwPersistenceEngine<class_NetwPersistenceEngine>`, or ``null`` when its archetype declared no :ref:`Netw.configure_persistence()<class_Netw_method_configure_persistence>`. The engine reads and writes the persisted columns on the live scene, so flush and hydrate operate on the same saved state. Resolves through the session, so it is ``null`` before the owner is in a :ref:`MultiplayerTree<class_MultiplayerTree>` branch.
+The entity's stored row. Reaching it compiles the :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` this entity declared together with every :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` declaration under it, and the row is read and written on the live scene.
 
 .. rst-class:: classref-item-separator
 

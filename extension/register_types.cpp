@@ -12,7 +12,10 @@
 #include "netw/api/clock_config.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/database.hpp"
+#include "netw/api/database_config.hpp"
 #include "netw/api/database_backend.hpp"
+#include "netw/api/database_connection.hpp"
+#include "netw/api/database_result.hpp"
 #include "netw/api/debug_join_config.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/display_handle.hpp"
@@ -20,7 +23,6 @@
 #include "netw/api/entity_options.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/event_plane.hpp"
-#include "netw/api/file_system_database.hpp"
 #include "netw/api/group_promise.hpp"
 #include "netw/api/interest_handle.hpp"
 #include "netw/api/interpolate.hpp"
@@ -37,11 +39,11 @@
 #include "netw/api/nodes/view/participant_window.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/persistence_config.hpp"
-#include "netw/api/persistence_engine.hpp"
 #include "netw/api/physics_stepper.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/predict_field_recovery.hpp"
 #include "netw/api/predict_island.hpp"
+#include "netw/api/persistence_handle.hpp"
 #include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/api/predict_stats.hpp"
@@ -52,18 +54,16 @@
 #include "netw/api/property_set.hpp"
 #include "netw/api/property_set_binding.hpp"
 #include "netw/api/record.hpp"
-#include "netw/api/record_table.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/scene_config.hpp"
 #include "netw/api/scene_handle.hpp"
 #include "netw/api/schema_model.hpp"
+#include "netw/schema_model.hpp"
 #include "netw/api/server_info.hpp"
 #include "netw/api/session_config.hpp"
 #include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
-#include "netw/api/transaction.hpp"
-#include "netw/api/warm_policy.hpp"
 #include "netw/call_park.hpp"
 #include "netw/carrier_buffers.hpp"
 #include "netw/carrier_frame.hpp"
@@ -127,7 +127,6 @@
 #endif
 
 #if defined(NETW_TESTS)
-#include "tests/support/persistence_stand.h"
 #include "tests/support/published_classes.h"
 #include "tests/support/stepper_recorder.h"
 #endif
@@ -179,8 +178,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwPropertySet);
     GDREGISTER_CLASS(netw::NetwPropertySetBinding);
     GDREGISTER_CLASS(netw::NetwChannel);
-    GDREGISTER_CLASS(netw::NetwTableHandle);
-    GDREGISTER_CLASS(netw::NetwPersistenceEngine);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwQuantize);
     GDREGISTER_CLASS(netw::NetwQuantizeScalar);
     GDREGISTER_CLASS(netw::NetwQuantizeAngle);
@@ -200,12 +197,13 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_ABSTRACT_CLASS(netw::Serde);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwRecord);
     GDREGISTER_CLASS(netw::DictionaryRecord);
-    GDREGISTER_CLASS(netw::WarmRequest);
-    GDREGISTER_CLASS(netw::WarmPolicy);
+    GDREGISTER_CLASS(netw::NetwTableHandle);
     GDREGISTER_CLASS(netw::NetwDatabaseBackend);
+    GDREGISTER_CLASS(netw::MemoryDatabase);
     GDREGISTER_CLASS(netw::FileSystemDatabase);
-    GDREGISTER_CLASS(netw::NetwTransaction);
-    GDREGISTER_CLASS(netw::NetwRecordTable);
+    GDREGISTER_CLASS(netw::NetwDatabaseConnection);
+    GDREGISTER_CLASS(netw::NetwDatabaseConfig);
+    GDREGISTER_CLASS(netw::NetwWriteBatch);
     GDREGISTER_CLASS(netw::NetwDatabase);
     GDREGISTER_CLASS(netw::NetwMultiplayer);
     GDREGISTER_CLASS(netw::NetwService);
@@ -219,12 +217,14 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwDespawnOpts);
     GDREGISTER_CLASS(netw::NetwDespawnConfig);
     GDREGISTER_CLASS(netw::NetwPersistenceConfig);
+    GDREGISTER_CLASS(netw::NetwPersistenceHandle);
     GDREGISTER_CLASS(netw::NetwJoinConfig);
     GDREGISTER_CLASS(netw::NetwMemberConfig);
     GDREGISTER_CLASS(netw::NetwPropertyConfig);
     GDREGISTER_CLASS(netw::NetwClockConfig);
     GDREGISTER_CLASS(netw::NetwLagCompensationConfig);
     GDREGISTER_CLASS(netw::NetwSessionConfig);
+    GDREGISTER_CLASS(netw::NetwColumnRef);
     GDREGISTER_CLASS(netw::NetwSchemaColumn);
     GDREGISTER_CLASS(netw::NetwSchema);
     GDREGISTER_CLASS(netw::NetwControlRequest);
@@ -257,7 +257,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw_test::SpawnIdentityProbe);
     GDREGISTER_CLASS(netw::NetwNativeTests);
 #endif
-    GDREGISTER_CLASS(netw_test::NetwTestPersistenceEngine);
     GDREGISTER_CLASS(netw_test::RecordingStepper);
 #endif
     netw::NetwEntityRecord::set_part_factory(
@@ -267,6 +266,10 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     netw::NetwEntityRecord::set_part_factory(
         netw::NetwEntityRecord::PART_INTEREST,
         callable_mp_static(&netw::build_interest_handle)
+    );
+    netw::NetwEntityRecord::set_part_factory(
+        netw::NetwEntityRecord::PART_PERSISTENCE,
+        callable_mp_static(&netw::build_persistence_handle)
     );
     netw::NetwEntityRecord::set_part_factory(
         netw::NetwEntityRecord::PART_PREDICTION,
@@ -290,6 +293,7 @@ void uninitialize_networked_module(ModuleInitializationLevel level) {
     netw::NetwEntityRecord::clear_part_factories();
     netw::NetwMultiplayer::clear_wrapper_factory();
     netw::connect::TransportBook::shared().clear();
+    netw::schema_model::clear();
     netw::entity::shutdown();
     netw::profile::shutdown();
 }

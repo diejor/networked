@@ -173,22 +173,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] L8 a session that has armed its persistence "
-    "quit guard is still freed with its last reference, because the guard "
-    "holds no session"
-) {
-    ObjectID seen;
-    {
-        Ref<NetwMultiplayer> session;
-        session.instantiate();
-        seen = netw::gd::instance_id(session.ptr());
-        session->persistence_arm_quit_guard();
-        session->persistence_arm_quit_guard();
-    }
-    CHECK(netw::gd::instance_from_id(seen) == nullptr);
-}
-
-TEST_CASE(
     "[Networked][Session][Hosted] L9 a service book belongs to the session "
     "that holds it, keys on any object identity, and holding a service keeps "
     "no session alive"

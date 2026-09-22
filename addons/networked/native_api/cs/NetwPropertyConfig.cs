@@ -649,87 +649,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         }
     }
 
-    private static readonly IntPtr _bindGetIsPersisted =
-        NetwApi.MethodBind(
-            "NetwPropertyConfig",
-            "get_is_persisted",
-            36873697UL);
-
-    private static readonly IntPtr _bindSetIsPersisted =
-        NetwApi.MethodBind(
-            "NetwPropertyConfig",
-            "set_is_persisted",
-            2586408642UL);
-
-    /// <summary>
-    /// Whether <see cref="NetwPropertyConfig.Persisted"/> marked this field a
-    /// persistence column. The field becomes a schema column
-    /// <see cref="NetwPersistenceEngine"/> snapshots and hydrates, independent
-    /// of whether it also syncs.
-    /// </summary>
-    public bool IsPersisted
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetIsPersisted,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-        set
-        {
-            byte slot0 = value ? (byte)1 : (byte)0;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Byte_Long(
-                _bindSetIsPersisted,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetPersistInterval =
-        NetwApi.MethodBind(
-            "NetwPropertyConfig",
-            "get_persist_interval",
-            1740695150UL);
-
-    private static readonly IntPtr _bindSetPersistInterval =
-        NetwApi.MethodBind(
-            "NetwPropertyConfig",
-            "set_persist_interval",
-            373806689UL);
-
-    /// <summary>
-    /// Per-field snapshot cadence in seconds, or <c>0.0</c> to inherit the
-    /// archetype's <see cref="NetwPersistenceConfig.DefaultInterval"/>.
-    /// Declared through <see cref="NetwPropertyConfig.Persisted"/>.
-    /// </summary>
-    public double PersistInterval
-    {
-        get
-        {
-            double answered = default;
-            NetwThunks.Ptrcall0_Double(
-                _bindGetPersistInterval,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            double slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Double_Long(
-                _bindSetPersistInterval,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
     private static readonly IntPtr _bindGetConvergeStiffness =
         NetwApi.MethodBind(
             "NetwPropertyConfig",
@@ -1566,36 +1485,41 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     }
 
     private static readonly IntPtr _bindPersisted =
-        NetwApi.MethodBind("NetwPropertyConfig", "persisted", 2969492179UL);
+        NetwApi.MethodBind("NetwPropertyConfig", "persisted", 1627830810UL);
 
     /// <summary>
-    /// Marks this field a column <see cref="NetwPersistenceEngine"/> snapshots
-    /// and hydrates, independent of whether it also syncs, by writing
-    /// <see cref="NetwPropertyConfig.IsPersisted"/> and
-    /// <see cref="NetwPropertyConfig.PersistInterval"/>. The database only ever
-    /// sees the value the server sees.
+    /// Fills <paramref name="column"/> of this entity's saved row with this
+    /// property, independent of whether the property also syncs. The database
+    /// only ever sees the value the server sees. <paramref name="column"/>
+    /// comes from the same <see cref="NetwSchema"/> the entity handed
+    /// <see cref="NetwPersistenceConfig.Schema"/>, and one taken from another
+    /// schema is refused whatever its index. The property's declared type and
+    /// stride have to be what that column stores.
     /// <code>
-    /// Netw.configure_persistence(self).database(db).table(&amp;"players")
+    /// var schema := game.save_schema
     ///
-    /// # never syncs, a server secret the database still keeps
-    /// Netw.configure_property(self, &amp;"gold").persisted()
+    /// # never syncs, a server secret the row still keeps
+    /// Netw.configure_property(self, &amp;"gold").persisted(schema.column_ref(0))
     ///
-    /// # synced per tick, snapshotted every 30 seconds
-    /// Netw.configure_property(self, &amp;"position").state().persisted(30.0)
+    /// # synced per tick, and saved on the entity's own cadence
+    /// Netw.configure_property(self, &amp;"position") \
+    ///         .state().persisted(schema.column_ref(1))
     ///
-    /// # client-authored, persistable because input() delivers it to the server
-    /// Netw.configure_property(self, &amp;"loadout").input().persisted()
+    /// # client-authored, savable because input() delivers it to the server
+    /// Netw.configure_property(self, &amp;"loadout") \
+    ///         .input().persisted(schema.column_ref(2))
     /// </code>
     /// <para>
-    /// <paramref name="interval"/> of <c>0.0</c> inherits
-    /// <see cref="NetwPersistenceConfig.DefaultInterval"/>.
+    /// The cadence belongs to the whole row, through
+    /// <see cref="NetwPersistenceConfig.Interval"/>, so a column names no
+    /// interval of its own.
     /// </para>
     /// </summary>
-    public NetwPropertyConfig Persisted(double interval = 0.0)
+    public NetwPropertyConfig Persisted(NetwColumnRef column)
     {
-        double slot0 = interval;
+        IntPtr slot0 = column?.Native ?? IntPtr.Zero;
         IntPtr answered = default;
-        NetwThunks.Ptrcall1_Double_IntPtr(
+        NetwThunks.Ptrcall1_IntPtr_IntPtr(
             _bindPersisted,
             Checked,
             in slot0,

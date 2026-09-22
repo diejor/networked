@@ -1,532 +1,380 @@
-## [NetwDatabaseBackend] that persists records to Nakama storage, host-only.
+## A [NetwDatabaseBackend] that keeps records in Nakama storage.
 ##
-## Nakama storage has no partial-field update and every write is a network round
-## trip, so this backend never blocks a gameplay write. [method _upsert],
-## [method _commit], and [method _delete] mutate an in-memory mirror of the open
-## slot and return [constant OK] at once, while a debounced loop flushes the
-## dirty records every [member flush_interval] seconds. A read serves the mirror
-## first and falls back to a remote fetch only on a miss.
+## Every record is one Nakama storage object owned by the authenticated user, so
+## a save follows the account rather than the device. A slot is one storage
+## collection, and [member app] names the manifest collection that lists them.
 ## [codeblock]
-## upsert/commit/delete ─╴ mutate mirror, mark dirty ─╴ return OK (no await)
-##                                  │
-##                    flush_interval│ debounced
-##                                  ▼
-##         await write/delete storage objects through NakamaWrapper
+## var backend := NakamaDatabase.new()
+## backend.wrapper = wrapper
+## Netw.configure_database(self, &"saves").backend(backend)
 ## [/codeblock]
-##
-## The backend needs an authenticated [NakamaSessionService], which it resolves
-## lazily through [method NakamaSessionService.of] and
-## [NakamaLobbyDirectory] sets up during connection. Records cross Nakama's
-## JSON-only storage as a [JSON] envelope wrapping a [Marshalls] base64 of the
-## record, so a [Vector2] or a [Color] survives the round trip. Queries filter
-## the mirror locally instead of pushing the predicate to the server, the same
-## as [FileSystemDatabase].
-##
 ## [br][br]
-## The [method NetwDatabase.open_slot] namespace becomes part of the Nakama
-## collection name.
-## [codeblock]
-## Collection
-## └── app_id.slot.table
-##     └── id
-##         └── { "v": "<base64 Variant>" }
+## Nakama cannot enumerate its own collections, so [method _list_slots] reads a
+## manifest this backend maintains. [method _open] writes a slot's manifest
+## entry before any record under it, so a slot that holds data is always listed.
+## [br][br]
+## Every storage request answers one of these codes, and each verb says where
+## the code lands. An uncertain code means the request left the process and
+## Nakama never said whether it applied.
+## [codeblock lang=text]
+## OK                    Nakama applied the request
+## ERR_UNAUTHORIZED      no authenticated session, or Nakama answered 401 or 403
+## ERR_UNAVAILABLE       the Nakama addon is absent
+## ERR_INVALID_DATA      Nakama answered another 4xx status
+## ERR_TIMEOUT           canceled, or ended with no HTTP status. Uncertain
+## ERR_CONNECTION_ERROR  Nakama answered nothing or a 5xx status. Uncertain
+## FAILED                any other exception. Uncertain
 ## [/codeblock]
 class_name NakamaDatabase
 extends NetwDatabaseBackend
 
-# Collection that holds the per-app slot index, since Nakama cannot list
-# collections. Keyed under app_id so several apps on one server stay separate.
-const _SLOT_INDEX_SUFFIX := "__slots__"
-const _SLOT_INDEX_KEY := "index"
+## Version stamped into every stored value, refused on read when it disagrees.
+const FORMAT_VERSION := 1
 
-## Application scope folded into every collection name ahead of the save slot.
-@export var app_id: String = "networked"
+## The manifest collection, and the prefix every slot's collection carries.
+@export var app := "netw_saves"
 
-## Seconds between debounced flushes of dirty records to Nakama. A shutdown
-## forces an immediate flush through [method drain] regardless of this cadence.
-@export_range(0.5, 30.0, 0.5, "suffix:s") var flush_interval: float = 5.0
-
-# Shared authentication and the storage-only wrapper bound to it.
-var _session: NakamaSessionService
-var _wrapper: NakamaWrapper
-
-# Declared schema and the open save slot.
-var _schema: Dictionary = { }
-var _slot: String = "default"
-
-# table -> { id -> Dictionary }: the full mirror of the open slot.
-var _cache: Dictionary = { }
-# table -> { id -> true }: records mutated since the last successful flush.
-var _dirty: Dictionary = { }
-# table -> { id -> true }: records deleted but not yet removed from Nakama.
-var _deletes: Dictionary = { }
-
-var _ready: bool = false
-var _flushing: bool = false
-var _running: bool = false
-
-# ── NetwDatabaseBackend overrides ────────────────────────────────────────
-
-
-## Overrides [method NetwDatabaseBackend._initialize] to declare the schema,
-## open the specified save [param slot], register it in the slot index, and
-## start the debounced flush loop.
-func _initialize(schema: Dictionary, slot: String = "") -> NetwPromise:
-	return _settling(func() -> Variant: return await _initialize_now(schema, slot))
-
-
-func _initialize_now(schema: Dictionary, slot: String = "") -> Error:
-	_schema = schema
-	_slot = slot if not slot.is_empty() else "default"
-	_cache.clear()
-	_dirty.clear()
-	_deletes.clear()
-	_ready = false
-
-	# Record the slot in the index so list_namespaces can find it later.
-	if await _ensure_session():
-		await _register_slot(_slot)
-
-	_start_flush_loop()
-	return OK
-
-
-## Overrides [method NetwDatabaseBackend._upsert] to write or update a record
-## in the local cache and mark it dirty for the next debounced flush.
-func _upsert(
-		table: StringName,
-		id: StringName,
-		data: Dictionary,
-) -> NetwPromise:
-	return NetwPromise.resolved(_upsert_now(table, id, data))
-
-
-func _upsert_now(
-		table: StringName,
-		id: StringName,
-		data: Dictionary,
-) -> Error:
-	var bucket := _cache_table(table)
-	if not bucket.has(id):
-		bucket[id] = { }
-	for key in data:
-		bucket[id][key] = data[key]
-	_mark(_dirty, table, id)
-	if _deletes.has(table):
-		_deletes[table].erase(id)
-	return OK
-
-
-## Overrides [method NetwDatabaseBackend._find_by_id] to read a record from the
-## local cache, falling back to a remote read from Nakama storage if it is not
-## cached.
-func _find_by_id(table: StringName, id: StringName) -> NetwPromise:
-	return _settling(func() -> Variant: return await _find_by_id_now(table, id))
-
-
-func _find_by_id_now(table: StringName, id: StringName) -> Dictionary:
-	if _cache.has(table) and _cache[table].has(id):
-		return _cache[table][id].duplicate()
-
-	# Cold: lazy fetch-on-miss, the unconditional fallback under any warm policy.
-	if not await _ensure_session():
-		return { }
-	var rows := await _wrapper.read_storage_objects(
-		[{ collection = _collection(table), key = String(id) }],
-	)
-	if rows.is_empty():
-		return { }
-	var record := _decode(rows[0].get("value"))
-	if record.is_empty():
-		return { }
-	_cache_table(table)[id] = record
-	return record.duplicate()
-
-
-## Overrides [method NetwDatabaseBackend._find_all] to return all cached
-## records matching [param filter].
-func _find_all(
-		table: StringName,
-		filter: Dictionary = { },
-) -> NetwPromise:
-	return NetwPromise.resolved(_find_all_now(table, filter))
-
-
-func _find_all_now(
-		table: StringName,
-		filter: Dictionary = { },
-) -> Array[Dictionary]:
-	var results: Array[Dictionary] = []
-	if not _cache.has(table):
-		return results
-	for id in _cache[table]:
-		var record: Dictionary = _cache[table][id]
-		if _matches_filter(record, filter):
-			results.append(record.duplicate())
-	return results
-
-
-## Overrides [method NetwDatabaseBackend._delete] to remove a record from the
-## local cache and queue its deletion on Nakama during the next flush.
-func _delete(table: StringName, id: StringName) -> NetwPromise:
-	return NetwPromise.resolved(_delete_now(table, id))
-
-
-func _delete_now(table: StringName, id: StringName) -> Error:
-	if _cache.has(table):
-		_cache[table].erase(id)
-	if _dirty.has(table):
-		_dirty[table].erase(id)
-	_mark(_deletes, table, id)
-	return OK
-
-
-## Overrides [method NetwDatabaseBackend._warm] to pre-load database records
-## into the local cache according to the provided [param directives].
-func _warm(directives: Array) -> NetwPromise:
-	return _settling(func() -> Variant: return await _warm_now(directives))
-
-
-func _warm_now(directives: Array) -> Error:
-	if not await _ensure_session():
-		return ERR_CANT_CONNECT
-	for directive in directives:
-		var table: StringName = directive.table
-		var request: WarmRequest = directive.request
-		match request.kind:
-			WarmRequest.KIND_ALL, WarmRequest.KIND_FILTER:
-				# Opaque blobs cannot be server-filtered, so warm the whole table
-				# and let find_all filter the cache locally.
-				await _warm_table(table)
-			WarmRequest.KIND_IDS:
-				await _warm_ids(table, request.id_list)
-			_:
-				pass
-	_ready = true
-	return OK
-
-
-## Lists registered save-slot names from the Nakama slot index.
+## The [NakamaWrapper] this backend performs its storage through.
 ##
-## See [method NetwDatabase.open_slot] for the slot namespace model.
-func _list_namespaces() -> NetwPromise:
-	return _settling(func() -> Variant: return await _list_namespaces_now())
+## A backend with no wrapper rejects every verb with
+## [constant @GlobalScope.ERR_UNCONFIGURED] rather than answering an empty save.
+var wrapper
 
 
-func _list_namespaces_now() -> Array[StringName]:
-	var out: Array[StringName] = []
-	if not await _ensure_session():
-		return out
-	for slot in await _read_slot_index():
-		out.append(StringName(slot))
-	return out
-
-
-## Deletes every known-table storage object under [param slot].
+## Encodes [param text] so it survives as one Nakama collection or key segment.
 ##
-## Also removes the slot from the Nakama slot index. See
-## [method NetwDatabase.open_slot] for the slot namespace model.
-func _delete_namespace(slot: String) -> NetwPromise:
-	return _settling(func() -> Variant: return await _delete_namespace_now(slot))
+## The encoding is injective, so two different names never meet in one key.
+static func encoded(text: String) -> String:
+	return text.uri_encode().replace(".", "%2E")
 
 
-func _delete_namespace_now(slot: String) -> Error:
-	if slot.is_empty():
-		return ERR_INVALID_PARAMETER
-	if not await _ensure_session():
-		return ERR_CANT_CONNECT
-
-	# Remove every known-table record under the slot, then drop it from the index.
-	var ids: Array = []
-	for table: StringName in _schema:
-		var listing := await _wrapper.list_storage_objects(
-			"%s.%s.%s" % [app_id, slot, table],
-		)
-		for object in listing.get("objects", []):
-			ids.append({ collection = "%s.%s.%s" % [app_id, slot, table], key = object.key })
-	if not ids.is_empty():
-		await _wrapper.delete_storage_objects(ids)
-
-	var slots := await _read_slot_index()
-	slots.erase(slot)
-	await _write_slot_index(slots)
-	return OK
-
-# ── Drain ─────────────────────────────────────────────────────────────────────
-
-
-## Flushes the queue and waits for acknowledgment, bounded by [param timeout_s].
+## Returns the storage key naming [param address].
 ##
-## A write returns before it reaches Nakama, so a quit or a player leave would
-## otherwise drop the last [member flush_interval] window. The
-## [method NetwMultiplayer.persist_shutdown] calls this so that final batch
-## lands.
-## Answers a [NetwPromise] resolving [constant OK] when the queue drained or
-## [constant ERR_TIMEOUT] when it did not within the bound. It is a promise for
-## the same reason every other verb on this backend is one: the wait belongs
-## above the boundary, never through it.
-func drain(timeout_s: float = 5.0) -> NetwPromise:
-	return _settling(func() -> Variant: return await _drain_now(timeout_s))
+## [code]kind[/code] leads, so a record and a table snapshot spelled with the
+## same key are two objects.
+static func address_key(address: Dictionary) -> String:
+	return "%d_%s_%s" % [
+		int(address.get("kind", 0)),
+		encoded(String(address.get("schema_name", ""))),
+		encoded(String(address.get("key", ""))),
+	]
 
 
-func _drain_now(timeout_s: float) -> Error:
-	var loop := Engine.get_main_loop() as SceneTree
-	var deadline := Time.get_ticks_msec() + int(timeout_s * 1000.0)
-	while not _queue_empty() and Time.get_ticks_msec() < deadline:
-		if _flushing:
-			if loop:
-				await loop.create_timer(0.05).timeout
-			else:
-				break
-		else:
-			await _flush()
-	return OK if _queue_empty() else ERR_TIMEOUT
+## Returns the key prefix every record of [param schema_name] at [param kind]
+## carries.
+static func address_prefix(kind: int, schema_name: String) -> String:
+	return "%d_%s_" % [kind, encoded(schema_name)]
 
 
-## Stops the debounced flush loop. Call after a final [method drain] when
-## retiring the backend so the timer loop does not outlive it.
-func stop() -> void:
-	_running = false
-
-# ── Flush ─────────────────────────────────────────────────────────────────────
-
-
-# Drives debounced flushes for the life of the backend. One pass per interval.
-func _start_flush_loop() -> void:
-	if _running:
-		return
-	_running = true
-	_flush_loop()
-
-
-func _flush_loop() -> void:
-	var loop := Engine.get_main_loop() as SceneTree
-	while _running and loop:
-		await loop.create_timer(flush_interval).timeout
-		await _flush()
-
-
-# Builds the batch synchronously, moves dirty/deletes out before awaiting, then
-# writes. Concurrent upserts during the await refill an empty set and are caught
-# next pass, so no write is lost. Failed batches merge back for retry.
-func _flush() -> void:
-	if _flushing:
-		return
-	if _queue_empty():
-		return
-	if not await _ensure_session():
-		return
-
-	var writes: Array = []
-	var pending_writes: Dictionary = { }
-	for table in _dirty:
-		for id in _dirty[table]:
-			if not (_cache.has(table) and _cache[table].has(id)):
-				continue
-			writes.append(
-				{
-					collection = _collection(table),
-					key = String(id),
-					value = _encode(_cache[table][id]),
-				},
-			)
-			_mark(pending_writes, table, id)
-
-	var removals: Array = []
-	var pending_deletes: Dictionary = { }
-	for table in _deletes:
-		for id in _deletes[table]:
-			removals.append({ collection = _collection(table), key = String(id) })
-			_mark(pending_deletes, table, id)
-
-	# Move-out: clear the queues before the await window opens.
-	_dirty.clear()
-	_deletes.clear()
-
-	_flushing = true
-	var wrote := true
-	var removed := true
-	if not writes.is_empty():
-		wrote = await _wrapper.write_storage_objects(writes)
-	if not removals.is_empty():
-		removed = await _wrapper.delete_storage_objects(removals)
-	_flushing = false
-
-	if not wrote:
-		_merge(_dirty, pending_writes)
-	if not removed:
-		_merge(_deletes, pending_deletes)
-
-# ── Warming ───────────────────────────────────────────────────────────────────
-
-
-func _warm_table(table: StringName) -> void:
-	var cursor := ""
-	while true:
-		var listing := await _wrapper.list_storage_objects(_collection(table), 100, cursor)
-		for object in listing.get("objects", []):
-			var record := _decode(object.get("value"))
-			if not record.is_empty():
-				_cache_table(table)[StringName(object.key)] = record
-		cursor = String(listing.get("cursor", ""))
-		if cursor.is_empty():
-			break
-
-
-func _warm_ids(table: StringName, ids: Array) -> void:
-	if ids.is_empty():
-		return
-	var query: Array = []
-	for id in ids:
-		query.append({ collection = _collection(table), key = String(id) })
-	for row in await _wrapper.read_storage_objects(query):
-		var record := _decode(row.get("value"))
-		if not record.is_empty():
-			_cache_table(table)[StringName(row.get("key"))] = record
-
-# ── Slot index ────────────────────────────────────────────────────────────────
-
-
-func _register_slot(slot: String) -> void:
-	var slots := await _read_slot_index()
-	if slot in slots:
-		return
-	slots.append(slot)
-	await _write_slot_index(slots)
-
-
-func _read_slot_index() -> Array:
-	var rows := await _wrapper.read_storage_objects(
-		[{ collection = _slot_index_collection(), key = _SLOT_INDEX_KEY }],
-	)
-	if rows.is_empty():
-		return []
-	var value = rows[0].get("value")
-	if typeof(value) == TYPE_DICTIONARY and value.has("slots"):
-		var out: Array = []
-		for slot in value["slots"]:
-			out.append(String(slot))
-		return out
-	return []
-
-
-func _write_slot_index(slots: Array) -> void:
-	await _wrapper.write_storage_objects(
-		[
-			{
-				collection = _slot_index_collection(),
-				key = _SLOT_INDEX_KEY,
-				value = JSON.stringify({ "slots": slots }),
-			},
-		],
+## Encodes [param envelope] into the JSON string Nakama stores.
+##
+## The payload is a [Variant] the game declared, which JSON cannot carry, so the
+## envelope travels as base64 of its binary form.
+static func packed(envelope: Dictionary) -> String:
+	return JSON.stringify(
+		{
+			"netw": FORMAT_VERSION,
+			"body": Marshalls.raw_to_base64(var_to_bytes(envelope)),
+		},
 	)
 
-# ── Session + helpers ─────────────────────────────────────────────────────────
 
-
-# Resolves the shared session lazily (the tree exists by the first network op)
-# and ensures it is authenticated. Returns false when Nakama is unavailable.
-func _ensure_session() -> bool:
-	if _session == null:
-		_session = _find_session()
-		if _session == null:
-			return false
-		_wrapper = NakamaWrapper.new()
-		_wrapper.use_session(_session)
-	if _session.is_authenticated():
-		return true
-	var res := await _session.connect_async()
-	return bool(res.get("ok", false))
-
-
-# Walks the live scene tree for the session-global NakamaSessionService.
-func _find_session() -> NakamaSessionService:
-	var loop := Engine.get_main_loop() as SceneTree
-	if loop == null:
-		return null
-	return NakamaSessionService.of(_find_session_root(loop.root))
-
-
-# A branch root is the node its own session answers as root, which is what
-# distinguishes it from every descendant inheriting the same session down the
-# SceneTree.
-func _find_session_root(node: Node) -> Node:
-	var session: NetwSessionHandle = Netw.session(node)
-	if session != null and session.root == node:
-		return node
-	for child in node.get_children():
-		var found := _find_session_root(child)
-		if found != null:
-			return found
-	return null
-
-
-func _collection(table: StringName) -> String:
-	return "%s.%s.%s" % [app_id, _slot, table]
-
-
-func _slot_index_collection() -> String:
-	return "%s.%s" % [app_id, _SLOT_INDEX_SUFFIX]
-
-
-# Serializes a record into a JSON envelope wrapping a base64 Variant, so Godot
-# types (Vector2, colors) survive Nakama's JSON-only storage.
-func _encode(record: Dictionary) -> String:
-	return JSON.stringify({ "v": Marshalls.variant_to_base64(record) })
-
-
-# Reverses _encode. The wrapper has already JSON-parsed the stored value.
-func _decode(value: Variant) -> Dictionary:
-	if typeof(value) != TYPE_DICTIONARY or not value.has("v"):
+## Decodes a stored [param value] back into an envelope.
+##
+## A value this library did not write answers an empty [Dictionary], which the
+## reading session refuses as [constant @GlobalScope.ERR_FILE_UNRECOGNIZED]
+## rather than reading as an empty save.
+static func unpacked(value: Variant) -> Dictionary:
+	if typeof(value) != TYPE_DICTIONARY:
 		return { }
-	var decoded: Variant = Marshalls.base64_to_variant(String(value["v"]))
-	return decoded if typeof(decoded) == TYPE_DICTIONARY else { }
+	if int((value as Dictionary).get("netw", 0)) != FORMAT_VERSION:
+		return { }
+	var body := String((value as Dictionary).get("body", ""))
+	var raw := Marshalls.base64_to_raw(body)
+	if raw.is_empty():
+		return { }
+	var held: Variant = bytes_to_var(raw)
+	return held if typeof(held) == TYPE_DICTIONARY else { }
 
 
-func _cache_table(table: StringName) -> Dictionary:
-	if not _cache.has(table):
-		_cache[table] = { }
-	return _cache[table]
+## Returns the storage collection holding [param slot]'s records.
+func collection_for(slot: String) -> String:
+	return "%s_%s" % [app, encoded(slot)]
 
 
-func _mark(sets: Dictionary, table: StringName, id: StringName) -> void:
-	if not sets.has(table):
-		sets[table] = { }
-	sets[table][id] = true
-
-
-func _merge(into: Dictionary, from: Dictionary) -> void:
-	for table in from:
-		for id in from[table]:
-			_mark(into, table, id)
-
-
-func _queue_empty() -> bool:
-	for table in _dirty:
-		if not _dirty[table].is_empty():
-			return false
-	for table in _deletes:
-		if not _deletes[table].is_empty():
-			return false
-	return true
-
-
-func _matches_filter(record: Dictionary, filter: Dictionary) -> bool:
-	for key in filter:
-		if not record.has(key) or record[key] != filter[key]:
-			return false
-	return true
-
-
-# Answers a promise now and settles it when [param work] finishes. The promise
-# IS how the caller waits, so the coroutine is deliberately not awaited here:
-# awaiting it would put a coroutine back across the boundary the promise exists
-# to keep it off.
-func _settling(work: Callable) -> NetwPromise:
+## Writes [param slot]'s manifest entry, then resolves a
+## [NakamaDatabase.Connection] over its collection. It rejects with
+## [constant @GlobalScope.ERR_UNCONFIGURED] when [member wrapper] is unset, and
+## with the code of a manifest write that failed.
+func _open(session: Object, slot: StringName) -> NetwPromise:
 	var promise := NetwPromise.new()
-	_settle_later(promise, work)
+	_open_async(promise, String(slot))
 	return promise
 
 
-func _settle_later(promise: NetwPromise, work: Callable) -> void:
-	promise.resolve(await work.call())
+## Resolves every slot the manifest lists, reading it page by page. It rejects
+## with [constant @GlobalScope.ERR_UNCONFIGURED] when [member wrapper] is unset,
+## and with the code of the first page that failed.
+func _list_slots(session: Object) -> NetwPromise:
+	var promise := NetwPromise.new()
+	_list_slots_async(promise)
+	return promise
+
+
+## Deletes every record in [param slot], then its manifest entry, and resolves
+## [constant @GlobalScope.OK] or the code of the first request that failed. A
+## failure leaves the slot listed, so the delete can run again. It rejects with
+## [constant @GlobalScope.ERR_UNCONFIGURED] when [member wrapper] is unset.
+func _delete_slot(session: Object, slot: StringName) -> NetwPromise:
+	var promise := NetwPromise.new()
+	_delete_slot_async(promise, String(slot))
+	return promise
+
+
+# Writes the slot's manifest entry, then answers a connection over its
+# collection. The manifest entry lands first, so a slot holding records is
+# never missing from the listing.
+func _open_async(promise: NetwPromise, slot: String) -> void:
+	if wrapper == null:
+		promise.reject(ERR_UNCONFIGURED, "this database has no Nakama wrapper")
+		return
+	var noted: Dictionary = await wrapper.write_storage_objects(
+		[
+			{
+				"collection": app,
+				"key": encoded(slot),
+				"read": 1,
+				"write": 1,
+				"value": JSON.stringify({ "slot": slot }),
+			},
+		],
+	)
+	if int(noted["error"]) != OK:
+		promise.reject(int(noted["error"]), String(noted["detail"]))
+		return
+	promise.resolve(NakamaDatabase.Connection.new(wrapper, collection_for(slot)))
+
+
+# Pages the whole manifest collection, so a slot an earlier run wrote appears.
+func _list_slots_async(promise: NetwPromise) -> void:
+	if wrapper == null:
+		promise.reject(ERR_UNCONFIGURED, "this database has no Nakama wrapper")
+		return
+	var names := PackedStringArray()
+	var cursor := ""
+	while true:
+		var answer: Dictionary = await wrapper.list_storage_objects(
+			app,
+			100,
+			cursor,
+			wrapper.own_user_id(),
+		)
+		if int(answer["error"]) != OK:
+			promise.reject(int(answer["error"]), String(answer["detail"]))
+			return
+		var objects: Array = answer["objects"]
+		for object in objects:
+			var name := _slot_name_of(object)
+			if not names.has(name):
+				names.append(name)
+		var next := String(answer["cursor"])
+		if next.is_empty() or objects.is_empty():
+			break
+		cursor = next
+	names.sort()
+	promise.resolve(names)
+
+
+# Reads a manifest row's slot name, falling back to the key it was stored under.
+func _slot_name_of(object: Dictionary) -> String:
+	var value: Variant = object.get("value")
+	if typeof(value) == TYPE_DICTIONARY and (value as Dictionary).has("slot"):
+		return String((value as Dictionary)["slot"])
+	return String(object.get("key", "")).uri_decode()
+
+
+# Drains every remote page of the slot's collection before dropping its
+# manifest entry, so no schema is left behind and a failure stays retryable.
+func _delete_slot_async(promise: NetwPromise, slot: String) -> void:
+	if wrapper == null:
+		promise.reject(ERR_UNCONFIGURED, "this database has no Nakama wrapper")
+		return
+	var collection := collection_for(slot)
+	while true:
+		var answer: Dictionary = await wrapper.list_storage_objects(
+			collection,
+			100,
+			"",
+			wrapper.own_user_id(),
+		)
+		if int(answer["error"]) != OK:
+			promise.resolve(int(answer["error"]))
+			return
+		var objects: Array = answer["objects"]
+		if objects.is_empty():
+			break
+		var ids: Array = []
+		for object in objects:
+			ids.append({ "collection": collection, "key": String(object["key"]) })
+		var removed: Dictionary = await wrapper.delete_storage_objects(ids)
+		if int(removed["error"]) != OK:
+			promise.resolve(int(removed["error"]))
+			return
+	var dropped: Dictionary = await wrapper.delete_storage_objects(
+		[{ "collection": app, "key": encoded(slot) }],
+	)
+	promise.resolve(int(dropped["error"]))
+
+
+## One open slot of Nakama storage, and the only object that performs its I/O.
+##
+## Every verb resolves once the service has answered, never once a request has
+## been queued, so an acknowledged write is a write Nakama holds.
+class Connection extends NetwDatabaseConnection:
+
+	## The [NakamaWrapper] this connection performs its storage through.
+	var wrapper
+
+	## The Nakama storage collection holding this slot's records.
+	var collection: String
+
+	func _init(p_wrapper, p_collection: String) -> void:
+		wrapper = p_wrapper
+		collection = p_collection
+
+	## Reads the object at [param address]. A missing object is
+	## [code]found[/code] false at [constant @GlobalScope.OK], and a failed read
+	## carries its code in [code]error[/code]. A value this library did not
+	## write answers an empty envelope.
+	func _read(address: Dictionary) -> NetwPromise:
+		var promise := NetwPromise.new()
+		_read_async(promise, address)
+		return promise
+
+	## Reads one page of the collection and keeps the records of the requested
+	## schema. A failed page carries its code in [code]error[/code]. Nakama
+	## cannot filter by key, so a page can hold no records and still carry a
+	## cursor.
+	func _scan(request: Dictionary) -> NetwPromise:
+		var promise := NetwPromise.new()
+		_scan_async(promise, request)
+		return promise
+
+	## Applies each operation as its own request, in order, so the batch is not
+	## atomic. [code]error[/code] is always [constant @GlobalScope.OK], each
+	## operation's code lands in [code]errors[/code], and an uncertain code sets
+	## [code]uncertain[/code].
+	func _write_batch(operations: Array) -> NetwPromise:
+		var promise := NetwPromise.new()
+		_write_batch_async(promise, operations)
+		return promise
+
+	## Resolves [constant @GlobalScope.OK], because the connection holds nothing
+	## to release.
+	func _close() -> NetwPromise:
+		return NetwPromise.resolved(OK)
+
+	# A record the service does not hold is absence at OK. A record it could not
+	# be asked about carries the error the service gave.
+	func _read_async(promise: NetwPromise, address: Dictionary) -> void:
+		var answer: Dictionary = await wrapper.read_storage_objects(
+			[
+				{
+					"collection": collection,
+					"key": NakamaDatabase.address_key(address),
+				},
+			],
+		)
+		var reply := {
+			"error": int(answer["error"]),
+			"detail": String(answer["detail"]),
+			"found": false,
+		}
+		var objects: Array = answer["objects"]
+		if int(answer["error"]) == OK and not objects.is_empty():
+			reply["found"] = true
+			reply["envelope"] = NakamaDatabase.unpacked(objects[0]["value"])
+		promise.resolve(reply)
+
+	# Nakama pages a whole collection and cannot filter by key prefix, so a page
+	# holding only other schemas answers no records and a cursor that continues.
+	func _scan_async(promise: NetwPromise, request: Dictionary) -> void:
+		var prefix := NakamaDatabase.address_prefix(
+			int(request.get("kind", 0)),
+			String(request.get("schema_name", "")),
+		)
+		var answer: Dictionary = await wrapper.list_storage_objects(
+			collection,
+			int(request.get("limit", 100)),
+			String(request.get("cursor", "")),
+			wrapper.own_user_id(),
+		)
+		var reply := {
+			"error": int(answer["error"]),
+			"detail": String(answer["detail"]),
+			"records": [],
+			"cursor": "",
+		}
+		if int(answer["error"]) != OK:
+			promise.resolve(reply)
+			return
+		var records: Array = []
+		for object in answer["objects"]:
+			var name := String(object["key"])
+			if not name.begins_with(prefix):
+				continue
+			records.append(
+				{
+					"key": name.substr(prefix.length()).uri_decode(),
+					"envelope": NakamaDatabase.unpacked(object["value"]),
+				},
+			)
+		reply["records"] = records
+		reply["cursor"] = String(answer["cursor"])
+		promise.resolve(reply)
+
+	# Operations are applied one at a time in the order they were given, and
+	# each one's own answer is reported. A batch is not atomic here.
+	func _write_batch_async(promise: NetwPromise, operations: Array) -> void:
+		var errors := PackedInt32Array()
+		var uncertain := PackedByteArray()
+		for operation in operations:
+			var answer := await _apply(operation)
+			errors.append(int(answer["error"]))
+			uncertain.append(1 if bool(answer["uncertain"]) else 0)
+		promise.resolve(
+			{
+				"error": OK,
+				"detail": "",
+				"errors": errors,
+				"uncertain": uncertain,
+			},
+		)
+
+	# Performs one operation and answers what the service said about it.
+	func _apply(operation: Dictionary) -> Dictionary:
+		var key := NakamaDatabase.address_key(operation.get("address", { }))
+		var kind := String(operation.get("kind", ""))
+		if kind == "replace":
+			return await wrapper.write_storage_objects(
+				[
+					{
+						"collection": collection,
+						"key": key,
+						"read": 1,
+						"write": 1,
+						"value": NakamaDatabase.packed(
+							operation.get("envelope", { }),
+						),
+					},
+				],
+			)
+		if kind == "erase":
+			return await wrapper.delete_storage_objects(
+				[{ "collection": collection, "key": key }],
+			)
+		return NakamaWrapper.storage_answer(
+			ERR_INVALID_DATA,
+			"'%s' is no storage operation" % kind,
+			false,
+		)

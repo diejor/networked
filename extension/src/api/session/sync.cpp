@@ -1401,118 +1401,6 @@ void NetwMultiplayer::display_absorb_recovery(
     display::absorb_recovery(p_runtime, p_deltas, p_teleported, display_hooks);
 }
 
-bool NetwMultiplayer::persistence_serves() {
-    return is_host();
-}
-
-void NetwMultiplayer::persistence_arm_quit_guard() {
-    if (persistence.quit_guard.is_valid()) {
-        persistence.quit_guard.call();
-        return;
-    }
-    SceneTree *tree = gd::scene_tree();
-    if (is_host() && tree != nullptr) {
-        tree->set_auto_accept_quit(false);
-    }
-}
-
-Ref<NetwPersistenceEngine> NetwMultiplayer::persistence_engine_for(
-    NetwEntity *p_entity
-) {
-    Ref<NetwEntity> entity = p_entity;
-    if (entity.is_null()) {
-        return Ref<NetwPersistenceEngine>();
-    }
-    Node *owner = entity->get_owner();
-    if (owner == nullptr) {
-        return Ref<NetwPersistenceEngine>();
-    }
-    const RID handle = entity->get_rid_handle();
-    const Ref<NetwPersistenceEngine> enrolled
-        = persistence.engines.engine_of(handle);
-    if (enrolled.is_valid()) {
-        return enrolled;
-    }
-    const Dictionary declared = NetwPersistenceEngine::config_of(owner);
-    if (declared.is_empty()) {
-        return Ref<NetwPersistenceEngine>();
-    }
-    const Ref<NetwPersistenceEngine> engine
-        = NetwPersistenceEngine::create(entity.ptr(), declared);
-    if (engine.is_null()) {
-        return engine;
-    }
-    if (engine->columns_empty()) {
-        NETW_WARN(
-            sys::TABLE,
-            "configure_persistence on '%s' declares no persisted field, so it "
-            "saves nothing: mark one with configure_property(...).persisted()",
-            String(owner->get_name())
-        );
-    }
-    persistence.engines.enroll(handle, engine);
-    engine->lint();
-    if (persistence_serves()) {
-        persistence_arm_quit_guard();
-    }
-    return engine;
-}
-
-void NetwMultiplayer::persist_pump(double p_delta) {
-    if (GDVIRTUAL_CALL(_persist_tick, p_delta)) {
-        return;
-    }
-    persist_tick_default(p_delta);
-}
-
-void NetwMultiplayer::persist_tick_default(double p_delta) {
-    const persist::WriteFence issuer{
-        gd::instance_id(this),
-        session_authority_peer(),
-        true
-    };
-    persist::snapshot_tick(
-        persistence.engines,
-        p_delta,
-        persistence_serves(),
-        issuer
-    );
-}
-
-void NetwMultiplayer::persistence_flush_all() {
-    persist::flush_all(persistence.engines, persistence_serves());
-}
-
-TypedArray<NetwPersistenceEngine> NetwMultiplayer::persistence_live_engines() {
-    TypedArray<NetwPersistenceEngine> live;
-    const TypedArray<RID> entities = persistence.engines.entities();
-    for (int at = 0; at < entities.size(); ++at) {
-        const Ref<NetwPersistenceEngine> engine
-            = persistence.engines.engine_of(entities[at]);
-        if (engine.is_valid() && engine->owner_node() != nullptr) {
-            live.push_back(engine);
-        }
-    }
-    return live;
-}
-
-void NetwMultiplayer::persist_shutdown() {
-    if (persistence.shutting_down || !persistence_serves()) {
-        return;
-    }
-    persistence.shutting_down = true;
-    NETW_TRACE(
-        sys::TABLE,
-        "persistence shutdown draining %d enrolled engine(s)",
-        persistence.engines.size()
-    );
-    if (persistence.drain.is_valid()) {
-        persistence.drain.call();
-        return;
-    }
-    persistence_drain_start(SHUTDOWN_NOTIFY_DELAY);
-}
-
 bool NetwMultiplayer::counts_verdict(Error p_verdict) {
     return GateVerdictBook::counts(p_verdict);
 }
@@ -1677,6 +1565,19 @@ void NetwMultiplayer::adopt_schema_declarations() {
                 );
             }
         }
+        schema_core.set_storage_version(
+            schema,
+            declaration->get_storage_version()
+        );
+        const Dictionary steps = declaration->get_migrations();
+        const Array froms = steps.keys();
+        for (int at_step = 0; at_step < froms.size(); ++at_step) {
+            schema_core.add_migration(
+                schema,
+                int(froms[at_step]),
+                steps[froms[at_step]]
+            );
+        }
         if (schema_seal(schema) != OK) {
             NETW_ERROR(
                 sys::TABLE,
@@ -1703,9 +1604,9 @@ void NetwMultiplayer::adopt_table_declarations() {
         if (!table.is_valid()) {
             NETW_ERROR(
                 sys::TABLE,
-                "schema '%s' asks for a table but declares a VARIANT column; "
-                "variable width has no row budget. Send it through a channel "
-                "or drop replicated() from the schema",
+                "schema '%s' asks for a table but declares a column of "
+                "varying width, which has no row budget. Send it through a "
+                "channel or drop replicated() from the schema",
                 String(declaration->get_schema_name())
             );
             continue;
@@ -1814,46 +1715,6 @@ Error NetwMultiplayer::table_write_column(
     const Variant &p_data
 ) {
     return table_core->write_column(p_table, p_column, p_data);
-}
-
-Dictionary NetwMultiplayer::persist_table_commit(
-    const RID &p_table,
-    const RID &p_schema,
-    const Dictionary &p_data
-) {
-    Dictionary out;
-    out[StringName("routes")] = PackedInt64Array();
-    out[StringName("ids")] = PackedStringArray();
-    if (p_data.is_empty()) {
-        return out;
-    }
-
-    const PackedStringArray ids
-        = PackedStringArray(p_data.get(StringName("ids"), PackedStringArray()));
-    const PackedInt64Array routes = liveness_claim_routes(ids.size());
-    table_write_routes(p_table, routes);
-    const int columns = schema_get_column_count(p_schema);
-    for (int column = 0; column < columns; ++column) {
-        const StringName key = schema_get_column_key(p_schema, column);
-        const int type = schema_get_column_type(p_schema, column);
-        const int stride = schema_get_column_stride(p_schema, column);
-        const int wanted = SchemaCore::storage_type(type);
-        Variant stored = p_data.get(key, Variant());
-        const int64_t expected = int64_t(routes.size()) * int64_t(stride);
-        const bool usable = type != SchemaCore::ENTITY
-            && int(stored.get_type()) == wanted
-            && int64_t(stored.call(StringName("size"))) == expected;
-        if (!usable) {
-            stored = SchemaCore::make_storage(type);
-            stored.call(StringName("resize"), expected);
-        }
-        table_write_column(p_table, column, stored);
-    }
-    table_commit(p_table);
-
-    out[StringName("routes")] = routes;
-    out[StringName("ids")] = ids;
-    return out;
 }
 
 Error NetwMultiplayer::table_commit(const RID &p_table) {
@@ -2585,34 +2446,6 @@ RID NetwMultiplayer::property_set_get_schema(const RID &p_set) const {
     return held != nullptr ? *held : RID();
 }
 
-Ref<NetwPromise> NetwMultiplayer::persist_hydrate(const RID &p_entity) {
-    const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    if (wrapper.is_null()) {
-        return NetwPromise::resolved(ERR_DOES_NOT_EXIST);
-    }
-    const Ref<NetwPersistenceEngine> engine
-        = persistence_engine_for(wrapper.ptr());
-    if (engine.is_null()) {
-        return NetwPromise::resolved(ERR_UNCONFIGURED);
-    }
-    return engine->hydrate();
-}
-
-Ref<NetwPromise> NetwMultiplayer::persist_flush(
-    const RID &p_entity,
-    const Array &p_keys
-) {
-    const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    if (wrapper.is_null()) {
-        return NetwPromise::resolved(ERR_DOES_NOT_EXIST);
-    }
-    const Ref<NetwPersistenceEngine> engine
-        = persistence_engine_for(wrapper.ptr());
-    if (engine.is_null()) {
-        return NetwPromise::resolved(ERR_UNCONFIGURED);
-    }
-    return engine->flush(p_keys);
-}
 
 void NetwMultiplayer::lagcomp_effect_adopt(const StringName &p_key) {
     effects.adopt(p_key);

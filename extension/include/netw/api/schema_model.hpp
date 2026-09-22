@@ -10,6 +10,33 @@
 
 namespace netw {
 
+class NetwSchema;
+
+class NetwColumnRef : public godot::RefCounted {
+    GDCLASS(NetwColumnRef, godot::RefCounted)
+
+    godot::Ref<NetwSchema> schema;
+    int index = -1;
+
+protected:
+    static void _bind_methods();
+
+public:
+    static godot::Ref<NetwColumnRef> make(
+        const godot::Ref<NetwSchema> &p_schema,
+        int p_index
+    );
+
+    godot::Ref<NetwSchema> get_schema() const {
+        return schema;
+    }
+    int get_index() const {
+        return index;
+    }
+    godot::StringName get_key() const;
+    bool is_valid() const;
+};
+
 class NetwSchemaColumn : public godot::RefCounted {
     GDCLASS(NetwSchemaColumn, godot::RefCounted)
 
@@ -56,6 +83,8 @@ class NetwSchema : public godot::RefCounted {
 
     godot::StringName name;
     godot::TypedArray<NetwSchemaColumn> columns;
+    godot::Dictionary migrations;
+    int version = 1;
     bool replicated_lane = true;
     bool reliable_lane = false;
 
@@ -77,6 +106,12 @@ public:
     }
     bool is_reliable() const {
         return reliable_lane;
+    }
+    int get_storage_version() const {
+        return version;
+    }
+    godot::Dictionary get_migrations() const {
+        return migrations;
     }
 
     int column(
@@ -130,10 +165,18 @@ public:
     );
     int entity(const godot::StringName &p_key, int p_stride);
     int variant(const godot::StringName &p_key, int p_stride);
+    int string(const godot::StringName &p_key, int p_stride);
+
+    godot::Ref<NetwColumnRef> column_ref(int p_index);
 
     godot::Ref<NetwSchema> register_declaration();
     godot::Ref<NetwSchema> replicated(bool p_value);
     godot::Ref<NetwSchema> reliable(bool p_value);
+    godot::Ref<NetwSchema> storage_version(int p_version);
+    godot::Ref<NetwSchema> migrate(
+        int p_from_version,
+        const godot::Callable &p_step
+    );
 };
 
 } // namespace netw

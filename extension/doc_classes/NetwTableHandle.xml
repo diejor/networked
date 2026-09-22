@@ -41,7 +41,20 @@
 		[/codeblock]
 		[method read_births] and [method read_deaths] name the routes the latest wave added and removed. A reader that keeps an object per row steps them from those two rather than diffing the table.
 		[b]Saving[/b]
-		[method flush] writes the committed rows into a [NetwDatabase] as one record and [method hydrate] loads them back under fresh routes. Both settle through a [NetwPromise].
+		[method save] stores the committed rows in a [NetwDatabase] under a key, and [method load] replaces the whole table with them. Routes are new in every session, so the game names each row with a stable id and pairs the ids with the routes a load hands back.
+		In the reply [method load] settles with, the row saved as [code]ids[i][/code] now lives at [code]routes[i][/code].
+		[codeblock]
+		func save_forest() -&gt; Error:
+		    return await mobs.save(db, &amp;"forest", mob_ids).wait()
+
+		func load_forest() -&gt; void:
+		    var loaded: Dictionary = await mobs.load(db, &amp;"forest").wait()
+		    if loaded.error != OK:
+		        show_load_error(loaded.error)
+		        return
+		    if loaded.found:
+		        rebuild_mob_index(loaded.ids, loaded.routes)
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -60,34 +73,37 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="flush">
+		<method name="load">
 			<return type="NetwPromise" />
 			<param index="0" name="database" type="NetwDatabase" />
-			<param index="1" name="into" type="StringName" />
-			<param index="2" name="ids" type="PackedStringArray" />
+			<param index="1" name="key" type="StringName" />
 			<description>
-				Saves the committed rows into [param into] as one record of [param database], settling with an [enum @GlobalScope.Error].
-				[param ids] names the row whose route is [member read_routes].
-				[codeblock lang=text]
-				Error
-				┠╴OK                  the record was saved
-				┠╴ERR_DOES_NOT_EXIST  the session this handle names is gone
-				┖╴ERR_UNCONFIGURED    the database has no [member backend]
-				[/codeblock]
-				[b]Server Only.[/b]
-			</description>
-		</method>
-		<method name="hydrate">
-			<return type="NetwPromise" />
-			<param index="0" name="database" type="NetwDatabase" />
-			<param index="1" name="into" type="StringName" />
-			<description>
-				Loads the saved record from [param into] of [param database], creates fresh routes for its rows, and commits them.
+				Replaces every row of the table with the snapshot stored under [param key] in [param database], and settles with a [Dictionary]. Each loaded row gets a new route.
+				The table is untouched unless the whole snapshot is applied. A missing snapshot answers [code]found[/code] false, and a snapshot that does not decode against the schema answers its error.
+				A [method commit] while the snapshot is being read makes the load answer [constant @GlobalScope.ERR_BUSY], so a load never overwrites rows written after it started.
 				[codeblock lang=text]
 				Dictionary
-				┠╴routes  PackedInt64Array    freshly claimed, the committed row order
-				┖╴ids     PackedStringArray   parallel, the keys the flush wrote
+				┠╴error    Error              @GlobalScope.Error. Check it before reading anything else
+				│ ┠╴OK                     the snapshot was applied, or none is stored
+				│ ┠╴ERR_UNAUTHORIZED       this peer holds no session authority
+				│ ┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different
+				│ │                        sessions, or the table's schema is not sealed
+				│ ┠╴ERR_INVALID_PARAMETER  key is empty
+				│ ┠╴ERR_UNCONFIGURED       the database is not open
+				│ ┠╴ERR_BUSY               a commit landed while the snapshot was read, or the
+				│ │                        database is full
+				│ ┠╴ERR_FILE_UNRECOGNIZED  the snapshot is not in this library's format, or
+				│ │                        carries a newer storage version than the schema
+				│ ┠╴ERR_INVALID_DATA       the snapshot does not match the schema
+				│ ┠╴ERR_UNAVAILABLE        session authority moved or the database closed while
+				│ │                        the snapshot was read
+				│ ┖╴backend-defined        the backend could not read the snapshot
+				┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
+				┠╴found    bool               whether a snapshot was stored under the key
+				┠╴ids      PackedStringArray  the id each loaded row was saved under
+				┖╴routes   PackedInt64Array   the route each loaded row now lives at
 				[/codeblock]
+				Routes an earlier load handed out are released once no other table holds them. Routes the game wrote itself are never released by a load.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -136,6 +152,32 @@
 			<return type="PackedInt64Array" />
 			<description>
 				The routes stored in this table, in row order.
+			</description>
+		</method>
+		<method name="save">
+			<return type="NetwPromise" />
+			<param index="0" name="database" type="NetwDatabase" />
+			<param index="1" name="key" type="StringName" />
+			<param index="2" name="ids" type="PackedStringArray" />
+			<description>
+				Stores the committed rows as one snapshot under [param key] in [param database], and settles with an [enum @GlobalScope.Error]. [param ids] names each row in the order of [method read_routes]. The rows are copied before this returns, so a later [method commit] does not change what is written.
+				A snapshot of zero rows is stored, and loading it empties the table. Values are stored at full precision whatever the column's wire quantizer.
+				[codeblock lang=text]
+				Error
+				┠╴OK                     the snapshot was stored
+				┠╴ERR_UNAUTHORIZED       this peer holds no session authority
+				┠╴ERR_INVALID_DATA       an id is empty or repeated, the ids and rows disagree in
+				│                        count, or the connection answered no outcome
+				┠╴ERR_INVALID_PARAMETER  the key is empty, or the schema has a COLUMN_ENTITY column
+				┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions,
+				│                        or the table's schema is not sealed
+				┠╴ERR_UNCONFIGURED       the database is not open
+				┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+				┠╴ERR_UNAVAILABLE        the connection implements no _write_batch, or the
+				│                        database closed before the snapshot settled
+				┖╴backend-defined        the backend refused or could not complete the write
+				[/codeblock]
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="write_column">

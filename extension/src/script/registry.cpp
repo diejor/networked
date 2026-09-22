@@ -24,8 +24,6 @@ StringName script_book_key(ScriptBook p_book) {
     switch (p_book) {
         case SCRIPT_DESPAWN:
             return StringName("netw_despawn_config");
-        case SCRIPT_PERSISTENCE:
-            return StringName("netw_persistence_config");
     }
     return StringName();
 }

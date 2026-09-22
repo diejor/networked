@@ -41,7 +41,7 @@
 		<method name="leave">
 			<return type="NetwPromise" />
 			<description>
-				[method NetwMultiplayer.session_leave]: leaves the session this handle was created by, returning the promise that resolves once the peer is down.
+				Leaves the session this handle was created by. The session authority saves its entity rows first, and a row the database refuses keeps the session online. The promise resolves with an [enum @GlobalScope.Error] once the peer is down or the save failed. Forwards to [method NetwMultiplayer.session_leave].
 			</description>
 		</method>
 		<method name="player_of" qualifiers="const">
@@ -59,6 +59,21 @@
 				[method NetwMultiplayer.scene_request]: asks server authority for the scene at [param path] over [param scope], one of [enum NetwMultiplayer.SceneChange], returning the promise that resolves when the scene is live or rejects when authority declines.
 				A scene already live is reached by [method Netw.scene] and read through its own [NetwSceneHandle]; this verb is the asking.
 				[b]Player request.[/b]
+			</description>
+		</method>
+		<method name="save_entities">
+			<return type="NetwPromise" />
+			<description>
+				Writes every entity row that changed since its last save, including the final rows of entities that already left, and waits for the writes each [NetwDatabase] had already admitted. The promise resolves with an [enum @GlobalScope.Error]. It is [constant @GlobalScope.OK] when every row is stored, and the error of the first row still unsaved otherwise.
+				Call it again to retry a row the database refused. [method leave] runs the same save before the peer goes down. A row's code is one of those [method NetwPersistenceHandle.save] lists.
+				[codeblock lang=text]
+				Error
+				┠╴OK                every changed row is stored
+				┠╴ERR_UNAUTHORIZED  this peer holds no session authority
+				┠╴ERR_UNCONFIGURED  this handle outlived its session
+				┖╴a row's code      the first row still unsaved
+				[/codeblock]
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="set_server_info">

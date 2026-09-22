@@ -4,7 +4,7 @@
 		The named-value row a persisted or sampled value travels as, and the base a script subclasses to supply its own storage.
 	</brief_description>
 	<description>
-		[NetwRecord] is the shared value object behind [NetwPersistenceEngine] persistence, [NetwDatabase] rows, and detached state samples. It stores named values without owning the scene object those values came from.
+		[NetwRecord] is the shared value object behind saved entity rows, [NetwDatabase] rows, and detached state samples. It stores named values without owning the scene object those values came from.
 		[codeblock]
 		var row: NetwRecord = await db.table(&amp;"players").fetch(username)
 		var health: int = row.get_value(&amp;"health", 100)

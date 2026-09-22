@@ -240,6 +240,12 @@ Ref<NetwPromise> NetwSessionHandle::leave() {
                           : NetwPromise::resolved(ERR_UNCONFIGURED);
 }
 
+Ref<NetwPromise> NetwSessionHandle::save_entities() {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->persist_flush_all()
+                          : NetwPromise::resolved(ERR_UNCONFIGURED);
+}
+
 Ref<NetwPromise> NetwSessionHandle::request_scene(
     const String &p_path,
     int64_t p_scope
@@ -371,6 +377,10 @@ void NetwSessionHandle::_bind_methods() {
     ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "stats"), "", "get_stats");
 
     ClassDB::bind_method(D_METHOD("leave"), &NetwSessionHandle::leave);
+    ClassDB::bind_method(
+        D_METHOD("save_entities"),
+        &NetwSessionHandle::save_entities
+    );
     ClassDB::bind_method(
         D_METHOD("kick", "player", "reason"),
         &NetwSessionHandle::kick,

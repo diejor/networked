@@ -6,59 +6,40 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The schema registry and read/write surface of the persistence layer.
+/// One named save store of one session, reached by <see cref="Netw.Database"/>.
 /// </summary>
 /// <remarks>
-/// Save one as a <c>.tres</c> file, give it a
-/// <see cref="NetwDatabase.Backend"/>, and name it from an archetype through
-/// <see cref="Netw.ConfigurePersistence"/> so a
-/// <see cref="NetwPersistenceEngine"/> persists into it. Every verb that
-/// reaches the backend returns a <see cref="NetwPromise"/> rather than the
-/// value, because a backend may be a disk or a socket and native code cannot
-/// suspend on the caller's behalf. <see cref="NetwPromise.Wait"/> is how the
-/// value arrives.
+/// A database holds records. A record is a
+/// <see cref="Godot.Collections.Dictionary"/> complete against a
+/// <see cref="NetwSchema"/>, stored under a durable <see cref="StringName"/>
+/// id, inside one slot. A slot is one independent set of records, which is what
+/// a game draws as a save file. A database admits no work until its
+/// <see cref="NetwDatabase.Open"/> has settled. Await it before starting play.
 /// <code>
-/// var record: NetwRecord = await db.table(&amp;"players").fetch(username).wait()
-/// </code>
-/// <para>
-/// <b>Tables</b> A table is a named set of records reached through
-/// <see cref="NetwDatabase.Table"/>, which returns a
-/// <see cref="NetwRecordTable"/>. A registered table name also resolves as a
-/// property, so <c>db.players</c> is <c>db.table(&amp;"players")</c> with
-/// autocompletion.
-/// <code>
-/// var record := await db.table(&amp;"players").fetch(username).wait()
-/// var same := await db.players.fetch(username).wait()
-/// </code>
-/// </para>
-/// <para>
-/// <b>Slots</b> A slot is one independent save namespace. Choose one with
-/// <see cref="NetwDatabase.OpenSlot"/> before the first schema registration
-/// locks the backend, which is what makes the choice startup-only. Backends
-/// receive the selected slot when they initialize and scope every record under
-/// it.
-/// <code>
-/// NetwDatabase
-/// └── open_slot(&amp;"slot_2")
+/// func _ready() -&gt; void:
+///     Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
 ///
-/// Backend namespace
-/// └── slot_2
-///     ├── players
-///     │   └── valeria
-///     └── world
-///         └── chest_01
+/// func start_game(slot: StringName) -&gt; void:
+///     var db: NetwDatabase = Netw.database(self, &amp;"saves")
+///     var error: Error = await db.open(slot).wait()
+///     if error != OK:
+///         show_load_error(error)
+///         return
+///     enter_game()
 /// </code>
-/// </para>
 /// <para>
-/// <see cref="NetwDatabase.ListSlots"/> and
-/// <see cref="NetwDatabase.DeleteSlot"/> work before a slot is open, because
-/// they read and remove backend namespaces by name. That is what a save-select
-/// menu needs. <b>Schema drift</b> When a loaded record carries columns the
-/// current schema does not declare, <see cref="NetwDatabase.MismatchPolicy"/>
-/// decides what happens to it. When a column's stored value disagrees with the
-/// type its <see cref="NetwSchema"/> declared, that one column is dropped with
-/// a warning and the live scene keeps its default, so a save written by an
-/// older build stays partly readable rather than wholly rejected.
+/// Every asynchronous method answers a <see cref="NetwPromise"/>. Read its
+/// settled value with <c>await promise.wait()</c>. A call refused on entry
+/// fails the promise, and <c>wait()</c> then answers the
+/// <c>@GlobalScope.Error</c>. Operations on one record settle in the order they
+/// were admitted, however long an earlier one takes, and that includes a read
+/// after a write. Operations on different records do not wait for each other.
+/// The values a write submits are frozen when it is admitted, so changing the
+/// <see cref="Godot.Collections.Dictionary"/> afterwards cannot change what is
+/// stored. An entity row that fails to load or save emits
+/// <see cref="NetwDatabase.Failed"/>. Rows also save on their own interval and
+/// when their entity leaves, so this signal is where a game hears about a save
+/// nobody awaited.
 /// </para>
 /// </remarks>
 public sealed class NetwDatabase : NetwRefCounted
@@ -77,246 +58,231 @@ public sealed class NetwDatabase : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    public enum SchemaMismatchPolicy : long
+    /// <summary>
+    /// Emitted when an entity row in this database fails to load or save.
+    /// <c>detail</c> names the record. A failed load emits no
+    /// <see cref="NetwPersistenceHandle.Loaded"/> and a failed save emits no
+    /// <see cref="NetwPersistenceHandle.Saved"/>.
+    /// <c>NetwMultiplayer.database_failed</c>. A load or save that settles
+    /// after session authority moved or the database closed is canceled and
+    /// emits nothing.
+    /// <code>
+    /// func _ready() -&gt; void:
+    ///     Netw.database(self, &amp;"saves").failed.connect(show_save_error)
+    ///
+    /// func show_save_error(_error: Error, detail: String) -&gt; void:
+    ///     status.text = detail
+    /// </code>
+    /// <para>
+    /// A row that failed to save stays owed, and
+    /// <see cref="NetwSessionHandle.SaveEntities"/> writes it again.
+    /// </para>
+    /// </summary>
+    public event Action<long, string> Failed
     {
-        /// <summary>
-        /// Delete the record and start fresh.
-        /// </summary>
-        Purge = 0,
-        /// <summary>
-        /// Strip the undeclared columns from the loaded data and proceed with
-        /// the known ones. Columns the schema declares that the record does not
-        /// carry take their scene defaults.
-        /// </summary>
-        LoadPartial = 1,
-        /// <summary>
-        /// Reject the read with <c>@GlobalScope.ERR_UNCONFIGURED</c> and leave
-        /// the record unchanged.
-        /// </summary>
-        Fail = 2,
+        add => Connect("failed", Callable.From(value));
+        remove => Disconnect("failed", Callable.From(value));
     }
 
-    /// <summary>
-    /// Emitted after a record is read from the backend. <c>hit</c> is
-    /// <c>false</c> when no record was found, which is a miss rather than a
-    /// failure.
-    /// </summary>
-    public event Action<StringName, StringName, bool> RecordLoaded
-    {
-        add => Connect("record_loaded", Callable.From(value));
-        remove => Disconnect("record_loaded", Callable.From(value));
-    }
+    private static readonly IntPtr _bindGetDatabaseName =
+        NetwApi.MethodBind("NetwDatabase", "get_database_name", 2002593661UL);
 
     /// <summary>
-    /// Emitted whenever a table's declared columns change. <c>columns</c> is
-    /// the full merged column list, not only the columns this declaration
-    /// added.
+    /// The name this database was declared under.
     /// </summary>
-    public event Action<StringName, Godot.Collections.Array> SchemaRegistered
-    {
-        add => Connect("schema_registered", Callable.From(value));
-        remove => Disconnect("schema_registered", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when a loaded record disagrees with the current schema.
-    /// <c>missing</c> is the columns the schema declares that the record does
-    /// not carry, which is safe and takes scene defaults. <c>unknown</c> is the
-    /// columns the record carries that the schema does not declare, which is
-    /// what <see cref="NetwDatabase.MismatchPolicy"/> judges.
-    /// </summary>
-    public event Action<
-        StringName,
-        StringName,
-        Godot.Collections.Array,
-        Godot.Collections.Array> SchemaMismatch
-    {
-        add => Connect("schema_mismatch", Callable.From(value));
-        remove => Disconnect("schema_mismatch", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted after a <see cref="NetwDatabase.Transaction"/> commits
-    /// successfully, counting the tables and records the batch touched. A
-    /// commit that returned an error announces nothing.
-    /// </summary>
-    public event Action<long, long> TransactionCommitted
-    {
-        add => Connect("transaction_committed", Callable.From(value));
-        remove => Disconnect("transaction_committed", Callable.From(value));
-    }
-
-    private static readonly IntPtr _bindGetBackend =
-        NetwApi.MethodBind("NetwDatabase", "get_backend", 1676167366UL);
-
-    private static readonly IntPtr _bindSetBackend =
-        NetwApi.MethodBind("NetwDatabase", "set_backend", 3870687910UL);
-
-    /// <summary>
-    /// The storage this database reads and writes through. Assign it before the
-    /// first read or write, which is what initializes the backend and locks the
-    /// slot. A database with no backend rejects every call rather than dropping
-    /// writes quietly.
-    /// </summary>
-    public NetwDatabaseBackend Backend
+    public StringName Name
     {
         get
         {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(_bindGetBackend, Checked, ref answered);
-            return NetwDatabaseBackend.Adopt(answered);
-        }
-        set
-        {
-            IntPtr slot0 = value?.Native ?? IntPtr.Zero;
-            long discarded = default;
-            NetwThunks.Ptrcall1_IntPtr_Long(
-                _bindSetBackend,
-                Checked,
-                in slot0,
-                ref discarded);
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetDatabaseName, Checked, ref answered);
+            StringName result = VariantUtils.ConvertToStringName(answered);
+            answered.Dispose();
+            return result;
         }
     }
 
-    private static readonly IntPtr _bindGetMismatchPolicy =
-        NetwApi.MethodBind("NetwDatabase", "get_mismatch_policy", 976988900UL);
-
-    private static readonly IntPtr _bindSetMismatchPolicy =
-        NetwApi.MethodBind("NetwDatabase", "set_mismatch_policy", 1090097976UL);
+    private static readonly IntPtr _bindGetSlot =
+        NetwApi.MethodBind("NetwDatabase", "get_slot", 2002593661UL);
 
     /// <summary>
-    /// What happens when a loaded record carries columns the current schema
-    /// does not declare. The default is the least destructive reading: a stray
-    /// column is dropped and the rest of the row loads, because a save file is
-    /// the player's and a schema that grew a column is the ordinary case rather
-    /// than corruption.
+    /// The open slot, or empty when this database is not open.
+    /// <c>NetwMultiplayer.database_get_slot</c>.
     /// </summary>
-    public NetwDatabase.SchemaMismatchPolicy MismatchPolicy
+    public StringName Slot
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetSlot, Checked, ref answered);
+            StringName result = VariantUtils.ConvertToStringName(answered);
+            answered.Dispose();
+            return result;
+        }
+    }
+
+    private static readonly IntPtr _bindGetState =
+        NetwApi.MethodBind("NetwDatabase", "get_state", 1003870803UL);
+
+    /// <summary>
+    /// A <see cref="NetwMultiplayer.DatabaseState"/> saying whether this
+    /// database is closed, opening, open, closing or faulted.
+    /// <c>NetwMultiplayer.database_get_state</c>.
+    /// </summary>
+    public NetwMultiplayer.DatabaseState State
     {
         get
         {
             long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetMismatchPolicy,
-                Checked,
-                ref answered);
-            return (NetwDatabase.SchemaMismatchPolicy)answered;
-        }
-        set
-        {
-            long slot0 = (long)value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetMismatchPolicy,
-                Checked,
-                in slot0,
-                ref discarded);
+            NetwThunks.Ptrcall0_Long(_bindGetState, Checked, ref answered);
+            return (NetwMultiplayer.DatabaseState)answered;
         }
     }
 
-    private static readonly IntPtr _bindGetWarmPolicy =
-        NetwApi.MethodBind("NetwDatabase", "get_warm_policy", 116303425UL);
-
-    private static readonly IntPtr _bindSetWarmPolicy =
-        NetwApi.MethodBind("NetwDatabase", "set_warm_policy", 1261461937UL);
+    private static readonly IntPtr _bindOpen =
+        NetwApi.MethodBind("NetwDatabase", "open", 2495519093UL);
 
     /// <summary>
-    /// The per-table cache-warming strategy applied when the backend
-    /// initializes, which is the first read or write. Assign <c>null</c> to
-    /// leave every table to lazy fetch-on-miss. Synchronous backends ignore it.
-    /// Never assigned, this reads <c>null</c> and warming runs through a stock
-    /// <see cref="WarmPolicy"/>, which warms everything. Assigning <c>null</c>
-    /// is therefore not the same as leaving it alone, and the two read alike
-    /// from the getter: one turns warming off and the other is the untouched
-    /// default.
+    /// Opens <paramref name="slot"/> and settles with an
+    /// <c>@GlobalScope.Error</c>. Nothing this database admits reaches storage
+    /// before it settles. <c>NetwMultiplayer.database_open</c>. Opening the
+    /// slot that is already open succeeds without reopening it. A second open
+    /// of the same slot while the first is still running shares that first
+    /// result. Opening a different slot is refused with
+    /// <c>@GlobalScope.ERR_BUSY</c>, so close the one that is open first. An
+    /// open that fails leaves the database closed, which is what makes a retry
+    /// safe.
     /// </summary>
-    public WarmPolicy WarmPolicy
+    public NetwPromise Open(StringName slot)
     {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindGetWarmPolicy,
-                Checked,
-                ref answered);
-            return WarmPolicy.Adopt(answered);
-        }
-        set
-        {
-            IntPtr slot0 = value?.Native ?? IntPtr.Zero;
-            long discarded = default;
-            NetwThunks.Ptrcall1_IntPtr_Long(
-                _bindSetWarmPolicy,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindTable =
-        NetwApi.MethodBind("NetwDatabase", "table", 3635829084UL);
-
-    /// <summary>
-    /// A <see cref="NetwRecordTable"/> onto <paramref name="table"/>. The
-    /// handle is created per call and holds no cache, so asking twice costs one
-    /// small object and returns the same table. The table does not need to be
-    /// registered first: registration happens through
-    /// <see cref="NetwDatabase.DeclareTable"/> or through the archetype a
-    /// <see cref="NetwPersistenceEngine"/> declares.
-    /// </summary>
-    public NetwRecordTable Table(StringName table)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
+        godot_variant slot0 = VariantUtils.CreateFromStringName(slot);
         godot_variant answered = default;
-        NetwThunks.Call1(_bindTable, Checked, in slot0, ref answered);
+        NetwThunks.Call1(_bindOpen, Checked, in slot0, ref answered);
         slot0.Dispose();
-        NetwRecordTable result =
-            NetwRecordTable.Adopt(
+        NetwPromise result =
+            NetwPromise.Adopt(
                 NetwApi.Retained(
                     VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
     }
 
-    private static readonly IntPtr _bindDeclareTable =
-        NetwApi.MethodBind("NetwDatabase", "declare_table", 2838675807UL);
+    private static readonly IntPtr _bindClose =
+        NetwApi.MethodBind("NetwDatabase", "close", 1931563502UL);
 
     /// <summary>
-    /// Declares <paramref name="table"/> from <paramref name="schema"/>,
-    /// optionally binding <paramref name="recordScript"/> as the
-    /// <see cref="NetwRecord"/> subclass its reads hydrate into. This is the
-    /// build-time entry point for declaring a table before any runtime query,
-    /// which is what keeps a first read from meeting an undeclared table and
-    /// rejecting it. <paramref name="schema"/> is a <see cref="NetwSchema"/>,
-    /// the same declaration a replicated table and a property binding compile
-    /// from, and it is what gives the database the column types it needs to
-    /// reject a value of the wrong shape instead of assigning it. A bare
-    /// <see cref="Godot.Collections.Array"/> of column names is accepted as the
-    /// untyped form, and a table declared that way coerces nothing.
+    /// Stops admitting work, waits for everything already admitted to settle,
+    /// releases the slot and advances this database's generation, then settles
+    /// with an <c>@GlobalScope.Error</c>.
+    /// <c>NetwMultiplayer.database_close</c>. An operation issued before the
+    /// close settles normally. One that was still outstanding when the
+    /// connection went away settles as canceled and never as a save.
+    /// </summary>
+    public NetwPromise Close()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindClose, Checked, ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindFlush =
+        NetwApi.MethodBind("NetwDatabase", "flush", 1931563502UL);
+
+    /// <summary>
+    /// Settles with an <c>@GlobalScope.Error</c> once every operation admitted
+    /// before this call has settled. It gathers no new state, so a value
+    /// changed after the call is not included.
+    /// <c>NetwMultiplayer.database_flush</c>.
+    /// </summary>
+    public NetwPromise Flush()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindFlush, Checked, ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindRead =
+        NetwApi.MethodBind("NetwDatabase", "read", 794457893UL);
+
+    /// <summary>
+    /// Reads the record at <paramref name="id"/> and settles with a
+    /// <see cref="Godot.Collections.Dictionary"/> snapshot.
+    /// <c>NetwMultiplayer.database_read</c>. Absence and failure are separate
+    /// answers. A record nobody has saved yet settles with <c>found</c> false
+    /// and <c>error</c> OK, and a record storage could not be asked about
+    /// carries the error. A read on a closed database, with an unsealed schema
+    /// or an empty id, fails the promise.
     /// <code>
-    /// db.declare_table(&amp;"rocks", Netw.configure_schema(&amp;"rocks")
-    ///         .replicated(false), RockRecord)
-    ///
-    /// db.declare_table(&amp;"rocks", [&amp;"health", &amp;"position"])   # untyped
+    /// Dictionary
+    /// ┠╴error    Error       @GlobalScope.Error. Check it before reading anything else
+    /// ┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
+    /// ┠╴found    bool        whether a record was stored under id. False on any failure
+    /// ┠╴id       StringName  the record id the read asked for
+    /// ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
+    ///                       schema that read it. Empty unless found is true
+    /// </code>
+    /// <code>
+    /// var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
+    /// if read.error != OK:
+    ///     show_load_error(read.error)
+    ///     return
+    /// if read.found:
+    ///     player.gold = read.values[&amp;"gold"]
     /// </code>
     /// <para>
-    /// Declaring the same table again merges the new columns in. Declaring
-    /// costs nothing on its own: the backend initializes on the first read or
-    /// write instead, so every table declared before then is part of one
-    /// initialization and one warm pass however many engines registered.
+    /// <c>values</c> is the caller's own copy, so changing it cannot reach
+    /// stored state.
     /// </para>
     /// </summary>
-    public void DeclareTable(
-        StringName table,
-        Variant schema = default,
-        Script recordScript = null)
+    public NetwPromise Read(NetwSchema schema, StringName id)
     {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 = schema.CopyNativeVariant();
-        godot_variant slot2 = VariantUtils.CreateFromGodotObject(recordScript);
+        godot_variant slot0 =
+            VariantUtils.CreateFromGodotObjectPtr(
+                schema?.Native ?? IntPtr.Zero);
+        godot_variant slot1 = VariantUtils.CreateFromStringName(id);
+        godot_variant answered = default;
+        NetwThunks.Call2(_bindRead, Checked, in slot0, in slot1, ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindWrite =
+        NetwApi.MethodBind("NetwDatabase", "write", 659202569UL);
+
+    /// <summary>
+    /// Replaces the whole record at <paramref name="id"/> and settles with an
+    /// <c>@GlobalScope.Error</c>. <c>NetwMultiplayer.database_write</c>.
+    /// <paramref name="values"/> must carry every column
+    /// <paramref name="schema"/> declares, at the declared type and stride, and
+    /// nothing else. A row that does not is refused before the backend sees it,
+    /// so a bad write never reaches storage. A successful write means the
+    /// backing store acknowledged it.
+    /// <code>
+    /// var error: Error = await db.write(PlayerSave.schema, account_id, {
+    ///     &amp;"gold": player.gold,
+    ///     &amp;"position": player.position,
+    /// }).wait()
+    /// </code>
+    /// </summary>
+    public NetwPromise Write(
+        NetwSchema schema,
+        StringName id,
+        Godot.Collections.Dictionary values)
+    {
+        godot_variant slot0 =
+            VariantUtils.CreateFromGodotObjectPtr(
+                schema?.Native ?? IntPtr.Zero);
+        godot_variant slot1 = VariantUtils.CreateFromStringName(id);
+        godot_variant slot2 = VariantUtils.CreateFromDictionary(values);
         godot_variant answered = default;
         NetwThunks.Call3(
-            _bindDeclareTable,
+            _bindWrite,
             Checked,
             in slot0,
             in slot1,
@@ -325,169 +291,47 @@ public sealed class NetwDatabase : NetwRefCounted
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindGetColumnType =
-        NetwApi.MethodBind("NetwDatabase", "get_column_type", 2419549490UL);
-
-    /// <summary>
-    /// The declared <see cref="NetwMultiplayer.ColumnType"/> of one column, or
-    /// <c>-1</c> when the table was declared without types. An untyped table
-    /// coerces nothing, which is what keeps the bare-names form of
-    /// <see cref="NetwDatabase.DeclareTable"/> from silently changing a game's
-    /// saves.
-    /// </summary>
-    public int GetColumnType(StringName table, StringName column)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(column);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindGetColumnType,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        int result = VariantUtils.ConvertToInt32(answered);
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
     }
 
-    private static readonly IntPtr _bindGetRegisteredColumns =
-        NetwApi.MethodBind(
-            "NetwDatabase",
-            "get_registered_columns",
-            3147814860UL);
+    private static readonly IntPtr _bindPatch =
+        NetwApi.MethodBind("NetwDatabase", "patch", 659202569UL);
 
     /// <summary>
-    /// The column names registered for <paramref name="table"/>, or an empty
-    /// array when nothing has declared it yet.
+    /// Replaces the fields <paramref name="values"/> names in the record at
+    /// <paramref name="id"/>, keeps the rest, and settles with an
+    /// <c>@GlobalScope.Error</c>. <c>NetwMultiplayer.database_patch</c>. A
+    /// record that is not there is refused with
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>, because a patch has nothing to
+    /// merge into. An empty <paramref name="values"/> succeeds without touching
+    /// storage. A field the schema does not declare refuses the whole patch.
     /// </summary>
-    public Godot.Collections.Array GetRegisteredColumns(StringName table)
+    public NetwPromise Patch(
+        NetwSchema schema,
+        StringName id,
+        Godot.Collections.Dictionary values)
     {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindGetRegisteredColumns,
-            Checked,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindFind =
-        NetwApi.MethodBind("NetwDatabase", "find", 2772463521UL);
-
-    /// <summary>
-    /// Reads the stored record for <paramref name="id"/> in
-    /// <paramref name="table"/> and settles with it as a
-    /// <see cref="Godot.Collections.Dictionary"/>, which is the read
-    /// <see cref="NetwRecordTable.Fetch"/> hydrates into a
-    /// <see cref="NetwRecord"/>. The record is storage currency rather than
-    /// domain currency, so a caller reads columns off it without knowing the
-    /// table's record script. An absent record settles as an empty
-    /// <see cref="Godot.Collections.Dictionary"/>, because a first play has
-    /// nothing saved and that is a result rather than a failure. Two states
-    /// reject instead, since no read can run in them at all: a table with no
-    /// declared schema, and a record <see cref="NetwDatabase.MismatchPolicy"/>
-    /// rejected outright.
-    /// <code>
-    /// db.find(&amp;"players", username).then(
-    ///     func(record: Dictionary) -&gt; void:
-    ///         engine.apply(record),
-    /// )
-    /// </code>
-    /// </summary>
-    public NetwPromise Find(StringName table, StringName id)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
+        godot_variant slot0 =
+            VariantUtils.CreateFromGodotObjectPtr(
+                schema?.Native ?? IntPtr.Zero);
         godot_variant slot1 = VariantUtils.CreateFromStringName(id);
+        godot_variant slot2 = VariantUtils.CreateFromDictionary(values);
         godot_variant answered = default;
-        NetwThunks.Call2(_bindFind, Checked, in slot0, in slot1, ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindFindAll =
-        NetwApi.MethodBind("NetwDatabase", "find_all", 137978769UL);
-
-    /// <summary>
-    /// Reads every stored record in <paramref name="table"/> matching
-    /// <paramref name="filter"/> and settles with them as an
-    /// <see cref="Godot.Collections.Array"/> of
-    /// <see cref="Godot.Collections.Dictionary"/>. An empty
-    /// <paramref name="filter"/> returns the whole table. Rejects with
-    /// <c>@GlobalScope.ERR_UNCONFIGURED</c> when the table has no declared
-    /// schema or the database has no <see cref="NetwDatabase.Backend"/>, on the
-    /// same reading as <see cref="NetwDatabase.Find"/>.
-    /// </summary>
-    public NetwPromise FindAll(
-        StringName table,
-        Godot.Collections.Dictionary filter = null)
-    {
-        filter ??= new Godot.Collections.Dictionary();
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(filter);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindFindAll,
+        NetwThunks.Call3(
+            _bindPatch,
             Checked,
             in slot0,
             in slot1,
+            in slot2,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindTransaction =
-        NetwApi.MethodBind("NetwDatabase", "transaction", 4104835065UL);
-
-    /// <summary>
-    /// Collects writes inside <paramref name="body"/> and commits them as one
-    /// batch. <paramref name="body"/> receives a <see cref="NetwTransaction"/>
-    /// and calls <see cref="NetwTransaction.QueueUpsert"/> for each record to
-    /// write. The commit runs once <paramref name="body"/> returns, which is
-    /// what makes it happen exactly once however the body exits. The promise
-    /// resolves with an <c>@GlobalScope.Error</c>. Read the code from
-    /// <see cref="NetwPromise.Result"/>.
-    /// <see cref="NetwDatabase.TransactionCommitted"/> is emitted only after a
-    /// commit returns <c>@GlobalScope.OK</c>.
-    /// <code>
-    /// var err: Error = await db.transaction(
-    ///     func(tx: NetwTransaction) -&gt; void:
-    ///         tx.queue_upsert(&amp;"rocks", &amp;"rock_1", {&amp;"health": 50})
-    /// ).wait()
-    /// </code>
-    /// <para>
-    /// A caller that must not suspend, such as a pump that would let its next
-    /// round start inside this one, chains <see cref="NetwPromise.Then"/> on
-    /// the same result instead of awaiting it.
-    /// </para>
-    /// </summary>
-    public NetwPromise Transaction(Callable body)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromCallable(body);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindTransaction, Checked, in slot0, ref answered);
-        slot0.Dispose();
+        slot2.Dispose();
         NetwPromise result =
             NetwPromise.Adopt(
                 NetwApi.Retained(
@@ -497,17 +341,18 @@ public sealed class NetwDatabase : NetwRefCounted
     }
 
     private static readonly IntPtr _bindErase =
-        NetwApi.MethodBind("NetwDatabase", "erase", 2772463521UL);
+        NetwApi.MethodBind("NetwDatabase", "erase", 794457893UL);
 
     /// <summary>
-    /// Permanently removes <paramref name="id"/> from <paramref name="table"/>,
-    /// settling with an <c>@GlobalScope.Error</c>. A database with no
-    /// <see cref="NetwDatabase.Backend"/> rejects with
-    /// <c>@GlobalScope.ERR_UNCONFIGURED</c>.
+    /// Removes the record at <paramref name="id"/> and settles with an
+    /// <c>@GlobalScope.Error</c>. Erasing a record that is not there succeeds.
+    /// <c>NetwMultiplayer.database_erase</c>.
     /// </summary>
-    public NetwPromise Erase(StringName table, StringName id)
+    public NetwPromise Erase(NetwSchema schema, StringName id)
     {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
+        godot_variant slot0 =
+            VariantUtils.CreateFromGodotObjectPtr(
+                schema?.Native ?? IntPtr.Zero);
         godot_variant slot1 = VariantUtils.CreateFromStringName(id);
         godot_variant answered = default;
         NetwThunks.Call2(_bindErase, Checked, in slot0, in slot1, ref answered);
@@ -521,89 +366,56 @@ public sealed class NetwDatabase : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindWarm =
-        NetwApi.MethodBind("NetwDatabase", "warm", 524528441UL);
+    private static readonly IntPtr _bindScan =
+        NetwApi.MethodBind("NetwDatabase", "scan", 2758729333UL);
 
     /// <summary>
-    /// Warms <paramref name="table"/> into the backend cache per
-    /// <paramref name="request"/> at runtime, settling with an
-    /// <c>@GlobalScope.Error</c>. This is the escape hatch for driving warming
-    /// from a game's own hooks, a scene load or a menu, rather than from
-    /// <see cref="NetwDatabase.WarmPolicy"/> at initialization. A synchronous
-    /// backend has no cache to fill and returns <c>@GlobalScope.OK</c> without
-    /// doing anything.
+    /// Reads storage a page at a time, settling with a
+    /// <see cref="Godot.Collections.Dictionary"/> of up to
+    /// <paramref name="limit"/> records matching <paramref name="filter"/>.
+    /// <c>NetwMultiplayer.database_scan</c>. A page fails whole, so a single
+    /// record the schema cannot read leaves <c>records</c> empty and
+    /// <c>error</c> set. An empty <c>records</c> with a nonempty <c>cursor</c>
+    /// means this page matched nothing, not that the scan is finished. Pass the
+    /// page's cursor back as <paramref name="cursor"/> to continue. The scan is
+    /// finished when <c>cursor</c> is empty.
+    /// <code>
+    /// Dictionary
+    /// ┠╴error    Error             @GlobalScope.Error. Check it before reading records
+    /// ┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
+    /// ┠╴records  Array[Dictionary]  each one a read reply, drawn on [method read]
+    /// ┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
+    /// </code>
+    /// <code>
+    /// var cursor := ""
+    /// while true:
+    ///     var page: Dictionary = await db.scan(PlayerSave.schema, {}, cursor).wait()
+    ///     if page.error != OK:
+    ///         show_load_error(page.error)
+    ///         return
+    ///     for read in page.records:
+    ///         roster.append(read.values)
+    ///     if page.cursor.is_empty():
+    ///         break
+    ///     cursor = page.cursor
+    /// </code>
     /// </summary>
-    public NetwPromise Warm(StringName table, WarmRequest request)
+    public NetwPromise Scan(
+        NetwSchema schema,
+        Godot.Collections.Dictionary filter = null,
+        string cursor = "",
+        int limit = 100)
     {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(table);
-        godot_variant slot1 =
+        filter ??= new Godot.Collections.Dictionary();
+        godot_variant slot0 =
             VariantUtils.CreateFromGodotObjectPtr(
-                request?.Native ?? IntPtr.Zero);
-        godot_variant answered = default;
-        NetwThunks.Call2(_bindWarm, Checked, in slot0, in slot1, ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindTableFlush =
-        NetwApi.MethodBind("NetwDatabase", "table_flush", 1151514272UL);
-
-    /// <summary>
-    /// Saves <paramref name="table"/>'s committed rows into
-    /// <paramref name="into"/> as one record. The unit of commit and of hydrate
-    /// is the whole table, because routes must be re-created as a set, so a
-    /// table saves as one record rather than one record per row. Two thousand
-    /// rows are one file on the file-system backend, not two thousand.
-    /// <code>
-    /// db.&lt;into&gt;
-    ///  ┖╴&lt;schema name&gt;          the one record
-    ///       ┠╴ids               PackedStringArray, parallel to the row order
-    ///       ┖╴&lt;column key&gt;      the committed storage array, verbatim
-    /// </code>
-    /// <para>
-    /// <paramref name="ids"/> names the row whose route is
-    /// <c>session.table_read_routes(table)[i]</c>. Stable identity is the
-    /// caller's domain, since they created the rows, and it is what lets a
-    /// fresh session rebuild its own indexes from
-    /// <see cref="NetwDatabase.TableHydrate"/>. Save keys never ride the wire
-    /// and routes never touch the disk. Values are the committed storage
-    /// arrays, which quantization never touches, so a quantized column saves at
-    /// full precision. A <see cref="NetwMultiplayer.ColumnType.Entity"/> column
-    /// is skipped with one warning, because a route is meaningless in the
-    /// session that loads it. The result is a <see cref="NetwPromise"/> because
-    /// the write is a database write, and it settles with the
-    /// <c>@GlobalScope.Error</c> the write reached.
-    /// <code>
-    /// Error
-    /// ┠╴OK                  written
-    /// ┠╴ERR_UNCONFIGURED    no table name, or session is not the server
-    /// ┠╴ERR_DOES_NOT_EXIST  the handle names no table
-    /// ┖╴ERR_INVALID_DATA    ids.size() disagrees with the committed row count
-    /// </code>
-    /// </para>
-    /// <para>
-    /// <b>Server Only.</b>
-    /// </para>
-    /// </summary>
-    public NetwPromise TableFlush(
-        MultiplayerApi session,
-        Rid table,
-        StringName into,
-        string[] ids)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(session);
-        godot_variant slot1 = VariantUtils.CreateFromRid(table);
-        godot_variant slot2 = VariantUtils.CreateFromStringName(into);
-        godot_variant slot3 = VariantUtils.CreateFromPackedStringArray(ids);
+                schema?.Native ?? IntPtr.Zero);
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(filter);
+        godot_variant slot2 = VariantUtils.CreateFromString(cursor);
+        godot_variant slot3 = VariantUtils.CreateFromInt((long)limit);
         godot_variant answered = default;
         NetwThunks.Call4(
-            _bindTableFlush,
+            _bindScan,
             Checked,
             in slot0,
             in slot1,
@@ -622,107 +434,18 @@ public sealed class NetwDatabase : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindTableHydrate =
-        NetwApi.MethodBind("NetwDatabase", "table_hydrate", 1990691343UL);
-
-    /// <summary>
-    /// Loads <paramref name="table"/>'s saved record from
-    /// <paramref name="into"/>, creates fresh routes for its rows, and commits
-    /// them into <paramref name="session"/>. Routes are session-scoped, so a
-    /// hydrate claims new ones rather than restoring the ones that were saved.
-    /// The returned pairing is how a caller rebuilds its own indexes against
-    /// the save keys it wrote.
-    /// <code>
-    /// Dictionary
-    /// ┠╴routes  PackedInt64Array    freshly claimed, the committed row order
-    /// ┖╴ids     PackedStringArray   parallel, the keys the flush wrote
-    /// </code>
-    /// <para>
-    /// Both arrays are empty when no record exists, which is the first-play
-    /// case rather than an error. A
-    /// <see cref="NetwMultiplayer.ColumnType.Entity"/> column zero-fills,
-    /// matching the skip at <see cref="NetwDatabase.TableFlush"/>. The result
-    /// is a <see cref="NetwPromise"/> settling with that
-    /// <see cref="Godot.Collections.Dictionary"/>, because the read is a
-    /// database read and the rows are committed on the edge it settles.
-    /// <b>Server Only.</b>
-    /// </para>
-    /// </summary>
-    public NetwPromise TableHydrate(
-        MultiplayerApi session,
-        Rid table,
-        StringName into)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(session);
-        godot_variant slot1 = VariantUtils.CreateFromRid(table);
-        godot_variant slot2 = VariantUtils.CreateFromStringName(into);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindTableHydrate,
-            Checked,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindOpenSlot =
-        NetwApi.MethodBind("NetwDatabase", "open_slot", 3304788590UL);
-
-    /// <summary>
-    /// Opens <paramref name="slot"/> as the active save namespace.
-    /// Startup-only: it must run before the first read or write initializes the
-    /// backend, which locks the choice. A call after that point is rejected
-    /// with an error and the open slot stands, because re-pointing a live
-    /// database at another save is a data loss with no way back. Declaring a
-    /// table does not lock it, so a slot can still be chosen after the
-    /// archetypes have registered.
-    /// </summary>
-    public void OpenSlot(StringName slot)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(slot);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindOpenSlot, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindCurrentSlot =
-        NetwApi.MethodBind("NetwDatabase", "current_slot", 2002593661UL);
-
-    /// <summary>
-    /// The active slot, <c>&amp;"default"</c> when
-    /// <see cref="NetwDatabase.OpenSlot"/> never ran.
-    /// </summary>
-    public StringName CurrentSlot()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindCurrentSlot, Checked, ref answered);
-        StringName result = VariantUtils.ConvertToStringName(answered);
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindListSlots =
         NetwApi.MethodBind("NetwDatabase", "list_slots", 1931563502UL);
 
     /// <summary>
-    /// Settles with every save-slot namespace the backend holds, as an
-    /// <see cref="Godot.Collections.Array"/> of <see cref="StringName"/>. Works
-    /// before <see cref="NetwDatabase.OpenSlot"/>, because it queries backend
-    /// namespace metadata rather than the open slot.
+    /// Answers every slot this backend holds, including a slot written by an
+    /// earlier run. Works before <see cref="NetwDatabase.Open"/>.
+    /// <c>NetwMultiplayer.database_list_slots</c>.
     /// <code>
-    /// for slot in await db.list_slots().wait():
-    ///     print(slot)
+    /// Dictionary
+    /// ┠╴error   Error              @GlobalScope.Error. Check it before reading slots
+    /// ┠╴detail  String             what went wrong, for a person to read. Empty when error is OK
+    /// ┖╴slots   PackedStringArray  every slot this backend holds, whether or not this process wrote it
     /// </code>
     /// </summary>
     public NetwPromise ListSlots()
@@ -736,10 +459,12 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "delete_slot", 2495519093UL);
 
     /// <summary>
-    /// Permanently removes <paramref name="slot"/> and every record under it,
-    /// settling with an <c>@GlobalScope.Error</c>. Works before
-    /// <see cref="NetwDatabase.OpenSlot"/>, because it names a backend
-    /// namespace rather than the open one.
+    /// Removes <paramref name="slot"/> and everything stored in it, then
+    /// settles with an <c>@GlobalScope.Error</c>. Deleting the slot this
+    /// process holds open is refused with <c>@GlobalScope.ERR_BUSY</c>.
+    /// <c>NetwMultiplayer.database_delete_slot</c>. This is an administration
+    /// call. It works before <see cref="NetwDatabase.Open"/>, which is how a
+    /// menu deletes a save the game has not loaded.
     /// </summary>
     public NetwPromise DeleteSlot(StringName slot)
     {
@@ -753,5 +478,20 @@ public sealed class NetwDatabase : NetwRefCounted
                     VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
+    }
+
+    private static readonly IntPtr _bindBatch =
+        NetwApi.MethodBind("NetwDatabase", "batch", 53058316UL);
+
+    /// <summary>
+    /// Returns a <see cref="NetwWriteBatch"/> that submits several writes and
+    /// erasures to this database in one call. It is synchronous, and nothing
+    /// reaches storage until the batch is submitted.
+    /// </summary>
+    public NetwWriteBatch Batch()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindBatch, Checked, ref answered);
+        return NetwWriteBatch.Adopt(answered);
     }
 }

@@ -15,7 +15,6 @@ enum MemberBook {
 
 enum ScriptBook {
     SCRIPT_DESPAWN,
-    SCRIPT_PERSISTENCE,
 };
 
 void declare_member(

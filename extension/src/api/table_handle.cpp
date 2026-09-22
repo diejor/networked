@@ -3,6 +3,7 @@
 #include "godot/callable.hpp"
 #include "godot/class_db.hpp"
 #include "netw/api/database.hpp"
+#include "netw/api/database_result.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/log.hpp"
@@ -166,34 +167,40 @@ PackedInt32Array NetwTableHandle::rows_of(const PackedInt64Array &p_routes
                           : PackedInt32Array();
 }
 
-Ref<NetwPromise> NetwTableHandle::flush(
+Ref<NetwPromise> NetwTableHandle::save(
     const Ref<NetwDatabase> &p_database,
-    const StringName &p_into,
+    const StringName &p_key,
     const PackedStringArray &p_ids
 ) {
     NetwMultiplayer *api = session();
-    if (p_database.is_null() || api == nullptr) {
+    if (api == nullptr || p_database.is_null() || !p_database->serves(api)) {
         return NetwPromise::rejected(
-            ERR_UNCONFIGURED,
-            "NetwTableHandle.flush: no database, or the session is gone"
+            ERR_DOES_NOT_EXIST,
+            "the table and the database belong to different sessions"
         );
     }
-    return p_database
-        ->table_flush(Ref<MultiplayerAPI>(api), table, p_into, p_ids);
+    return api->table_save(
+        table,
+        p_database->get_database(),
+        p_key,
+        p_ids
+    );
 }
 
-Ref<NetwPromise> NetwTableHandle::hydrate(
+Ref<NetwPromise> NetwTableHandle::load(
     const Ref<NetwDatabase> &p_database,
-    const StringName &p_into
+    const StringName &p_key
 ) {
     NetwMultiplayer *api = session();
-    if (p_database.is_null() || api == nullptr) {
-        return NetwPromise::rejected(
-            ERR_UNCONFIGURED,
-            "NetwTableHandle.hydrate: no database, or the session is gone"
+    if (api == nullptr || p_database.is_null() || !p_database->serves(api)) {
+        return NetwPromise::resolved(
+            table_load_failure(
+                ERR_DOES_NOT_EXIST,
+                "the table and the database belong to different sessions"
+            )
         );
     }
-    return p_database->table_hydrate(Ref<MultiplayerAPI>(api), table, p_into);
+    return api->table_load(table, p_database->get_database(), p_key);
 }
 
 void NetwTableHandle::_bind_methods() {
@@ -261,15 +268,15 @@ void NetwTableHandle::_bind_methods() {
         D_METHOD("rows_of", "routes"),
         &NetwTableHandle::rows_of
     );
+    ClassDB::bind_method(
+        D_METHOD("save", "database", "key", "ids"),
+        &NetwTableHandle::save
+    );
+    ClassDB::bind_method(
+        D_METHOD("load", "database", "key"),
+        &NetwTableHandle::load
+    );
 
-    ClassDB::bind_method(
-        D_METHOD("flush", "database", "into", "ids"),
-        &NetwTableHandle::flush
-    );
-    ClassDB::bind_method(
-        D_METHOD("hydrate", "database", "into"),
-        &NetwTableHandle::hydrate
-    );
 
     ADD_PROPERTY(PropertyInfo(Variant::RID, "table"), "", "get_table");
     ADD_PROPERTY(

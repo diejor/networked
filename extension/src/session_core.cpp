@@ -33,7 +33,12 @@ void SessionCore::set_state(State value) {
         return;
     }
     const State previous = state;
+    const bool held = holds_server_authority();
     state = value;
+    if (held != holds_server_authority() || previous == STATE_ONLINE
+        || value == STATE_ONLINE) {
+        end_tenure();
+    }
     if (host != nullptr) {
         host->session_announce_edge(previous, value);
     }
@@ -44,7 +49,11 @@ SessionCore::State SessionCore::get_state() const {
 }
 
 void SessionCore::set_role(Role value) {
+    const bool held = holds_server_authority();
     role = value;
+    if (held != holds_server_authority()) {
+        end_tenure();
+    }
 }
 
 SessionCore::Role SessionCore::get_role() const {
@@ -111,6 +120,14 @@ uint64_t SessionCore::get_generation() const {
     return generation;
 }
 
+uint64_t SessionCore::get_tenure() const {
+    return tenure;
+}
+
+void SessionCore::end_tenure() {
+    tenure += 1;
+}
+
 void SessionCore::on_peer_assigned(
     bool has_live_peer,
     bool connected,
@@ -135,10 +152,12 @@ void SessionCore::on_peer_assigned(
 
 void SessionCore::resolve_online(int unique_id) {
     if (unique_id == authority.coordinator) {
-        role = desired_role == ROLE_LISTEN_SERVER ? ROLE_LISTEN_SERVER
-                                                  : ROLE_DEDICATED_SERVER;
+        set_role(
+            desired_role == ROLE_LISTEN_SERVER ? ROLE_LISTEN_SERVER
+                                               : ROLE_DEDICATED_SERVER
+        );
     } else {
-        role = ROLE_CLIENT;
+        set_role(ROLE_CLIENT);
     }
     transition(STATE_ONLINE);
 }
@@ -176,6 +195,7 @@ int64_t SessionCore::compute_app_tag(const StringName &value) {
 void SessionCore::clear() {
     state = STATE_OFFLINE;
     role = ROLE_NONE;
+    end_tenure();
     join_window.clear();
 }
 
