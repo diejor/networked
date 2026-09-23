@@ -1045,72 +1045,6 @@ TEST_CASE(
     NETW_CHECK_EQ(bool(said[3]), 0);
 }
 
-Dictionary simulated_header(int64_t p_tick, bool p_whole) {
-    Dictionary payload;
-    payload[StringName("position")] = Vector2(2.0, 0.0);
-    payload[StringName("velocity")] = Vector2();
-    Dictionary header;
-    header[StringName("tick")] = p_tick;
-    header[StringName("whole")] = p_whole;
-    header[StringName("payload")] = payload;
-    return header;
-}
-
-TEST_CASE(
-    "[Networked][Predict][Report] PR24 a simulated remote accepts no "
-    "row before its stream has RECONSTRUCTED, because a partial mosaic is "
-    "authoritative at no single tick and rebasing on one invents a state "
-    "authority never held"
-) {
-    LoopbackRig rig(1);
-    rig.mount();
-    Node *arena = rig.mirror_child("Arena");
-    const Ref<NetwEntity> seated = seat_player(rig, arena);
-    REQUIRE(seated.is_valid());
-    Node *owner = seated->get_owner();
-
-    NetwMultiplayer *core = rig.server();
-    NetwPredictionEngine *const pool = core->get_prediction_engine();
-    const int64_t slot = pool->slot_register(seated);
-    REQUIRE(slot >= 0);
-    pool->adopt_declaration(
-        seated,
-        NetwPropertySetBinding::create(pose_and_momentum(), owner),
-        Ref<NetwPropertySetBinding>(),
-        int(netw::Schedule::TICK),
-        int(netw::Role::SIMULATE),
-        int(netw::CorrectionMode::SNAP),
-        int(netw::RestoreMode::EXACT),
-        6,
-        0,
-        false
-    );
-
-    NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
-        netw::gd::live_object(seated->get_prediction())
-    );
-    REQUIRE(handle != nullptr);
-    Vector<StringName> watched;
-    watched.push_back(StringName("state_evaluated"));
-    Recorder judged(handle, watched);
-
-    NETW_CHECK_EQ(pool->stream_reconstructed_of(slot), 0);
-    pool->admit_simulated_state(slot, simulated_header(7, false));
-    NETW_CHECK_EQ(judged.count(StringName("state_evaluated")), 0);
-
-    pool->admit_simulated_state(slot, simulated_header(8, true));
-    NETW_CHECK_EQ(pool->stream_reconstructed_of(slot), 1);
-    NETW_CHECK_EQ(judged.count(StringName("state_evaluated")), 1);
-    const Array said = judged.args(StringName("state_evaluated"));
-    REQUIRE(said.size() == 4);
-    NETW_CHECK_EQ(int64_t(said[0]), int64_t(8));
-    NETW_CHECK_EQ(int64_t(said[1]), int64_t(-1));
-    NETW_CHECK_EQ(
-        int64_t(pool->verdict_reason_of(slot)),
-        int64_t(NetwPredict::VERDICT_REASON_NONE)
-    );
-}
-
 TEST_CASE(
     "[Networked][Predict][Report] PR25 a drive the pool RECORDED is "
     "reported, and a drive it refused is not, because a watcher counting "
@@ -1438,22 +1372,14 @@ TEST_CASE(
     NETW_CHECK_EQ(coasted.has(StringName("steer")), false);
     NETW_CHECK_EQ(pool->invalid_command_predictor_reported_of(slot), false);
 
-    const int64_t subject = seated->get_instance_id();
-    REQUIRE(pool->note_simulated_by(
-        slot,
-        subject,
-        callable_mp_static(&predictor_overlay)
-    ));
+    const Ref<netw::NetwPredictionHandle> member = seated->get_prediction();
+    REQUIRE(member.is_valid());
+    member->set_predict_commands(callable_mp_static(&predictor_overlay));
     const Dictionary answered = pool->predicted_command(slot, seated, 4);
     NETW_CHECK_EQ(int(answered[StringName("steer")]), 4);
     NETW_CHECK_EQ(pool->invalid_command_predictor_reported_of(slot), false);
 
-    REQUIRE(pool->clear_simulated_by(slot, subject));
-    REQUIRE(pool->note_simulated_by(
-        slot,
-        subject,
-        callable_mp_static(&predictor_broken)
-    ));
+    member->set_predict_commands(callable_mp_static(&predictor_broken));
     const Dictionary refused = pool->predicted_command(slot, seated, 4);
     NETW_CHECK_EQ(refused.has(StringName("steer")), false);
     NETW_CHECK_EQ(pool->invalid_command_predictor_reported_of(slot), true);

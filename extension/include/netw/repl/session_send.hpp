@@ -33,6 +33,7 @@ struct RowOffer {
     bool reliable = false;
     bool windowed = false;
     uint32_t window = 0;
+    int64_t heartbeat = 0;
     int64_t tick = -1;
     int64_t ack = -1;
     int64_t life = 0;
@@ -133,14 +134,18 @@ class SessionSend {
         wire::SnapshotSender &p_stream,
         int p_peer,
         const wire::StreamLane &p_lane,
+        const RowOffer &p_offer,
+        int64_t p_base_tick,
         int64_t p_now_ms,
-        bool &r_repairing
+        bool &r_repairing,
+        bool &r_beat
     );
 
     uint64_t revision_for(
         wire::SnapshotSender &p_stream,
         int p_peer,
         const wire::StreamLane &p_lane,
+        int64_t p_base_tick,
         int64_t p_now_ms,
         bool p_repairing
     );

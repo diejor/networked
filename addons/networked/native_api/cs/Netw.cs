@@ -737,6 +737,11 @@ public sealed class Netw : NetwRefCounted
     /// 	# the node now behaves like `Node.set_multiplayer_authority(peer_id)`
     /// 	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
     /// </code>
+    /// <para>
+    /// The entity's body is declared on <see cref="NetwEntity.Simulation"/>,
+    /// its prediction on <see cref="NetwEntity.Prediction"/> and its drawing on
+    /// <see cref="NetwEntity.Interpolation"/>.
+    /// </para>
     /// </summary>
     public static NetwEntity ConfigureEntity(Node node)
     {

@@ -16,7 +16,7 @@ using netw::predict::UNROUTED_ORDER_KEY;
 SlotCursors consuming_frame(bool p_advanced, bool p_fresh, int64_t p_label) {
     SlotCursors read;
     read.role = NetwPredict::ROLE_CONSUME;
-    read.schedule = NetwPredict::SCHEDULE_FRAME;
+    read.schedule = netw::NetwSimulationHandle::SCHEDULE_FRAME;
     read.ack_advanced = p_advanced;
     read.last_replayed_fresh = p_fresh;
     read.last_replayed_label = p_label;
@@ -26,7 +26,7 @@ SlotCursors consuming_frame(bool p_advanced, bool p_fresh, int64_t p_label) {
 SlotCursors consuming_tick(bool p_advanced, int64_t p_ack) {
     SlotCursors read;
     read.role = NetwPredict::ROLE_CONSUME;
-    read.schedule = NetwPredict::SCHEDULE_TICK;
+    read.schedule = netw::NetwSimulationHandle::SCHEDULE_TICK;
     read.ack_advanced = p_advanced;
     read.ack = p_ack;
     return read;
@@ -77,7 +77,7 @@ TEST_CASE(
 ) {
     SlotCursors framed;
     framed.role = NetwPredict::ROLE_PREDICT;
-    framed.schedule = NetwPredict::SCHEDULE_FRAME;
+    framed.schedule = netw::NetwSimulationHandle::SCHEDULE_FRAME;
     framed.ack_advanced = true;
     framed.last_driven_input_tick = 30;
     NETW_CHECK_EQ(history_record_tick(framed, 99), int64_t(31));
@@ -86,7 +86,7 @@ TEST_CASE(
 
     SlotCursors ticked;
     ticked.role = NetwPredict::ROLE_PREDICT;
-    ticked.schedule = NetwPredict::SCHEDULE_TICK;
+    ticked.schedule = netw::NetwSimulationHandle::SCHEDULE_TICK;
     NETW_CHECK_EQ(history_record_tick(ticked, 99), int64_t(99));
 }
 
@@ -108,7 +108,7 @@ TEST_CASE(
 ) {
     SlotCursors predicting;
     predicting.role = NetwPredict::ROLE_PREDICT;
-    predicting.schedule = NetwPredict::SCHEDULE_TICK;
+    predicting.schedule = netw::NetwSimulationHandle::SCHEDULE_TICK;
     CHECK(has_consumed_state_tick(predicting, 1000));
 
     CHECK(has_consumed_state_tick(consuming_frame(true, true, 11), 12));

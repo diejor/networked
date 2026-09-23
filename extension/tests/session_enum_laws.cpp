@@ -62,8 +62,8 @@ TEST_CASE(
             netw::display::ROLE_AUTHORITY
         );
         NETW_CHECK_EQ(
-            NetwMultiplayer::PREDICTED_MODE_BRACKETED,
-            netw::display::PREDICTED_BRACKETED
+            NetwMultiplayer::LIVE_MODE_BRACKETED,
+            netw::display::LIVE_BRACKETED
         );
         NETW_CHECK_EQ(
             NetwMultiplayer::TIMELINE_MODE_FORECAST,

@@ -6,6 +6,7 @@
 #include "godot/local_vector.hpp"
 #include "godot/object.hpp"
 #include "godot/ref_counted.hpp"
+#include "godot/rid.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
 
@@ -19,6 +20,7 @@ class NetwPredictRunner {
     godot::LocalVector<NetwPredictSlotEngine *> engines;
     godot::LocalVector<NetwPredictSlotEngine *> sorted;
     godot::LocalVector<NetwPredictSlotEngine *> phase_roster;
+    godot::LocalVector<godot::RID> held_spaces;
     godot::HashMap<int64_t, NetwPredictSlotEngine *> by_slot;
     bool sort_dirty = true;
     godot::ObjectID core_id;

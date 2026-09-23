@@ -20,10 +20,10 @@
 #include "godot/utility.hpp"
 #include "godot/viewport.hpp"
 #include "godot/world.hpp"
+#include "netw/api/display_handle.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -669,7 +669,8 @@ LocalVector<repl::RowOffer> NetwMultiplayer::sync_pump_offers(
             route,
             ordinal,
             int64_t(get_unique_id()),
-            node->is_inside_tree() && node->is_multiplayer_authority(),
+            node->is_inside_tree() ? int64_t(node->get_multiplayer_authority())
+                                   : 0,
             entity->get_controller(),
             rpc_get_recipients(entity),
             session_authority_peer()
@@ -1075,6 +1076,7 @@ Error NetwMultiplayer::run_apply_set(
 
 void NetwMultiplayer::display_resolve_role(display::Runtime *p_runtime) {
     if (p_runtime != nullptr) {
+        sim_settle_body(p_runtime->entity());
         display::resolve_role(p_runtime, display_hooks);
     }
 }
@@ -1084,7 +1086,21 @@ bool NetwMultiplayer::display_wants_runtime(Node *p_owner) const {
 }
 
 void NetwMultiplayer::display_rebuild_runtime(display::Runtime *p_runtime) {
+    if (p_runtime != nullptr) {
+        display_seat_bodies(p_runtime);
+    }
     display::rebuild_runtime(p_runtime, display_hooks);
+}
+
+void NetwMultiplayer::display_seat_bodies(display::Runtime *p_runtime) {
+    const sim::Row *row = sim_rows.row_of(p_runtime->entity_rid());
+    LocalVector<ObjectID> bodies;
+    sim::collect_bodies(
+        p_runtime->owner(),
+        row != nullptr ? row->declaration.bodies : Vector<NodePath>(),
+        bodies
+    );
+    p_runtime->set_bodies(bodies);
 }
 
 display::Channel *NetwMultiplayer::display_ensure_state(
@@ -1134,15 +1150,20 @@ int NetwMultiplayer::display_default_role(
     if (entity.is_null()) {
         return display::resolve_role_facts(facts);
     }
-    const Ref<NetwPredictionHandle> handle = prediction_of(entity);
     facts.authors_streams = p_authors_streams;
     facts.controlled_locally = entity->get_is_controlled_locally();
-    facts.predicted_input = handle.is_valid()
-        && handle->get_input_source() == NetwPredict::INPUT_SOURCE_PREDICTED;
-    facts.prediction_registered = handle.is_valid() && handle->is_registered();
-    facts.simulates_locally = handle.is_valid() && handle->is_registered()
-        ? handle->get_sim_mode() != NetwPredict::SIM_MODE_DISPLAY
-        : authoring::declares_prediction(p_runtime->owner());
+    const sim::Row *row = sim_rows.row_of(p_entity);
+    if (row != nullptr) {
+        const int derived = display::role_for_mode(
+            row->mode,
+            row->facts.predicted,
+            facts.controlled_locally
+        );
+        if (derived != display::ROLE_AUTO) {
+            return derived;
+        }
+    }
+    facts.simulates_locally = authoring::declares_prediction(owner);
     return display::resolve_role_facts(facts);
 }
 
@@ -2268,6 +2289,9 @@ void NetwMultiplayer::property_set_set_param(
         case SET_PARAM_RELIABLE:
             record->set_reliable(bool(p_value));
             return;
+        case SET_PARAM_HEARTBEAT:
+            record->set_heartbeat(int64_t(p_value));
+            return;
         default:
             NETW_ERR(
                 sys::TABLE,
@@ -2362,6 +2386,7 @@ RID NetwMultiplayer::adopt_property_set(
     property_set_set_param(set, SET_PARAM_PROFILE, p_source->get_profile());
     property_set_set_param(set, SET_PARAM_CHANNEL, p_source->get_channel());
     property_set_set_param(set, SET_PARAM_RELIABLE, p_source->get_reliable());
+    property_set_set_param(set, SET_PARAM_HEARTBEAT, p_source->get_heartbeat());
     const TypedArray<NetwPropertySetColumn> columns = p_source->get_columns();
     for (int index = 0; index < columns.size(); ++index) {
         const Ref<NetwPropertySetColumn> member = columns[index];

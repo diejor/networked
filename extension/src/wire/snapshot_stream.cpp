@@ -52,6 +52,19 @@ uint64_t SnapshotSender::reserve() {
     return taken;
 }
 
+uint64_t SnapshotSender::mint(int64_t p_tick) {
+    const uint64_t taken = reserve();
+    if (taken != 0) {
+        minted_tick = p_tick;
+    }
+    return taken;
+}
+
+bool SnapshotSender::beat_due(int64_t p_tick, int64_t p_every) const {
+    return p_every > 0 && has_confirmed && quiet()
+        && p_tick - minted_tick >= p_every;
+}
+
 uint64_t SnapshotSender::distance_for(uint64_t p_revision) const {
     if (!has_confirmed || p_revision <= confirmed_revision) {
         return 0;
@@ -192,6 +205,7 @@ void SnapshotSender::reset() {
     confirmed_revision = 0;
     highest_exposed = 0;
     repair_at = 0;
+    minted_tick = 0;
     has_confirmed = false;
     has_desired = false;
 }

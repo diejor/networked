@@ -59,12 +59,17 @@ bool SessionSend::row_is_owed(
     wire::SnapshotSender &p_stream,
     int p_peer,
     const wire::StreamLane &p_lane,
+    const RowOffer &p_offer,
+    int64_t p_base_tick,
     int64_t p_now_ms,
-    bool &r_repairing
+    bool &r_repairing,
+    bool &r_beat
 ) {
     r_repairing = false;
+    r_beat = false;
     if (p_stream.quiet()) {
-        return false;
+        r_beat = p_stream.beat_due(p_base_tick, p_offer.heartbeat);
+        return r_beat;
     }
     if (!p_stream.awaiting_receipt()) {
         return true;
@@ -82,6 +87,7 @@ uint64_t SessionSend::revision_for(
     wire::SnapshotSender &p_stream,
     int p_peer,
     const wire::StreamLane &p_lane,
+    int64_t p_base_tick,
     int64_t p_now_ms,
     bool p_repairing
 ) {
@@ -89,7 +95,7 @@ uint64_t SessionSend::revision_for(
         return p_stream.pinned_repair();
     }
     writers.note_attempt(p_peer, p_lane, p_now_ms);
-    return p_stream.reserve();
+    return p_stream.mint(p_base_tick);
 }
 
 PackedByteArray SessionSend::price(
@@ -273,7 +279,17 @@ LocalVector<RowSend> SessionSend::collect(
                 }
                 stream->desire(row);
                 bool repairing = false;
-                if (!row_is_owed(*stream, peer, lane, p_now_ms, repairing)) {
+                bool beat = false;
+                if (!row_is_owed(
+                        *stream,
+                        peer,
+                        lane,
+                        offer,
+                        p_base_tick,
+                        p_now_ms,
+                        repairing,
+                        beat
+                    )) {
                     r_out.caught_up += 1;
                     note_verdict(
                         offer.route,
@@ -286,9 +302,15 @@ LocalVector<RowSend> SessionSend::collect(
                 }
                 SnapshotHeader header;
                 header.token = token;
-                header.revision
-                    = revision_for(*stream, peer, lane, p_now_ms, repairing);
-                header.distance = repairing
+                header.revision = revision_for(
+                    *stream,
+                    peer,
+                    lane,
+                    p_base_tick,
+                    p_now_ms,
+                    repairing
+                );
+                header.distance = repairing || beat
                     ? 0
                     : stream->distance_for(header.revision);
                 header.tick = offer.tick;
@@ -392,7 +414,17 @@ LocalVector<RowSend> SessionSend::collect(
             }
             stream->desire(row);
             bool repairing = false;
-            if (!row_is_owed(*stream, peer, stream_lane, p_now_ms, repairing)) {
+            bool beat = false;
+            if (!row_is_owed(
+                    *stream,
+                    peer,
+                    stream_lane,
+                    offer,
+                    p_base_tick,
+                    p_now_ms,
+                    repairing,
+                    beat
+                )) {
                 r_out.caught_up += 1;
                 note_verdict(
                     offer.route,
@@ -409,11 +441,13 @@ LocalVector<RowSend> SessionSend::collect(
                 *stream,
                 peer,
                 stream_lane,
+                p_base_tick,
                 p_now_ms,
                 repairing
             );
-            header.distance
-                = repairing ? 0 : stream->distance_for(header.revision);
+            header.distance = repairing || beat
+                ? 0
+                : stream->distance_for(header.revision);
             header.tick = offer.tick;
             header.reconcile_ack = offer.ack;
             const wire::CodeRow *baseline

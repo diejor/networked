@@ -29,9 +29,6 @@ private:
         godot::Vector<godot::StringName> members;
         godot::Vector<godot::StringName> simulated;
         int reconcile = 0;
-        int promotion = 0;
-        int promotion_count = 0;
-        double promotion_meters = 0.0;
     };
 
     godot::Vector<SceneRow> scenes;
@@ -100,19 +97,6 @@ public:
         row.members = p_members;
         row.reconcile = int(p_reconcile);
         islands.push_back(row);
-        return *this;
-    }
-
-    WorldDecl &promoting(
-        netw::predict::Promotion p_promotion,
-        int p_count = 0,
-        double p_meters = 0.0
-    ) {
-        REQUIRE_MESSAGE(!islands.is_empty(), "promotion needs an island");
-        IslandRow &row = islands.write[islands.size() - 1];
-        row.promotion = int(p_promotion);
-        row.promotion_count = p_count;
-        row.promotion_meters = p_meters;
         return *this;
     }
 

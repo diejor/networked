@@ -13,13 +13,13 @@
 #include "netw/predict/frame_records.hpp"
 #include "netw/predict/wiring.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/sim/resolve.hpp"
 
 namespace netw {
 
 using table::SchemaRecord;
 
 class NetwMultiplayer;
-class NetwPredictIsland;
 class NetwTimeline;
 class NetwPredictionHandle;
 class NetwPredictStats;
@@ -493,15 +493,7 @@ public:
     godot::Array ledger_fields(int64_t p_slot) const;
     godot::Dictionary field_recovery(int64_t p_slot);
 
-    bool note_simulated_by(
-        int64_t p_slot,
-        int64_t p_subject,
-        const godot::Callable &p_predictor
-    );
-    bool clear_simulated_by(int64_t p_slot, int64_t p_subject);
-    void clear_simulation_subjects(int64_t p_slot);
     int simulation_subject_count(int64_t p_slot) const;
-    godot::Callable first_simulation_predictor(int64_t p_slot) const;
 
     void note_breach_source(int64_t p_slot, const godot::StringName &p_source);
     godot::StringName breach_source_of(int64_t p_slot) const;
@@ -799,11 +791,21 @@ public:
         bool p_sleeping
     );
 
+    sim::Facts resolution_facts(
+        int64_t p_slot,
+        const godot::Ref<NetwPredictionHandle> &p_handle
+    ) const;
+    int apply_mode(
+        int64_t p_slot,
+        const godot::Ref<NetwPredictionHandle> &p_handle,
+        sim::Mode p_mode
+    );
     int resolve_axes(
         int64_t p_slot,
         const godot::Ref<NetwPredictionHandle> &p_handle
     );
     int resolve_correction(int64_t p_slot, int p_declared) const;
+    int settle_correction(int64_t p_slot, int p_declared);
 
     void record_episode_decision(
         int64_t p_slot,
@@ -942,12 +944,6 @@ public:
         godot::Object *p_collider,
         const godot::String &p_support
     ) const;
-    godot::Dictionary open_simulated_state(
-        int64_t p_slot,
-        const godot::Dictionary &p_payload,
-        int64_t p_recv_tick,
-        int64_t p_current_tick
-    );
 
     enum RelayColumn {
         RELAY_DROPPED_LATE = 0,
@@ -1052,6 +1048,9 @@ public:
     int64_t sibling_slot(const godot::Ref<NetwEntity> &p_member);
     int admitted_reconcile_mode(int64_t p_slot);
     void admit_reconcile_mode(int64_t p_slot);
+    int reconcile_of(int64_t p_slot) const;
+    void set_reconcile_own(int64_t p_slot, int p_mode);
+    void leave_joint(int64_t p_slot);
     void follow_relay_subscription(int64_t p_slot, int p_mode);
     bool slot_has_stepper(int64_t p_slot) const;
     bool slot_is_steppable(int64_t p_slot) const;
@@ -1482,71 +1481,32 @@ public:
     bool probation_pending(int64_t p_slot) const;
     int64_t reseed_ignore_through(int64_t p_slot) const;
 
-    godot::TypedArray<NetwEntity> live_participants(
+    godot::TypedArray<NetwEntity> live_participants(int64_t p_slot);
+    godot::PackedStringArray live_participant_ids(int64_t p_slot);
+    void publish_topology_roster(int64_t p_slot);
+    void refresh_selection(
         int64_t p_slot,
-        const godot::Ref<NetwPredictIsland> &p_island
-    );
-    godot::PackedStringArray live_participant_ids(
-        int64_t p_slot,
-        const godot::Ref<NetwPredictIsland> &p_island
-    );
-    void publish_topology_roster(
-        int64_t p_slot,
-        const godot::Ref<NetwPredictIsland> &p_island
-    );
-    void refresh_island_membership(
-        int64_t p_slot,
-        const godot::Ref<NetwPredictIsland> &p_island,
-        bool p_apply_promotion,
+        bool p_joint,
         const godot::Callable &p_admit_reconcile
     );
     void publish_island_roster(int64_t p_slot);
     void clear_island_promotions(int64_t p_slot);
+    void clear_joint_roster(int64_t p_slot);
     bool apply_island_promotions(
         int64_t p_slot,
-        const godot::Ref<NetwPredictIsland> &p_island,
         const godot::TypedArray<NetwEntity> &p_promoted
     );
     int release_lingering(int64_t p_slot, int64_t p_floor_transition);
-    bool contact_is_equivalent(
-        int64_t p_slot,
-        const godot::Ref<NetwPredictIsland> &p_island,
-        bool p_has_witness
-    );
+    bool contact_is_equivalent(int64_t p_slot, bool p_has_witness);
     void notify_contact(
         int64_t p_slot,
-        const godot::Ref<NetwPredictIsland> &p_island,
         bool p_has_witness,
         int p_cooldown_ticks
     );
-    godot::TypedArray<NetwEntity> island_roster(
-        int64_t p_slot,
-        godot::Object *p_session,
-        const godot::Ref<NetwPredictIsland> &p_island
-    );
-    godot::TypedArray<NetwEntity> island_commit_members(
-        int64_t p_slot,
-        const godot::TypedArray<NetwEntity> &p_members,
-        const godot::Ref<NetwPredictIsland> &p_island,
-        int64_t p_frontier
-    );
-    godot::PackedInt64Array island_commit(
-        int64_t p_slot,
-        int64_t p_owner_order_key,
-        const godot::PackedInt64Array &p_members,
-        const godot::PackedInt64Array &p_order_keys,
-        const godot::PackedFloat64Array &p_distance_squared,
-        const godot::PackedInt32Array &p_fidelities,
-        const godot::PackedByteArray &p_eligible,
-        const godot::PackedByteArray &p_contact,
-        int p_promotion,
-        int p_promotion_count,
-        double p_promotion_meters,
-        int64_t p_frontier
-    );
-    int island_member_count(int64_t p_slot) const;
-    bool island_promoted(int64_t p_slot, int64_t p_member) const;
-    double island_distance_squared(int64_t p_slot, int64_t p_member) const;
+    void joint_adopt(int64_t p_slot, const sim::Selection &p_selection);
+    bool joint_admits(int64_t p_slot, int64_t p_member) const;
+    int joint_member_count(int64_t p_slot) const;
+    bool joint_promoted(int64_t p_slot, int64_t p_member) const;
     int64_t tenure_begin(int64_t p_slot) const;
     int64_t tenure_end(int64_t p_slot) const;
     void joint_record(
@@ -1559,6 +1519,11 @@ public:
         bool p_predictor_valid
     );
     void joint_note_basis(int64_t p_slot, int64_t p_basis, int p_source);
+    void joint_admit_state(
+        int64_t p_slot,
+        int64_t p_transition,
+        const godot::Dictionary &p_payload
+    );
     void note_joint_basis(
         int64_t p_slot,
         int64_t p_basis,

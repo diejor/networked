@@ -35,11 +35,14 @@ bool record_authors(
     if (p_record == SET_RECORD_STATE) {
         return p_holds_session_authority;
     }
+    const int64_t steering = p_controller == 0 && p_holds_session_authority
+        ? p_local_id
+        : p_controller;
     return entity::Control::policy_admits(
         int(p_policy),
         p_local_id,
         p_node_authority,
-        p_controller
+        steering
     );
 }
 

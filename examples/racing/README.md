@@ -8,4 +8,6 @@ models and sound effects are CC0, the skid sound effect is by
 
 `vehicle.gd` keeps most of its shape. What the port adds is the six
 `Netw.configure_property` broadcast declarations, the interest join, and the
-freeze that makes a car nobody here controls a proxy.
+`simulation.bodies` declaration that makes a car nobody here controls a proxy.
+The upstream `_physics_process` runs as `_network_tick`, which the framework
+calls on the peer that controls the car.

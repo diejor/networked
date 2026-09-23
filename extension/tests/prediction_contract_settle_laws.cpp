@@ -11,8 +11,10 @@
 #include "godot/node.hpp"
 #include "godot/script.hpp"
 #include "godot/utility.hpp"
+#include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_set.hpp"
+#include "netw/api/simulation_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/sync_authoring.hpp"
@@ -153,6 +155,44 @@ TEST_CASE(
     CHECK_FALSE(netw::authoring::declares_prediction(bare));
 
     memdelete(bare);
+}
+
+TEST_CASE(
+    "[Networked][Sync][Sim] a synchronizer prediction block's schedule, "
+    "restore and restore horizon integers read back through the entity's "
+    "simulation handle with the values they carried"
+) {
+    Node *root = memnew(Node);
+    root->set_name("BlockAuthored");
+    const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(root);
+    REQUIRE(entity.is_valid());
+    MultiplayerSynchronizer *sync = predicting_child(root);
+    sync->set_meta(
+        StringName("netw_schedule"),
+        int(netw::NetwSimulationHandle::SCHEDULE_STEPPED)
+    );
+    sync->set_meta(
+        StringName("netw_snap_restore"),
+        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED)
+    );
+    sync->set_meta(StringName("netw_max_restore_ticks"), 4);
+
+    netw::authoring::apply(root, sync);
+
+    const Ref<netw::NetwSimulationHandle> simulation
+        = entity->get_simulation();
+    REQUIRE(simulation.is_valid());
+    NETW_CHECK_EQ(
+        simulation->get_schedule(),
+        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+    );
+    NETW_CHECK_EQ(
+        simulation->get_restore(),
+        netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED
+    );
+    NETW_CHECK_EQ(simulation->get_max_restore_ticks(), 4);
+
+    memdelete(root);
 }
 
 } // namespace TestNetwPredictionContractSettleLaws

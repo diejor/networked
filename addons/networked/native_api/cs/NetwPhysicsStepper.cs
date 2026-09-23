@@ -31,29 +31,30 @@ namespace Networked;
 /// <para>
 /// Install one per space with
 /// <see cref="NetwMultiplayer.PredictStepperInstall"/>, which rejects a stepper
-/// whose <c>_can_step</c> does not return <c>true</c>; installing with a
+/// whose <c>_can_step</c> does not return <c>true</c>. Installing with a
 /// <c>null</c> stepper uninstalls. Read back what a space holds with
 /// <see cref="NetwMultiplayer.PredictGetStepper"/>. Only a member declared
-/// <see cref="NetwPredict.Schedule.Stepped"/> reaches a stepper at all: a space
-/// with none downgrades that member to <see cref="NetwPredict.Schedule.Frame"/>
-/// instead, as <see cref="NetwPredict.Schedule.Stepped"/> describes, and a
-/// member on <see cref="NetwPredict.Schedule.Tick"/> never asks for one. The
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> reaches a stepper at
+/// all. A space with none runs that member at
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>, and a member on
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> never asks for one. The
 /// hold on a space starts at the first network tick a
-/// <see cref="NetwPredict.Schedule.Stepped"/> member stands in it, because
-/// <see cref="NetwMultiplayer.PredictStepperInstall"/> takes a bare <c>RID</c>
-/// and only a member standing in it reveals the dimension the hold needs, and
-/// the hold ends when the stepper is uninstalled. <b>Forward path.</b> Once per
-/// network tick the engine drives every
-/// <see cref="NetwPredict.Schedule.Stepped"/> member standing in the space,
-/// applying that tick's command to each, and only then calls <c>_step</c> and
-/// <c>_snapshot</c>, once for the space however many members or islands stand
-/// in it. That order is what makes one step integrate what the whole group
-/// authored rather than a world one member wrote alone. <b>Joint replay.</b>
-/// When a <see cref="NetwPredictIsland"/> whose owner is
-/// <see cref="NetwPredict.Schedule.Stepped"/> rebases to a basis tick, the
-/// engine restores every member's own columns from its timeline, calls
-/// <c>_restore</c> once for the whole pass, then for each unacknowledged tick
-/// after the basis applies that tick's commands and calls <c>_step</c> and
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> member stands in it,
+/// because <see cref="NetwMultiplayer.PredictStepperInstall"/> takes a bare
+/// <c>RID</c> and only a member standing in it reveals the dimension the hold
+/// needs, and the hold ends when the stepper is uninstalled. <b>Forward
+/// path.</b> Once per network tick the engine drives every
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> member standing in
+/// the space, applying that tick's command to each, and only then calls
+/// <c>_step</c> and <c>_snapshot</c>, once for the space however many members
+/// stand in it. That order is what makes one step integrate what the whole
+/// group authored rather than a world one member wrote alone. <b>Joint
+/// replay.</b> When a <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/>
+/// entity under <see cref="NetwPredict.Reconcile.Joint"/> rebases itself and
+/// the entities its <see cref="NetwEntity.Simulation"/> selects to a basis
+/// tick, the engine restores every member's own columns from its timeline,
+/// calls <c>_restore</c> once for the whole pass, then for each unacknowledged
+/// tick after the basis applies that tick's commands and calls <c>_step</c> and
 /// <c>_snapshot</c> once for the whole group. <c>_snapshot</c> and
 /// <c>_restore</c> exist only for a stepped space holding dynamic bodies no
 /// entity governs, such as loose debris the engine cannot restore from an

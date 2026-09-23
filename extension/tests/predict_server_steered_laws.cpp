@@ -51,8 +51,12 @@ Axes axes_on_the_authority(LoopbackRig &p_rig, const EntityDecl &p_decl) {
     read.input_source
         = NetwPredict::InputSource(prediction->get_input_source());
     read.sim_mode = NetwPredict::SimMode(prediction->get_sim_mode());
-    read.role
-        = NetwPredictionHandle::role_for_axes(read.input_source, read.sim_mode);
+    read.role = NetwPredict::Role(
+        netw::NetwPredictionEngine::role_for_axes(
+            read.input_source,
+            read.sim_mode
+        )
+    );
     return read;
 }
 

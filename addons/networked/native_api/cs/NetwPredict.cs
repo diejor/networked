@@ -15,38 +15,23 @@ namespace Networked;
 /// and this class exists so naming one costs nothing, because nothing here
 /// holds state and nothing here can be constructed.
 /// <code>
-/// entity.prediction.schedule = NetwPredict.SCHEDULE_FRAME
-/// if entity.prediction.role == NetwPredict.ROLE_PREDICT:
-///     ...
+/// entity.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+/// entity.prediction.recovery_policy = NetwPredict.RECOVERY_POLICY_REBASE_RECOVER
 /// </code>
 /// <para>
-/// <b>What a game declares</b>
+/// The schedule, the restore and the mode an entity runs in are
+/// <see cref="NetwSimulationHandle"/> values. <b>What a game declares</b>
 /// - <see cref="NetwPredict.Archetype"/> what kind of body this is, which
 /// presets the rest
-/// - <see cref="NetwPredict.Schedule"/> how often the entity is driven
 /// - <see cref="NetwPredict.CorrectionMode"/> how a correction is applied
-/// - <see cref="NetwPredict.RestoreMode"/> how a snapped correction places the
-/// state
 /// - <see cref="NetwPredict.RecoveryPolicy"/> what a recovery is allowed to do
 /// - <see cref="NetwPredict.MissingInput"/> what the server does about an input
 /// that never came
 /// - <see cref="NetwPredict.BreachResponse"/> what happens on a contact outside
 /// the prediction
-/// - <see cref="NetwPredict.Fidelity"/> how one member of an island is
-/// represented here
-/// - <see cref="NetwPredict.Promotion"/> which island members are simulated
-/// locally
-/// - <see cref="NetwPredict.Pacing"/> when an island's members open a
-/// transition
-/// - <see cref="NetwPredict.Reconcile"/> whether an island is corrected
+/// - <see cref="NetwPredict.Reconcile"/> whether a selection is corrected
 /// together or apart
 /// <b>What the session reports back</b>
-/// - <see cref="NetwPredict.Role"/> the name for one
-/// <see cref="NetwPredict.InputSource"/> and <see cref="NetwPredict.SimMode"/>
-/// pair
-/// - <see cref="NetwPredict.InputSource"/> where this peer's copy gets its
-/// input
-/// - <see cref="NetwPredict.SimMode"/> what this peer's simulation counts for
 /// - <see cref="NetwPredict.DriveKind"/> how the last drive chose its input
 /// - <see cref="NetwPredict.ConsumeAction"/> what a consume pass did this frame
 /// - <see cref="NetwPredict.ContactClass"/> what the local solve reported
@@ -81,110 +66,6 @@ public sealed class NetwPredict : NetwObject
         return Adopt(NetwApi.ObjectOf(value));
     }
 
-    public enum Role : long
-    {
-        /// <summary>
-        /// A remote client controls the entity, which predicts and corrects
-        /// itself when the server acknowledges. A role is never chosen on its
-        /// own. It is the name <see cref="NetwPredictionHandle.RoleForAxes"/>
-        /// gives to a pair of <see cref="NetwPredictionHandle.InputSource"/>
-        /// and <see cref="NetwPredictionHandle.SimMode"/>, so the name and the
-        /// two facts behind it cannot disagree. Every role is driven, because
-        /// the work done for an entity is the same whichever peer owns it. A
-        /// role decides whether a caller reaches the simulation at all and
-        /// never what the simulation then does, which is what makes a
-        /// transition recorded under one role comparable against the same
-        /// transition recorded under another.
-        /// </summary>
-        Predict = 0,
-        /// <summary>
-        /// The server consumes a remote peer's received input into
-        /// authoritative state.
-        /// </summary>
-        Consume = 1,
-        /// <summary>
-        /// A listen-server host controls its own entity, simulating
-        /// authoritatively.
-        /// </summary>
-        HostLocal = 2,
-        /// <summary>
-        /// A remote display. Never simulates here, the interpolator shows it.
-        /// </summary>
-        Remote = 3,
-        /// <summary>
-        /// A replicated remote stepped locally with a predicted command.
-        /// </summary>
-        Simulate = 4,
-    }
-
-    public enum InputSource : long
-    {
-        /// <summary>
-        /// This peer produces the input it simulates. Read the entity value
-        /// from <see cref="NetwPredictionHandle.InputSource"/>.
-        /// </summary>
-        Local = 0,
-        /// <summary>
-        /// This peer reads a command another peer authored and sent.
-        /// </summary>
-        Received = 1,
-        /// <summary>
-        /// This peer guesses a command nobody sent, for a simulated island
-        /// participant.
-        /// </summary>
-        Predicted = 2,
-        /// <summary>
-        /// This peer simulates nothing, so it needs no command.
-        /// </summary>
-        None = 3,
-    }
-
-    public enum SimMode : long
-    {
-        /// <summary>
-        /// The simulation produces the authoritative state. Read the entity
-        /// value from <see cref="NetwPredictionHandle.SimMode"/>.
-        /// </summary>
-        Authoritative = 0,
-        /// <summary>
-        /// The simulation produces a guess this peer will reconcile.
-        /// </summary>
-        Speculative = 1,
-        /// <summary>
-        /// No simulation runs and received state is shown.
-        /// </summary>
-        Display = 2,
-    }
-
-    public enum Schedule : long
-    {
-        /// <summary>
-        /// Drive once for every network tick, which is what a kinematic body
-        /// predicts under.
-        /// </summary>
-        Tick = 0,
-        /// <summary>
-        /// Apply once after every physics frame's network tick loop.
-        /// </summary>
-        Frame = 1,
-        /// <summary>
-        /// Apply once per network tick through a
-        /// <see cref="NetwPhysicsStepper"/>, which can re-run a space step
-        /// inside one frame. Every member in the space is driven first and the
-        /// space is stepped once after all of them, so one step integrates the
-        /// forces the whole tick authored and the state each member records is
-        /// the one that step produced. A space with no stepper installed cannot
-        /// re-run a step, so a member declaring this there resolves to
-        /// <see cref="NetwPredict.Schedule.Frame"/> and the engine reports that
-        /// once, naming the entity and the space. The handle keeps the
-        /// declaration the game wrote and so does the recovery policy, so
-        /// installing a stepper with
-        /// <see cref="NetwMultiplayer.PredictStepperInstall"/> restores the
-        /// schedule that was asked for.
-        /// </summary>
-        Stepped = 2,
-    }
-
     public enum ContactClass : long
     {
         /// <summary>
@@ -206,7 +87,7 @@ public sealed class NetwPredict : NetwObject
         /// </summary>
         PredictedDynamic = 3,
         /// <summary>
-        /// A dynamic entity outside this peer's prediction island.
+        /// A dynamic entity this peer neither predicts nor selects.
         /// </summary>
         UnpredictedDynamic = 4,
         /// <summary>
@@ -267,12 +148,13 @@ public sealed class NetwPredict : NetwObject
         /// </summary>
         Repeat = 2,
         /// <summary>
-        /// The consume cursor held while repeating its acknowledged input.
+        /// The consume cursor held past its buffer, so nothing drove the
+        /// simulation this tick.
         /// </summary>
         Hold = 3,
         /// <summary>
-        /// The consume cursor had no input stream and repeated its acknowledged
-        /// input.
+        /// The consume cursor had no input queued at all, so nothing drove the
+        /// simulation this tick.
         /// </summary>
         Starved = 4,
         /// <summary>
@@ -382,20 +264,6 @@ public sealed class NetwPredict : NetwObject
         Snap = 2,
     }
 
-    public enum RestoreMode : long
-    {
-        /// <summary>
-        /// Write the state that arrived, exactly, at the tick it belongs to.
-        /// </summary>
-        Exact = 0,
-        /// <summary>
-        /// Project each carry-declaring field forward to the present tick by
-        /// its replicated velocity before restoring, so a dynamic body lands
-        /// near where it is instead of snapping back to a stale tick.
-        /// </summary>
-        Extrapolated = 1,
-    }
-
     public enum Archetype : long
     {
         /// <summary>
@@ -411,20 +279,21 @@ public sealed class NetwPredict : NetwObject
         None = 0,
         /// <summary>
         /// A body whose step is ordinary code and can be re-run inside one
-        /// frame. It sets <see cref="NetwPredict.Schedule.Tick"/>,
+        /// frame. It sets <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/>,
         /// <see cref="NetwPredict.MissingInput.Stall"/> and
         /// <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/>, because a
         /// velocity that comes straight from the input catches up again on the
         /// next tick.
         /// </summary>
-        Kinematic = 1,
+        Scripted = 1,
         /// <summary>
         /// A body the physics engine solves, whose step cannot be re-run once
-        /// per input. It sets <see cref="NetwPredict.Schedule.Frame"/>,
+        /// per input. It sets
+        /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>,
         /// <see cref="NetwPredict.MissingInput.RepeatLast"/>,
         /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/> and
-        /// <see cref="NetwPredict.RestoreMode.Extrapolated"/>, with a teleport
-        /// distance sized for a body that settles through contacts.
+        /// <see cref="NetwSimulationHandle.RestoreEnum.Extrapolated"/>, with a
+        /// teleport distance sized for a body that settles through contacts.
         /// </summary>
         SolverBody = 2,
     }
@@ -436,7 +305,12 @@ public sealed class NetwPredict : NetwObject
         /// over it, which reaches the present through the entity's own
         /// simulation. <see cref="NetwPredictionHandle.RecoveryPolicy"/> is
         /// where an entity declares one, and it names what the entity wants
-        /// rather than how the engine does it.
+        /// rather than how the engine does it. A <see cref="RigidBody3D"/> or
+        /// <see cref="RigidBody2D"/> at
+        /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> recovers under
+        /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/> and warns
+        /// once. The engine applies its forces only when the space steps, and
+        /// nothing steps the space between replayed inputs.
         /// </summary>
         RebaseReplay = 0,
         /// <summary>
@@ -457,60 +331,6 @@ public sealed class NetwPredict : NetwObject
         Observe = 3,
     }
 
-    public enum Fidelity : long
-    {
-        /// <summary>
-        /// Draw the state that arrives, and treat contact with it as contact
-        /// with a stand-in.
-        /// </summary>
-        Proxy = 0,
-        /// <summary>
-        /// Step the member locally with substituted commands.
-        /// </summary>
-        Simulated = 1,
-    }
-
-    public enum Promotion : long
-    {
-        /// <summary>
-        /// Promote nothing on its own. A member named outright through
-        /// <see cref="NetwPredictIsland.Simulate"/> is still promoted, because
-        /// naming one is not a policy and this decides only what happens to the
-        /// members nobody named. The two policies differ in what limits them. A
-        /// count is a budget a game knows it can afford, and a radius is a
-        /// claim about where contact can happen.
-        /// </summary>
-        None = 0,
-        /// <summary>
-        /// Promote the nearest <c>promotion_count</c> produced members.
-        /// </summary>
-        Nearest = 1,
-        /// <summary>
-        /// Promote produced members within <c>promotion_meters</c>.
-        /// </summary>
-        Within = 2,
-        /// <summary>
-        /// Promote every produced member. The honest expensive mode of a joint
-        /// group, where partial promotion is meaningless.
-        /// </summary>
-        All = 3,
-    }
-
-    public enum Pacing : long
-    {
-        /// <summary>
-        /// Open a transition as soon as there is one to open, and correct it
-        /// afterwards.
-        /// </summary>
-        Speculate = 0,
-        /// <summary>
-        /// Open a transition only when every member's command for it is in
-        /// hand. Nothing speculates, nothing rolls back, and the cost is the
-        /// declared input delay plus the slowest peer's transport.
-        /// </summary>
-        DelayClosed = 1,
-    }
-
     public enum Reconcile : long
     {
         /// <summary>
@@ -518,12 +338,13 @@ public sealed class NetwPredict : NetwObject
         /// </summary>
         Independent = 0,
         /// <summary>
-        /// Restore and replay the island together. The engine admits the group
-        /// at membership commit, where every member's schedule is known. An
-        /// authoritative row a member receives here is where a replay starts
-        /// from rather than somewhere to jump to. The group replays from one
-        /// floor, so a member that snapped to wherever its own extrapolated row
-        /// landed would enter that replay from a state no other member's
+        /// Restore and replay this entity together with the entities its
+        /// <see cref="NetwEntity.Simulation"/> selects. The engine admits the
+        /// group when the selection commits, where every member's schedule is
+        /// known. An authoritative row a member receives here is where a replay
+        /// starts from rather than somewhere to jump to. The group replays from
+        /// one floor, so a member that snapped to wherever its own extrapolated
+        /// row landed would enter that replay from a state no other member's
         /// history knows about. The unextrapolated payload is the basis, and
         /// the pass re-runs the transitions the extrapolation was standing in
         /// for.
@@ -781,15 +602,16 @@ public sealed class NetwPredict : NetwObject
     }
 
     private static readonly IntPtr _bindScheduleName =
-        NetwApi.MethodBind("NetwPredict", "schedule_name", 2113299152UL);
+        NetwApi.MethodBind("NetwPredict", "schedule_name", 252416563UL);
 
     /// <summary>
-    /// The <see cref="NetwPredict.Schedule"/> member
+    /// The <see cref="NetwSimulationHandle.ScheduleEnum"/> member
     /// <paramref name="schedule"/> names, without its prefix. Returns with the
     /// decimal value when it names no member, so a capture written by a newer
     /// build stays readable rather than reporting a wrong name.
     /// </summary>
-    public static string ScheduleName(NetwPredict.Schedule schedule)
+    public static string ScheduleName(
+        NetwSimulationHandle.ScheduleEnum schedule)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)schedule);
         godot_variant answered = default;

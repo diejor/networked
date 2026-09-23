@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "godot/engine.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
@@ -227,6 +228,72 @@ TEST_CASE(
 
     session->advance_frame();
     NETW_CHECK_EQ(session->receive_tick(), 41);
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted][SceneTree] L8 the drain that follows the "
+    "last framework body leaving releases only the arms it holds, so a "
+    "game's own clock_set_gate arm survives it"
+) {
+    Ref<NetwMultiplayer> session = hosting();
+    Node3D *body = memnew(Node3D);
+    netw::gd::scene_root()->add_child(body);
+    const RID entity = seated(session, 45, body);
+
+    session->simulation_gate_set(entity, true);
+    session->clock_set_gate(true);
+    NETW_CHECK_EQ(session->simulation_gate_count(), 1);
+    CHECK(session->clock_is_gated());
+
+    netw::gd::scene_root()->remove_child(body);
+    memdelete(body);
+    session->simulation_gate_apply();
+
+    NETW_CHECK_EQ(session->simulation_gate_count(), 0);
+    CHECK(session->clock_is_gated());
+
+    session->clock_set_gate(false);
+    CHECK_FALSE(session->clock_is_gated());
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted][SceneTree] L9 arming the gate against a "
+    "physics rate that is an integer multiple of the tickrate warns never, "
+    "and one that is not warns once"
+) {
+    const godot::Engine *engine = godot::Engine::get_singleton();
+    REQUIRE(engine != nullptr);
+    const int physics_rate = engine->get_physics_ticks_per_second();
+    REQUIRE(physics_rate > 2);
+
+    Ref<NetwMultiplayer> aligned_session = hosting();
+    aligned_session->clock_engine().set_tickrate(physics_rate);
+    Node3D *aligned_body = memnew(Node3D);
+    netw::gd::scene_root()->add_child(aligned_body);
+    const RID aligned_entity = seated(aligned_session, 46, aligned_body);
+
+    aligned_session->simulation_gate_set(aligned_entity, true);
+    CHECK_FALSE(aligned_session->predict_pacing_rate_warned);
+    aligned_body->queue_free();
+
+    const int mismatched_tickrate = physics_rate - 1;
+    Ref<NetwMultiplayer> mismatched_session = hosting();
+    mismatched_session->clock_engine().set_tickrate(mismatched_tickrate);
+    Node3D *first_body = memnew(Node3D);
+    netw::gd::scene_root()->add_child(first_body);
+    const RID first_entity = seated(mismatched_session, 47, first_body);
+    Node3D *second_body = memnew(Node3D);
+    netw::gd::scene_root()->add_child(second_body);
+    const RID second_entity = seated(mismatched_session, 48, second_body);
+
+    CHECK_FALSE(mismatched_session->predict_pacing_rate_warned);
+    mismatched_session->simulation_gate_set(first_entity, true);
+    CHECK(mismatched_session->predict_pacing_rate_warned);
+    mismatched_session->simulation_gate_set(second_entity, true);
+    CHECK(mismatched_session->predict_pacing_rate_warned);
+
+    first_body->queue_free();
+    second_body->queue_free();
 }
 
 } // namespace TestNetwSessionSimulationGate

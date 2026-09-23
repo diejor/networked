@@ -87,7 +87,9 @@ TEST_CASE(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE_MESSAGE(handle != nullptr, "the entity minted no handle");
-    handle->set_schedule(NetwPredict::SCHEDULE_TICK);
+    handle->simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_TICK
+    );
 
     const Ref<NetwTimeline> lane
         = NetwTimeline::create(NetwTimeline::DEFAULT_LIMIT);
@@ -140,7 +142,9 @@ TEST_CASE(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE(handle != nullptr);
-    handle->set_schedule(NetwPredict::SCHEDULE_FRAME);
+    handle->simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_FRAME
+    );
 
     const Ref<NetwTimeline> lane
         = NetwTimeline::create(NetwTimeline::DEFAULT_LIMIT);

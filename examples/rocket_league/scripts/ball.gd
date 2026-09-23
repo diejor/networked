@@ -15,10 +15,14 @@ var goal_team := -1
 
 var pose: Transform3D:
 	get:
-		return state.transform if state else transform
+		if state and not freeze:
+			return state.transform
+		return global_transform if is_inside_tree() else transform
 	set(value):
-		if state:
+		if state and not freeze:
 			state.transform = value
+		elif is_inside_tree():
+			global_transform = value
 		else:
 			transform = value
 
@@ -82,8 +86,8 @@ func _init() -> void:
 	var e := NetwEntity.ensure(self)
 	e.entity_id = &"ball"
 	e.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
-	e.prediction.schedule = RocketJoltStepper.schedule()
-	e.prediction.recovery_policy = NetwPredict.RECOVERY_POLICY_REBASE_REPLAY
+	e.simulation.schedule = RocketJoltStepper.schedule()
+	e.prediction.recovery_policy = RocketJoltStepper.recovery_policy()
 	e.prediction.sensors[&"goal"] = sample_goal
 	e.prediction.witness_contacts = sample_contacts
 	e.interpolation.visual_root = ^"MeshInstance3D"

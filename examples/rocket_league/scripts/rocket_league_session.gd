@@ -6,7 +6,6 @@ const ARENA := "res://examples/rocket_league/scenes/arena.tscn"
 @onready var browser: ConnectBrowser = %ConnectBrowser
 @onready var session: NetwSessionHandle = Netw.session(self)
 
-var stepped := false
 var level: Node
 
 
@@ -73,9 +72,7 @@ func open_match(arena: NetwSceneHandle) -> void:
 
 func on_scene_live(scene: NetwSceneHandle) -> void:
 	if scene.label == &"Arena":
-		install_stepper(scene.root as Node3D, scene)
-		scene.observe(NetwMultiplayer.SCENE_EVENT_BODY, car_edge.bind(scene))
-		declare_islands(scene)
+		install_stepper(scene.root as Node3D)
 
 	if scene.label == &"Lobby":
 		var in_lobby: InLobby = scene.root.find_child("InLobby", true, false)
@@ -85,39 +82,11 @@ func on_scene_live(scene: NetwSceneHandle) -> void:
 		open_match(scene)
 
 
-func install_stepper(root: Node3D, arena: NetwSceneHandle) -> void:
-	var space: RID = root.get_world_3d().space
-	multiplayer.predict_stepper_install(space, RocketJoltStepper.new())
-	stepped = multiplayer.predict_get_stepper(space) != null
-	declare_islands(arena)
-
-
-func car_edge(_entered: bool, _car: NetwEntity, arena: NetwSceneHandle) -> bool:
-	declare_islands.call_deferred(arena)
-	return false
-
-
-func declare_islands(arena: NetwSceneHandle) -> void:
-	var bodies := simulated_bodies(arena)
-	for member: NetwEntity in bodies:
-		if not (member.owner is RocketCar):
-			continue
-		var island := member.prediction.island
-		island.exact_claim = stepped
-		island.approximate = not stepped
-		island.reconcile = NetwPredict.RECONCILE_JOINT if stepped \
-		else NetwPredict.RECONCILE_INDEPENDENT
-		for other: NetwEntity in bodies:
-			if other != member:
-				island.add(other)
-
-
-func simulated_bodies(arena: NetwSceneHandle) -> Array[NetwEntity]:
-	var out: Array[NetwEntity] = []
-	for entity: NetwEntity in arena.entities:
-		if entity.owner is RocketCar or entity.owner is RocketBall:
-			out.append(entity)
-	return out
+func install_stepper(root: Node3D) -> void:
+	multiplayer.predict_stepper_install(
+		root.get_world_3d().space,
+		RocketJoltStepper.new(),
+	)
 
 
 func show_browser() -> void:

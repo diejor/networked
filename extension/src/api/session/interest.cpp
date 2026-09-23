@@ -20,7 +20,6 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"

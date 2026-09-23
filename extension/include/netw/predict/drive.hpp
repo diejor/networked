@@ -208,6 +208,7 @@ struct EngineLatches {
     bool invalid_command_predictor_reported = false;
     bool joint_refusal_reported = false;
     bool stepper_absence_reported = false;
+    bool integration_refusal_reported = false;
     bool island_gap_reported = false;
     bool island_roster_seeded = false;
     int64_t joint_basis = -1;
@@ -229,21 +230,6 @@ struct RecoveryLedger {
     void bump_triggered(int p_field);
     void bump_repaired(int p_field);
     void bump_contracted(int p_field);
-};
-
-struct SubjectBook {
-    godot::LocalVector<int64_t> ids;
-    godot::LocalVector<godot::Callable> predictors;
-
-    int index_of(int64_t p_id) const;
-    bool note(int64_t p_id, const godot::Callable &p_predictor);
-    bool erase(int64_t p_id);
-    void clear();
-    godot::Callable first_valid() const;
-
-    int count() const {
-        return int(ids.size());
-    }
 };
 
 struct ComparisonReport {
@@ -284,7 +270,6 @@ struct Slot {
     godot::Ref<NetwTimeline> entry_history;
     DriveStats stats;
     ComparisonReport report;
-    SubjectBook simulated_by;
     RecoveryLedger recovery_ledger;
     PassCursor cursor;
     LaneCursor lane_cursor;
@@ -299,7 +284,9 @@ struct Slot {
     StateVerdict last_state_verdict;
     StateRow state;
     Episode episode;
-    Island island;
+    sim::Selection joint_roster;
+    int reconcile_own = 0;
+    bool reconcile_joined = false;
     JointTrack joint;
     JointStats joint_stats;
     Quarantine quarantine;

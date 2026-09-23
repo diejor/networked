@@ -33,7 +33,6 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
@@ -124,6 +123,12 @@ NetwMultiplayer::NetwMultiplayer() {
     display_book.instantiate();
     prediction_engine.bind_session(this);
     predict_runner.seat_core(this);
+    sim_rows.seed_with(
+        [](void *p_context, sim::Row &r_row) {
+            static_cast<NetwMultiplayer *>(p_context)->sim_seed(r_row);
+        },
+        this
+    );
     connect(
         StringName("clock_before_tick_loop"),
         callable_mp(this, &NetwMultiplayer::before_frame_step)
@@ -1766,6 +1771,7 @@ void NetwMultiplayer::session_announce_ended() {
 }
 
 void NetwMultiplayer::session_announce_edge(int p_old, int p_new) {
+    sim_follow_session_authority();
     emit_signal(SIG_SESSION_STATE_CHANGED, p_old, p_new);
     session_after_edge(p_old, p_new);
 }
@@ -2359,6 +2365,7 @@ void NetwMultiplayer::session_set_state(SessionState p_state) {
 
 void NetwMultiplayer::session_set_role(Role p_role) {
     session_core.set_role(SessionCore::Role(p_role));
+    sim_follow_session_authority();
 }
 
 void NetwMultiplayer::session_set_desired_role(Role p_role) {

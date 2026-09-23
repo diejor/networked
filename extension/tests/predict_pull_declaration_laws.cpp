@@ -63,8 +63,9 @@ Ref<NetwEntity> mount(
 } // namespace
 
 TEST_CASE(
-    "[Networked][Predict][Hosted][SceneTree] a declared archetype seats its "
-    "own slot when the owner is ready, with no verb from the game"
+    "[Networked][Predict][Hosted][SceneTree] a declared archetype on an "
+    "entity with no state row seats no slot when the owner is ready, and the "
+    "session names the reason"
 ) {
     CHECK(netw::gd::scene_root() != nullptr);
     if (netw::gd::scene_root() == nullptr) {
@@ -72,9 +73,10 @@ TEST_CASE(
     }
     Branch branch("pull_declared");
     const Ref<NetwEntity> entity
-        = mount(branch, "declared", NetwPredict::ARCHETYPE_KINEMATIC);
+        = mount(branch, "declared", NetwPredict::ARCHETYPE_SCRIPTED);
 
-    CHECK(branch.api->predict_engine_seated(entity->get_rid_handle()));
+    CHECK(branch.api->predict_lacks_state_rows(entity));
+    CHECK_FALSE(branch.api->predict_engine_seated(entity->get_rid_handle()));
 }
 
 TEST_CASE(

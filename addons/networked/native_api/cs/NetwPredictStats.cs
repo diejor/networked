@@ -575,8 +575,8 @@ public sealed class NetwPredictStats : NetwRefCounted
 
     /// <summary>
     /// Index of the newest prediction tape transition authored or received. A
-    /// <c>NetwPredict.Schedule.TICK</c> entity's transitions are its ticks, so
-    /// this tracks the newest driven tick there.
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> entity's
+    /// transitions are its ticks, so this tracks the newest driven tick there.
     /// </summary>
     public long TapeIndex
     {
@@ -1118,12 +1118,13 @@ public sealed class NetwPredictStats : NetwRefCounted
 
     /// <summary>
     /// New transitions the owner lane delivered to authority, bucketed by how
-    /// many arrived in one frame. <c>NetwPredict.Schedule.FRAME</c> consume
-    /// only. Arrival shape, not arrival total, sets consume health: a lane
-    /// delivering one transition every frame and a lane delivering six every
-    /// sixth frame have the same total and nothing else in common. Authority
-    /// replays at most one per frame, so the second lane leaves five frames dry
-    /// for every burst and no buffer setting changes that. Read it beside
+    /// many arrived in one frame.
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> consume only.
+    /// Arrival shape, not arrival total, sets consume health: a lane delivering
+    /// one transition every frame and a lane delivering six every sixth frame
+    /// have the same total and nothing else in common. Authority replays at
+    /// most one per frame, so the second lane leaves five frames dry for every
+    /// burst and no buffer setting changes that. Read it beside
     /// <see cref="NetwPredictStats.ReplayDepth"/> to tell a lane defect from a
     /// rate one. Indexed by arrival count, saturating at
     /// <see cref="NetwPredictStats.ArrivalBuckets"/> minus one.
@@ -1165,9 +1166,10 @@ public sealed class NetwPredictStats : NetwRefCounted
 
     /// <summary>
     /// Standing queued-transition depth at each authority frame's consume
-    /// boundary, bucketed by depth. <c>NetwPredict.Schedule.FRAME</c> consume
-    /// only. Depth is the owner's lead over authority measured in transitions,
-    /// so this reads the clock relationship rather than a queue: a distribution
+    /// boundary, bucketed by depth.
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> consume only.
+    /// Depth is the owner's lead over authority measured in transitions, so
+    /// this reads the clock relationship rather than a queue: a distribution
     /// parked near zero says the two peers run at the same rate, and one that
     /// ratchets upward says the owner is authoring faster than authority is
     /// solving. Neither is returned by a replay buffer depth setting, which
@@ -1219,10 +1221,10 @@ public sealed class NetwPredictStats : NetwRefCounted
     /// <summary>
     /// Authority frames bucketed by <c>"consumed,quantum_steps"</c>: how many
     /// transitions the frame ran against how much simulated time the last of
-    /// them measured. <c>NetwPredict.Schedule.FRAME</c> consume only.
-    /// <c>"1,1"</c> is the healthy shape, one transition per solve. Every other
-    /// key names a frame that spent simulated time no single transition
-    /// accounts for, which is the divergence
+    /// them measured. <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>
+    /// consume only. <c>"1,1"</c> is the healthy shape, one transition per
+    /// solve. Every other key names a frame that spent simulated time no single
+    /// transition accounts for, which is the divergence
     /// <see cref="NetwPredictStats.QuantumFaults"/> totals. This histogram is
     /// that total broken down by how each frame misspent.
     /// </summary>
@@ -1299,13 +1301,13 @@ public sealed class NetwPredictStats : NetwRefCounted
     /// The verdict is the correction trigger for a transition labeled
     /// <see cref="NetwPredictJournal.Domain.InDomain"/>, and a report for one
     /// that is not. Which label a transition receives is decided by the
-    /// entity's island membership, so an entity that declares no island keeps
-    /// the tolerance compare it always had. It is the trigger only where it
-    /// arrives in time to be one. The verdict rides the acknowledgement lane
-    /// while the comparison runs when the authoritative state arrives, so a
-    /// transition compared before its acknowledgement is judged by tolerance
-    /// and this counter reports a divergence nothing acted on. A set that ships
-    /// whole rows can be judged on arrival. A
+    /// entity's selection through <see cref="NetwEntity.Simulation"/>, so an
+    /// entity that selects nothing is compared against its tolerance. It is the
+    /// trigger only where it arrives in time to be one. The verdict rides the
+    /// acknowledgement lane while the comparison runs when the authoritative
+    /// state arrives, so a transition compared before its acknowledgement is
+    /// judged by tolerance and this counter reports a divergence nothing acted
+    /// on. A set that ships whole rows can be judged on arrival. A
     /// <see cref="NetwPropertyConfig.Masked"/> set cannot, because a masked
     /// frame carries only the fields that changed and the authority row it
     /// belongs to cannot be fingerprinted from it. Read this counter as what
@@ -1481,8 +1483,9 @@ public sealed class NetwPredictStats : NetwRefCounted
         NetwApi.MethodBind("NetwPredictStats", "set_names_fact", 3353661094UL);
 
     /// <summary>
-    /// The island roster this engine last committed, by entity id, sorted.
-    /// Sorted because the roster is an antecedent of the fingerprint both peers
+    /// The selection this engine last committed through
+    /// <see cref="NetwEntity.Simulation"/>, by entity id, sorted. Sorted
+    /// because the roster is an antecedent of the fingerprint both peers
     /// compute, and two peers that agree on the members but not on their order
     /// would disagree on the digest.
     /// </summary>

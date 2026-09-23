@@ -316,7 +316,7 @@ struct InterpHarness {
     ) {
         build_runtime(netw::display::PUMP_CHASE);
         config.set_param(
-            netw::display::PARAM_PREDICTED_SMOOTH_TIME,
+            netw::display::PARAM_LIVE_SMOOTH_TIME,
             p_smooth_time
         );
         runtime->set_config(config);

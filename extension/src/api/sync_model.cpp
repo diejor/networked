@@ -288,7 +288,7 @@ PackedInt32Array NetwSyncModel::offer_row(
     int64_t p_route,
     int64_t p_ordinal,
     int64_t p_local_id,
-    bool p_node_authority,
+    int64_t p_node_authority,
     int64_t p_controller,
     const PackedInt32Array &p_live,
     int64_t p_coordinator

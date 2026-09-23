@@ -10,11 +10,11 @@
 		pred.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
 		pred.witness_contacts = _sample_contacts
 		pred.breach_response = NetwPredict.BREACH_RESPONSE_DEMOTE
-		pred.island.add(opponent)
 		[/codeblock]
-		Declare field-level behavior, including tolerances and recovery rules, with [NetwPropertyConfig]. Configure related predicted entities with [NetwPredictIsland].
+		Declare field-level behavior, including tolerances and recovery rules, with [NetwPropertyConfig]. The step, the schedule and the entities this one runs with are on [member NetwEntity.simulation], and [member NetwSimulationHandle.mode] says how this peer runs the entity.
+		Prediction registers only on an entity with a [method NetwPropertyConfig.state] row, because the state is what it compares and restores. An entity that declares an [member archetype] with no state row reports one error when its owner is ready and is not predicted.
 		A [MultiplayerSynchronizer] may provide scene defaults. Later assignments in code override those values.
-		Use [member input_source] and [member sim_mode] to inspect the entity's role. Use [member stats], [method journal], and [method episode] for comparison diagnostics. Use [method reachability] to validate referenced objects.
+		Use [member stats], [method journal], and [method episode] for comparison diagnostics. Use [method reachability] to validate referenced objects.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -23,7 +23,7 @@
 			<return type="void" />
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
-				Binds the entity this handle belongs to and arms its island. Called by the entity record's factory, which is the only thing that creates a handle.
+				Binds the entity this handle belongs to. Called by the entity record's factory, which is the only thing that creates a handle.
 			</description>
 		</method>
 		<method name="diverged" qualifiers="static">
@@ -189,17 +189,11 @@
 				Opens a window of [member collision_cooldown_ticks] during which a recovery smaller than [member teleport_threshold] is held off, so the brief disagreement a collision causes is not corrected through. Call it from the controlling client when the predicted body registers a collision. It does nothing with no engine attached.
 			</description>
 		</method>
-		<method name="predicted_command_callable" qualifiers="const">
-			<return type="Callable" />
-			<description>
-				The substituted command producer this entity runs, taken from the lowest-numbered subject that promotes it and declared one. Empty when nothing promotes it or nothing declared one, which is the zero-input COAST policy.
-			</description>
-		</method>
 		<method name="reachability" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
 				What this entity's declarations actually reach, field by field, or an empty [Dictionary] before the entity is attached to an engine.
-				A declaration can be legal, be accepted, and still do nothing. [method NetwPropertyConfig.carry_step] under [constant NetwPredict.SCHEDULE_TICK] is rejected the first time it is used and never tried again, a [method NetwPropertyConfig.teleport_only] field that is free to trigger asks for corrections no smaller restore may write, and an [method NetwPropertyConfig.epsilon] on a field no comparison reads bounds nothing. This is where a game finds that out while wiring rather than in a capture.
+				A declaration can be legal, be accepted, and still do nothing. [method NetwPropertyConfig.carry_step] under [constant NetwSimulationHandle.SCHEDULE_TICK] is rejected the first time it is used and never tried again, a [method NetwPropertyConfig.teleport_only] field that is free to trigger asks for corrections no smaller restore may write, and an [method NetwPropertyConfig.epsilon] on a field no comparison reads bounds nothing. This is where a game finds that out while wiring rather than in a capture.
 				[codeblock]
 				var report := entity.prediction.reachability()
 				for key: StringName in report[&amp;"fields"]:
@@ -252,26 +246,7 @@
 			<return type="int" enum="NetwPredict.RecoveryPolicy" />
 			<description>
 				The [enum NetwPredict.RecoveryPolicy] this entity recovers under, resolving [constant NetwPredict.CORRECTION_MODE_AUTO] against what the body is, the way [method resolved_correction_mode] does.
-			</description>
-		</method>
-		<method name="restate_declaration">
-			<return type="void" />
-			<description>
-			</description>
-		</method>
-		<method name="role_for_axes" qualifiers="static">
-			<return type="int" enum="NetwPredict.Role" />
-			<param index="0" name="source" type="int" enum="NetwPredict.InputSource" />
-			<param index="1" name="mode" type="int" enum="NetwPredict.SimMode" />
-			<description>
-				The [enum NetwPredict.Role] that [param source] and [param mode] together name. Those two are what the session actually decides, and the role is the name for a pair of them, so every role is reachable and no pair names a role that contradicts it.
-				[codeblock lang=text]
-				               AUTHORITATIVE  SPECULATIVE   DISPLAY
-				LOCAL          HOST_LOCAL     PREDICT       REMOTE
-				RECEIVED       CONSUME        unreachable   REMOTE
-				PREDICTED      unreachable    SIMULATE      REMOTE
-				NONE           REMOTE         REMOTE        REMOTE
-				[/codeblock]
+				A physics body at [constant NetwSimulationHandle.SCHEDULE_FRAME] that declares [constant NetwPredict.RECOVERY_POLICY_REBASE_REPLAY] resolves [constant NetwPredict.RECOVERY_POLICY_REBASE_RECOVER].
 			</description>
 		</method>
 		<method name="sensor" qualifiers="const">
@@ -290,15 +265,6 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="set_simulated_by">
-			<return type="void" />
-			<param index="0" name="subject" type="NetwEntity" />
-			<param index="1" name="enabled" type="bool" />
-			<param index="2" name="predictor" type="Callable" default="Callable()" />
-			<description>
-				Adds or withdraws one island's claim to step this entity locally, with the command it substitutes. Withdrawing the last claim also drops the entity back to [constant NetwPredict.RECONCILE_INDEPENDENT], because a member no group promotes owes no group evidence.
-			</description>
-		</method>
 		<method name="simulate_frame">
 			<return type="void" />
 			<param index="0" name="delta" type="float" />
@@ -315,12 +281,6 @@
 				Steps prediction or consumption for [param tick], and does nothing with no engine attached.
 			</description>
 		</method>
-		<method name="simulated_by_count" qualifiers="const">
-			<return type="int" />
-			<description>
-				How many other entities currently promote this one to local simulation.
-			</description>
-		</method>
 		<method name="stamp_episode">
 			<return type="void" />
 			<description>
@@ -330,7 +290,7 @@
 		<method name="tape_transitions" qualifiers="const">
 			<return type="Dictionary[]" />
 			<description>
-				Every recorded transition, oldest first. The client that owns the entity returns the transitions it wrote, and the consuming server returns the ones it decoded. For an entity at [constant NetwPredict.SCHEDULE_TICK] the index, the label and the tick are all the same number and every entry is fresh.
+				Every recorded transition, oldest first. The client that owns the entity returns the transitions it wrote, and the consuming server returns the ones it decoded. For an entity at [constant NetwSimulationHandle.SCHEDULE_TICK] the index, the label and the tick are all the same number and every entry is fresh.
 				[codeblock lang=text]
 				Array[Dictionary]
 				┖╴entry
@@ -376,15 +336,15 @@
 	<members>
 		<member name="ack_age_ticks" type="int" setter="set_ack_age_ticks" getter="get_ack_age_ticks" default="0">
 			How many ticks behind the newest input the acknowledgement is, updated every tick.
-			On the owning client it is the span a restore has to project across, and [member max_restore_ticks] caps it. On the server it is the backlog waiting to be consumed, and [member max_consume_per_tick] drains it. A healthy link holds it near zero, and a growing value means the server is falling behind.
+			On the owning client it is the span a restore has to project across, and [member NetwSimulationHandle.max_restore_ticks] caps it. On the server it is the backlog waiting to be consumed, and [member max_consume_per_tick] drains it. A healthy link holds it near zero, and a growing value means the server is falling behind.
 		</member>
 		<member name="acknowledged_tick" type="int" setter="" getter="get_acknowledged_tick" default="-1">
 			The newest transition authority has acknowledged, or [code]-1[/code] before any acknowledgement has reached this peer. [member NetwPredictStats.ack_confirmed] counts how many have arrived.
 		</member>
 		<member name="archetype" type="int" setter="set_archetype" getter="get_archetype" enum="NetwPredict.Archetype" default="0">
 			The set of prediction settings this entity starts from, or [constant NetwPredict.ARCHETYPE_NONE].
-			A preset is a starting point. Writing it applies that set's schedule and recovery settings outright, and anything written afterwards refines them. A scene declaring prediction on its [MultiplayerSynchronizer] therefore applies its archetype first and writes only the values it actually moved, so a value left at its default cannot overwrite the preset it was meant to refine.
-			No preset sets [member breach_response], because it is the one recovery setting that changes [member sim_mode], stopping speculation at a witnessed contact and following authority until the entity is reseeded. A game that wants that says so itself.
+			A preset is a starting point. Writing it applies that set's recovery settings and [member NetwSimulationHandle.schedule] outright, and anything written afterwards refines them. [constant NetwPredict.ARCHETYPE_SCRIPTED] writes [constant NetwSimulationHandle.SCHEDULE_TICK]. [constant NetwPredict.ARCHETYPE_SOLVER_BODY] writes [constant NetwSimulationHandle.SCHEDULE_FRAME] and [constant NetwSimulationHandle.RESTORE_EXTRAPOLATED]. A scene declaring prediction on its [MultiplayerSynchronizer] therefore applies its archetype first and writes only the values it actually moved, so a value left at its default cannot overwrite the preset it was meant to refine.
+			No preset sets [member breach_response], because it is the one recovery setting that stops speculation at a witnessed contact and follows authority until the entity is reseeded. A game that wants that says so itself.
 		</member>
 		<member name="breach_response" type="int" setter="set_breach_response" getter="get_breach_response" enum="NetwPredict.BreachResponse" default="0">
 			What this entity does the moment it touches something it was not predicted to touch. It is armed only when [member witness_contacts] declares how contacts are observed. [constant NetwPredict.BREACH_RESPONSE_DEMOTE] follows authority from then on while the entity keeps sending its input.
@@ -422,25 +382,9 @@
 			A row like that one triggers nearly every recovery, is withheld from nearly every one, and the few writes it did get made it no smaller, so nothing is repairing it.
 			Inside the comparison a correction is decided by fingerprint rather than by tolerance, so [member NetwPredictFieldRecovery.triggered] names the fields that were also past their tolerance rather than the ones that decided it. A field declared [method NetwPropertyConfig.reconcile_only] never counts a trigger at all.
 		</member>
-		<member name="input_source" type="int" setter="set_input_source" getter="get_input_source" enum="NetwPredict.InputSource" default="3">
-			Where this peer's copy of the entity gets its input, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
-			This and [member sim_mode] are the two values combined by [enum NetwPredict.Role]. Read them separately when only one axis matters.
-		</member>
 		<member name="is_reconciling" type="bool" setter="" getter="get_is_reconciling" default="false">
 			True while a correction is restoring and replaying, which is what code that plays an effect reads before playing one.
 			It clears only after the replay has actually run, never before, so a reader never sees it false over a body still being re-run. An effect held back while it is true would otherwise fire in the middle of the replay it was meant to sit out.
-		</member>
-		<member name="island" type="NetwPredictIsland" setter="set_island" getter="get_island">
-			The entities this one claims to simulate the way authority does.
-			Naming members through [member NetwPredictIsland.participants], or a producer through [method NetwPredictIsland.from_interest], is what enters this entity into the fingerprint comparison, and [member NetwPredictIsland.declared] reports exactly that claim. An entity claiming nothing is simply outside the comparison rather than failing it.
-			Named entities and producers feed one runtime set, and a producer reading interest admits only entities this peer already has. Some members are then promoted to [constant NetwPredict.FIDELITY_SIMULATED] and the rest stay a watched [constant NetwPredict.FIDELITY_PROXY]. Changes take effect at a transition boundary, with a margin on distance so a member on the edge does not flicker, and without changing fidelity mid-contact.
-			A simulated member coasts on no input unless [method NetwPredictIsland.predict_commands] supplies one, and every arriving authority state re-bases it, so its error is bounded by how often state arrives times how wrong the substituted command was. What the player sees follows the simulated body.
-			[codeblock]
-			var island := NetwEntity.of(self).prediction.island
-			island.from_interest()
-			island.simulate_nearest(1)
-			[/codeblock]
-			Never [code]null[/code]. Assigning one installs it and binds it to this entity, which is how a scene passes its own rule down.
 		</member>
 		<member name="last_attributed_transition" type="int" setter="" getter="get_last_attributed_transition" default="-1">
 			The transition [member last_attribution] describes, or [code]-1[/code] while no divergence has been blamed on anything.
@@ -493,24 +437,29 @@
 			Input skipped that way is a second old and no longer worth simulating, and [member NetwPredictStats.skipped] counts it. A value of [code]0[/code] turns the recovery off and lets the server fall as far behind as it falls.
 		</member>
 		<member name="max_consume_per_tick" type="int" setter="set_max_consume_per_tick" getter="get_max_consume_per_tick" default="1">
-			How many queued input ticks one frame may fold together when a backlog has built up, for an entity at [constant NetwPredict.SCHEDULE_FRAME].
+			How many queued input ticks one frame may fold together when a backlog has built up, for an entity at [constant NetwSimulationHandle.SCHEDULE_FRAME].
 			The client produces one input per tick, so the default of [code]1[/code] keeps the two in step. A higher value lets a frame skip past inputs that have already arrived rather than working through the backlog one frame at a time. Folding never steps over a lost tick, and folded inputs are counted by [member NetwPredictStats.folded] rather than simulated, so it is never extra work.
-			An entity at [constant NetwPredict.SCHEDULE_TICK] ignores this and advances by exactly one per tick, because authority may not run a transition its own clock has not reached.
-		</member>
-		<member name="max_restore_ticks" type="int" setter="set_max_restore_ticks" getter="get_max_restore_ticks" default="6">
-			How far a [constant NetwPredict.RESTORE_MODE_EXTRAPOLATED] restore may project forward, in ticks. It projects across [member ack_age_ticks], and a straight-line projection over a long span can land a body a long way off a curved path. This caps that span the way [constant NetwMultiplayer.DISPLAY_PARAM_MAX_FORECAST_TICKS] caps the display forecast, so an old acknowledgement never launches the body, and it defaults to the same [code]6[/code].
+			An entity at [constant NetwSimulationHandle.SCHEDULE_TICK] ignores this and advances by exactly one per tick, because authority may not run a transition its own clock has not reached.
 		</member>
 		<member name="missing_policy" type="int" setter="set_missing_policy" getter="get_missing_policy" enum="NetwPredict.MissingInput" default="0">
 			What the server does about an input tick that never arrived, as a [enum NetwPredict.MissingInput] value.
 		</member>
+		<member name="predict_commands" type="Callable" setter="set_predict_commands" getter="get_predict_commands" default="Callable()">
+			The command this entity runs on a peer that selects it through [member NetwEntity.simulation] and has no input from its controller. A command relayed from the controller always wins over it.
+			It is called as [code](entity: NetwEntity, tick: int)[/code] and returns a [Dictionary] laid over a zero command. Empty means the entity coasts on the zero command.
+			[codeblock]
+			func _init() -&gt; void:
+			    entity.prediction.predict_commands = func(_e, _tick): return {&amp;"throttle": 1.0}
+			[/codeblock]
+		</member>
 		<member name="reconcile_mode" type="int" setter="set_reconcile_mode" getter="get_reconcile_mode" enum="NetwPredict.Reconcile" default="0">
-			Whether this entity is corrected on its own or together with the rest of its [member island], as a [enum NetwPredict.Reconcile] value.
+			Whether this entity is corrected on its own or together with the entities its [member NetwEntity.simulation] selects, as a [enum NetwPredict.Reconcile] value.
 		</member>
 		<member name="recovery_policy" type="int" setter="set_recovery_policy" getter="get_recovery_policy" enum="NetwPredict.RecoveryPolicy" default="-1">
 			The [enum NetwPredict.RecoveryPolicy] this entity recovers under, or [code]-1[/code] while none has been declared, in which case [method resolved_recovery_policy] works one out from [member correction_mode].
 		</member>
 		<member name="replay_buffer_depth" type="int" setter="set_replay_buffer_depth" getter="get_replay_buffer_depth" default="0">
-			How many transitions authority leaves standing in the queue instead of replaying, for an entity at [constant NetwPredict.SCHEDULE_FRAME]. It is latency added to every command and it buys nothing back, which is why it defaults to zero.
+			How many transitions authority leaves standing in the queue instead of replaying, for an entity at [constant NetwSimulationHandle.SCHEDULE_FRAME]. It is latency added to every command and it buys nothing back, which is why it defaults to zero.
 			Authority replays at most one transition per frame, so it can never drain faster than the owner fills, and a reserve that cannot be spent faster than it is refilled absorbs no jitter. Every tick of depth is another tick of [member ack_age_ticks] behind every recovery.
 			[codeblock lang=text]
 			depth &gt; buffer       replay one transition        (consumed)
@@ -519,27 +468,13 @@
 			[/codeblock]
 			At the default of zero the middle row cannot happen, so a frame either replays the transition it has or reports that it has none. Raise it only to trade acknowledgement latency for a later replay position. It will not smooth arrival, because what covers a dry frame is depth an earlier burst already built, at any buffer including zero.
 		</member>
-		<member name="schedule" type="int" setter="set_schedule" getter="get_schedule" enum="NetwPredict.Schedule" default="0">
-			How often this entity is driven, as a [enum NetwPredict.Schedule] value. That is once per network tick, once per physics frame, or once per network tick with the physics space stepped after it.
-			A body the physics engine solves declares [constant NetwPredict.SCHEDULE_FRAME], because such a body's transition is a physics step and recording it as anything else records something that did not happen. One whose space holds a [NetwPhysicsStepper] declares [constant NetwPredict.SCHEDULE_STEPPED] instead, which keeps that true while putting the step on the network's clock so a rollback can re-run it.
-		</member>
 		<member name="sensors" type="Dictionary" setter="set_sensors" getter="get_sensors" default="{}">
 			The world facts this entity's transition reads, by name.
 			Each sampler is called once before each drive and recorded with it, which is what lets a divergence be blamed on the world rather than left unexplained. [method sensor] reads the sample back. A sampler that cannot be called is skipped when it would have been sampled rather than rejected here, so the record describes exactly the facts the drive ran against.
 			Declaring a sensor says where a divergence came from and claims nothing about exactness, so declaring them alone leaves every transition [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN].
 		</member>
-		<member name="sim_mode" type="int" setter="set_sim_mode" getter="get_sim_mode" enum="NetwPredict.SimMode" default="2">
-			What this peer's simulation of the entity counts for, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
-		</member>
-		<member name="simulate" type="Callable" setter="set_simulate" getter="get_simulate" default="Callable()">
-			The simulation step, which is the entity root's [code]_network_tick(delta, tick, is_fresh)[/code] unless something else is assigned here. It is one [Callable] and never a list, so exactly one step runs per entity per tick.
-		</member>
 		<member name="sleeping" type="bool" setter="set_sleeping" getter="get_sleeping" default="false">
 			True while the authoritative body is asleep. Corrections pause while it is, so a sleeping body is never nudged awake by one. A game writes it when its own body sleeps and wakes.
-		</member>
-		<member name="snap_restore" type="int" setter="set_snap_restore" getter="get_snap_restore" enum="NetwPredict.RestoreMode" default="0">
-			How a [constant NetwPredict.CORRECTION_MODE_SNAP] restore lands on the body, as a [enum NetwPredict.RestoreMode] value. [constant NetwPredict.RESTORE_MODE_EXTRAPOLATED] carries each field that declares a [member NetwInterpolate.project_channel] forward to the present tick, and the default [constant NetwPredict.RESTORE_MODE_EXACT] writes what arrived.
-			It is ignored under [constant NetwPredict.CORRECTION_MODE_REPLAY], because replaying the inputs already brings the body up to the present.
 		</member>
 		<member name="stats" type="NetwPredictStats" setter="" getter="get_stats">
 			Everything this entity's engine counted, one name per fact, on a [NetwPredictStats].
@@ -601,10 +536,9 @@
 			<param index="3" name="attribution" type="int" enum="NetwPredictJournal.Attribution" />
 			<description>
 				Emitted after a recovery wrote the body. It names the transition it went back to, how far each field moved as [code]after - before[/code], whether the move was large enough to be a teleport, and what the divergence was blamed on. An angle's change is given as the shorter way around.
-				A recovery is one write, so this fires once per recovery and [param deltas] is the whole of it. A game does not have to absorb them by hand. Under [constant NetwMultiplayer.PREDICTED_MODE_CHASE] the smoothing already turns each one into an offset that decays away, reset for each recovery and snapped through on a teleport.
+				A recovery is one write, so this fires once per recovery and [param deltas] is the whole of it. A game does not have to absorb them by hand. Under [constant NetwMultiplayer.LIVE_MODE_CHASE] the smoothing already turns each one into an offset that decays away, reset for each recovery and snapped through on a teleport.
 				[codeblock]
-				entity.interpolation.predicted_mode = \
-				        NetwMultiplayer.PREDICTED_MODE_CHASE
+				entity.interpolation.live_mode = NetwMultiplayer.LIVE_MODE_CHASE
 				api.display_set_param(entity.rid,
 				        NetwMultiplayer.DISPLAY_PARAM_CHASE_GLIDE_TIME, 0.15)
 				[/codeblock]

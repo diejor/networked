@@ -10,7 +10,6 @@
 #include "godot/rid.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/display_handle.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/participant.hpp"
@@ -21,10 +20,12 @@
 
 namespace netw {
 
+class NetwDisplayHandle;
 class NetwInterestHandle;
 class NetwMultiplayer;
 class NetwPersistenceHandle;
 class NetwPredictionHandle;
+class NetwSimulationHandle;
 class ReplicationCore;
 
 class NetwEntity : public godot::RefCounted {
@@ -59,8 +60,11 @@ private:
     bool ensure_server_action(const godot::StringName &p_action);
     ReplicationCore *get_replication_plane() const;
     void set_controller_internal(int64_t p_value);
+    void announce_control(int64_t p_was, int64_t p_peer);
     int64_t resolve_initial_controller() const;
     void apply_control();
+    void project_control(godot::Object *p_announcer);
+    void transfer_control(int64_t p_peer);
     void apply_control_change(int64_t p_peer);
     void transition(int64_t p_stage);
     void linger_then_free(const godot::Ref<NetwDespawnOpts> &p_opts);
@@ -199,6 +203,7 @@ public:
     godot::Ref<NetwInterestHandle> get_interest() const;
     godot::Ref<NetwSceneHandle> get_scene() const;
     godot::Ref<NetwPredictionHandle> get_prediction() const;
+    godot::Ref<NetwSimulationHandle> get_simulation() const;
     godot::Ref<NetwPersistenceHandle> get_persistence() const;
     godot::Ref<NetwDisplayHandle> get_interpolation() const;
     godot::Ref<NetwTimeline> get_timeline() const;

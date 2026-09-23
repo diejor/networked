@@ -20,7 +20,6 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
@@ -451,7 +450,7 @@ void NetwMultiplayer::entity_request_control(const RID &p_entity) {
         return;
     }
     send_to(
-        MultiplayerPeer::TARGET_PEER_SERVER,
+        session_authority_peer(),
         wrapper->get_route(),
         control_channels.control_request,
         PackedByteArray(),

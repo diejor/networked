@@ -25,6 +25,12 @@ bool draws_on_owner(Runtime *p_runtime) {
         && owner_is_solver_body(p_runtime->owner());
 }
 
+static bool draws_on_body(Runtime *p_runtime, Node *p_source) {
+    return draws_on_owner(p_runtime)
+        || (p_runtime->get_pump_mode() == netw::display::PUMP_REMOTE
+            && p_runtime->holds_body(p_source));
+}
+
 static bool is_global_space_channel(const StringName &p_prop) {
     for (const char *name : GLOBAL_SPACE_CHANNELS) {
         if (p_prop == StringName(name)) {
@@ -110,7 +116,20 @@ Channel *ensure_state(
         );
     }
     const bool split = has_source && visual != nullptr;
-    Node *target = split && !draws_on_owner(p_runtime) ? visual : p_node;
+    NETW_ERR_COND_V(
+        has_source && !split && p_target_prop != p_source_prop
+            && p_runtime->holds_body(p_node),
+        nullptr,
+        sys::INTERPOLATION,
+        "'%s' on '%s' follows '%s' but writes '%s' on the same simulated "
+        "body, so a live display would drag the body off its own solution "
+        "every frame. The channel is refused. Draw it on a visual_root",
+        String(p_target_prop),
+        String(p_node->get_name()),
+        String(p_source_prop),
+        String(p_target_prop)
+    );
+    Node *target = split && !draws_on_body(p_runtime, p_node) ? visual : p_node;
     state->set_target_obj(target);
 
     const Ref<NetwEntity> entity = p_runtime->entity();
@@ -169,12 +188,20 @@ void retarget_drawn_node(Runtime *p_runtime) {
     if (visual == nullptr || visual == owner) {
         return;
     }
-    Node *drawn = draws_on_owner(p_runtime) ? owner : visual;
+    const bool on_owner = draws_on_owner(p_runtime);
     const LocalVector<Channel *> &states = p_runtime->channels();
     for (int at = 0; at < int(states.size()); ++at) {
         Channel *state = states[at];
         if (state->get_source_obj().get_type() == Variant::NIL) {
             continue;
+        }
+        Object *held = state->get_source_obj();
+        Node *source = Object::cast_to<Node>(held);
+        Node *drawn = visual;
+        if (on_owner) {
+            drawn = owner;
+        } else if (draws_on_body(p_runtime, source)) {
+            drawn = source;
         }
         state->set_target_obj(drawn);
         state->display_port().bind(drawn, owner);

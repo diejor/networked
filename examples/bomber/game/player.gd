@@ -42,10 +42,9 @@ func _init() -> void:
 	entity = Netw.configure_entity(self)
 	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 	entity.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
-	entity.prediction.archetype = NetwPredict.ARCHETYPE_KINEMATIC
+	entity.prediction.archetype = NetwPredict.ARCHETYPE_SCRIPTED
 	entity.interpolation.visual_root = ^"sprite"
-	entity.interpolation.predicted_mode = \
-	NetwMultiplayer.PREDICTED_MODE_BRACKETED
+	entity.interpolation.live_mode = NetwMultiplayer.LIVE_MODE_BRACKETED
 	Netw.configure_property(self, &"motion").input().quantize(
 		NetwQuantizeScalar.new().bits(16),
 	)

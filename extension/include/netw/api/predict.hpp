@@ -4,6 +4,7 @@
 
 #include "godot/object.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/simulation_handle.hpp"
 
 namespace netw {
 
@@ -35,12 +36,6 @@ public:
         SIM_MODE_AUTHORITATIVE = 0,
         SIM_MODE_SPECULATIVE = 1,
         SIM_MODE_DISPLAY = 2,
-    };
-
-    enum Schedule {
-        SCHEDULE_TICK = 0,
-        SCHEDULE_FRAME = 1,
-        SCHEDULE_STEPPED = 2,
     };
 
     enum ContactClass {
@@ -104,14 +99,9 @@ public:
         CORRECTION_MODE_SNAP = 2,
     };
 
-    enum RestoreMode {
-        RESTORE_MODE_EXACT = 0,
-        RESTORE_MODE_EXTRAPOLATED = 1,
-    };
-
     enum Archetype {
         ARCHETYPE_NONE = 0,
-        ARCHETYPE_KINEMATIC = 1,
+        ARCHETYPE_SCRIPTED = 1,
         ARCHETYPE_SOLVER_BODY = 2,
     };
 
@@ -120,23 +110,6 @@ public:
         RECOVERY_POLICY_REBASE_RECOVER = 1,
         RECOVERY_POLICY_DELAY_CLOSED = 2,
         RECOVERY_POLICY_OBSERVE = 3,
-    };
-
-    enum Fidelity : int {
-        FIDELITY_PROXY = 0,
-        FIDELITY_SIMULATED = 1,
-    };
-
-    enum Promotion {
-        PROMOTION_NONE = 0,
-        PROMOTION_NEAREST = 1,
-        PROMOTION_WITHIN = 2,
-        PROMOTION_ALL = 3,
-    };
-
-    enum Pacing {
-        PACING_SPECULATE = 0,
-        PACING_DELAY_CLOSED = 1,
     };
 
     enum Reconcile {
@@ -198,7 +171,9 @@ public:
         bool p_predictor_valid
     );
 
-    static godot::String schedule_name(Schedule p_schedule);
+    static godot::String schedule_name(
+        NetwSimulationHandle::Schedule p_schedule
+    );
     static godot::String drive_kind_name(DriveKind p_kind);
     static godot::String verdict_reason_name(VerdictReason p_reason);
     static godot::String episode_state_name(EpisodeState p_state);
@@ -207,10 +182,6 @@ public:
 
 } // namespace netw
 
-VARIANT_ENUM_CAST(netw::NetwPredict::Role);
-VARIANT_ENUM_CAST(netw::NetwPredict::InputSource);
-VARIANT_ENUM_CAST(netw::NetwPredict::SimMode);
-VARIANT_ENUM_CAST(netw::NetwPredict::Schedule);
 VARIANT_ENUM_CAST(netw::NetwPredict::ContactClass);
 VARIANT_ENUM_CAST(netw::NetwPredict::WitnessClass);
 VARIANT_ENUM_CAST(netw::NetwPredict::CommandOrigin);
@@ -220,12 +191,8 @@ VARIANT_ENUM_CAST(netw::NetwPredict::ConsumeAction);
 VARIANT_ENUM_CAST(netw::NetwPredict::ExactVerdict);
 VARIANT_ENUM_CAST(netw::NetwPredict::MissingInput);
 VARIANT_ENUM_CAST(netw::NetwPredict::CorrectionMode);
-VARIANT_ENUM_CAST(netw::NetwPredict::RestoreMode);
 VARIANT_ENUM_CAST(netw::NetwPredict::Archetype);
 VARIANT_ENUM_CAST(netw::NetwPredict::RecoveryPolicy);
-VARIANT_ENUM_CAST(netw::NetwPredict::Fidelity);
-VARIANT_ENUM_CAST(netw::NetwPredict::Promotion);
-VARIANT_ENUM_CAST(netw::NetwPredict::Pacing);
 VARIANT_ENUM_CAST(netw::NetwPredict::Reconcile);
 VARIANT_ENUM_CAST(netw::NetwPredict::CellProvenance);
 VARIANT_ENUM_CAST(netw::NetwPredict::BreachResponse);

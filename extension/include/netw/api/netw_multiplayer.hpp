@@ -18,7 +18,6 @@
 #include "netw/api/clock_config.hpp"
 #include "netw/api/clock_handle.hpp"
 #include "netw/api/connect_handle.hpp"
-#include "netw/api/display_handle.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/group_promise.hpp"
@@ -38,6 +37,7 @@
 #include "netw/api/session_config.hpp"
 #include "netw/api/session_handle.hpp"
 #include "netw/api/session_stats.hpp"
+#include "netw/api/simulation_handle.hpp"
 #include "netw/api/sync_model.hpp"
 #include "netw/api/table_handle.hpp"
 #include "netw/call_park.hpp"
@@ -79,6 +79,7 @@
 #include "netw/session_core.hpp"
 #include "netw/session_decl.hpp"
 #include "netw/settle_queue.hpp"
+#include "netw/sim/row.hpp"
 #include "netw/spawn/book.hpp"
 #include "netw/spawn/pipeline.hpp"
 #include "netw/spawn/spawner_compat.hpp"
@@ -303,9 +304,8 @@ public:
 
     enum DisplayParam {
         DISPLAY_PARAM_ROLE = display::PARAM_ROLE,
-        DISPLAY_PARAM_PREDICTED_MODE = display::PARAM_PREDICTED_MODE,
-        DISPLAY_PARAM_PREDICTED_SMOOTH_TIME
-        = display::PARAM_PREDICTED_SMOOTH_TIME,
+        DISPLAY_PARAM_LIVE_MODE = display::PARAM_LIVE_MODE,
+        DISPLAY_PARAM_LIVE_SMOOTH_TIME = display::PARAM_LIVE_SMOOTH_TIME,
         DISPLAY_PARAM_CHASE_GLIDE_TIME = display::PARAM_CHASE_GLIDE_TIME,
         DISPLAY_PARAM_TIMELINE_MODE = display::PARAM_TIMELINE_MODE,
         DISPLAY_PARAM_MAX_FORECAST_TICKS = display::PARAM_MAX_FORECAST_TICKS,
@@ -336,9 +336,9 @@ public:
         DISPLAY_PUMP_CHASE = display::PUMP_CHASE,
     };
 
-    enum PredictedMode {
-        PREDICTED_MODE_CHASE = display::PREDICTED_CHASE,
-        PREDICTED_MODE_BRACKETED = display::PREDICTED_BRACKETED,
+    enum LiveMode {
+        LIVE_MODE_CHASE = display::LIVE_CHASE,
+        LIVE_MODE_BRACKETED = display::LIVE_BRACKETED,
     };
 
     enum TimelineMode {
@@ -348,15 +348,12 @@ public:
 
     enum PredictParam {
         PREDICT_PARAM_ARCHETYPE = 0,
-        PREDICT_PARAM_SCHEDULE = 1,
         PREDICT_PARAM_MISSING_POLICY = 2,
         PREDICT_PARAM_RECOVERY_POLICY = 3,
-        PREDICT_PARAM_SNAP_RESTORE = 4,
         PREDICT_PARAM_CORRECTION_MODE = 5,
         PREDICT_PARAM_TELEPORT_THRESHOLD = 6,
         PREDICT_PARAM_DIVERGENCE_EPSILON = 7,
         PREDICT_PARAM_BREACH_RESPONSE = 8,
-        PREDICT_PARAM_MAX_RESTORE_TICKS = 9,
         PREDICT_PARAM_COLLISION_COOLDOWN_TICKS = 10,
         PREDICT_PARAM_MAX_CONSUME_PER_TICK = 11,
         PREDICT_PARAM_MAX_CONSUME_LAG_TICKS = 12,
@@ -364,20 +361,12 @@ public:
         PREDICT_PARAM_REPLAY_BUFFER_DEPTH = 14,
     };
 
-    enum IslandParam {
-        ISLAND_PARAM_APPROXIMATE = 0,
-        ISLAND_PARAM_EXACT_CLAIM = 1,
-        ISLAND_PARAM_RECONCILE = 2,
-        ISLAND_PARAM_PROMOTION = 3,
-        ISLAND_PARAM_PROMOTION_COUNT = 4,
-        ISLAND_PARAM_PROMOTION_METERS = 5,
-        ISLAND_PARAM_PACING = 6,
-        ISLAND_PARAM_INPUT_DELAY = 7,
-    };
-
-    enum MemberParam {
-        MEMBER_PARAM_FIDELITY = 0,
-        MEMBER_PARAM_PREDICTOR = 1,
+    enum SimulationParam {
+        SIMULATION_PARAM_BODIES = 0,
+        SIMULATION_PARAM_SCHEDULE = 1,
+        SIMULATION_PARAM_REPLICAS = 2,
+        SIMULATION_PARAM_RESTORE = 3,
+        SIMULATION_PARAM_MAX_RESTORE_TICKS = 4,
     };
 
     enum WritePolicy {
@@ -408,6 +397,7 @@ public:
         SET_PARAM_PROFILE = 7,
         SET_PARAM_CHANNEL = 8,
         SET_PARAM_RELIABLE = 9,
+        SET_PARAM_HEARTBEAT = 10,
     };
 
     enum ColumnType {
@@ -1024,6 +1014,8 @@ private:
     };
     godot::HashMap<int64_t, SteppedSpace> space_steppers;
     godot::HashMap<int64_t, NetwPredictSlotEngine *> predict_engines;
+    sim::Rows sim_rows;
+    godot::LocalVector<godot::RID> sim_stepping;
     NetwPredictRunner predict_runner;
     godot::HashMap<int64_t, bool> pending_scene_facets;
     int64_t physics_frame = 0;
@@ -1204,6 +1196,9 @@ public:
         EntitySpace held;
     };
     godot::LocalVector<GatedBody> gated_bodies;
+    int64_t predict_gate_arms = 0;
+    bool predict_pacing_rate_warned = false;
+    void warn_pacing_rate_mismatch_once();
     void simulation_gate_set(const godot::RID &p_entity, bool p_wanted);
     void simulation_gate_apply();
     int64_t simulation_gate_count() const;
@@ -1240,7 +1235,7 @@ public:
         const godot::Dictionary &p_payload,
         NetwPredict::RecoveryPolicy p_policy,
         NetwPredict::CorrectionMode p_correction,
-        NetwPredict::RestoreMode p_snap_restore,
+        NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_current,
         const godot::Dictionary &p_pose_errors,
@@ -1260,7 +1255,7 @@ public:
         const godot::Dictionary &p_payload,
         NetwPredict::RecoveryPolicy p_policy,
         NetwPredict::CorrectionMode p_correction,
-        NetwPredict::RestoreMode p_snap_restore,
+        NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_current,
         const godot::Dictionary &p_pose_errors,
@@ -1293,7 +1288,7 @@ public:
         godot::Dictionary,
         NetwPredict::RecoveryPolicy,
         NetwPredict::CorrectionMode,
-        NetwPredict::RestoreMode,
+        NetwSimulationHandle::Restore,
         godot::Dictionary,
         godot::Dictionary,
         godot::Dictionary,
@@ -1795,6 +1790,7 @@ public:
 
     bool display_wants_runtime(godot::Node *p_owner) const;
     void display_rebuild_runtime(display::Runtime *p_runtime);
+    void display_seat_bodies(display::Runtime *p_runtime);
     display::Channel *display_ensure_state(
         display::Runtime *p_runtime,
         godot::Node *p_node,
@@ -1947,10 +1943,12 @@ public:
     );
     void predict_reresolve_space(const godot::RID &p_space);
     void predict_reconcile_declaration(const godot::Ref<NetwEntity> &p_entity);
+    bool predict_lacks_state_rows(const godot::Ref<NetwEntity> &p_entity) const;
     godot::Ref<NetwPhysicsStepper> predict_get_stepper(
         const godot::RID &p_space
     ) const;
     void predict_stepper_hold(const godot::RID &p_space, int p_dimension);
+    void predict_held_spaces(godot::LocalVector<godot::RID> &r_spaces) const;
     bool predict_space_is_stepped(const godot::RID &p_space) const;
     void predict_engine_install(
         const godot::RID &p_entity,
@@ -1960,6 +1958,123 @@ public:
     NetwPredictSlotEngine *predict_engine_for(const godot::RID &p_entity) const;
     bool predict_engine_seated(const godot::RID &p_entity) const;
     godot::TypedArray<godot::Object> predict_engine_entities() const;
+    sim::Row &sim_row(const godot::RID &p_entity);
+    const sim::Row *sim_row_of(const godot::RID &p_entity) const;
+    sim::Mode sim_resolve(const godot::RID &p_entity, const sim::Facts &p_facts);
+    void sim_follow_session_authority();
+    sim::Facts sim_body_facts(const godot::Ref<NetwEntity> &p_entity) const;
+    void sim_settle_body(const godot::Ref<NetwEntity> &p_entity);
+    void sim_settle_body_of(const godot::RID &p_entity);
+    void sim_on_body_control(
+        int64_t p_previous,
+        int64_t p_peer,
+        const godot::RID &p_entity
+    );
+    void sim_install_newest(const godot::Ref<NetwEntity> &p_entity);
+    void sim_release_body(const godot::RID &p_entity, bool p_restore);
+    void sim_hold_poses(
+        const godot::RID &p_space,
+        const godot::LocalVector<godot::RID> &p_members,
+        godot::LocalVector<sim::HeldPose> &r_poses
+    ) const;
+    bool sim_draws_column(
+        const godot::RID &p_entity,
+        godot::Node *p_node,
+        const godot::StringName &p_key
+    ) const;
+    bool sim_takes_install(
+        const godot::RID &p_entity,
+        const NetwPropertySetBinding *p_binding
+    ) const;
+    godot::Error sim_admit_install(
+        const godot::RID &p_entity,
+        const sim::Sample &p_sample,
+        bool p_whole
+    );
+    void sim_drain_installs();
+    void sim_install(const godot::RID &p_entity, const sim::Sample &p_sample);
+    bool sim_reconstructs(
+        const godot::RID &p_entity,
+        int64_t p_comp,
+        bool p_whole
+    );
+    void sim_forget_reconstruction(const godot::RID &p_entity);
+    void sim_note_whole(const godot::RID &p_entity, int64_t p_comp);
+    godot::Array sim_install_target(
+        const NetwPropertySetBinding *p_binding,
+        const sim::Sample &p_sample,
+        sim::Restore p_restore,
+        int64_t p_max_restore_ticks,
+        int64_t &r_age
+    ) const;
+    bool sim_write_install(
+        const godot::RID &p_entity,
+        NetwPropertySetBinding *p_binding,
+        const godot::Array &p_keys,
+        const godot::Array &p_values,
+        int64_t p_age
+    );
+    int64_t sim_author_peer(const godot::RID &p_entity) const;
+    int64_t sim_display_tick() const;
+    void sim_run(sim::Schedule p_phase, double p_delta, int64_t p_tick);
+    void sim_step(
+        const godot::RID &p_entity,
+        sim::Schedule p_phase,
+        double p_delta,
+        int64_t p_tick
+    );
+    sim::Schedule sim_schedule_of(sim::Row &r_row, godot::Node *p_owner);
+    void sim_release_row(const godot::RID &p_entity);
+    godot::Error sim_simulate(
+        const godot::RID &p_subject,
+        const godot::Ref<NetwEntity> &p_entity
+    );
+    void sim_forget(
+        const godot::RID &p_subject,
+        const godot::Ref<NetwEntity> &p_entity
+    );
+    void sim_simulate_nearest(
+        const godot::RID &p_subject,
+        int p_count,
+        const godot::StringName &p_layer = godot::StringName()
+    );
+    void sim_simulate_within(
+        const godot::RID &p_subject,
+        double p_meters,
+        const godot::StringName &p_layer = godot::StringName()
+    );
+    void sim_simulate_all(
+        const godot::RID &p_subject,
+        const godot::StringName &p_layer = godot::StringName()
+    );
+    void sim_simulate_none(const godot::RID &p_subject);
+    godot::TypedArray<NetwEntity> sim_selected(const godot::RID &p_subject);
+    uint32_t sim_selection_count(const godot::RID &p_member) const;
+    bool sim_chooses(const godot::RID &p_subject) const;
+    godot::TypedArray<NetwEntity> sim_named(const godot::RID &p_subject);
+    godot::TypedArray<NetwEntity> sim_candidates(
+        const godot::Ref<NetwEntity> &p_subject
+    );
+    bool sim_selectable(const godot::Ref<NetwEntity> &p_member);
+    godot::RID sim_entity_of_key(int64_t p_key) const;
+    godot::TypedArray<NetwEntity> sim_select(
+        const godot::Ref<NetwEntity> &p_subject,
+        const godot::TypedArray<NetwEntity> &p_candidates,
+        const godot::TypedArray<NetwEntity> &p_contact,
+        int64_t p_frontier
+    );
+    void sim_drop_selections(const godot::RID &p_subject);
+    void sim_note_selected_by(
+        const godot::RID &p_member,
+        const godot::RID &p_subject,
+        bool p_selected
+    );
+    void sim_release_lingering(const godot::RID &p_subject, int64_t p_floor);
+    void sim_select_unpredicted(int64_t p_tick, bool p_commit);
+    void sim_declare(const godot::Ref<NetwEntity> &p_entity);
+    void sim_seed(sim::Row &r_row);
+    void sim_announce(const godot::RID &p_entity);
+    void sim_refresh_members(const godot::LocalVector<godot::RID> &p_members);
     NetwPredictRunner *predict_runner_seated();
     void predict_history_record_tick(int64_t p_tick);
     void predict_history_record_frame(int64_t p_tick);
@@ -2330,7 +2445,7 @@ public:
         const godot::RID &p_entity,
         const godot::Callable &p_callback
     );
-    void predict_set_simulate_callback(
+    void predict_set_commands_callback(
         const godot::RID &p_entity,
         const godot::Callable &p_callback
     );
@@ -2339,30 +2454,23 @@ public:
         godot::Object *p_owner
     );
     void predict_unbind_owner(const godot::RID &p_entity);
-    godot::Error predict_island_add(
+    godot::Ref<NetwSimulationHandle> simulation_handle(
+        const godot::RID &p_entity
+    ) const;
+    void simulation_set_param(
         const godot::RID &p_entity,
-        const godot::RID &p_other
-    );
-    void predict_island_remove(
-        const godot::RID &p_entity,
-        const godot::RID &p_other
-    );
-    godot::Error predict_island_set_param(
-        const godot::RID &p_entity,
-        IslandParam p_param,
+        SimulationParam p_param,
         const godot::Variant &p_value
     );
-    godot::Error predict_island_set_member_param(
+    godot::Variant simulation_get_param(
         const godot::RID &p_entity,
-        const godot::RID &p_member,
-        MemberParam p_param,
-        const godot::Variant &p_value
+        SimulationParam p_param
     );
-    godot::Variant predict_island_get_member_param(
+    void simulation_set_step_callback(
         const godot::RID &p_entity,
-        const godot::RID &p_member,
-        MemberParam p_param
+        const godot::Callable &p_callback
     );
+    NetwSimulationHandle::Mode simulation_get_mode(const godot::RID &p_entity);
     godot::Variant predict_sensor_sample(
         const godot::RID &p_entity,
         const godot::StringName &p_name,
@@ -4473,11 +4581,10 @@ VARIANT_ENUM_CAST(netw::NetwMultiplayer::SceneIsolation);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::DisplayParam);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::DisplayRole);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::DisplayPump);
-VARIANT_ENUM_CAST(netw::NetwMultiplayer::PredictedMode);
+VARIANT_ENUM_CAST(netw::NetwMultiplayer::LiveMode);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::TimelineMode);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::PredictParam);
-VARIANT_ENUM_CAST(netw::NetwMultiplayer::IslandParam);
-VARIANT_ENUM_CAST(netw::NetwMultiplayer::MemberParam);
+VARIANT_ENUM_CAST(netw::NetwMultiplayer::SimulationParam);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::WritePolicy);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::ColumnParam);
 VARIANT_ENUM_CAST(netw::NetwMultiplayer::PropertySetParam);

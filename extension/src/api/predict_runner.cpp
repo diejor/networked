@@ -185,7 +185,9 @@ void NetwPredictRunner::tick_step(const NetwPredictTiming &p_timing) {
         for (uint32_t at = 0; at < roster.size(); ++at) {
             NetwPredictSlotEngine *engine = roster[at];
             if (engine != nullptr) {
-                engine->prepare_island(int(NetwPredict::SCHEDULE_TICK));
+                engine->prepare_island(
+                    int(NetwSimulationHandle::SCHEDULE_TICK)
+                );
             }
         }
     }
@@ -242,7 +244,7 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
     for (uint32_t at = 0; at < engines.size(); ++at) {
         NetwPredictSlotEngine *engine = engines[at];
         if (engine == nullptr
-            || !engine->uses_schedule(NetwPredict::SCHEDULE_STEPPED)) {
+            || !engine->uses_schedule(NetwSimulationHandle::SCHEDULE_STEPPED)) {
             continue;
         }
         const NetwMultiplayer::EntitySpace held
@@ -257,6 +259,16 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
         stepper->step(held.space, p_timing.get_ticktime());
         stepper->snapshot(held.space, p_timing.get_tick());
     }
+    service->predict_held_spaces(held_spaces);
+    for (const RID &space : held_spaces) {
+        const Ref<NetwPhysicsStepper> stepper
+            = service->predict_get_stepper(space);
+        if (stepper.is_null() || driven.has(space.get_id())) {
+            continue;
+        }
+        stepper->step(space, p_timing.get_ticktime());
+        stepper->snapshot(space, p_timing.get_tick());
+    }
 }
 
 void NetwPredictRunner::frame_step(const NetwPredictTiming &p_timing) {
@@ -267,7 +279,9 @@ void NetwPredictRunner::frame_step(const NetwPredictTiming &p_timing) {
         for (uint32_t at = 0; at < roster.size(); ++at) {
             NetwPredictSlotEngine *engine = roster[at];
             if (engine != nullptr) {
-                engine->prepare_island(int(NetwPredict::SCHEDULE_FRAME));
+                engine->prepare_island(
+                    int(NetwSimulationHandle::SCHEDULE_FRAME)
+                );
             }
         }
     }

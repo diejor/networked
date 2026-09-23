@@ -1387,10 +1387,12 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
 
     /// <summary>
     /// Re-sends the whole set every <paramref name="ticks"/> ticks even when
-    /// nothing changed, so a peer that missed an
-    /// <see cref="NetwPropertyConfig.OnChange"/> send converges in bounded
-    /// time. Writes <see cref="NetwPropertyConfig.SetHeartbeatTicks"/>, and
-    /// warns when a second member of the same script writes it too.
+    /// nothing changed, and every peer applies it. A peer that missed an
+    /// <see cref="NetwPropertyConfig.OnChange"/> send, or whose copy drifted,
+    /// converges in bounded time. An <see cref="NetwPropertyConfig.Input"/> set
+    /// sends a window of recent samples and ignores it. Writes
+    /// <see cref="NetwPropertyConfig.SetHeartbeatTicks"/>, and warns when a
+    /// second member of the same script writes it too.
     /// <code>
     /// # a lost "stunned" flip heals within a second at 60 ticks
     /// Netw.configure_property(self, &amp;"stunned").state().heartbeat(60)

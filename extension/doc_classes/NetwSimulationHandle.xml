@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSimulationHandle" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Where and how one [NetwEntity]'s body runs on each peer.
+	</brief_description>
+	<description>
+		Reach it through [member NetwEntity.simulation]. It is never [code]null[/code], and there is one per entity.
+		Each peer resolves one [member mode] for the entity. The body's freeze, the [member step], how an arriving sample lands and how the entity is drawn all follow that mode. A game writes the declaration below and reads the mode, and never writes the mode.
+		[codeblocks]
+		[gdscript]
+		func _init() -&gt; void:
+		    var entity := Netw.configure_entity(self)
+		    entity.simulation.bodies = [^"Sphere"]
+		    entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+
+		func _network_tick(delta: float, tick: int, is_fresh: bool) -&gt; void:
+		    if is_fresh:
+		        steer(delta)
+		[/gdscript]
+		[csharp]
+		public Car()
+		{
+		    var entity = Netw.ConfigureEntity(this);
+		    entity.Simulation.Bodies = new Godot.Collections.Array { new NodePath("Sphere") };
+		    entity.Simulation.Replicas = NetwSimulationHandle.ReplicasEnum.Active;
+		    entity.Simulation.Step = Callable.From&lt;double, long, bool&gt;(Step);
+		}
+
+		private void Step(double delta, long tick, bool isFresh)
+		{
+		    if (isFresh)
+		        Steer(delta);
+		}
+		[/csharp]
+		[/codeblocks]
+		An entity is simulated when it writes any member here, calls a selection method, declares [member NetwPredictionHandle.archetype], or has a [RigidBody2D] or [RigidBody3D] root that [member NetwEntity.interpolation] draws. Every other entity stays [constant MODE_NONE] on every peer.
+		[b]Modes[/b]
+		The peer that authors the entity runs it as [constant MODE_AUTHORITY]. A controller running a predicted entity ahead runs it as [constant MODE_PREDICT]. Every other copy is [constant MODE_PROXY], frozen and drawn from history, unless [member replicas] or a selection makes it [constant MODE_ACTIVE].
+		[codeblock lang=text]
+		mode       the step           the body
+		AUTHORITY  runs               runs with the settings the scene authored
+		PREDICT    runs and replays   runs with the settings the scene authored
+		ACTIVE     runs, never fresh  runs, and installs each sample it receives
+		PROXY      does not run       frozen kinematic, drawn from history
+		NONE       does not run       untouched
+		[/codeblock]
+		[b]Selection[/b]
+		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. [method simulate] names one, and [method simulate_nearest], [method simulate_within] and [method simulate_all] set one automatic policy, which the last call replaces. A change takes effect at the start of the next tick.
+		[codeblock]
+		func _ready() -&gt; void:
+		    entity.simulation.simulate(ball)
+		    entity.simulation.simulate_nearest(2, &amp;"arena")
+		[/codeblock]
+		An entity named with [method simulate] never spends the automatic policy's budget. A predicted entity keeps an entity it selected while the two touch. The selection belongs to this handle, so it holds across prediction being declared again.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="forget">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Withdraws the selection [method simulate] made for [param entity]. The automatic policy may still select it.
+			</description>
+		</method>
+		<method name="simulate">
+			<return type="void" />
+			<param index="0" name="entity" type="NetwEntity" />
+			<description>
+				Always selects [param entity], so it runs here as [constant MODE_ACTIVE] while this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT].
+				An entity in another scene is refused with an error and is not selected.
+			</description>
+		</method>
+		<method name="simulate_all">
+			<return type="void" />
+			<param index="0" name="layer" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Selects every entity this peer holds in [param layer]. An empty [param layer] reads this entity's own [NetwInterestLayer] membership.
+			</description>
+		</method>
+		<method name="simulate_nearest">
+			<return type="void" />
+			<param index="0" name="count" type="int" />
+			<param index="1" name="layer" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Selects the [param count] entities nearest this one among those this peer holds in [param layer]. An empty [param layer] reads this entity's own [NetwInterestLayer] membership. A negative [param count] selects nothing.
+			</description>
+		</method>
+		<method name="simulate_none">
+			<return type="void" />
+			<description>
+				Drops the automatic policy. Entities named with [method simulate] stay selected.
+			</description>
+		</method>
+		<method name="simulate_within">
+			<return type="void" />
+			<param index="0" name="meters" type="float" />
+			<param index="1" name="layer" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Selects the entities within [param meters] of this one among those this peer holds in [param layer]. A selected entity leaves only once it is 10% past [param meters]. A negative [param meters] selects nothing.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="bodies" type="NodePath[]" setter="set_bodies" getter="get_bodies" default="[]">
+			The physics bodies this entity's simulation owns, as paths from the entity root. The core freezes them on a [constant MODE_PROXY] copy and restores the [member RigidBody3D.freeze] settings the scene authored when the copy runs again.
+			Empty means the root, when it is a [RigidBody2D] or [RigidBody3D]. A value written after the entity goes live warns, and the bodies it had stay in effect.
+		</member>
+		<member name="max_restore_ticks" type="int" setter="set_max_restore_ticks" getter="get_max_restore_ticks" default="6">
+			The most ticks [constant RESTORE_EXTRAPOLATED] carries a sample forward.
+		</member>
+		<member name="mode" type="int" setter="" getter="get_mode" enum="NetwSimulationHandle.Mode" default="0">
+			The mode this entity runs in on this peer. [signal mode_changed] reports each change.
+		</member>
+		<member name="replicas" type="int" setter="set_replicas" getter="get_replicas" enum="NetwSimulationHandle.Replicas" default="0">
+			How the copies this peer does not author run. [constant REPLICAS_ACTIVE] makes every such copy [constant MODE_ACTIVE]. It can change at any time.
+		</member>
+		<member name="restore" type="int" setter="set_restore" getter="get_restore" enum="NetwSimulationHandle.Restore" default="2">
+			How a sample from the author lands on a [constant MODE_ACTIVE] copy. Under [constant NetwMultiplayer.LIVE_MODE_CHASE] the drawn position absorbs the jump up to [member NetwPredictionHandle.teleport_threshold], so the body snaps and the visual glides.
+		</member>
+		<member name="schedule" type="int" setter="set_schedule" getter="get_schedule" enum="NetwSimulationHandle.Schedule" default="3">
+			When [member step] runs and when the physics server moves the bodies.
+		</member>
+		<member name="selected" type="NetwEntity[]" setter="" getter="get_selected" default="[]">
+			The entities this entity selects on this peer right now.
+		</member>
+		<member name="step" type="Callable" setter="set_step" getter="get_step" default="Callable()">
+			The step the core calls in the phase [member schedule] names, while [member mode] runs the body. It is called as [code](delta: float, tick: int, is_fresh: bool)[/code]. It reads the root's [code]_network_tick[/code] when none is set.
+			[code]is_fresh[/code] is true on a [constant MODE_AUTHORITY] or [constant MODE_PREDICT] step that moves the entity forward, and false in a replay and on every [constant MODE_ACTIVE] step. Gate input on it, so an active copy coasts on the samples it installs.
+		</member>
+	</members>
+	<signals>
+		<signal name="mode_changed">
+			<param index="0" name="previous" type="int" enum="NetwSimulationHandle.Mode" />
+			<param index="1" name="mode" type="int" enum="NetwSimulationHandle.Mode" />
+			<description>
+				Emitted when [member mode] changes on this peer, after the body and the arriving samples have moved to [param mode].
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="MODE_NONE" value="0" enum="Mode">
+			Not simulated. The entity follows plain replication.
+		</constant>
+		<constant name="MODE_AUTHORITY" value="1" enum="Mode">
+			This peer authors the entity. The step runs and the samples go out from here.
+		</constant>
+		<constant name="MODE_PREDICT" value="2" enum="Mode">
+			This peer controls a predicted entity and runs it ahead of the server. See [NetwPredictionHandle].
+		</constant>
+		<constant name="MODE_ACTIVE" value="3" enum="Mode">
+			A copy that runs forward and installs each sample it receives.
+		</constant>
+		<constant name="MODE_PROXY" value="4" enum="Mode">
+			A frozen copy drawn from history, where it collides.
+		</constant>
+		<constant name="SCHEDULE_TICK" value="0" enum="Schedule">
+			The step moves the entity once per tick.
+		</constant>
+		<constant name="SCHEDULE_FRAME" value="1" enum="Schedule">
+			The physics server moves the bodies in each frame that brings a tick, and the step runs once in that frame.
+		</constant>
+		<constant name="SCHEDULE_STEPPED" value="2" enum="Schedule">
+			A [NetwPhysicsStepper] installed with [method NetwMultiplayer.predict_stepper_install] steps the space once per tick. An entity that does not declare prediction, or that stands in a space with no stepper, runs [constant SCHEDULE_FRAME] and reports one error.
+		</constant>
+		<constant name="SCHEDULE_AUTO" value="3" enum="Schedule">
+			[constant SCHEDULE_FRAME] when the entity has a physics body, and [constant SCHEDULE_TICK] otherwise.
+		</constant>
+		<constant name="REPLICAS_PROXY" value="0" enum="Replicas">
+			Copies this peer does not author are [constant MODE_PROXY], unless a selection makes them active.
+		</constant>
+		<constant name="REPLICAS_ACTIVE" value="1" enum="Replicas">
+			Copies this peer does not author are [constant MODE_ACTIVE].
+		</constant>
+		<constant name="RESTORE_EXACT" value="0" enum="Restore">
+			A sample lands when it arrives, as it was authored.
+		</constant>
+		<constant name="RESTORE_EXTRAPOLATED" value="1" enum="Restore">
+			A sample lands when it arrives, carried forward by its age along the property its interpolation projects by, for at most [member max_restore_ticks].
+		</constant>
+		<constant name="RESTORE_BUFFERED" value="2" enum="Restore">
+			A sample is held until the clock's display tick reaches it, then lands as it was authored, so every sample lands at the same age.
+		</constant>
+	</constants>
+</class>

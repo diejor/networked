@@ -46,6 +46,7 @@ var pressed := {
 @onready var state := PhysicsServer3D.body_get_direct_state(get_rid())
 @onready var level: Node = entity.scene.root
 @onready var game: RocketGame = level.get_node(^"game")
+@onready var ball: RocketBall = level.get_node(^"ball")
 @onready var marker: Marker3D = level.get_node(
 	"Markers/%s%d" % ["r" if team == 0 else "b", slot + 1],
 )
@@ -172,8 +173,9 @@ func _init() -> void:
 	Netw.configure_interest(self).join(&"arena")
 
 	e.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
-	e.prediction.schedule = RocketJoltStepper.schedule()
-	e.prediction.recovery_policy = NetwPredict.RECOVERY_POLICY_REBASE_REPLAY
+	e.simulation.schedule = RocketJoltStepper.schedule()
+	e.prediction.recovery_policy = RocketJoltStepper.recovery_policy()
+	e.prediction.reconcile_mode = RocketJoltStepper.reconcile_mode()
 	e.prediction.witness_contacts = sample_contacts
 	e.interpolation.visual_root = ^"Car_model"
 
@@ -185,6 +187,8 @@ func _ready() -> void:
 	max_contacts_reported = 8
 
 	set_color(TEAM_COLORS[team])
+	entity.simulation.simulate(ball.entity)
+	entity.simulation.simulate_nearest(2, &"arena")
 
 	if entity.is_controlled_locally:
 		get_viewport().get_camera_3d().target = car_model

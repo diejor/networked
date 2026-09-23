@@ -184,6 +184,7 @@ public:
     int64_t stamp = STAMP_NONE;
     int64_t record = RECORD_NONE;
     int64_t window = 0;
+    int64_t heartbeat = 0;
     int64_t audience = AUDIENCE_PUBLIC;
     bool masked = false;
     NetwMemberConfig::Policy policy = NetwMemberConfig::POLICY_AUTHORITY;
@@ -269,6 +270,12 @@ public:
     }
     void set_window(int64_t p_value) {
         window = p_value;
+    }
+    int64_t get_heartbeat() const {
+        return heartbeat;
+    }
+    void set_heartbeat(int64_t p_value) {
+        heartbeat = p_value;
     }
     int64_t get_audience() const {
         return audience;

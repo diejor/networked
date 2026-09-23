@@ -9,6 +9,14 @@ func _init() -> void:
 	Netw.configure_property(self, &"rotation").input()
 )";
 
+constexpr const char *INTERPOLATED_STATE_AND_INPUT = R"(extends Node2D
+
+func _init() -> void:
+	var smoothing := NetwInterpolate.new().lerp().smooth(0.0).to(&"position")
+	Netw.configure_property(self, &"position").state().interpolate(smoothing)
+	Netw.configure_property(self, &"rotation").input()
+)";
+
 constexpr const char *STATE_ONLY = R"(extends Node2D
 
 func _init() -> void:
@@ -45,6 +53,22 @@ var aim_dir: Vector2 = Vector2.ZERO
 
 func _init() -> void:
 	Netw.configure_property(self, &"aim_dir").broadcast().masked()
+)";
+
+constexpr const char *BROADCAST_AUTHORITY_AIM = R"(extends Node2D
+
+var aim_dir: Vector2 = Vector2.ZERO
+
+func _init() -> void:
+	Netw.configure_property(self, &"aim_dir").broadcast().authority()
+)";
+
+constexpr const char *BROADCAST_HEARTBEAT_AIM = R"(extends Node2D
+
+var aim_dir: Vector2 = Vector2.ZERO
+
+func _init() -> void:
+	Netw.configure_property(self, &"aim_dir").broadcast().heartbeat(10)
 )";
 
 constexpr const char *INTERPOLATED_RPC_AND_SIGNAL = R"(extends Node2D

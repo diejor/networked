@@ -267,9 +267,9 @@ class LoopbackRig {
             return;
         }
         netw::NetwMultiplayer *p_api = core_of(p_shell);
-        p_api->predict_set_param(
+        p_api->simulation_set_param(
             p_entity,
-            netw::NetwMultiplayer::PREDICT_PARAM_SCHEDULE,
+            netw::NetwMultiplayer::SIMULATION_PARAM_SCHEDULE,
             int(p_decl.schedule())
         );
         p_api->predict_set_param(
@@ -1041,11 +1041,6 @@ public:
         return index < 0 ? -1 : p_world.rows[index].player_client;
     }
 
-    enum Fidelity {
-        FIDELITY_PROXY = 0,
-        FIDELITY_SIMULATED = 1,
-    };
-
     void declare_island(const WorldDecl::IslandRow &p_row) {
         seat_island(server(), p_row, -1);
         for (int index = 0; index < count(); ++index) {
@@ -1067,39 +1062,16 @@ public:
             }
         }
         const godot::RID owner = entity_of(p_row.owner, p_client);
-        for (const godot::StringName &member : p_row.members) {
-            p_api->predict_island_add(owner, entity_of(member, p_client));
-        }
+        const godot::Ref<netw::NetwSimulationHandle> selecting
+            = p_api->simulation_handle(owner);
         for (const godot::StringName &member : p_row.simulated) {
-            p_api->predict_island_set_member_param(
-                owner,
-                entity_of(member, p_client),
-                netw::NetwMultiplayer::MEMBER_PARAM_FIDELITY,
-                FIDELITY_SIMULATED
+            selecting->simulate(
+                p_api->entity_get_view(entity_of(member, p_client))
             );
         }
-        p_api->predict_island_set_param(
-            owner,
-            netw::NetwMultiplayer::ISLAND_PARAM_RECONCILE,
-            p_row.reconcile
+        p_api->prediction_handle(owner)->set_reconcile_mode(
+            netw::NetwPredict::Reconcile(p_row.reconcile)
         );
-        if (p_row.promotion != 0) {
-            p_api->predict_island_set_param(
-                owner,
-                netw::NetwMultiplayer::ISLAND_PARAM_PROMOTION,
-                p_row.promotion
-            );
-            p_api->predict_island_set_param(
-                owner,
-                netw::NetwMultiplayer::ISLAND_PARAM_PROMOTION_COUNT,
-                p_row.promotion_count
-            );
-            p_api->predict_island_set_param(
-                owner,
-                netw::NetwMultiplayer::ISLAND_PARAM_PROMOTION_METERS,
-                p_row.promotion_meters
-            );
-        }
     }
 
     bool holds_entity(const godot::StringName &p_name, int p_client) const {

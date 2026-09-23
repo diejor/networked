@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "godot/callable.hpp"
 #include "godot/local_vector.hpp"
 #include "godot/node.hpp"
 #include "godot/ref_counted.hpp"
@@ -33,13 +34,13 @@ private:
     bool rebuild_queued = false;
     godot::Ref<NetwPropertySetBinding> authoring_binding;
     int64_t trace_frame = 0;
-    godot::Dictionary saved_freeze;
     godot::Array entity_hooks;
     godot::Array chase_hooks;
     bool disabled = false;
     int64_t disable_until_tick = -1;
     bool warned_self_feedback = false;
     double display_offset_limit = 0.0;
+    godot::LocalVector<godot::ObjectID> bodies;
 
 public:
     Runtime();
@@ -143,13 +144,6 @@ public:
         return trace_frame;
     }
 
-    void set_saved_freeze(const godot::Dictionary &p_saved) {
-        saved_freeze = p_saved;
-    }
-    godot::Dictionary get_saved_freeze() const {
-        return saved_freeze;
-    }
-
     void set_entity_hooks(const godot::Array &p_hooks) {
         entity_hooks = p_hooks;
     }
@@ -190,6 +184,13 @@ public:
     }
     double get_display_offset_limit() const {
         return display_offset_limit;
+    }
+
+    void set_bodies(const godot::LocalVector<godot::ObjectID> &p_bodies) {
+        bodies = p_bodies;
+    }
+    bool holds_body(const godot::Object *p_node) const {
+        return p_node != nullptr && bodies.find(gd::instance_id(p_node)) >= 0;
     }
 };
 

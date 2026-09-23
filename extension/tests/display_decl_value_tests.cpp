@@ -19,8 +19,8 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         decl.set_param(
-            netw::display::PARAM_PREDICTED_MODE,
-            netw::display::PREDICTED_BRACKETED
+            netw::display::PARAM_LIVE_MODE,
+            netw::display::LIVE_BRACKETED
         ),
         netw::display::DIRT_ROLE
     );
@@ -29,7 +29,7 @@ TEST_CASE(
         netw::display::DIRT_RUNTIME
     );
     NETW_CHECK_EQ(
-        decl.set_param(netw::display::PARAM_PREDICTED_SMOOTH_TIME, 0.25),
+        decl.set_param(netw::display::PARAM_LIVE_SMOOTH_TIME, 0.25),
         netw::display::DIRT_RUNTIME
     );
     NETW_CHECK_EQ(
@@ -38,9 +38,9 @@ TEST_CASE(
     );
 
     NETW_CHECK_EQ(decl.display_role, netw::display::ROLE_REMOTE);
-    NETW_CHECK_EQ(decl.predicted_mode, netw::display::PREDICTED_BRACKETED);
+    NETW_CHECK_EQ(decl.live_mode, netw::display::LIVE_BRACKETED);
     CHECK(decl.visual_root == NodePath("Visual"));
-    NETW_CHECK_CLOSE(decl.predicted_smooth_time, 0.25, 0.0);
+    NETW_CHECK_CLOSE(decl.live_smooth_time, 0.25, 0.0);
     NETW_CHECK_EQ(decl.trace_interval, 4);
 }
 
@@ -52,10 +52,10 @@ TEST_CASE(
 
     decl.set_param(netw::display::PARAM_ROLE, netw::display::ROLE_AUTHORITY);
     decl.set_param(
-        netw::display::PARAM_PREDICTED_MODE,
-        netw::display::PREDICTED_BRACKETED
+        netw::display::PARAM_LIVE_MODE,
+        netw::display::LIVE_BRACKETED
     );
-    decl.set_param(netw::display::PARAM_PREDICTED_SMOOTH_TIME, 0.5);
+    decl.set_param(netw::display::PARAM_LIVE_SMOOTH_TIME, 0.5);
     decl.set_param(netw::display::PARAM_CHASE_GLIDE_TIME, 0.75);
     decl.set_param(
         netw::display::PARAM_TIMELINE_MODE,
@@ -76,11 +76,11 @@ TEST_CASE(
         netw::display::ROLE_AUTHORITY
     );
     NETW_CHECK_EQ(
-        int(decl.get_param(netw::display::PARAM_PREDICTED_MODE)),
-        netw::display::PREDICTED_BRACKETED
+        int(decl.get_param(netw::display::PARAM_LIVE_MODE)),
+        netw::display::LIVE_BRACKETED
     );
     NETW_CHECK_CLOSE(
-        double(decl.get_param(netw::display::PARAM_PREDICTED_SMOOTH_TIME)),
+        double(decl.get_param(netw::display::PARAM_LIVE_SMOOTH_TIME)),
         0.5,
         0.0
     );
@@ -136,8 +136,8 @@ TEST_CASE(
     Decl decl;
     decl.set_param(netw::display::PARAM_ROLE, netw::display::ROLE_REMOTE);
     decl.set_param(
-        netw::display::PARAM_PREDICTED_MODE,
-        netw::display::PREDICTED_BRACKETED
+        netw::display::PARAM_LIVE_MODE,
+        netw::display::LIVE_BRACKETED
     );
     decl.set_param(
         netw::display::PARAM_TIMELINE_MODE,
@@ -150,7 +150,7 @@ TEST_CASE(
         netw::display::DIRT_NONE
     );
     NETW_CHECK_EQ(
-        decl.set_param(netw::display::PARAM_PREDICTED_MODE, -1),
+        decl.set_param(netw::display::PARAM_LIVE_MODE, -1),
         netw::display::DIRT_NONE
     );
     NETW_CHECK_EQ(
@@ -163,7 +163,7 @@ TEST_CASE(
     ERR_PRINT_ON;
 
     NETW_CHECK_EQ(decl.display_role, netw::display::ROLE_REMOTE);
-    NETW_CHECK_EQ(decl.predicted_mode, netw::display::PREDICTED_BRACKETED);
+    NETW_CHECK_EQ(decl.live_mode, netw::display::LIVE_BRACKETED);
     NETW_CHECK_EQ(decl.timeline_mode, netw::display::TIMELINE_FORECAST);
 }
 

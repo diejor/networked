@@ -17,15 +17,19 @@ namespace Networked;
 /// pred.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
 /// pred.witness_contacts = _sample_contacts
 /// pred.breach_response = NetwPredict.BREACH_RESPONSE_DEMOTE
-/// pred.island.add(opponent)
 /// </code>
 /// <para>
 /// Declare field-level behavior, including tolerances and recovery rules, with
-/// <see cref="NetwPropertyConfig"/>. Configure related predicted entities with
-/// <see cref="NetwPredictIsland"/>. A <see cref="MultiplayerSynchronizer"/> may
-/// provide scene defaults. Later assignments in code override those values. Use
-/// <see cref="NetwPredictionHandle.InputSource"/> and
-/// <see cref="NetwPredictionHandle.SimMode"/> to inspect the entity's role. Use
+/// <see cref="NetwPropertyConfig"/>. The step, the schedule and the entities
+/// this one runs with are on <see cref="NetwEntity.Simulation"/>, and
+/// <see cref="NetwSimulationHandle.Mode"/> says how this peer runs the entity.
+/// Prediction registers only on an entity with a
+/// <see cref="NetwPropertyConfig.State"/> row, because the state is what it
+/// compares and restores. An entity that declares an
+/// <see cref="NetwPredictionHandle.Archetype"/> with no state row reports one
+/// error when its owner is ready and is not predicted. A
+/// <see cref="MultiplayerSynchronizer"/> may provide scene defaults. Later
+/// assignments in code override those values. Use
 /// <see cref="NetwPredictionHandle.Stats"/>,
 /// <see cref="NetwPredictionHandle.Journal"/>, and
 /// <see cref="NetwPredictionHandle.Episode"/> for comparison diagnostics. Use
@@ -117,12 +121,11 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// blamed on. An angle's change is given as the shorter way around. A
     /// recovery is one write, so this fires once per recovery and <c>deltas</c>
     /// is the whole of it. A game does not have to absorb them by hand. Under
-    /// <see cref="NetwMultiplayer.PredictedMode.Chase"/> the smoothing already
-    /// turns each one into an offset that decays away, reset for each recovery
-    /// and snapped through on a teleport.
+    /// <see cref="NetwMultiplayer.LiveMode.Chase"/> the smoothing already turns
+    /// each one into an offset that decays away, reset for each recovery and
+    /// snapped through on a teleport.
     /// <code>
-    /// entity.interpolation.predicted_mode = \
-    ///         NetwMultiplayer.PREDICTED_MODE_CHASE
+    /// entity.interpolation.live_mode = NetwMultiplayer.LIVE_MODE_CHASE
     /// api.display_set_param(entity.rid,
     ///         NetwMultiplayer.DISPLAY_PARAM_CHASE_GLIDE_TIME, 0.15)
     /// </code>
@@ -176,30 +179,36 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         remove => Disconnect("state_evaluated", Callable.From(value));
     }
 
-    private static readonly IntPtr _bindGetSimulate =
+    private static readonly IntPtr _bindGetPredictCommands =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
-            "get_simulate",
+            "get_predict_commands",
             1307783378UL);
 
-    private static readonly IntPtr _bindSetSimulate =
+    private static readonly IntPtr _bindSetPredictCommands =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
-            "set_simulate",
+            "set_predict_commands",
             1611583062UL);
 
     /// <summary>
-    /// The simulation step, which is the entity root's <c>_network_tick(delta,
-    /// tick, is_fresh)</c> unless something else is assigned here. It is one
-    /// <see cref="Callable"/> and never a list, so exactly one step runs per
-    /// entity per tick.
+    /// The command this entity runs on a peer that selects it through
+    /// <see cref="NetwEntity.Simulation"/> and has no input from its
+    /// controller. A command relayed from the controller always wins over it.
+    /// It is called as <c>(entity: NetwEntity, tick: int)</c> and returns a
+    /// <see cref="Godot.Collections.Dictionary"/> laid over a zero command.
+    /// Empty means the entity coasts on the zero command.
+    /// <code>
+    /// func _init() -&gt; void:
+    ///     entity.prediction.predict_commands = func(_e, _tick): return {&amp;"throttle": 1.0}
+    /// </code>
     /// </summary>
-    public Callable Simulate
+    public Callable PredictCommands
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetSimulate, Checked, ref answered);
+            NetwThunks.Call0(_bindGetPredictCommands, Checked, ref answered);
             Callable result = VariantUtils.ConvertToCallable(answered);
             answered.Dispose();
             return result;
@@ -208,50 +217,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         {
             godot_variant slot0 = VariantUtils.CreateFromCallable(value);
             godot_variant answered = default;
-            NetwThunks.Call1(_bindSetSimulate, Checked, in slot0, ref answered);
-            slot0.Dispose();
-            answered.Dispose();
-        }
-    }
-
-    private static readonly IntPtr _bindGetSchedule =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_schedule",
-            2722713194UL);
-
-    private static readonly IntPtr _bindSetSchedule =
-        NetwApi.MethodBind("NetwPredictionHandle", "set_schedule", 595824982UL);
-
-    /// <summary>
-    /// How often this entity is driven, as a <see cref="NetwPredict.Schedule"/>
-    /// value. That is once per network tick, once per physics frame, or once
-    /// per network tick with the physics space stepped after it. A body the
-    /// physics engine solves declares <see cref="NetwPredict.Schedule.Frame"/>,
-    /// because such a body's transition is a physics step and recording it as
-    /// anything else records something that did not happen. One whose space
-    /// holds a <see cref="NetwPhysicsStepper"/> declares
-    /// <see cref="NetwPredict.Schedule.Stepped"/> instead, which keeps that
-    /// true while putting the step on the network's clock so a rollback can
-    /// re-run it.
-    /// </summary>
-    public NetwPredict.Schedule Schedule
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(_bindGetSchedule, Checked, ref answered);
-            return (NetwPredict.Schedule)answered;
-        }
-        set
-        {
-            long slot0 = (long)value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetSchedule,
+            NetwThunks.Call1(
+                _bindSetPredictCommands,
                 Checked,
                 in slot0,
-                ref discarded);
+                ref answered);
+            slot0.Dispose();
+            answered.Dispose();
         }
     }
 
@@ -288,131 +260,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetCorrectionMode,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetSnapRestore =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_snap_restore",
-            1360701347UL);
-
-    private static readonly IntPtr _bindSetSnapRestore =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "set_snap_restore",
-            1045755608UL);
-
-    /// <summary>
-    /// How a <see cref="NetwPredict.CorrectionMode.Snap"/> restore lands on the
-    /// body, as a <see cref="NetwPredict.RestoreMode"/> value.
-    /// <see cref="NetwPredict.RestoreMode.Extrapolated"/> carries each field
-    /// that declares a <see cref="NetwInterpolate.ProjectChannel"/> forward to
-    /// the present tick, and the default
-    /// <see cref="NetwPredict.RestoreMode.Exact"/> writes what arrived. It is
-    /// ignored under <see cref="NetwPredict.CorrectionMode.Replay"/>, because
-    /// replaying the inputs already brings the body up to the present.
-    /// </summary>
-    public NetwPredict.RestoreMode SnapRestore
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetSnapRestore,
-                Checked,
-                ref answered);
-            return (NetwPredict.RestoreMode)answered;
-        }
-        set
-        {
-            long slot0 = (long)value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetSnapRestore,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetInputSource =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_input_source",
-            963609079UL);
-
-    private static readonly IntPtr _bindSetInputSource =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "set_input_source",
-            3264658430UL);
-
-    /// <summary>
-    /// Where this peer's copy of the entity gets its input, decided when the
-    /// entity is set up. It is read-only, because who has authority and who is
-    /// controlling the entity decide it. This and
-    /// <see cref="NetwPredictionHandle.SimMode"/> are the two values combined
-    /// by <see cref="NetwPredict.Role"/>. Read them separately when only one
-    /// axis matters.
-    /// </summary>
-    public NetwPredict.InputSource InputSource
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetInputSource,
-                Checked,
-                ref answered);
-            return (NetwPredict.InputSource)answered;
-        }
-        set
-        {
-            long slot0 = (long)value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetInputSource,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetSimMode =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_sim_mode",
-            3359152365UL);
-
-    private static readonly IntPtr _bindSetSimMode =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "set_sim_mode",
-            1376646081UL);
-
-    /// <summary>
-    /// What this peer's simulation of the entity counts for, decided when the
-    /// entity is set up. It is read-only, because who has authority and who is
-    /// controlling the entity decide it.
-    /// </summary>
-    public NetwPredict.SimMode SimMode
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(_bindGetSimMode, Checked, ref answered);
-            return (NetwPredict.SimMode)answered;
-        }
-        set
-        {
-            long slot0 = (long)value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetSimMode,
                 Checked,
                 in slot0,
                 ref discarded);
@@ -496,61 +343,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetBreachResponse,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetIsland =
-        NetwApi.MethodBind("NetwPredictionHandle", "get_island", 1400971UL);
-
-    private static readonly IntPtr _bindSetIsland =
-        NetwApi.MethodBind("NetwPredictionHandle", "set_island", 2211437521UL);
-
-    /// <summary>
-    /// The entities this one claims to simulate the way authority does. Naming
-    /// members through <see cref="NetwPredictIsland.Participants"/>, or a
-    /// producer through <see cref="NetwPredictIsland.FromInterest"/>, is what
-    /// enters this entity into the fingerprint comparison, and
-    /// <see cref="NetwPredictIsland.Declared"/> reports exactly that claim. An
-    /// entity claiming nothing is simply outside the comparison rather than
-    /// failing it. Named entities and producers feed one runtime set, and a
-    /// producer reading interest admits only entities this peer already has.
-    /// Some members are then promoted to
-    /// <see cref="NetwPredict.Fidelity.Simulated"/> and the rest stay a watched
-    /// <see cref="NetwPredict.Fidelity.Proxy"/>. Changes take effect at a
-    /// transition boundary, with a margin on distance so a member on the edge
-    /// does not flicker, and without changing fidelity mid-contact. A simulated
-    /// member coasts on no input unless
-    /// <see cref="NetwPredictIsland.PredictCommands"/> supplies one, and every
-    /// arriving authority state re-bases it, so its error is bounded by how
-    /// often state arrives times how wrong the substituted command was. What
-    /// the player sees follows the simulated body.
-    /// <code>
-    /// var island := NetwEntity.of(self).prediction.island
-    /// island.from_interest()
-    /// island.simulate_nearest(1)
-    /// </code>
-    /// <para>
-    /// Never <c>null</c>. Assigning one installs it and binds it to this
-    /// entity, which is how a scene passes its own rule down.
-    /// </para>
-    /// </summary>
-    public NetwPredictIsland Island
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(_bindGetIsland, Checked, ref answered);
-            return NetwPredictIsland.Adopt(answered);
-        }
-        set
-        {
-            IntPtr slot0 = value?.Native ?? IntPtr.Zero;
-            long discarded = default;
-            NetwThunks.Ptrcall1_IntPtr_Long(
-                _bindSetIsland,
                 Checked,
                 in slot0,
                 ref discarded);
@@ -717,51 +509,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
                 ref answered);
             slot0.Dispose();
             answered.Dispose();
-        }
-    }
-
-    private static readonly IntPtr _bindGetMaxRestoreTicks =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_max_restore_ticks",
-            3905245786UL);
-
-    private static readonly IntPtr _bindSetMaxRestoreTicks =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "set_max_restore_ticks",
-            1286410249UL);
-
-    /// <summary>
-    /// How far a <see cref="NetwPredict.RestoreMode.Extrapolated"/> restore may
-    /// project forward, in ticks. It projects across
-    /// <see cref="NetwPredictionHandle.AckAgeTicks"/>, and a straight-line
-    /// projection over a long span can land a body a long way off a curved
-    /// path. This caps that span the way
-    /// <see cref="NetwMultiplayer.DisplayParam.MaxForecastTicks"/> caps the
-    /// display forecast, so an old acknowledgement never launches the body, and
-    /// it defaults to the same <c>6</c>.
-    /// </summary>
-    public int MaxRestoreTicks
-    {
-        get
-        {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
-                _bindGetMaxRestoreTicks,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            int slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Int_Long(
-                _bindSetMaxRestoreTicks,
-                Checked,
-                in slot0,
-                ref discarded);
         }
     }
 
@@ -947,16 +694,17 @@ public sealed class NetwPredictionHandle : NetwRefCounted
 
     /// <summary>
     /// How many queued input ticks one frame may fold together when a backlog
-    /// has built up, for an entity at <see cref="NetwPredict.Schedule.Frame"/>.
-    /// The client produces one input per tick, so the default of <c>1</c> keeps
-    /// the two in step. A higher value lets a frame skip past inputs that have
-    /// already arrived rather than working through the backlog one frame at a
-    /// time. Folding never steps over a lost tick, and folded inputs are
-    /// counted by <see cref="NetwPredictStats.Folded"/> rather than simulated,
-    /// so it is never extra work. An entity at
-    /// <see cref="NetwPredict.Schedule.Tick"/> ignores this and advances by
-    /// exactly one per tick, because authority may not run a transition its own
-    /// clock has not reached.
+    /// has built up, for an entity at
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. The client
+    /// produces one input per tick, so the default of <c>1</c> keeps the two in
+    /// step. A higher value lets a frame skip past inputs that have already
+    /// arrived rather than working through the backlog one frame at a time.
+    /// Folding never steps over a lost tick, and folded inputs are counted by
+    /// <see cref="NetwPredictStats.Folded"/> rather than simulated, so it is
+    /// never extra work. An entity at
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> ignores this and
+    /// advances by exactly one per tick, because authority may not run a
+    /// transition its own clock has not reached.
     /// </summary>
     public int MaxConsumePerTick
     {
@@ -1052,10 +800,11 @@ public sealed class NetwPredictionHandle : NetwRefCounted
 
     /// <summary>
     /// How many transitions authority leaves standing in the queue instead of
-    /// replaying, for an entity at <see cref="NetwPredict.Schedule.Frame"/>. It
-    /// is latency added to every command and it buys nothing back, which is why
-    /// it defaults to zero. Authority replays at most one transition per frame,
-    /// so it can never drain faster than the owner fills, and a reserve that
+    /// replaying, for an entity at
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. It is latency
+    /// added to every command and it buys nothing back, which is why it
+    /// defaults to zero. Authority replays at most one transition per frame, so
+    /// it can never drain faster than the owner fills, and a reserve that
     /// cannot be spent faster than it is refilled absorbs no jitter. Every tick
     /// of depth is another tick of
     /// <see cref="NetwPredictionHandle.AckAgeTicks"/> behind every recovery.
@@ -1167,7 +916,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// <summary>
     /// How many ticks behind the newest input the acknowledgement is, updated
     /// every tick. On the owning client it is the span a restore has to project
-    /// across, and <see cref="NetwPredictionHandle.MaxRestoreTicks"/> caps it.
+    /// across, and <see cref="NetwSimulationHandle.MaxRestoreTicks"/> caps it.
     /// On the server it is the backlog waiting to be consumed, and
     /// <see cref="NetwPredictionHandle.MaxConsumePerTick"/> drains it. A
     /// healthy link holds it near zero, and a growing value means the server is
@@ -1247,8 +996,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             3859961898UL);
 
     /// <summary>
-    /// Whether this entity is corrected on its own or together with the rest of
-    /// its <see cref="NetwPredictionHandle.Island"/>, as a
+    /// Whether this entity is corrected on its own or together with the
+    /// entities its <see cref="NetwEntity.Simulation"/> selects, as a
     /// <see cref="NetwPredict.Reconcile"/> value.
     /// </summary>
     public NetwPredict.Reconcile ReconcileMode
@@ -1289,17 +1038,22 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// <summary>
     /// The set of prediction settings this entity starts from, or
     /// <see cref="NetwPredict.Archetype.None"/>. A preset is a starting point.
-    /// Writing it applies that set's schedule and recovery settings outright,
-    /// and anything written afterwards refines them. A scene declaring
-    /// prediction on its <see cref="MultiplayerSynchronizer"/> therefore
-    /// applies its archetype first and writes only the values it actually
-    /// moved, so a value left at its default cannot overwrite the preset it was
-    /// meant to refine. No preset sets
+    /// Writing it applies that set's recovery settings and
+    /// <see cref="NetwSimulationHandle.Schedule"/> outright, and anything
+    /// written afterwards refines them.
+    /// <see cref="NetwPredict.Archetype.Scripted"/> writes
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/>.
+    /// <see cref="NetwPredict.Archetype.SolverBody"/> writes
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> and
+    /// <see cref="NetwSimulationHandle.RestoreEnum.Extrapolated"/>. A scene
+    /// declaring prediction on its <see cref="MultiplayerSynchronizer"/>
+    /// therefore applies its archetype first and writes only the values it
+    /// actually moved, so a value left at its default cannot overwrite the
+    /// preset it was meant to refine. No preset sets
     /// <see cref="NetwPredictionHandle.BreachResponse"/>, because it is the one
-    /// recovery setting that changes
-    /// <see cref="NetwPredictionHandle.SimMode"/>, stopping speculation at a
-    /// witnessed contact and following authority until the entity is reseeded.
-    /// A game that wants that says so itself.
+    /// recovery setting that stops speculation at a witnessed contact and
+    /// follows authority until the entity is reseeded. A game that wants that
+    /// says so itself.
     /// </summary>
     public NetwPredict.Archetype Archetype
     {
@@ -1637,9 +1391,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "bind_entity", 3949104711UL);
 
     /// <summary>
-    /// Binds the entity this handle belongs to and arms its island. Called by
-    /// the entity record's factory, which is the only thing that creates a
-    /// handle.
+    /// Binds the entity this handle belongs to. Called by the entity record's
+    /// factory, which is the only thing that creates a handle.
     /// </summary>
     public void BindEntity(NetwEntity entity)
     {
@@ -1728,7 +1481,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity recovers under,
     /// resolving <see cref="NetwPredict.CorrectionMode.Auto"/> against what the
     /// body is, the way
-    /// <see cref="NetwPredictionHandle.ResolvedCorrectionMode"/> does.
+    /// <see cref="NetwPredictionHandle.ResolvedCorrectionMode"/> does. A
+    /// physics body at <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>
+    /// that declares <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/>
+    /// resolves <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/>.
     /// </summary>
     public NetwPredict.RecoveryPolicy ResolvedRecoveryPolicy()
     {
@@ -1866,8 +1622,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// empty <see cref="Godot.Collections.Dictionary"/> before the entity is
     /// attached to an engine. A declaration can be legal, be accepted, and
     /// still do nothing. <see cref="NetwPropertyConfig.CarryStep"/> under
-    /// <see cref="NetwPredict.Schedule.Tick"/> is rejected the first time it is
-    /// used and never tried again, a
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> is rejected the
+    /// first time it is used and never tried again, a
     /// <see cref="NetwPropertyConfig.TeleportOnly"/> field that is free to
     /// trigger asks for corrections no smaller restore may write, and an
     /// <see cref="NetwPropertyConfig.Epsilon"/> on a field no comparison reads
@@ -2042,8 +1798,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// Every recorded transition, oldest first. The client that owns the entity
     /// returns the transitions it wrote, and the consuming server returns the
     /// ones it decoded. For an entity at
-    /// <see cref="NetwPredict.Schedule.Tick"/> the index, the label and the
-    /// tick are all the same number and every entry is fresh.
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> the index, the
+    /// label and the tick are all the same number and every entry is fresh.
     /// <code>
     /// Array[Dictionary]
     /// ┖╴entry
@@ -2199,129 +1955,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     {
         long discarded = default;
         NetwThunks.Ptrcall0_Long(_bindStampEpisode, Checked, ref discarded);
-    }
-
-    private static readonly IntPtr _bindSetSimulatedBy =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "set_simulated_by",
-            3778948626UL);
-
-    /// <summary>
-    /// Adds or withdraws one island's claim to step this entity locally, with
-    /// the command it substitutes. Withdrawing the last claim also drops the
-    /// entity back to <see cref="NetwPredict.Reconcile.Independent"/>, because
-    /// a member no group promotes owes no group evidence.
-    /// </summary>
-    public void SetSimulatedBy(
-        NetwEntity subject,
-        bool enabled,
-        Callable predictor = default)
-    {
-        godot_variant slot0 =
-            VariantUtils.CreateFromGodotObjectPtr(
-                subject?.Native ?? IntPtr.Zero);
-        godot_variant slot1 = VariantUtils.CreateFromBool(enabled);
-        godot_variant slot2 = VariantUtils.CreateFromCallable(predictor);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindSetSimulatedBy,
-            Checked,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindSimulatedByCount =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "simulated_by_count",
-            3905245786UL);
-
-    /// <summary>
-    /// How many other entities currently promote this one to local simulation.
-    /// </summary>
-    public int SimulatedByCount()
-    {
-        int answered = default;
-        NetwThunks.Ptrcall0_Int(_bindSimulatedByCount, Checked, ref answered);
-        return answered;
-    }
-
-    private static readonly IntPtr _bindPredictedCommandCallable =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "predicted_command_callable",
-            1307783378UL);
-
-    /// <summary>
-    /// The substituted command producer this entity runs, taken from the
-    /// lowest-numbered subject that promotes it and declared one. Empty when
-    /// nothing promotes it or nothing declared one, which is the zero-input
-    /// COAST policy.
-    /// </summary>
-    public Callable PredictedCommandCallable()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindPredictedCommandCallable, Checked, ref answered);
-        Callable result = VariantUtils.ConvertToCallable(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindRestateDeclaration =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "restate_declaration",
-            3218959716UL);
-
-    public void RestateDeclaration()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(
-            _bindRestateDeclaration,
-            Checked,
-            ref discarded);
-    }
-
-    private static readonly IntPtr _bindRoleForAxes =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "role_for_axes",
-            3160014857UL);
-
-    /// <summary>
-    /// The <see cref="NetwPredict.Role"/> that <paramref name="source"/> and
-    /// <paramref name="mode"/> together name. Those two are what the session
-    /// actually decides, and the role is the name for a pair of them, so every
-    /// role is reachable and no pair names a role that contradicts it.
-    /// <code>
-    ///                AUTHORITATIVE  SPECULATIVE   DISPLAY
-    /// LOCAL          HOST_LOCAL     PREDICT       REMOTE
-    /// RECEIVED       CONSUME        unreachable   REMOTE
-    /// PREDICTED      unreachable    SIMULATE      REMOTE
-    /// NONE           REMOTE         REMOTE        REMOTE
-    /// </code>
-    /// </summary>
-    public static NetwPredict.Role RoleForAxes(
-        NetwPredict.InputSource source,
-        NetwPredict.SimMode mode)
-    {
-        long slot0 = (long)source;
-        long slot1 = (long)mode;
-        long answered = default;
-        NetwThunks.Ptrcall2_Long_Long_Long(
-            _bindRoleForAxes,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return (NetwPredict.Role)answered;
     }
 
     private static readonly IntPtr _bindResolveCorrectionModeFor =

@@ -388,7 +388,7 @@ TEST_CASE(
         == doctest::Approx((1.0 / 30.0) * 0.85)
     );
 
-    decl.set_param(netw::display::PARAM_PREDICTED_SMOOTH_TIME, 0.5);
+    decl.set_param(netw::display::PARAM_LIVE_SMOOTH_TIME, 0.5);
     runtime->set_config(decl);
     CHECK(
         netw::display::chase_smooth_time(runtime, timing)

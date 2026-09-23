@@ -90,20 +90,20 @@ public sealed class NetwDisplayHandle : NetwRefCounted
         NetwApi.MethodBind(
             "NetwDisplayHandle",
             "get_display_role",
-            3905245786UL);
+            4093053615UL);
 
     private static readonly IntPtr _bindSetDisplayRole =
         NetwApi.MethodBind(
             "NetwDisplayHandle",
             "set_display_role",
-            1286410249UL);
+            3139775772UL);
 
     /// <summary>
     /// How this entity is drawn. <see cref="NetwMultiplayer.DisplayRole.Auto"/>
-    /// works it out from who controls the entity, which is right for almost
-    /// every one.
+    /// works it out from <see cref="NetwSimulationHandle.Mode"/> and who
+    /// controls the entity, which is right for almost every one.
     /// </summary>
-    public long DisplayRole
+    public NetwMultiplayer.DisplayRole DisplayRole
     {
         get
         {
@@ -112,11 +112,11 @@ public sealed class NetwDisplayHandle : NetwRefCounted
                 _bindGetDisplayRole,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwMultiplayer.DisplayRole)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetDisplayRole,
@@ -126,67 +126,62 @@ public sealed class NetwDisplayHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetPredictedMode =
-        NetwApi.MethodBind(
-            "NetwDisplayHandle",
-            "get_predicted_mode",
-            3905245786UL);
+    private static readonly IntPtr _bindGetLiveMode =
+        NetwApi.MethodBind("NetwDisplayHandle", "get_live_mode", 2628984929UL);
 
-    private static readonly IntPtr _bindSetPredictedMode =
-        NetwApi.MethodBind(
-            "NetwDisplayHandle",
-            "set_predicted_mode",
-            1286410249UL);
+    private static readonly IntPtr _bindSetLiveMode =
+        NetwApi.MethodBind("NetwDisplayHandle", "set_live_mode", 3681603989UL);
 
     /// <summary>
-    /// Predicted display filter used for local prediction.
+    /// How a body this peer runs is drawn under
+    /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/>. It covers a body in
+    /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/> and a copy in
+    /// <see cref="NetwSimulationHandle.ModeEnum.Active"/>.
     /// </summary>
-    public long PredictedMode
+    public NetwMultiplayer.LiveMode LiveMode
     {
         get
         {
             long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetPredictedMode,
-                Checked,
-                ref answered);
-            return answered;
+            NetwThunks.Ptrcall0_Long(_bindGetLiveMode, Checked, ref answered);
+            return (NetwMultiplayer.LiveMode)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
-                _bindSetPredictedMode,
+                _bindSetLiveMode,
                 Checked,
                 in slot0,
                 ref discarded);
         }
     }
 
-    private static readonly IntPtr _bindGetPredictedSmoothTime =
+    private static readonly IntPtr _bindGetLiveSmoothTime =
         NetwApi.MethodBind(
             "NetwDisplayHandle",
-            "get_predicted_smooth_time",
+            "get_live_smooth_time",
             1740695150UL);
 
-    private static readonly IntPtr _bindSetPredictedSmoothTime =
+    private static readonly IntPtr _bindSetLiveSmoothTime =
         NetwApi.MethodBind(
             "NetwDisplayHandle",
-            "set_predicted_smooth_time",
+            "set_live_smooth_time",
             373806689UL);
 
     /// <summary>
     /// Exponential smoothing time for
-    /// <see cref="NetwMultiplayer.PredictedMode.Chase"/>.
+    /// <see cref="NetwMultiplayer.LiveMode.Chase"/>. <c>0</c> follows the tick
+    /// length.
     /// </summary>
-    public double PredictedSmoothTime
+    public double LiveSmoothTime
     {
         get
         {
             double answered = default;
             NetwThunks.Ptrcall0_Double(
-                _bindGetPredictedSmoothTime,
+                _bindGetLiveSmoothTime,
                 Checked,
                 ref answered);
             return answered;
@@ -196,7 +191,7 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             double slot0 = value;
             long discarded = default;
             NetwThunks.Ptrcall1_Double_Long(
-                _bindSetPredictedSmoothTime,
+                _bindSetLiveSmoothTime,
                 Checked,
                 in slot0,
                 ref discarded);

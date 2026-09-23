@@ -129,7 +129,7 @@
 			<param index="0" name="payload" type="Dictionary" />
 			<param index="1" name="policy" type="int" enum="NetwPredict.RecoveryPolicy" />
 			<param index="2" name="correction" type="int" enum="NetwPredict.CorrectionMode" />
-			<param index="3" name="snap_restore" type="int" enum="NetwPredict.RestoreMode" />
+			<param index="3" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
 			<param index="4" name="projection" type="Dictionary" />
 			<param index="5" name="current" type="Dictionary" />
 			<param index="6" name="pose_errors" type="Dictionary" />
@@ -2118,7 +2118,7 @@
 			<param index="0" name="space" type="RID" />
 			<description>
 				The re-stepping driver [method predict_stepper_install] installed for a physics space, or [code]null[/code] when the space has none.
-				A prediction member declaring [constant NetwPredict.SCHEDULE_STEPPED] needs its space's driver to admit replay, because replaying a stepped body means re-running the solve rather than sampling it. Without one the member runs as [constant NetwPredict.SCHEDULE_FRAME], so this returning [code]null[/code] is a downgrade rather than a failure.
+				A prediction member declaring [constant NetwSimulationHandle.SCHEDULE_STEPPED] needs its space's driver to admit replay, because replaying a stepped body means re-running the solve rather than sampling it. Without one the member runs as [constant NetwSimulationHandle.SCHEDULE_FRAME], so this returning [code]null[/code] is a downgrade rather than a failure.
 			</description>
 		</method>
 		<method name="predict_get_tap_cost" qualifiers="const">
@@ -2135,56 +2135,12 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="predict_island_add">
-			<return type="int" enum="Error" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="other" type="RID" />
-			<description>
-				Adds [param other] to [param entity]'s prediction island, the set of entities resimulated together because they interact. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] carries no prediction handle or [param other] is not a registered entity, otherwise adds the member and returns [constant @GlobalScope.OK].
-				[codeblock lang=text]
-				Error
-				┠╴OK                  the member was added
-				┖╴ERR_DOES_NOT_EXIST  entity carries no prediction handle, or other is not a registered entity
-				[/codeblock]
-			</description>
-		</method>
-		<method name="predict_island_set_member_param">
-			<return type="int" enum="Error" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="member" type="RID" />
-			<param index="2" name="param" type="int" enum="NetwMultiplayer.MemberParam" />
-			<param index="3" name="value" type="Variant" />
-			<description>
-				Writes [param value] to the per-member setting named by [param param] for [param member] inside [param entity]'s prediction island, addressed as [code](entity, member, param)[/code]. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] carries no prediction handle or [param member] is not a registered entity, and [constant @GlobalScope.ERR_INVALID_PARAMETER] when [param member] has not been added to the island with [method predict_island_add] or [param param] names nothing this enum defines.
-				[codeblock lang=text]
-				Error
-				┠╴OK                     the setting was written
-				┠╴ERR_DOES_NOT_EXIST     entity carries no prediction handle, or member is not a registered entity
-				┖╴ERR_INVALID_PARAMETER  member is not in the island, or param names nothing this enum defines
-				[/codeblock]
-			</description>
-		</method>
-		<method name="predict_island_set_param">
-			<return type="int" enum="Error" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="param" type="int" enum="NetwMultiplayer.IslandParam" />
-			<param index="2" name="value" type="Variant" />
-			<description>
-				Writes [param value] to the island-wide setting named by [param param] on [param entity]'s prediction island, covering [constant ISLAND_PARAM_APPROXIMATE] through [constant ISLAND_PARAM_INPUT_DELAY]. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] carries no prediction handle, and [constant @GlobalScope.ERR_INVALID_PARAMETER] when [param param] names nothing this enum defines. A count or a ticks value below zero is clamped to zero rather than rejected.
-				[codeblock lang=text]
-				Error
-				┠╴OK                     the setting was written
-				┠╴ERR_DOES_NOT_EXIST     entity carries no prediction handle
-				┖╴ERR_INVALID_PARAMETER  param names nothing this enum defines
-				[/codeblock]
-			</description>
-		</method>
 		<method name="predict_recover_default">
 			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
 			<param index="1" name="policy" type="int" enum="NetwPredict.RecoveryPolicy" />
 			<param index="2" name="correction" type="int" enum="NetwPredict.CorrectionMode" />
-			<param index="3" name="snap_restore" type="int" enum="NetwPredict.RestoreMode" />
+			<param index="3" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
 			<param index="4" name="projection" type="Dictionary" />
 			<param index="5" name="current" type="Dictionary" />
 			<param index="6" name="pose_errors" type="Dictionary" />
@@ -2194,6 +2150,14 @@
 			<description>
 				The recovery plan the session makes when nothing overrides [method _predict_recover]. It is published so an override can defer to it.
 				A GDScript subclass cannot [code]super[/code] into a [code]GDVIRTUAL[/code], so this is an override's only route back to stock behaviour. An override that plans one policy itself and wants the default result for the rest returns this rather than reimplementing it.
+			</description>
+		</method>
+		<method name="predict_set_commands_callback">
+			<return type="void" />
+			<param index="0" name="entity" type="RID" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Installs [param callback] as [member NetwPredictionHandle.predict_commands] on [param entity]'s prediction handle, a no-op when [param entity] has none.
 			</description>
 		</method>
 		<method name="predict_set_corridor_callback">
@@ -2224,14 +2188,6 @@
 				The declared sampler is called once before each drive and folded into the environment digest, and [method NetwPredictionHandle.sensor] is how the drive reads the sample back, so a divergence traced to the environment can be charged to it instead of left unattributed.
 			</description>
 		</method>
-		<method name="predict_set_simulate_callback">
-			<return type="void" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="callback" type="Callable" />
-			<description>
-				Replaces [param entity]'s [member NetwPredictionHandle.simulate], the single step a drive runs each tick, a no-op when [param entity] carries no prediction handle. With none installed the step defaults to the entity's owner calling [code]_network_tick(delta, tick, is_fresh)[/code] directly, and installing [param callback] routes the step through it instead, which is how a delegating node takes over the authoritative step.
-			</description>
-		</method>
 		<method name="predict_set_witness_callback">
 			<return type="void" />
 			<param index="0" name="entity" type="RID" />
@@ -2247,7 +2203,7 @@
 			<param index="1" name="stepper" type="NetwPhysicsStepper" default="null" />
 			<description>
 				Installs [param stepper] as the driver [method predict_get_stepper] returns for [param space], which is what a rollback needs in order to advance the same physics space more than once inside one frame. [param stepper] is asked [method NetwPhysicsStepper._can_step] at install time, and a [code]null[/code] stepper or one returning [code]false[/code] is rejected, leaving [param space] with no driver rather than an unusable one.
-				A member whose space has no driver still predicts, but only at [constant NetwPredict.SCHEDULE_FRAME] rather than [constant NetwPredict.SCHEDULE_STEPPED], because replaying a stepped body means re-running the solve rather than sampling it.
+				A member whose space has no driver still predicts, but only at [constant NetwSimulationHandle.SCHEDULE_FRAME] rather than [constant NetwSimulationHandle.SCHEDULE_STEPPED], because replaying a stepped body means re-running the solve rather than sampling it.
 			</description>
 		</method>
 		<method name="predict_undeclare">
@@ -3087,6 +3043,38 @@
 			<description>
 				Resumes the game on every live peer, each receiving [signal session_tree_unpaused], and on this session too. A session without server authority rejects the call and resumes nobody.
 				The twin of [method session_pause]. It carries no reason and does not check that a pause came first, because a peer that missed the pause must still end up resumed.
+			</description>
+		</method>
+		<method name="simulation_get_mode">
+			<return type="int" enum="NetwSimulationHandle.Mode" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				The [member NetwSimulationHandle.mode] [param entity] runs in on this peer, or [constant NetwSimulationHandle.MODE_NONE] when it is not simulated.
+			</description>
+		</method>
+		<method name="simulation_get_param">
+			<return type="Variant" />
+			<param index="0" name="entity" type="RID" />
+			<param index="1" name="param" type="int" enum="NetwMultiplayer.SimulationParam" />
+			<description>
+				Reads back the setting named by [param param] from [param entity]'s [NetwSimulationHandle]. Returns [code]null[/code] when [param entity] has no handle or [param param] names nothing [enum SimulationParam] defines.
+			</description>
+		</method>
+		<method name="simulation_set_param">
+			<return type="void" />
+			<param index="0" name="entity" type="RID" />
+			<param index="1" name="param" type="int" enum="NetwMultiplayer.SimulationParam" />
+			<param index="2" name="value" type="Variant" />
+			<description>
+				Writes [param value] to the setting named by [param param] on [param entity]'s [NetwSimulationHandle]. Does nothing when [param entity] has no handle, and logs an error when [param param] names no setting.
+			</description>
+		</method>
+		<method name="simulation_set_step_callback">
+			<return type="void" />
+			<param index="0" name="entity" type="RID" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Installs [param callback] as [member NetwSimulationHandle.step] on [param entity]'s simulation handle, a no-op when [param entity] has none.
 			</description>
 		</method>
 		<method name="spawn_admit_frame_default">
@@ -4242,14 +4230,15 @@
 			Neither. The game decides, through the layer's own handler.
 		</constant>
 		<constant name="DISPLAY_ROLE_AUTO" value="0" enum="DisplayRole">
-			Resolve from [NetwEntity] control and [member Node.multiplayer_authority]. The default, and correct for almost every entity.
-			A peer holding node authority over a body it also controls locally resolves to [constant DISPLAY_ROLE_DISABLED], because its own solver already writes that node every step and there is nothing left for a display to drive. [constant DISPLAY_ROLE_AUTHORITY] is what an authoring peer resolves to when it does not run that body's control itself.
+			Resolve from [member NetwSimulationHandle.mode] on this peer. The default, and correct for almost every entity.
+			A peer running the entity in [constant NetwSimulationHandle.MODE_PREDICT] or [constant NetwSimulationHandle.MODE_ACTIVE] resolves to [constant DISPLAY_ROLE_PREDICTED]. A peer that only receives it resolves to [constant DISPLAY_ROLE_REMOTE]. A peer that controls an entity with no prediction resolves to [constant DISPLAY_ROLE_DISABLED], because it already writes that node itself. [constant DISPLAY_ROLE_AUTHORITY] is what an authoring peer resolves to for an entity it does not control.
 		</constant>
 		<constant name="DISPLAY_ROLE_REMOTE" value="1" enum="DisplayRole">
 			Interpolate replicated snapshots. What a peer uses for somebody else's entity.
+			A rigid body is frozen here and drawn on the body itself, so its collider is where it is seen.
 		</constant>
 		<constant name="DISPLAY_ROLE_PREDICTED" value="2" enum="DisplayRole">
-			Follow the locally predicted body. What a player uses for their own entity.
+			Follow the body this peer runs, the way [member NetwDisplayHandle.live_mode] says. What a player uses for their own entity.
 		</constant>
 		<constant name="DISPLAY_ROLE_DISABLED" value="3" enum="DisplayRole">
 			No smoothing. The node is left alone for the game to drive.
@@ -4267,15 +4256,15 @@
 			Sample the recorded history along the session's display timeline, [constant TIMELINE_MODE_BUFFERED] or [constant TIMELINE_MODE_FORECAST]. What [constant DISPLAY_ROLE_REMOTE] pumps.
 		</constant>
 		<constant name="DISPLAY_PUMP_BRACKETED" value="2" enum="DisplayPump">
-			Sample the recorded history bracketed between the previous and current tick, one tick behind. What [constant DISPLAY_ROLE_AUTHORITY] always pumps, and what [constant DISPLAY_ROLE_PREDICTED] pumps under [constant PREDICTED_MODE_BRACKETED].
+			Sample the recorded history bracketed between the previous and current tick, one tick behind. What [constant DISPLAY_ROLE_AUTHORITY] always pumps, and what [constant DISPLAY_ROLE_PREDICTED] pumps under [constant LIVE_MODE_BRACKETED].
 		</constant>
 		<constant name="DISPLAY_PUMP_CHASE" value="3" enum="DisplayPump">
-			Ease the visual toward the live predicted body every frame instead of sampling history. What [constant DISPLAY_ROLE_PREDICTED] pumps under [constant PREDICTED_MODE_CHASE].
+			Ease the visual toward the live body every frame instead of sampling history. What [constant DISPLAY_ROLE_PREDICTED] pumps under [constant LIVE_MODE_CHASE].
 		</constant>
-		<constant name="PREDICTED_MODE_CHASE" value="0" enum="PredictedMode">
-			Ease the visual toward the live predicted body every frame. Most responsive, and shows correction ripple.
+		<constant name="LIVE_MODE_CHASE" value="0" enum="LiveMode">
+			Ease the visual toward the live body every frame. Most responsive, and shows correction ripple.
 		</constant>
-		<constant name="PREDICTED_MODE_BRACKETED" value="1" enum="PredictedMode">
+		<constant name="LIVE_MODE_BRACKETED" value="1" enum="LiveMode">
 			Interpolate between the previous and current tick samples. Steadier, and one tick behind.
 		</constant>
 		<constant name="TIMELINE_MODE_BUFFERED" value="0" enum="TimelineMode">
@@ -4493,14 +4482,14 @@
 			[enum DisplayRole]. How the entity is drawn. This is the only one most games ever set, and it is usually left at [constant DISPLAY_ROLE_AUTO].
 			Every [enum DisplayParam] is read and written through [method display_get_param] and [method display_set_param], and the note after each name is the [Variant] type it takes. [NetwDisplayHandle] publishes twelve of them as named members. [constant DISPLAY_PARAM_MAX_FORECAST_TICKS] and [constant DISPLAY_PARAM_CHASE_GLIDE_TIME] are reached through these two methods only.
 		</constant>
-		<constant name="DISPLAY_PARAM_PREDICTED_MODE" value="1" enum="DisplayParam">
-			[enum PredictedMode]. How a predicted entity turns its body into a pose.
+		<constant name="DISPLAY_PARAM_LIVE_MODE" value="1" enum="DisplayParam">
+			[enum LiveMode]. How an entity this peer runs turns its body into a pose.
 		</constant>
-		<constant name="DISPLAY_PARAM_PREDICTED_SMOOTH_TIME" value="2" enum="DisplayParam">
-			[float] seconds. How long a predicted visual takes to absorb a correction.
+		<constant name="DISPLAY_PARAM_LIVE_SMOOTH_TIME" value="2" enum="DisplayParam">
+			[float] seconds. How long a live visual takes to absorb a correction.
 		</constant>
 		<constant name="DISPLAY_PARAM_CHASE_GLIDE_TIME" value="3" enum="DisplayParam">
-			[float] seconds. How long [constant PREDICTED_MODE_CHASE] takes to close the gap to the live body.
+			[float] seconds. How fast [constant LIVE_MODE_CHASE] decays the visual offset it opens on each recovery.
 		</constant>
 		<constant name="DISPLAY_PARAM_TIMELINE_MODE" value="4" enum="DisplayParam">
 			[enum TimelineMode]. Where on the timeline a remote entity renders.
@@ -4536,17 +4525,11 @@
 			[enum NetwPredict.Archetype]. What the entity starts from, such as a character or a vehicle. Set this first and adjust afterwards.
 			Every [enum PredictParam] is read and written through [method predict_get_param] and [method predict_set_param], writes the like-named member on the entity's [NetwPredictionHandle], and takes the [Variant] type named after it below. An archetype sets most of the rest, so a game usually writes one or two.
 		</constant>
-		<constant name="PREDICT_PARAM_SCHEDULE" value="1" enum="PredictParam">
-			[enum NetwPredict.Schedule]. When in the tick the entity simulates.
-		</constant>
 		<constant name="PREDICT_PARAM_MISSING_POLICY" value="2" enum="PredictParam">
 			[enum NetwPredict.MissingInput]. What authority does for a tick whose input never arrived.
 		</constant>
 		<constant name="PREDICT_PARAM_RECOVERY_POLICY" value="3" enum="PredictParam">
 			[enum NetwPredict.RecoveryPolicy]. What the owner does about a divergence, from replaying it to merely reporting it.
-		</constant>
-		<constant name="PREDICT_PARAM_SNAP_RESTORE" value="4" enum="PredictParam">
-			[enum NetwPredict.RestoreMode]. Whether a snap restores to the acknowledged state or extrapolates it forward to now.
 		</constant>
 		<constant name="PREDICT_PARAM_CORRECTION_MODE" value="5" enum="PredictParam">
 			[enum NetwPredict.CorrectionMode]. The mechanism a recovery policy is carried out by.
@@ -4559,9 +4542,6 @@
 		</constant>
 		<constant name="PREDICT_PARAM_BREACH_RESPONSE" value="8" enum="PredictParam">
 			[enum NetwPredict.BreachResponse]. What happens when a client's claimed state cannot be reconciled at all.
-		</constant>
-		<constant name="PREDICT_PARAM_MAX_RESTORE_TICKS" value="9" enum="PredictParam">
-			[int] ticks. The cap on how far an extrapolated restore may project, so a backlogged acknowledgement cannot launch the body down a long straight line off a curved path.
 		</constant>
 		<constant name="PREDICT_PARAM_COLLISION_COOLDOWN_TICKS" value="10" enum="PredictParam">
 			[int] ticks. How long after a contact the entity stays out of partial recovery, since a body still being disturbed cannot say which properties are safe to leave behind.
@@ -4578,35 +4558,21 @@
 		<constant name="PREDICT_PARAM_REPLAY_BUFFER_DEPTH" value="14" enum="PredictParam">
 			[int]. How many transitions the owner keeps for replay, which bounds how far a correction can rewind.
 		</constant>
-		<constant name="ISLAND_PARAM_APPROXIMATE" value="0" enum="IslandParam">
-			[bool]. Whether the island admits approximate agreement rather than demanding reproducible transitions. An island is the set of entities that must be resimulated together because they interact. Its settings are written through [method predict_island_set_param], and [method predict_island_add] is what puts an entity in one.
+		<constant name="SIMULATION_PARAM_BODIES" value="0" enum="SimulationParam">
+			[code]Array[NodePath][/code]. [member NetwSimulationHandle.bodies].
+			Every [enum SimulationParam] is read and written through [method simulation_get_param] and [method simulation_set_param], and writes the like-named member on the entity's [NetwSimulationHandle].
 		</constant>
-		<constant name="ISLAND_PARAM_EXACT_CLAIM" value="1" enum="IslandParam">
-			[bool]. Whether the island claims its transitions are exactly reproducible, which is what entitles them to be judged without tolerance.
+		<constant name="SIMULATION_PARAM_SCHEDULE" value="1" enum="SimulationParam">
+			[enum NetwSimulationHandle.Schedule]. [member NetwSimulationHandle.schedule].
 		</constant>
-		<constant name="ISLAND_PARAM_RECONCILE" value="2" enum="IslandParam">
-			[enum NetwPredict.Reconcile]. How the island resimulates after a divergence.
+		<constant name="SIMULATION_PARAM_REPLICAS" value="2" enum="SimulationParam">
+			[enum NetwSimulationHandle.Replicas]. [member NetwSimulationHandle.replicas].
 		</constant>
-		<constant name="ISLAND_PARAM_PROMOTION" value="3" enum="IslandParam">
-			[enum NetwPredict.Promotion]. What causes a nearby entity to be drawn into the island.
+		<constant name="SIMULATION_PARAM_RESTORE" value="3" enum="SimulationParam">
+			[enum NetwSimulationHandle.Restore]. [member NetwSimulationHandle.restore].
 		</constant>
-		<constant name="ISLAND_PARAM_PROMOTION_COUNT" value="4" enum="IslandParam">
-			[int]. The number of nearest members promoted. Clamped at zero.
-		</constant>
-		<constant name="ISLAND_PARAM_PROMOTION_METERS" value="5" enum="IslandParam">
-			[float] meters. The distance that triggers promotion. Clamped at zero.
-		</constant>
-		<constant name="ISLAND_PARAM_PACING" value="6" enum="IslandParam">
-			[enum NetwPredict.Pacing]. When the island's members open transitions.
-		</constant>
-		<constant name="ISLAND_PARAM_INPUT_DELAY" value="7" enum="IslandParam">
-			[int] ticks. The input delay a [constant NetwPredict.PACING_DELAY_CLOSED] group holds. Clamped at zero.
-		</constant>
-		<constant name="MEMBER_PARAM_FIDELITY" value="0" enum="MemberParam">
-			[enum NetwPredict.Fidelity]. How this member is simulated. A member setting is addressed as [code](entity, member, param)[/code] through [method predict_island_set_member_param].
-		</constant>
-		<constant name="MEMBER_PARAM_PREDICTOR" value="1" enum="MemberParam">
-			[Callable]. The substituted command producer for this member, or an empty callable for none.
+		<constant name="SIMULATION_PARAM_MAX_RESTORE_TICKS" value="4" enum="SimulationParam">
+			[int] ticks. [member NetwSimulationHandle.max_restore_ticks].
 		</constant>
 		<constant name="COLUMN_F32" value="0" enum="ColumnType">
 			32-bit float. Every [enum ColumnType] is passed to [method schema_add_column] and says what a value is stored as and how wide it travels.

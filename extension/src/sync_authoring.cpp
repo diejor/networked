@@ -12,6 +12,7 @@
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/property_config.hpp"
+#include "netw/api/simulation_handle.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/synchronizers.hpp"
 
@@ -27,8 +28,8 @@ const char *INTERPOLATE_KEY = "netw_interpolate";
 const char *KEY_VISUAL_ROOT = "netw_visual_root";
 const char *KEY_DISPLAY_ROLE = "netw_display_role";
 const char *KEY_TIMELINE_MODE = "netw_timeline_mode";
-const char *KEY_PREDICTED_MODE = "netw_predicted_mode";
-const char *KEY_PREDICTED_SMOOTH_TIME = "netw_predicted_smooth_time";
+const char *KEY_LIVE_MODE = "netw_live_mode";
+const char *KEY_LIVE_SMOOTH_TIME = "netw_live_smooth_time";
 const char *KEY_SMART_DILATION = "netw_enable_smart_dilation";
 const char *KEY_MAX_EXTRA_DILATION = "netw_max_extra_dilation";
 const char *KEY_LAG_ADAPT_RATE = "netw_lag_adapt_rate";
@@ -85,15 +86,17 @@ void apply_display(Object *p_sync, const Ref<NetwEntity> &p_entity) {
         );
     }
     if (declared(p_sync, KEY_DISPLAY_ROLE)) {
-        display->set_display_role(whole(p_sync, KEY_DISPLAY_ROLE));
-    }
-    if (declared(p_sync, KEY_PREDICTED_MODE)) {
-        display->set_predicted_mode(whole(p_sync, KEY_PREDICTED_MODE));
-    }
-    if (declared(p_sync, KEY_PREDICTED_SMOOTH_TIME)) {
-        display->set_predicted_smooth_time(
-            real(p_sync, KEY_PREDICTED_SMOOTH_TIME)
+        display->set_display_role(
+            NetwMultiplayer::DisplayRole(whole(p_sync, KEY_DISPLAY_ROLE))
         );
+    }
+    if (declared(p_sync, KEY_LIVE_MODE)) {
+        display->set_live_mode(
+            NetwMultiplayer::LiveMode(whole(p_sync, KEY_LIVE_MODE))
+        );
+    }
+    if (declared(p_sync, KEY_LIVE_SMOOTH_TIME)) {
+        display->set_live_smooth_time(real(p_sync, KEY_LIVE_SMOOTH_TIME));
     }
     if (declared(p_sync, KEY_SMART_DILATION)) {
         display->set_enable_smart_dilation(
@@ -198,9 +201,10 @@ void apply_prediction(Object *p_sync, const Ref<NetwEntity> &p_entity) {
             )
         );
     }
-    if (declared(p_sync, KEY_SCHEDULE)) {
-        predict->set_schedule(
-            static_cast<NetwPredict::Schedule>(int(whole(p_sync, KEY_SCHEDULE)))
+    const Ref<NetwSimulationHandle> simulation = p_entity->get_simulation();
+    if (declared(p_sync, KEY_SCHEDULE) && simulation.is_valid()) {
+        simulation->set_schedule(
+            NetwSimulationHandle::Schedule(whole(p_sync, KEY_SCHEDULE))
         );
     }
     if (declared(p_sync, KEY_CORRECTION_MODE)) {
@@ -213,11 +217,9 @@ void apply_prediction(Object *p_sync, const Ref<NetwEntity> &p_entity) {
             )
         );
     }
-    if (declared(p_sync, KEY_SNAP_RESTORE)) {
-        predict->set_snap_restore(
-            static_cast<NetwPredict::RestoreMode>(
-                int(whole(p_sync, KEY_SNAP_RESTORE))
-            )
+    if (declared(p_sync, KEY_SNAP_RESTORE) && simulation.is_valid()) {
+        simulation->set_restore(
+            NetwSimulationHandle::Restore(whole(p_sync, KEY_SNAP_RESTORE))
         );
     }
     if (declared(p_sync, KEY_MISSING_POLICY)) {
@@ -227,8 +229,8 @@ void apply_prediction(Object *p_sync, const Ref<NetwEntity> &p_entity) {
             )
         );
     }
-    if (declared(p_sync, KEY_MAX_RESTORE_TICKS)) {
-        predict->set_max_restore_ticks(
+    if (declared(p_sync, KEY_MAX_RESTORE_TICKS) && simulation.is_valid()) {
+        simulation->set_max_restore_ticks(
             int(whole(p_sync, KEY_MAX_RESTORE_TICKS))
         );
     }

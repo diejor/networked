@@ -232,6 +232,82 @@ func test_the_lobby_lists_every_waiting_player_before_the_match_opens() -> void:
 	assert_that(await client.await_player(&"luigi", 2.0)).is_not_null()
 
 
+func test_a_clients_ball_responds_in_the_frame_its_car_touches_it() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await begin_match(host)
+	await host.await_scene(&"Arena", 2.0)
+	await client.await_scene(&"Arena", 2.0)
+	var own := await client.await_player(&"luigi", 2.0)
+	var host_ball := arena_ball(host)
+	var client_ball := arena_ball(client)
+	await await_kickoff(own)
+	quiet_ai(host)
+	quiet_ai(client)
+	await game.sync_ticks(4)
+	assert_int(client_ball.entity.simulation.mode).override_failure_message(
+		"the client's car selects the ball, so the client runs it",
+	).is_equal(NetwSimulationHandle.MODE_ACTIVE)
+
+	var ahead: Vector3 = own.car_position + Basis(own.car_rotation).z * 5.0
+	ahead.y = RocketBall.STARTING_POSITION.y
+	host_ball.ball_position = ahead
+	host_ball.ball_linear_velocity = Vector3.ZERO
+	var still := 0
+	for _tick in 400:
+		await game.sync_ticks(1)
+		var resting: bool = host_ball.ball_linear_velocity.length() < 0.05
+		still = still + 1 if resting else 0
+		if still >= 10:
+			break
+	game.degrade(client).inbound().latency_ms(300.0)
+	await game.sync_ticks(20)
+
+	client.simulate_action_press("forward")
+	var touched := -1
+	var moved := -1
+	for tick in 240:
+		await game.sync_ticks(1)
+		if touched < 0 and own.get_colliding_bodies().has(client_ball):
+			touched = tick
+		var drift := client_ball.ball_linear_velocity * Vector3(1.0, 0.0, 1.0)
+		if touched >= 0 and drift.length() > 2.0:
+			moved = tick
+			break
+	client.simulate_action_release("forward")
+
+	assert_int(touched).override_failure_message(
+		"the client's car never reached the ball",
+	).is_greater_equal(0)
+	assert_int(moved - touched).override_failure_message(
+		"the client's ball moved %d ticks after its car touched it"
+		% (moved - touched),
+	).is_between(0, 2)
+
+
+func test_a_clients_ball_visibly_rotates_with_its_state() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await begin_match(host)
+	await host.await_scene(&"Arena", 2.0)
+	await client.await_scene(&"Arena", 2.0)
+	var host_ball := arena_ball(host)
+	var client_ball := arena_ball(client)
+	var car := await host.await_player(&"mario", 2.0)
+	await await_kickoff(car)
+	quiet_ai(host)
+
+	host_ball.ball_angular_velocity = Vector3(0.0, 6.0, 0.0)
+	var before := client_ball.transform.basis.get_rotation_quaternion()
+	await game.sync_ticks(60)
+	var after := client_ball.transform.basis.get_rotation_quaternion()
+	assert_float(after.angle_to(before)) \
+			.override_failure_message(
+				"a client's replicated ball spun but its drawn transform "
+				+ "did not follow",
+			).is_greater(0.05)
+
+
 func test_a_late_join_gets_a_car_on_the_other_team() -> void:
 	var host := await game.add_host("mario", false)
 	await begin_match(host)

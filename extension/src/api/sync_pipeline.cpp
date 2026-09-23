@@ -1205,6 +1205,7 @@ void SyncPipeline::apply_row(
     stage_arrival.base_tick = datagram_tick;
     stage_arrival.seq = seq;
     stage_arrival.life = plane->liveness_route_wire_life(route);
+    stage_arrival.sender = p_sender;
     stage_lane = p_lane;
     stage_decoded = Dictionary();
     const int64_t baseline_drops_before = row_send()->baseline_drops();

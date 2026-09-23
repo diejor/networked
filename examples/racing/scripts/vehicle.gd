@@ -86,6 +86,7 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 	e.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
+	e.simulation.bodies = [^"Sphere"]
 
 	Netw.configure_property(self, &"sphere_position").broadcast().masked() \
 			.quantize(NetwQuantizeScalar.new().bits(19).limits(-2048.0, 2048.0)) \
@@ -115,8 +116,6 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	sphere.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-	sphere.freeze = not entity.is_controlled_locally
 	display_position = sphere.position
 	display_heading = vehicle_model.rotation.y
 	prev_position = vehicle_model.position
@@ -142,8 +141,8 @@ func displayed_position() -> Vector3:
 # Functions
 
 
-func _physics_process(delta):
-	if not entity.is_controlled_locally:
+func _network_tick(delta: float, _tick: int, is_fresh: bool) -> void:
+	if not is_fresh:
 		return
 
 	handle_input(delta)

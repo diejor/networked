@@ -79,28 +79,32 @@ void NetwDisplayHandle::set_visual_root(const NodePath &p_value) {
     write(NetwMultiplayer::DISPLAY_PARAM_VISUAL_ROOT, p_value);
 }
 
-int64_t NetwDisplayHandle::get_display_role() const {
-    return read(NetwMultiplayer::DISPLAY_PARAM_ROLE);
+NetwMultiplayer::DisplayRole NetwDisplayHandle::get_display_role() const {
+    return NetwMultiplayer::DisplayRole(
+        int64_t(read(NetwMultiplayer::DISPLAY_PARAM_ROLE))
+    );
 }
 
-void NetwDisplayHandle::set_display_role(int64_t p_value) {
-    write(NetwMultiplayer::DISPLAY_PARAM_ROLE, p_value);
+void NetwDisplayHandle::set_display_role(NetwMultiplayer::DisplayRole p_value) {
+    write(NetwMultiplayer::DISPLAY_PARAM_ROLE, int64_t(p_value));
 }
 
-int64_t NetwDisplayHandle::get_predicted_mode() const {
-    return read(NetwMultiplayer::DISPLAY_PARAM_PREDICTED_MODE);
+NetwMultiplayer::LiveMode NetwDisplayHandle::get_live_mode() const {
+    return NetwMultiplayer::LiveMode(
+        int64_t(read(NetwMultiplayer::DISPLAY_PARAM_LIVE_MODE))
+    );
 }
 
-void NetwDisplayHandle::set_predicted_mode(int64_t p_value) {
-    write(NetwMultiplayer::DISPLAY_PARAM_PREDICTED_MODE, p_value);
+void NetwDisplayHandle::set_live_mode(NetwMultiplayer::LiveMode p_value) {
+    write(NetwMultiplayer::DISPLAY_PARAM_LIVE_MODE, int64_t(p_value));
 }
 
-double NetwDisplayHandle::get_predicted_smooth_time() const {
-    return read(NetwMultiplayer::DISPLAY_PARAM_PREDICTED_SMOOTH_TIME);
+double NetwDisplayHandle::get_live_smooth_time() const {
+    return read(NetwMultiplayer::DISPLAY_PARAM_LIVE_SMOOTH_TIME);
 }
 
-void NetwDisplayHandle::set_predicted_smooth_time(double p_value) {
-    write(NetwMultiplayer::DISPLAY_PARAM_PREDICTED_SMOOTH_TIME, p_value);
+void NetwDisplayHandle::set_live_smooth_time(double p_value) {
+    write(NetwMultiplayer::DISPLAY_PARAM_LIVE_SMOOTH_TIME, p_value);
 }
 
 bool NetwDisplayHandle::get_enable_smart_dilation() const {
@@ -234,37 +238,37 @@ void NetwDisplayHandle::_bind_methods() {
         "get_display_role"
     );
     ClassDB::bind_method(
-        D_METHOD("get_predicted_mode"),
-        &NetwDisplayHandle::get_predicted_mode
+        D_METHOD("get_live_mode"),
+        &NetwDisplayHandle::get_live_mode
     );
     ClassDB::bind_method(
-        D_METHOD("set_predicted_mode", "value"),
-        &NetwDisplayHandle::set_predicted_mode
+        D_METHOD("set_live_mode", "value"),
+        &NetwDisplayHandle::set_live_mode
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::INT,
-            "predicted_mode",
+            "live_mode",
             PROPERTY_HINT_ENUM,
             "Chase,Bracketed",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.PredictedMode"
+            "NetwMultiplayer.LiveMode"
         ),
-        "set_predicted_mode",
-        "get_predicted_mode"
+        "set_live_mode",
+        "get_live_mode"
     );
     ClassDB::bind_method(
-        D_METHOD("get_predicted_smooth_time"),
-        &NetwDisplayHandle::get_predicted_smooth_time
+        D_METHOD("get_live_smooth_time"),
+        &NetwDisplayHandle::get_live_smooth_time
     );
     ClassDB::bind_method(
-        D_METHOD("set_predicted_smooth_time", "value"),
-        &NetwDisplayHandle::set_predicted_smooth_time
+        D_METHOD("set_live_smooth_time", "value"),
+        &NetwDisplayHandle::set_live_smooth_time
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::FLOAT, "predicted_smooth_time"),
-        "set_predicted_smooth_time",
-        "get_predicted_smooth_time"
+        PropertyInfo(Variant::FLOAT, "live_smooth_time"),
+        "set_live_smooth_time",
+        "get_live_smooth_time"
     );
     ClassDB::bind_method(
         D_METHOD("get_enable_smart_dilation"),

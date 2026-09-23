@@ -26,6 +26,7 @@ struct RowArrival {
     int64_t base_tick = -1;
     int64_t life = -1;
     int64_t seq = -1;
+    int64_t sender = 0;
 };
 
 godot::PackedByteArray write_window_frame(

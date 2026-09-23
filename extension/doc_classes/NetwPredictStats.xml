@@ -82,7 +82,7 @@
 			The transition authority's acknowledgement lane is currently able to ship, [code]-1[/code] on an owner. It is the lesser of the consumed transition and the journal's closed prefix, so a value trailing the consumed one names the closed prefix as what is holding the lane back.
 		</member>
 		<member name="arrivals" type="PackedInt32Array" setter="set_buckets_fact" getter="get_buckets_fact" default="PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0)">
-			New transitions the owner lane delivered to authority, bucketed by how many arrived in one frame. [constant NetwPredict.Schedule.FRAME] consume only.
+			New transitions the owner lane delivered to authority, bucketed by how many arrived in one frame. [constant NetwSimulationHandle.SCHEDULE_FRAME] consume only.
 			Arrival shape, not arrival total, sets consume health: a lane delivering one transition every frame and a lane delivering six every sixth frame have the same total and nothing else in common. Authority replays at most one per frame, so the second lane leaves five frames dry for every burst and no buffer setting changes that. Read it beside [member replay_depth] to tell a lane defect from a rate one.
 			Indexed by arrival count, saturating at [constant ARRIVAL_BUCKETS] minus one.
 		</member>
@@ -129,7 +129,7 @@
 			Authoritative frames this owner acknowledged without reaching a verdict, because the masked stream had not reconstructed a whole row to compare against. Every one of them reports a zero divergence it did not measure.
 		</member>
 		<member name="consume_shape" type="Dictionary" setter="set_dict_fact" getter="get_dict_fact" default="{}">
-			Authority frames bucketed by [code]"consumed,quantum_steps"[/code]: how many transitions the frame ran against how much simulated time the last of them measured. [constant NetwPredict.Schedule.FRAME] consume only.
+			Authority frames bucketed by [code]"consumed,quantum_steps"[/code]: how many transitions the frame ran against how much simulated time the last of them measured. [constant NetwSimulationHandle.SCHEDULE_FRAME] consume only.
 			[code]"1,1"[/code] is the healthy shape, one transition per solve. Every other key names a frame that spent simulated time no single transition accounts for, which is the divergence [member quantum_faults] totals. This histogram is that total broken down by how each frame misspent.
 		</member>
 		<member name="consumed" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
@@ -159,7 +159,7 @@
 		</member>
 		<member name="fp_mismatches" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
 			Acknowledged transitions whose prediction fingerprinted unequal to the authority state, counted out of [member fp_verified]. On a run where every antecedent of the recurrence matched this stays zero, so a nonzero count names a broken antecedent rather than a tolerance that wants widening.
-			The verdict is the correction trigger for a transition labeled [constant NetwPredictJournal.Domain.IN_DOMAIN], and a report for one that is not. Which label a transition receives is decided by the entity's island membership, so an entity that declares no island keeps the tolerance compare it always had.
+			The verdict is the correction trigger for a transition labeled [constant NetwPredictJournal.Domain.IN_DOMAIN], and a report for one that is not. Which label a transition receives is decided by the entity's selection through [member NetwEntity.simulation], so an entity that selects nothing is compared against its tolerance.
 			It is the trigger only where it arrives in time to be one. The verdict rides the acknowledgement lane while the comparison runs when the authoritative state arrives, so a transition compared before its acknowledgement is judged by tolerance and this counter reports a divergence nothing acted on. A set that ships whole rows can be judged on arrival. A [method NetwPropertyConfig.masked] set cannot, because a masked frame carries only the fields that changed and the authority row it belongs to cannot be fingerprinted from it. Read this counter as what the peers disagreed about, never as what was corrected.
 		</member>
 		<member name="fp_verified" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
@@ -177,7 +177,7 @@
 			A hold is a frame the world solved without running a transition, so it costs one [member quantum_faults] on the next drive and nothing on the wire tells the owner it happened. Unlike [member starved] there was a transition available, which is why the FRAME tier's replay buffer depth defaults to zero and never produces one.
 		</member>
 		<member name="island_members" type="PackedStringArray" setter="set_names_fact" getter="get_names_fact" default="PackedStringArray()">
-			The island roster this engine last committed, by entity id, sorted.
+			The selection this engine last committed through [member NetwEntity.simulation], by entity id, sorted.
 			Sorted because the roster is an antecedent of the fingerprint both peers compute, and two peers that agree on the members but not on their order would disagree on the digest.
 		</member>
 		<member name="joint_depth" type="Dictionary" setter="set_dict_fact" getter="get_dict_fact" default="{}">
@@ -237,7 +237,7 @@
 			Counts cells rather than frames, so the redundancy window's re-sends do not inflate it and the value is how much of another peer's authorship this one actually learned.
 		</member>
 		<member name="replay_depth" type="PackedInt32Array" setter="set_buckets_fact" getter="get_buckets_fact" default="PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)">
-			Standing queued-transition depth at each authority frame's consume boundary, bucketed by depth. [constant NetwPredict.Schedule.FRAME] consume only.
+			Standing queued-transition depth at each authority frame's consume boundary, bucketed by depth. [constant NetwSimulationHandle.SCHEDULE_FRAME] consume only.
 			Depth is the owner's lead over authority measured in transitions, so this reads the clock relationship rather than a queue: a distribution parked near zero says the two peers run at the same rate, and one that ratchets upward says the owner is authoring faster than authority is solving. Neither is returned by a replay buffer depth setting, which shifts this whole distribution and changes its shape not at all.
 			Indexed by depth, saturating at [constant REPLAY_DEPTH_BUCKETS] minus one.
 		</member>
@@ -264,7 +264,7 @@
 			An epoch change re-keys every tape cursor. Retaining a cursor could resolve it to a transition reused by the new epoch.
 		</member>
 		<member name="tape_index" type="int" setter="set_int_fact" getter="get_int_fact" default="-1">
-			Index of the newest prediction tape transition authored or received. A [constant NetwPredict.Schedule.TICK] entity's transitions are its ticks, so this tracks the newest driven tick there.
+			Index of the newest prediction tape transition authored or received. A [constant NetwSimulationHandle.SCHEDULE_TICK] entity's transitions are its ticks, so this tracks the newest driven tick there.
 		</member>
 		<member name="tape_queue_depth" type="int" setter="set_int_fact" getter="get_int_fact" default="0">
 			Contiguous owner-lane transitions currently queued on the consuming server at or beyond its replay cursor.

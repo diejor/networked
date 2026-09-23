@@ -574,26 +574,30 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public enum DisplayRole : long
     {
         /// <summary>
-        /// Resolve from <see cref="NetwEntity"/> control and
-        /// <see cref="Node.GetMultiplayerAuthority"/>. The default, and correct
-        /// for almost every entity. A peer holding node authority over a body
-        /// it also controls locally resolves to
-        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/>, because its own
-        /// solver already writes that node every step and there is nothing left
-        /// for a display to drive.
+        /// Resolve from <see cref="NetwSimulationHandle.Mode"/> on this peer.
+        /// The default, and correct for almost every entity. A peer running the
+        /// entity in <see cref="NetwSimulationHandle.ModeEnum.Predict"/> or
+        /// <see cref="NetwSimulationHandle.ModeEnum.Active"/> resolves to
+        /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/>. A peer that
+        /// only receives it resolves to
+        /// <see cref="NetwMultiplayer.DisplayRole.Remote"/>. A peer that
+        /// controls an entity with no prediction resolves to
+        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/>, because it
+        /// already writes that node itself.
         /// <see cref="NetwMultiplayer.DisplayRole.Authority"/> is what an
-        /// authoring peer resolves to when it does not run that body's control
-        /// itself.
+        /// authoring peer resolves to for an entity it does not control.
         /// </summary>
         Auto = 0,
         /// <summary>
         /// Interpolate replicated snapshots. What a peer uses for somebody
-        /// else's entity.
+        /// else's entity. A rigid body is frozen here and drawn on the body
+        /// itself, so its collider is where it is seen.
         /// </summary>
         Remote = 1,
         /// <summary>
-        /// Follow the locally predicted body. What a player uses for their own
-        /// entity.
+        /// Follow the body this peer runs, the way
+        /// <see cref="NetwDisplayHandle.LiveMode"/> says. What a player uses
+        /// for their own entity.
         /// </summary>
         Predicted = 2,
         /// <summary>
@@ -635,23 +639,22 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// current tick, one tick behind. What
         /// <see cref="NetwMultiplayer.DisplayRole.Authority"/> always pumps,
         /// and what <see cref="NetwMultiplayer.DisplayRole.Predicted"/> pumps
-        /// under <see cref="NetwMultiplayer.PredictedMode.Bracketed"/>.
+        /// under <see cref="NetwMultiplayer.LiveMode.Bracketed"/>.
         /// </summary>
         Bracketed = 2,
         /// <summary>
-        /// Ease the visual toward the live predicted body every frame instead
-        /// of sampling history. What
-        /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/> pumps under
-        /// <see cref="NetwMultiplayer.PredictedMode.Chase"/>.
+        /// Ease the visual toward the live body every frame instead of sampling
+        /// history. What <see cref="NetwMultiplayer.DisplayRole.Predicted"/>
+        /// pumps under <see cref="NetwMultiplayer.LiveMode.Chase"/>.
         /// </summary>
         Chase = 3,
     }
 
-    public enum PredictedMode : long
+    public enum LiveMode : long
     {
         /// <summary>
-        /// Ease the visual toward the live predicted body every frame. Most
-        /// responsive, and shows correction ripple.
+        /// Ease the visual toward the live body every frame. Most responsive,
+        /// and shows correction ripple.
         /// </summary>
         Chase = 0,
         /// <summary>
@@ -1137,19 +1140,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Role = 0,
         /// <summary>
-        /// <see cref="NetwMultiplayer.PredictedMode"/>. How a predicted entity
+        /// <see cref="NetwMultiplayer.LiveMode"/>. How an entity this peer runs
         /// turns its body into a pose.
         /// </summary>
-        PredictedMode = 1,
+        LiveMode = 1,
         /// <summary>
-        /// [float] seconds. How long a predicted visual takes to absorb a
+        /// [float] seconds. How long a live visual takes to absorb a
         /// correction.
         /// </summary>
-        PredictedSmoothTime = 2,
+        LiveSmoothTime = 2,
         /// <summary>
-        /// [float] seconds. How long
-        /// <see cref="NetwMultiplayer.PredictedMode.Chase"/> takes to close the
-        /// gap to the live body.
+        /// [float] seconds. How fast
+        /// <see cref="NetwMultiplayer.LiveMode.Chase"/> decays the visual
+        /// offset it opens on each recovery.
         /// </summary>
         ChaseGlideTime = 3,
         /// <summary>
@@ -1222,11 +1225,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Archetype = 0,
         /// <summary>
-        /// <see cref="NetwPredict.Schedule"/>. When in the tick the entity
-        /// simulates.
-        /// </summary>
-        Schedule = 1,
-        /// <summary>
         /// <see cref="NetwPredict.MissingInput"/>. What authority does for a
         /// tick whose input never arrived.
         /// </summary>
@@ -1236,11 +1234,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// a divergence, from replaying it to merely reporting it.
         /// </summary>
         RecoveryPolicy = 3,
-        /// <summary>
-        /// <see cref="NetwPredict.RestoreMode"/>. Whether a snap restores to
-        /// the acknowledged state or extrapolates it forward to now.
-        /// </summary>
-        SnapRestore = 4,
         /// <summary>
         /// <see cref="NetwPredict.CorrectionMode"/>. The mechanism a recovery
         /// policy is carried out by.
@@ -1262,12 +1255,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// client's claimed state cannot be reconciled at all.
         /// </summary>
         BreachResponse = 8,
-        /// <summary>
-        /// [int] ticks. The cap on how far an extrapolated restore may project,
-        /// so a backlogged acknowledgement cannot launch the body down a long
-        /// straight line off a curved path.
-        /// </summary>
-        MaxRestoreTicks = 9,
         /// <summary>
         /// [int] ticks. How long after a contact the entity stays out of
         /// partial recovery, since a body still being disturbed cannot say
@@ -1298,69 +1285,36 @@ public sealed class NetwMultiplayer : NetwRefCounted
         ReplayBufferDepth = 14,
     }
 
-    public enum IslandParam : long
+    public enum SimulationParam : long
     {
         /// <summary>
-        /// [bool]. Whether the island admits approximate agreement rather than
-        /// demanding reproducible transitions. An island is the set of entities
-        /// that must be resimulated together because they interact. Its
-        /// settings are written through
-        /// <see cref="NetwMultiplayer.PredictIslandSetParam"/>, and
-        /// <see cref="NetwMultiplayer.PredictIslandAdd"/> is what puts an
-        /// entity in one.
+        /// <c>Array[NodePath]</c>. <see cref="NetwSimulationHandle.Bodies"/>.
+        /// Every <see cref="NetwMultiplayer.SimulationParam"/> is read and
+        /// written through <see cref="NetwMultiplayer.SimulationGetParam"/> and
+        /// <see cref="NetwMultiplayer.SimulationSetParam"/>, and writes the
+        /// like-named member on the entity's
+        /// <see cref="NetwSimulationHandle"/>.
         /// </summary>
-        Approximate = 0,
+        Bodies = 0,
         /// <summary>
-        /// [bool]. Whether the island claims its transitions are exactly
-        /// reproducible, which is what entitles them to be judged without
-        /// tolerance.
+        /// <see cref="NetwSimulationHandle.ScheduleEnum"/>.
+        /// <see cref="NetwSimulationHandle.Schedule"/>.
         /// </summary>
-        ExactClaim = 1,
+        Schedule = 1,
         /// <summary>
-        /// <see cref="NetwPredict.Reconcile"/>. How the island resimulates
-        /// after a divergence.
+        /// <see cref="NetwSimulationHandle.ReplicasEnum"/>.
+        /// <see cref="NetwSimulationHandle.Replicas"/>.
         /// </summary>
-        Reconcile = 2,
+        Replicas = 2,
         /// <summary>
-        /// <see cref="NetwPredict.Promotion"/>. What causes a nearby entity to
-        /// be drawn into the island.
+        /// <see cref="NetwSimulationHandle.RestoreEnum"/>.
+        /// <see cref="NetwSimulationHandle.Restore"/>.
         /// </summary>
-        Promotion = 3,
+        Restore = 3,
         /// <summary>
-        /// [int]. The number of nearest members promoted. Clamped at zero.
+        /// [int] ticks. <see cref="NetwSimulationHandle.MaxRestoreTicks"/>.
         /// </summary>
-        PromotionCount = 4,
-        /// <summary>
-        /// [float] meters. The distance that triggers promotion. Clamped at
-        /// zero.
-        /// </summary>
-        PromotionMeters = 5,
-        /// <summary>
-        /// <see cref="NetwPredict.Pacing"/>. When the island's members open
-        /// transitions.
-        /// </summary>
-        Pacing = 6,
-        /// <summary>
-        /// [int] ticks. The input delay a
-        /// <see cref="NetwPredict.Pacing.DelayClosed"/> group holds. Clamped at
-        /// zero.
-        /// </summary>
-        InputDelay = 7,
-    }
-
-    public enum MemberParam : long
-    {
-        /// <summary>
-        /// <see cref="NetwPredict.Fidelity"/>. How this member is simulated. A
-        /// member setting is addressed as <c>(entity, member, param)</c>
-        /// through <see cref="NetwMultiplayer.PredictIslandSetMemberParam"/>.
-        /// </summary>
-        Fidelity = 0,
-        /// <summary>
-        /// <see cref="Callable"/>. The substituted command producer for this
-        /// member, or an empty callable for none.
-        /// </summary>
-        Predictor = 1,
+        MaxRestoreTicks = 4,
     }
 
     public enum ColumnType : long
@@ -8648,7 +8602,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_recover_default",
-            4127004294UL);
+            2270332653UL);
 
     /// <summary>
     /// The recovery plan the session makes when nothing overrides
@@ -8662,7 +8616,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         Godot.Collections.Dictionary payload,
         NetwPredict.RecoveryPolicy policy,
         NetwPredict.CorrectionMode correction,
-        NetwPredict.RestoreMode snapRestore,
+        NetwSimulationHandle.RestoreEnum restore,
         Godot.Collections.Dictionary projection,
         Godot.Collections.Dictionary current,
         Godot.Collections.Dictionary poseErrors,
@@ -8680,7 +8634,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         godot_variant slot2 = VariantUtils.CreateFromInt((long)correction);
         NetwThunks.ArgsSet(pack, 2, in slot2);
         slot2.Dispose();
-        godot_variant slot3 = VariantUtils.CreateFromInt((long)snapRestore);
+        godot_variant slot3 = VariantUtils.CreateFromInt((long)restore);
         NetwThunks.ArgsSet(pack, 3, in slot3);
         slot3.Dispose();
         godot_variant slot4 = VariantUtils.CreateFromDictionary(projection);
@@ -8990,9 +8944,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// at install time, and a <c>null</c> stepper or one returning <c>false</c>
     /// is rejected, leaving <paramref name="space"/> with no driver rather than
     /// an unusable one. A member whose space has no driver still predicts, but
-    /// only at <see cref="NetwPredict.Schedule.Frame"/> rather than
-    /// <see cref="NetwPredict.Schedule.Stepped"/>, because replaying a stepped
-    /// body means re-running the solve rather than sampling it.
+    /// only at <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> rather
+    /// than <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/>, because
+    /// replaying a stepped body means re-running the solve rather than sampling
+    /// it.
     /// </summary>
     public void PredictStepperInstall(
         Rid space,
@@ -9762,29 +9717,25 @@ public sealed class NetwMultiplayer : NetwRefCounted
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindPredictSetSimulateCallback =
+    private static readonly IntPtr _bindPredictSetCommandsCallback =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "predict_set_simulate_callback",
+            "predict_set_commands_callback",
             3379118538UL);
 
     /// <summary>
-    /// Replaces <paramref name="entity"/>'s
-    /// <see cref="NetwPredictionHandle.Simulate"/>, the single step a drive
-    /// runs each tick, a no-op when <paramref name="entity"/> carries no
-    /// prediction handle. With none installed the step defaults to the entity's
-    /// owner calling <c>_network_tick(delta, tick, is_fresh)</c> directly, and
-    /// installing <paramref name="callback"/> routes the step through it
-    /// instead, which is how a delegating node takes over the authoritative
-    /// step.
+    /// Installs <paramref name="callback"/> as
+    /// <see cref="NetwPredictionHandle.PredictCommands"/> on
+    /// <paramref name="entity"/>'s prediction handle, a no-op when
+    /// <paramref name="entity"/> has none.
     /// </summary>
-    public void PredictSetSimulateCallback(Rid entity, Callable callback)
+    public void PredictSetCommandsCallback(Rid entity, Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(entity);
         godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
         godot_variant answered = default;
         NetwThunks.Call2(
-            _bindPredictSetSimulateCallback,
+            _bindPredictSetCommandsCallback,
             Checked,
             in slot0,
             in slot1,
@@ -9794,65 +9745,22 @@ public sealed class NetwMultiplayer : NetwRefCounted
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindPredictIslandAdd =
+    private static readonly IntPtr _bindSimulationSetParam =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "predict_island_add",
-            3181288260UL);
+            "simulation_set_param",
+            40310611UL);
 
     /// <summary>
-    /// Adds <paramref name="other"/> to <paramref name="entity"/>'s prediction
-    /// island, the set of entities resimulated together because they interact.
-    /// Returns <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when
-    /// <paramref name="entity"/> carries no prediction handle or
-    /// <paramref name="other"/> is not a registered entity, otherwise adds the
-    /// member and returns <c>@GlobalScope.OK</c>.
-    /// <code>
-    /// Error
-    /// ┠╴OK                  the member was added
-    /// ┖╴ERR_DOES_NOT_EXIST  entity carries no prediction handle, or other is not a registered entity
-    /// </code>
+    /// Writes <paramref name="value"/> to the setting named by
+    /// <paramref name="param"/> on <paramref name="entity"/>'s
+    /// <see cref="NetwSimulationHandle"/>. Does nothing when
+    /// <paramref name="entity"/> has no handle, and logs an error when
+    /// <paramref name="param"/> names no setting.
     /// </summary>
-    public Error PredictIslandAdd(Rid entity, Rid other)
-    {
-        Rid slot0 = entity;
-        Rid slot1 = other;
-        long answered = default;
-        NetwThunks.Ptrcall2_Rid_Rid_Long(
-            _bindPredictIslandAdd,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        return (Error)answered;
-    }
-
-    private static readonly IntPtr _bindPredictIslandSetParam =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "predict_island_set_param",
-            2930817734UL);
-
-    /// <summary>
-    /// Writes <paramref name="value"/> to the island-wide setting named by
-    /// <paramref name="param"/> on <paramref name="entity"/>'s prediction
-    /// island, covering <see cref="NetwMultiplayer.IslandParam.Approximate"/>
-    /// through <see cref="NetwMultiplayer.IslandParam.InputDelay"/>. Returns
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="entity"/>
-    /// carries no prediction handle, and
-    /// <c>@GlobalScope.ERR_INVALID_PARAMETER</c> when <paramref name="param"/>
-    /// names nothing this enum defines. A count or a ticks value below zero is
-    /// clamped to zero rather than rejected.
-    /// <code>
-    /// Error
-    /// ┠╴OK                     the setting was written
-    /// ┠╴ERR_DOES_NOT_EXIST     entity carries no prediction handle
-    /// ┖╴ERR_INVALID_PARAMETER  param names nothing this enum defines
-    /// </code>
-    /// </summary>
-    public Error PredictIslandSetParam(
+    public void SimulationSetParam(
         Rid entity,
-        NetwMultiplayer.IslandParam param,
+        NetwMultiplayer.SimulationParam param,
         Variant value)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(entity);
@@ -9860,7 +9768,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         godot_variant slot2 = value.CopyNativeVariant();
         godot_variant answered = default;
         NetwThunks.Call3(
-            _bindPredictIslandSetParam,
+            _bindSimulationSetParam,
             Checked,
             in slot0,
             in slot1,
@@ -9869,61 +9777,91 @@ public sealed class NetwMultiplayer : NetwRefCounted
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        answered.Dispose();
+    }
+
+    private static readonly IntPtr _bindSimulationGetParam =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "simulation_get_param",
+            462535426UL);
+
+    /// <summary>
+    /// Reads back the setting named by <paramref name="param"/> from
+    /// <paramref name="entity"/>'s <see cref="NetwSimulationHandle"/>. Returns
+    /// <c>null</c> when <paramref name="entity"/> has no handle or
+    /// <paramref name="param"/> names nothing
+    /// <see cref="NetwMultiplayer.SimulationParam"/> defines.
+    /// </summary>
+    public Variant SimulationGetParam(
+        Rid entity,
+        NetwMultiplayer.SimulationParam param)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(entity);
+        godot_variant slot1 = VariantUtils.CreateFromInt((long)param);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindSimulationGetParam,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        Variant result = Variant.CreateCopyingBorrowed(answered);
         answered.Dispose();
         return result;
     }
 
-    private static readonly IntPtr _bindPredictIslandSetMemberParam =
+    private static readonly IntPtr _bindSimulationSetStepCallback =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "predict_island_set_member_param",
-            2839293073UL);
+            "simulation_set_step_callback",
+            3379118538UL);
 
     /// <summary>
-    /// Writes <paramref name="value"/> to the per-member setting named by
-    /// <paramref name="param"/> for <paramref name="member"/> inside
-    /// <paramref name="entity"/>'s prediction island, addressed as <c>(entity,
-    /// member, param)</c>. Returns <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when
-    /// <paramref name="entity"/> carries no prediction handle or
-    /// <paramref name="member"/> is not a registered entity, and
-    /// <c>@GlobalScope.ERR_INVALID_PARAMETER</c> when <paramref name="member"/>
-    /// has not been added to the island with
-    /// <see cref="NetwMultiplayer.PredictIslandAdd"/> or
-    /// <paramref name="param"/> names nothing this enum defines.
-    /// <code>
-    /// Error
-    /// ┠╴OK                     the setting was written
-    /// ┠╴ERR_DOES_NOT_EXIST     entity carries no prediction handle, or member is not a registered entity
-    /// ┖╴ERR_INVALID_PARAMETER  member is not in the island, or param names nothing this enum defines
-    /// </code>
+    /// Installs <paramref name="callback"/> as
+    /// <see cref="NetwSimulationHandle.Step"/> on <paramref name="entity"/>'s
+    /// simulation handle, a no-op when <paramref name="entity"/> has none.
     /// </summary>
-    public Error PredictIslandSetMemberParam(
-        Rid entity,
-        Rid member,
-        NetwMultiplayer.MemberParam param,
-        Variant value)
+    public void SimulationSetStepCallback(Rid entity, Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(entity);
-        godot_variant slot1 = VariantUtils.CreateFromRid(member);
-        godot_variant slot2 = VariantUtils.CreateFromInt((long)param);
-        godot_variant slot3 = value.CopyNativeVariant();
+        godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
         godot_variant answered = default;
-        NetwThunks.Call4(
-            _bindPredictIslandSetMemberParam,
+        NetwThunks.Call2(
+            _bindSimulationSetStepCallback,
             Checked,
             in slot0,
             in slot1,
-            in slot2,
-            in slot3,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
-        slot2.Dispose();
-        slot3.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
         answered.Dispose();
-        return result;
+    }
+
+    private static readonly IntPtr _bindSimulationGetMode =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "simulation_get_mode",
+            3353509014UL);
+
+    /// <summary>
+    /// The <see cref="NetwSimulationHandle.Mode"/> <paramref name="entity"/>
+    /// runs in on this peer, or
+    /// <see cref="NetwSimulationHandle.ModeEnum.None"/> when it is not
+    /// simulated.
+    /// </summary>
+    public NetwSimulationHandle.ModeEnum SimulationGetMode(Rid entity)
+    {
+        Rid slot0 = entity;
+        long answered = default;
+        NetwThunks.Ptrcall1_Rid_Long(
+            _bindSimulationGetMode,
+            Checked,
+            in slot0,
+            ref answered);
+        return (NetwSimulationHandle.ModeEnum)answered;
     }
 
     private static readonly IntPtr _bindPeerForget =
@@ -10029,11 +9967,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// The re-stepping driver
     /// <see cref="NetwMultiplayer.PredictStepperInstall"/> installed for a
     /// physics space, or <c>null</c> when the space has none. A prediction
-    /// member declaring <see cref="NetwPredict.Schedule.Stepped"/> needs its
-    /// space's driver to admit replay, because replaying a stepped body means
-    /// re-running the solve rather than sampling it. Without one the member
-    /// runs as <see cref="NetwPredict.Schedule.Frame"/>, so this returning
-    /// <c>null</c> is a downgrade rather than a failure.
+    /// member declaring <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/>
+    /// needs its space's driver to admit replay, because replaying a stepped
+    /// body means re-running the solve rather than sampling it. Without one the
+    /// member runs as <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>, so
+    /// this returning <c>null</c> is a downgrade rather than a failure.
     /// </summary>
     public NetwPhysicsStepper PredictGetStepper(Rid space)
     {

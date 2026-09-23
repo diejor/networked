@@ -17,30 +17,6 @@ bool owner_is_solver_body(Node *p_owner) {
             || p_owner->is_class("RigidBody3D"));
 }
 
-void apply_body_freeze(Runtime *p_runtime, int p_role) {
-    Node *owner = p_runtime->owner();
-    if (!owner_is_solver_body(owner)) {
-        return;
-    }
-    Dictionary saved = p_runtime->get_saved_freeze();
-    if (p_role == netw::display::ROLE_REMOTE) {
-        if (saved.is_empty()) {
-            saved["freeze"] = owner->get("freeze");
-            saved["mode"] = owner->get("freeze_mode");
-            p_runtime->set_saved_freeze(saved);
-        }
-        owner->set("freeze_mode", FREEZE_MODE_KINEMATIC);
-        owner->set("freeze", true);
-        return;
-    }
-    if (saved.is_empty()) {
-        return;
-    }
-    owner->set("freeze", saved["freeze"]);
-    owner->set("freeze_mode", saved["mode"]);
-    p_runtime->set_saved_freeze(Dictionary());
-}
-
 void warn_self_feedback(Runtime *p_runtime) {
     if (p_runtime->get_warned_self_feedback()) {
         return;
@@ -107,7 +83,6 @@ void resolve_role(Runtime *p_runtime, const Hooks &p_hooks) {
 
     p_runtime->set_pump_mode(pump);
     retarget_drawn_node(p_runtime);
-    apply_body_freeze(p_runtime, role);
     if (netw::display::pump_is_predicted(pump)) {
         warn_self_feedback(p_runtime);
     }

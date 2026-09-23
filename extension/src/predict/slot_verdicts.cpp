@@ -13,7 +13,8 @@ int64_t history_record_tick(
     int64_t p_fallback_tick
 ) {
     const bool consuming = p_cursors.role == NetwPredict::ROLE_CONSUME;
-    const bool framed = p_cursors.schedule == NetwPredict::SCHEDULE_FRAME;
+    const bool framed
+        = p_cursors.schedule == NetwSimulationHandle::SCHEDULE_FRAME;
     if (consuming && framed) {
         return p_cursors.ack_advanced && p_cursors.last_replayed_fresh
             ? p_cursors.last_replayed_label + 1
@@ -31,7 +32,7 @@ int64_t history_record_tick(
 
 bool consumed_unslotted_transition(const SlotCursors &p_cursors) {
     return p_cursors.role == NetwPredict::ROLE_CONSUME
-        && p_cursors.schedule == NetwPredict::SCHEDULE_FRAME
+        && p_cursors.schedule == NetwSimulationHandle::SCHEDULE_FRAME
         && p_cursors.ack_advanced && !p_cursors.last_replayed_fresh;
 }
 
@@ -42,7 +43,7 @@ bool has_consumed_state_tick(
     if (p_cursors.role != NetwPredict::ROLE_CONSUME) {
         return true;
     }
-    if (p_cursors.schedule == NetwPredict::SCHEDULE_FRAME) {
+    if (p_cursors.schedule == NetwSimulationHandle::SCHEDULE_FRAME) {
         return p_cursors.last_replayed_label + 1 >= p_state_tick;
     }
     return p_cursors.ack >= 0 && p_cursors.ack + 1 >= p_state_tick;

@@ -47,7 +47,7 @@
 			Read-only extra display delay in ticks measured by smart dilation.
 		</member>
 		<member name="display_role" type="int" setter="set_display_role" getter="get_display_role" enum="NetwMultiplayer.DisplayRole" default="0">
-			How this entity is drawn. [constant NetwMultiplayer.DISPLAY_ROLE_AUTO] works it out from who controls the entity, which is right for almost every one.
+			How this entity is drawn. [constant NetwMultiplayer.DISPLAY_ROLE_AUTO] works it out from [member NetwSimulationHandle.mode] and who controls the entity, which is right for almost every one.
 		</member>
 		<member name="enable_smart_dilation" type="bool" setter="set_enable_smart_dilation" getter="get_enable_smart_dilation" default="false">
 			Enables display lag adaptation for remote interpolation.
@@ -58,14 +58,14 @@
 		<member name="lag_adapt_rate" type="float" setter="set_lag_adapt_rate" getter="get_lag_adapt_rate" default="0.0">
 			Per frame fraction used to track the measured lag floor.
 		</member>
+		<member name="live_mode" type="int" setter="set_live_mode" getter="get_live_mode" enum="NetwMultiplayer.LiveMode" default="0">
+			How a body this peer runs is drawn under [constant NetwMultiplayer.DISPLAY_ROLE_PREDICTED]. It covers a body in [constant NetwSimulationHandle.MODE_PREDICT] and a copy in [constant NetwSimulationHandle.MODE_ACTIVE].
+		</member>
+		<member name="live_smooth_time" type="float" setter="set_live_smooth_time" getter="get_live_smooth_time" default="0.0">
+			Exponential smoothing time for [constant NetwMultiplayer.LIVE_MODE_CHASE]. [code]0[/code] follows the tick length.
+		</member>
 		<member name="max_extra_dilation" type="float" setter="set_max_extra_dilation" getter="get_max_extra_dilation" default="0.0">
 			Maximum extra ticks that display lag can grow while starving.
-		</member>
-		<member name="predicted_mode" type="int" setter="set_predicted_mode" getter="get_predicted_mode" enum="NetwMultiplayer.PredictedMode" default="0">
-			Predicted display filter used for local prediction.
-		</member>
-		<member name="predicted_smooth_time" type="float" setter="set_predicted_smooth_time" getter="get_predicted_smooth_time" default="0.0">
-			Exponential smoothing time for [constant NetwMultiplayer.PREDICTED_MODE_CHASE].
 		</member>
 		<member name="starvation_grace_frames" type="int" setter="set_starvation_grace_frames" getter="get_starvation_grace_frames" default="0">
 			Starving frames tolerated before lag starts growing.

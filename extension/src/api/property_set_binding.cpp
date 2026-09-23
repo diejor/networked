@@ -8,6 +8,7 @@
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 #include "netw/replication_send.hpp"
+#include "netw/sim/install.hpp"
 #include "netw/subsystems.hpp"
 #include "netw/staged_writes.hpp"
 #include "netw/wire/registry.hpp"
@@ -308,6 +309,76 @@ Error NetwPropertySetBinding::apply_values(
     return session->run_apply_set(entity_rid(), comp, p_values, applier);
 }
 
+Error NetwPropertySetBinding::apply_undrawn(
+    Node *p_node,
+    const Array &p_keys,
+    const Array &p_values
+) {
+    NetwMultiplayer *session = core();
+    if (session == nullptr) {
+        return apply_values(p_node, p_keys, p_values);
+    }
+    const RID entity = entity_rid();
+    int drawn = 0;
+    for (int at = 0; at < p_keys.size(); at++) {
+        drawn += session->sim_draws_column(entity, p_node, p_keys[at]) ? 1 : 0;
+    }
+    if (drawn == 0) {
+        return apply_values(p_node, p_keys, p_values);
+    }
+    Array keys;
+    Array values;
+    for (int at = 0; at < p_keys.size(); at++) {
+        if (!session->sim_draws_column(entity, p_node, p_keys[at])) {
+            keys.push_back(p_keys[at]);
+            values.push_back(p_values[at]);
+        }
+    }
+    return keys.is_empty() ? OK : apply_values(p_node, keys, values);
+}
+
+Error NetwPropertySetBinding::apply_volatile(Node *p_node) {
+    NetwMultiplayer *session = core();
+    const RID entity = entity_rid();
+    const bool whole = bool(candidate.decoded.get("whole", true));
+    if (session == nullptr) {
+        return apply_undrawn(p_node, candidate.keys, candidate.values);
+    }
+    if (!session->sim_takes_install(entity, this)) {
+        if (whole) {
+            session->sim_note_whole(entity, comp);
+        }
+        return apply_undrawn(p_node, candidate.keys, candidate.values);
+    }
+    sim::Sample sample;
+    sample.binding = gd::instance_id(this);
+    sample.comp = comp;
+    sample.tick = int64_t(candidate.decoded.get("tick", -1));
+    sample.sender = candidate.sender;
+    sample.keys = candidate.keys;
+    sample.values = candidate.values;
+    return session->sim_admit_install(entity, sample, whole);
+}
+
+Error NetwPropertySetBinding::install_values(
+    const Array &p_keys,
+    const Array &p_values
+) {
+    Node *held = node();
+    if (held == nullptr) {
+        return ERR_UNAVAILABLE;
+    }
+    return apply_values(held, p_keys, p_values);
+}
+
+Error NetwPropertySetBinding::reinstall_accepted() {
+    Node *held = node();
+    if (held == nullptr || accepted.is_empty() || !write_gate) {
+        return ERR_UNAVAILABLE;
+    }
+    return apply_values(held, accepted.keys(), accepted.values());
+}
+
 Array NetwPropertySetBinding::volatile_row() {
     NETW_ZONE_NC("Binding volatile row", colors::WIRE);
     Node *held = node();
@@ -391,6 +462,7 @@ void NetwPropertySetBinding::offer_rows(
             offer.masked = set->masked && !windowed;
             offer.windowed = windowed;
             offer.window = uint32_t(set->window);
+            offer.heartbeat = set->heartbeat;
             offer.life = p_life;
             offer.priority = 1.0f;
             r_offers.push_back(offer);
@@ -407,6 +479,7 @@ void NetwPropertySetBinding::offer_rows(
         offer.values = retained;
         offer.recipients = recipients_of(p_recipients);
         offer.tick = -1;
+        offer.heartbeat = set->heartbeat;
         offer.reliable = true;
         offer.life = p_life;
         offer.priority = 1.0f;
@@ -511,6 +584,7 @@ Dictionary NetwPropertySetBinding::stage_row_frame(
     staged.lane = STAGED_VOLATILE;
     staged.ordinal = p_arrival.ordinal;
     staged.seq = p_arrival.seq;
+    staged.sender = p_arrival.sender;
     staged.fields = fields;
     staged.keys = keys_of(fields);
     staged.values = values;
@@ -554,14 +628,24 @@ Error NetwPropertySetBinding::commit_staged(
         candidate.ordinal,
         candidate.values
     );
-    if (writes_node && apply_values(held, candidate.keys, candidate.values)
-            != OK) {
+    const Error applied = !writes_node ? OK
+        : lane == STAGED_RETAINED
+        ? apply_values(held, candidate.keys, candidate.values)
+        : lane == STAGED_VOLATILE
+        ? apply_volatile(held)
+        : apply_undrawn(held, candidate.keys, candidate.values);
+    if (applied != OK) {
         const bool targets_survived = targets_present(node(), candidate.keys);
         discard_staged();
         if (!targets_survived) {
             reset_stream();
         }
         return ERR_CANT_RESOLVE;
+    }
+    if (writes_node) {
+        for (int at = 0; at < candidate.keys.size(); at++) {
+            accepted[candidate.keys[at]] = candidate.values[at];
+        }
     }
     stream_reset = false;
     r_header = header_of(candidate);

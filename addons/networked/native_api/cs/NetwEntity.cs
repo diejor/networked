@@ -107,10 +107,19 @@ namespace Networked;
 /// <see cref="Node"/> to own its record, which <see cref="NetwEntity.Ensure"/>
 /// provides before the node joins the scene's subtree. <b>The facets it
 /// returns</b> <see cref="NetwEntity.Scene"/>,
-/// <see cref="NetwEntity.Interest"/>, <see cref="NetwEntity.Prediction"/>, and
+/// <see cref="NetwEntity.Interest"/>, <see cref="NetwEntity.Simulation"/>,
+/// <see cref="NetwEntity.Prediction"/>, and
 /// <see cref="NetwEntity.Interpolation"/> are created once per entity. Repeated
-/// reads return the same object. They are <see cref="Variant"/> values because
-/// their types are implemented in scripts.
+/// reads return the same object. <see cref="NetwEntity.Simulation"/> says where
+/// and how the entity's body runs on each peer,
+/// <see cref="NetwEntity.Prediction"/> how a controller runs it ahead, and
+/// <see cref="NetwEntity.Interpolation"/> how it is drawn.
+/// <code>
+/// func _init() -&gt; void:
+///     var entity := Netw.configure_entity(self)
+///     entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+///     entity.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+/// </code>
 /// </para>
 /// </remarks>
 public sealed class NetwEntity : NetwRefCounted
@@ -1276,9 +1285,9 @@ public sealed class NetwEntity : NetwRefCounted
     /// reconciliation config the prediction block a scene declares on its
     /// <see cref="MultiplayerSynchronizer"/> supplies, or a caller sets in
     /// code, plus the live counters
-    /// <see cref="NetwMultiplayer.LagcompMetrics"/> reads. The stepping kernel
-    /// lives in <see cref="NetwMultiplayer"/>. Never <c>null</c>, and it
-    /// reports itself unregistered until an engine wires.
+    /// <see cref="NetwMultiplayer.LagcompMetrics"/> reads. Never <c>null</c>,
+    /// and it reports itself unregistered until an engine wires. The step and
+    /// the schedule it drives are on <see cref="NetwEntity.Simulation"/>.
     /// </summary>
     public NetwPredictionHandle Prediction
     {
@@ -1290,6 +1299,26 @@ public sealed class NetwEntity : NetwRefCounted
                 Checked,
                 ref answered);
             return NetwPredictionHandle.Adopt(answered);
+        }
+    }
+
+    private static readonly IntPtr _bindGetSimulation =
+        NetwApi.MethodBind("NetwEntity", "get_simulation", 2406380865UL);
+
+    /// <summary>
+    /// Where and how this entity's body runs on each peer, and which other
+    /// entities it runs here. Never <c>null</c>.
+    /// </summary>
+    public NetwSimulationHandle Simulation
+    {
+        get
+        {
+            IntPtr answered = default;
+            NetwThunks.Ptrcall0_IntPtr(
+                _bindGetSimulation,
+                Checked,
+                ref answered);
+            return NetwSimulationHandle.Adopt(answered);
         }
     }
 

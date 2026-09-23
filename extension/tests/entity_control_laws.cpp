@@ -1,7 +1,9 @@
 #include "support/netw_test.h"
 
+#include "godot/callable.hpp"
 #include "godot/node.hpp"
 #include "godot/script.hpp"
+#include "godot/templates.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/entity/control.hpp"
@@ -114,6 +116,89 @@ TEST_CASE(
         armed.entity->get_control_kind(),
         int64_t(NetwEntity::CONTROL_SERVER_CONTROLLED)
     );
+}
+
+struct Announcements {
+    Vector<int64_t> authority_seen;
+    Vector<int64_t> peer_named;
+};
+
+class AuthorityAtAnnouncement final : public CallableCustom {
+    Announcements *seen;
+    Node *owner;
+
+    static bool same(const CallableCustom *a, const CallableCustom *b) {
+        return a == b;
+    }
+
+    static bool before(const CallableCustom *a, const CallableCustom *b) {
+        return a < b;
+    }
+
+public:
+    AuthorityAtAnnouncement(Announcements *p_seen, Node *p_owner)
+        : seen(p_seen), owner(p_owner) {
+    }
+
+    uint32_t hash() const override {
+        return uint32_t(uintptr_t(this));
+    }
+
+    String get_as_text() const override {
+        return String("AuthorityAtAnnouncement");
+    }
+
+    CompareEqualFunc get_compare_equal_func() const override {
+        return &AuthorityAtAnnouncement::same;
+    }
+
+    CompareLessFunc get_compare_less_func() const override {
+        return &AuthorityAtAnnouncement::before;
+    }
+
+    ObjectID get_object() const override {
+        return netw::gd::instance_id(owner);
+    }
+
+    void call(
+        const Variant **p_arguments,
+        int p_count,
+        Variant &r_return_value,
+        netw::gd::CallError &r_call_error
+    ) const override {
+        seen->authority_seen.push_back(owner->get_multiplayer_authority());
+        seen->peer_named.push_back(p_count > 1 ? int64_t(*p_arguments[1]) : -1);
+        netw::gd::call_ok(r_call_error);
+    }
+};
+
+TEST_CASE(
+    "[Networked][Entity][Hosted] EC7 a composed grant announces "
+    "control_changed once, after the node authority already names the "
+    "new controller, and a revoke does the same"
+) {
+    ArmedNode armed(
+        "valeria",
+        0,
+        int(netw::entity::Control::InitialController::REPRESENTED_PEER)
+    );
+    Announcements seen;
+    armed.entity->connect(
+        StringName("control_changed"),
+        Callable(memnew(AuthorityAtAnnouncement(&seen, armed.owner)))
+    );
+
+    armed.entity->grant_control(42);
+
+    NETW_REQUIRE_EQ(int(seen.authority_seen.size()), 1);
+    NETW_CHECK_EQ(seen.peer_named[0], 42);
+    NETW_CHECK_EQ(seen.authority_seen[0], 42);
+
+    armed.entity->revoke_control();
+
+    NETW_REQUIRE_EQ(int(seen.authority_seen.size()), 2);
+    NETW_CHECK_EQ(seen.peer_named[1], 0);
+    NETW_CHECK_EQ(seen.authority_seen[1], 1);
 }
 
 Ref<NetwMultiplayer> a_coordinated_session(int64_t p_coordinator) {

@@ -36,6 +36,7 @@ public:
     int64_t authored_tick = -1;
     int64_t reconcile_ack = -1;
     bool volatile_external = false;
+    godot::Dictionary accepted;
 
     static godot::Ref<NetwPropertySetBinding> create(
         const godot::Ref<NetwPropertySet> &p_set,
@@ -124,6 +125,11 @@ public:
         const godot::Array &p_values,
         const godot::Array &p_keys
     );
+    godot::Error reinstall_accepted();
+    godot::Error install_values(
+        const godot::Array &p_keys,
+        const godot::Array &p_values
+    );
 
     godot::Ref<NetwPropertySet> get_set() const {
         return set;
@@ -192,6 +198,7 @@ private:
         StagedLane lane = STAGED_NONE;
         int64_t ordinal = 0;
         int64_t seq = -1;
+        int64_t sender = 0;
         godot::Array fields;
         godot::Array keys;
         godot::Array values;
@@ -248,6 +255,12 @@ private:
         const godot::Array &p_keys,
         const godot::Array &p_values
     );
+    godot::Error apply_undrawn(
+        godot::Node *p_node,
+        const godot::Array &p_keys,
+        const godot::Array &p_values
+    );
+    godot::Error apply_volatile(godot::Node *p_node);
     godot::Dictionary canonical_plan(const godot::Dictionary &p_payload) const;
     static godot::PackedByteArray canonical_run(
         const godot::Dictionary &p_plan

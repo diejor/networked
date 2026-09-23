@@ -632,8 +632,8 @@ TEST_CASE(
     REQUIRE(handle->get_simulate().is_valid());
     CHECK(pool->slot_is_steppable(slot));
 
-    handle->set_schedule(
-        static_cast<netw::NetwPredict::Schedule>(int(netw::Schedule::STEPPED))
+    handle->simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_STEPPED
     );
     CHECK_FALSE(pool->slot_is_steppable(slot));
 
@@ -811,26 +811,21 @@ TEST_CASE(
     const Ref<NetwPredictionHandle> handle = wrapper->get_prediction();
     REQUIRE(handle.is_valid());
 
-    Ref<netw::NetwPredictIsland> island = handle->get_island();
-    if (island.is_null()) {
-        island.instantiate();
-        handle->set_island(island);
-    }
-    island->set_reconcile(int(netw::NetwPredict::RECONCILE_INDEPENDENT));
+    handle->set_reconcile_mode(netw::NetwPredict::RECONCILE_INDEPENDENT);
     NETW_CHECK_EQ(
         pool->admitted_reconcile_mode(slot),
         int(netw::NetwPredict::RECONCILE_INDEPENDENT)
     );
 
-    island->set_reconcile(int(netw::NetwPredict::RECONCILE_JOINT));
+    handle->set_reconcile_mode(netw::NetwPredict::RECONCILE_JOINT);
     NETW_CHECK_EQ(
         pool->admitted_reconcile_mode(slot),
         int(netw::NetwPredict::RECONCILE_JOINT)
     );
     CHECK_FALSE(pool->joint_refusal_reported_of(slot));
 
-    handle->set_schedule(
-        static_cast<netw::NetwPredict::Schedule>(int(netw::Schedule::STEPPED))
+    handle->simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_STEPPED
     );
     REQUIRE_FALSE(pool->slot_is_steppable(slot));
     NETW_CHECK_EQ(
@@ -897,9 +892,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Census] PC15 only a SOLVER BODY holds the "
-    "simulation gate, and a forced release drops it whatever the archetype "
-    "says, because a released subject is one the world may step freely"
+    "[Networked][Predict][Census] PC15 only a SOLVER BODY that leads holds "
+    "the simulation gate, and a forced release drops it whatever the "
+    "archetype says, because a released subject is one the world may step "
+    "freely and a proxy follows a tick another peer paced"
 ) {
     const Scenario scenario = two_predicted_lanes();
     LoopbackRig rig(scenario.clients);
@@ -933,9 +929,42 @@ TEST_CASE(
     pool->refresh_simulation_gate(slot, false);
     NETW_CHECK_EQ(server->simulation_gate_count(), armed);
 
-    handle->set_archetype(netw::NetwPredict::ARCHETYPE_KINEMATIC);
+    handle->set_archetype(netw::NetwPredict::ARCHETYPE_SCRIPTED);
     pool->refresh_simulation_gate(slot, false);
     NETW_CHECK_EQ(server->simulation_gate_count(), armed - 1);
+
+    for (int client = 0; client < scenario.clients; ++client) {
+        NetwMultiplayer *peer = rig.client(client);
+        REQUIRE(peer != nullptr);
+        netw::NetwPredictionEngine *const lanes = peer->get_prediction_engine();
+        REQUIRE(lanes != nullptr);
+        const TypedArray<godot::Object> seated
+            = peer->predict_engine_entities();
+        REQUIRE(seated.size() == 1);
+        const Ref<NetwEntity> lane = seated[0];
+        REQUIRE(lane.is_valid());
+        const Ref<NetwPredictionHandle> own = lane->get_prediction();
+        REQUIRE(own.is_valid());
+        const netw::sim::Row *row = peer->sim_row_of(lane->get_rid_handle());
+        REQUIRE(row != nullptr);
+
+        own->set_archetype(netw::NetwPredict::ARCHETYPE_SOLVER_BODY);
+        lanes->refresh_simulation_gate(lanes->slot_of(lane), false);
+        NETW_CHECK_EQ(int(row->mode), int(netw::sim::Mode::PREDICT));
+        NETW_CHECK_EQ(peer->simulation_gate_count(), int64_t(1));
+
+        const netw::NetwPredict::RecoveryPolicy open
+            = own->get_recovery_policy();
+        own->set_recovery_policy(
+            netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
+        );
+        NETW_CHECK_EQ(int(row->mode), int(netw::sim::Mode::PROXY));
+        NETW_CHECK_EQ(peer->simulation_gate_count(), int64_t(0));
+
+        own->set_recovery_policy(open);
+        NETW_CHECK_EQ(int(row->mode), int(netw::sim::Mode::PREDICT));
+        NETW_CHECK_EQ(peer->simulation_gate_count(), int64_t(1));
+    }
 }
 
 } // namespace TestNetwPredictCensusLaws

@@ -153,6 +153,7 @@
 					# the node now behaves like `Node.set_multiplayer_authority(peer_id)`
 					entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 				[/codeblock]
+				The entity's body is declared on [member NetwEntity.simulation], its prediction on [member NetwEntity.prediction] and its drawing on [member NetwEntity.interpolation].
 			</description>
 		</method>
 		<method name="configure_interest" qualifiers="static">

@@ -23,14 +23,6 @@ using godot::Ref;
 using netw::NetwPredictionEngine;
 using netw_test::Carrier;
 
-bool declared_rule(int64_t, const godot::StringName &) {
-    return true;
-}
-
-bool second_rule(int64_t, const godot::StringName &) {
-    return false;
-}
-
 netw::predict::AckEvidenceWire ack_record(
     int p_evidence_mask,
     int p_pre_fp,
@@ -1321,11 +1313,6 @@ TEST_CASE(
     );
     CHECK_FALSE(pool->reconfigure_from(slot + 9000, handle));
 
-    handle->set_schedule(
-        static_cast<netw::NetwPredict::Schedule>(int(netw::Schedule::TICK))
-    );
-    handle->set_snap_restore(netw::NetwPredict::RESTORE_MODE_EXTRAPOLATED);
-    handle->set_max_restore_ticks(9);
     handle->set_divergence_epsilon(0.75);
     handle->set_teleport_threshold(3.5);
     handle->set_collision_cooldown_ticks(11);
@@ -1424,117 +1411,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Axes] the two axes are resolved from the "
-    "declaration, and a closed delay displays where it would speculate"
-) {
-    NetwPredictionEngine held_pool;
-    NetwPredictionEngine *const pool = &held_pool;
-    Carrier *body = carrier(4.5, 0.25);
-    const int64_t slot = stamped_slot(pool, body);
-    Ref<netw::NetwPredictionHandle> handle;
-    handle.instantiate();
-
-    pool->declare_axes(slot, false, true, false);
-    NETW_CHECK_EQ(
-        pool->resolve_axes(slot, handle),
-        int(netw::NetwPredict::ROLE_PREDICT)
-    );
-    NETW_CHECK_EQ(
-        handle->get_input_source(),
-        int(netw::NetwPredict::INPUT_SOURCE_LOCAL)
-    );
-    NETW_CHECK_EQ(
-        handle->get_sim_mode(),
-        int(netw::NetwPredict::SIM_MODE_SPECULATIVE)
-    );
-
-    handle->set_recovery_policy(
-        netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
-    );
-    pool->resolve_axes(slot, handle);
-    NETW_CHECK_EQ(
-        handle->get_sim_mode(),
-        int(netw::NetwPredict::SIM_MODE_DISPLAY)
-    );
-
-    pool->declare_axes(slot, true, false, false);
-    pool->resolve_axes(slot, handle);
-    NETW_CHECK_EQ(
-        handle->get_input_source(),
-        int(netw::NetwPredict::INPUT_SOURCE_RECEIVED)
-    );
-    NETW_CHECK_EQ(
-        handle->get_sim_mode(),
-        int(netw::NetwPredict::SIM_MODE_AUTHORITATIVE)
-    );
-
-    pool->declare_axes(slot, false, false, false);
-    pool->resolve_axes(slot, handle);
-    NETW_CHECK_EQ(
-        handle->get_input_source(),
-        int(netw::NetwPredict::INPUT_SOURCE_NONE)
-    );
-    NETW_CHECK_EQ(
-        handle->get_sim_mode(),
-        int(netw::NetwPredict::SIM_MODE_DISPLAY)
-    );
-
-    memdelete(body);
-}
-
-TEST_CASE(
-    "[Networked][Predict][Axes] an entity nobody authors commands for "
-    "simulates on its authority and is dragged where something drags it"
-) {
-    NetwPredictionEngine held_pool;
-    NetwPredictionEngine *const pool = &held_pool;
-    Carrier *body = carrier(4.5, 0.25);
-    const int64_t slot = stamped_slot(pool, body);
-    Ref<netw::NetwPredictionHandle> handle;
-    handle.instantiate();
-
-    pool->declare_axes(slot, true, true, true);
-    NETW_CHECK_EQ(
-        pool->resolve_axes(slot, handle),
-        int(netw::NetwPredict::ROLE_HOST_LOCAL)
-    );
-    NETW_CHECK_EQ(
-        handle->get_input_source(),
-        int(netw::NetwPredict::INPUT_SOURCE_NONE)
-    );
-    NETW_CHECK_EQ(
-        handle->get_sim_mode(),
-        int(netw::NetwPredict::SIM_MODE_AUTHORITATIVE)
-    );
-
-    pool->declare_axes(slot, false, false, true);
-    NETW_CHECK_EQ(
-        pool->resolve_axes(slot, handle),
-        int(netw::NetwPredict::ROLE_REMOTE)
-    );
-
-    pool->note_simulated_by(slot, 77, Callable());
-    NETW_CHECK_EQ(
-        pool->resolve_axes(slot, handle),
-        int(netw::NetwPredict::ROLE_SIMULATE)
-    );
-    NETW_CHECK_EQ(
-        handle->get_sim_mode(),
-        int(netw::NetwPredict::SIM_MODE_SPECULATIVE)
-    );
-
-    handle->set_recovery_policy(
-        netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
-    );
-    NETW_CHECK_EQ(
-        pool->resolve_axes(slot, handle),
-        int(netw::NetwPredict::ROLE_REMOTE)
-    );
-
-    memdelete(body);
-}
-
-TEST_CASE(
     "[Networked][Predict][Reseed] a seed is advanced only where the "
     "declaration asked to extrapolate, and never past the restore ceiling"
 ) {
@@ -1569,7 +1445,7 @@ TEST_CASE(
         slot,
         seed,
         4,
-        int(netw::NetwPredict::RESTORE_MODE_EXACT),
+        int(netw::NetwSimulationHandle::RESTORE_EXACT),
         6,
         2.0,
         0.01
@@ -1580,7 +1456,7 @@ TEST_CASE(
         slot,
         seed,
         4,
-        int(netw::NetwPredict::RESTORE_MODE_EXTRAPOLATED),
+        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
         6,
         2.0,
         0.01
@@ -1592,7 +1468,7 @@ TEST_CASE(
         slot,
         seed,
         4,
-        int(netw::NetwPredict::RESTORE_MODE_EXTRAPOLATED),
+        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
         0,
         2.0,
         0.01
@@ -1603,7 +1479,7 @@ TEST_CASE(
                   slot,
                   godot::Dictionary(),
                   4,
-                  int(netw::NetwPredict::RESTORE_MODE_EXTRAPOLATED),
+                  int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
                   6,
                   2.0,
                   0.01
@@ -1956,60 +1832,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Pose] a simulated remote is compared "
-    "against where the authority row would be NOW, and only where the "
-    "declaration asked to extrapolate"
-) {
-    NetwPredictionEngine held_pool;
-    NetwPredictionEngine *const pool = &held_pool;
-    Carrier *body = carrier(4.5, 0.25);
-    const int64_t slot = stamped_slot(pool, body);
-
-    godot::Dictionary payload;
-    payload[StringName("speed")] = 4.5;
-    payload[StringName("throttle")] = 0.25;
-    payload[StringName("latch")] = 7.0;
-
-    const godot::Dictionary held
-        = pool->open_simulated_state(slot, payload, 10, 40);
-    const godot::Dictionary target = held[StringName("target")];
-    NETW_CHECK_CLOSE(double(target[StringName("speed")]), 4.5, 1e-9);
-    NETW_CHECK_CLOSE(double(held[StringName("divergence")]), 0.0, 1e-9);
-    CHECK(pool->reconciling(slot));
-
-    pool->configure(
-        slot,
-        int(netw::Schedule::TICK),
-        int(netw::Role::PREDICT),
-        int(netw::CorrectionMode::SNAP),
-        int(netw::RestoreMode::EXTRAPOLATED)
-    );
-    const godot::Dictionary aged
-        = pool->open_simulated_state(slot, payload, 10, 40);
-    const godot::Dictionary moved = aged[StringName("target")];
-    const bool target_moved = double(moved[StringName("speed")]) != 4.5;
-    CHECK(target_moved);
-    const bool divergence_seen = double(aged[StringName("divergence")]) > 0.0;
-    CHECK(divergence_seen);
-
-    const godot::Dictionary same_tick
-        = pool->open_simulated_state(slot, payload, 10, 10);
-    NETW_CHECK_CLOSE(
-        double(godot::Dictionary(
-            same_tick[StringName("target")]
-        )[StringName("speed")]),
-        4.5,
-        1e-9
-    );
-
-    const godot::Dictionary absent
-        = pool->open_simulated_state(slot + 9000, payload, 10, 40);
-    NETW_CHECK_CLOSE(double(absent[StringName("divergence")]), 0.0, 1e-9);
-
-    memdelete(body);
-}
-
-TEST_CASE(
     "[Networked][Predict][Pose] the tier error is measured against "
     "the EXTRAPOLATED target, so an older acknowledgement moves the target "
     "and a slot with nothing in the tier measures nothing at all"
@@ -2095,7 +1917,7 @@ TEST_CASE(
     CHECK_FALSE(bool(model[StringName("live")]));
     const bool says_frame
         = String(model[StringName("why")])
-              .contains(String("prediction.schedule = FRAME"));
+              .contains(String("simulation.schedule = FRAME"));
     CHECK(says_frame);
 }
 
@@ -2673,7 +2495,7 @@ TEST_CASE(
 ) {
     CHECK(
         netw::NetwPredict::schedule_name(
-            static_cast<netw::NetwPredict::Schedule>(1)
+            static_cast<netw::NetwSimulationHandle::Schedule>(1)
         )
         == godot::String("FRAME")
     );
@@ -2701,7 +2523,7 @@ TEST_CASE(
 
     CHECK(
         netw::NetwPredict::schedule_name(
-            static_cast<netw::NetwPredict::Schedule>(99)
+            static_cast<netw::NetwSimulationHandle::Schedule>(99)
         )
         == godot::String("99")
     );
@@ -2849,58 +2671,6 @@ TEST_CASE(
 
     NETW_CHECK_EQ(pool->divergence_report(slot + 9000).size(), 0);
     CHECK_FALSE(pool->has_divergence(slot + 9000, speed));
-}
-
-TEST_CASE(
-    "[Networked][Predict][Report] the promoting subjects are kept in "
-    "instance order, so the predictor a member runs holds still"
-) {
-    NetwPredictionEngine held_pool;
-    NetwPredictionEngine *const pool = &held_pool;
-    const int64_t slot = pool->open(every_family_populated());
-    const Callable first = callable_mp_static(&declared_rule);
-    const Callable second = callable_mp_static(&second_rule);
-
-    NETW_CHECK_EQ(pool->simulation_subject_count(slot), 0);
-    CHECK_FALSE(pool->first_simulation_predictor(slot).is_valid());
-
-    CHECK(pool->note_simulated_by(slot, 90, second));
-    CHECK(pool->note_simulated_by(slot, 10, first));
-    NETW_CHECK_EQ(pool->simulation_subject_count(slot), 2);
-    CHECK(pool->first_simulation_predictor(slot) == first);
-
-    CHECK_FALSE(pool->note_simulated_by(slot, 10, first));
-    CHECK(pool->note_simulated_by(slot, 10, second));
-    CHECK(pool->first_simulation_predictor(slot) == second);
-
-    CHECK(pool->clear_simulated_by(slot, 10));
-    CHECK_FALSE(pool->clear_simulated_by(slot, 10));
-    NETW_CHECK_EQ(pool->simulation_subject_count(slot), 1);
-    CHECK(pool->first_simulation_predictor(slot) == second);
-
-    pool->clear_simulation_subjects(slot);
-    NETW_CHECK_EQ(pool->simulation_subject_count(slot), 0);
-
-    CHECK_FALSE(pool->note_simulated_by(slot + 9000, 1, first));
-    NETW_CHECK_EQ(pool->simulation_subject_count(slot + 9000), 0);
-}
-
-TEST_CASE(
-    "[Networked][Predict][Report] a subject that declared no predictor "
-    "is still a promoter, and is skipped when one is asked for"
-) {
-    NetwPredictionEngine held_pool;
-    NetwPredictionEngine *const pool = &held_pool;
-    const int64_t slot = pool->open(every_family_populated());
-    const Callable declared = callable_mp_static(&declared_rule);
-
-    CHECK(pool->note_simulated_by(slot, 5, Callable()));
-    NETW_CHECK_EQ(pool->simulation_subject_count(slot), 1);
-    CHECK_FALSE(pool->first_simulation_predictor(slot).is_valid());
-
-    CHECK(pool->note_simulated_by(slot, 9, declared));
-    NETW_CHECK_EQ(pool->simulation_subject_count(slot), 2);
-    CHECK(pool->first_simulation_predictor(slot) == declared);
 }
 
 TEST_CASE(

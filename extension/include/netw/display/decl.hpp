@@ -8,8 +8,8 @@ namespace netw::display {
 
 enum Param {
     PARAM_ROLE = 0,
-    PARAM_PREDICTED_MODE = 1,
-    PARAM_PREDICTED_SMOOTH_TIME = 2,
+    PARAM_LIVE_MODE = 1,
+    PARAM_LIVE_SMOOTH_TIME = 2,
     PARAM_CHASE_GLIDE_TIME = 3,
     PARAM_TIMELINE_MODE = 4,
     PARAM_MAX_FORECAST_TICKS = 5,
@@ -39,10 +39,10 @@ enum Role {
     ROLE_MAX = 5,
 };
 
-enum PredictedMode {
-    PREDICTED_CHASE = 0,
-    PREDICTED_BRACKETED = 1,
-    PREDICTED_MODE_MAX = 2,
+enum LiveMode {
+    LIVE_CHASE = 0,
+    LIVE_BRACKETED = 1,
+    LIVE_MODE_MAX = 2,
 };
 
 enum Pump {
@@ -62,12 +62,12 @@ enum TimelineMode {
 struct Decl {
     godot::NodePath visual_root;
     int32_t display_role = ROLE_AUTO;
-    int32_t predicted_mode = PREDICTED_CHASE;
+    int32_t live_mode = LIVE_CHASE;
     int32_t timeline_mode = TIMELINE_BUFFERED;
     int32_t max_forecast_ticks = 6;
     int32_t starvation_grace_frames = 3;
     int32_t trace_interval = 0;
-    double predicted_smooth_time = 0.0;
+    double live_smooth_time = 0.0;
     double chase_glide_time = 0.15;
     double max_extra_dilation = 0.0;
     double lag_adapt_rate = 0.05;

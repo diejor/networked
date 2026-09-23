@@ -148,8 +148,8 @@ double glide(Runtime *p_runtime, double p_frame_delta) {
 
 double chase_smooth_time(Runtime *p_runtime, const Timing &p_timing) {
     const Decl &config = p_runtime->get_config();
-    if (config.predicted_smooth_time > 0.0) {
-        return config.predicted_smooth_time;
+    if (config.live_smooth_time > 0.0) {
+        return config.live_smooth_time;
     }
     if (p_timing.ticktime > 0.0) {
         return std::max(p_timing.ticktime * 0.85, 0.001);

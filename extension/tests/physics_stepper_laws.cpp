@@ -1,9 +1,12 @@
 #include "support/netw_test.h"
 
+#include "support/minted_script.h"
 #include "support/netw_cells.h"
 #include "support/scenario_run.h"
 #include "support/stepper_recorder.h"
+#include "support/value_flow_stand.h"
 
+#include "godot/physics_body.hpp"
 #include "godot/physics_server.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
@@ -135,7 +138,9 @@ SteppedSpace step_one_space(NetwMultiplayer *p_core, int p_members) {
         } else if (held.space != out.held.space) {
             continue;
         }
-        entity->get_prediction()->set_schedule(NetwPredict::SCHEDULE_STEPPED);
+        entity->get_simulation()->set_schedule(
+            netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        );
         out.members.push_back(entity);
         if (int(out.members.size()) >= p_members) {
             break;
@@ -171,7 +176,9 @@ SteppedOwner step_the_island(NetwMultiplayer *p_core) {
     out.space = out.held.space;
     out.stepper.instantiate();
     p_core->predict_stepper_install(out.space, out.stepper);
-    out.entity->get_prediction()->set_schedule(NetwPredict::SCHEDULE_STEPPED);
+    out.entity->get_simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+    );
     return out;
 }
 
@@ -355,6 +362,170 @@ TEST_CASE(
     NETW_CHECK_EQ(one.stepper->count_of(RecordingStepper::STEP), 4);
     NETW_CHECK_GE(pool->last_driven_input_tick_of(slot) - driven_before, 3);
     one.release();
+}
+
+class DriftingStepper : public RecordingStepper {
+public:
+    godot::RID body;
+
+    void step(const godot::RID &p_space, double p_delta) override {
+        RecordingStepper::step(p_space, p_delta);
+        godot::PhysicsServer2D *server
+            = godot::PhysicsServer2D::get_singleton();
+        const godot::Transform2D at = server->body_get_state(
+            body,
+            godot::PhysicsServer2D::BODY_STATE_TRANSFORM
+        );
+        server->body_set_state(
+            body,
+            godot::PhysicsServer2D::BODY_STATE_TRANSFORM,
+            at.translated(godot::Vector2(1.0, 0.0))
+        );
+    }
+};
+
+constexpr const char *BYSTANDER = R"(extends Node2D
+
+var body: RigidBody2D
+var crate_position: Vector2
+
+func _init() -> void:
+	body = RigidBody2D.new()
+	body.name = &"Body"
+	body.gravity_scale = 0.0
+	body.collision_layer = 0
+	body.collision_mask = 0
+	add_child(body)
+	Netw.configure_property(self, &"crate_position").broadcast()
+)";
+
+double drift_of(const godot::RID &p_body) {
+    const godot::Transform2D at
+        = godot::PhysicsServer2D::get_singleton()->body_get_state(
+            p_body,
+            godot::PhysicsServer2D::BODY_STATE_TRANSFORM
+        );
+    return at.get_origin().x;
+}
+
+TEST_CASE(
+    "[Networked][Predict][Stepper] ST7 a joint replay in a stepped space "
+    "leaves the body of an entity that is not replayed where the forward "
+    "path left it, so a bystander integrates once per tick however deep the "
+    "replays run"
+) {
+    const Scenario scenario = stepped_island_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *const predictor = rig.client(0);
+    REQUIRE(predictor != nullptr);
+    NetwPredictionEngine *const pool = predictor->get_prediction_engine();
+    SteppedOwner owner = step_the_island(predictor);
+    REQUIRE(owner.slot >= 0);
+
+    rig.mount();
+    const FlowPair pair = stand_flow_pair(rig, BYSTANDER, "Bystander");
+    const Ref<NetwEntity> bystander = NetwEntity::of(pair.mirror(0));
+    netw::sim::Declaration &declared
+        = predictor->sim_row(bystander->get_rid_handle()).declaration;
+    declared.bodies.push_back(godot::NodePath("Body"));
+    declared.replicas = netw::sim::Replicas::ACTIVE;
+    predictor->sim_settle_body(bystander);
+    godot::RigidBody2D *body = godot::Object::cast_to<godot::RigidBody2D>(
+        pair.mirror(0)->get_node_or_null(godot::NodePath("Body"))
+    );
+    REQUIRE(body != nullptr);
+    REQUIRE(
+        godot::PhysicsServer2D::get_singleton()->body_get_space(body->get_rid())
+        == owner.space
+    );
+
+    Ref<DriftingStepper> drifting;
+    drifting.instantiate();
+    drifting->body = body->get_rid();
+    predictor->predict_stepper_install(owner.space, drifting);
+    owner.entity->get_simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+    );
+
+    rig.step_ticks(2);
+    const int64_t passes_before = pool->joint_stats(
+        owner.slot
+    )[NetwPredictionEngine::STAT_JOINT_PASSES];
+    drifting->forget();
+    const double start = drift_of(body->get_rid());
+    const int ticks = 6;
+    rig.step_ticks(ticks);
+
+    REQUIRE(
+        pool->joint_stats(owner.slot)[NetwPredictionEngine::STAT_JOINT_PASSES]
+        > passes_before
+    );
+    REQUIRE(drifting->count_of(RecordingStepper::STEP) > ticks);
+    NETW_CHECK_CLOSE(drift_of(body->get_rid()) - start, double(ticks), 1e-6);
+    owner.release();
+}
+
+TEST_CASE(
+    "[Networked][Predict][Stepper] ST8 an ACTIVE copy in a stepped space "
+    "integrates once per tick on a peer where no stepped member executes, "
+    "because the space steps whether or not anything in it is predicted here"
+) {
+    const Scenario scenario = stepped_island_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *const predictor = rig.client(0);
+    REQUIRE(predictor != nullptr);
+    SteppedOwner owner = step_the_island(predictor);
+    REQUIRE(owner.slot >= 0);
+
+    rig.mount();
+    const FlowPair pair = stand_flow_pair(rig, BYSTANDER, "Bystander");
+    const Ref<NetwEntity> bystander = NetwEntity::of(pair.mirror(0));
+    netw::sim::Declaration &declared
+        = predictor->sim_row(bystander->get_rid_handle()).declaration;
+    declared.bodies.push_back(godot::NodePath("Body"));
+    declared.replicas = netw::sim::Replicas::ACTIVE;
+    predictor->sim_settle_body(bystander);
+    godot::RigidBody2D *body = godot::Object::cast_to<godot::RigidBody2D>(
+        pair.mirror(0)->get_node_or_null(godot::NodePath("Body"))
+    );
+    REQUIRE(body != nullptr);
+
+    Ref<DriftingStepper> drifting;
+    drifting.instantiate();
+    drifting->body = body->get_rid();
+    predictor->predict_stepper_install(owner.space, drifting);
+    owner.entity->get_simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+    );
+    rig.step_ticks(2);
+    REQUIRE_FALSE(space_is_active(owner.held));
+    owner.entity->get_prediction()->set_recovery_policy(
+        NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
+    );
+    rig.step_ticks(1);
+
+    const netw::sim::Row *row
+        = predictor->sim_row_of(owner.entity->get_rid_handle());
+    REQUIRE(row != nullptr);
+    REQUIRE(row->mode == netw::sim::Mode::PROXY);
+    REQUIRE(
+        predictor->sim_row_of(bystander->get_rid_handle())->mode
+        == netw::sim::Mode::ACTIVE
+    );
+
+    drifting->forget();
+    const double start = drift_of(body->get_rid());
+    const int ticks = 5;
+    rig.step_ticks(ticks);
+    NETW_CHECK_EQ(drifting->count_of(RecordingStepper::STEP), ticks);
+    NETW_CHECK_CLOSE(drift_of(body->get_rid()) - start, double(ticks), 1e-6);
+    owner.release();
 }
 
 } // namespace TestNetwPhysicsStepperLaws

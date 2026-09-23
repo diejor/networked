@@ -345,8 +345,12 @@ PackedInt32Array ReplicationCore::live_peers(const Ref<NetwEntity> &p_entity) {
 }
 
 void ReplicationCore::request_control(const Ref<NetwEntity> &p_entity) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr) {
+        return;
+    }
     send_to(
-        int64_t(MultiplayerPeer::TARGET_PEER_SERVER),
+        plane->session_authority_peer(),
         p_entity->get_route(),
         ids.control_request,
         PackedByteArray(),
@@ -682,7 +686,8 @@ void ReplicationCore::dispatch_frame(
         }
     } else if (p_channel == ids.control_apply) {
         session::ControlApply applied;
-        if (entity.is_valid() && session::frame_read(p_payload, applied)) {
+        if (entity.is_valid() && p_sender == plane->session_authority_peer()
+            && session::frame_read(p_payload, applied)) {
             entity->_handle_control_apply(int64_t(applied.controller));
         }
     } else if (p_channel == ids.property_sync) {

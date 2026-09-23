@@ -24,40 +24,38 @@ TEST_CASE(
 
     session->predict_set_param(
         entity,
-        NetwMultiplayer::PREDICT_PARAM_MAX_RESTORE_TICKS,
+        NetwMultiplayer::PREDICT_PARAM_COLLISION_COOLDOWN_TICKS,
         9
     );
     NETW_CHECK_EQ(
         session
             ->predict_get_param(
                 entity,
-                NetwMultiplayer::PREDICT_PARAM_MAX_RESTORE_TICKS
+                NetwMultiplayer::PREDICT_PARAM_COLLISION_COOLDOWN_TICKS
             )
             .get_type(),
         Variant::NIL
     );
 
-    SUBCASE("the island verbs say the handle is missing") {
-        NETW_CHECK_EQ(
-            session->predict_island_add(entity, entity),
-            ERR_DOES_NOT_EXIST
+    SUBCASE("the simulation verbs find no handle and write nothing") {
+        CHECK(session->simulation_handle(entity).is_null());
+        session->simulation_set_param(
+            entity,
+            NetwMultiplayer::SIMULATION_PARAM_MAX_RESTORE_TICKS,
+            9
         );
         NETW_CHECK_EQ(
-            session->predict_island_set_param(
-                entity,
-                NetwMultiplayer::ISLAND_PARAM_APPROXIMATE,
-                true
-            ),
-            ERR_DOES_NOT_EXIST
+            session
+                ->simulation_get_param(
+                    entity,
+                    NetwMultiplayer::SIMULATION_PARAM_MAX_RESTORE_TICKS
+                )
+                .get_type(),
+            Variant::NIL
         );
         NETW_CHECK_EQ(
-            session->predict_island_set_member_param(
-                entity,
-                entity,
-                NetwMultiplayer::MEMBER_PARAM_FIDELITY,
-                0
-            ),
-            ERR_DOES_NOT_EXIST
+            session->simulation_get_mode(entity),
+            netw::NetwSimulationHandle::MODE_NONE
         );
     }
 
@@ -84,7 +82,8 @@ TEST_CASE(
     SUBCASE("the callback setters are no-ops rather than a null deref") {
         session->predict_set_witness_callback(entity, Callable());
         session->predict_set_corridor_callback(entity, Callable());
-        session->predict_set_simulate_callback(entity, Callable());
+        session->predict_set_commands_callback(entity, Callable());
+        session->simulation_set_step_callback(entity, Callable());
         session->predict_set_sensor_callback(
             entity,
             StringName("ground"),
@@ -113,12 +112,13 @@ TEST_CASE(
         Variant::NIL
     );
     NETW_CHECK_EQ(
-        session->predict_island_set_param(
-            entity,
-            static_cast<NetwMultiplayer::IslandParam>(9999),
-            true
-        ),
-        ERR_DOES_NOT_EXIST
+        session
+            ->simulation_get_param(
+                entity,
+                static_cast<NetwMultiplayer::SimulationParam>(9999)
+            )
+            .get_type(),
+        Variant::NIL
     );
 }
 

@@ -1,6 +1,7 @@
 #include "godot/class_db.hpp"
 #include "godot/engine.hpp"
 #include "godot/object.hpp"
+#include "netw/api/display_handle.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/colors.hpp"
@@ -125,7 +126,7 @@ void NetwMultiplayer::display_release_route(int64_t p_route) {
     display::Runtime *runtime = display_book->runtime_at(p_route);
     if (runtime != nullptr) {
         display_release_hooks(runtime);
-        display::apply_body_freeze(runtime, netw::display::ROLE_DISABLED);
+        sim_release_body(runtime->entity_rid(), true);
     }
     display_book->drop_route(p_route);
 }
@@ -134,6 +135,7 @@ void NetwMultiplayer::display_retire_route(int64_t p_route) {
     display::Runtime *runtime = display_book->runtime_at(p_route);
     if (runtime != nullptr) {
         display_release_hooks(runtime);
+        sim_release_body(runtime->entity_rid(), false);
     }
     display_book->drop_route(p_route);
 }
@@ -143,7 +145,7 @@ void NetwMultiplayer::display_clear_runtimes() {
     for (int at = 0; at < runtimes.size(); ++at) {
         display::Runtime *runtime = runtimes[at];
         display_release_hooks(runtime);
-        display::apply_body_freeze(runtime, netw::display::ROLE_DISABLED);
+        sim_release_body(runtime->entity_rid(), true);
     }
     display_book->clear();
 }

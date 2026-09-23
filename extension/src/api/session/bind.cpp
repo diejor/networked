@@ -21,7 +21,6 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
@@ -1170,8 +1169,8 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(DISPLAY_PUMP_REMOTE);
     BIND_ENUM_CONSTANT(DISPLAY_PUMP_BRACKETED);
     BIND_ENUM_CONSTANT(DISPLAY_PUMP_CHASE);
-    BIND_ENUM_CONSTANT(PREDICTED_MODE_CHASE);
-    BIND_ENUM_CONSTANT(PREDICTED_MODE_BRACKETED);
+    BIND_ENUM_CONSTANT(LIVE_MODE_CHASE);
+    BIND_ENUM_CONSTANT(LIVE_MODE_BRACKETED);
     BIND_ENUM_CONSTANT(TIMELINE_MODE_BUFFERED);
     BIND_ENUM_CONSTANT(TIMELINE_MODE_FORECAST);
     BIND_ENUM_CONSTANT(SYNC_MODE_SNAP);
@@ -1246,8 +1245,8 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_PHYSICS_HZ);
     BIND_ENUM_CONSTANT(CLOCK_MONITOR_POLL_HZ);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_ROLE);
-    BIND_ENUM_CONSTANT(DISPLAY_PARAM_PREDICTED_MODE);
-    BIND_ENUM_CONSTANT(DISPLAY_PARAM_PREDICTED_SMOOTH_TIME);
+    BIND_ENUM_CONSTANT(DISPLAY_PARAM_LIVE_MODE);
+    BIND_ENUM_CONSTANT(DISPLAY_PARAM_LIVE_SMOOTH_TIME);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_CHASE_GLIDE_TIME);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_TIMELINE_MODE);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_MAX_FORECAST_TICKS);
@@ -1260,30 +1259,22 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_TRACE_INTERVAL);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_VISUAL_ROOT);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_ARCHETYPE);
-    BIND_ENUM_CONSTANT(PREDICT_PARAM_SCHEDULE);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_MISSING_POLICY);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_RECOVERY_POLICY);
-    BIND_ENUM_CONSTANT(PREDICT_PARAM_SNAP_RESTORE);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_CORRECTION_MODE);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_TELEPORT_THRESHOLD);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_DIVERGENCE_EPSILON);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_BREACH_RESPONSE);
-    BIND_ENUM_CONSTANT(PREDICT_PARAM_MAX_RESTORE_TICKS);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_COLLISION_COOLDOWN_TICKS);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_MAX_CONSUME_PER_TICK);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_MAX_CONSUME_LAG_TICKS);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_CONSUME_BUFFER_TICKS);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_REPLAY_BUFFER_DEPTH);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_APPROXIMATE);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_EXACT_CLAIM);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_RECONCILE);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_PROMOTION);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_PROMOTION_COUNT);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_PROMOTION_METERS);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_PACING);
-    BIND_ENUM_CONSTANT(ISLAND_PARAM_INPUT_DELAY);
-    BIND_ENUM_CONSTANT(MEMBER_PARAM_FIDELITY);
-    BIND_ENUM_CONSTANT(MEMBER_PARAM_PREDICTOR);
+    BIND_ENUM_CONSTANT(SIMULATION_PARAM_BODIES);
+    BIND_ENUM_CONSTANT(SIMULATION_PARAM_SCHEDULE);
+    BIND_ENUM_CONSTANT(SIMULATION_PARAM_REPLICAS);
+    BIND_ENUM_CONSTANT(SIMULATION_PARAM_RESTORE);
+    BIND_ENUM_CONSTANT(SIMULATION_PARAM_MAX_RESTORE_TICKS);
     BIND_ENUM_CONSTANT(COLUMN_F32);
     BIND_ENUM_CONSTANT(COLUMN_F64);
     BIND_ENUM_CONSTANT(COLUMN_I8);
@@ -1526,7 +1517,7 @@ void NetwMultiplayer::_bind_methods() {
             "payload",
             "policy",
             "correction",
-            "snap_restore",
+            "restore",
             "projection",
             "current",
             "pose_errors",
@@ -1557,7 +1548,7 @@ void NetwMultiplayer::_bind_methods() {
         "payload",
         "policy",
         "correction",
-        "snap_restore",
+        "restore",
         "projection",
         "current",
         "pose_errors",
@@ -1845,26 +1836,24 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::predict_set_corridor_callback
     );
     ClassDB::bind_method(
-        D_METHOD("predict_set_simulate_callback", "entity", "callback"),
-        &NetwMultiplayer::predict_set_simulate_callback
+        D_METHOD("predict_set_commands_callback", "entity", "callback"),
+        &NetwMultiplayer::predict_set_commands_callback
     );
     ClassDB::bind_method(
-        D_METHOD("predict_island_add", "entity", "other"),
-        &NetwMultiplayer::predict_island_add
+        D_METHOD("simulation_set_param", "entity", "param", "value"),
+        &NetwMultiplayer::simulation_set_param
     );
     ClassDB::bind_method(
-        D_METHOD("predict_island_set_param", "entity", "param", "value"),
-        &NetwMultiplayer::predict_island_set_param
+        D_METHOD("simulation_get_param", "entity", "param"),
+        &NetwMultiplayer::simulation_get_param
     );
     ClassDB::bind_method(
-        D_METHOD(
-            "predict_island_set_member_param",
-            "entity",
-            "member",
-            "param",
-            "value"
-        ),
-        &NetwMultiplayer::predict_island_set_member_param
+        D_METHOD("simulation_set_step_callback", "entity", "callback"),
+        &NetwMultiplayer::simulation_set_step_callback
+    );
+    ClassDB::bind_method(
+        D_METHOD("simulation_get_mode", "entity"),
+        &NetwMultiplayer::simulation_get_mode
     );
     ClassDB::bind_method(
         D_METHOD("peer_forget", "peer"),

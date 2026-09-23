@@ -4,10 +4,12 @@
 #include "godot/multiplayer.hpp"
 #include "godot/object.hpp"
 #include "godot/utility.hpp"
+#include "netw/api/display_handle.hpp"
 #include "netw/api/interest_handle.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_handle.hpp"
 #include "netw/api/prediction_handle.hpp"
+#include "netw/api/simulation_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/entity/control.hpp"
 #include "netw/entity/stage.hpp"
@@ -325,37 +327,56 @@ ReplicationCore *NetwEntity::get_replication_plane() const {
 
 void NetwEntity::set_controller_internal(int64_t p_value) {
     const int64_t was = control()->get_controller();
-    if (!record->set_controller(this, p_value)) {
+    if (!record->set_controller(nullptr, p_value)) {
         return;
     }
+    announce_control(was, p_value);
+}
+
+void NetwEntity::announce_control(int64_t p_was, int64_t p_peer) {
+    emit_signal(StringName(SIG_CONTROL_CHANGED), p_was, p_peer);
     NetwMultiplayer *core = session_core();
     if (core == nullptr) {
         return;
     }
     Dictionary detail;
-    detail["from"] = was;
-    detail["to"] = p_value;
+    detail["from"] = p_was;
+    detail["to"] = p_peer;
     core->event_emit(
         EventPlane::CONTROL_CHANGED,
         get_route(),
         detail,
         get_entity_id(),
-        p_value,
+        p_peer,
         OK,
         Dictionary()
     );
 }
 
 void NetwEntity::apply_control() {
+    project_control(this);
+}
+
+void NetwEntity::project_control(Object *p_announcer) {
     NetwMultiplayer *api = session_core();
     const int64_t coordinator
         = api != nullptr ? api->session_authority_peer() : 1;
     record->apply_control(
-        this,
+        p_announcer,
         get_owner(),
         get_is_authority(),
         coordinator
     );
+}
+
+void NetwEntity::transfer_control(int64_t p_peer) {
+    const int64_t was = control()->get_controller();
+    if (!record->set_controller(nullptr, p_peer)) {
+        apply_control();
+        return;
+    }
+    project_control(nullptr);
+    announce_control(was, p_peer);
 }
 
 int64_t NetwEntity::resolve_initial_controller() const {
@@ -461,8 +482,7 @@ void NetwEntity::_handle_control_request(int64_t p_sender) {
 }
 
 void NetwEntity::apply_control_change(int64_t p_peer) {
-    set_controller_internal(p_peer);
-    apply_control();
+    transfer_control(p_peer);
     NetwMultiplayer::entity_broadcast_control(
         this,
         get_replication_plane(),
@@ -471,8 +491,7 @@ void NetwEntity::apply_control_change(int64_t p_peer) {
 }
 
 void NetwEntity::_handle_control_apply(int64_t p_peer) {
-    set_controller_internal(p_peer);
-    apply_control();
+    transfer_control(p_peer);
 }
 
 bool NetwEntity::get_is_authority() const {
@@ -540,9 +559,10 @@ void NetwEntity::arm(const Ref<NetwMultiplayer> &p_api) {
     );
     stamp_multiplayer(p_api);
     if (!control()->get_configured()) {
-        set_controller_internal(resolve_initial_controller());
+        transfer_control(resolve_initial_controller());
+    } else {
+        apply_control();
     }
-    apply_control();
     transition(int64_t(entity::Stage::ARMED));
 }
 
@@ -681,8 +701,21 @@ void NetwEntity::_on_owner_ready() {
     }
     hydrate_components();
     NetwMultiplayer *core = session_core();
+    if (core != nullptr && core->predict_lacks_state_rows(this)) {
+        Node *owner = get_owner();
+        NETW_ERROR(
+            sys::PREDICTION,
+            "prediction on %s is not registered, because the entity has no "
+            ".state() row for prediction to compare and restore.",
+            owner != nullptr ? String(owner->get_path()).utf8().get_data()
+                             : String(get_entity_id()).utf8().get_data()
+        );
+    }
     if (core != nullptr && !core->persist_enroll(get_owner())) {
         core->predict_reconcile_declaration(this);
+    }
+    if (core != nullptr) {
+        core->sim_declare(this);
     }
     emit_signal(SIG_SPAWNED);
 }
@@ -902,6 +935,13 @@ Ref<NetwSceneHandle> NetwEntity::get_scene() const {
 Ref<NetwPredictionHandle> NetwEntity::get_prediction() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_PREDICTION,
+        const_cast<NetwEntity *>(this)
+    );
+}
+
+Ref<NetwSimulationHandle> NetwEntity::get_simulation() const {
+    return const_cast<NetwEntity *>(this)->record->part(
+        NetwEntityRecord::PART_SIMULATION,
         const_cast<NetwEntity *>(this)
     );
 }
@@ -1496,6 +1536,21 @@ void NetwEntity::_bind_methods() {
         ),
         "",
         "get_prediction"
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_simulation"),
+        &NetwEntity::get_simulation
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::OBJECT,
+            "simulation",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwSimulationHandle",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_simulation"
     );
     ClassDB::bind_method(
         D_METHOD("get_persistence"),

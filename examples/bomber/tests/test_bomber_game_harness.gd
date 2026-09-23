@@ -275,6 +275,72 @@ func test_a_mid_match_joiner_waits_in_the_lobby_and_plays_the_next_round() -> vo
 	assert_that(await valeria.await_player(&"valeria", 2.0)).is_not_null()
 
 
+func test_every_peer_runs_each_player_in_its_own_cell() -> void:
+	var valeria := await game.add_host("valeria", false)
+	var jose := await game.add_client("jose", false)
+	var ana := await game.add_client("ana", false)
+	await _begin_game(valeria)
+
+	for runner: NetwSceneRunner in [valeria, jose, ana]:
+		await runner.await_scene(&"World", 2.0)
+		for name: StringName in [&"valeria", &"jose", &"ana"]:
+			await runner.await_player(name, 2.0)
+	await game.sync_ticks(8)
+
+	var jose_own := jose.find_player(&"jose") as Node2D
+	var jose_on_host := valeria.find_player(&"jose") as Node2D
+	var jose_on_ana := ana.find_player(&"jose") as Node2D
+	var start := jose_own.position.x
+	jose.simulate_action_press("move_right")
+	await game.sync_ticks(8)
+
+	var own :=NetwSimulationHandle.MODE_PREDICT
+	var host := NetwSimulationHandle.MODE_AUTHORITY
+	var other := NetwSimulationHandle.MODE_PROXY
+	var bracketed := NetwMultiplayer.DISPLAY_PUMP_BRACKETED
+	var remote := NetwMultiplayer.DISPLAY_PUMP_REMOTE
+	var peers := {&"valeria": valeria, &"jose": jose, &"ana": ana}
+	var cells := [
+		[&"valeria", &"valeria", host, bracketed],
+		[&"valeria", &"jose", host, bracketed],
+		[&"valeria", &"ana", host, bracketed],
+		[&"jose", &"jose", own, bracketed],
+		[&"jose", &"valeria", other, remote],
+		[&"jose", &"ana", other, remote],
+		[&"ana", &"ana", own, bracketed],
+		[&"ana", &"valeria", other, remote],
+		[&"ana", &"jose", other, remote],
+	]
+	for cell: Array in cells:
+		var runner: NetwSceneRunner = peers[cell[0]]
+		var player := runner.find_player(cell[1]) as Node2D
+		var entity := NetwEntity.of(player)
+		var pump: int = NetwMultiplayer.core_of(player).display_get_track_stat(
+			entity.rid,
+			&"",
+			&"pump_mode",
+		)
+		var mode: int = entity.simulation.mode
+		assert_int(mode).override_failure_message(
+			"%s runs %s in mode %d" % [cell[0], cell[1], mode],
+		).is_equal(cell[2])
+		assert_int(pump).override_failure_message(
+			"%s draws %s through pump %d" % [cell[0], cell[1], pump],
+		).is_equal(cell[3])
+
+	jose.simulate_action_release("move_right")
+	await game.sync_ticks(30)
+	assert_float(jose_own.position.x).is_greater(start)
+	assert_float(jose_on_host.position.x).is_equal_approx(
+		jose_own.position.x,
+		8.0,
+	)
+	assert_float(jose_on_ana.position.x).is_equal_approx(
+		jose_own.position.x,
+		8.0,
+	)
+
+
 func press_exit(host: NetwSceneRunner) -> void:
 	var world: NetwSceneHandle = Netw.scene(host.tree, &"World")
 	var exit := world.root.get_node(^"Winner/ExitGame") as Button

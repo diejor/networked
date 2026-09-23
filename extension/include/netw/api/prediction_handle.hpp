@@ -8,9 +8,9 @@
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/predict_stats.hpp"
+#include "netw/api/simulation_handle.hpp"
 
 namespace netw {
 
@@ -23,20 +23,16 @@ class NetwPredictSlotEngine;
 class NetwPredictionHandle : public godot::RefCounted {
     GDCLASS(NetwPredictionHandle, godot::RefCounted)
 
-    godot::Callable simulate_step;
-    NetwPredict::Schedule schedule_value = NetwPredict::SCHEDULE_TICK;
     int correction_value = NetwPredict::CORRECTION_MODE_AUTO;
-    int restore_value = NetwPredict::RESTORE_MODE_EXACT;
     int input_source_value = NetwPredict::INPUT_SOURCE_NONE;
     int sim_mode_value = NetwPredict::SIM_MODE_DISPLAY;
     int recovery_policy_value = -1;
     int breach_response_value = NetwPredict::BREACH_RESPONSE_PREDICT_THROUGH;
-    godot::Ref<NetwPredictIsland> island_rule;
+    godot::Callable command_predictor;
     godot::Dictionary sensor_table;
     int64_t epoch_value = -1;
     godot::Callable witness_sampler;
     godot::Callable corridor_sweep;
-    int max_restore_value = 6;
     double teleport_value = 2.0;
     int cooldown_value = 6;
     bool sleeping_value = false;
@@ -94,7 +90,7 @@ public:
         const godot::Dictionary &p_carried,
         NetwPredict::RecoveryPolicy p_policy,
         NetwPredict::CorrectionMode p_correction,
-        NetwPredict::RestoreMode p_snap_restore,
+        NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_before,
         const godot::Dictionary &p_tier_errors,
@@ -112,20 +108,17 @@ public:
     godot::Ref<NetwEntity> get_entity() const;
     bool is_registered() const;
 
-    void set_simulate(const godot::Callable &p_value);
-    void set_schedule(NetwPredict::Schedule p_value);
+    godot::Ref<NetwSimulationHandle> simulation() const;
+    void step_changed();
     void set_correction_mode(NetwPredict::CorrectionMode p_value);
-    void set_snap_restore(NetwPredict::RestoreMode p_value);
     void set_input_source(NetwPredict::InputSource p_value);
     void set_sim_mode(NetwPredict::SimMode p_value);
     void set_recovery_policy(NetwPredict::RecoveryPolicy p_value);
     void set_breach_response(NetwPredict::BreachResponse p_value);
-    void set_island(const godot::Ref<NetwPredictIsland> &p_value);
     void set_sensors(const godot::Dictionary &p_value);
     void set_epoch(int64_t p_value);
     void set_witness_contacts(const godot::Callable &p_value);
     void set_transport_corridor(const godot::Callable &p_value);
-    void set_max_restore_ticks(int p_value);
     void set_teleport_threshold(double p_value);
     void set_collision_cooldown_ticks(int p_value);
     void set_sleeping(bool p_value);
@@ -139,20 +132,13 @@ public:
     void set_reconcile_mode(NetwPredict::Reconcile p_value);
     void set_archetype(NetwPredict::Archetype p_value);
 
-    godot::Callable get_simulate() const {
-        return simulate_step;
-    }
-
-    NetwPredict::Schedule get_schedule() const {
-        return schedule_value;
-    }
+    godot::Callable get_simulate() const;
+    NetwSimulationHandle::Schedule get_schedule() const;
+    NetwSimulationHandle::Restore get_snap_restore() const;
+    int get_max_restore_ticks() const;
 
     NetwPredict::CorrectionMode get_correction_mode() const {
         return static_cast<NetwPredict::CorrectionMode>(correction_value);
-    }
-
-    NetwPredict::RestoreMode get_snap_restore() const {
-        return static_cast<NetwPredict::RestoreMode>(restore_value);
     }
 
     NetwPredict::InputSource get_input_source() const {
@@ -171,10 +157,6 @@ public:
         return static_cast<NetwPredict::BreachResponse>(breach_response_value);
     }
 
-    godot::Ref<NetwPredictIsland> get_island() const {
-        return island_rule;
-    }
-
     godot::Dictionary get_sensors() const {
         return sensor_table;
     }
@@ -189,10 +171,6 @@ public:
 
     godot::Callable get_transport_corridor() const {
         return corridor_sweep;
-    }
-
-    int get_max_restore_ticks() const {
-        return max_restore_value;
     }
 
     double get_teleport_threshold() const {
@@ -263,6 +241,10 @@ public:
     ) const;
     NetwPredict::RecoveryPolicy resolved_recovery_policy() const;
     NetwPredict::CorrectionMode resolved_correction_mode() const;
+    NetwPredict::CorrectionMode integrable_correction_mode(
+        NetwPredict::CorrectionMode p_declared
+    ) const;
+    bool body_solves() const;
 
     void simulate_tick(double p_delta, int64_t p_tick);
     void simulate_frame(double p_delta);
@@ -280,19 +262,14 @@ public:
     int64_t history_record_tick(int64_t p_fallback) const;
 
     void stamp_episode();
-    void set_simulated_by(
-        const godot::Ref<NetwEntity> &p_subject,
-        bool p_enabled,
-        const godot::Callable &p_predictor = godot::Callable()
-    );
-    int simulated_by_count() const;
-    godot::Callable predicted_command_callable() const;
+    void set_predict_commands(const godot::Callable &p_predictor);
+
+    godot::Callable get_predict_commands() const {
+        return command_predictor;
+    }
+
     void restate_declaration();
 
-    static NetwPredict::Role role_for_axes(
-        NetwPredict::InputSource p_source,
-        NetwPredict::SimMode p_mode
-    );
     static NetwPredict::CorrectionMode resolve_correction_mode_for(
         godot::Object *p_body,
         NetwPredict::CorrectionMode p_mode,

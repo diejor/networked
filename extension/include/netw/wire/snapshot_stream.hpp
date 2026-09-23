@@ -40,6 +40,7 @@ class SnapshotSender {
     uint64_t confirmed_revision = 0;
     uint64_t highest_exposed = 0;
     uint64_t repair_at = 0;
+    int64_t minted_tick = 0;
     bool has_confirmed = false;
     bool has_desired = false;
 
@@ -58,6 +59,10 @@ public:
     }
 
     uint64_t reserve();
+
+    uint64_t mint(int64_t p_tick);
+
+    bool beat_due(int64_t p_tick, int64_t p_every) const;
 
     uint64_t distance_for(uint64_t p_revision) const;
 

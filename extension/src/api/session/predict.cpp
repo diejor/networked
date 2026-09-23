@@ -3,7 +3,10 @@
 
 #include "netw/api/participant.hpp"
 
+#include <cmath>
+
 #include "godot/class_db.hpp"
+#include "godot/engine.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "godot/os.hpp"
@@ -24,7 +27,6 @@
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/nodes/multiplayer_tree.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
@@ -303,6 +305,30 @@ void space_set_active(
 
 } // namespace
 
+void NetwMultiplayer::warn_pacing_rate_mismatch_once() {
+    if (predict_pacing_rate_warned) {
+        return;
+    }
+    const double factor = clock_engine().physics_factor();
+    if (std::abs(factor - std::round(factor)) < 1e-6) {
+        return;
+    }
+    predict_pacing_rate_warned = true;
+    const Engine *engine = Engine::get_singleton();
+    const int physics_rate
+        = engine != nullptr ? engine->get_physics_ticks_per_second() : 60;
+    NETW_WARN(
+        sys::PREDICTION,
+        "a gated space paces physics at %d steps per second against a %d "
+        "tick session, and %d is not an integer multiple of %d, so the "
+        "space's steps will drift against the ticks that gate it",
+        physics_rate,
+        clock_engine().get_tickrate(),
+        physics_rate,
+        clock_engine().get_tickrate()
+    );
+}
+
 void NetwMultiplayer::simulation_gate_set(const RID &p_entity, bool p_wanted) {
     if (!p_entity.is_valid()) {
         return;
@@ -324,6 +350,8 @@ void NetwMultiplayer::simulation_gate_set(const RID &p_entity, bool p_wanted) {
         row.held = entity_space_of(entity_get_view(p_entity));
         gated_bodies.push_back(row);
         clock.arm_gate();
+        predict_gate_arms += 1;
+        warn_pacing_rate_mismatch_once();
         return;
     }
     const GatedBody &releasing = gated_bodies[uint32_t(index)];
@@ -332,6 +360,7 @@ void NetwMultiplayer::simulation_gate_set(const RID &p_entity, bool p_wanted) {
     }
     gated_bodies.remove_at(uint32_t(index));
     clock.release_gate();
+    predict_gate_arms -= 1;
 }
 
 void NetwMultiplayer::simulation_gate_apply() {
@@ -361,8 +390,9 @@ void NetwMultiplayer::simulation_gate_apply() {
         ++i;
     }
     if (gated_bodies.is_empty()) {
-        while (clock_engine().is_gated()) {
+        while (predict_gate_arms > 0) {
             clock_engine().release_gate();
+            predict_gate_arms -= 1;
         }
     }
 }
@@ -497,7 +527,7 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
     const Dictionary &p_payload,
     NetwPredict::RecoveryPolicy p_policy,
     NetwPredict::CorrectionMode p_correction,
-    NetwPredict::RestoreMode p_snap_restore,
+    NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_current,
     const Dictionary &p_pose_errors,
@@ -540,7 +570,7 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover_default(
     const Dictionary &p_payload,
     NetwPredict::RecoveryPolicy p_policy,
     NetwPredict::CorrectionMode p_correction,
-    NetwPredict::RestoreMode p_snap_restore,
+    NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_current,
     const Dictionary &p_pose_errors,
@@ -613,6 +643,15 @@ void NetwMultiplayer::predict_stepper_hold(
     space_set_active({held->space, held->dimension}, false);
 }
 
+void NetwMultiplayer::predict_held_spaces(LocalVector<RID> &r_spaces) const {
+    r_spaces.clear();
+    for (const KeyValue<int64_t, SteppedSpace> &row : space_steppers) {
+        if (row.value.inactive) {
+            r_spaces.push_back(row.value.space);
+        }
+    }
+}
+
 bool NetwMultiplayer::predict_space_is_stepped(const RID &p_space) const {
     return space_steppers.has(p_space.get_id());
 }
@@ -662,6 +701,34 @@ TypedArray<Object> NetwMultiplayer::predict_engine_entities() const {
         }
     }
     return out;
+}
+
+sim::Row &NetwMultiplayer::sim_row(const RID &p_entity) {
+    return sim_rows.ensure(p_entity);
+}
+
+const sim::Row *NetwMultiplayer::sim_row_of(const RID &p_entity) const {
+    return sim_rows.row_of(p_entity);
+}
+
+sim::Mode NetwMultiplayer::sim_resolve(
+    const RID &p_entity,
+    const sim::Facts &p_facts
+) {
+    return sim_rows.resolve(p_entity, p_facts);
+}
+
+void NetwMultiplayer::sim_follow_session_authority() {
+    const LocalVector<RID> moved
+        = sim_rows.follow_session_authority(is_host());
+    for (const RID &entity : moved) {
+        if (NetwPredictSlotEngine *engine = predict_engine_for(entity)) {
+            engine->rewire();
+        } else {
+            sim_settle_body_of(entity);
+            sim_announce(entity);
+        }
+    }
 }
 
 NetwPredictRunner *NetwMultiplayer::predict_runner_seated() {
@@ -1011,11 +1078,13 @@ void NetwMultiplayer::lagcomp_deny_action(
 }
 
 void NetwMultiplayer::predict_history_record_tick(int64_t p_tick) {
-    predict_history_record(p_tick, NetwPredict::SCHEDULE_TICK, true);
+    predict_history_record(p_tick, NetwSimulationHandle::SCHEDULE_TICK, true);
 }
 
 void NetwMultiplayer::tick_step(double p_delta, int64_t p_tick) {
     NETW_ZONE_NC("session tick step", colors::PREDICTION);
+    sim_drain_installs();
+    sim_run(sim::Schedule::TICK, p_delta, p_tick);
     if (!lagcomp_configured) {
         return;
     }
@@ -1037,6 +1106,10 @@ void NetwMultiplayer::before_frame_step() {
 
 void NetwMultiplayer::frame_step() {
     NETW_ZONE_NC("session frame step", colors::PREDICTION);
+    const ClockEngine &clock = clock_engine();
+    if (clock.is_simulating()) {
+        sim_run(sim::Schedule::FRAME, clock.ticktime(), clock.get_tick() - 1);
+    }
     if (!lagcomp_configured) {
         return;
     }
@@ -1054,7 +1127,7 @@ void NetwMultiplayer::frame_step() {
 }
 
 void NetwMultiplayer::predict_history_record_frame(int64_t p_tick) {
-    predict_history_record(p_tick, NetwPredict::SCHEDULE_FRAME, false);
+    predict_history_record(p_tick, NetwSimulationHandle::SCHEDULE_FRAME, false);
 }
 
 namespace {
@@ -1283,10 +1356,20 @@ void NetwMultiplayer::predict_reconcile_declaration(
     }
     const Ref<NetwPredictionHandle> handle = p_entity->get_prediction();
     if (handle.is_null()
-        || handle->get_archetype() == NetwPredict::ARCHETYPE_NONE) {
+        || handle->get_archetype() == NetwPredict::ARCHETYPE_NONE
+        || predict_lacks_state_rows(p_entity)) {
         return;
     }
     predict_declare(p_entity->get_rid_handle());
+}
+
+bool NetwMultiplayer::predict_lacks_state_rows(
+    const Ref<NetwEntity> &p_entity
+) const {
+    const Ref<NetwPredictionHandle> handle = p_entity->get_prediction();
+    return handle.is_valid()
+        && handle->get_archetype() != NetwPredict::ARCHETYPE_NONE
+        && p_entity->get_state_binding().is_null();
 }
 
 void NetwMultiplayer::register_prediction(const Ref<NetwEntity> &p_entity) {
@@ -1318,9 +1401,15 @@ void NetwMultiplayer::unregister_prediction(const Ref<NetwEntity> &p_entity) {
     if (engine == nullptr) {
         return;
     }
+    engine->release();
+    sim_release_body(entity, true);
+    sim_release_row(entity);
+    const Ref<NetwSimulationHandle> simulation = p_entity->get_simulation();
+    if (simulation.is_valid()) {
+        simulation->announce(NetwSimulationHandle::MODE_NONE);
+    }
     prediction_engine.slot_unregister(p_entity);
     relay_release(entity.get_id());
-    engine->release();
     const Ref<NetwPredictionHandle> handle = p_entity->get_prediction();
     if (handle.is_valid()) {
         handle->bind_engine(nullptr);
@@ -1394,10 +1483,6 @@ void NetwMultiplayer::predict_set_param(
             return handle->set_archetype(
                 static_cast<NetwPredict::Archetype>(int(p_value))
             );
-        case PREDICT_PARAM_SCHEDULE:
-            return handle->set_schedule(
-                static_cast<NetwPredict::Schedule>(int(p_value))
-            );
         case PREDICT_PARAM_MISSING_POLICY:
             return handle->set_missing_policy(
                 static_cast<NetwPredict::MissingInput>(int(p_value))
@@ -1405,10 +1490,6 @@ void NetwMultiplayer::predict_set_param(
         case PREDICT_PARAM_RECOVERY_POLICY:
             return handle->set_recovery_policy(
                 static_cast<NetwPredict::RecoveryPolicy>(int(p_value))
-            );
-        case PREDICT_PARAM_SNAP_RESTORE:
-            return handle->set_snap_restore(
-                static_cast<NetwPredict::RestoreMode>(int(p_value))
             );
         case PREDICT_PARAM_CORRECTION_MODE:
             return handle->set_correction_mode(
@@ -1422,8 +1503,6 @@ void NetwMultiplayer::predict_set_param(
             return handle->set_breach_response(
                 static_cast<NetwPredict::BreachResponse>(int(p_value))
             );
-        case PREDICT_PARAM_MAX_RESTORE_TICKS:
-            return handle->set_max_restore_ticks(int(p_value));
         case PREDICT_PARAM_COLLISION_COOLDOWN_TICKS:
             return handle->set_collision_cooldown_ticks(int(p_value));
         case PREDICT_PARAM_MAX_CONSUME_PER_TICK:
@@ -1454,14 +1533,10 @@ Variant NetwMultiplayer::predict_get_param(
     switch (p_param) {
         case PREDICT_PARAM_ARCHETYPE:
             return handle->get_archetype();
-        case PREDICT_PARAM_SCHEDULE:
-            return handle->get_schedule();
         case PREDICT_PARAM_MISSING_POLICY:
             return handle->get_missing_policy();
         case PREDICT_PARAM_RECOVERY_POLICY:
             return handle->get_recovery_policy();
-        case PREDICT_PARAM_SNAP_RESTORE:
-            return handle->get_snap_restore();
         case PREDICT_PARAM_CORRECTION_MODE:
             return handle->get_correction_mode();
         case PREDICT_PARAM_TELEPORT_THRESHOLD:
@@ -1470,8 +1545,6 @@ Variant NetwMultiplayer::predict_get_param(
             return handle->get_divergence_epsilon();
         case PREDICT_PARAM_BREACH_RESPONSE:
             return handle->get_breach_response();
-        case PREDICT_PARAM_MAX_RESTORE_TICKS:
-            return handle->get_max_restore_ticks();
         case PREDICT_PARAM_COLLISION_COOLDOWN_TICKS:
             return handle->get_collision_cooldown_ticks();
         case PREDICT_PARAM_MAX_CONSUME_PER_TICK:
@@ -1525,13 +1598,13 @@ void NetwMultiplayer::predict_set_corridor_callback(
     }
 }
 
-void NetwMultiplayer::predict_set_simulate_callback(
+void NetwMultiplayer::predict_set_commands_callback(
     const RID &p_entity,
     const Callable &p_callback
 ) {
     const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
     if (handle.is_valid()) {
-        handle->set_simulate(p_callback);
+        handle->set_predict_commands(p_callback);
     }
 }
 
@@ -1549,10 +1622,10 @@ Error NetwMultiplayer::predict_bind_owner(
     if (!prediction_engine.slot_bind_owner(wrapper, p_owner)) {
         return ERR_DOES_NOT_EXIST;
     }
-    const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
-    if (handle.is_valid() && !handle->get_simulate().is_valid()
+    const Ref<NetwSimulationHandle> handle = simulation_handle(p_entity);
+    if (handle.is_valid() && !handle->declaration().step.is_valid()
         && p_owner->has_method(StringName("_network_tick"))) {
-        handle->set_simulate(Callable(p_owner, StringName("_network_tick")));
+        handle->adopt_step(Callable(p_owner, StringName("_network_tick")));
     }
     return OK;
 }
@@ -1564,124 +1637,90 @@ void NetwMultiplayer::predict_unbind_owner(const RID &p_entity) {
     }
 }
 
-Error NetwMultiplayer::predict_island_add(
-    const RID &p_entity,
-    const RID &p_other
-) {
-    const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
-    const Ref<NetwEntity> member = entity_get_view(p_other);
-    if (handle.is_null() || member.is_null()) {
-        return ERR_DOES_NOT_EXIST;
-    }
-    handle->get_island()->add(member);
-    return OK;
+Ref<NetwSimulationHandle> NetwMultiplayer::simulation_handle(
+    const RID &p_entity
+) const {
+    const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
+    return wrapper.is_valid()
+        ? Ref<NetwSimulationHandle>(wrapper->get_simulation())
+        : Ref<NetwSimulationHandle>();
 }
 
-void NetwMultiplayer::predict_island_remove(
+void NetwMultiplayer::simulation_set_param(
     const RID &p_entity,
-    const RID &p_other
-) {
-    const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
-    const Ref<NetwEntity> member = entity_get_view(p_other);
-    if (handle.is_valid() && member.is_valid()) {
-        handle->get_island()->remove(member);
-    }
-}
-
-Error NetwMultiplayer::predict_island_set_param(
-    const RID &p_entity,
-    IslandParam p_param,
+    SimulationParam p_param,
     const Variant &p_value
 ) {
-    const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
+    const Ref<NetwSimulationHandle> handle = simulation_handle(p_entity);
     if (handle.is_null()) {
-        return ERR_DOES_NOT_EXIST;
-    }
-    const Ref<NetwPredictIsland> island = handle->get_island();
-    switch (p_param) {
-        case ISLAND_PARAM_APPROXIMATE:
-            island->set_approximate(bool(p_value));
-            return OK;
-        case ISLAND_PARAM_EXACT_CLAIM:
-            island->set_exact_claim(bool(p_value));
-            return OK;
-        case ISLAND_PARAM_RECONCILE:
-            island->set_reconcile(int(p_value));
-            return OK;
-        case ISLAND_PARAM_PROMOTION:
-            island->set_promotion(int(p_value));
-            return OK;
-        case ISLAND_PARAM_PROMOTION_COUNT:
-            island->set_promotion_count(MAX(0, int(p_value)));
-            return OK;
-        case ISLAND_PARAM_PROMOTION_METERS:
-            island->set_promotion_meters(MAX(0.0, double(p_value)));
-            return OK;
-        case ISLAND_PARAM_PACING:
-            island->set_pacing(int(p_value));
-            return OK;
-        case ISLAND_PARAM_INPUT_DELAY:
-            island->set_input_delay_ticks(MAX(0, int(p_value)));
-            return OK;
-        default:
-            return ERR_INVALID_PARAMETER;
-    }
-}
-
-Error NetwMultiplayer::predict_island_set_member_param(
-    const RID &p_entity,
-    const RID &p_member,
-    MemberParam p_param,
-    const Variant &p_value
-) {
-    const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
-    const Ref<NetwEntity> other = entity_get_view(p_member);
-    if (handle.is_null() || other.is_null()) {
-        return ERR_DOES_NOT_EXIST;
-    }
-    const Ref<NetwPredictIsland> island = handle->get_island();
-    if (!island->has_member(other)) {
-        return ERR_INVALID_PARAMETER;
+        return;
     }
     switch (p_param) {
-        case MEMBER_PARAM_FIDELITY:
-            island->set_fidelity(
-                other,
-                static_cast<NetwPredict::Fidelity>(int(p_value))
+        case SIMULATION_PARAM_BODIES:
+            return handle->set_bodies(TypedArray<NodePath>(p_value));
+        case SIMULATION_PARAM_SCHEDULE:
+            return handle->set_schedule(
+                NetwSimulationHandle::Schedule(int(p_value))
             );
-            return OK;
-        case MEMBER_PARAM_PREDICTOR:
-            island->predict_commands(other, p_value);
-            return OK;
+        case SIMULATION_PARAM_REPLICAS:
+            return handle->set_replicas(
+                NetwSimulationHandle::Replicas(int(p_value))
+            );
+        case SIMULATION_PARAM_RESTORE:
+            return handle->set_restore(
+                NetwSimulationHandle::Restore(int(p_value))
+            );
+        case SIMULATION_PARAM_MAX_RESTORE_TICKS:
+            return handle->set_max_restore_ticks(int(p_value));
         default:
-            return ERR_INVALID_PARAMETER;
+            NETW_ERR(
+                sys::PREDICTION,
+                "simulation parameter {} names no simulation setting",
+                p_param
+            );
     }
 }
 
-Variant NetwMultiplayer::predict_island_get_member_param(
+Variant NetwMultiplayer::simulation_get_param(
     const RID &p_entity,
-    const RID &p_member,
-    MemberParam p_param
+    SimulationParam p_param
 ) {
-    const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
-    const Ref<NetwEntity> other = entity_get_view(p_member);
-    if (handle.is_null() || other.is_null()) {
-        return Variant();
-    }
-    const Ref<NetwPredictIsland> island = handle->get_island();
-    if (!island->has_member(other)) {
+    const Ref<NetwSimulationHandle> handle = simulation_handle(p_entity);
+    if (handle.is_null()) {
         return Variant();
     }
     switch (p_param) {
-        case MEMBER_PARAM_FIDELITY: {
-            const int declared = island->fidelity_of(other);
-            return declared >= 0 ? declared : int(NetwPredict::FIDELITY_PROXY);
-        }
-        case MEMBER_PARAM_PREDICTOR:
-            return island->predictor_of(other);
+        case SIMULATION_PARAM_BODIES:
+            return handle->get_bodies();
+        case SIMULATION_PARAM_SCHEDULE:
+            return handle->get_schedule();
+        case SIMULATION_PARAM_REPLICAS:
+            return handle->get_replicas();
+        case SIMULATION_PARAM_RESTORE:
+            return handle->get_restore();
+        case SIMULATION_PARAM_MAX_RESTORE_TICKS:
+            return handle->get_max_restore_ticks();
         default:
             return Variant();
     }
+}
+
+void NetwMultiplayer::simulation_set_step_callback(
+    const RID &p_entity,
+    const Callable &p_callback
+) {
+    const Ref<NetwSimulationHandle> handle = simulation_handle(p_entity);
+    if (handle.is_valid()) {
+        handle->set_step(p_callback);
+    }
+}
+
+NetwSimulationHandle::Mode NetwMultiplayer::simulation_get_mode(
+    const RID &p_entity
+) {
+    const sim::Row *row = sim_rows.row_of(p_entity);
+    return row != nullptr ? NetwSimulationHandle::Mode(int(row->mode))
+                          : NetwSimulationHandle::MODE_NONE;
 }
 
 Variant NetwMultiplayer::predict_sensor_sample(
@@ -1712,7 +1751,6 @@ void NetwMultiplayer::predict_notify_contact(const RID &p_entity) {
     }
     prediction_engine.notify_contact(
         slot,
-        handle->get_island(),
         handle->get_witness_contacts().is_valid(),
         handle->get_collision_cooldown_ticks()
     );

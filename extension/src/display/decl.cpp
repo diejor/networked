@@ -32,16 +32,12 @@ Dirt Decl::set_param(int param, const Variant &value) {
             display_role = ordinal;
             return DIRT_ROLE;
         }
-        case PARAM_PREDICTED_MODE: {
+        case PARAM_LIVE_MODE: {
             const int ordinal = int(value);
-            if (!ordinal_names_one(
-                    ordinal,
-                    PREDICTED_MODE_MAX,
-                    "predicted mode"
-                )) {
+            if (!ordinal_names_one(ordinal, LIVE_MODE_MAX, "live mode")) {
                 return DIRT_NONE;
             }
-            predicted_mode = ordinal;
+            live_mode = ordinal;
             return DIRT_ROLE;
         }
         case PARAM_TIMELINE_MODE: {
@@ -69,8 +65,8 @@ Dirt Decl::set_param(int param, const Variant &value) {
             visual_root = value.operator NodePath();
             return DIRT_RUNTIME;
         }
-        case PARAM_PREDICTED_SMOOTH_TIME:
-            predicted_smooth_time = double(value);
+        case PARAM_LIVE_SMOOTH_TIME:
+            live_smooth_time = double(value);
             return DIRT_RUNTIME;
         case PARAM_CHASE_GLIDE_TIME:
             chase_glide_time = double(value);
@@ -114,10 +110,10 @@ Variant Decl::get_param(int param) const {
     switch (param) {
         case PARAM_ROLE:
             return display_role;
-        case PARAM_PREDICTED_MODE:
-            return predicted_mode;
-        case PARAM_PREDICTED_SMOOTH_TIME:
-            return predicted_smooth_time;
+        case PARAM_LIVE_MODE:
+            return live_mode;
+        case PARAM_LIVE_SMOOTH_TIME:
+            return live_smooth_time;
         case PARAM_CHASE_GLIDE_TIME:
             return chase_glide_time;
         case PARAM_TIMELINE_MODE:
@@ -170,8 +166,7 @@ bool pump_arms_offsets(int previous, int next) {
 int Decl::pump_for(int role) const {
     switch (role) {
         case ROLE_PREDICTED:
-            return predicted_mode == PREDICTED_BRACKETED ? PUMP_BRACKETED
-                                                         : PUMP_CHASE;
+            return live_mode == LIVE_BRACKETED ? PUMP_BRACKETED : PUMP_CHASE;
         case ROLE_AUTHORITY:
             return PUMP_BRACKETED;
         case ROLE_REMOTE:

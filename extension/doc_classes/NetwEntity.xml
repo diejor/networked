@@ -47,7 +47,14 @@
 		[/codeblock]
 		A node name is never an identity. A scene requires each spawned [Node] to own its record, which [method ensure] provides before the node joins the scene's subtree.
 		[b]The facets it returns[/b]
-		[member scene], [member interest], [member prediction], and [member interpolation] are created once per entity. Repeated reads return the same object. They are [Variant] values because their types are implemented in scripts.
+		[member scene], [member interest], [member simulation], [member prediction], and [member interpolation] are created once per entity. Repeated reads return the same object.
+		[member simulation] says where and how the entity's body runs on each peer, [member prediction] how a controller runs it ahead, and [member interpolation] how it is drawn.
+		[codeblock]
+		func _init() -&gt; void:
+		    var entity := Netw.configure_entity(self)
+		    entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+		    entity.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -329,7 +336,7 @@
 			The entity's stored row. Reaching it compiles the [NetwPersistenceConfig] this entity declared together with every [method NetwPropertyConfig.persisted] declaration under it, and the row is read and written on the live scene.
 		</member>
 		<member name="prediction" type="NetwPredictionHandle" setter="" getter="get_prediction">
-			The entity-level prediction handle. It holds the prediction and reconciliation config the prediction block a scene declares on its [MultiplayerSynchronizer] supplies, or a caller sets in code, plus the live counters [method NetwMultiplayer.lagcomp_metrics] reads. The stepping kernel lives in [NetwMultiplayer]. Never [code]null[/code], and it reports itself unregistered until an engine wires.
+			The entity-level prediction handle. It holds the prediction and reconciliation config the prediction block a scene declares on its [MultiplayerSynchronizer] supplies, or a caller sets in code, plus the live counters [method NetwMultiplayer.lagcomp_metrics] reads. Never [code]null[/code], and it reports itself unregistered until an engine wires. The step and the schedule it drives are on [member simulation].
 		</member>
 		<member name="rid" type="RID" setter="" getter="get_rid" default="RID(98784247808)">
 			The handle naming this entity, valid from construction until this record is freed.
@@ -360,6 +367,9 @@
 			The non-unique stem naming this scene's archetype, empty when [member declares_scene] is [code]false[/code].
 			Identity is the [member rid], never this string. Two live instances of one arena share a stem and own separate admission boundaries, so [method NetwMultiplayer.scene_find] returns "an instance of this stem" rather than "the arena". The stem is declared once per script through [method Netw.configure_multiplayer_scene] and read back through the script whenever no instance wrote its own, so it is correct on an orphan, on a spawned instance and on a client that decoded it off the SPAWN packet alike.
 		</member>
+		<member name="simulation" type="NetwSimulationHandle" setter="" getter="get_simulation">
+			Where and how this entity's body runs on each peer, and which other entities it runs here. Never [code]null[/code].
+		</member>
 		<member name="stage" type="int" setter="" getter="get_stage" enum="NetwEntity.Stage">
 			The entity's current lifecycle position, as a [enum Stage]. Read-only, and moved only along an edge the stage table admits, so a rejected move leaves it where it was.
 		</member>
@@ -379,7 +389,7 @@
 			<param index="0" name="previous_peer" type="int" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Emitted when [member controller] changes.
+				Emitted once when [member controller] changes. On a transfer through [method grant_control], [method revoke_control] or a received control frame, it fires after the node authority has moved.
 			</description>
 		</signal>
 		<signal name="control_requested">

@@ -22,8 +22,10 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/call_args.hpp"
 #include "netw/display/decl.hpp"
+#include "netw/entity/control.hpp"
 #include "netw/property_set_builder.hpp"
 #include "netw/script/model.hpp"
+#include "netw/session/frames.hpp"
 #include "netw/wire/registry.hpp"
 #include "netw/wire/stream.hpp"
 #include "support/declared_nodes.h"
@@ -611,6 +613,7 @@ TEST_CASE(
 
     at_host->set_position(Vector2(12.0, 34.0));
     cw.settle(8);
+    cw.one->display_pump(0.0);
 
     NETW_CHECK_CLOSE(double(at_one->get_position().x), 12.0, 0.001);
     NETW_CHECK_CLOSE(double(at_one->get_position().y), 34.0, 0.001);
@@ -746,6 +749,95 @@ TEST_CASE(
         int(Object::cast_to<Node>(forged.sink->get(StringName("last_node")))
             == nine_views),
         1
+    );
+}
+
+Error deliver_control_apply(
+    NetwMultiplayer *p_at,
+    int64_t p_route,
+    int64_t p_controller,
+    int64_t p_sender
+) {
+    netw::session::ControlApply applied;
+    applied.controller = uint64_t(p_controller);
+    return p_at->receive_carrier(
+        NetwMultiplayer::frame_pack(
+            p_route,
+            0,
+            netw::wire::builtin_channel("CONTROL_APPLY"),
+            netw::session::frame_write(applied),
+            String()
+        ),
+        p_sender,
+        true,
+        -1,
+        -1
+    );
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] CW8 a control frame forged by member 9 "
+    "moves nothing at coordinator 7 or at member 1, and the same frame from "
+    "coordinator 7 moves member 1's copy"
+) {
+    ComposedWorld cw;
+    const RID seated = cw.spawn_for("Contested", TRANSPORT_SERVER);
+    const int64_t route = cw.host->entity_get_route(seated);
+    REQUIRE(route > 0);
+    Node *at_host = cw.host->entity_get_node(seated);
+    Node *at_one = route_node_at(cw.one, route);
+    REQUIRE(at_host != nullptr);
+    REQUIRE(at_one != nullptr);
+    const int64_t held_controller = NetwEntity::of(at_host)->get_controller();
+    const int64_t held_authority = at_host->get_multiplayer_authority();
+    NETW_REQUIRE_EQ(
+        NetwEntity::of(at_one)->get_controller(),
+        held_controller
+    );
+
+    deliver_control_apply(cw.host, route, MEMBER, MEMBER);
+    deliver_control_apply(cw.one, route, MEMBER, MEMBER);
+
+    NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), held_controller);
+    NETW_CHECK_EQ(
+        int64_t(at_host->get_multiplayer_authority()),
+        held_authority
+    );
+    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), held_controller);
+
+    deliver_control_apply(cw.one, route, MEMBER, COORDINATOR);
+
+    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(int64_t(at_one->get_multiplayer_authority()), int64_t(MEMBER));
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] CW9 a control request from member 9 "
+    "reaches coordinator 7, which grants it to every peer"
+) {
+    ComposedWorld cw;
+    const RID seated = cw.spawn_for("Requested", TRANSPORT_SERVER);
+    const int64_t route = cw.host->entity_get_route(seated);
+    REQUIRE(route > 0);
+    Node *at_host = cw.host->entity_get_node(seated);
+    Node *at_one = route_node_at(cw.one, route);
+    Node *at_nine = route_node_at(cw.nine, route);
+    REQUIRE(at_host != nullptr);
+    REQUIRE(at_one != nullptr);
+    REQUIRE(at_nine != nullptr);
+    NetwEntity::of(at_host)->set_transfer(
+        int64_t(netw::entity::Control::Transfer::REQUESTABLE)
+    );
+
+    NetwEntity::of(at_nine)->request_control();
+    cw.settle(12);
+
+    NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(NetwEntity::of(at_nine)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(
+        int64_t(at_nine->get_multiplayer_authority()),
+        int64_t(MEMBER)
     );
 }
 

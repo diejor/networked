@@ -56,4 +56,22 @@ int correction_for_recovery_policy(int p_policy) {
         : int(CorrectionMode::SNAP);
 }
 
+bool replays_without_integration(int p_schedule, bool p_solves) {
+    return p_solves && p_schedule == int(Schedule::FRAME);
+}
+
+int integrable_recovery_policy(int p_policy, int p_schedule, bool p_solves) {
+    return p_policy == int(RecoveryPolicy::REBASE_REPLAY)
+            && replays_without_integration(p_schedule, p_solves)
+        ? int(RecoveryPolicy::REBASE_RECOVER)
+        : p_policy;
+}
+
+int integrable_correction(int p_correction, int p_schedule, bool p_solves) {
+    return p_correction == int(CorrectionMode::REPLAY)
+            && replays_without_integration(p_schedule, p_solves)
+        ? int(CorrectionMode::SNAP)
+        : p_correction;
+}
+
 } // namespace netw::predict

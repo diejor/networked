@@ -25,7 +25,8 @@ public:
         PART_PREDICTION = 2,
         PART_DISPLAY = 3,
         PART_PERSISTENCE = 4,
-        PART_MAX = 5,
+        PART_SIMULATION = 5,
+        PART_MAX = 6,
     };
 
 private:

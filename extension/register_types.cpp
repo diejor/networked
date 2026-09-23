@@ -42,7 +42,6 @@
 #include "netw/api/physics_stepper.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/predict_field_recovery.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/persistence_handle.hpp"
 #include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/predict_slot_engine.hpp"
@@ -61,6 +60,7 @@
 #include "netw/schema_model.hpp"
 #include "netw/api/server_info.hpp"
 #include "netw/api/session_config.hpp"
+#include "netw/api/simulation_handle.hpp"
 #include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -188,7 +188,7 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwPredictJudgement);
     GDREGISTER_CLASS(netw::NetwPredictRecovery);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwPredict);
-    GDREGISTER_CLASS(netw::NetwPredictIsland);
+    GDREGISTER_CLASS(netw::NetwSimulationHandle);
     GDREGISTER_CLASS(netw::NetwPredictFieldRecovery);
     GDREGISTER_CLASS(netw::NetwPredictionHandle);
     GDREGISTER_CLASS(netw::NetwPredictCarryContext);
@@ -274,6 +274,10 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     netw::NetwEntityRecord::set_part_factory(
         netw::NetwEntityRecord::PART_PREDICTION,
         callable_mp_static(&netw::build_prediction_handle)
+    );
+    netw::NetwEntityRecord::set_part_factory(
+        netw::NetwEntityRecord::PART_SIMULATION,
+        callable_mp_static(&netw::build_simulation_handle)
     );
     netw::NetwEntityRecord::set_part_factory(
         netw::NetwEntityRecord::PART_SCENE,

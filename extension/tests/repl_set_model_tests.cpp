@@ -825,16 +825,16 @@ TEST_CASE(
         SET_AUDIENCE_PUBLIC
     );
     PackedInt32Array live;
-    live.push_back(7);
+    live.push_back(1);
     live.push_back(8);
 
-    CHECK(model.offer_row(ROUTE, 0, 1, false, 7, live, 1).is_empty());
+    CHECK(model.offer_row(ROUTE, 0, 7, 8, 0, live, 1).is_empty());
     Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_not_author")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_no_recipients")]), 0);
 
     NETW_CHECK_EQ(
-        int64_t(model.offer_row(ROUTE, 0, 1, true, 7, live, 1).size()),
+        int64_t(model.offer_row(ROUTE, 0, 7, 7, 0, live, 1).size()),
         2
     );
     stats = model.stats();
@@ -860,7 +860,7 @@ TEST_CASE(
     );
 
     CHECK(
-        model.offer_row(ROUTE, 0, 1, true, 7, PackedInt32Array(), 1).is_empty()
+        model.offer_row(ROUTE, 0, 1, 1, 7, PackedInt32Array(), 1).is_empty()
     );
     const Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_no_recipients")]), 1);
@@ -875,7 +875,7 @@ TEST_CASE(
     PackedInt32Array live;
     live.push_back(7);
 
-    CHECK(model.offer_row(ROUTE, 0, 1, true, 7, live, 1).is_empty());
+    CHECK(model.offer_row(ROUTE, 0, 1, 1, 7, live, 1).is_empty());
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("skips_not_author")]), 1);
 }
 

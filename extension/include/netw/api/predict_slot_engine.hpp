@@ -61,7 +61,6 @@ class NetwPredictSlotEngine {
     int64_t route() const;
     predict::SlotCursors cursors() const;
 
-    void apply_scene_island_defaults();
     void rewire_on(const Declaration &p_declaration);
     void refresh_simulation_gate(bool p_force_release);
     void publish_topology_roster();
@@ -91,6 +90,7 @@ class NetwPredictSlotEngine {
     int pool_island() const;
     void admit_reconcile_mode();
     void clear_island_promotions();
+    sim::Mode resolved_mode() const;
 
     void predict_author_tick(int64_t p_tick);
     void predict_frame_step(const NetwPredictTiming &p_timing);
@@ -228,7 +228,7 @@ class NetwPredictSlotEngine {
         const godot::Dictionary &p_carried,
         NetwPredict::RecoveryPolicy p_policy,
         NetwPredict::CorrectionMode p_correction,
-        NetwPredict::RestoreMode p_snap_restore,
+        NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_before,
         const godot::Dictionary &p_tier_errors,

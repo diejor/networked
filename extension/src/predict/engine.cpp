@@ -4,7 +4,6 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/predict_field_recovery.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/property_set_binding.hpp"
@@ -1109,7 +1108,10 @@ Dictionary NetwPredictionEngine::predicted_command(
             p_slot
         );
     }
-    const Callable predictor = first_simulation_predictor(p_slot);
+    const NetwPredictionHandle *handle
+        = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
+    const Callable predictor
+        = handle != nullptr ? handle->get_predict_commands() : Callable();
     if (!predictor.is_valid()) {
         return canonical_input(p_slot, command);
     }
@@ -1126,8 +1128,8 @@ Dictionary NetwPredictionEngine::predicted_command(
         set_invalid_command_predictor_reported(p_slot, true);
         NETW_ERROR(
             sys::PREDICTION,
-            "Prediction island command predictor for %s must return a "
-            "Dictionary. COAST was used instead.",
+            "predict_commands for %s must return a Dictionary. COAST was "
+            "used instead.",
             p_entity.is_valid() ? p_entity->get_entity_id() : StringName()
         );
     }
@@ -1760,40 +1762,13 @@ Dictionary NetwPredictionEngine::field_recovery(int64_t p_slot) {
     return out;
 }
 
-bool NetwPredictionEngine::note_simulated_by(
-    int64_t p_slot,
-    int64_t p_subject,
-    const Callable &p_predictor
-) {
-    predict::Slot *row = mutable_row_of(p_slot);
-    return row != nullptr && row->simulated_by.note(p_subject, p_predictor);
-}
-
-bool NetwPredictionEngine::clear_simulated_by(
-    int64_t p_slot,
-    int64_t p_subject
-) {
-    predict::Slot *row = mutable_row_of(p_slot);
-    return row != nullptr && row->simulated_by.erase(p_subject);
-}
-
-void NetwPredictionEngine::clear_simulation_subjects(int64_t p_slot) {
-    predict::Slot *row = mutable_row_of(p_slot);
-    if (row != nullptr) {
-        row->simulated_by.clear();
-    }
-}
-
 int NetwPredictionEngine::simulation_subject_count(int64_t p_slot) const {
-    const predict::Slot *row = row_of(p_slot);
-    return row == nullptr ? 0 : row->simulated_by.count();
-}
-
-Callable NetwPredictionEngine::first_simulation_predictor(
-    int64_t p_slot
-) const {
-    const predict::Slot *row = row_of(p_slot);
-    return row == nullptr ? Callable() : row->simulated_by.first_valid();
+    NetwMultiplayer *host = core();
+    const Ref<NetwEntity> seated = owner_entity(p_slot);
+    if (host == nullptr || seated.is_null()) {
+        return 0;
+    }
+    return int(host->sim_selection_count(seated->get_rid_handle()));
 }
 
 void NetwPredictionEngine::note_breach_source(
@@ -2357,12 +2332,18 @@ bool NetwPredictionEngine::reconfigure_from(
     if (row == nullptr || p_handle.is_null()) {
         return false;
     }
-    const Ref<NetwPredictIsland> island = p_handle->get_island();
-    const bool declared = island.is_valid() && island->get_declared();
+    NetwMultiplayer *host = core();
+    const Ref<NetwEntity> seated = owner_entity(p_slot);
+    const RID entity = seated.is_valid() ? seated->get_rid_handle() : RID();
+    const sim::Row *standing
+        = host != nullptr ? host->sim_row_of(entity) : nullptr;
+    const bool declared = standing != nullptr && standing->choice.declared();
+    const bool selected = standing != nullptr
+        && standing->selected_by.count() > 0 && !sim::leads(standing->mode);
     int seat = ISLAND_NONE;
-    if (p_handle->get_reconcile_mode() == int(NetwPredict::RECONCILE_JOINT)) {
+    if (reconcile_of(p_slot) == int(NetwPredict::RECONCILE_JOINT)) {
         seat = ISLAND_JOINT;
-    } else if (declared || simulation_subject_count(p_slot) > 0) {
+    } else if (declared || selected) {
         seat = ISLAND_DECLARED;
     }
     return configure(
@@ -2375,7 +2356,12 @@ bool NetwPredictionEngine::reconfigure_from(
         seat,
         p_handle->get_witness_contacts().is_valid(),
         declared,
-        island.is_valid() && island->get_approximate(),
+        declared
+            && !sim::claims_exact(
+                standing->choice,
+                p_handle->get_schedule()
+                    == NetwSimulationHandle::SCHEDULE_STEPPED
+            ),
         p_handle->get_divergence_epsilon(),
         p_handle->get_teleport_threshold(),
         p_handle->get_collision_cooldown_ticks()
@@ -3158,47 +3144,75 @@ bool NetwPredictionEngine::record_evidence(
     );
 }
 
-int NetwPredictionEngine::resolve_axes(
+sim::Facts NetwPredictionEngine::resolution_facts(
     int64_t p_slot,
     const Ref<NetwPredictionHandle> &p_handle
+) const {
+    sim::Facts facts;
+    const predict::Slot *row = row_of(p_slot);
+    if (row == nullptr || p_handle.is_null()) {
+        return facts;
+    }
+    facts.declared = true;
+    facts.predicted = true;
+    facts.input_rows = !row->axes.inputless;
+    facts.session_authority_here = row->axes.authority;
+    facts.controller_here = row->axes.controlled_locally;
+    facts.fallback_latched = row->latches.fallback_latched;
+    facts.delay_closed = p_handle->get_recovery_policy()
+        == NetwPredict::RECOVERY_POLICY_DELAY_CLOSED;
+    facts.selection_count = uint32_t(simulation_subject_count(p_slot));
+    return facts;
+}
+
+int NetwPredictionEngine::apply_mode(
+    int64_t p_slot,
+    const Ref<NetwPredictionHandle> &p_handle,
+    sim::Mode p_mode
 ) {
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr || p_handle.is_null()) {
         return int(NetwPredict::ROLE_REMOTE);
     }
-    const bool is_server = row->axes.authority;
-    const bool delay_closed = row->latches.fallback_latched
-        || p_handle->get_recovery_policy()
-            == NetwPredict::RECOVERY_POLICY_DELAY_CLOSED;
-    if (row->axes.inputless) {
-        const bool dragged = simulation_subject_count(p_slot) > 0;
-        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_NONE);
-        p_handle->set_sim_mode(
-            is_server ? NetwPredict::SIM_MODE_AUTHORITATIVE
-                : dragged && !delay_closed
-                ? NetwPredict::SIM_MODE_SPECULATIVE
-                : NetwPredict::SIM_MODE_DISPLAY
-        );
-    } else if (row->axes.controlled_locally) {
-        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_LOCAL);
-        p_handle->set_sim_mode(
-            is_server          ? NetwPredict::SIM_MODE_AUTHORITATIVE
-                : delay_closed ? NetwPredict::SIM_MODE_DISPLAY
-                               : NetwPredict::SIM_MODE_SPECULATIVE
-        );
-    } else if (is_server) {
-        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_RECEIVED);
-        p_handle->set_sim_mode(NetwPredict::SIM_MODE_AUTHORITATIVE);
-    } else if (simulation_subject_count(p_slot) > 0) {
-        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_PREDICTED);
-        p_handle->set_sim_mode(NetwPredict::SIM_MODE_SPECULATIVE);
-    } else {
-        p_handle->set_input_source(NetwPredict::INPUT_SOURCE_NONE);
-        p_handle->set_sim_mode(NetwPredict::SIM_MODE_DISPLAY);
+    const bool local = row->axes.controlled_locally;
+    NetwPredict::InputSource source = NetwPredict::INPUT_SOURCE_NONE;
+    NetwPredict::SimMode simulation = NetwPredict::SIM_MODE_DISPLAY;
+    switch (p_mode) {
+        case sim::Mode::AUTHORITY: {
+            source = local ? NetwPredict::INPUT_SOURCE_LOCAL
+                           : NetwPredict::INPUT_SOURCE_RECEIVED;
+            simulation = NetwPredict::SIM_MODE_AUTHORITATIVE;
+        } break;
+        case sim::Mode::PREDICT: {
+            source = NetwPredict::INPUT_SOURCE_LOCAL;
+            simulation = NetwPredict::SIM_MODE_SPECULATIVE;
+        } break;
+        case sim::Mode::ACTIVE: {
+            source = NetwPredict::INPUT_SOURCE_PREDICTED;
+            simulation = NetwPredict::SIM_MODE_SPECULATIVE;
+        } break;
+        case sim::Mode::NONE:
+        case sim::Mode::PROXY: {
+            source = local ? NetwPredict::INPUT_SOURCE_LOCAL
+                           : NetwPredict::INPUT_SOURCE_NONE;
+        } break;
     }
-    return NetwPredictionHandle::role_for_axes(
-        p_handle->get_input_source(),
-        p_handle->get_sim_mode()
+    if (row->axes.inputless) {
+        source = NetwPredict::INPUT_SOURCE_NONE;
+    }
+    p_handle->set_input_source(source);
+    p_handle->set_sim_mode(simulation);
+    return role_for_axes(source, simulation);
+}
+
+int NetwPredictionEngine::resolve_axes(
+    int64_t p_slot,
+    const Ref<NetwPredictionHandle> &p_handle
+) {
+    return apply_mode(
+        p_slot,
+        p_handle,
+        sim::resolve(resolution_facts(p_slot, p_handle))
     );
 }
 
@@ -3206,12 +3220,44 @@ int NetwPredictionEngine::resolve_correction(
     int64_t p_slot,
     int p_declared
 ) const {
-    if (p_declared != int(CorrectionMode::AUTO)) {
+    const predict::Slot *row = row_of(p_slot);
+    const bool solves = row != nullptr && row->owner_solves;
+    if (p_declared == int(CorrectionMode::AUTO)) {
+        return solves ? int(CorrectionMode::SNAP) : int(CorrectionMode::REPLAY);
+    }
+    const NetwPredictionHandle *handle
+        = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
+    if (handle == nullptr) {
         return p_declared;
     }
-    const predict::Slot *row = row_of(p_slot);
-    return row != nullptr && row->owner_solves ? int(CorrectionMode::SNAP)
-                                               : int(CorrectionMode::REPLAY);
+    return predict::integrable_correction(
+        p_declared,
+        handle->get_schedule(),
+        handle->body_solves()
+    );
+}
+
+int NetwPredictionEngine::settle_correction(int64_t p_slot, int p_declared) {
+    const int correction = resolve_correction(p_slot, p_declared);
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr || correction == p_declared
+        || p_declared != int(CorrectionMode::REPLAY)
+        || row->latches.integration_refusal_reported) {
+        return correction;
+    }
+    row->latches.integration_refusal_reported = true;
+    const Ref<NetwEntity> seated = owner_entity(p_slot);
+    const String named
+        = seated.is_valid() ? String(seated->get_entity_id()) : String();
+    NETW_WARN(
+        sys::PREDICTION,
+        "NetwPredict.RECOVERY_POLICY_REBASE_REPLAY: %s is a physics body on "
+        "SCHEDULE_FRAME. A replay would run its step again with no physics "
+        "step between, so it recovers with RECOVERY_POLICY_REBASE_RECOVER. "
+        "Declare SCHEDULE_STEPPED with an installed stepper to replay it.",
+        named.is_empty() ? "an entity" : named.utf8().get_data()
+    );
+    return correction;
 }
 
 void NetwPredictionEngine::record_episode_decision(
@@ -3722,46 +3768,6 @@ int NetwPredictionEngine::classify_collider(
     return int(NetwPredict::CONTACT_CLASS_UNPREDICTED_DYNAMIC);
 }
 
-Dictionary NetwPredictionEngine::open_simulated_state(
-    int64_t p_slot,
-    const Dictionary &p_payload,
-    int64_t p_recv_tick,
-    int64_t p_current_tick
-) {
-    Dictionary opened;
-    const predict::Slot *row = row_of(p_slot);
-    if (row == nullptr) {
-        opened[StringName("target")] = p_payload;
-        opened[StringName("divergence")] = 0.0;
-        return opened;
-    }
-    const int64_t age = std::clamp(
-        std::max(int64_t(0), p_current_tick - p_recv_tick),
-        int64_t(0),
-        int64_t(row->config.max_restore_ticks)
-    );
-    Dictionary target = p_payload;
-    if (row->config.restore == int(RestoreMode::EXTRAPOLATED)) {
-        target = project_state(
-            p_slot,
-            p_payload,
-            double(age) * row->cursor.tick_delta
-        );
-    }
-    Dictionary by_field;
-    const double divergence = NetwPredictionHandle::divergence_by_field(
-        canonicalize_state(p_slot, capture_state(p_slot)),
-        target,
-        by_field,
-        angle_fields_of(p_slot)
-    );
-    note_divergence(p_slot, by_field);
-    note_reconciling(p_slot, true);
-    opened[StringName("target")] = target;
-    opened[StringName("divergence")] = divergence;
-    return opened;
-}
-
 Array NetwPredictionEngine::input_keys(int64_t p_slot) const {
     Array out;
     const predict::Slot *row = row_of(p_slot);
@@ -4041,13 +4047,10 @@ void NetwPredictionEngine::admit_relayed_payload(
     int64_t p_slot,
     const PackedByteArray &p_payload
 ) {
-    NetwPredictionHandle *handle
-        = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
     const PackedInt64Array counts = receive_relayed_command_frame(
         p_slot,
         p_payload,
-        handle != nullptr
-            && handle->get_reconcile_mode() == NetwPredict::RECONCILE_JOINT
+        reconcile_of(p_slot) == int(NetwPredict::RECONCILE_JOINT)
     );
     if (counts.is_empty()) {
         add_held_fact(p_slot, NetwPredictStats::FACT_FRAMES_DROPPED_INVALID, 1);
@@ -4383,12 +4386,12 @@ void NetwPredictionEngine::refresh_simulation_gate(
     if (host == nullptr || seated.is_null()) {
         return;
     }
+    const RID entity = seated->get_rid_handle();
     const bool solver = handle != nullptr
         && handle->get_archetype() == int(NetwPredict::ARCHETYPE_SOLVER_BODY);
-    host->simulation_gate_set(
-        seated->get_rid_handle(),
-        !p_force_release && solver
-    );
+    const sim::Row *row = host->sim_row_of(entity);
+    const bool leads = row != nullptr && sim::leads(row->mode);
+    host->simulation_gate_set(entity, !p_force_release && solver && leads);
 }
 
 void NetwPredictionEngine::host_local_step(
@@ -4431,10 +4434,8 @@ int64_t NetwPredictionEngine::sibling_slot(const Ref<NetwEntity> &p_member) {
 int NetwPredictionEngine::admitted_reconcile_mode(int64_t p_slot) {
     NetwPredictionHandle *handle
         = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
-    const Ref<NetwPredictIsland> island
-        = handle != nullptr ? handle->get_island() : Ref<NetwPredictIsland>();
-    const int requested = island.is_valid()
-        ? island->get_reconcile()
+    const int requested = handle != nullptr
+        ? int(handle->get_reconcile_mode())
         : int(NetwPredict::RECONCILE_INDEPENDENT);
     if (requested != int(NetwPredict::RECONCILE_JOINT)) {
         return requested;
@@ -4470,8 +4471,8 @@ int NetwPredictionEngine::admitted_reconcile_mode(int64_t p_slot) {
         set_joint_refusal_reported(p_slot, true);
         NETW_ERROR(
             sys::PREDICTION,
-            "NetwPredictIsland.reconcile: JOINT admitted for none of this "
-            "island's members (%s), so it runs INDEPENDENT.",
+            "prediction.reconcile_mode: JOINT admitted for none of the "
+            "selected members (%s), so it runs INDEPENDENT.",
             String(", ").join(refusals)
         );
     }
@@ -4494,13 +4495,18 @@ void NetwPredictionEngine::follow_relay_subscription(
 }
 
 void NetwPredictionEngine::admit_reconcile_mode(int64_t p_slot) {
-    const NetwPredict::Reconcile admitted
-        = static_cast<NetwPredict::Reconcile>(admitted_reconcile_mode(p_slot));
-    NetwPredictionHandle *handle
-        = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
-    if (handle != nullptr) {
-        handle->set_reconcile_mode(admitted);
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
     }
+    row->reconcile_own = admitted_reconcile_mode(p_slot);
+    const bool joined = row->reconcile_own == int(NetwPredict::RECONCILE_JOINT);
+    reconfigure_from(
+        p_slot,
+        Ref<NetwPredictionHandle>(
+            Object::cast_to<NetwPredictionHandle>(handle_of(p_slot))
+        )
+    );
     const TypedArray<NetwEntity> members
         = roster_list(p_slot, ROSTER_SIMULATED);
     for (int at = 0; at < members.size(); ++at) {
@@ -4509,17 +4515,60 @@ void NetwPredictionEngine::admit_reconcile_mode(int64_t p_slot) {
             continue;
         }
         const int64_t seat = sibling_slot(member);
-        if (seat < 0) {
+        predict::Slot *held = mutable_row_of(seat);
+        if (held == nullptr || held->reconcile_joined == joined) {
             continue;
         }
-        NetwPredictionHandle *held
-            = Object::cast_to<NetwPredictionHandle>(handle_of(seat));
-        if (held == nullptr || held->get_reconcile_mode() == admitted) {
-            continue;
+        const int before = reconcile_of(seat);
+        held->reconcile_joined = joined;
+        const int after = reconcile_of(seat);
+        if (after != before) {
+            follow_relay_subscription(seat, after);
         }
-        held->set_reconcile_mode(admitted);
-        follow_relay_subscription(seat, admitted);
+        reconfigure_from(
+            seat,
+            Ref<NetwPredictionHandle>(
+                Object::cast_to<NetwPredictionHandle>(handle_of(seat))
+            )
+        );
     }
+}
+
+int NetwPredictionEngine::reconcile_of(int64_t p_slot) const {
+    const predict::Slot *row = row_of(p_slot);
+    if (row == nullptr) {
+        return int(NetwPredict::RECONCILE_INDEPENDENT);
+    }
+    const bool joint = row->reconcile_joined
+        || row->reconcile_own == int(NetwPredict::RECONCILE_JOINT);
+    return joint ? int(NetwPredict::RECONCILE_JOINT)
+                 : int(NetwPredict::RECONCILE_INDEPENDENT);
+}
+
+void NetwPredictionEngine::set_reconcile_own(int64_t p_slot, int p_mode) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row != nullptr) {
+        row->reconcile_own = p_mode;
+    }
+}
+
+void NetwPredictionEngine::leave_joint(int64_t p_slot) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr || !row->reconcile_joined) {
+        return;
+    }
+    const int before = reconcile_of(p_slot);
+    row->reconcile_joined = false;
+    const int after = reconcile_of(p_slot);
+    if (after != before) {
+        follow_relay_subscription(p_slot, after);
+    }
+    reconfigure_from(
+        p_slot,
+        Ref<NetwPredictionHandle>(
+            Object::cast_to<NetwPredictionHandle>(handle_of(p_slot))
+        )
+    );
 }
 
 bool NetwPredictionEngine::slot_has_stepper(int64_t p_slot) const {
@@ -4533,7 +4582,7 @@ bool NetwPredictionEngine::slot_has_stepper(int64_t p_slot) const {
 }
 
 int NetwPredictionEngine::resolved_schedule(int64_t p_slot, int p_declared) {
-    if (p_declared != int(NetwPredict::SCHEDULE_STEPPED)) {
+    if (p_declared != int(NetwSimulationHandle::SCHEDULE_STEPPED)) {
         return p_declared;
     }
     if (slot_has_stepper(p_slot)) {
@@ -4549,7 +4598,8 @@ int NetwPredictionEngine::resolved_schedule(int64_t p_slot, int p_declared) {
             : RID();
         NETW_ERROR(
             sys::PREDICTION,
-            "NetwPredict.SCHEDULE_STEPPED: %s stands in space %d, which has "
+            "NetwSimulationHandle.SCHEDULE_STEPPED: %s stands in space %d, "
+            "which has "
             "no installed stepper, so it runs SCHEDULE_FRAME. Install one "
             "with NetwMultiplayer.predict_stepper_install, or declare a "
             "schedule a stock engine can drive.",
@@ -4558,7 +4608,7 @@ int NetwPredictionEngine::resolved_schedule(int64_t p_slot, int p_declared) {
             int64_t(space.get_id())
         );
     }
-    return int(NetwPredict::SCHEDULE_FRAME);
+    return int(NetwSimulationHandle::SCHEDULE_FRAME);
 }
 
 bool NetwPredictionEngine::slot_is_steppable(int64_t p_slot) const {
@@ -4569,10 +4619,10 @@ bool NetwPredictionEngine::slot_is_steppable(int64_t p_slot) const {
         || !handle->get_simulate().is_valid()) {
         return false;
     }
-    if (handle->get_schedule() == NetwPredict::SCHEDULE_TICK) {
+    if (handle->get_schedule() == NetwSimulationHandle::SCHEDULE_TICK) {
         return true;
     }
-    return handle->get_schedule() == NetwPredict::SCHEDULE_STEPPED
+    return handle->get_schedule() == NetwSimulationHandle::SCHEDULE_STEPPED
         && slot_has_stepper(p_slot);
 }
 
@@ -4867,7 +4917,7 @@ void NetwPredictionEngine::note_joint_basis(
         return;
     }
     set_joint_basis(p_slot, MAX(joint_basis_of(p_slot), p_basis));
-    if (handle->get_schedule() == NetwPredict::SCHEDULE_TICK) {
+    if (handle->get_schedule() == NetwSimulationHandle::SCHEDULE_TICK) {
         const Ref<NetwTimeline> history = timeline_of(p_slot);
         if (history.is_valid()) {
             history->record_state(p_basis + 1, p_payload);
@@ -4875,8 +4925,35 @@ void NetwPredictionEngine::note_joint_basis(
         mark_carry_dirty(p_slot, p_basis + 1);
     }
     if (p_basis >= 0 && island_of(p_slot) != ISLAND_NONE) {
+        joint_admit_state(p_slot, p_basis, p_payload);
         joint_note_basis(p_slot, p_basis, p_source);
     }
+}
+
+void NetwPredictionEngine::joint_admit_state(
+    int64_t p_slot,
+    int64_t p_transition,
+    const Dictionary &p_payload
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    const int count = row->wiring.count();
+    const predict::StateRow *local = row->joint.state_at(p_transition);
+    predict::StateRow arrived;
+    if (local != nullptr && int(local->values.size()) == count) {
+        arrived = *local;
+    } else {
+        arrived.resize(count);
+    }
+    for (int at = 0; at < count; ++at) {
+        const StringName field = field_name(p_slot, at);
+        if (p_payload.has(field)) {
+            arrived.set(at, p_payload[field]);
+        }
+    }
+    row->joint.record_state(p_transition, arrived);
 }
 
 void NetwPredictionEngine::admit_simulated_state(
@@ -4885,31 +4962,59 @@ void NetwPredictionEngine::admit_simulated_state(
 ) {
     NetwPredictionHandle *handle
         = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
-    if (handle == nullptr) {
+    NetwMultiplayer *host = core();
+    const Ref<NetwEntity> seated = owner_entity(p_slot);
+    const Ref<NetwPropertySetBinding> binding = state_binding_of(p_slot);
+    const predict::Slot *row = row_of(p_slot);
+    if (handle == nullptr || host == nullptr || seated.is_null()
+        || binding.is_null() || row == nullptr) {
         return;
     }
-    if (!stream_reconstructed_of(p_slot)) {
-        set_stream_reconstructed(
-            p_slot,
-            bool(p_header.get(StringName("whole"), true))
-        );
-    }
-    if (!stream_reconstructed_of(p_slot)) {
+    const RID entity = seated->get_rid_handle();
+    const bool whole = bool(p_header.get(StringName("whole"), true));
+    if (!host->sim_reconstructs(
+            entity,
+            binding->comp,
+            whole || stream_reconstructed_of(p_slot)
+        )) {
         return;
     }
+    set_stream_reconstructed(p_slot, true);
     const Dictionary payload
         = p_header.get(StringName("payload"), Dictionary());
     if (payload.is_empty()) {
         return;
     }
     const int64_t recv_tick = p_header.get(StringName("tick"), -1);
-    const int64_t now = current_tick();
-    const Dictionary opened = open_simulated_state(
-        p_slot,
-        payload,
-        recv_tick,
-        now >= 0 ? now : recv_tick
+    sim::Sample sample;
+    sample.binding = gd::instance_id(binding.ptr());
+    sample.comp = binding->comp;
+    sample.tick = recv_tick;
+    sample.keys = payload.keys();
+    sample.values = payload.values();
+    int64_t age = -1;
+    const Array values = host->sim_install_target(
+        binding.ptr(),
+        sample,
+        row->config.restore == int(RestoreMode::EXTRAPOLATED)
+            ? sim::Restore::EXTRAPOLATED
+            : sim::Restore::EXACT,
+        int64_t(row->config.max_restore_ticks),
+        age
     );
+    Dictionary target;
+    for (int at = 0; at < sample.keys.size(); ++at) {
+        target[sample.keys[at]] = values[at];
+    }
+    Dictionary by_field;
+    const double divergence = NetwPredictionHandle::divergence_by_field(
+        canonicalize_state(p_slot, capture_state(p_slot)),
+        target,
+        by_field,
+        angle_fields_of(p_slot)
+    );
+    note_divergence(p_slot, by_field);
+    note_reconciling(p_slot, true);
     const Ref<NetwPredictStats> counters = handle->get_stats();
     if (counters.is_valid()) {
         counters->set(
@@ -4917,23 +5022,26 @@ void NetwPredictionEngine::admit_simulated_state(
             int64_t(counters->get(StringName("corrections"))) + 1
         );
     }
-    if (handle->get_reconcile_mode() == NetwPredict::RECONCILE_JOINT) {
+    if (reconcile_of(p_slot) == int(NetwPredict::RECONCILE_JOINT)) {
         note_joint_basis(p_slot, recv_tick - 1, payload, JOINT_FLOOR_STATE);
-    } else {
-        const Ref<NetwEntity> seated = owner_entity(p_slot);
-        if (apply_restore(
-                p_slot,
-                opened.get(StringName("target"), Dictionary()),
-                int(predict::Operator::NONE),
-                -1,
-                p_slot,
-                seated.is_valid() ? seated->get_entity_id() : StringName(),
-                handle->get_ack_age_ticks(),
-                handle->get_divergence_epsilon(),
-                false,
-                false
-            )) {
+    } else if (
+        host->sim_write_install(entity, binding.ptr(), sample.keys, values, age)
+    ) {
+        if (predict::Slot *held = mutable_row_of(p_slot)) {
+            port_sync_transform(held->port.resolve(sys::PREDICTION));
         }
+        record_restore(
+            p_slot,
+            target,
+            int(predict::Operator::NONE),
+            -1,
+            p_slot,
+            seated->get_entity_id(),
+            handle->get_ack_age_ticks(),
+            handle->get_divergence_epsilon(),
+            false,
+            false
+        );
     }
     note_reconciling(p_slot, false);
     note_verdict_reason(p_slot, NetwPredict::VERDICT_REASON_NONE);
@@ -4941,7 +5049,7 @@ void NetwPredictionEngine::admit_simulated_state(
         StringName("state_evaluated"),
         recv_tick,
         int64_t(-1),
-        double(opened.get(StringName("divergence"), 0.0)),
+        divergence,
         true
     );
 }
@@ -4958,7 +5066,7 @@ int NetwPredictionEngine::replay_reseed_horizon(
     if (handle == nullptr) {
         return 0;
     }
-    if (handle->get_schedule() == NetwPredict::SCHEDULE_FRAME) {
+    if (handle->get_schedule() == NetwSimulationHandle::SCHEDULE_FRAME) {
         return replay_authored_entries(
             p_slot,
             p_ack,
@@ -5052,7 +5160,7 @@ void NetwPredictionEngine::finish_reseed_alignment(
     adopt_alignment(
         p_slot,
         p_ack,
-        handle->get_schedule() == NetwPredict::SCHEDULE_FRAME
+        handle->get_schedule() == NetwSimulationHandle::SCHEDULE_FRAME
             ? last_driven_entry_index_of(p_slot)
             : latest_input_tick_of(p_slot)
     );
@@ -5498,8 +5606,9 @@ void NetwPredictionEngine::close_state_recovery(
         return;
     }
     const int schedule = handle->get_schedule();
-    const bool frame_scheduled = schedule == NetwPredict::SCHEDULE_FRAME;
-    if (schedule == NetwPredict::SCHEDULE_TICK) {
+    const bool frame_scheduled
+        = schedule == NetwSimulationHandle::SCHEDULE_FRAME;
+    if (schedule == NetwSimulationHandle::SCHEDULE_TICK) {
         const Ref<NetwTimeline> history = timeline_of(p_slot);
         if (history.is_valid()) {
             history->record_state(p_ack + 1, p_payload);
@@ -7254,102 +7363,6 @@ NETW_PREDICT_QUARANTINE_READ(reseed_ignore_through, ignore_through, int64_t, -1)
 
 #undef NETW_PREDICT_QUARANTINE_READ
 
-namespace {
-
-Vector3 entity_position(const Ref<NetwEntity> &p_entity) {
-    Node *root = p_entity.is_valid() ? p_entity->get_owner() : nullptr;
-    Node3D *spatial = Object::cast_to<Node3D>(root);
-    if (spatial != nullptr) {
-        return spatial->get_global_position();
-    }
-    Node2D *flat = Object::cast_to<Node2D>(root);
-    if (flat != nullptr) {
-        const Vector2 point = flat->get_global_position();
-        return Vector3(point.x, point.y, 0.0);
-    }
-    return Vector3();
-}
-
-bool entity_id_less(const Ref<NetwEntity> &p_a, const Ref<NetwEntity> &p_b) {
-    const String a_id = participant_key(p_a);
-    const String b_id = participant_key(p_b);
-    if (a_id == b_id) {
-        return p_a->get_instance_id() < p_b->get_instance_id();
-    }
-    return a_id < b_id;
-}
-
-bool valid_island_member(
-    const Ref<NetwEntity> &p_owner,
-    const Ref<NetwEntity> &p_member
-) {
-    if (p_member.is_null() || p_member == p_owner
-        || p_member->get_owner() == nullptr || p_member->get_declares_scene()) {
-        return false;
-    }
-    const Ref<NetwSceneHandle> mine = p_owner->get_scene();
-    const Ref<NetwSceneHandle> theirs = p_member->get_scene();
-    if (mine.is_null() || theirs.is_null()) {
-        return false;
-    }
-    return p_member->get_multiplayer() == p_owner->get_multiplayer()
-        && theirs->get_entity() == mine->get_entity();
-}
-
-bool can_automatically_simulate(const Ref<NetwEntity> &p_member) {
-    const Ref<NetwPredictionHandle> handle = p_member->get_prediction();
-    if (handle.is_null() || !handle->is_registered()) {
-        return false;
-    }
-    return handle->get_sim_mode() == NetwPredict::SIM_MODE_DISPLAY
-        || handle->simulated_by_count() > 0;
-}
-
-} // namespace
-
-TypedArray<NetwEntity> NetwPredictionEngine::island_roster(
-    int64_t p_slot,
-    Object *p_session,
-    const Ref<NetwPredictIsland> &p_island
-) {
-    TypedArray<NetwEntity> out;
-    const Ref<NetwEntity> owner = owner_entity(p_slot);
-    if (owner.is_null() || p_island.is_null()) {
-        return out;
-    }
-    LocalVector<Ref<NetwEntity>> found;
-    HashSet<uint64_t> seen;
-    const TypedArray<NetwEntity> declared = p_island->get_participants();
-    for (int at = 0; at < declared.size(); ++at) {
-        const Ref<NetwEntity> member = declared[at];
-        if (valid_island_member(owner, member)
-            && !seen.has(member->get_instance_id())) {
-            seen.insert(member->get_instance_id());
-            found.push_back(member);
-        }
-    }
-    NetwMultiplayer *session = Object::cast_to<NetwMultiplayer>(p_session);
-    const PackedStringArray layers = p_island->get_producers();
-    for (int at = 0; session != nullptr && at < layers.size(); ++at) {
-        const TypedArray<Object> shared
-            = session->interest_shared_entities(owner, StringName(layers[at]));
-        for (int seat = 0; seat < shared.size(); ++seat) {
-            const Ref<NetwEntity> member
-                = Ref<NetwEntity>(Object::cast_to<NetwEntity>(shared[seat]));
-            if (valid_island_member(owner, member)
-                && !seen.has(member->get_instance_id())) {
-                seen.insert(member->get_instance_id());
-                found.push_back(member);
-            }
-        }
-    }
-    std::sort(found.ptr(), found.ptr() + found.size(), entity_id_less);
-    for (uint32_t at = 0; at < found.size(); ++at) {
-        out.push_back(found[at]);
-    }
-    return out;
-}
-
 Ref<NetwEntity> NetwPredictionEngine::owner_entity(int64_t p_slot) const {
     const HashMap<int64_t, Ref<RefCounted>>::ConstIterator seated
         = entity_by_slot.find(p_slot);
@@ -7358,30 +7371,20 @@ Ref<NetwEntity> NetwPredictionEngine::owner_entity(int64_t p_slot) const {
         : Ref<NetwEntity>();
 }
 
-TypedArray<NetwEntity> NetwPredictionEngine::live_participants(
-    int64_t p_slot,
-    const Ref<NetwPredictIsland> &p_island
-) {
-    TypedArray<NetwEntity> seated = roster_list(p_slot, ROSTER_ISLAND_MEMBERS);
-    if (!seated.is_empty() || p_island.is_null()) {
+TypedArray<NetwEntity> NetwPredictionEngine::live_participants(int64_t p_slot) {
+    const TypedArray<NetwEntity> seated
+        = roster_list(p_slot, ROSTER_ISLAND_MEMBERS);
+    NetwMultiplayer *host = core();
+    const Ref<NetwEntity> owner = owner_entity(p_slot);
+    if (!seated.is_empty() || host == nullptr || owner.is_null()) {
         return seated;
     }
-    const TypedArray<NetwEntity> declared = p_island->get_participants();
-    for (int at = 0; at < declared.size(); ++at) {
-        const Ref<NetwEntity> participant = declared[at];
-        if (participant.is_valid()) {
-            seated.push_back(participant);
-        }
-    }
-    return seated;
+    return host->sim_named(owner->get_rid_handle());
 }
 
-PackedStringArray NetwPredictionEngine::live_participant_ids(
-    int64_t p_slot,
-    const Ref<NetwPredictIsland> &p_island
-) {
+PackedStringArray NetwPredictionEngine::live_participant_ids(int64_t p_slot) {
     NETW_ZONE_NC("predict live participant ids", colors::PREDICTION);
-    const TypedArray<NetwEntity> seated = live_participants(p_slot, p_island);
+    const TypedArray<NetwEntity> seated = live_participants(p_slot);
     PackedStringArray ids;
     ids.resize(seated.size());
     String *names = ids.ptrw();
@@ -7465,36 +7468,70 @@ void NetwPredictionEngine::publish_island_roster(int64_t p_slot) {
     );
 }
 
-void NetwPredictionEngine::refresh_island_membership(
+void NetwPredictionEngine::refresh_selection(
     int64_t p_slot,
-    const Ref<NetwPredictIsland> &p_island,
-    bool p_apply_promotion,
+    bool p_joint,
     const Callable &p_admit_reconcile
 ) {
-    if (p_island.is_null() || !p_island->get_declared()) {
+    NetwMultiplayer *host = core();
+    const Ref<NetwEntity> owner = owner_entity(p_slot);
+    const RID subject = owner.is_valid() ? owner->get_rid_handle() : RID();
+    if (host == nullptr || !host->sim_chooses(subject)) {
         clear_island_promotions(p_slot);
         roster_clear(p_slot, ROSTER_ISLAND_MEMBERS);
-        publish_topology_roster(p_slot, p_island);
+        publish_topology_roster(p_slot);
         return;
     }
-    NetwMultiplayer *host = core();
-    const TypedArray<NetwEntity> members
-        = island_roster(p_slot, host, p_island);
-    if (p_apply_promotion) {
-        TypedArray<NetwEntity> promoted;
-        if (host != nullptr) {
-            promoted = island_commit_members(
-                p_slot,
-                members,
-                p_island,
-                drive_frontier(p_slot)
-            );
+    const TypedArray<NetwEntity> members = host->sim_candidates(owner);
+    TypedArray<NetwEntity> admitted;
+    for (int at = 0; at < members.size(); ++at) {
+        const Ref<NetwEntity> member = members[at];
+        const int64_t seat = slot_of(member);
+        if (seat < 0 || joint_admits(p_slot, seat)) {
+            admitted.push_back(member);
+            continue;
         }
-        if (apply_island_promotions(p_slot, p_island, promoted)) {
+        NETW_ERROR(
+            sys::PREDICTION,
+            "%s is not re-runnable, so its JOINT subject does not select it.",
+            String(member->get_entity_id()).utf8().get_data()
+        );
+    }
+    const TypedArray<NetwEntity> promoted = host->sim_select(
+        owner,
+        admitted,
+        roster_list(p_slot, ROSTER_REALIZED_CONTACT),
+        drive_frontier(p_slot)
+    );
+    if (p_joint) {
+        const sim::Row *standing = host->sim_row_of(subject);
+        sim::Selection joint;
+        if (standing != nullptr) {
+            joint.owner_order_key = standing->selection.owner_order_key;
+            for (const sim::Selected &member : standing->selection.members) {
+                const int64_t seat = slot_of(
+                    host->entity_get_view(host->sim_entity_of_key(member.key))
+                );
+                if (seat < 0) {
+                    continue;
+                }
+                sim::Selected held = member;
+                held.key = seat;
+                joint.members.push_back(held);
+            }
+        }
+        joint_adopt(p_slot, joint);
+        TypedArray<NetwEntity> joined;
+        for (int at = 0; at < promoted.size(); ++at) {
+            if (slot_of(Ref<NetwEntity>(promoted[at])) >= 0) {
+                joined.push_back(promoted[at]);
+            }
+        }
+        if (apply_island_promotions(p_slot, joined)) {
             publish_island_roster(p_slot);
         }
     } else {
-        clear_island_promotions(p_slot);
+        clear_joint_roster(p_slot);
     }
 
     const bool changed
@@ -7510,7 +7547,7 @@ void NetwPredictionEngine::refresh_island_membership(
     }
     set_island_roster_seeded(p_slot, true);
     roster_assign(p_slot, ROSTER_ISLAND_MEMBERS, members);
-    publish_topology_roster(p_slot, p_island);
+    publish_topology_roster(p_slot);
     if (p_admit_reconcile.is_valid()) {
         p_admit_reconcile.call();
     }
@@ -7520,54 +7557,44 @@ void NetwPredictionEngine::refresh_island_membership(
 }
 
 void NetwPredictionEngine::clear_island_promotions(int64_t p_slot) {
+    clear_joint_roster(p_slot);
+    NetwMultiplayer *host = core();
     const Ref<NetwEntity> owner = owner_entity(p_slot);
+    if (host != nullptr && owner.is_valid()) {
+        host->sim_drop_selections(owner->get_rid_handle());
+    }
+}
+
+void NetwPredictionEngine::clear_joint_roster(int64_t p_slot) {
     const int64_t frontier = drive_frontier(p_slot);
     const TypedArray<NetwEntity> simulated
         = roster_list(p_slot, ROSTER_SIMULATED);
     for (int at = 0; at < simulated.size(); ++at) {
-        const Ref<NetwEntity> member = simulated[at];
-        close_tenure(p_slot, member, frontier);
-        const Ref<NetwPredictionHandle> handle = member->get_prediction();
-        if (handle.is_valid()) {
-            handle->set_simulated_by(owner, false, Callable());
-        }
+        close_tenure(p_slot, simulated[at], frontier);
     }
     roster_clear(p_slot, ROSTER_SIMULATED);
+    if (predict::Slot *row = mutable_row_of(p_slot)) {
+        row->joint_roster.members.clear();
+    }
 }
 
 bool NetwPredictionEngine::apply_island_promotions(
     int64_t p_slot,
-    const Ref<NetwPredictIsland> &p_island,
     const TypedArray<NetwEntity> &p_promoted
 ) {
-    const Ref<NetwEntity> owner = owner_entity(p_slot);
     const int64_t frontier = drive_frontier(p_slot);
     const TypedArray<NetwEntity> standing
         = roster_list(p_slot, ROSTER_SIMULATED);
     for (int at = 0; at < standing.size(); ++at) {
         const Ref<NetwEntity> member = standing[at];
-        if (p_promoted.has(member)) {
-            continue;
-        }
-        close_tenure(p_slot, member, frontier);
-        const Ref<NetwPredictionHandle> handle = member->get_prediction();
-        if (handle.is_valid()) {
-            handle->set_simulated_by(owner, false, Callable());
+        if (!p_promoted.has(member)) {
+            close_tenure(p_slot, member, frontier);
         }
     }
     for (int at = 0; at < p_promoted.size(); ++at) {
         const Ref<NetwEntity> member = p_promoted[at];
         if (!standing.has(member)) {
             open_tenure(p_slot, member, frontier + 1);
-        }
-        const Ref<NetwPredictionHandle> handle = member->get_prediction();
-        if (handle.is_valid()) {
-            handle->set_simulated_by(
-                owner,
-                true,
-                p_island.is_valid() ? p_island->predictor_of(member)
-                                    : Callable()
-            );
         }
     }
     bool changed = p_promoted.size() != standing.size();
@@ -7597,19 +7624,15 @@ int NetwPredictionEngine::release_lingering(
     return held;
 }
 
-void NetwPredictionEngine::publish_topology_roster(
-    int64_t p_slot,
-    const Ref<NetwPredictIsland> &p_island
-) {
-    set_island_participants(p_slot, live_participant_ids(p_slot, p_island));
+void NetwPredictionEngine::publish_topology_roster(int64_t p_slot) {
+    set_island_participants(p_slot, live_participant_ids(p_slot));
 }
 
 bool NetwPredictionEngine::contact_is_equivalent(
     int64_t p_slot,
-    const Ref<NetwPredictIsland> &p_island,
     bool p_has_witness
 ) {
-    const TypedArray<NetwEntity> seated = live_participants(p_slot, p_island);
+    const TypedArray<NetwEntity> seated = live_participants(p_slot);
     if (seated.is_empty()) {
         return false;
     }
@@ -7631,7 +7654,6 @@ bool NetwPredictionEngine::contact_is_equivalent(
 
 void NetwPredictionEngine::notify_contact(
     int64_t p_slot,
-    const Ref<NetwPredictIsland> &p_island,
     bool p_has_witness,
     int p_cooldown_ticks
 ) {
@@ -7642,264 +7664,74 @@ void NetwPredictionEngine::notify_contact(
     const int64_t authored = row->cursor.latest_input_tick;
     set_cooldown_until_tick(p_slot, authored + p_cooldown_ticks);
     if (!row->latches.island_gap_reported
-        && live_participants(p_slot, p_island).is_empty()) {
+        && live_participants(p_slot).is_empty()) {
         row->latches.island_gap_reported = true;
         const Ref<NetwEntity> seated = owner_entity(p_slot);
         NETW_WARN(
             sys::PREDICTION,
-            "Prediction: %s reported contact with no declared island. Declare "
-            "the bodies it touches on prediction.island, or its contact "
-            "transitions will keep claiming an exactness they cannot hold.",
+            "Prediction: %s reported contact with nothing selected. Select "
+            "the bodies it touches, or its contact transitions will keep "
+            "claiming an exactness they cannot hold.",
             String(seated.is_valid() ? seated->get_entity_id() : StringName())
                 .utf8()
                 .get_data()
         );
     }
-    if (!contact_is_equivalent(p_slot, p_island, p_has_witness)) {
+    if (!contact_is_equivalent(p_slot, p_has_witness)) {
         open_out_of_domain_window(p_slot, authored, p_cooldown_ticks);
     }
 }
 
-TypedArray<NetwEntity> NetwPredictionEngine::island_commit_members(
+void NetwPredictionEngine::joint_adopt(
     int64_t p_slot,
-    const TypedArray<NetwEntity> &p_members,
-    const Ref<NetwPredictIsland> &p_island,
-    int64_t p_frontier
+    const sim::Selection &p_selection
 ) {
-    TypedArray<NetwEntity> promoted;
-    const Ref<NetwEntity> owner = owner_entity(p_slot);
-    if (row_of(p_slot) == nullptr || owner.is_null() || p_island.is_null()
-        || island_of(p_slot) == ISLAND_NONE) {
-        return promoted;
-    }
-    LocalVector<Ref<NetwEntity>> ranked;
-    ranked.reserve(uint32_t(p_members.size()) + 1);
-    for (int at = 0; at < p_members.size(); ++at) {
-        ranked.push_back(p_members[at]);
-    }
-    ranked.push_back(owner);
-    std::sort(ranked.ptr(), ranked.ptr() + ranked.size(), entity_id_less);
-
-    const Vector3 here = entity_position(owner);
-    PackedInt64Array slots;
-    PackedInt64Array order_keys;
-    PackedInt32Array fidelities;
-    PackedFloat64Array distances;
-    PackedByteArray eligible;
-    PackedByteArray contact;
-    HashMap<int64_t, Ref<NetwEntity>> by_slot;
-    int64_t owner_order_key = -1;
-    for (uint32_t at = 0; at < ranked.size(); ++at) {
-        if (ranked[at] == owner) {
-            owner_order_key = int64_t(at);
-            break;
-        }
-    }
-    for (int at = 0; at < p_members.size(); ++at) {
-        const Ref<NetwEntity> member = p_members[at];
-        const int64_t row = slot_of(member);
-        if (member.is_null() || row < 0 || row == p_slot || by_slot.has(row)) {
-            continue;
-        }
-        int64_t key = -1;
-        for (uint32_t seat = 0; seat < ranked.size(); ++seat) {
-            if (ranked[seat] == member) {
-                key = int64_t(seat);
-                break;
-            }
-        }
-        slots.push_back(row);
-        order_keys.push_back(key);
-        fidelities.push_back(p_island->fidelity_of(member));
-        distances.push_back(here.distance_squared_to(entity_position(member)));
-        eligible.push_back(can_automatically_simulate(member) ? 1 : 0);
-        contact.push_back(
-            roster_has(p_slot, ROSTER_REALIZED_CONTACT, member) ? 1 : 0
-        );
-        by_slot.insert(row, member);
-    }
-    const PackedInt64Array committed = island_commit(
-        p_slot,
-        owner_order_key,
-        slots,
-        order_keys,
-        distances,
-        fidelities,
-        eligible,
-        contact,
-        p_island->get_promotion(),
-        p_island->get_promotion_count(),
-        p_island->get_promotion_meters(),
-        p_frontier
-    );
-    for (int at = 0; at < committed.size(); ++at) {
-        const HashMap<int64_t, Ref<NetwEntity>>::ConstIterator found
-            = by_slot.find(committed[at]);
-        if (found != by_slot.end()) {
-            promoted.push_back(found->value);
-        }
-    }
-    return promoted;
-}
-
-PackedInt64Array NetwPredictionEngine::island_commit(
-    int64_t p_slot,
-    int64_t p_owner_order_key,
-    const PackedInt64Array &p_members,
-    const PackedInt64Array &p_order_keys,
-    const PackedFloat64Array &p_distance_squared,
-    const PackedInt32Array &p_fidelities,
-    const PackedByteArray &p_eligible,
-    const PackedByteArray &p_contact,
-    int p_promotion,
-    int p_promotion_count,
-    double p_promotion_meters,
-    int64_t p_frontier
-) {
-    NETW_ZONE_NC("NetwPredictionEngine island commit", colors::PREDICTION);
-    PackedInt64Array out;
     predict::Slot *owner = mutable_row_of(p_slot);
-    NETW_ERR_COND_V(
-        owner == nullptr || owner->config.island == ISLAND_NONE,
-        out,
-        sys::PREDICTION,
-        "Island commit requires an open slot with a declared island."
-    );
-    const int count = p_members.size();
-    NETW_ERR_COND_V(
-        p_order_keys.size() != count || p_distance_squared.size() != count
-            || p_fidelities.size() != count || p_eligible.size() != count
-            || p_contact.size() != count,
-        out,
-        sys::PREDICTION,
-        "Island columns must have the same length."
-    );
-    NETW_ERR_COND_V(
-        p_promotion < int(predict::Promotion::NONE)
-            || p_promotion > int(predict::Promotion::ALL),
-        out,
-        sys::PREDICTION,
-        "Island promotion %d is outside the declared range.",
-        p_promotion
-    );
-    NETW_ERR_COND_V(
-        p_promotion_count < 0 || p_promotion_meters < 0.0
-            || !std::isfinite(p_promotion_meters),
-        out,
-        sys::PREDICTION,
-        "Island promotion budgets must be non-negative."
-    );
-
-    LocalVector<predict::IslandCandidate> candidates;
-    candidates.resize(uint32_t(count));
-    for (int at = 0; at < count; ++at) {
-        const int64_t member_slot = p_members[at];
-        const int64_t order_key = p_order_keys[at];
-        predict::Slot *member = mutable_row_of(member_slot);
-        NETW_ERR_COND_V(
-            member == nullptr || member_slot == p_slot,
-            out,
-            sys::PREDICTION,
-            "Island member slot %d is invalid.",
-            member_slot
-        );
-        NETW_ERR_COND_V(
-            owner->config.island == ISLAND_JOINT
-                && !rerunnable(member->config.schedule),
-            out,
-            sys::PREDICTION,
-            "Island member slot %d is not a re-runnable participant.",
-            member_slot
-        );
-        NETW_ERR_COND_V(
-            p_fidelities[at] < int(predict::Fidelity::UNDECLARED)
-                || p_fidelities[at] > int(predict::Fidelity::SIMULATED),
-            out,
-            sys::PREDICTION,
-            "Island fidelity %d is outside the declared range.",
-            p_fidelities[at]
-        );
-        NETW_ERR_COND_V(
-            p_distance_squared[at] < 0.0
-                || !std::isfinite(p_distance_squared[at]),
-            out,
-            sys::PREDICTION,
-            "Island distance squared must be non-negative."
-        );
-        NETW_ERR_COND_V(
-            order_key == p_owner_order_key,
-            out,
-            sys::PREDICTION,
-            "Island order keys must be unique."
-        );
-        for (int prior = 0; prior < at; ++prior) {
-            NETW_ERR_COND_V(
-                p_members[prior] == member_slot
-                    || p_order_keys[prior] == order_key,
-                out,
-                sys::PREDICTION,
-                "Island member slots and order keys must be unique."
-            );
-        }
-        predict::IslandCandidate &candidate = candidates[uint32_t(at)];
-        candidate.slot = member_slot;
-        candidate.order_key = order_key;
-        candidate.distance_squared = p_distance_squared[at];
-        candidate.fidelity = predict::Fidelity(p_fidelities[at]);
-        candidate.eligible = p_eligible[at] != 0;
-        candidate.contact = p_contact[at] != 0;
+    if (owner == nullptr) {
+        return;
     }
-
-    owner->island.owner_order_key = p_owner_order_key;
-    owner->island.promotion = predict::Promotion(p_promotion);
-    owner->island.promotion_count = p_promotion_count;
-    owner->island.promotion_meters = p_promotion_meters;
-    owner->island.commit(candidates, p_frontier);
-    for (uint32_t at = 0; at < owner->island.members.size(); ++at) {
-        const predict::IslandMember &island_member = owner->island.members[at];
-        predict::Slot *member = mutable_row_of(island_member.slot);
-        if (member == nullptr) {
-            continue;
-        }
-        member->joint.tenure = island_member.tenure;
-        if (island_member.promoted) {
-            out.push_back(island_member.slot);
+    owner->joint_roster = p_selection;
+    for (const sim::Selected &selected : owner->joint_roster.members) {
+        if (predict::Slot *member = mutable_row_of(selected.key)) {
+            member->joint.tenure = selected.tenure;
         }
     }
     NETW_TRACE(
         sys::PREDICTION,
-        "Committed island slot=%d members=%d promoted=%d lingering=%d.",
+        "Adopted joint roster slot=%d members=%d promoted=%d lingering=%d.",
         p_slot,
-        owner->island.present_count(),
-        owner->island.promoted_count(),
-        owner->island.lingering_count()
+        owner->joint_roster.present_count(),
+        owner->joint_roster.promoted_count(),
+        owner->joint_roster.lingering_count()
     );
-    return out;
 }
 
-int NetwPredictionEngine::island_member_count(int64_t p_slot) const {
+bool NetwPredictionEngine::joint_admits(
+    int64_t p_slot,
+    int64_t p_member
+) const {
+    const predict::Slot *owner = row_of(p_slot);
+    const predict::Slot *member = row_of(p_member);
+    if (owner == nullptr || member == nullptr || p_member == p_slot) {
+        return false;
+    }
+    return owner->config.island != ISLAND_JOINT
+        || rerunnable(member->config.schedule);
+}
+
+int NetwPredictionEngine::joint_member_count(int64_t p_slot) const {
     const predict::Slot *row = row_of(p_slot);
-    return row != nullptr ? row->island.present_count() : 0;
+    return row != nullptr ? row->joint_roster.present_count() : 0;
 }
 
-bool NetwPredictionEngine::island_promoted(
+bool NetwPredictionEngine::joint_promoted(
     int64_t p_slot,
     int64_t p_member
 ) const {
     const predict::Slot *row = row_of(p_slot);
-    const predict::IslandMember *member
-        = row != nullptr ? row->island.member(p_member) : nullptr;
+    const sim::Selected *member
+        = row != nullptr ? row->joint_roster.member(p_member) : nullptr;
     return member != nullptr && member->promoted;
-}
-
-double NetwPredictionEngine::island_distance_squared(
-    int64_t p_slot,
-    int64_t p_member
-) const {
-    const predict::Slot *row = row_of(p_slot);
-    const predict::IslandMember *member
-        = row != nullptr ? row->island.member(p_member) : nullptr;
-    return member != nullptr ? member->distance_squared : -1.0;
 }
 
 int64_t NetwPredictionEngine::tenure_begin(int64_t p_slot) const {
@@ -8041,27 +7873,26 @@ predict::JointPassPlan NetwPredictionEngine::joint_pass(
     PassMember subject;
     subject.row = owner;
     subject.slot = p_slot;
-    subject.order_key = owner->island.owner_order_key;
+    subject.order_key = owner->joint_roster.owner_order_key;
     members.push_back(subject);
-    for (uint32_t at = 0; at < owner->island.members.size(); ++at) {
-        const predict::IslandMember &island_member = owner->island.members[at];
-        if (!island_member.promoted && !island_member.lingering) {
+    for (const sim::Selected &selected : owner->joint_roster.members) {
+        if (!selected.promoted && !selected.lingering) {
             continue;
         }
-        predict::Slot *member = mutable_row_of(island_member.slot);
+        predict::Slot *member = mutable_row_of(selected.key);
         NETW_WARN_COND(
             member == nullptr,
             sys::PREDICTION,
             "Joint member slot %d closed before its linger completed.",
-            island_member.slot
+            selected.key
         );
         if (member == nullptr) {
             continue;
         }
         PassMember pass_member;
         pass_member.row = member;
-        pass_member.slot = island_member.slot;
-        pass_member.order_key = island_member.order_key;
+        pass_member.slot = selected.key;
+        pass_member.order_key = selected.order_key;
         members.push_back(pass_member);
     }
     struct ByOrder {
@@ -8099,7 +7930,8 @@ predict::JointPassPlan NetwPredictionEngine::joint_pass(
         p_present
     );
     const auto release_expired = [&](int64_t p_floor) {
-        owner->island.release_lingering(p_floor);
+        owner->joint_roster.release_lingering(p_floor);
+        plan.floor = p_floor;
         for (uint32_t at = 0; at < members.size();) {
             const bool expired = members[at].slot != p_slot
                 && members[at].row->joint.tenure.end >= 0
@@ -8208,7 +8040,7 @@ predict::JointPassPlan NetwPredictionEngine::joint_pass(
     stats.present = plan.present;
     plan.valid = true;
 
-    stats.linger_held = owner->island.lingering_count();
+    stats.linger_held = owner->joint_roster.lingering_count();
     for (uint32_t at = 0; at < members.size(); ++at) {
         members[at].row->joint.clear_floors();
     }
@@ -8677,15 +8509,6 @@ int NetwPredictionEngine::adopt_declaration(
         = Object::cast_to<NetwPredictionHandle>(handle_of(slot));
     if (node != nullptr && handle != nullptr) {
         bind_owner(slot, node);
-        if (!handle->get_simulate().is_valid()) {
-            Node *root = p_entity->get_owner();
-            if (root != nullptr
-                && root->has_method(StringName("_network_tick"))) {
-                handle->set_simulate(
-                    Callable(root, StringName("_network_tick"))
-                );
-            }
-        }
         NetwMultiplayer *host = core();
         const int64_t route
             = host != nullptr ? host->liveness_route_of(p_entity.ptr()) : -1;
@@ -8700,7 +8523,7 @@ int NetwPredictionEngine::adopt_declaration(
         }
     }
 
-    const int correction = resolve_correction(slot, p_declared_correction);
+    const int correction = settle_correction(slot, p_declared_correction);
     if (!configure(
             slot,
             p_schedule,
@@ -8854,7 +8677,8 @@ void NetwPredictionEngine::apply_recovery_plan(
         op = int(predict::Operator::FULL_CLOSURE);
     } else if (
         row->config.correction == int(CorrectionMode::SNAP)
-        && handle->get_snap_restore() == NetwPredict::RESTORE_MODE_EXTRAPOLATED
+        && handle->get_snap_restore()
+            == NetwSimulationHandle::RESTORE_EXTRAPOLATED
         && projected
     ) {
         op = int(predict::Operator::REBASE_PROJECTED);
@@ -8899,7 +8723,7 @@ int NetwPredictionEngine::open_recovery(
         return RECOVERY_PLAN;
     }
     row->config.correction
-        = resolve_correction(p_slot, handle->get_correction_mode());
+        = settle_correction(p_slot, handle->get_correction_mode());
     const Dictionary before = capture_current(p_slot);
     row->rows.recovery_before = before;
     row->rows.recovery_write = Dictionary();
@@ -9704,7 +9528,7 @@ Dictionary NetwPredictionEngine::advanced_seed(
         p_divergence_epsilon
     );
     const Dictionary projection = projection_map(p_slot);
-    if (p_snap_restore != int(NetwPredict::RESTORE_MODE_EXTRAPOLATED)
+    if (p_snap_restore != int(NetwSimulationHandle::RESTORE_EXTRAPOLATED)
         || projection.is_empty()) {
         return carried;
     }
@@ -9824,14 +9648,21 @@ Dictionary NetwPredictionEngine::reachability_report_of(int64_t p_slot) const {
     if (handle == nullptr) {
         return Dictionary();
     }
-    const Ref<NetwPredictIsland> island = handle->get_island();
-    int claim = 0;
-    if (island.is_valid() && island->get_approximate()) {
-        claim = 2;
-    } else if (island.is_valid() && island->get_exact_claim()) {
-        claim = 1;
-    }
     const Ref<NetwEntity> seated = owner_entity(p_slot);
+    NetwMultiplayer *host = core();
+    const sim::Row *standing = host != nullptr && seated.is_valid()
+        ? host->sim_row_of(seated->get_rid_handle())
+        : nullptr;
+    int claim = 0;
+    if (standing != nullptr && standing->choice.declared()) {
+        claim = sim::claims_exact(
+                    standing->choice,
+                    handle->get_schedule()
+                        == NetwSimulationHandle::SCHEDULE_STEPPED
+                )
+            ? 1
+            : 2;
+    }
     return reachability_report(
         p_slot,
         seated.is_valid() ? seated->get_entity_id() : StringName(),
@@ -9908,7 +9739,7 @@ Dictionary NetwPredictionEngine::reachability_report(
         } else if (model == StringName("step")) {
             if (!frame_tier) {
                 why = String(
-                    "carry_step() needs prediction.schedule = FRAME; under "
+                    "carry_step() needs simulation.schedule = FRAME; under "
                     "the tick tier it is refused on first use and retired"
                 );
                 inert_steps.push_back(name);
@@ -10087,7 +9918,7 @@ Dictionary NetwPredictionEngine::reachability_report(
                     "here, and is then refused on its first use and "
                     "permanently retired, so every recovery writes the "
                     "acknowledged value as if none had been declared. Set "
-                    "prediction.schedule to FRAME, or carry_along() a "
+                    "simulation.schedule to FRAME, or carry_along() a "
                     "replicated derivative instead."
                 )
         ));
@@ -10619,7 +10450,7 @@ Dictionary NetwPredictionEngine::record_drive(
     NetwPredictionHandle *declared
         = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
     if (is_new && declared != nullptr
-        && declared->get_schedule() == NetwPredict::SCHEDULE_FRAME) {
+        && declared->get_schedule() == NetwSimulationHandle::SCHEDULE_FRAME) {
         report_quantum_declaration(p_slot);
         row = mutable_row_of(p_slot);
         if (row == nullptr) {
@@ -11164,7 +10995,7 @@ void NetwPredictionEngine::report_carry_retirements(int64_t p_slot) {
                 warn_carry_retired(
                     charged.field,
                     String(
-                        "It needs prediction.schedule = FRAME: the tick tier "
+                        "It needs simulation.schedule = FRAME: the tick tier "
                         "re-anchors its own state record to authority on every "
                         "correction, so too little of it is the owner's own to "
                         "replay a rule against. The rule itself is not in "
@@ -11239,6 +11070,10 @@ void NetwPredictionEngine::reset_for_rewire(
     set_last_recorded_entry_index(p_slot, -1);
     if (!p_same_stream) {
         set_stream_reconstructed(p_slot, false);
+        const Ref<NetwEntity> seated = owner_entity(p_slot);
+        if (core() != nullptr && seated.is_valid()) {
+            core()->sim_forget_reconstruction(seated->get_rid_handle());
+        }
     }
     clear_out_of_domain_window(p_slot);
     clear_environment_epoch(p_slot);

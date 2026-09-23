@@ -372,57 +372,6 @@ void EntityRoster::clear() {
     members.clear();
 }
 
-int SubjectBook::index_of(int64_t p_id) const {
-    for (uint32_t at = 0; at < ids.size(); ++at) {
-        if (ids[at] == p_id) {
-            return int(at);
-        }
-    }
-    return -1;
-}
-
-bool SubjectBook::note(int64_t p_id, const godot::Callable &p_predictor) {
-    const int at = index_of(p_id);
-    if (at >= 0) {
-        if (predictors[uint32_t(at)] == p_predictor) {
-            return false;
-        }
-        predictors[uint32_t(at)] = p_predictor;
-        return true;
-    }
-    uint32_t slot = 0;
-    while (slot < ids.size() && ids[slot] < p_id) {
-        slot += 1;
-    }
-    ids.insert(slot, p_id);
-    predictors.insert(slot, p_predictor);
-    return true;
-}
-
-bool SubjectBook::erase(int64_t p_id) {
-    const int at = index_of(p_id);
-    if (at < 0) {
-        return false;
-    }
-    ids.remove_at(uint32_t(at));
-    predictors.remove_at(uint32_t(at));
-    return true;
-}
-
-void SubjectBook::clear() {
-    ids.clear();
-    predictors.clear();
-}
-
-godot::Callable SubjectBook::first_valid() const {
-    for (uint32_t at = 0; at < predictors.size(); ++at) {
-        if (predictors[at].is_valid()) {
-            return predictors[at];
-        }
-    }
-    return godot::Callable();
-}
-
 void FieldReadings::resize(int p_count) {
     value.resize(uint32_t(std::max(0, p_count)));
     present.resize(uint32_t(std::max(0, p_count)));

@@ -167,7 +167,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
-				Re-sends the whole set every [param ticks] ticks even when nothing changed, so a peer that missed an [method on_change] send converges in bounded time. Writes [member set_heartbeat_ticks], and warns when a second member of the same script writes it too.
+				Re-sends the whole set every [param ticks] ticks even when nothing changed, and every peer applies it. A peer that missed an [method on_change] send, or whose copy drifted, converges in bounded time. An [method input] set sends a window of recent samples and ignores it. Writes [member set_heartbeat_ticks], and warns when a second member of the same script writes it too.
 				[codeblock]
 				# a lost "stunned" flip heals within a second at 60 ticks
 				Netw.configure_property(self, &amp;"stunned").state().heartbeat(60)

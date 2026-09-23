@@ -2,9 +2,6 @@
 
 #include <algorithm>
 
-#include "netw/colors.hpp"
-#include "netw/profile.hpp"
-
 using namespace godot;
 
 namespace netw::predict {
@@ -35,340 +32,7 @@ template <typename T> void trim(LocalVector<T> &r_rows) {
     }
 }
 
-IslandMember *mutable_member(
-    LocalVector<IslandMember> &r_members,
-    int64_t p_slot
-) {
-    for (uint32_t at = 0; at < r_members.size(); ++at) {
-        if (r_members[at].slot == p_slot) {
-            return &r_members[at];
-        }
-    }
-    return nullptr;
-}
-
-bool selected(const LocalVector<int64_t> &p_slots, int64_t p_slot) {
-    for (uint32_t at = 0; at < p_slots.size(); ++at) {
-        if (p_slots[at] == p_slot) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void sort_candidates(LocalVector<IslandCandidate> &r_candidates) {
-    struct ByDistance {
-        bool operator()(
-            const IslandCandidate &p_left,
-            const IslandCandidate &p_right
-        ) const {
-            if (p_left.distance_squared == p_right.distance_squared) {
-                if (p_left.order_key == p_right.order_key) {
-                    return p_left.slot < p_right.slot;
-                }
-                return p_left.order_key < p_right.order_key;
-            }
-            return p_left.distance_squared < p_right.distance_squared;
-        }
-    };
-    r_candidates.sort_custom<ByDistance>();
-}
-
-void sort_candidate_order(LocalVector<IslandCandidate> &r_candidates) {
-    struct ByOrder {
-        bool operator()(
-            const IslandCandidate &p_left,
-            const IslandCandidate &p_right
-        ) const {
-            if (p_left.order_key == p_right.order_key) {
-                return p_left.slot < p_right.slot;
-            }
-            return p_left.order_key < p_right.order_key;
-        }
-    };
-    r_candidates.sort_custom<ByOrder>();
-}
-
-struct RetainedCandidate {
-    IslandCandidate candidate;
-    bool held = false;
-};
-
-void deselect(LocalVector<int64_t> &r_slots, int64_t p_slot) {
-    for (uint32_t at = 0; at < r_slots.size(); ++at) {
-        if (r_slots[at] == p_slot) {
-            r_slots.remove_at(at);
-            return;
-        }
-    }
-}
-
-const IslandCandidate *candidate_of(
-    const LocalVector<IslandCandidate> &p_candidates,
-    int64_t p_slot
-) {
-    for (uint32_t at = 0; at < p_candidates.size(); ++at) {
-        if (p_candidates[at].slot == p_slot) {
-            return &p_candidates[at];
-        }
-    }
-    return nullptr;
-}
-
-void defer_contacting(
-    const Island &p_island,
-    const LocalVector<IslandCandidate> &p_candidates,
-    LocalVector<int64_t> &r_desired
-) {
-    for (uint32_t at = 0; at < p_candidates.size(); ++at) {
-        const IslandCandidate &candidate = p_candidates[at];
-        if (!candidate.contact) {
-            continue;
-        }
-        const IslandMember *row = p_island.member(candidate.slot);
-        const bool held = row != nullptr && row->promoted;
-        if (held == selected(r_desired, candidate.slot)) {
-            continue;
-        }
-        if (held) {
-            r_desired.push_back(candidate.slot);
-        } else {
-            deselect(r_desired, candidate.slot);
-        }
-    }
-}
-
-void enforce_promotion_count(
-    const Island &p_island,
-    const LocalVector<IslandCandidate> &p_candidates,
-    LocalVector<int64_t> &r_desired
-) {
-    if (p_island.promotion != Promotion::NEAREST) {
-        return;
-    }
-    LocalVector<RetainedCandidate> automatic;
-    for (uint32_t at = 0; at < r_desired.size(); ++at) {
-        const IslandCandidate *row = candidate_of(p_candidates, r_desired[at]);
-        if (row == nullptr || row->fidelity == Fidelity::SIMULATED) {
-            continue;
-        }
-        const IslandMember *held = p_island.member(row->slot);
-        RetainedCandidate entry;
-        entry.candidate = *row;
-        entry.held = held != nullptr && held->promoted;
-        automatic.push_back(entry);
-    }
-    if (int(automatic.size()) <= p_island.promotion_count) {
-        return;
-    }
-    struct ByRetainedThenDistance {
-        bool operator()(
-            const RetainedCandidate &p_left,
-            const RetainedCandidate &p_right
-        ) const {
-            if (p_left.held != p_right.held) {
-                return p_left.held;
-            }
-            const IslandCandidate &left = p_left.candidate;
-            const IslandCandidate &right = p_right.candidate;
-            if (left.distance_squared == right.distance_squared) {
-                if (left.order_key == right.order_key) {
-                    return left.slot < right.slot;
-                }
-                return left.order_key < right.order_key;
-            }
-            return left.distance_squared < right.distance_squared;
-        }
-    };
-    automatic.sort_custom<ByRetainedThenDistance>();
-    for (uint32_t at = uint32_t(std::max(0, p_island.promotion_count));
-         at < automatic.size();
-         ++at) {
-        deselect(r_desired, automatic[at].candidate.slot);
-    }
-}
-
 } // namespace
-
-bool Tenure::contains(int64_t p_transition) const {
-    if (begin >= 0 && p_transition < begin) {
-        return false;
-    }
-    return end < 0 || p_transition <= end;
-}
-
-void Island::commit(
-    const LocalVector<IslandCandidate> &p_candidates,
-    int64_t p_frontier
-) {
-    NETW_ZONE_NC("NetwPredict commit island", colors::PREDICTION);
-    for (uint32_t at = 0; at < members.size(); ++at) {
-        members[at].present = false;
-    }
-
-    LocalVector<IslandCandidate> automatic;
-    LocalVector<int64_t> desired;
-    for (uint32_t at = 0; at < p_candidates.size(); ++at) {
-        const IslandCandidate &candidate = p_candidates[at];
-        IslandMember *row = mutable_member(members, candidate.slot);
-        if (row == nullptr) {
-            IslandMember added;
-            added.slot = candidate.slot;
-            members.push_back(added);
-            row = &members[members.size() - 1];
-        }
-        row->order_key = candidate.order_key;
-        row->distance_squared = candidate.distance_squared;
-        row->present = true;
-        row->eligible = candidate.eligible;
-        row->explicit_simulation = candidate.fidelity == Fidelity::SIMULATED;
-        if (row->explicit_simulation) {
-            desired.push_back(row->slot);
-        } else if (
-            candidate.fidelity == Fidelity::UNDECLARED && candidate.eligible
-        ) {
-            automatic.push_back(candidate);
-        }
-    }
-
-    sort_candidates(automatic);
-    if (promotion == Promotion::ALL) {
-        for (uint32_t at = 0; at < automatic.size(); ++at) {
-            desired.push_back(automatic[at].slot);
-        }
-    } else if (promotion == Promotion::WITHIN) {
-        const double enter = promotion_meters * promotion_meters;
-        const double exit = enter * ISLAND_EXIT_MARGIN_SQUARED;
-        for (uint32_t at = 0; at < automatic.size(); ++at) {
-            const IslandCandidate &candidate = automatic[at];
-            const IslandMember *row = member(candidate.slot);
-            const double limit = row != nullptr && row->promoted ? exit : enter;
-            if (candidate.distance_squared <= limit) {
-                desired.push_back(candidate.slot);
-            }
-        }
-    } else if (
-        promotion == Promotion::NEAREST && promotion_count > 0
-        && !automatic.is_empty()
-    ) {
-        const int limit = std::min(promotion_count, int(automatic.size()));
-        const double cutoff = automatic[uint32_t(limit - 1)].distance_squared
-            * ISLAND_EXIT_MARGIN_SQUARED;
-        LocalVector<IslandCandidate> retained;
-        for (uint32_t at = 0; at < automatic.size(); ++at) {
-            const IslandCandidate &candidate = automatic[at];
-            const IslandMember *row = member(candidate.slot);
-            if (row != nullptr && row->promoted
-                && candidate.distance_squared <= cutoff) {
-                retained.push_back(candidate);
-            }
-        }
-        sort_candidate_order(retained);
-        int automatic_selected = 0;
-        for (uint32_t at = 0; at < retained.size(); ++at) {
-            if (automatic_selected >= promotion_count) {
-                break;
-            }
-            desired.push_back(retained[at].slot);
-            automatic_selected += 1;
-        }
-        for (uint32_t at = 0; at < automatic.size(); ++at) {
-            if (automatic_selected >= promotion_count) {
-                break;
-            }
-            if (!selected(desired, automatic[at].slot)) {
-                desired.push_back(automatic[at].slot);
-                automatic_selected += 1;
-            }
-        }
-    }
-
-    defer_contacting(*this, p_candidates, desired);
-    enforce_promotion_count(*this, p_candidates, desired);
-
-    for (uint32_t at = 0; at < members.size(); ++at) {
-        IslandMember &row = members[at];
-        const bool promote = row.present && selected(desired, row.slot);
-        if (promote && !row.promoted) {
-            row.tenure.begin = p_frontier + 1;
-            row.tenure.end = -1;
-            row.lingering = false;
-        } else if (!promote && row.promoted) {
-            row.tenure.end = p_frontier;
-            row.lingering = true;
-        }
-        row.promoted = promote;
-    }
-
-    for (uint32_t at = 0; at < members.size();) {
-        const IslandMember &row = members[at];
-        if (!row.present && !row.promoted && !row.lingering) {
-            members.remove_at(at);
-        } else {
-            at += 1;
-        }
-    }
-
-    struct ByOrder {
-        bool operator()(
-            const IslandMember &p_left,
-            const IslandMember &p_right
-        ) const {
-            if (p_left.order_key == p_right.order_key) {
-                return p_left.slot < p_right.slot;
-            }
-            return p_left.order_key < p_right.order_key;
-        }
-    };
-    members.sort_custom<ByOrder>();
-}
-
-void Island::release_lingering(int64_t p_floor) {
-    for (uint32_t at = 0; at < members.size();) {
-        IslandMember &row = members[at];
-        if (row.lingering && row.tenure.end < p_floor) {
-            row.lingering = false;
-        }
-        if (!row.present && !row.promoted && !row.lingering) {
-            members.remove_at(at);
-        } else {
-            at += 1;
-        }
-    }
-}
-
-const IslandMember *Island::member(int64_t p_slot) const {
-    for (uint32_t at = 0; at < members.size(); ++at) {
-        if (members[at].slot == p_slot) {
-            return &members[at];
-        }
-    }
-    return nullptr;
-}
-
-int Island::present_count() const {
-    int out = 0;
-    for (uint32_t at = 0; at < members.size(); ++at) {
-        out += members[at].present ? 1 : 0;
-    }
-    return out;
-}
-
-int Island::promoted_count() const {
-    int out = 0;
-    for (uint32_t at = 0; at < members.size(); ++at) {
-        out += members[at].promoted ? 1 : 0;
-    }
-    return out;
-}
-
-int Island::lingering_count() const {
-    int out = 0;
-    for (uint32_t at = 0; at < members.size(); ++at) {
-        out += members[at].lingering ? 1 : 0;
-    }
-    return out;
-}
 
 void JointTrack::record(
     int64_t p_transition,
@@ -376,24 +40,7 @@ void JointTrack::record(
     const godot::Variant &p_command,
     CellProvenance p_provenance
 ) {
-    if (p_state.any()) {
-        bool found_state = false;
-        for (uint32_t at = 0; at < states.size(); ++at) {
-            if (states[at].transition == p_transition) {
-                states[at].state = p_state;
-                found_state = true;
-                break;
-            }
-        }
-        if (!found_state) {
-            JointStateRecord state_row;
-            state_row.transition = p_transition;
-            state_row.state = p_state;
-            states.push_back(state_row);
-            trim(states);
-        }
-    }
-
+    record_state(p_transition, p_state);
     for (uint32_t at = 0; at < commands.size(); ++at) {
         JointCommandRecord &row = commands[at];
         if (row.transition != p_transition) {
@@ -411,6 +58,23 @@ void JointTrack::record(
     command_row.provenance = p_provenance;
     commands.push_back(command_row);
     trim(commands);
+}
+
+void JointTrack::record_state(int64_t p_transition, const StateRow &p_state) {
+    if (!p_state.any()) {
+        return;
+    }
+    for (uint32_t at = 0; at < states.size(); ++at) {
+        if (states[at].transition == p_transition) {
+            states[at].state = p_state;
+            return;
+        }
+    }
+    JointStateRecord state_row;
+    state_row.transition = p_transition;
+    state_row.state = p_state;
+    states.push_back(state_row);
+    trim(states);
 }
 
 const JointStateRecord *JointTrack::newest_state_at_or_before(

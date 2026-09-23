@@ -4,6 +4,7 @@
 #include "support/netw_cells.h"
 
 #include "godot/callable.hpp"
+#include "godot/physics_body.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/variant.hpp"
@@ -11,8 +12,9 @@
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/prediction_handle.hpp"
+#include "netw/api/simulation_handle.hpp"
+#include "netw/predict/engine.hpp"
 
 namespace TestNetwSessionPredictDeclareLaws {
 
@@ -21,6 +23,7 @@ using netw::NetwEntity;
 using netw::NetwMultiplayer;
 using netw::NetwPredict;
 using netw::NetwPredictionHandle;
+using netw::NetwSimulationHandle;
 using netw_test::CallLog;
 using netw_test::law_broken;
 using netw_test::law_held;
@@ -34,14 +37,13 @@ enum Plant {
     PLANT_A_DECLARATION_THAT_NEVER_HAPPENED,
     PLANT_A_PARAM_WRITTEN_TO_ANOTHER_ENTITY,
     PLANT_AN_UNDECLARE_THAT_NEVER_HAPPENED,
-    PLANT_A_MEMBER_THE_ISLAND_NEVER_TOOK,
+    PLANT_A_MEMBER_THE_SELECTION_NEVER_TOOK,
 };
 
 struct PredictScenario {
     String label;
-    int64_t schedule = NetwPredict::SCHEDULE_FRAME;
-    bool joins_an_island = false;
-    bool approximates = false;
+    int64_t schedule = NetwSimulationHandle::SCHEDULE_FRAME;
+    bool selects_another = false;
     bool installs_callbacks = false;
 };
 
@@ -58,18 +60,17 @@ PredictScenario a_declaration_with_callbacks() {
     return scenario;
 }
 
-PredictScenario an_island_of_two() {
+PredictScenario a_selection_of_two() {
     PredictScenario scenario;
-    scenario.label = "an-island-of-two";
-    scenario.joins_an_island = true;
+    scenario.label = "a-selection-of-two";
+    scenario.selects_another = true;
     return scenario;
 }
 
-PredictScenario an_approximating_island() {
+PredictScenario a_selection_with_callbacks() {
     PredictScenario scenario;
-    scenario.label = "an-approximating-island";
-    scenario.joins_an_island = true;
-    scenario.approximates = true;
+    scenario.label = "a-selection-with-callbacks";
+    scenario.selects_another = true;
     scenario.installs_callbacks = true;
     return scenario;
 }
@@ -82,10 +83,8 @@ class PredictRun {
     bool engine_after_undeclare = true;
     Variant schedule_read;
     bool sensor_is_the_one_installed = false;
-    bool simulate_is_the_one_installed = false;
-    Error island_verdict = FAILED;
-    bool island_holds_the_other = false;
-    bool island_approximates = false;
+    bool step_is_the_one_installed = false;
+    bool selection_holds_the_other = false;
 
 public:
     PredictRun(const PredictScenario &p_scenario, Plant p_plant = PLANT_NONE)
@@ -107,44 +106,38 @@ public:
         declare_verdict = planted == PLANT_A_DECLARATION_THAT_NEVER_HAPPENED
             ? OK
             : session->predict_declare(entity);
-        if (declared.joins_an_island) {
+        if (declared.selects_another) {
             session->predict_declare(other_entity);
         }
         engine_after_declare = session->predict_engine_seated(entity);
 
-        session->predict_set_param(
+        session->simulation_set_param(
             planted == PLANT_A_PARAM_WRITTEN_TO_ANOTHER_ENTITY ? other_entity
                                                                : entity,
-            NetwMultiplayer::PREDICT_PARAM_SCHEDULE,
+            NetwMultiplayer::SIMULATION_PARAM_SCHEDULE,
             declared.schedule
         );
-        schedule_read = session->predict_get_param(
+        schedule_read = session->simulation_get_param(
             entity,
-            NetwMultiplayer::PREDICT_PARAM_SCHEDULE
+            NetwMultiplayer::SIMULATION_PARAM_SCHEDULE
         );
 
         const Callable sensor = log.answering("sensor", 17);
-        const Callable simulate = log.callable("simulate");
+        const Callable step = log.callable("step");
         if (declared.installs_callbacks) {
             session->predict_set_sensor_callback(
                 entity,
                 StringName(SENSOR_KEY),
                 sensor
             );
-            session->predict_set_simulate_callback(entity, simulate);
+            session->simulation_set_step_callback(entity, step);
         }
 
-        if (declared.joins_an_island) {
-            island_verdict = planted == PLANT_A_MEMBER_THE_ISLAND_NEVER_TOOK
-                ? OK
-                : session->predict_island_add(entity, other_entity);
-            session->predict_island_set_param(
-                entity,
-                NetwMultiplayer::ISLAND_PARAM_APPROXIMATE,
-                declared.approximates
-            );
-        } else {
-            island_verdict = OK;
+        const Ref<NetwSimulationHandle> simulation
+            = session->simulation_handle(entity);
+        if (declared.selects_another
+            && planted != PLANT_A_MEMBER_THE_SELECTION_NEVER_TOOK) {
+            simulation->simulate(other);
         }
 
         const Ref<NetwPredictionHandle> handle
@@ -155,13 +148,12 @@ public:
                                               Variant()
                                           ))
                 == Variant(sensor);
-            simulate_is_the_one_installed = handle->get_simulate() == simulate;
-            const Ref<netw::NetwPredictIsland> island = handle->get_island();
-            if (island.is_valid()) {
-                island_holds_the_other = island->has_member(other);
-                island_approximates = island->get_approximate();
-            }
+            step_is_the_one_installed = handle->get_simulate() == step;
         }
+        const netw::sim::Named *named
+            = simulation->selection_choice().named_of(other_entity);
+        selection_holds_the_other
+            = named != nullptr && named->pick == netw::sim::Pick::CHOSEN;
 
         if (planted != PLANT_AN_UNDECLARE_THAT_NEVER_HAPPENED) {
             session->predict_undeclare(entity);
@@ -197,20 +189,12 @@ public:
         return sensor_is_the_one_installed;
     }
 
-    bool simulate_kept() const {
-        return simulate_is_the_one_installed;
+    bool step_kept() const {
+        return step_is_the_one_installed;
     }
 
-    Error island() const {
-        return island_verdict;
-    }
-
-    bool island_member() const {
-        return island_holds_the_other;
-    }
-
-    bool approximates() const {
-        return island_approximates;
+    bool selection_member() const {
+        return selection_holds_the_other;
     }
 };
 
@@ -260,28 +244,18 @@ LawVerdict law_addressed(const PredictRun &p_run) {
     if (!p_run.sensor_kept()) {
         return law_broken("the handle holds a sensor nobody installed");
     }
-    if (!p_run.simulate_kept()) {
+    if (!p_run.step_kept()) {
         return law_broken("the handle holds a step nobody installed");
     }
     return law_held();
 }
 
-LawVerdict law_islanded(const PredictRun &p_run) {
-    if (p_run.island() != OK) {
-        return law_broken("joining an island answered %d", int(p_run.island()));
-    }
-    if (!p_run.scenario().joins_an_island) {
+LawVerdict law_selecting(const PredictRun &p_run) {
+    if (!p_run.scenario().selects_another) {
         return law_held();
     }
-    if (!p_run.island_member()) {
-        return law_broken("the island does not hold the entity it was given");
-    }
-    if (p_run.approximates() != p_run.scenario().approximates) {
-        return law_broken(
-            "the island approximates %d against the %d declared",
-            int(p_run.approximates()),
-            int(p_run.scenario().approximates)
-        );
+    if (!p_run.selection_member()) {
+        return law_broken("the selection does not hold the entity it named");
     }
     return law_held();
 }
@@ -310,21 +284,22 @@ const PredictLaw L_ADDRESSED = {
     &law_addressed,
 };
 
-const PredictLaw L_ISLANDED = {
-    "islanded",
-    "an island named by RID holds the members and the rule it was given",
-    &law_islanded,
+const PredictLaw L_SELECTING = {
+    "selecting",
+    "a selection made on the handle of an entity named by RID holds the "
+    "entity it was given",
+    &law_selecting,
 };
 
 const PredictLaw LAWS[]
-    = {L_DECLARED, L_UNDECLARED, L_PARAMETERISED, L_ADDRESSED, L_ISLANDED};
+    = {L_DECLARED, L_UNDECLARED, L_PARAMETERISED, L_ADDRESSED, L_SELECTING};
 
 TEST_CASE("[Networked][Session][SceneTree] the flat prediction laws hold") {
     const PredictScenario CORPUS[] = {
         a_bare_declaration(),
         a_declaration_with_callbacks(),
-        an_island_of_two(),
-        an_approximating_island(),
+        a_selection_of_two(),
+        a_selection_with_callbacks(),
     };
     for (const PredictScenario &scenario : CORPUS) {
         const PredictRun run(scenario);
@@ -366,13 +341,174 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] a member the island never took reds "
-    "islanded"
+    "[Networked][Session][SceneTree] a member the selection never took reds "
+    "selecting"
 ) {
-    const PredictScenario scenario = an_island_of_two();
-    const PredictRun run(scenario, PLANT_A_MEMBER_THE_ISLAND_NEVER_TOOK);
-    NETW_CELL(L_ISLANDED, scenario);
-    NETW_LAW_BREAKS(L_ISLANDED, run);
+    const PredictScenario scenario = a_selection_of_two();
+    const PredictRun run(scenario, PLANT_A_MEMBER_THE_SELECTION_NEVER_TOOK);
+    NETW_CELL(L_SELECTING, scenario);
+    NETW_LAW_BREAKS(L_SELECTING, run);
+}
+
+struct ReplayScenario {
+    String label;
+    bool rigid = false;
+    int64_t schedule = NetwSimulationHandle::SCHEDULE_FRAME;
+    bool integrates = true;
+};
+
+ReplayScenario a_frame_solver_body() {
+    return {
+        "a-frame-solver-body",
+        true,
+        NetwSimulationHandle::SCHEDULE_FRAME,
+        false,
+    };
+}
+
+ReplayScenario a_stepped_solver_body() {
+    return {
+        "a-stepped-solver-body",
+        true,
+        NetwSimulationHandle::SCHEDULE_STEPPED,
+        true,
+    };
+}
+
+ReplayScenario a_frame_plain_body() {
+    return {
+        "a-frame-plain-body",
+        false,
+        NetwSimulationHandle::SCHEDULE_FRAME,
+        true,
+    };
+}
+
+ReplayScenario a_tick_solver_body() {
+    return {
+        "a-tick-solver-body",
+        true,
+        NetwSimulationHandle::SCHEDULE_TICK,
+        true,
+    };
+}
+
+class ReplayRun {
+    ReplayScenario declared;
+    NetwPredict::RecoveryPolicy policy = NetwPredict::RECOVERY_POLICY_OBSERVE;
+    NetwPredict::CorrectionMode correction = NetwPredict::CORRECTION_MODE_AUTO;
+
+public:
+    explicit ReplayRun(const ReplayScenario &p_scenario)
+        : declared(p_scenario) {
+        Ref<NetwMultiplayer> session;
+        session.instantiate();
+        REQUIRE(session->lagcomp_initialize(8, 12) == OK);
+
+        Node3D *body = declared.rigid ? memnew(RigidBody3D) : memnew(Node3D);
+        netw::gd::scene_root()->add_child(body);
+        const Ref<NetwEntity> wrapper = NetwEntity::ensure(body);
+        const RID entity = session->entity_of(body);
+        REQUIRE(session->predict_declare(entity) == OK);
+        session->predict_set_param(
+            entity,
+            NetwMultiplayer::PREDICT_PARAM_ARCHETYPE,
+            NetwPredict::ARCHETYPE_SOLVER_BODY
+        );
+        session->simulation_set_param(
+            entity,
+            NetwMultiplayer::SIMULATION_PARAM_SCHEDULE,
+            declared.schedule
+        );
+        session->predict_set_param(
+            entity,
+            NetwMultiplayer::PREDICT_PARAM_RECOVERY_POLICY,
+            NetwPredict::RECOVERY_POLICY_REBASE_REPLAY
+        );
+
+        const Ref<NetwPredictionHandle> handle
+            = session->prediction_handle(entity);
+        REQUIRE(handle.is_valid());
+        policy = handle->resolved_recovery_policy();
+        netw::NetwPredictionEngine *pool = session->get_prediction_engine();
+        REQUIRE(pool != nullptr);
+        const int64_t slot = pool->slot_register(wrapper);
+        REQUIRE(slot >= 0);
+        pool->settle_correction(slot, handle->get_correction_mode());
+        correction = static_cast<NetwPredict::CorrectionMode>(
+            pool->settle_correction(slot, handle->get_correction_mode())
+        );
+
+        session->predict_undeclare(entity);
+        session->clear_session_state();
+        body->queue_free();
+    }
+
+    const ReplayScenario &scenario() const {
+        return declared;
+    }
+
+    NetwPredict::RecoveryPolicy recovery() const {
+        return policy;
+    }
+
+    NetwPredict::CorrectionMode mode() const {
+        return correction;
+    }
+};
+
+typedef LawRowFor<ReplayRun> ReplayLaw;
+
+LawVerdict law_integrated(const ReplayRun &p_run) {
+    const bool replays
+        = p_run.recovery() == NetwPredict::RECOVERY_POLICY_REBASE_REPLAY;
+    const bool corrects_by_replay
+        = p_run.mode() == NetwPredict::CORRECTION_MODE_REPLAY;
+    if (replays != corrects_by_replay) {
+        return law_broken(
+            "the policy resolves %d and the correction resolves %d",
+            int(p_run.recovery()),
+            int(p_run.mode())
+        );
+    }
+    if (p_run.scenario().integrates && !replays) {
+        return law_broken(
+            "a body whose replay integrates resolves %d",
+            int(p_run.recovery())
+        );
+    }
+    if (!p_run.scenario().integrates
+        && p_run.recovery() != NetwPredict::RECOVERY_POLICY_REBASE_RECOVER) {
+        return law_broken(
+            "a FRAME solver body declaring REPLAY resolves %d",
+            int(p_run.recovery())
+        );
+    }
+    return law_held();
+}
+
+const ReplayLaw L_INTEGRATED = {
+    "integrated",
+    "a body whose step applies forces is never replayed without a physics "
+    "step, so a FRAME solver body declaring REPLAY resolves RECOVER",
+    &law_integrated,
+};
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] a replay the space cannot integrate "
+    "resolves to recovery"
+) {
+    const ReplayScenario CORPUS[] = {
+        a_frame_solver_body(),
+        a_stepped_solver_body(),
+        a_frame_plain_body(),
+        a_tick_solver_body(),
+    };
+    for (const ReplayScenario &scenario : CORPUS) {
+        const ReplayRun run(scenario);
+        NETW_CELL(L_INTEGRATED, scenario);
+        NETW_LAW_HOLDS(L_INTEGRATED, run);
+    }
 }
 
 } // namespace TestNetwSessionPredictDeclareLaws

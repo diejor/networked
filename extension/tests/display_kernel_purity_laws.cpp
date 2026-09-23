@@ -159,7 +159,7 @@ TEST_CASE(
         kernel(
             "chase-smooth-time",
             "double chase_smooth_time(",
-            "predicted_smooth_time"
+            "live_smooth_time"
         ),
         kernel("glide", "double glide(", "chase_glide_time"),
         kernel("take-trace-frame", "bool take_trace_frame(", "trace_interval"),

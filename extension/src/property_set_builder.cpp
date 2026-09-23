@@ -138,6 +138,8 @@ Ref<NetwPropertySet> from_property_configs(
     StringName trigger_owner;
     int64_t window = want_input ? 2 : 0;
     StringName window_owner;
+    int64_t heartbeat = 0;
+    StringName heartbeat_owner;
     int64_t audience = want_input ? NetwPropertySet::AUDIENCE_SERVER_ONLY
                                   : NetwPropertySet::AUDIENCE_PUBLIC;
     bool masked = false;
@@ -198,6 +200,19 @@ Ref<NetwPropertySet> from_property_configs(
             trigger = config->get_set_trigger();
             trigger_owner = property;
         }
+        if (config->get_set_heartbeat_ticks() != NetwPropertyConfig::UNSET) {
+            if (!String(heartbeat_owner).is_empty()
+                && config->get_set_heartbeat_ticks() != heartbeat) {
+                warn_set_conflict(
+                    p_record,
+                    "heartbeat",
+                    heartbeat_owner,
+                    property
+                );
+            }
+            heartbeat = config->get_set_heartbeat_ticks();
+            heartbeat_owner = property;
+        }
         if (config->get_set_window() != NetwPropertyConfig::UNSET) {
             if (want_broadcast) {
                 warn_broadcast_ignored("windowed", property);
@@ -245,6 +260,7 @@ Ref<NetwPropertySet> from_property_configs(
     set->policy = policy;
     set->trigger = trigger;
     set->window = window;
+    set->heartbeat = heartbeat;
     set->audience = audience;
     set->masked = masked;
     return set;

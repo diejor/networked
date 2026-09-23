@@ -167,7 +167,7 @@ void declare_prediction(Node *p_node) {
     sync->set_name("PredictSync");
     sync->set_meta(
         StringName("netw_schedule"),
-        int(netw::NetwPredict::SCHEDULE_TICK)
+        int(netw::NetwSimulationHandle::SCHEDULE_TICK)
     );
     p_node->add_child(sync);
     sync->set_owner(p_node);
@@ -202,8 +202,8 @@ Subject stand_target(
 }
 
 struct DisplayDecl {
-    int64_t role = NetwMultiplayer::DISPLAY_ROLE_AUTO;
-    int64_t predicted_mode = -1;
+    NetwMultiplayer::DisplayRole role = NetwMultiplayer::DISPLAY_ROLE_AUTO;
+    NetwMultiplayer::LiveMode live_mode = NetwMultiplayer::LIVE_MODE_CHASE;
     double smooth_time = -1.0;
 };
 
@@ -220,11 +220,9 @@ Subject stand_interpolated(
     if (p_declared.role != NetwMultiplayer::DISPLAY_ROLE_AUTO) {
         display->set_display_role(p_declared.role);
     }
-    if (p_declared.predicted_mode >= 0) {
-        display->set_predicted_mode(p_declared.predicted_mode);
-    }
+    display->set_live_mode(p_declared.live_mode);
     if (p_declared.smooth_time >= 0.0) {
-        display->set_predicted_smooth_time(p_declared.smooth_time);
+        display->set_live_smooth_time(p_declared.smooth_time);
     }
     netw::Netw::configure_property(subject.body, StringName("position"), false)
         ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
@@ -352,7 +350,7 @@ public:
         DisplayDecl declared;
         if (p_scenario.shape == WORLD_BRACKETED) {
             declared.role = NetwMultiplayer::DISPLAY_ROLE_PREDICTED;
-            declared.predicted_mode = NetwMultiplayer::PREDICTED_MODE_BRACKETED;
+            declared.live_mode = NetwMultiplayer::LIVE_MODE_BRACKETED;
         }
         Subject subject = stand_interpolated(
             bench,
@@ -528,8 +526,8 @@ TEST_CASE(
 
 enum Rung {
     RUNG_AUTHORITY,
-    RUNG_SIMULATED,
     RUNG_STEERED,
+    RUNG_AVATAR,
     RUNG_REMOTE,
 };
 
@@ -546,21 +544,20 @@ RoleScenario locally_owned() {
     return scenario;
 }
 
-RoleScenario locally_simulated() {
-    RoleScenario scenario;
-    scenario.label = "locally-simulated";
-    scenario.rung = RUNG_SIMULATED;
-    scenario.route = 52;
-    scenario.expected = NetwMultiplayer::DISPLAY_ROLE_PREDICTED;
-    return scenario;
-}
-
 RoleScenario locally_steered() {
     RoleScenario scenario;
     scenario.label = "locally-steered";
     scenario.rung = RUNG_STEERED;
     scenario.route = 53;
     scenario.expected = NetwMultiplayer::DISPLAY_ROLE_PREDICTED;
+    return scenario;
+}
+
+RoleScenario an_avatar_on_its_controller() {
+    RoleScenario scenario;
+    scenario.label = "an-avatar-on-its-controller";
+    scenario.rung = RUNG_AVATAR;
+    scenario.route = 55;
     return scenario;
 }
 
@@ -577,6 +574,7 @@ class RoleRun {
     RoleScenario declared;
     int64_t resolved = -1;
     bool steers_locally = false;
+    bool warned_self_feedback = false;
 
 public:
     explicit RoleRun(const RoleScenario &p_scenario, Plant p_plant = PLANT_NONE)
@@ -584,8 +582,7 @@ public:
         Bench bench;
         Node2D *node = memnew(Node2D);
         node->set_name("LadderTarget");
-        if (p_scenario.rung == RUNG_SIMULATED
-            || p_scenario.rung == RUNG_STEERED) {
+        if (p_scenario.rung == RUNG_STEERED) {
             declare_prediction(node);
         }
         if (p_scenario.rung == RUNG_REMOTE) {
@@ -593,22 +590,13 @@ public:
         }
         const Ref<NetwEntity> entity = NetwEntity::ensure(node);
         entity->get_interpolation()->set_enable_smart_dilation(false);
-        if (p_scenario.rung == RUNG_SIMULATED) {
-            entity->get_prediction()->set_input_source(
-                netw::NetwPredict::INPUT_SOURCE_PREDICTED
-            );
-        }
-        if (p_scenario.rung == RUNG_SIMULATED
-            || p_scenario.rung == RUNG_STEERED) {
-            entity->get_prediction()->set_sim_mode(
-                netw::NetwPredict::SIM_MODE_SPECULATIVE
-            );
-        }
         netw::Netw::configure_property(node, StringName("position"), false)
             ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
         bench.seat(node);
         bench.bind(entity, p_scenario.route);
-        if (p_scenario.rung == RUNG_STEERED
+        const bool steered = p_scenario.rung == RUNG_STEERED
+            || p_scenario.rung == RUNG_AVATAR;
+        if (steered
             && p_plant != PLANT_THE_LADDER_READS_A_STEERED_ENTITY_AS_OWNED) {
             entity->set_controller(1);
         }
@@ -623,6 +611,13 @@ public:
             StringName(),
             StringName("role")
         ));
+        const netw::display::Runtime *runtime
+            = NetwNativeTests::display_runtime_of(
+                bench.core(),
+                entity->get_rid_handle()
+            );
+        REQUIRE(runtime != nullptr);
+        warned_self_feedback = runtime->get_warned_self_feedback();
     }
 
     const RoleScenario &scenario() const {
@@ -635,6 +630,10 @@ public:
 
     bool local_control() const {
         return steers_locally;
+    }
+
+    bool warned() const {
+        return warned_self_feedback;
     }
 };
 
@@ -654,7 +653,7 @@ LawVerdict law_ladder(const RoleRun &p_run) {
 const RoleLaw L_LADDER = {
     "ladder",
     "the auto role reads the entity's own facts: an entity this peer holds "
-    "authority over displays nothing, one this peer simulates or steers is "
+    "authority over displays nothing, one this peer steers and predicts is "
     "predicted, and one streamed from elsewhere is remote",
     &law_ladder,
 };
@@ -676,13 +675,33 @@ const RoleLaw L_STEERING = {
     &law_steering,
 };
 
-const RoleLaw ROLE_LAWS[] = {L_LADDER, L_STEERING};
+LawVerdict law_in_place(const RoleRun &p_run) {
+    if (p_run.scenario().rung != RUNG_AVATAR) {
+        return law_held();
+    }
+    if (p_run.warned()) {
+        return law_broken(
+            "an unpredicted body written in place by its own controller "
+            "raised the self-feedback warning"
+        );
+    }
+    return law_held();
+}
+
+const RoleLaw L_IN_PLACE = {
+    "in-place",
+    "an unpredicted entity on its controller keeps the disabled role, so a "
+    "channel it interpolates in place raises no self-feedback warning",
+    &law_in_place,
+};
+
+const RoleLaw ROLE_LAWS[] = {L_LADDER, L_STEERING, L_IN_PLACE};
 
 TEST_CASE("[Networked][Display][SceneTree] the auto display role laws hold") {
     const RoleScenario CORPUS[] = {
         locally_owned(),
-        locally_simulated(),
         locally_steered(),
+        an_avatar_on_its_controller(),
         streamed_from_elsewhere(),
     };
     for (const RoleScenario &scenario : CORPUS) {
@@ -804,46 +823,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Display][SceneTree] a remote rigid body freezes "
-    "kinematically while a display owns it and returns to its own "
-    "freeze when the display is disabled"
-) {
-    Bench bench;
-    RigidBody2D *body = memnew(RigidBody2D);
-    body->set_name("RemoteBody");
-    body->set_freeze_enabled(false);
-    body->set_freeze_mode(RigidBody2D::FREEZE_MODE_STATIC);
-    body->set_multiplayer_authority(REMOTE_PEER);
-    const Ref<NetwEntity> entity = NetwEntity::ensure(body);
-    entity->get_interpolation()->set_enable_smart_dilation(false);
-    netw::Netw::configure_property(body, StringName("position"), false)
-        ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
-    bench.seat(body);
-    bench.bind(entity, 44);
-
-    CHECK(body->is_freeze_enabled());
-    NETW_CHECK_EQ(
-        int(body->get_freeze_mode()),
-        int(RigidBody2D::FREEZE_MODE_KINEMATIC)
-    );
-
-    entity->get_interpolation()->set_display_role(
-        NetwMultiplayer::DISPLAY_ROLE_DISABLED
-    );
-    bench.core()->display_mark_dirty(
-        entity->get_rid_handle(),
-        netw::display::DIRT_RUNTIME
-    );
-    bench.core()->session_flush_deferred();
-
-    CHECK(!body->is_freeze_enabled());
-    NETW_CHECK_EQ(
-        int(body->get_freeze_mode()),
-        int(RigidBody2D::FREEZE_MODE_STATIC)
-    );
-}
-
-TEST_CASE(
     "[Networked][Display][SceneTree] a predicted chase moves the visual "
     "toward the live source without moving the source"
 ) {
@@ -913,7 +892,7 @@ TEST_CASE(
 ) {
     Bench bench;
     const Subject subject = stand_predicted(bench, 7);
-    subject.entity->get_interpolation()->set_predicted_smooth_time(0.0);
+    subject.entity->get_interpolation()->set_live_smooth_time(0.0);
     netw::display::Runtime *runtime
         = NetwNativeTests::display_runtime_of(bench.core(), subject.rid());
     REQUIRE(runtime != nullptr);

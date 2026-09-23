@@ -9,7 +9,6 @@
 #include "godot/utility.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict_island.hpp"
 #include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/predict_runner.hpp"
 #include "netw/api/predict_stats.hpp"
@@ -319,7 +318,7 @@ int64_t NetwPredictSlotEngine::schedule() const {
         return seated;
     }
     return handle.is_valid() ? handle->get_schedule()
-                             : int(NetwPredict::SCHEDULE_TICK);
+                             : int(NetwSimulationHandle::SCHEDULE_TICK);
 }
 
 int64_t NetwPredictSlotEngine::ack() const {
@@ -375,7 +374,6 @@ void NetwPredictSlotEngine::attach(
         );
         return;
     }
-    apply_scene_island_defaults();
     handle->get_stats()->bind_slot(pool, p_entity);
     const Callable on_control = callable_mp(
         handle.ptr(),
@@ -395,7 +393,6 @@ void NetwPredictSlotEngine::release() {
     }
     refresh_simulation_gate(true);
     clear_island_promotions();
-    pool->clear_simulation_subjects(native_slot());
     unregister_from_loop();
     const predict::Feed feed;
     const Ref<NetwPropertySetBinding> state = state_binding();
@@ -427,13 +424,13 @@ void NetwPredictSlotEngine::rewire() {
 }
 
 void NetwPredictSlotEngine::publish_topology_roster() {
-    pool->publish_topology_roster(native_slot(), handle->get_island());
+    pool->publish_topology_roster(native_slot());
 }
 
 void NetwPredictSlotEngine::network_tick(const NetwPredictTiming &p_timing) {
     NETW_ZONE_NC("predict engine network tick", colors::PREDICTION);
     adopt_timing(p_timing);
-    if (schedule() == NetwPredict::SCHEDULE_TICK) {
+    if (schedule() == NetwSimulationHandle::SCHEDULE_TICK) {
         simulate_tick(p_timing);
         return;
     }
@@ -483,7 +480,7 @@ void NetwPredictSlotEngine::simulate_tick(const NetwPredictTiming &p_timing) {
 void NetwPredictSlotEngine::simulate_frame(const NetwPredictTiming &p_timing) {
     NETW_ZONE_NC("predict engine simulate frame", colors::PREDICTION);
     adopt_timing(p_timing);
-    if (schedule() != NetwPredict::SCHEDULE_FRAME) {
+    if (schedule() != NetwSimulationHandle::SCHEDULE_FRAME) {
         return;
     }
     simulate_solver(p_timing);
@@ -494,7 +491,7 @@ void NetwPredictSlotEngine::simulate_stepped(
 ) {
     NETW_ZONE_NC("predict engine simulate stepped", colors::PREDICTION);
     adopt_timing(p_timing);
-    if (schedule() != NetwPredict::SCHEDULE_STEPPED) {
+    if (schedule() != NetwSimulationHandle::SCHEDULE_STEPPED) {
         return;
     }
     simulate_solver(p_timing);
@@ -544,9 +541,8 @@ void NetwPredictSlotEngine::prepare_island(int p_schedule) {
         || !role_drives_island(role())) {
         return;
     }
-    pool->refresh_island_membership(
+    pool->refresh_selection(
         native_slot(),
-        handle->get_island(),
         role() == NetwPredict::ROLE_PREDICT,
         callable_mp(handle.ptr(), &NetwPredictionHandle::seat_reconcile_mode)
     );
@@ -563,7 +559,7 @@ void NetwPredictSlotEngine::adopt_timing(const NetwPredictTiming &p_timing) {
 
 void NetwPredictSlotEngine::finalize_frame_state() {
     NETW_ZONE_NC("predict finalize frame state", colors::PREDICTION);
-    if (schedule() != NetwPredict::SCHEDULE_FRAME
+    if (schedule() != NetwSimulationHandle::SCHEDULE_FRAME
         || role() != NetwPredict::ROLE_PREDICT) {
         return;
     }
@@ -572,7 +568,7 @@ void NetwPredictSlotEngine::finalize_frame_state() {
 
 void NetwPredictSlotEngine::finalize_stepped_state() {
     NETW_ZONE_NC("predict finalize stepped state", colors::PREDICTION);
-    if (schedule() != NetwPredict::SCHEDULE_STEPPED
+    if (schedule() != NetwSimulationHandle::SCHEDULE_STEPPED
         || role() != NetwPredict::ROLE_PREDICT) {
         return;
     }
@@ -620,7 +616,7 @@ bool NetwPredictSlotEngine::uses_schedule(int p_schedule) const {
 Dictionary NetwPredictSlotEngine::transition_state_at(
     int64_t p_entry_index
 ) const {
-    if (schedule() == NetwPredict::SCHEDULE_TICK) {
+    if (schedule() == NetwSimulationHandle::SCHEDULE_TICK) {
         const Ref<NetwTimeline> held = timeline();
         return held.is_valid() ? held->state_at(p_entry_index + 1)
                                : Dictionary();
@@ -916,7 +912,7 @@ void NetwPredictSlotEngine::judge_owner_claim(
 }
 
 int64_t NetwPredictSlotEngine::recorded_transition() const {
-    if (schedule() == NetwPredict::SCHEDULE_FRAME
+    if (schedule() == NetwSimulationHandle::SCHEDULE_FRAME
         && role() == NetwPredict::ROLE_CONSUME) {
         return ack();
     }
@@ -986,16 +982,20 @@ void NetwPredictSlotEngine::record_server_input(
 
 int NetwPredictSlotEngine::resolve_correction(int p_declared) const {
     if (core_seated() == nullptr) {
-        return NetwPredictionHandle::resolve_correction_mode_for(
-            entity.is_valid() ? entity->get_owner() : nullptr,
-            static_cast<NetwPredict::CorrectionMode>(p_declared)
-        );
+        const NetwPredict::CorrectionMode declared
+            = static_cast<NetwPredict::CorrectionMode>(p_declared);
+        return handle.is_valid()
+            ? handle->integrable_correction_mode(declared)
+            : NetwPredictionHandle::resolve_correction_mode_for(
+                  entity.is_valid() ? entity->get_owner() : nullptr,
+                  declared
+              );
     }
     const int64_t slot = native_slot();
     if (slot < 0) {
         return p_declared;
     }
-    return pool->resolve_correction(slot, p_declared);
+    return pool->settle_correction(slot, p_declared);
 }
 
 void NetwPredictSlotEngine::record_input_to_pool(
@@ -1015,35 +1015,7 @@ void NetwPredictSlotEngine::on_control_changed(
 }
 
 void NetwPredictSlotEngine::on_reparented() {
-    apply_scene_island_defaults();
     rewire_on(resolved_declaration());
-}
-
-void NetwPredictSlotEngine::apply_scene_island_defaults() {
-    const Ref<NetwPredictIsland> declared = handle->get_island();
-    if (declared->get_declared() && !declared->get_inherited()) {
-        return;
-    }
-    const Ref<NetwSceneHandle> scene = entity->get_scene();
-    NetwMultiplayer *session = scene.is_valid()
-        ? NetwEntity::session_core_for(entity->get_owner())
-        : nullptr;
-    const RID scene_rid = scene.is_valid() ? scene->get_entity() : RID();
-    const Ref<NetwEntity> host = session != nullptr && scene_rid.is_valid()
-        ? Object::cast_to<NetwEntity>(session->entity_get_view(scene_rid).ptr())
-        : Ref<NetwEntity>();
-    Ref<NetwPredictIsland> inherited;
-    if (host.is_valid() && host != entity) {
-        const Ref<NetwPredictionHandle> host_prediction
-            = host->get_prediction();
-        if (host_prediction.is_valid()) {
-            inherited = host_prediction->get_island()->inheritable();
-        }
-    }
-    if (inherited.is_null() && !declared->get_inherited()) {
-        return;
-    }
-    handle->set_island(inherited);
 }
 
 void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
@@ -1090,7 +1062,6 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
         input.is_valid() ? input->snapshot_payload() : Dictionary()
     );
     sync_episode();
-    refresh_simulation_gate(false);
     publish_topology_roster();
     const Ref<NetwPredictStats> stats = handle->get_stats();
     stats->set_int_fact(NetwPredictStats::FACT_COMMAND_QUEUE_DEPTH, 0);
@@ -1104,9 +1075,14 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
         adopt_timing(session->frame_timing());
     }
     const int resolved_role = resolve_axes();
+    refresh_simulation_gate(false);
     set_role_column(resolved_role);
-    if (resolved_role != NetwPredict::ROLE_PREDICT) {
+    const bool leading = session != nullptr ? sim::leads(resolved_mode())
+                                            : role_drives_island(resolved_role);
+    if (!leading) {
         clear_island_promotions();
+    } else if (resolved_role != NetwPredict::ROLE_PREDICT) {
+        pool->clear_joint_roster(slot);
     }
     set_correction_column(resolve_correction(handle->get_correction_mode()));
     pool->seed_recovery_ledger(slot);
@@ -1166,12 +1142,13 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
     }
     if (session != nullptr) {
         session->display_mark_role_dirty(entity->get_rid_handle());
+        session->sim_announce(entity->get_rid_handle());
     }
 }
 
 void NetwPredictSlotEngine::reconfigure() {
     if (core_seated() != nullptr) {
-        pool->reconfigure_from(native_slot(), handle);
+        pool->admit_reconcile_mode(native_slot());
     }
 }
 
@@ -1192,24 +1169,45 @@ void NetwPredictSlotEngine::emit_reachability_findings(
 }
 
 int NetwPredictSlotEngine::pool_island() const {
-    if (handle->get_reconcile_mode() == NetwPredict::RECONCILE_JOINT) {
+    if (pool->reconcile_of(native_slot()) == NetwPredict::RECONCILE_JOINT) {
         return NetwPredictionEngine::ISLAND_JOINT;
     }
-    if (handle->get_island()->get_declared()
-        || pool->simulation_subject_count(native_slot()) > 0) {
+    NetwMultiplayer *session = core_seated();
+    const sim::Row *row = session != nullptr && entity.is_valid()
+        ? session->sim_row_of(entity->get_rid_handle())
+        : nullptr;
+    const bool chosen = row != nullptr && row->choice.declared();
+    const bool selected = row != nullptr && row->selected_by.count() > 0
+        && !sim::leads(row->mode);
+    if (chosen || selected) {
         return NetwPredictionEngine::ISLAND_DECLARED;
     }
     return NetwPredictionEngine::ISLAND_NONE;
 }
 
+sim::Mode NetwPredictSlotEngine::resolved_mode() const {
+    NetwMultiplayer *session = core_seated();
+    const sim::Row *row = session != nullptr && entity.is_valid()
+        ? session->sim_row_of(entity->get_rid_handle())
+        : nullptr;
+    return row != nullptr ? row->mode : sim::Mode::NONE;
+}
+
 int NetwPredictSlotEngine::resolve_axes() {
-    return pool->resolve_axes(native_slot(), handle);
+    const sim::Facts facts = pool->resolution_facts(native_slot(), handle);
+    NetwMultiplayer *session = core_seated();
+    if (session == nullptr || entity.is_null()) {
+        return pool->apply_mode(native_slot(), handle, sim::resolve(facts));
+    }
+    const RID seated = entity->get_rid_handle();
+    const sim::Mode mode = session->sim_resolve(seated, facts);
+    session->sim_settle_body(entity);
+    return pool->apply_mode(native_slot(), handle, mode);
 }
 
 void NetwPredictSlotEngine::notify_contact() {
     pool->notify_contact(
         native_slot(),
-        handle->get_island(),
         handle->get_witness_contacts().is_valid(),
         handle->get_collision_cooldown_ticks()
     );
@@ -1399,7 +1397,7 @@ void NetwPredictSlotEngine::predict_step(double p_delta, int64_t p_tick) {
 void NetwPredictSlotEngine::simulated_step(double p_delta, int64_t p_tick) {
     const Dictionary input = predicted_command(p_tick);
     const bool joint
-        = handle->get_reconcile_mode() == NetwPredict::RECONCILE_JOINT;
+        = pool->reconcile_of(native_slot()) == NetwPredict::RECONCILE_JOINT;
     if (joint) {
         record_drive(
             p_tick,
@@ -1577,8 +1575,7 @@ void NetwPredictSlotEngine::on_state(
         );
         return;
     }
-    if (corrected
-        && handle->get_reconcile_mode() == NetwPredict::RECONCILE_JOINT) {
+    if (corrected && pool->reconcile_of(slot) == NetwPredict::RECONCILE_JOINT) {
         pool->note_joint_basis(
             slot,
             p_ack,
@@ -1631,7 +1628,7 @@ Ref<NetwPredictRecovery> NetwPredictSlotEngine::recover_through_seam(
     const Dictionary &p_carried,
     NetwPredict::RecoveryPolicy p_policy,
     NetwPredict::CorrectionMode p_correction,
-    NetwPredict::RestoreMode p_snap_restore,
+    NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_before,
     const Dictionary &p_tier_errors,
@@ -1712,13 +1709,19 @@ bool NetwPredictSlotEngine::is_steppable() const {
 
 void NetwPredictSlotEngine::joint_pass(const NetwPredictTiming &p_timing) {
     const int64_t present = p_timing.get_tick() - 1;
-    if (handle->get_reconcile_mode() != NetwPredict::RECONCILE_JOINT
+    if (pool->reconcile_of(native_slot()) != NetwPredict::RECONCILE_JOINT
         || !role_drives_island(role()) || core_seated() == nullptr
         || present < 0) {
         return;
     }
     NETW_ZONE_NC("predict engine joint pass", colors::PREDICTION);
     const predict::JointPassPlan plan = pool_joint_pass(present);
+    if (plan.floor >= 0) {
+        core_seated()->sim_release_lingering(
+            entity->get_rid_handle(),
+            plan.floor
+        );
+    }
     if (!plan.valid) {
         NETW_TRACE(
             sys::PREDICTION,
@@ -1793,7 +1796,8 @@ NetwPredictSlotEngine::SteppedIsland NetwPredictSlotEngine::
     stepped_island() const {
     SteppedIsland out;
     NetwMultiplayer *host = core_seated();
-    if (host == nullptr || schedule() != NetwPredict::SCHEDULE_STEPPED) {
+    if (host == nullptr
+        || schedule() != NetwSimulationHandle::SCHEDULE_STEPPED) {
         return out;
     }
     out.space = host->entity_space_of(seated_entity()).space;
@@ -1858,7 +1862,13 @@ void NetwPredictSlotEngine::run_joint_pass(
         ran.push_back(0);
     }
     const SteppedIsland island = stepped_island();
+    LocalVector<sim::HeldPose> bystanders;
     if (island.stepper.is_valid()) {
+        LocalVector<RID> replayed;
+        for (NetwPredictSlotEngine *member : stepped) {
+            replayed.push_back(member->seated_entity()->get_rid_handle());
+        }
+        core_seated()->sim_hold_poses(island.space, replayed, bystanders);
         island.stepper->restore(island.space, p_floor_transition);
     }
     int64_t open_transition = -1;
@@ -1890,6 +1900,7 @@ void NetwPredictSlotEngine::run_joint_pass(
     if (open_transition >= 0) {
         step_island(island, open_transition);
     }
+    sim::restore_poses(bystanders);
     const int64_t present = p_plan.present;
     for (uint32_t at = 0; at < stepped.size(); ++at) {
         stepped[at]->apply_input_raw(live[at]);
@@ -2397,7 +2408,7 @@ Dictionary NetwPredictSlotEngine::witness_sample() const {
 }
 
 PackedStringArray NetwPredictSlotEngine::island_participant_ids() const {
-    return pool->live_participant_ids(native_slot(), handle->get_island());
+    return pool->live_participant_ids(native_slot());
 }
 
 void NetwPredictSlotEngine::maybe_demote_for_breach(

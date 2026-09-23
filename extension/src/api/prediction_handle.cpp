@@ -11,6 +11,7 @@
 #include "netw/api/predict_field_recovery.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/log.hpp"
+#include "netw/predict/axes.hpp"
 #include "netw/predict/compare.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/journal.hpp"
@@ -29,7 +30,6 @@ const char *NetwPredictionHandle::GENERATOR_UNKNOWN_BEYOND_RETENTION
     = "UNKNOWN_BEYOND_RETENTION";
 
 NetwPredictionHandle::NetwPredictionHandle() {
-    island_rule.instantiate();
     counters.instantiate();
 }
 
@@ -72,10 +72,6 @@ void NetwPredictionHandle::rewire() {
 
 void NetwPredictionHandle::bind_entity(const Ref<NetwEntity> &p_entity) {
     entity_id = p_entity.is_valid() ? p_entity->get_instance_id() : ObjectID();
-    island_rule->bind_owner(p_entity);
-    island_rule->watch_declaration(
-        callable_mp(this, &NetwPredictionHandle::restate_declaration)
-    );
 }
 
 void NetwPredictionHandle::bind_engine(NetwPredictSlotEngine *p_engine) {
@@ -191,7 +187,7 @@ Ref<NetwPredictRecovery> NetwPredictionHandle::seat_recover_seam(
     const Dictionary &p_carried,
     NetwPredict::RecoveryPolicy p_policy,
     NetwPredict::CorrectionMode p_correction,
-    NetwPredict::RestoreMode p_snap_restore,
+    NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_before,
     const Dictionary &p_tier_errors,
@@ -239,28 +235,47 @@ bool NetwPredictionHandle::is_registered() const {
     return engine() != nullptr;
 }
 
-void NetwPredictionHandle::set_simulate(const Callable &p_value) {
-    simulate_step = p_value;
+Ref<NetwSimulationHandle> NetwPredictionHandle::simulation() const {
+    const Ref<NetwEntity> bound = get_entity();
+    return bound.is_valid() ? bound->get_simulation()
+                            : Ref<NetwSimulationHandle>();
+}
+
+void NetwPredictionHandle::step_changed() {
     NetwPredictSlotEngine *held = engine();
     if (held != nullptr) {
         held->push_simulate();
     }
 }
 
-void NetwPredictionHandle::set_schedule(NetwPredict::Schedule p_value) {
-    schedule_value = p_value;
-    reconfigure();
+Callable NetwPredictionHandle::get_simulate() const {
+    const Ref<NetwSimulationHandle> held = simulation();
+    return held.is_valid() ? held->get_step() : Callable();
+}
+
+NetwSimulationHandle::Schedule NetwPredictionHandle::get_schedule() const {
+    const Ref<NetwSimulationHandle> held = simulation();
+    return held.is_valid() ? held->resolved_schedule()
+                           : NetwSimulationHandle::SCHEDULE_TICK;
+}
+
+NetwSimulationHandle::Restore NetwPredictionHandle::get_snap_restore() const {
+    const Ref<NetwSimulationHandle> held = simulation();
+    return held.is_valid()
+            && held->get_restore() == NetwSimulationHandle::RESTORE_EXTRAPOLATED
+        ? NetwSimulationHandle::RESTORE_EXTRAPOLATED
+        : NetwSimulationHandle::RESTORE_EXACT;
+}
+
+int NetwPredictionHandle::get_max_restore_ticks() const {
+    const Ref<NetwSimulationHandle> held = simulation();
+    return held.is_valid() ? held->get_max_restore_ticks() : 6;
 }
 
 void NetwPredictionHandle::set_correction_mode(
     NetwPredict::CorrectionMode p_value
 ) {
     correction_value = p_value;
-    reconfigure();
-}
-
-void NetwPredictionHandle::set_snap_restore(NetwPredict::RestoreMode p_value) {
-    restore_value = p_value;
     reconfigure();
 }
 
@@ -290,18 +305,6 @@ void NetwPredictionHandle::set_breach_response(
     if (held != nullptr) {
         held->note_breach_source(slot(), StringName("code"));
     }
-}
-
-void NetwPredictionHandle::set_island(const Ref<NetwPredictIsland> &p_value) {
-    island_rule = p_value;
-    if (island_rule.is_null()) {
-        island_rule.instantiate();
-    }
-    island_rule->bind_owner(get_entity());
-    island_rule->watch_declaration(
-        callable_mp(this, &NetwPredictionHandle::restate_declaration)
-    );
-    reconfigure();
 }
 
 void NetwPredictionHandle::set_sensors(const Dictionary &p_value) {
@@ -335,11 +338,6 @@ void NetwPredictionHandle::set_transport_corridor(const Callable &p_value) {
         "Transport stays disabled."
     );
     corridor_sweep = p_value;
-}
-
-void NetwPredictionHandle::set_max_restore_ticks(int p_value) {
-    max_restore_value = p_value;
-    reconfigure();
 }
 
 void NetwPredictionHandle::set_teleport_threshold(double p_value) {
@@ -398,20 +396,20 @@ void NetwPredictionHandle::set_archetype(NetwPredict::Archetype p_value) {
     if (!bool(axes[StringName("declared")])) {
         return;
     }
-    set_schedule(
-        static_cast<NetwPredict::Schedule>(int(axes[StringName("schedule")]))
-    );
+    const Ref<NetwSimulationHandle> held = simulation();
+    if (held.is_valid()) {
+        held->preset(
+            NetwSimulationHandle::Schedule(int(axes[StringName("schedule")])),
+            bool(axes[StringName("declares_snap_restore")]),
+            NetwSimulationHandle::Restore(int(axes[StringName("snap_restore")]))
+        );
+    }
     set_missing_policy(static_cast<NetwPredict::MissingInput>(
         int(axes[StringName("missing_policy")])
     ));
     set_recovery_policy(static_cast<NetwPredict::RecoveryPolicy>(
         int(axes[StringName("recovery_policy")])
     ));
-    if (bool(axes[StringName("declares_snap_restore")])) {
-        set_snap_restore(static_cast<NetwPredict::RestoreMode>(
-            int(axes[StringName("snap_restore")])
-        ));
-    }
     if (bool(axes[StringName("declares_teleport_threshold")])) {
         set_teleport_threshold(double(axes[StringName("teleport_threshold")]));
     }
@@ -480,7 +478,13 @@ Variant NetwPredictionHandle::sensor(
 NetwPredict::RecoveryPolicy NetwPredictionHandle::
     resolved_recovery_policy() const {
     if (recovery_policy_value >= 0) {
-        return static_cast<NetwPredict::RecoveryPolicy>(recovery_policy_value);
+        return static_cast<NetwPredict::RecoveryPolicy>(
+            predict::integrable_recovery_policy(
+                recovery_policy_value,
+                get_schedule(),
+                body_solves()
+            )
+        );
     }
     return resolved_correction_mode() == NetwPredict::CORRECTION_MODE_REPLAY
         ? NetwPredict::RECOVERY_POLICY_REBASE_REPLAY
@@ -495,12 +499,34 @@ NetwPredict::CorrectionMode NetwPredictionHandle::
             held->resolved_correction_mode()
         );
     }
-    const Ref<NetwEntity> bound = get_entity();
-    Object *body = bound.is_valid() ? bound->get_owner() : nullptr;
-    return resolve_correction_mode_for(
-        body,
+    return integrable_correction_mode(
         static_cast<NetwPredict::CorrectionMode>(correction_value)
     );
+}
+
+NetwPredict::CorrectionMode NetwPredictionHandle::integrable_correction_mode(
+    NetwPredict::CorrectionMode p_declared
+) const {
+    const Ref<NetwEntity> bound = get_entity();
+    Object *body = bound.is_valid() ? bound->get_owner() : nullptr;
+    return static_cast<NetwPredict::CorrectionMode>(
+        predict::integrable_correction(
+            resolve_correction_mode_for(body, p_declared),
+            get_schedule(),
+            body_solves()
+        )
+    );
+}
+
+bool NetwPredictionHandle::body_solves() const {
+    NetwPredictionEngine *held = pool();
+    if (held != nullptr && held->owner_bound(slot())) {
+        return held->owner_solves(slot());
+    }
+    const Ref<NetwEntity> bound = get_entity();
+    Object *body = bound.is_valid() ? bound->get_owner() : nullptr;
+    return Object::cast_to<RigidBody2D>(body) != nullptr
+        || Object::cast_to<RigidBody3D>(body) != nullptr;
 }
 
 void NetwPredictionHandle::simulate_tick(double p_delta, int64_t p_tick) {
@@ -621,58 +647,12 @@ void NetwPredictionHandle::stamp_episode() {
     }
 }
 
-void NetwPredictionHandle::set_simulated_by(
-    const Ref<NetwEntity> &p_subject,
-    bool p_enabled,
-    const Callable &p_predictor
-) {
-    NetwPredictionEngine *held = pool();
-    if (p_subject.is_null() || held == nullptr) {
-        return;
-    }
-    const int64_t row = slot();
-    const int64_t subject = p_subject->get_instance_id();
-    bool changed = false;
-    if (p_enabled) {
-        changed = held->note_simulated_by(row, subject, p_predictor);
-    } else {
-        changed = held->clear_simulated_by(row, subject);
-        if (held->simulation_subject_count(row) == 0
-            && reconcile_value != NetwPredict::RECONCILE_INDEPENDENT) {
-            reconcile_value = NetwPredict::RECONCILE_INDEPENDENT;
-            NetwPredictSlotEngine *shell = engine();
-            if (shell != nullptr) {
-                shell->follow_relay_subscription(reconcile_value);
-            }
-        }
-    }
-    if (changed) {
-        rewire();
-    }
-}
-
-int NetwPredictionHandle::simulated_by_count() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? 0 : held->simulation_subject_count(slot());
-}
-
-Callable NetwPredictionHandle::predicted_command_callable() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? Callable()
-                           : held->first_simulation_predictor(slot());
+void NetwPredictionHandle::set_predict_commands(const Callable &p_predictor) {
+    command_predictor = p_predictor;
 }
 
 void NetwPredictionHandle::restate_declaration() {
     reconfigure();
-}
-
-NetwPredict::Role NetwPredictionHandle::role_for_axes(
-    NetwPredict::InputSource p_source,
-    NetwPredict::SimMode p_mode
-) {
-    return static_cast<NetwPredict::Role>(
-        NetwPredictionEngine::role_for_axes(int(p_source), int(p_mode))
-    );
 }
 
 NetwPredict::CorrectionMode NetwPredictionHandle::resolve_correction_mode_for(
@@ -859,29 +839,6 @@ void NetwPredictionHandle::_bind_methods() {
         D_METHOD("stamp_episode"),
         &NetwPredictionHandle::stamp_episode
     );
-    ClassDB::bind_method(
-        D_METHOD("set_simulated_by", "subject", "enabled", "predictor"),
-        &NetwPredictionHandle::set_simulated_by,
-        DEFVAL(Callable())
-    );
-    ClassDB::bind_method(
-        D_METHOD("simulated_by_count"),
-        &NetwPredictionHandle::simulated_by_count
-    );
-    ClassDB::bind_method(
-        D_METHOD("predicted_command_callable"),
-        &NetwPredictionHandle::predicted_command_callable
-    );
-    ClassDB::bind_method(
-        D_METHOD("restate_declaration"),
-        &NetwPredictionHandle::restate_declaration
-    );
-
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD("role_for_axes", "source", "mode"),
-        &NetwPredictionHandle::role_for_axes
-    );
     ClassDB::bind_static_method(
         "NetwPredictionHandle",
         D_METHOD("resolve_correction_mode_for", "body", "mode", "solves"),
@@ -938,37 +895,17 @@ void NetwPredictionHandle::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_simulate"),
-        &NetwPredictionHandle::get_simulate
+        D_METHOD("get_predict_commands"),
+        &NetwPredictionHandle::get_predict_commands
     );
     ClassDB::bind_method(
-        D_METHOD("set_simulate", "value"),
-        &NetwPredictionHandle::set_simulate
+        D_METHOD("set_predict_commands", "value"),
+        &NetwPredictionHandle::set_predict_commands
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::CALLABLE, "simulate"),
-        "set_simulate",
-        "get_simulate"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_schedule"),
-        &NetwPredictionHandle::get_schedule
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_schedule", "value"),
-        &NetwPredictionHandle::set_schedule
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "schedule",
-            PROPERTY_HINT_ENUM,
-            "Tick,TickAndFrame,Frame,TickPrepass",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredict.Schedule"
-        ),
-        "set_schedule",
-        "get_schedule"
+        PropertyInfo(Variant::CALLABLE, "predict_commands"),
+        "set_predict_commands",
+        "get_predict_commands"
     );
     ClassDB::bind_method(
         D_METHOD("get_correction_mode"),
@@ -989,66 +926,6 @@ void NetwPredictionHandle::_bind_methods() {
         ),
         "set_correction_mode",
         "get_correction_mode"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_snap_restore"),
-        &NetwPredictionHandle::get_snap_restore
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_snap_restore", "value"),
-        &NetwPredictionHandle::set_snap_restore
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "snap_restore",
-            PROPERTY_HINT_ENUM,
-            "None,Pose,Physics",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredict.RestoreMode"
-        ),
-        "set_snap_restore",
-        "get_snap_restore"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_input_source"),
-        &NetwPredictionHandle::get_input_source
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_input_source", "value"),
-        &NetwPredictionHandle::set_input_source
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "input_source",
-            PROPERTY_HINT_ENUM,
-            "Local,Received,Predicted,None",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredict.InputSource"
-        ),
-        "set_input_source",
-        "get_input_source"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_sim_mode"),
-        &NetwPredictionHandle::get_sim_mode
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_sim_mode", "value"),
-        &NetwPredictionHandle::set_sim_mode
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "sim_mode",
-            PROPERTY_HINT_ENUM,
-            "Tick,Frame,Custom",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredict.SimMode"
-        ),
-        "set_sim_mode",
-        "get_sim_mode"
     );
     ClassDB::bind_method(
         D_METHOD("get_recovery_policy"),
@@ -1089,25 +966,6 @@ void NetwPredictionHandle::_bind_methods() {
         ),
         "set_breach_response",
         "get_breach_response"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_island"),
-        &NetwPredictionHandle::get_island
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_island", "value"),
-        &NetwPredictionHandle::set_island
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "island",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwPredictIsland",
-            PROPERTY_USAGE_NONE
-        ),
-        "set_island",
-        "get_island"
     );
     ClassDB::bind_method(
         D_METHOD("get_sensors"),
@@ -1156,19 +1014,6 @@ void NetwPredictionHandle::_bind_methods() {
         PropertyInfo(Variant::CALLABLE, "transport_corridor"),
         "set_transport_corridor",
         "get_transport_corridor"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_max_restore_ticks"),
-        &NetwPredictionHandle::get_max_restore_ticks
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_max_restore_ticks", "value"),
-        &NetwPredictionHandle::set_max_restore_ticks
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "max_restore_ticks"),
-        "set_max_restore_ticks",
-        "get_max_restore_ticks"
     );
     ClassDB::bind_method(
         D_METHOD("get_teleport_threshold"),
@@ -1336,7 +1181,14 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::set_archetype
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "archetype"),
+        PropertyInfo(
+            Variant::INT,
+            "archetype",
+            PROPERTY_HINT_ENUM,
+            "None,Scripted,SolverBody",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.Archetype"
+        ),
         "set_archetype",
         "get_archetype"
     );

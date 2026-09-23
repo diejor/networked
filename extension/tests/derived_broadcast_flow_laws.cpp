@@ -436,6 +436,123 @@ TEST_CASE(
     NETW_CHECK_GE(seen.author_ack_of_peer, 0);
 }
 
+TEST_CASE(
+    "[Networked][Sync][SceneTree] A4 a broadcast on an entity with no "
+    "controller is authored by session authority and the mirror applies it"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const FlowPair pair
+        = netw_test::stand_flow_pair(rig, BROADCAST_BODY, "BroadcastBody");
+    netw_test::steer(pair, 0);
+
+    const StringName field("aim_dir");
+    const int64_t out_before = stat_of(rig.server(), "row_frames_out");
+    int64_t authored = 0;
+    for (int step = 0; step < CLEAN_TICKS; ++step) {
+        authored = netw_test::clock_tick(rig, -1) + 1;
+        netw_test::author_at(
+            pair.authored,
+            field,
+            authored_value(authored),
+            NetwPropertySet::RECORD_BROADCAST,
+            authored
+        );
+        rig.step_ticks(1);
+    }
+    rig.step_ticks(HEAL_TICKS);
+
+    NETW_CHECK_GT(stat_of(rig.server(), "row_frames_out"), out_before);
+    const Vector2 mirrored = pair.mirror(0)->get(field);
+    NETW_CHECK_GT(mirrored.x, 0.0);
+    CHECK(mirrored.is_equal_approx(authored_value(authored)));
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] A5 an authority-policy broadcast is "
+    "authored by the client that holds node authority, and the server and "
+    "the other client apply it"
+) {
+    LoopbackRig rig(2);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const FlowPair pair = netw_test::stand_flow_pair(
+        rig,
+        netw_test::gdsrc::BROADCAST_AUTHORITY_AIM,
+        "AuthorityBody"
+    );
+    netw_test::steer(pair, rig.peer_id(1));
+    const int holder = rig.peer_id(0);
+    pair.authored->set_multiplayer_authority(holder);
+    pair.mirror(0)->set_multiplayer_authority(holder);
+    pair.mirror(1)->set_multiplayer_authority(holder);
+
+    const StringName field("aim_dir");
+    const int64_t out_before = stat_of(rig.client(0), "row_frames_out");
+    int64_t authored = 0;
+    for (int step = 0; step < CLEAN_TICKS; ++step) {
+        authored = netw_test::clock_tick(rig, 0) + 1;
+        netw_test::author_at(
+            pair.mirror(0),
+            field,
+            authored_value(authored),
+            NetwPropertySet::RECORD_BROADCAST,
+            authored
+        );
+        rig.step_ticks(1);
+    }
+    rig.step_ticks(HEAL_TICKS);
+
+    NETW_CHECK_GT(stat_of(rig.client(0), "row_frames_out"), out_before);
+    const Vector2 at_server = pair.authored->get(field);
+    const Vector2 at_peer = pair.mirror(1)->get(field);
+    CHECK(at_server.is_equal_approx(authored_value(authored)));
+    CHECK(at_peer.is_equal_approx(authored_value(authored)));
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] A6 a quiet broadcast with a heartbeat "
+    "re-sends its unchanged row every N ticks under a new revision, and the "
+    "mirror applies it over a drifted copy"
+) {
+    constexpr int BEAT_TICKS = 10;
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const FlowPair pair = netw_test::stand_flow_pair(
+        rig,
+        netw_test::gdsrc::BROADCAST_HEARTBEAT_AIM,
+        "HeartbeatBody"
+    );
+    netw_test::steer(pair, 0);
+
+    const StringName field("aim_dir");
+    const int64_t authored = netw_test::clock_tick(rig, -1) + 1;
+    netw_test::author_at(
+        pair.authored,
+        field,
+        authored_value(authored),
+        NetwPropertySet::RECORD_BROADCAST,
+        authored
+    );
+    rig.step_ticks(BEAT_TICKS * 2);
+    REQUIRE(Vector2(pair.mirror(0)->get(field))
+                .is_equal_approx(authored_value(authored)));
+
+    const Vector2 drifted(-7.0, -7.0);
+    pair.mirror(0)->set(field, drifted);
+    const int64_t out_before = stat_of(rig.server(), "row_frames_out");
+    rig.step_ticks(BEAT_TICKS * 2 + HEAL_TICKS);
+
+    NETW_CHECK_GE(
+        stat_of(rig.server(), "row_frames_out") - out_before,
+        int64_t(2)
+    );
+    const Vector2 mirrored = pair.mirror(0)->get(field);
+    CHECK(mirrored.is_equal_approx(authored_value(authored)));
+}
+
 } // namespace TestDerivedBroadcastFlowLaws
 
 #endif
