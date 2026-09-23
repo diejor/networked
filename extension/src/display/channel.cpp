@@ -48,11 +48,11 @@ void Channel::write(const Variant &p_value) {
 Variant Channel::current_source_value() {
     Object *from = source.resolve(sys::INTERPOLATION);
     if (from != nullptr) {
-        return from->get(source_prop);
+        return port_get(from, source_prop);
     }
     Object *to = target.resolve(sys::INTERPOLATION);
     if (to != nullptr) {
-        return to->get(target_prop);
+        return port_get(to, target_prop);
     }
     return Variant();
 }

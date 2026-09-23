@@ -131,8 +131,10 @@ func track_travel() -> void:
 							+ (drawn - last_model[key]).length()
 				last_model[key] = drawn
 			car_wheel_gap[key] = wheel_gap(each)
-			car_state_gap[key] = (each.pose.origin - each.global_position) \
-					.length()
+			var pose: Transform3D = each.state.transform
+			if each.freeze:
+				pose = each.global_transform
+			car_state_gap[key] = (pose.origin - each.global_position).length()
 			car_frozen[key] = each.freeze
 			var turn := each.global_basis.orthonormalized()
 			if last_spin.has(key):

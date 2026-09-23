@@ -23,7 +23,6 @@ namespace Networked;
 /// <see cref="NetwSimulationHandle"/> values. <b>What a game declares</b>
 /// - <see cref="NetwPredict.Archetype"/> what kind of body this is, which
 /// presets the rest
-/// - <see cref="NetwPredict.CorrectionMode"/> how a correction is applied
 /// - <see cref="NetwPredict.RecoveryPolicy"/> what a recovery is allowed to do
 /// - <see cref="NetwPredict.MissingInput"/> what the server does about an input
 /// that never came
@@ -36,18 +35,17 @@ namespace Networked;
 /// - <see cref="NetwPredict.ConsumeAction"/> what a consume pass did this frame
 /// - <see cref="NetwPredict.ContactClass"/> what the local solve reported
 /// touching
-/// - <see cref="NetwPredict.WitnessClass"/> what both peers agree was touched
 /// - <see cref="NetwPredict.CommandOrigin"/> where one replayed input came from
-/// - <see cref="NetwPredict.CellProvenance"/> the same, ranked, when a group
-/// replays together
 /// - <see cref="NetwPredict.ExactVerdict"/> whether fingerprints have been
 /// compared yet
+/// - <see cref="NetwPredict.Domain"/> whether a transition is judged by
+/// fingerprint or by tolerance
 /// - <see cref="NetwPredict.TriggerShape"/> what asked for a recovery
+/// - <see cref="NetwPredict.Attribution"/> what a divergence is blamed on
+/// - <see cref="NetwPredict.Operator"/> what wrote the body during a recovery
 /// - <see cref="NetwPredict.OperatorOutcome"/> what a recovery attempt achieved
 /// - <see cref="NetwPredict.EpisodeState"/> how far a divergence episode has
 /// got
-/// - <see cref="NetwPredict.VerdictReason"/> why a comparison did not reach the
-/// body
 /// </para>
 /// </remarks>
 public sealed class NetwPredict : NetwObject
@@ -94,28 +92,6 @@ public sealed class NetwPredict : NetwObject
         /// A kinematic or animated collision proxy.
         /// </summary>
         KinematicProxy = 5,
-    }
-
-    public enum WitnessClass : long
-    {
-        /// <summary>
-        /// Nothing was touched. A <see cref="NetwPredict.WitnessClass"/> reads
-        /// the same on every peer, which is what lets it travel in a
-        /// fingerprint and be compared.
-        /// </summary>
-        None = 0,
-        /// <summary>
-        /// The declared support was contacted.
-        /// </summary>
-        Support = 1,
-        /// <summary>
-        /// Static geometry other than the declared support was contacted.
-        /// </summary>
-        Static = 2,
-        /// <summary>
-        /// A replicated dynamic entity was contacted.
-        /// </summary>
-        DynamicEntity = 4,
     }
 
     public enum CommandOrigin : long
@@ -245,25 +221,6 @@ public sealed class NetwPredict : NetwObject
         RepeatLast = 1,
     }
 
-    public enum CorrectionMode : long
-    {
-        /// <summary>
-        /// Decide from what the body is. A kinematic body gets
-        /// <see cref="NetwPredict.CorrectionMode.Replay"/> and a dynamic one
-        /// gets <see cref="NetwPredict.CorrectionMode.Snap"/>.
-        /// </summary>
-        Auto = 0,
-        /// <summary>
-        /// Restore authoritative state, then replay every unacked input over
-        /// it.
-        /// </summary>
-        Replay = 1,
-        /// <summary>
-        /// Restore authoritative state and stop, with no replay.
-        /// </summary>
-        Snap = 2,
-    }
-
     public enum Archetype : long
     {
         /// <summary>
@@ -329,6 +286,16 @@ public sealed class NetwPredict : NetwObject
         /// can never oscillate between corrections, because it makes none.
         /// </summary>
         Observe = 3,
+        /// <summary>
+        /// Pick from the body. A <see cref="RigidBody3D"/> or
+        /// <see cref="RigidBody2D"/> recovers under
+        /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/> and any other
+        /// body under <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/>.
+        /// This is the default, and
+        /// <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/> returns
+        /// the pick.
+        /// </summary>
+        Auto = 4,
     }
 
     public enum Reconcile : long
@@ -350,28 +317,6 @@ public sealed class NetwPredict : NetwObject
         /// for.
         /// </summary>
         Joint = 1,
-    }
-
-    public enum CellProvenance : long
-    {
-        /// <summary>
-        /// Nothing named this one, so it coasts on the value it already held.
-        /// </summary>
-        Coast = 0,
-        /// <summary>
-        /// A registered command predictor guessed the cell for an entity this
-        /// peer does not own.
-        /// </summary>
-        Substituted = 1,
-        /// <summary>
-        /// The authoring peer's own command reached here through the server.
-        /// </summary>
-        Relayed = 2,
-        /// <summary>
-        /// The owner authored this cell itself, which is the only provenance a
-        /// replay reproduces rather than repeats.
-        /// </summary>
-        Authored = 3,
     }
 
     public enum BreachResponse : long
@@ -440,68 +385,107 @@ public sealed class NetwPredict : NetwObject
         Withheld = 4,
     }
 
-    public enum VerdictReason : long
+    public enum Attribution : long
     {
         /// <summary>
-        /// Nothing stood between the comparison and the body. Either it found
-        /// agreement, or a recovery ran and decided what to write.
-        /// <see cref="NetwPredictionHandle.StateEvaluated"/> reports a
-        /// comparison, not a write. This value identifies paths that detect
-        /// divergence without applying a correction.
+        /// The evidence needed to blame a boundary was absent. Every other
+        /// <see cref="NetwPredict.Attribution"/> names the first thing the two
+        /// runs disagreed about, and
+        /// <see cref="NetwPredictionHandle.DivergenceDetected"/> carries it.
+        /// </summary>
+        Unknown = 0,
+        /// <summary>
+        /// The peers entered the transition with different declared state.
+        /// </summary>
+        PreState = 1,
+        /// <summary>
+        /// Authority ran input the owner did not author.
+        /// </summary>
+        Command = 2,
+        /// <summary>
+        /// The transition ran against unequal world facts.
+        /// </summary>
+        Environment = 3,
+        /// <summary>
+        /// The execution topology or body mode differed.
+        /// </summary>
+        Topology = 4,
+        /// <summary>
+        /// The declared state agreed but the optional raw execution bits
+        /// differed.
+        /// </summary>
+        Execution = 5,
+        /// <summary>
+        /// Equal inputs produced a different contact.
+        /// </summary>
+        Contact = 6,
+        /// <summary>
+        /// Everything observed going in agreed and the produced state still
+        /// differed.
+        /// </summary>
+        Closure = 7,
+    }
+
+    public enum Operator : long
+    {
+        /// <summary>
+        /// Nothing wrote the body since the preceding transition. An
+        /// <see cref="NetwPredict.Operator"/> is what an episode records for
+        /// each recovery attempt.
         /// </summary>
         None = 0,
         /// <summary>
-        /// No comparison ran. A masked set is reconciled only once the stream
-        /// has seen its gain-edge full row, and before that edge a receive is
-        /// recorded having judged nothing.
+        /// A projected authoritative state was restored.
         /// </summary>
-        AwaitingReconstruction = 1,
+        RebaseProjected = 1,
         /// <summary>
-        /// The reseed's evidence-free horizon alignment is still waiting for
-        /// its command epoch, so this receive is neither compared nor written.
+        /// An exact authoritative state was restored.
         /// </summary>
-        RealignPending = 2,
+        RebaseExact = 2,
         /// <summary>
-        /// The acknowledgement is at or before the reseed horizon, so the row
-        /// returns for transitions the seed has already replaced.
+        /// A teleport restored every declared field.
         /// </summary>
-        ReseedIgnored = 3,
+        FullClosure = 3,
         /// <summary>
-        /// The first comparison after resuming disagreed, so the entity went
-        /// straight back to following authority. It writes nothing, spends no
-        /// evidence, and does not count against the next attempt, because a
-        /// resume that was never proven says nothing a longer wait would not
-        /// settle.
+        /// The body was moved to where it should be now, across a path
+        /// <see cref="NetwPredictionHandle.TransportCorridor"/> cleared.
         /// </summary>
-        ProbationRequarantine = 4,
+        TransportDelta = 4,
         /// <summary>
-        /// The episode's bounded recovery evidence ran out on this comparison,
-        /// so speculation closed instead of correcting.
+        /// The body was seeded from authority after a fallback.
         /// </summary>
-        EvidenceExhausted = 5,
+        Reseed = 5,
         /// <summary>
-        /// A transport is already staged against this divergence and owns the
-        /// write that returns it.
+        /// The first comparison after a reseed aligned the acknowledgement.
         /// </summary>
-        TransportPending = 6,
+        ReseedAlign = 6,
         /// <summary>
-        /// A dissipation is already staged against this divergence.
+        /// A witnessed breach stopped prediction while input keeps flowing.
         /// </summary>
-        DissipatePending = 7,
+        Demote = 7,
         /// <summary>
-        /// The comparison chose to let the divergence fade without writing a
-        /// correction.
+        /// A divergence in velocity alone was left to fade with no write.
         /// </summary>
-        Dissipated = 8,
+        Dissipate = 8,
         /// <summary>
-        /// The operator is deferred until an authority witness covers the
-        /// boundary it would rebase across.
+        /// A joint pass restored the whole group to its shared starting
+        /// transition.
         /// </summary>
-        WitnessDeferred = 9,
+        JointRebase = 9,
+    }
+
+    public enum Domain : long
+    {
         /// <summary>
-        /// The ladder ran and the recovery it selected declined to write.
+        /// Everything the transition read is declared equal on both peers, so
+        /// its fingerprints must match exactly.
         /// </summary>
-        Declined = 10,
+        In = 0,
+        /// <summary>
+        /// Something the transition read is declared unequal or unknown, so it
+        /// is compared by tolerance.
+        /// </summary>
+        Out = 1,
     }
 
     /// <summary>
@@ -513,206 +497,4 @@ public sealed class NetwPredict : NetwObject
     /// <see cref="NetwPredictionHandle.AckAgeTicks"/>.
     /// </summary>
     public const long AckAgeMax = 64;
-
-    private static readonly IntPtr _bindJointFloor =
-        NetwApi.MethodBind("NetwPredict", "joint_floor", 1249350991UL);
-
-    /// <summary>
-    /// The one transition a joint group replays from, as <c>floor</c>, and
-    /// whether reaching it needed a heal, as <c>heal</c>. The floor is the
-    /// oldest point any member still needs, because a group replaying from a
-    /// newer one would leave a member re-running transitions its own history no
-    /// longer covers. A negative value is a member with nothing outstanding and
-    /// does not lower the floor. A floor older than
-    /// <paramref name="historyFloor"/> is one no member can still replay
-    /// across, so the group heals to <paramref name="present"/> instead and
-    /// says so. A caller reading <c>floor</c> without <c>heal</c> cannot tell a
-    /// group that rewound from one that gave up on rewinding.
-    /// <code>
-    /// Dictionary
-    /// ┠╴floor  int   the transition the group replays from
-    /// ┖╴heal   bool  true when no member's floor could be honored
-    /// </code>
-    /// </summary>
-    public static Godot.Collections.Dictionary JointFloor(
-        Godot.Collections.Dictionary bases,
-        Godot.Collections.Dictionary relayFloors,
-        long epochFloor,
-        long historyFloor,
-        long present)
-    {
-        IntPtr pack = NetwThunks.ArgsNew(5);
-        godot_variant slot0 = VariantUtils.CreateFromDictionary(bases);
-        NetwThunks.ArgsSet(pack, 0, in slot0);
-        slot0.Dispose();
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(relayFloors);
-        NetwThunks.ArgsSet(pack, 1, in slot1);
-        slot1.Dispose();
-        godot_variant slot2 = VariantUtils.CreateFromInt((long)epochFloor);
-        NetwThunks.ArgsSet(pack, 2, in slot2);
-        slot2.Dispose();
-        godot_variant slot3 = VariantUtils.CreateFromInt((long)historyFloor);
-        NetwThunks.ArgsSet(pack, 3, in slot3);
-        slot3.Dispose();
-        godot_variant slot4 = VariantUtils.CreateFromInt((long)present);
-        NetwThunks.ArgsSet(pack, 4, in slot4);
-        slot4.Dispose();
-        godot_variant answered = default;
-        NetwThunks.CallPack(
-            _bindJointFloor,
-            IntPtr.Zero,
-            pack,
-            5,
-            ref answered);
-        NetwThunks.ArgsFree(pack);
-        Godot.Collections.Dictionary result =
-            VariantUtils.ConvertToDictionary(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindJointCell =
-        NetwApi.MethodBind("NetwPredict", "joint_cell", 343996642UL);
-
-    /// <summary>
-    /// The <see cref="NetwPredict.CellProvenance"/> one replayed input
-    /// receives, ranked. What the owner actually did outranks a relay, a relay
-    /// outranks a substituted guess, and one with none of the three coasts on
-    /// what it already held. Ranked rather than exclusive because more than one
-    /// can be true at once, and a replay that charged the weaker of two would
-    /// report a guess where authorship was reproduced.
-    /// </summary>
-    public static int JointCell(
-        bool authored,
-        bool relayed,
-        bool predictorValid)
-    {
-        byte slot0 = authored ? (byte)1 : (byte)0;
-        byte slot1 = relayed ? (byte)1 : (byte)0;
-        byte slot2 = predictorValid ? (byte)1 : (byte)0;
-        int answered = default;
-        NetwThunks.Ptrcall3_Byte_Byte_Byte_Int(
-            _bindJointCell,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        return answered;
-    }
-
-    private static readonly IntPtr _bindScheduleName =
-        NetwApi.MethodBind("NetwPredict", "schedule_name", 252416563UL);
-
-    /// <summary>
-    /// The <see cref="NetwSimulationHandle.ScheduleEnum"/> member
-    /// <paramref name="schedule"/> names, without its prefix. Returns with the
-    /// decimal value when it names no member, so a capture written by a newer
-    /// build stays readable rather than reporting a wrong name.
-    /// </summary>
-    public static string ScheduleName(
-        NetwSimulationHandle.ScheduleEnum schedule)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)schedule);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindScheduleName,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        string result = VariantUtils.ConvertToString(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindDriveKindName =
-        NetwApi.MethodBind("NetwPredict", "drive_kind_name", 1383288956UL);
-
-    /// <summary>
-    /// The <see cref="NetwPredict.DriveKind"/> member <paramref name="kind"/>
-    /// names, without its prefix. Returns with the decimal value when it names
-    /// no member, so a capture written by a newer build stays readable rather
-    /// than reporting a wrong name.
-    /// </summary>
-    public static string DriveKindName(NetwPredict.DriveKind kind)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)kind);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindDriveKindName,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        string result = VariantUtils.ConvertToString(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindVerdictReasonName =
-        NetwApi.MethodBind("NetwPredict", "verdict_reason_name", 4160287344UL);
-
-    /// <summary>
-    /// The <see cref="NetwPredict.VerdictReason"/> member
-    /// <paramref name="reason"/> names, without its prefix. Returns with the
-    /// decimal value when it names no member, so a capture written by a newer
-    /// build stays readable rather than reporting a wrong name.
-    /// </summary>
-    public static string VerdictReasonName(NetwPredict.VerdictReason reason)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)reason);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindVerdictReasonName,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        string result = VariantUtils.ConvertToString(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindEpisodeStateName =
-        NetwApi.MethodBind("NetwPredict", "episode_state_name", 2539266548UL);
-
-    /// <summary>
-    /// The <see cref="NetwPredict.EpisodeState"/> member
-    /// <paramref name="state"/> names, without its prefix. Returns with the
-    /// decimal value when it names no member, so a capture written by a newer
-    /// build stays readable rather than reporting a wrong name.
-    /// </summary>
-    public static string EpisodeStateName(NetwPredict.EpisodeState state)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)state);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindEpisodeStateName,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        string result = VariantUtils.ConvertToString(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindOperatorOutcomeName =
-        NetwApi.MethodBind("NetwPredict", "operator_outcome_name", 990163283UL);
-
-    public static string OperatorOutcomeName(int outcome)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)outcome);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindOperatorOutcomeName,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        string result = VariantUtils.ConvertToString(answered);
-        answered.Dispose();
-        return result;
-    }
 }

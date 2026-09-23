@@ -282,31 +282,8 @@ func _snapshot_entities() -> void:
 		if handle == null:
 			continue
 		_entity_snapshots[String(id)] = {
-			"stats": handle.stats.to_dictionary(),
-			"episode": handle.episode_digest(),
-			"last_field_divergence": handle.last_field_divergence,
-			# The divergence row says how far each field is out now; this says
-			# which fields the run's recoveries actually reached. A field that
-			# triggers and is never repaired is answered by writing another one,
-			# and neither the stats block nor a single-tick divergence can show
-			# that.
-			"field_recovery": _field_recovery_report(handle),
+			"stats": NetwNativeTests.prediction_stats(handle),
 		}
-
-
-func _field_recovery_report(handle: Variant) -> Dictionary:
-	var out: Dictionary = { }
-	for field: StringName in handle.field_recovery:
-		var row: Variant = handle.field_recovery[field]
-		out[String(field)] = {
-			"triggered": row.triggered,
-			"repaired": row.repaired,
-			"contracted": row.contracted,
-			"carried": row.carried,
-			"declined": row.declined,
-			"infidelity": row.infidelity,
-		}
-	return out
 
 
 func _write_summary(exit_kind: String) -> void:

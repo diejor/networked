@@ -9,6 +9,8 @@
 #include "netw/api/property_set.hpp"
 #include "netw/api/property_set_binding.hpp"
 #include "netw/display/book.hpp"
+#include "netw/object_port.hpp"
+#include "netw/predict/compare.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/sim/install.hpp"
 #include "netw/sim/row.hpp"
@@ -51,8 +53,8 @@ bool matches(
 ) {
     for (int at = 0; at < p_keys.size(); ++at) {
         const StringName key = p_keys[at];
-        const double error = NetwPredictionHandle::field_error(
-            p_node->get(key),
+        const double error = predict::value_error(
+            port_get(p_node, key),
             p_values[at],
             false
         );
@@ -94,7 +96,7 @@ Array projected(
 Array gather(Node *p_node, const Array &p_keys) {
     Array out;
     for (int at = 0; at < p_keys.size(); ++at) {
-        out.push_back(p_node->get(StringName(p_keys[at])));
+        out.push_back(port_get(p_node, StringName(p_keys[at])));
     }
     return out;
 }
@@ -295,7 +297,7 @@ bool NetwMultiplayer::sim_write_install(
         const Variant delta
             = prediction_core::pose_delta(after[at], before[at], false);
         if (delta.get_type() != Variant::NIL
-            && NetwPredictionHandle::field_error(after[at], before[at], false)
+            && predict::value_error(after[at], before[at], false)
                 > NEGLIGIBLE_DELTA) {
             deltas[p_keys[at]] = delta;
         }

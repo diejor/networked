@@ -19,7 +19,6 @@
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/replication_core.hpp"
@@ -289,8 +288,8 @@ class LoopbackRig {
         );
         p_api->predict_set_param(
             p_entity,
-            netw::NetwMultiplayer::PREDICT_PARAM_CORRECTION_MODE,
-            int(p_decl.correction())
+            netw::NetwMultiplayer::PREDICT_PARAM_RECOVERY_POLICY,
+            int(p_decl.recovery())
         );
         if (p_decl.teleport_at() > 0.0) {
             p_api->predict_set_param(
@@ -1187,6 +1186,22 @@ public:
             );
         REQUIRE_MESSAGE(handle != nullptr, "the entity has no prediction");
         return handle;
+    }
+
+    netw::NetwPredictionEngine *prediction_pool(int p_client = -1) const {
+        netw::NetwMultiplayer *api = p_client < 0 ? server() : client(p_client);
+        REQUIRE_MESSAGE(api != nullptr, "prediction needs a session");
+        return api->get_prediction_engine();
+    }
+
+    int64_t prediction_slot(
+        const godot::StringName &p_name,
+        int p_client = -1
+    ) const {
+        const godot::Ref<netw::NetwEntity> entity
+            = prediction_handle(p_name, p_client)->get_entity();
+        REQUIRE_MESSAGE(entity.is_valid(), "prediction needs its entity");
+        return prediction_pool(p_client)->slot_of(entity);
     }
 
     netw::LocalMultiplayerPeer *peer(int p_client) const {

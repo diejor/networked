@@ -8,13 +8,11 @@
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/simulation_handle.hpp"
 
 namespace netw {
 
-class NetwPredictJournal;
 class NetwPredictJudgement;
 class NetwPredictRecovery;
 class NetwPredictionEngine;
@@ -23,10 +21,9 @@ class NetwPredictSlotEngine;
 class NetwPredictionHandle : public godot::RefCounted {
     GDCLASS(NetwPredictionHandle, godot::RefCounted)
 
-    int correction_value = NetwPredict::CORRECTION_MODE_AUTO;
     int input_source_value = NetwPredict::INPUT_SOURCE_NONE;
     int sim_mode_value = NetwPredict::SIM_MODE_DISPLAY;
-    int recovery_policy_value = -1;
+    int recovery_policy_value = NetwPredict::RECOVERY_POLICY_AUTO;
     int breach_response_value = NetwPredict::BREACH_RESPONSE_PREDICT_THROUGH;
     godot::Callable command_predictor;
     godot::Dictionary sensor_table;
@@ -89,7 +86,6 @@ public:
     godot::Ref<NetwPredictRecovery> seat_recover_seam(
         const godot::Dictionary &p_carried,
         NetwPredict::RecoveryPolicy p_policy,
-        NetwPredict::CorrectionMode p_correction,
         NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_before,
@@ -98,7 +94,7 @@ public:
         double p_tick_delta
     );
     godot::Ref<NetwPredictJudgement> seat_evaluate_seam(
-        NetwPredictJournal::Domain p_domain,
+        NetwPredict::Domain p_domain,
         NetwPredict::ExactVerdict p_exact_verdict,
         const godot::Dictionary &p_predicted,
         const godot::Dictionary &p_payload,
@@ -110,7 +106,6 @@ public:
 
     godot::Ref<NetwSimulationHandle> simulation() const;
     void step_changed();
-    void set_correction_mode(NetwPredict::CorrectionMode p_value);
     void set_input_source(NetwPredict::InputSource p_value);
     void set_sim_mode(NetwPredict::SimMode p_value);
     void set_recovery_policy(NetwPredict::RecoveryPolicy p_value);
@@ -136,10 +131,6 @@ public:
     NetwSimulationHandle::Schedule get_schedule() const;
     NetwSimulationHandle::Restore get_snap_restore() const;
     int get_max_restore_ticks() const;
-
-    NetwPredict::CorrectionMode get_correction_mode() const {
-        return static_cast<NetwPredict::CorrectionMode>(correction_value);
-    }
 
     NetwPredict::InputSource get_input_source() const {
         return static_cast<NetwPredict::InputSource>(input_source_value);
@@ -225,43 +216,20 @@ public:
         return counters;
     }
 
-    godot::Dictionary get_last_field_divergence() const;
-    godot::Dictionary get_field_recovery() const;
-    int get_last_compare_staleness() const;
-    godot::Dictionary get_last_tier_errors() const;
-    int get_last_verdict_reason() const;
-    bool get_is_reconciling() const;
-    int64_t get_acknowledged_tick() const;
-    NetwPredictJournal::Attribution get_last_attribution() const;
-    int64_t get_last_attributed_transition() const;
-
     godot::Variant sensor(
         const godot::StringName &p_name,
         const godot::Variant &p_default = godot::Variant()
     ) const;
     NetwPredict::RecoveryPolicy resolved_recovery_policy() const;
-    NetwPredict::CorrectionMode resolved_correction_mode() const;
-    NetwPredict::CorrectionMode integrable_correction_mode(
-        NetwPredict::CorrectionMode p_declared
-    ) const;
+    int resolved_correction() const;
     bool body_solves() const;
 
     void simulate_tick(double p_delta, int64_t p_tick);
     void simulate_frame(double p_delta);
 
-    godot::Ref<NetwPredictJournal> journal() const;
-    godot::Dictionary teleport_distances() const;
     godot::Dictionary reachability() const;
-    godot::Dictionary episode() const;
-    godot::Dictionary episode_digest() const;
-    godot::TypedArray<godot::Dictionary> tape_transitions() const;
-    godot::Dictionary transition_state_at(int64_t p_transition) const;
-    void record_server_input(int64_t p_tick, const godot::Dictionary &p_input);
-    bool has_consumed_state_tick(int64_t p_state_tick) const;
     void notify_contact();
-    int64_t history_record_tick(int64_t p_fallback) const;
 
-    void stamp_episode();
     void set_predict_commands(const godot::Callable &p_predictor);
 
     godot::Callable get_predict_commands() const {
@@ -269,41 +237,6 @@ public:
     }
 
     void restate_declaration();
-
-    static NetwPredict::CorrectionMode resolve_correction_mode_for(
-        godot::Object *p_body,
-        NetwPredict::CorrectionMode p_mode,
-        bool p_solves = false
-    );
-    static double divergence(
-        const godot::Dictionary &p_predicted,
-        const godot::Dictionary &p_authoritative,
-        const godot::Dictionary &p_angles = godot::Dictionary()
-    );
-    static double divergence_by_field(
-        const godot::Dictionary &p_predicted,
-        const godot::Dictionary &p_authoritative,
-        godot::Dictionary p_out,
-        const godot::Dictionary &p_angles = godot::Dictionary()
-    );
-    static bool triggers(double p_error, double p_tolerance);
-    static bool diverged(
-        const godot::Dictionary &p_predicted,
-        const godot::Dictionary &p_authoritative,
-        double p_epsilon,
-        const godot::Dictionary &p_overrides,
-        const godot::Dictionary &p_excludes = godot::Dictionary(),
-        const godot::Dictionary &p_angles = godot::Dictionary()
-    );
-    static double value_error(
-        const godot::Variant &p_a,
-        const godot::Variant &p_b
-    );
-    static double field_error(
-        const godot::Variant &p_a,
-        const godot::Variant &p_b,
-        bool p_is_angle
-    );
 };
 
 godot::Ref<NetwPredictionHandle> build_prediction_handle(

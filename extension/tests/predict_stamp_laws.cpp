@@ -4,10 +4,11 @@
 
 #include "netw/api/entity.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_field_recovery.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/property_set_binding.hpp"
 #include "netw/predict/engine.hpp"
+#include "netw/predict/joint.hpp"
+#include "netw/prediction_core.hpp"
 #include "support/carrier.h"
 
 using namespace godot;
@@ -2438,16 +2439,16 @@ TEST_CASE(
     relays[StringName("a")] = 37;
 
     const godot::Dictionary settled
-        = netw::NetwPredict::joint_floor(bases, relays, 39, 30, 50);
+        = netw::prediction_core::calculate_joint_floor(bases, relays, 39, 30, 50);
     NETW_CHECK_EQ(int64_t(settled[StringName("floor")]), 34);
     CHECK_FALSE(bool(settled[StringName("heal")]));
 
     const godot::Dictionary healed
-        = netw::NetwPredict::joint_floor(bases, relays, 39, 36, 50);
+        = netw::prediction_core::calculate_joint_floor(bases, relays, 39, 36, 50);
     NETW_CHECK_EQ(int64_t(healed[StringName("floor")]), 50);
     CHECK(bool(healed[StringName("heal")]));
 
-    const godot::Dictionary epoch_bound = netw::NetwPredict::joint_floor(
+    const godot::Dictionary epoch_bound = netw::prediction_core::calculate_joint_floor(
         godot::Dictionary(),
         relays,
         12,
@@ -2456,7 +2457,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(int64_t(epoch_bound[StringName("floor")]), 12);
 
-    const godot::Dictionary nothing = netw::NetwPredict::joint_floor(
+    const godot::Dictionary nothing = netw::prediction_core::calculate_joint_floor(
         godot::Dictionary(),
         godot::Dictionary(),
         -1,
@@ -2472,66 +2473,20 @@ TEST_CASE(
     "strongest provenance that is true of it"
 ) {
     NETW_CHECK_EQ(
-        netw::NetwPredict::joint_cell(true, true, true),
-        int(netw::NetwPredict::CELL_PROVENANCE_AUTHORED)
+        netw::prediction_core::calculate_joint_cell(true, true, true),
+        int(netw::predict::CellProvenance::AUTHORED)
     );
     NETW_CHECK_EQ(
-        netw::NetwPredict::joint_cell(false, true, true),
-        int(netw::NetwPredict::CELL_PROVENANCE_RELAYED)
+        netw::prediction_core::calculate_joint_cell(false, true, true),
+        int(netw::predict::CellProvenance::RELAYED)
     );
     NETW_CHECK_EQ(
-        netw::NetwPredict::joint_cell(false, false, true),
-        int(netw::NetwPredict::CELL_PROVENANCE_SUBSTITUTED)
+        netw::prediction_core::calculate_joint_cell(false, false, true),
+        int(netw::predict::CellProvenance::SUBSTITUTED)
     );
     NETW_CHECK_EQ(
-        netw::NetwPredict::joint_cell(false, false, false),
-        int(netw::NetwPredict::CELL_PROVENANCE_COAST)
-    );
-}
-
-TEST_CASE(
-    "[Networked][Predict][Vocabulary] a name a member does not have "
-    "reads back as its value rather than as another member's name"
-) {
-    CHECK(
-        netw::NetwPredict::schedule_name(
-            static_cast<netw::NetwSimulationHandle::Schedule>(1)
-        )
-        == godot::String("FRAME")
-    );
-    CHECK(
-        netw::NetwPredict::drive_kind_name(
-            static_cast<netw::NetwPredict::DriveKind>(7)
-        )
-        == godot::String("SUBSTITUTED")
-    );
-    CHECK(
-        netw::NetwPredict::verdict_reason_name(
-            static_cast<netw::NetwPredict::VerdictReason>(10)
-        )
-        == godot::String("DECLINED")
-    );
-    CHECK(
-        netw::NetwPredict::episode_state_name(
-            static_cast<netw::NetwPredict::EpisodeState>(2)
-        )
-        == godot::String("FALLBACK")
-    );
-    CHECK(
-        netw::NetwPredict::operator_outcome_name(4) == godot::String("WITHHELD")
-    );
-
-    CHECK(
-        netw::NetwPredict::schedule_name(
-            static_cast<netw::NetwSimulationHandle::Schedule>(99)
-        )
-        == godot::String("99")
-    );
-    CHECK(
-        netw::NetwPredict::drive_kind_name(
-            static_cast<netw::NetwPredict::DriveKind>(-1)
-        )
-        == godot::String("-1")
+        netw::prediction_core::calculate_joint_cell(false, false, false),
+        int(netw::predict::CellProvenance::COAST)
     );
 }
 
@@ -2739,19 +2694,10 @@ TEST_CASE(
     NETW_CHECK_EQ(counts[3], 0);
     NETW_CHECK_EQ(counts[4], 0);
     NETW_CHECK_EQ(counts[5], 0);
-
-    const godot::Dictionary rows = pool->field_recovery(slot);
-    NETW_CHECK_EQ(rows.size(), 1);
-    const Ref<netw::NetwPredictFieldRecovery> row = rows[speed];
-    REQUIRE(row.is_valid());
-    NETW_CHECK_EQ(row->get_triggered(), 2);
-    NETW_CHECK_EQ(row->get_repaired(), 1);
-    NETW_CHECK_EQ(row->get_contracted(), 1);
-    NETW_CHECK_EQ(row->get_carried(), 0);
-    CHECK(row->get_field() == speed);
+    NETW_CHECK_EQ(pool->ledger_fields(slot).size(), 1);
 
     pool->ledger_bump_triggered(slot, speed);
-    NETW_CHECK_EQ(row->get_triggered(), 3);
+    NETW_CHECK_EQ(pool->ledger_counts(slot, speed)[0], 3);
 }
 
 TEST_CASE(
@@ -2771,7 +2717,6 @@ TEST_CASE(
     NETW_CHECK_EQ(pool->ledger_counts(slot, speed)[1], 2);
     NETW_CHECK_EQ(pool->ledger_fields(slot).size(), 1);
 
-    NETW_CHECK_EQ(pool->field_recovery(slot + 9000).size(), 0);
     NETW_CHECK_EQ(pool->ledger_fields(slot + 9000).size(), 0);
 }
 

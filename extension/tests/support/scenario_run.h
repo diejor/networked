@@ -53,10 +53,6 @@ class ScenarioRun {
     static constexpr int VERDICT_UNJUDGED = 0;
     static constexpr int DRIVE_FRESH = 1;
 
-    static constexpr int POLICY_RECOVER = 0;
-    static constexpr int CORRECTION_SNAP = 0;
-    static constexpr int RESTORE_EXACT = 0;
-
     static constexpr double DELTA = 1.0 / 60.0;
     static constexpr double SPEED = 60.0;
 
@@ -79,11 +75,8 @@ class ScenarioRun {
         int64_t latest_input_tick = -1;
         int64_t last_driven_input_tick = -1;
 
-        int streak = 0;
-        int last_sign = 0;
-        double last_divergence = -1.0;
-
         netw::predict::Slot engine;
+        netw::predict::Slot planner;
 
         Lane lane;
     };
@@ -336,46 +329,30 @@ inline void ScenarioRun::judge(int p_tick, Plant p_plant) {
             continue;
         }
 
-        godot::Dictionary verdict;
-        verdict[godot::StringName("domain")] = domain;
-        const godot::Ref<netw::NetwPredictRecovery> plan
-            = netw::prediction_core::recover(
-                payload,
-                POLICY_RECOVER,
-                CORRECTION_SNAP,
-                RESTORE_EXACT,
-                godot::Dictionary(),
-                predicted,
-                pose_errors,
-                wiring,
-                verdict,
-                DELTA
-            );
+        netw::predict::RecoveryRequest request;
+        request.predicted.resize(1);
+        request.predicted.set(0, track.predicted);
+        request.authority.resize(1);
+        request.authority.set(0, track.authority);
+        request.current = request.predicted;
+        request.field_errors.push_back(divergence);
+        request.basis = p_tick;
+        request.current_label = p_tick;
+        request.policy = int(netw::RecoveryPolicy::REBASE_RECOVER);
+        request.fallback_epsilon = ran.epsilon;
+        request.fallback_teleport = TELEPORT_THRESHOLD;
+        request.tick_delta = DELTA;
+        request.domain = netw::predict::Domain(domain);
+        if (p_plant == PLANT_CARRY_STREAK) {
+            track.planner.recovery.last_divergence = 0.0;
+        }
+        const netw::predict::WritePlan plan = track.planner.recover(request);
+        track.lane.lane_escalations += plan.escalated ? 1 : 0;
 
-        const double gap = track.authority.x - track.predicted.x;
-        const int sign = gap > 0.0 ? 1 : (gap < 0.0 ? -1 : 0);
-        const godot::Dictionary escalation
-            = netw::prediction_core::escalation_after(
-                track.streak,
-                track.last_sign,
-                track.last_divergence,
-                divergence,
-                sign
-            );
-        const bool escalated = bool(escalation[godot::StringName("escalate")]);
-        track.lane.lane_escalations += escalated ? 1 : 0;
-        track.streak = p_plant == PLANT_CARRY_STREAK
-            ? track.streak + 1
-            : int(escalation[godot::StringName("streak")]);
-        track.last_sign = int(escalation[godot::StringName("sign")]);
-        track.last_divergence
-            = p_plant == PLANT_CARRY_STREAK ? 0.0 : divergence;
-
-        if (plan->skip() || p_plant == PLANT_NO_RECOVER) {
+        if (plan.skip || p_plant == PLANT_NO_RECOVER) {
             continue;
         }
-        const godot::Dictionary restore = plan->restore();
-        track.predicted = godot::Vector2(restore[track.field]);
+        track.predicted = godot::Vector2(plan.restore.values[0]);
         track.lane.lane_corrections += 1;
         track.lane.lane_max_replay_depth = 1;
     }
@@ -423,6 +400,15 @@ inline void ScenarioRun::seed_tracks(const Scenario &p_scenario) {
         track.lane.name = track.name;
         track.lane.lane_epsilon = p_scenario.epsilon;
         track.lane.lane_buffer_declared = decl.replay_buffer_depth();
+        godot::LocalVector<netw::predict::FieldDecl> fields;
+        netw::predict::FieldDecl field;
+        field.key = track.field;
+        field.converge_stiffness = CONVERGE_RATE;
+        fields.push_back(field);
+        track.planner.open = true;
+        track.planner.rewire(netw::predict::compile(fields));
+        track.planner.config.correction = int(netw::CorrectionMode::SNAP);
+        track.planner.config.restore = int(netw::RestoreMode::EXACT);
         tracks.push_back(track);
     }
     REQUIRE_MESSAGE(
@@ -680,8 +666,8 @@ inline ScenarioRun ScenarioRun::session(
         if (p_plant == PLANT_REPLAY_UNDER_SNAP) {
             owner_api->predict_set_param(
                 p_rig.entity_of(name, client),
-                netw::NetwMultiplayer::PREDICT_PARAM_CORRECTION_MODE,
-                int(netw::CorrectionMode::REPLAY)
+                netw::NetwMultiplayer::PREDICT_PARAM_RECOVERY_POLICY,
+                int(netw::RecoveryPolicy::REBASE_REPLAY)
             );
         }
         if (p_plant == PLANT_REPLAY_FRESH) {
@@ -842,45 +828,58 @@ inline ScenarioRun ScenarioRun::session(
             = server_handle->get_stats();
         REQUIRE(client_stats.is_valid());
         REQUIRE(server_stats.is_valid());
-        track.lane.lane_corrections = int(client_stats->get("corrections"));
-        track.lane.lane_drives = int(client_stats->get("drive_seq"));
+        const godot::Dictionary client_facts = client_stats->to_dictionary();
+        const godot::Dictionary server_facts = server_stats->to_dictionary();
+        const auto client_fact = [&](const char *p_name) {
+            return client_facts[godot::StringName(p_name)];
+        };
+        const auto server_fact = [&](const char *p_name) {
+            return server_facts[godot::StringName(p_name)];
+        };
+        track.lane.lane_corrections = int(client_fact("corrections"));
+        track.lane.lane_drives = int(client_fact("drive_seq"));
         track.lane.lane_frames = p_scenario.run_ticks;
         track.lane.lane_authoring_clamped
-            = int(client_stats->get("authoring_clamped"));
+            = int(client_fact("authoring_clamped"));
         track.lane.lane_quantum_declared
-            = int(client_stats->get("quantum_declared"));
-        track.lane.lane_quantum_steps = int(client_stats->get("quantum_steps"));
+            = int(client_fact("quantum_declared"));
+        track.lane.lane_quantum_steps = int(client_fact("quantum_steps"));
         track.lane.lane_quantum_faults
-            = int(client_stats->get("quantum_faults"));
+            = int(client_fact("quantum_faults"));
         track.lane.lane_max_replay_depth
-            = int(client_stats->get("max_replay_depth"));
+            = int(client_fact("max_replay_depth"));
         if (p_plant == PLANT_FORGE_REPLAY_DEPTH) {
             track.lane.lane_max_replay_depth = p_scenario.run_ticks;
         }
-        track.lane.lane_fp_verified = int(client_stats->get("fp_verified"));
-        track.lane.lane_fp_mismatches = int(client_stats->get("fp_mismatches"));
+        track.lane.lane_fp_verified = int(client_fact("fp_verified"));
+        track.lane.lane_fp_mismatches = int(client_fact("fp_mismatches"));
         track.lane.lane_first_divergence
-            = int(client_stats->get("first_divergent_transition"));
-        const godot::Ref<netw::NetwPredictJournal> owner_journal
-            = client_handle->journal();
-        track.lane.lane_journal_rows
-            = owner_journal.is_valid() ? owner_journal->size() : 0;
-        track.lane.lane_consumed = int(server_stats->get("consumed"));
-        track.lane.lane_missing = int(server_stats->get("missing"));
-        track.lane.lane_held = int(server_stats->get("held"));
-        track.lane.lane_starved = int(server_stats->get("starved"));
+            = int(client_fact("first_divergent_transition"));
+        netw::predict::JournalSnapshot owner_journal;
+        p_rig.prediction_pool(track.client)
+            ->journal_snapshot(
+                p_rig.prediction_slot(track.name, track.client),
+                owner_journal
+            );
+        track.lane.lane_journal_rows = owner_journal.size();
+        track.lane.lane_consumed = int(server_fact("consumed"));
+        track.lane.lane_missing = int(server_fact("missing"));
+        track.lane.lane_held = int(server_fact("held"));
+        track.lane.lane_starved = int(server_fact("starved"));
         track.lane.lane_speculation_held
-            = int(client_stats->get("speculation_held"));
-        track.lane.lane_resyncs = int(server_stats->get("resync"));
-        track.lane.lane_skipped = int(server_stats->get("skipped"));
+            = int(client_fact("speculation_held"));
+        track.lane.lane_resyncs = int(server_fact("resync"));
+        track.lane.lane_skipped = int(server_fact("skipped"));
         track.lane.lane_queue_depth
-            = int(server_stats->get("tape_queue_depth"));
-        const godot::Ref<netw::NetwPredictJournal> authority_journal
-            = server_handle->journal();
-        track.lane.lane_authority_journal_rows
-            = authority_journal.is_valid() ? authority_journal->size() : 0;
-        track.lane.lane_joint_passes = int(client_stats->get("joint_passes"));
-        track.lane.lane_joint_members = int(client_stats->get("joint_members"));
+            = int(server_fact("tape_queue_depth"));
+        netw::predict::JournalSnapshot authority_journal;
+        p_rig.prediction_pool()->journal_snapshot(
+            p_rig.prediction_slot(track.name),
+            authority_journal
+        );
+        track.lane.lane_authority_journal_rows = authority_journal.size();
+        track.lane.lane_joint_passes = int(client_fact("joint_passes"));
+        track.lane.lane_joint_members = int(client_fact("joint_members"));
         track.lane.lane_epsilon = p_scenario.epsilon;
 
         Recorder &recorder = *recorders[size_t(index)];

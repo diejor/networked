@@ -259,6 +259,7 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
         stepper->step(held.space, p_timing.get_ticktime());
         stepper->snapshot(held.space, p_timing.get_tick());
     }
+    service->predict_release_empty_holds();
     service->predict_held_spaces(held_spaces);
     for (const RID &space : held_spaces) {
         const Ref<NetwPhysicsStepper> stepper

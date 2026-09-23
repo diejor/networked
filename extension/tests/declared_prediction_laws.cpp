@@ -71,7 +71,7 @@ Scenario snap_lane() {
     scenario.epsilon = 0.01;
     scenario.world.clocked(30, 3).lag_compensated().player(
         EntityDecl(predicted_player(netw::Schedule::TICK))
-            .corrected_by(netw::CorrectionMode::SNAP),
+            .recovered_by(netw::RecoveryPolicy::REBASE_RECOVER),
         0
     );
     scenario.conditions(netw::LocalLinkConditions::polls(4));

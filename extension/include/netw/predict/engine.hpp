@@ -6,11 +6,11 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/predict/drive.hpp"
 #include "netw/predict/episode_report.hpp"
 #include "netw/predict/feed.hpp"
 #include "netw/predict/frame_records.hpp"
+#include "netw/predict/journal_snapshot.hpp"
 #include "netw/predict/wiring.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/sim/resolve.hpp"
@@ -78,6 +78,12 @@ predict::FieldDecl field_decl(
     const godot::Ref<NetwQuantize> &p_quantizer = godot::Ref<NetwQuantize>(),
     int p_type = int(godot::Variant::NIL)
 );
+
+struct PlannedRecovery {
+    predict::WritePlan pool;
+    RecoveryPlan answer;
+    bool answered = false;
+};
 
 class NetwPredictTiming {
     friend class NetwPredictionEngine;
@@ -491,7 +497,6 @@ public:
         const godot::StringName &p_key
     ) const;
     godot::Array ledger_fields(int64_t p_slot) const;
-    godot::Dictionary field_recovery(int64_t p_slot);
 
     int simulation_subject_count(int64_t p_slot) const;
 
@@ -1391,7 +1396,8 @@ public:
         int p_collision_cooldown_ticks,
         int p_domain,
         int p_attribution,
-        bool p_suppressed
+        bool p_suppressed,
+        const RecoveryPlan *p_answer = nullptr
     );
     void open_recovery_window(int64_t p_slot, int64_t p_label, int p_cooldown);
     void suppress_recovery_until(
@@ -1413,7 +1419,7 @@ public:
     godot::Dictionary recovery_projection_of(int64_t p_slot) const;
     godot::Dictionary recovery_carried_of(int64_t p_slot) const;
     godot::Dictionary recovery_tier_errors_of(int64_t p_slot) const;
-    predict::WritePlan plan_recovery(
+    PlannedRecovery plan_recovery(
         int64_t p_slot,
         int64_t p_ack,
         int64_t p_ack_label,
@@ -1421,7 +1427,16 @@ public:
         const godot::Dictionary &p_payload,
         bool p_escalated,
         int p_domain,
-        int p_attribution
+        int p_attribution,
+        const godot::Callable &p_seam = godot::Callable()
+    );
+    godot::Dictionary recovery_context(
+        int64_t p_slot,
+        int64_t p_ack,
+        int64_t p_ack_label,
+        int p_domain,
+        int p_attribution,
+        bool p_escalated
     );
     void apply_recovery_plan(
         int64_t p_slot,
@@ -1745,7 +1760,10 @@ public:
         const godot::Callable &p_enter_fallback
     );
 
-    godot::Ref<NetwPredictJournal> journal_snapshot(int64_t p_slot) const;
+    void journal_snapshot(
+        int64_t p_slot,
+        predict::JournalSnapshot &r_snapshot
+    ) const;
 
     void bind_session(NetwMultiplayer *p_core);
 
@@ -2013,11 +2031,11 @@ public:
         const godot::Callable &p_demote,
         const godot::Callable &p_seam
     );
-    RecoveryPlan recover_through(
+    bool ask_recover_seam(
         int64_t p_slot,
         const godot::Dictionary &p_context,
-        const godot::Dictionary &p_before,
-        const godot::Callable &p_seam
+        const godot::Callable &p_seam,
+        RecoveryPlan &r_plan
     );
     bool plan_answered(
         const godot::Ref<NetwPredictRecovery> &p_answered,

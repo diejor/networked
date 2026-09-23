@@ -526,68 +526,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict] A run that will not shrink escalates on the third"
-) {
-    Dictionary state = prediction_core::escalation_after(0, 0, -1.0, 1.0, 1);
-    NETW_CHECK_EQ((int)state[StringName("streak")], 1);
-    CHECK_FALSE(bool(state[StringName("escalate")]));
-
-    state = prediction_core::escalation_after(1, 1, 1.0, 1.0, 1);
-    NETW_CHECK_EQ((int)state[StringName("streak")], 2);
-    CHECK_FALSE(bool(state[StringName("escalate")]));
-
-    state = prediction_core::escalation_after(2, 1, 1.0, 2.0, 1);
-    CHECK(bool(state[StringName("escalate")]));
-    NETW_CHECK_EQ((int)state[StringName("sign")], 1);
-}
-
-TEST_CASE("[Networked][Predict] Escalating closes the run it escalated on") {
-    const Dictionary escalated
-        = prediction_core::escalation_after(2, 1, 1.0, 2.0, 1);
-
-    CHECK(bool(escalated[StringName("escalate")]));
-    NETW_CHECK_EQ((int)escalated[StringName("streak")], 0);
-}
-
-TEST_CASE(
-    "[Networked][Predict] A sign flip escalates at once, whatever the streak"
-) {
-    const Dictionary state
-        = prediction_core::escalation_after(0, 1, 1.0, 1.0, -1);
-
-    CHECK(bool(state[StringName("escalate")]));
-    NETW_CHECK_EQ((int)state[StringName("sign")], -1);
-}
-
-TEST_CASE(
-    "[Networked][Predict] An unsigned sample cannot flip, and still counts "
-    "toward the run"
-) {
-    const Dictionary state
-        = prediction_core::escalation_after(1, 1, 1.0, 9.0, 0);
-
-    NETW_CHECK_EQ((int)state[StringName("streak")], 2);
-    NETW_CHECK_EQ((int)state[StringName("sign")], 0);
-    CHECK_FALSE(bool(state[StringName("escalate")]));
-}
-
-TEST_CASE(
-    "[Networked][Predict] A shrinking divergence closes the run and outranks "
-    "a flip"
-) {
-    const Dictionary steady
-        = prediction_core::escalation_after(2, 1, 5.0, 1.0, 1);
-    NETW_CHECK_EQ((int)steady[StringName("streak")], 0);
-    NETW_CHECK_EQ((int)steady[StringName("sign")], 0);
-    CHECK_FALSE(bool(steady[StringName("escalate")]));
-
-    const Dictionary flipped
-        = prediction_core::escalation_after(2, 1, 5.0, 1.0, -1);
-    CHECK_FALSE(bool(flipped[StringName("escalate")]));
-    NETW_CHECK_EQ((int)flipped[StringName("sign")], 0);
-}
-
-TEST_CASE(
     "[Networked][Predict] The meter reads a tolerance as a zero region and "
     "counts whole tolerances past it"
 ) {

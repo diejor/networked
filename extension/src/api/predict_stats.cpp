@@ -148,6 +148,13 @@ constexpr bool fact_named(int p_at, const char *p_name) {
 static_assert(
     fact_named(NetwPredictStats::FACT_QUANTUM_STEPS, "quantum_steps")
 );
+static_assert(fact_named(NetwPredictStats::FACT_CORRECTIONS, "corrections"));
+static_assert(
+    fact_named(NetwPredictStats::FACT_ISLAND_MEMBERS, "island_members")
+);
+static_assert(
+    fact_named(NetwPredictStats::FACT_SIMULATED_MEMBERS, "simulated_members")
+);
 static_assert(fact_named(NetwPredictStats::FACT_CONSUMED, "consumed"));
 static_assert(fact_named(NetwPredictStats::FACT_MISSING, "missing"));
 static_assert(fact_named(NetwPredictStats::FACT_STARVED, "starved"));
@@ -423,80 +430,20 @@ Dictionary NetwPredictStats::to_dictionary() const {
     return out;
 }
 
+int64_t NetwPredictStats::get_corrections() const {
+    return get_int_fact(FACT_CORRECTIONS);
+}
+
 void NetwPredictStats::_bind_methods() {
     ClassDB::bind_method(
-        D_METHOD("to_dictionary"),
-        &NetwPredictStats::to_dictionary
+        D_METHOD("get_corrections"),
+        &NetwPredictStats::get_corrections
     );
-    ClassDB::bind_method(
-        D_METHOD("set_int_fact", "index", "value"),
-        &NetwPredictStats::set_int_fact
+    ADD_PROPERTY(
+        PropertyInfo(Variant::INT, "corrections"),
+        godot::String(),
+        "get_corrections"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_int_fact", "index"),
-        &NetwPredictStats::get_int_fact
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_dict_fact", "index", "value"),
-        &NetwPredictStats::set_dict_fact
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_dict_fact", "index"),
-        &NetwPredictStats::get_dict_fact
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_buckets_fact", "index", "value"),
-        &NetwPredictStats::set_buckets_fact
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_buckets_fact", "index"),
-        &NetwPredictStats::get_buckets_fact
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_names_fact", "index", "value"),
-        &NetwPredictStats::set_names_fact
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_names_fact", "index"),
-        &NetwPredictStats::get_names_fact
-    );
-    for (int at = 0; at < FACT_COUNT; ++at) {
-        Variant::Type type = Variant::INT;
-        const char *setter = "set_int_fact";
-        const char *getter = "get_int_fact";
-        switch (FACTS[at].source) {
-            case SOURCE_ARRIVALS:
-            case SOURCE_REPLAY_DEPTH:
-                type = Variant::PACKED_INT32_ARRAY;
-                setter = "set_buckets_fact";
-                getter = "get_buckets_fact";
-                break;
-            case SOURCE_CONSUME_SHAPE:
-            case SOURCE_JOINT_DEPTH:
-            case SOURCE_FLOOR_MOVES:
-                type = Variant::DICTIONARY;
-                setter = "set_dict_fact";
-                getter = "get_dict_fact";
-                break;
-            case SOURCE_ISLAND_MEMBERS:
-            case SOURCE_SIMULATED_MEMBERS:
-                type = Variant::PACKED_STRING_ARRAY;
-                setter = "set_names_fact";
-                getter = "get_names_fact";
-                break;
-            default:
-                break;
-        }
-        ClassDB::add_property(
-            "NetwPredictStats",
-            PropertyInfo(type, FACTS[at].name),
-            setter,
-            getter,
-            at
-        );
-    }
-    BIND_CONSTANT(ARRIVAL_BUCKETS);
-    BIND_CONSTANT(REPLAY_DEPTH_BUCKETS);
 }
 
 } // namespace netw

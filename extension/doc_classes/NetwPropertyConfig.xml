@@ -18,6 +18,14 @@
 		[/codeblock]
 		Pick the kind by returning who owns the value, who sees it, and whether the server polices it. [enum NetwPropertySet.Record] holds the comparison table. A field with no kind mark rides no per-tick set and syncs only when [method Netw.sync_property] pushes it explicitly.
 		[method volatile], [method retained], [method epsilon], and [method persisted] refine one property. [method every_tick], [method on_change], [method heartbeat], [method windowed], [method audience], and [method masked] write through to the script's whole [NetwPropertySet] from any member, so the last member to name a knob owns it.
+		[b]Rigid bodies[/b]
+		When the entity root is a [RigidBody3D] or a [RigidBody2D], the columns [code]position[/code], [code]quaternion[/code] ([code]rotation[/code] in 2D), [code]linear_velocity[/code], [code]angular_velocity[/code] and [code]sleeping[/code] read and write the body's physics state. A read right after a physics step sees the stepped value before the node catches up. [code]position[/code] stays relative to the parent, as it is on the node. While [member RigidBody3D.freeze] is on, the position and rotation columns read and write the node transform instead. A rigid body below the root reads and writes its node properties.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_property(self, &amp;"position").state()
+		    Netw.configure_property(self, &amp;"quaternion").state()
+		    Netw.configure_property(self, &amp;"linear_velocity").state()
+		[/codeblock]
 		[b]The chain downgrades to the base type.[/b]
 		[method NetwMemberConfig.call_local] and [method NetwMemberConfig.call_remote] are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb returns a [NetwMemberConfig] from that point on even though the object is still this [NetwPropertyConfig]. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
 	</description>
@@ -90,7 +98,7 @@
 				func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
 				    return value + _drive_axis(ctx.state) * ctx.state[&amp;"speed"] * ctx.delta
 				[/codeblock]
-				[param step] may read only its [NetwPredictCarryContext] and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a rejected carry writes the acknowledged value exactly as an undeclared field does. [member NetwPredictionHandle.field_recovery] counts both.
+				[param step] may read only its [NetwPredictCarryContext] and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a rejected carry writes the acknowledged value exactly as an undeclared field does.
 				The rule is stored per node rather than per script, because a [Callable] is bound to one body while a property declaration is shared by every instance of the script that declares it. [param step] therefore has to be a method or lambda of a [Node], which is the body it will advance. A [param step] that is invalid, or valid but bound to something that is not a [Node], is reported through the error channel and binds nothing, leaving this config exactly as it was. The rule lands in a per-node overlay, which is keyed by node instance rather than by [member NetwMemberConfig.context_script].
 			</description>
 		</method>

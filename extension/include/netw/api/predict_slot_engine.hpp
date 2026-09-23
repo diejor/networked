@@ -85,7 +85,8 @@ class NetwPredictSlotEngine {
     void judge_owner_claim(int64_t p_transition, int64_t p_fingerprint);
     int64_t recorded_transition() const;
     void record_input_to_pool(int64_t p_tick, const godot::Dictionary &p_input);
-    int resolve_correction(int p_declared) const;
+    int declared_correction() const;
+    int resolve_correction() const;
     int resolve_axes();
     int pool_island() const;
     void admit_reconcile_mode();
@@ -227,7 +228,6 @@ class NetwPredictSlotEngine {
     godot::Ref<NetwPredictRecovery> recover_through_seam(
         const godot::Dictionary &p_carried,
         NetwPredict::RecoveryPolicy p_policy,
-        NetwPredict::CorrectionMode p_correction,
         NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_before,
@@ -236,7 +236,7 @@ class NetwPredictSlotEngine {
         double p_tick_delta
     );
     godot::Ref<NetwPredictJudgement> evaluate_through_seam(
-        NetwPredictJournal::Domain p_domain,
+        NetwPredict::Domain p_domain,
         NetwPredict::ExactVerdict p_exact_verdict,
         const godot::Dictionary &p_predicted,
         const godot::Dictionary &p_payload,
@@ -277,7 +277,6 @@ public:
     int64_t history_record_tick(int64_t p_fallback_tick) const;
     bool consumed_unslotted_transition() const;
     bool has_consumed_state_tick(int64_t p_state_tick) const;
-    int resolved_correction_mode() const;
     void record_server_input(int64_t p_tick, const godot::Dictionary &p_input);
     void finalize_recorded_state(const godot::Dictionary &p_payload);
 };

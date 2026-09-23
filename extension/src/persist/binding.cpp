@@ -7,6 +7,7 @@
 #include "netw/api/persistence_config.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/log.hpp"
+#include "netw/object_port.hpp"
 #include "netw/schema_core.hpp"
 #include "netw/script/model.hpp"
 
@@ -396,7 +397,7 @@ Dictionary Bindings::live_values(const RID &p_binding) const {
         if (node == nullptr) {
             return Dictionary();
         }
-        values[column.key] = node->get(column.property);
+        values[column.key] = port_get(node, column.property);
     }
     return values;
 }
@@ -447,7 +448,7 @@ bool Bindings::apply(const RID &p_binding, const Dictionary &p_values) {
         if (node == nullptr || !p_values.has(column.key)) {
             return false;
         }
-        node->set(column.property, p_values[column.key]);
+        port_set(node, column.property, p_values[column.key]);
         if (book.get_or_null(p_binding) == nullptr) {
             return false;
         }

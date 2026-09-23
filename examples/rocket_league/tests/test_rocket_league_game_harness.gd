@@ -19,21 +19,21 @@ func test_a_host_car_spawns_on_its_marker_and_drives_after_kickoff() -> void:
 	quiet_ai(host)
 
 	await game.sync_ticks(4)
-	assert_float(car.car_position.distance_to(car.marker.global_position)) \
+	assert_float(pose_of(car).origin.distance_to(car.marker.global_position)) \
 			.override_failure_message(
 				"a car must sit on its own kickoff marker before kickoff",
 			).is_less(1.0)
 
 	await await_kickoff(car)
 	quiet_ai(host)
-	var start: Vector3 = car.car_position
-	var facing: Vector3 = Basis(car.car_rotation).z
+	var start: Vector3 = pose_of(car).origin
+	var facing: Vector3 = pose_of(car).basis.z
 	host.simulate_action_press("forward")
 	await game.sync_ticks(90)
 	host.simulate_action_release("forward")
-	assert_float(car.car_position.distance_to(start)).is_greater(0.5)
+	assert_float(pose_of(car).origin.distance_to(start)).is_greater(0.5)
 
-	assert_float((car.car_position - start).dot(facing)) \
+	assert_float((pose_of(car).origin - start).dot(facing)) \
 			.override_failure_message(
 				"the accelerate action must move a car along its own facing",
 			).is_greater(0.5)
@@ -61,7 +61,7 @@ func test_every_peer_holds_the_other_peers_car() -> void:
 	await game.sync_ticks(90)
 	client.simulate_action_release("forward")
 
-	assert_float(own.car_position.distance_to(host_view.car_position)) \
+	assert_float(pose_of(own).origin.distance_to(pose_of(host_view).origin)) \
 			.override_failure_message(
 				"the host's view of a client car must track the client's own",
 			).is_less(3.5)
@@ -84,8 +84,8 @@ func test_a_goal_bumps_the_score_on_every_peer_and_queues_a_kickoff() -> void:
 	quiet_ai(host)
 	quiet_ai(client)
 	var before: int = server_game.score_red
-	ball.ball_position = goal_position(host, "Goal0")
-	ball.ball_linear_velocity = Vector3.ZERO
+	place(ball, goal_position(host, "Goal0"))
+	ball.state.linear_velocity = Vector3.ZERO
 	for _tick in 120:
 		await game.sync_ticks(1)
 		if server_game.score_red > before:
@@ -117,13 +117,13 @@ func test_cars_hold_their_markers_and_the_ball_returns_to_its_spot() -> void:
 	host.simulate_action_press("forward")
 	await game.sync_ticks(30)
 	host.simulate_action_release("forward")
-	assert_float(car.car_position.distance_to(car.marker.global_position)) \
+	assert_float(pose_of(car).origin.distance_to(car.marker.global_position)) \
 			.override_failure_message(
 				"input must not move a car that is held for the kickoff",
 			).is_less(1.0)
 
 	await await_kickoff(car)
-	assert_float(ball.ball_position.distance_to(RocketBall.STARTING_POSITION)) \
+	assert_float(pose_of(ball).origin.distance_to(RocketBall.STARTING_POSITION)) \
 			.override_failure_message(
 				"the reset must put the ball back on its spot before play",
 			).is_less(1.0)
@@ -175,9 +175,9 @@ func test_a_car_drives_itself_toward_the_ball_with_no_local_input() -> void:
 
 	await await_kickoff(car)
 	var ball := arena_ball(host)
-	var before: float = car.car_position.distance_to(ball.ball_position)
+	var before: float = pose_of(car).origin.distance_to(pose_of(ball).origin)
 	await game.sync_ticks(120)
-	var after: float = car.car_position.distance_to(ball.ball_position)
+	var after: float = pose_of(car).origin.distance_to(pose_of(ball).origin)
 	assert_float(after).override_failure_message(
 		"the AI closed %.2fm to %.2fm on the ball" % [before, after],
 	).is_less(before)
@@ -249,14 +249,14 @@ func test_a_clients_ball_responds_in_the_frame_its_car_touches_it() -> void:
 		"the client's car selects the ball, so the client runs it",
 	).is_equal(NetwSimulationHandle.MODE_ACTIVE)
 
-	var ahead: Vector3 = own.car_position + Basis(own.car_rotation).z * 5.0
+	var ahead: Vector3 = pose_of(own).origin + pose_of(own).basis.z * 5.0
 	ahead.y = RocketBall.STARTING_POSITION.y
-	host_ball.ball_position = ahead
-	host_ball.ball_linear_velocity = Vector3.ZERO
+	place(host_ball, ahead)
+	host_ball.state.linear_velocity = Vector3.ZERO
 	var still := 0
 	for _tick in 400:
 		await game.sync_ticks(1)
-		var resting: bool = host_ball.ball_linear_velocity.length() < 0.05
+		var resting: bool = host_ball.state.linear_velocity.length() < 0.05
 		still = still + 1 if resting else 0
 		if still >= 10:
 			break
@@ -270,7 +270,7 @@ func test_a_clients_ball_responds_in_the_frame_its_car_touches_it() -> void:
 		await game.sync_ticks(1)
 		if touched < 0 and own.get_colliding_bodies().has(client_ball):
 			touched = tick
-		var drift := client_ball.ball_linear_velocity * Vector3(1.0, 0.0, 1.0)
+		var drift := client_ball.state.linear_velocity * Vector3(1.0, 0.0, 1.0)
 		if touched >= 0 and drift.length() > 2.0:
 			moved = tick
 			break
@@ -302,10 +302,10 @@ func test_a_clients_hit_on_a_bouncing_ball_takes_effect_at_once() -> void:
 		"the client's car selects the ball, so the client runs it",
 	).is_equal(NetwSimulationHandle.MODE_ACTIVE)
 
-	var ahead: Vector3 = own.car_position + Basis(own.car_rotation).z * 5.0
+	var ahead: Vector3 = pose_of(own).origin + pose_of(own).basis.z * 5.0
 	ahead.y = RocketBall.STARTING_POSITION.y
-	host_ball.ball_position = ahead
-	host_ball.ball_linear_velocity = Vector3.ZERO
+	place(host_ball, ahead)
+	host_ball.state.linear_velocity = Vector3.ZERO
 	game.degrade(client).inbound().latency_ms(300.0)
 	for _tick in 20:
 		await game.sync_ticks(1)
@@ -318,12 +318,12 @@ func test_a_clients_hit_on_a_bouncing_ball_takes_effect_at_once() -> void:
 	for tick in 240:
 		if touched < 0:
 			bounce(host_ball)
-			var speed := host_ball.ball_linear_velocity.length()
+			var speed := host_ball.state.linear_velocity.length()
 			server_speed = maxf(server_speed, speed)
 		await game.sync_ticks(1)
 		if touched < 0 and own.get_colliding_bodies().has(client_ball):
 			touched = tick
-		var drift := client_ball.ball_linear_velocity * Vector3(1.0, 0.0, 1.0)
+		var drift := client_ball.state.linear_velocity * Vector3(1.0, 0.0, 1.0)
 		if touched >= 0 and drift.length() > 2.0:
 			moved = tick
 			break
@@ -353,7 +353,7 @@ func test_a_clients_ball_visibly_rotates_with_its_state() -> void:
 	await await_kickoff(car)
 	quiet_ai(host)
 
-	host_ball.ball_angular_velocity = Vector3(0.0, 6.0, 0.0)
+	host_ball.state.angular_velocity = Vector3(0.0, 6.0, 0.0)
 	var before := client_ball.transform.basis.get_rotation_quaternion()
 	await game.sync_ticks(60)
 	var after := client_ball.transform.basis.get_rotation_quaternion()
@@ -384,8 +384,18 @@ func test_a_late_join_gets_a_car_on_the_other_team() -> void:
 
 
 func bounce(ball: RocketBall) -> void:
-	if ball.ball_position.y < 1.1 and ball.ball_linear_velocity.y <= 0.0:
-		ball.ball_linear_velocity = Vector3(0.0, 2.0, 0.0)
+	if pose_of(ball).origin.y < 1.1 and ball.state.linear_velocity.y <= 0.0:
+		ball.state.linear_velocity = Vector3(0.0, 2.0, 0.0)
+
+
+func pose_of(body: RigidBody3D) -> Transform3D:
+	if body.freeze:
+		return body.global_transform
+	return PhysicsServer3D.body_get_direct_state(body.get_rid()).transform
+
+
+func place(ball: RocketBall, at: Vector3) -> void:
+	ball.state.transform = Transform3D(ball.state.transform.basis, at)
 
 
 func begin_match(host: NetwSceneRunner) -> void:

@@ -18,6 +18,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_set.hpp"
 #include "netw/api/property_set_binding.hpp"
+#include "netw/object_port.hpp"
 
 namespace netw_test {
 
@@ -146,7 +147,7 @@ inline void author_at(
     netw::NetwPropertySet::Record p_record,
     int64_t p_tick
 ) {
-    p_node->set(p_property, p_value);
+    netw::port_set(p_node, p_property, p_value);
     const godot::Ref<netw::NetwPropertySetBinding> binding
         = binding_of(p_node, p_record);
     if (binding.is_valid()) {

@@ -41,9 +41,7 @@
 #include "netw/api/persistence_config.hpp"
 #include "netw/api/physics_stepper.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/predict_field_recovery.hpp"
 #include "netw/api/persistence_handle.hpp"
-#include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/prediction_handle.hpp"
@@ -189,11 +187,9 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwPredictRecovery);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwPredict);
     GDREGISTER_CLASS(netw::NetwSimulationHandle);
-    GDREGISTER_CLASS(netw::NetwPredictFieldRecovery);
     GDREGISTER_CLASS(netw::NetwPredictionHandle);
     GDREGISTER_CLASS(netw::NetwPredictCarryContext);
     GDREGISTER_CLASS(netw::NetwPredictStats);
-    GDREGISTER_CLASS(netw::NetwPredictJournal);
     GDREGISTER_ABSTRACT_CLASS(netw::Serde);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwRecord);
     GDREGISTER_CLASS(netw::DictionaryRecord);

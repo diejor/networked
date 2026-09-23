@@ -7,8 +7,10 @@
 #include "godot/class_db.hpp"
 #include "godot/utility.hpp"
 #include "netw/log.hpp"
+#include "netw/predict/axes.hpp"
 #include "netw/predict/compare.hpp"
 #include "netw/predict/frames.hpp"
+#include "netw/predict/recovery.hpp"
 #include "netw/predict/sensors.hpp"
 #include "netw/profile.hpp"
 #include "netw/project.hpp"
@@ -16,8 +18,6 @@
 using namespace godot;
 
 namespace netw {
-
-constexpr int NONSHRINKING_DIVERGENCES_BEFORE_ESCALATION = 3;
 
 constexpr int CAUSAL_FAMILY_COUNT = 3;
 
@@ -51,43 +51,70 @@ static Variant pose_delta(
     }
 }
 
-static Variant pose_scale(const Variant &value, double factor) {
-    switch (value.get_type()) {
-        case Variant::FLOAT:
-            return double(value) * factor;
-        case Variant::VECTOR2:
-            return Vector2(value) * real_t(factor);
-        case Variant::VECTOR3:
-            return Vector3(value) * real_t(factor);
-        default:
-            return value;
-    }
-}
-
-static bool rate_converges(double p_rate) {
-    const bool holds_the_live_value = p_rate <= 0.0;
-    const bool is_the_staged_restore = p_rate >= 1.0;
-    return !holds_the_live_value && !is_the_staged_restore;
-}
-
-static Variant pose_sum(const Variant &a, const Variant &b) {
-    return prediction_core::pose_advance(a, b);
-}
-
-static bool teleport_reached(
+static predict::Wiring recovery_wiring(
+    const Dictionary &payload,
+    const Dictionary &current,
     const Dictionary &pose_errors,
-    const Dictionary &thresholds,
-    double default_threshold
+    const Dictionary &projection,
+    const Dictionary &wiring
 ) {
-    const Array keys = pose_errors.keys();
-    for (int index = 0; index < keys.size(); ++index) {
-        const Variant key = keys[index];
-        if (double(pose_errors[key])
-            >= double(thresholds.get(key, default_threshold))) {
-            return true;
+    predict::Wiring out;
+    const Dictionary *const sources[] = {&payload, &current, &pose_errors};
+    for (const Dictionary *source : sources) {
+        const Array keys = source->keys();
+        for (int index = 0; index < keys.size(); ++index) {
+            out.fields.append(StringName(keys[index]));
         }
     }
-    return false;
+    const Array projected = projection.keys();
+    for (int index = 0; index < projected.size(); ++index) {
+        out.fields.append(StringName(projected[index]));
+        out.fields.append(StringName(projection[projected[index]]));
+    }
+    out.resize(out.fields.count());
+
+    const Dictionary withheld
+        = wiring.get(StringName("withheld"), Dictionary());
+    const Dictionary converge
+        = wiring.get(StringName("converge_rules"), Dictionary());
+    const Dictionary angles
+        = wiring.get(StringName("angle_fields"), Dictionary());
+    const Dictionary epsilons
+        = wiring.get(StringName("epsilon_overrides"), Dictionary());
+    const Dictionary teleports
+        = wiring.get(StringName("teleport_thresholds"), Dictionary());
+    for (int at = 0; at < out.count(); ++at) {
+        const StringName &key = out.fields.name_at(at);
+        const uint32_t slot = uint32_t(at);
+        out.causal[slot] = 1;
+        out.withheld[slot] = withheld.has(key) ? 1 : 0;
+        out.angle[slot] = angles.has(key) ? 1 : 0;
+        out.pose[slot] = pose_errors.has(key) ? 1 : 0;
+        out.converge_rate[slot] = double(converge.get(key, -1.0));
+        out.epsilon[slot] = double(epsilons.get(key, -1.0));
+        out.teleport[slot] = double(teleports.get(key, -1.0));
+    }
+    for (int index = 0; index < projected.size(); ++index) {
+        const int field = out.fields.index_of(StringName(projected[index]));
+        out.projection[uint32_t(field)]
+            = out.fields.index_of(StringName(projection[projected[index]]));
+    }
+    return out;
+}
+
+static predict::StateRow recovery_row(
+    const predict::Wiring &wiring,
+    const Dictionary &values
+) {
+    predict::StateRow out;
+    out.resize(wiring.count());
+    for (int at = 0; at < wiring.count(); ++at) {
+        const StringName &key = wiring.fields.name_at(at);
+        if (values.has(key)) {
+            out.set(at, values[key]);
+        }
+    }
+    return out;
 }
 
 static double divergence_by_field(
@@ -357,14 +384,6 @@ Variant prediction_core::pose_advance(
     }
 }
 
-bool prediction_core::teleport_reached(
-    const Dictionary &pose_errors,
-    const Dictionary &thresholds,
-    double default_threshold
-) {
-    return netw::teleport_reached(pose_errors, thresholds, default_threshold);
-}
-
 Dictionary prediction_core::compared_state(
     const Dictionary &payload,
     const Dictionary &causal
@@ -408,36 +427,6 @@ Dictionary prediction_core::project_payload(
     return out;
 }
 
-Dictionary prediction_core::converge_toward(
-    const Dictionary &restore,
-    const Dictionary &current,
-    const Dictionary &rules,
-    const Dictionary &angles
-) {
-    if (rules.is_empty()) {
-        return restore;
-    }
-    Dictionary out = restore.duplicate();
-    const Array fields = rules.keys();
-    for (int index = 0; index < fields.size(); ++index) {
-        const Variant field = fields[index];
-        if (!restore.has(field) || !current.has(field)) {
-            continue;
-        }
-        const double rate = std::clamp(double(rules[field]), 0.0, 1.0);
-        if (!rate_converges(rate)) {
-            continue;
-        }
-        const Variant delta
-            = pose_delta(restore[field], current[field], angles.has(field));
-        if (delta.get_type() == Variant::NIL) {
-            continue;
-        }
-        out[field] = pose_sum(current[field], pose_scale(delta, rate));
-    }
-    return out;
-}
-
 Ref<NetwPredictRecovery> NetwPredictRecovery::of(
     const Dictionary &p_restore,
     const Dictionary &p_write,
@@ -466,10 +455,9 @@ void NetwPredictRecovery::_bind_methods() {
     ClassDB::bind_method(D_METHOD("skip"), &NetwPredictRecovery::skip);
 }
 
-RecoveryPlan prediction_core::recover_plan(
+Ref<NetwPredictRecovery> prediction_core::recover(
     const Dictionary &payload,
     int policy,
-    int correction,
     int snap_restore,
     const Dictionary &projection,
     const Dictionary &current,
@@ -479,110 +467,54 @@ RecoveryPlan prediction_core::recover_plan(
     double tick_delta
 ) {
     NETW_ZONE_NC("NetwPredict recover", colors::PREDICTION);
-    if (policy == int(RecoveryPolicy::OBSERVE)) {
-        return RecoveryPlan();
-    }
-    if (correction == int(CorrectionMode::REPLAY)) {
-        RecoveryPlan replayed;
-        replayed.restore = payload;
-        replayed.skip = false;
-        return replayed;
-    }
+    const predict::Wiring fields
+        = recovery_wiring(payload, current, pose_errors, projection, wiring);
 
-    Dictionary restore = payload;
-    if (snap_restore == int(RestoreMode::EXTRAPOLATED)
-        && !projection.is_empty()) {
-        const int64_t ack_age = verdict.get(StringName("ack_age_ticks"), 0);
-        const int64_t ceiling = wiring.get(StringName("max_restore_ticks"), 0);
-        const int64_t span = std::clamp(ack_age, int64_t(0), ceiling);
-        restore
-            = project_payload(payload, projection, double(span) * tick_delta);
-    }
+    predict::Config config;
+    config.correction = predict::correction_for_recovery_policy(policy);
+    config.restore = snap_restore;
 
-    if (bool(verdict.get(StringName("pose_unmeasured"), false))
-        || teleport_reached(
-            pose_errors,
-            wiring.get(StringName("teleport_thresholds"), Dictionary()),
-            wiring.get(StringName("teleport_threshold"), 0.0)
-        )) {
-        RecoveryPlan teleported;
-        teleported.restore = restore;
-        teleported.write = restore;
-        teleported.teleport = true;
-        teleported.skip = false;
-        return teleported;
+    predict::RecoveryRequest request;
+    request.authority = recovery_row(fields, payload);
+    request.current = recovery_row(fields, current);
+    request.predicted.resize(fields.count());
+    request.field_errors.resize(uint32_t(fields.count()));
+    for (int at = 0; at < fields.count(); ++at) {
+        request.field_errors[uint32_t(at)]
+            = double(pose_errors.get(fields.fields.name_at(at), -1.0));
     }
+    request.policy = policy;
+    request.fallback_epsilon = wiring.get(StringName("epsilon"), 0.0);
+    request.fallback_teleport
+        = wiring.get(StringName("teleport_threshold"), 0.0);
+    request.max_restore_ticks = wiring.get(StringName("max_restore_ticks"), 0);
+    request.ack_age_ticks = verdict.get(StringName("ack_age_ticks"), 0);
+    request.tick_delta = tick_delta;
+    request.domain = predict::Domain(
+        int(verdict.get(StringName("domain"), int(Domain::IN_DOMAIN)))
+    );
+    request.attribution = predict::Attribution(
+        int(verdict.get(StringName("attribution"), int(Attribution::UNKNOWN)))
+    );
+    request.contact_window = verdict.get(StringName("contact_window"), false);
+    request.suppressed = verdict.get(StringName("suppressed"), false);
+    request.pose_unmeasured = verdict.get(StringName("pose_unmeasured"), false);
 
-    const int domain
-        = verdict.get(StringName("domain"), int(Domain::IN_DOMAIN));
-    const int attribution
-        = verdict.get(StringName("attribution"), int(Attribution::UNKNOWN));
-    if (domain == int(Domain::OUT_OF_DOMAIN)
-        || (attribution == int(Attribution::UNKNOWN)
-            && bool(verdict.get(StringName("contact_window"), false)))) {
-        RecoveryPlan whole;
-        whole.restore = restore;
-        whole.write = restore;
-        whole.skip = false;
-        return whole;
-    }
-
-    if (bool(verdict.get(StringName("suppressed"), false))) {
-        return RecoveryPlan();
-    }
-
-    const Dictionary withheld
-        = wiring.get(StringName("withheld"), Dictionary());
-    if (!withheld.is_empty()) {
-        restore = restore.duplicate();
-        const Array fields = withheld.keys();
-        for (int index = 0; index < fields.size(); ++index) {
-            restore.erase(fields[index]);
+    predict::RecoveryState fresh;
+    const predict::WritePlan plan
+        = predict::stage_recovery(fields, config, request, fresh);
+    Dictionary restore;
+    Dictionary write;
+    for (int at = 0; at < fields.count(); ++at) {
+        const StringName &key = fields.fields.name_at(at);
+        if (plan.restore.has(at)) {
+            restore[key] = plan.restore.values[uint32_t(at)];
+        }
+        if (plan.write.has(at)) {
+            write[key] = plan.write.values[uint32_t(at)];
         }
     }
-    restore = converge_toward(
-        restore,
-        current,
-        wiring.get(StringName("converge_rules"), Dictionary()),
-        wiring.get(StringName("angle_fields"), Dictionary())
-    );
-    RecoveryPlan converged;
-    converged.restore = restore;
-    converged.write = restore;
-    converged.skip = false;
-    return converged;
-}
-
-Ref<NetwPredictRecovery> prediction_core::recover(
-    const Dictionary &payload,
-    int policy,
-    int correction,
-    int snap_restore,
-    const Dictionary &projection,
-    const Dictionary &current,
-    const Dictionary &pose_errors,
-    const Dictionary &wiring,
-    const Dictionary &verdict,
-    double tick_delta
-) {
-    const RecoveryPlan planned = recover_plan(
-        payload,
-        policy,
-        correction,
-        snap_restore,
-        projection,
-        current,
-        pose_errors,
-        wiring,
-        verdict,
-        tick_delta
-    );
-    return NetwPredictRecovery::of(
-        planned.restore,
-        planned.write,
-        planned.teleport,
-        planned.skip
-    );
+    return NetwPredictRecovery::of(restore, write, plan.teleport, plan.skip);
 }
 
 int prediction_core::domain_of(
@@ -596,32 +528,6 @@ int prediction_core::domain_of(
         return int(Domain::OUT_OF_DOMAIN);
     }
     return int(Domain::IN_DOMAIN);
-}
-
-Dictionary prediction_core::escalation_after(
-    int streak,
-    int last_sign,
-    double last_divergence,
-    double divergence,
-    int sign
-) {
-    Dictionary result;
-    if (last_divergence >= 0.0 && divergence < last_divergence) {
-        result[StringName("streak")] = 0;
-        result[StringName("sign")] = 0;
-        result[StringName("escalate")] = false;
-        return result;
-    }
-
-    const int grown = streak + 1;
-    const bool flipped = sign != 0 && last_sign != 0 && sign != last_sign;
-    const bool escalate
-        = grown >= NONSHRINKING_DIVERGENCES_BEFORE_ESCALATION || flipped;
-
-    result[StringName("streak")] = escalate ? 0 : grown;
-    result[StringName("sign")] = sign;
-    result[StringName("escalate")] = escalate;
-    return result;
 }
 
 int prediction_core::measure(

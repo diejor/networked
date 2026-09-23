@@ -29,12 +29,11 @@ namespace Networked;
 /// <see cref="NetwPredictionHandle.Archetype"/> with no state row reports one
 /// error when its owner is ready and is not predicted. A
 /// <see cref="MultiplayerSynchronizer"/> may provide scene defaults. Later
-/// assignments in code override those values. Use
-/// <see cref="NetwPredictionHandle.Stats"/>,
-/// <see cref="NetwPredictionHandle.Journal"/>, and
-/// <see cref="NetwPredictionHandle.Episode"/> for comparison diagnostics. Use
-/// <see cref="NetwPredictionHandle.Reachability"/> to validate referenced
-/// objects.
+/// assignments in code override those values.
+/// <see cref="NetwPredictionHandle.Stats"/> counts corrections. The signals
+/// report each divergence, episode and recovery as it happens.
+/// <see cref="NetwPredictionHandle.Reachability"/> says what each declaration
+/// actually reaches.
 /// </para>
 /// </remarks>
 public sealed class NetwPredictionHandle : NetwRefCounted
@@ -54,7 +53,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Generator status when the causal fork predates retained journal rows.
+    /// Generator status when the causal fork predates retained rows.
     /// </summary>
     public const long GeneratorUnknownBeyondRetention = 0;
 
@@ -66,13 +65,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// as loudly as a game that corrects.
     /// <code>
     /// entity.prediction.divergence_detected.connect(
-    ///     func(entry: int, attribution: NetwPredictJournal.Attribution):
-    ///         if attribution == NetwPredictJournal.CLOSURE:
+    ///     func(entry: int, attribution: NetwPredict.Attribution):
+    ///         if attribution == NetwPredict.ATTRIBUTION_CLOSURE:
     ///             push_warning("transition %d diverged" % entry)
     /// )
     /// </code>
     /// </summary>
-    public event Action<long, NetwPredictJournal.Attribution> DivergenceDetected
+    public event Action<long, NetwPredict.Attribution> DivergenceDetected
     {
         add => Connect("divergence_detected", Callable.From(value));
         remove => Disconnect("divergence_detected", Callable.From(value));
@@ -80,8 +79,58 @@ public sealed class NetwPredictionHandle : NetwRefCounted
 
     /// <summary>
     /// Emitted when a settled comparison diverges far enough to act on and
-    /// opens an episode. <c>report</c> is shaped exactly as
-    /// <see cref="NetwPredictionHandle.Episode"/> describes.
+    /// opens an episode. <c>report</c> is a copy of the episode record. The
+    /// attribution is a <see cref="NetwPredict.Attribution"/>, each operator a
+    /// <see cref="NetwPredict.Operator"/> with a
+    /// <see cref="NetwPredict.OperatorOutcome"/>, and the disposition state a
+    /// <see cref="NetwPredict.EpisodeState"/>.
+    /// <code>
+    /// Dictionary
+    /// ┠╴id            int
+    /// ┠╴generator     Dictionary
+    /// ┃ ┠╴transition  int
+    /// ┃ ┠╴boundary    NetwPredict.Attribution
+    /// ┃ ┖╴row         Dictionary
+    /// ┠╴operators     Array[Dictionary]
+    /// ┃ ┠╴operator    NetwPredict.Operator
+    /// ┃ ┠╴basis       int
+    /// ┃ ┠╴eligible    bool
+    /// ┃ ┠╴applied     bool
+    /// ┃ ┠╴eligibility Dictionary
+    /// ┃ ┠╴outcome     NetwPredict.OperatorOutcome
+    /// ┃ ┖╴write       Dictionary
+    /// ┠╴contraction   Array[Dictionary]
+    /// ┃ ┖╴            transition, meter, agrees, write_id
+    /// ┠╴disposition   Dictionary
+    /// ┃ ┠╴state                 NetwPredict.EpisodeState
+    /// ┃ ┠╴non_contraction_used  int
+    /// ┃ ┠╴closure_used          int
+    /// ┃ ┠╴closed_transition     int
+    /// ┃ ┠╴fallback_transition   int
+    /// ┃ ┠╴demoted               bool
+    /// ┃ ┠╴breach_transition     int
+    /// ┃ ┠╴breach_witness        Dictionary
+    /// ┃ ┠╴resume_ack_age        int
+    /// ┃ ┠╴quarantine_target     int
+    /// ┃ ┠╴quarantine_clean_run  int
+    /// ┃ ┠╴reseed_transition     int
+    /// ┃ ┠╴aligned_transition    int
+    /// ┃ ┖╴evidence_dropped      int
+    /// ┖╴reopen_chain  Array[int]
+    /// </code>
+    /// <para>
+    /// <c>generator.row</c> is the recorded row for that transition, and its
+    /// <c>witness_detail</c> carries the contact behind the witness
+    /// fingerprint. A run that began before the kept window starts reads
+    /// <see cref="NetwPredictionHandle.GeneratorUnknownBeyondRetention"/>.
+    /// Later diverging rows appear under <c>taint</c>, and failures that began
+    /// on their own appear under <c>secondary_generators</c>. An operator that
+    /// was rejected has <c>outcome = -1</c> and an empty <c>write</c>. Each
+    /// series is kept only to a bounded window, because an episode has no limit
+    /// on how long it may stay open. A trim keeps the newest entries and counts
+    /// what it dropped, so a truncated series can be told apart from a short
+    /// one.
+    /// </para>
     /// </summary>
     public event Action<Godot.Collections.Dictionary> EpisodeOpened
     {
@@ -91,9 +140,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
 
     /// <summary>
     /// Emitted when a run of agreement long enough to be trusted closes an
-    /// episode. <c>report</c> is shaped exactly as
-    /// <see cref="NetwPredictionHandle.Episode"/> describes, it is a copy, and
-    /// it stays valid after later journal rows have pushed out the row it
+    /// episode. <c>report</c> is shaped as
+    /// <see cref="NetwPredictionHandle.EpisodeOpened"/> describes. It is a
+    /// copy, and it stays valid after later rows have pushed out the row it
     /// names.
     /// </summary>
     public event Action<Godot.Collections.Dictionary> EpisodeClosed
@@ -104,9 +153,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
 
     /// <summary>
     /// Emitted when an episode runs out of evidence to recover with and the
-    /// entity starts following authority instead. <c>report</c> is shaped
-    /// exactly as <see cref="NetwPredictionHandle.Episode"/> describes. The
-    /// entity keeps sending its input while it has stopped predicting ahead.
+    /// entity starts following authority instead. <c>report</c> is shaped as
+    /// <see cref="NetwPredictionHandle.EpisodeOpened"/> describes. The entity
+    /// keeps sending its input while it has stopped predicting ahead.
     /// </summary>
     public event Action<Godot.Collections.Dictionary> EpisodeFallback
     {
@@ -142,7 +191,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         long,
         Godot.Collections.Dictionary,
         bool,
-        NetwPredictJournal.Attribution> Recovered
+        NetwPredict.Attribution> Recovered
     {
         add => Connect("recovered", Callable.From(value));
         remove => Disconnect("recovered", Callable.From(value));
@@ -158,20 +207,15 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// nothing, such as the evidence running out or an operator waiting on a
     /// witness. Those still report true, so a reader that only watches sees a
     /// divergence the engine chose not to act on.
-    /// <see cref="NetwPredictionHandle.LastVerdictReason"/> says why, and
     /// <see cref="NetwPredictionHandle.Recovered"/> is the signal for the
     /// write. A frame that reached no comparison at all still fires this, with
     /// a zero divergence and no correction, so a listener sees the frame arrive
     /// rather than losing it silently.
-    /// <see cref="NetwPredictionHandle.LastVerdictReason"/> tells such a row
-    /// from one that compared and agreed.
     /// <see cref="NetwPredictionHandle.DivergenceDetected"/> fires only when a
     /// transition actually disagrees. A drift that grows tick over tick and
     /// never crosses <see cref="NetwPredictionHandle.DivergenceEpsilon"/> is
     /// heard here and never there, so anything watching for a drift nothing
-    /// acted on reads this one. <c>divergence</c> is the worst field alone, and
-    /// <see cref="NetwPredictionHandle.LastFieldDivergence"/> breaks it out per
-    /// field.
+    /// acted on reads this one. <c>divergence</c> is the worst field alone.
     /// </summary>
     public event Action<long, long, double, bool> StateEvaluated
     {
@@ -227,45 +271,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetCorrectionMode =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_correction_mode",
-            1786907001UL);
-
-    private static readonly IntPtr _bindSetCorrectionMode =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "set_correction_mode",
-            3840740725UL);
-
-    /// <summary>
-    /// How a correction is applied, a <see cref="NetwPredict.CorrectionMode"/>
-    /// value.
-    /// </summary>
-    public NetwPredict.CorrectionMode CorrectionMode
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetCorrectionMode,
-                Checked,
-                ref answered);
-            return (NetwPredict.CorrectionMode)answered;
-        }
-        set
-        {
-            long slot0 = (long)value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetCorrectionMode,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
     private static readonly IntPtr _bindGetRecoveryPolicy =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
@@ -279,10 +284,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             46739939UL);
 
     /// <summary>
-    /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity recovers under,
-    /// or <c>-1</c> while none has been declared, in which case
-    /// <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/> works one out
-    /// from <see cref="NetwPredictionHandle.CorrectionMode"/>.
+    /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity declares. The
+    /// default <see cref="NetwPredict.RecoveryPolicy.Auto"/> picks one from the
+    /// body, and <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/>
+    /// returns the policy the entity actually recovers under.
     /// </summary>
     public NetwPredict.RecoveryPolicy RecoveryPolicy
     {
@@ -364,7 +369,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// rather than rejected here, so the record describes exactly the facts the
     /// drive ran against. Declaring a sensor says where a divergence came from
     /// and claims nothing about exactness, so declaring them alone leaves every
-    /// transition <see cref="NetwPredictJournal.Domain.OutOfDomain"/>.
+    /// transition <see cref="NetwPredict.Domain.Out"/>.
     /// </summary>
     public Godot.Collections.Dictionary Sensors
     {
@@ -699,9 +704,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// produces one input per tick, so the default of <c>1</c> keeps the two in
     /// step. A higher value lets a frame skip past inputs that have already
     /// arrived rather than working through the backlog one frame at a time.
-    /// Folding never steps over a lost tick, and folded inputs are counted by
-    /// <see cref="NetwPredictStats.Folded"/> rather than simulated, so it is
-    /// never extra work. An entity at
+    /// Folding never steps over a lost tick, and folded inputs are skipped
+    /// rather than simulated, so it is never extra work. An entity at
     /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> ignores this and
     /// advances by exactly one per tick, because authority may not run a
     /// transition its own clock has not reached.
@@ -748,14 +752,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// nothing spare alternates ticks where the entity does not step at all
     /// with ticks where it drains a burst. This is a target the server keeps to
     /// rather than a warm-up it does once. A tick whose queue has fallen to the
-    /// target consumes nothing and rebuilds the slack instead, which
-    /// <see cref="NetwPredictStats.Held"/> counts, and
+    /// target consumes nothing and rebuilds the slack instead, and
     /// <see cref="NetwPredictionHandle.MaxConsumePerTick"/> trims a burst back
     /// to the target rather than to zero.
     /// <code>
     /// span &gt; buffer        consume, draining toward buffer + 1
-    /// 0 &lt; span &lt;= buffer   hold, and the slack rebuilds     (held)
-    /// span &lt;= 0            starved, no input exists      (starved)
+    /// 0 &lt; span &lt;= buffer   hold, and the slack rebuilds
+    /// span &lt;= 0            starved, no input exists
     /// </code>
     /// <para>
     /// Every tick of depth costs a tick of input latency, and a hold delays one
@@ -872,10 +875,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     ///                      consume_buffer_ticks
     /// </code>
     /// <para>
-    /// Input skipped that way is a second old and no longer worth simulating,
-    /// and <see cref="NetwPredictStats.Skipped"/> counts it. A value of
-    /// <c>0</c> turns the recovery off and lets the server fall as far behind
-    /// as it falls.
+    /// Input skipped that way is a second old and no longer worth simulating. A
+    /// value of <c>0</c> turns the recovery off and lets the server fall as far
+    /// behind as it falls.
     /// </para>
     /// </summary>
     public int MaxConsumeLagTicks
@@ -1075,232 +1077,11 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetLastFieldDivergence =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_last_field_divergence",
-            3102165223UL);
-
-    /// <summary>
-    /// Each field's own divergence from the most recent comparison, refreshed
-    /// every time state arrives on the owning client. Empty until the first
-    /// comparison. <see cref="NetwPredictionHandle.StateEvaluated"/> carries
-    /// only the worst field's error, and a set mixing meters, radians and
-    /// meters per second cannot say from that number which field moved. Read
-    /// this to tell a position drifting from a velocity drifting, especially
-    /// for a field declared <see cref="NetwPropertyConfig.ReconcileOnly"/> or
-    /// <see cref="NetwPropertyConfig.TeleportOnly"/>, which can drift without
-    /// ever triggering a correction or being restored by one.
-    /// </summary>
-    public Godot.Collections.Dictionary LastFieldDivergence
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(
-                _bindGetLastFieldDivergence,
-                Checked,
-                ref answered);
-            Godot.Collections.Dictionary result =
-                VariantUtils.ConvertToDictionary(answered);
-            answered.Dispose();
-            return result;
-        }
-    }
-
-    private static readonly IntPtr _bindGetFieldRecovery =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_field_recovery",
-            3102165223UL);
-
-    /// <summary>
-    /// How often each field has asked for a recovery and how often one repaired
-    /// it, counted since the entity spawned. A field may trigger correction
-    /// without being writable by that correction.
-    /// <see cref="NetwPropertyConfig.TeleportOnly"/> reserves its write for a
-    /// teleport, so smaller corrections may update other fields. This flag
-    /// records that condition across the full run.
-    /// <code>
-    /// var row := entity.prediction.field_recovery[&amp;"angular_velocity"]
-    /// print(row.triggered, row.repaired, row.contracted)   # 1393  50  0
-    /// </code>
-    /// <para>
-    /// A row like that one triggers nearly every recovery, is withheld from
-    /// nearly every one, and the few writes it did get made it no smaller, so
-    /// nothing is repairing it. Inside the comparison a correction is decided
-    /// by fingerprint rather than by tolerance, so
-    /// <see cref="NetwPredictFieldRecovery.Triggered"/> names the fields that
-    /// were also past their tolerance rather than the ones that decided it. A
-    /// field declared <see cref="NetwPropertyConfig.ReconcileOnly"/> never
-    /// counts a trigger at all.
-    /// </para>
-    /// </summary>
-    public Godot.Collections.Dictionary FieldRecovery
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetFieldRecovery, Checked, ref answered);
-            Godot.Collections.Dictionary result =
-                VariantUtils.ConvertToDictionary(answered);
-            answered.Dispose();
-            return result;
-        }
-    }
-
-    private static readonly IntPtr _bindGetLastCompareStaleness =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_last_compare_staleness",
-            3905245786UL);
-
-    /// <summary>
-    /// How many ticks older than the arriving state the prediction compared
-    /// against it was, or <c>-1</c> when nothing was recorded to compare at
-    /// all. A comparison is only honest at zero. When the owner recorded
-    /// nothing at the acknowledged tick the comparison falls back to an older
-    /// prediction, and the resulting
-    /// <see cref="NetwPredictionHandle.LastFieldDivergence"/> then mixes real
-    /// divergence with the distance the body simply travelled in between. Read
-    /// this beside every divergence number to tell the two apart. It is
-    /// non-zero on the ticks the owner did not simulate at all, which is the
-    /// two sides running on different schedules rather than the physics
-    /// disagreeing.
-    /// </summary>
-    public int LastCompareStaleness
-    {
-        get
-        {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
-                _bindGetLastCompareStaleness,
-                Checked,
-                ref answered);
-            return answered;
-        }
-    }
-
-    private static readonly IntPtr _bindGetLastTierErrors =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_last_tier_errors",
-            3102165223UL);
-
-    /// <summary>
-    /// The error the teleport test last measured for each pose field, or empty
-    /// when the last comparison measured none. This is a different number from
-    /// <see cref="NetwPredictionHandle.LastFieldDivergence"/>, which is why
-    /// both are published. A divergence is measured against the value that
-    /// arrived. This is measured against that value carried forward to now
-    /// through the field's <see cref="NetwPropertyConfig.CarryAlong"/>. A field
-    /// whose carry overshoots can reach the teleport distance while its plain
-    /// divergence stays small, so a capture explaining a teleport with the
-    /// divergence is quoting a number that did not cause it. Read it against
-    /// the distance the field declared with
-    /// <see cref="NetwPropertyConfig.TeleportAt"/>.
-    /// </summary>
-    public Godot.Collections.Dictionary LastTierErrors
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetLastTierErrors, Checked, ref answered);
-            Godot.Collections.Dictionary result =
-                VariantUtils.ConvertToDictionary(answered);
-            answered.Dispose();
-            return result;
-        }
-    }
-
-    private static readonly IntPtr _bindGetLastVerdictReason =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_last_verdict_reason",
-            3905245786UL);
-
-    /// <summary>
-    /// Why the most recent comparison did not reach the body, or
-    /// <see cref="NetwPredict.VerdictReason.None"/> when nothing stood in its
-    /// way. It is cleared at the start of every arriving frame, before the
-    /// comparison runs, so it always describes the comparison in front of the
-    /// reader. Read it beside every
-    /// <see cref="NetwPredictionHandle.StateEvaluated"/>, the way
-    /// <see cref="NetwPredictionHandle.LastCompareStaleness"/> is read beside
-    /// every divergence. The signal carries what the comparison decided and
-    /// this carries what was done about it. More than one reason can stand at
-    /// once, and the ranking is fixed.
-    /// - <see cref="NetwPredict.VerdictReason.EvidenceExhausted"/> outranks a
-    /// pending operator
-    /// - <see cref="NetwPredict.VerdictReason.TransportPending"/> outranks
-    /// <see cref="NetwPredict.VerdictReason.DissipatePending"/>
-    /// For <see cref="NetwPredict.VerdictReason.EvidenceExhausted"/>, the
-    /// caller must choose the fallback. The pending reasons indicate that the
-    /// current pass is still gathering data. A comparison that agreed is never
-    /// rejected and reads <see cref="NetwPredict.VerdictReason.None"/>, so this
-    /// rather than the corrected flag is what tells a rejection from an
-    /// agreement. Counting corrections off the verdict alone counts comparisons
-    /// that wrote nothing and cannot tell them from repairs.
-    /// <code>
-    /// entity.prediction.state_evaluated.connect(
-    ///     func(_r, ack, error, corrected):
-    ///         var pred := entity.prediction
-    ///         if corrected and pred.last_verdict_reason \
-    ///                 != NetwPredict.VERDICT_REASON_NONE:
-    ///             print("transition %d disagreed by %.3f and wrote nothing"
-    ///                     % [ack, error])
-    /// )
-    /// </code>
-    /// </summary>
-    public int LastVerdictReason
-    {
-        get
-        {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(
-                _bindGetLastVerdictReason,
-                Checked,
-                ref answered);
-            return answered;
-        }
-    }
-
-    private static readonly IntPtr _bindGetIsReconciling =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_is_reconciling",
-            36873697UL);
-
-    /// <summary>
-    /// True while a correction is restoring and replaying, which is what code
-    /// that plays an effect reads before playing one. It clears only after the
-    /// replay has actually run, never before, so a reader never sees it false
-    /// over a body still being re-run. An effect held back while it is true
-    /// would otherwise fire in the middle of the replay it was meant to sit
-    /// out.
-    /// </summary>
-    public bool IsReconciling
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetIsReconciling,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-    }
-
     private static readonly IntPtr _bindGetStats =
         NetwApi.MethodBind("NetwPredictionHandle", "get_stats", 4290843155UL);
 
     /// <summary>
-    /// Everything this entity's engine counted, one name per fact, on a
-    /// <see cref="NetwPredictStats"/>. These are for reading, printing and
-    /// charting. Build a rule on the signals and the named properties beside
-    /// them instead, because those are the ones that will not change under a
-    /// game.
+    /// What this entity's engine counted, on a <see cref="NetwPredictStats"/>.
     /// </summary>
     public NetwPredictStats Stats
     {
@@ -1309,81 +1090,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             IntPtr answered = default;
             NetwThunks.Ptrcall0_IntPtr(_bindGetStats, Checked, ref answered);
             return NetwPredictStats.Adopt(answered);
-        }
-    }
-
-    private static readonly IntPtr _bindGetAcknowledgedTick =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_acknowledged_tick",
-            3905245786UL);
-
-    /// <summary>
-    /// The newest transition authority has acknowledged, or <c>-1</c> before
-    /// any acknowledgement has reached this peer.
-    /// <see cref="NetwPredictStats.AckConfirmed"/> counts how many have
-    /// arrived.
-    /// </summary>
-    public long AcknowledgedTick
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetAcknowledgedTick,
-                Checked,
-                ref answered);
-            return answered;
-        }
-    }
-
-    private static readonly IntPtr _bindGetLastAttribution =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_last_attribution",
-            1861079057UL);
-
-    /// <summary>
-    /// What the most recent divergence was blamed on, as a
-    /// <see cref="NetwPredictJournal.Attribution"/> value. It means nothing
-    /// until <see cref="NetwPredictionHandle.LastAttributedTransition"/> is no
-    /// longer <c>-1</c>. <see cref="NetwPredictJournal.Attribution.Unknown"/>
-    /// means the evidence needed to return was not there. Every other value
-    /// names the first thing the two runs disagreed about.
-    /// </summary>
-    public NetwPredictJournal.Attribution LastAttribution
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetLastAttribution,
-                Checked,
-                ref answered);
-            return (NetwPredictJournal.Attribution)answered;
-        }
-    }
-
-    private static readonly IntPtr _bindGetLastAttributedTransition =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "get_last_attributed_transition",
-            3905245786UL);
-
-    /// <summary>
-    /// The transition <see cref="NetwPredictionHandle.LastAttribution"/>
-    /// describes, or <c>-1</c> while no divergence has been blamed on anything.
-    /// </summary>
-    public long LastAttributedTransition
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetLastAttributedTransition,
-                Checked,
-                ref answered);
-            return answered;
         }
     }
 
@@ -1478,13 +1184,12 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             4095437614UL);
 
     /// <summary>
-    /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity recovers under,
-    /// resolving <see cref="NetwPredict.CorrectionMode.Auto"/> against what the
-    /// body is, the way
-    /// <see cref="NetwPredictionHandle.ResolvedCorrectionMode"/> does. A
-    /// physics body at <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>
-    /// that declares <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/>
-    /// resolves <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/>.
+    /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity recovers under.
+    /// It never returns <see cref="NetwPredict.RecoveryPolicy.Auto"/>, which it
+    /// resolves against the body. A physics body at
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> that declares
+    /// <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/> resolves
+    /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/>.
     /// </summary>
     public NetwPredict.RecoveryPolicy ResolvedRecoveryPolicy()
     {
@@ -1494,28 +1199,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             Checked,
             ref answered);
         return (NetwPredict.RecoveryPolicy)answered;
-    }
-
-    private static readonly IntPtr _bindResolvedCorrectionMode =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "resolved_correction_mode",
-            1786907001UL);
-
-    /// <summary>
-    /// The <see cref="NetwPredict.CorrectionMode"/> this entity actually
-    /// corrects with. It never returns
-    /// <see cref="NetwPredict.CorrectionMode.Auto"/>, because that has already
-    /// been resolved into one of the real modes.
-    /// </summary>
-    public NetwPredict.CorrectionMode ResolvedCorrectionMode()
-    {
-        long answered = default;
-        NetwThunks.Ptrcall0_Long(
-            _bindResolvedCorrectionMode,
-            Checked,
-            ref answered);
-        return (NetwPredict.CorrectionMode)answered;
     }
 
     private static readonly IntPtr _bindSimulateTick =
@@ -1563,52 +1246,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
-    }
-
-    private static readonly IntPtr _bindJournal =
-        NetwApi.MethodBind("NetwPredictionHandle", "journal", 3701839518UL);
-
-    /// <summary>
-    /// The <see cref="NetwPredictJournal"/> recording every transition this
-    /// entity's engine drove, or <c>null</c> before an engine is attached. It
-    /// is the engine's own record, so reading it changes nothing about the
-    /// simulation, and its rows outlive the correction that consumed them.
-    /// <code>
-    /// var journal := entity.prediction.journal()
-    /// if journal and journal.first_unmatched() &gt;= 0:
-    ///     print("unverified from transition ", journal.first_unmatched())
-    /// </code>
-    /// </summary>
-    public NetwPredictJournal Journal()
-    {
-        IntPtr answered = default;
-        NetwThunks.Ptrcall0_IntPtr(_bindJournal, Checked, ref answered);
-        return NetwPredictJournal.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindTeleportDistances =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "teleport_distances",
-            3102165223UL);
-
-    /// <summary>
-    /// The teleport distance in force for each field, as a copy.
-    /// <see cref="NetwPredictionHandle.Reachability"/> returns this too and
-    /// much more besides, which is why it is the wrong call for a recorder. It
-    /// rebuilds its whole report every time, and a recorder runs once per
-    /// arriving state. This is the cheap read of the one fact. A field missing
-    /// from the result declared no distance of its own and uses
-    /// <see cref="NetwPredictionHandle.TeleportThreshold"/>.
-    /// </summary>
-    public Godot.Collections.Dictionary TeleportDistances()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindTeleportDistances, Checked, ref answered);
-        Godot.Collections.Dictionary result =
-            VariantUtils.ConvertToDictionary(answered);
-        answered.Dispose();
-        return result;
     }
 
     private static readonly IntPtr _bindReachability =
@@ -1669,231 +1306,6 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindEpisode =
-        NetwApi.MethodBind("NetwPredictionHandle", "episode", 3102165223UL);
-
-    /// <summary>
-    /// The current or most recent prediction episode. An empty result means no
-    /// episode has started. Returns a copy.
-    /// <code>
-    /// Dictionary
-    /// ┠╴id            int
-    /// ┠╴generator     Dictionary
-    /// ┃ ┠╴transition  int
-    /// ┃ ┠╴boundary    NetwPredictJournal.Attribution
-    /// ┃ ┖╴row         Dictionary
-    /// ┠╴operators     Array[Dictionary]
-    /// ┃ ┠╴operator    NetwPredictJournal.Operator
-    /// ┃ ┠╴basis       int
-    /// ┃ ┠╴eligible    bool
-    /// ┃ ┠╴applied     bool
-    /// ┃ ┠╴eligibility Dictionary
-    /// ┃ ┠╴outcome     NetwPredict.OperatorOutcome
-    /// ┃ ┖╴write       Dictionary
-    /// ┠╴contraction   Array[Dictionary]
-    /// ┃ ┖╴            transition, meter, agrees, write_id
-    /// ┠╴disposition   Dictionary
-    /// ┃ ┠╴state                 NetwPredict.EpisodeState
-    /// ┃ ┠╴non_contraction_used  int
-    /// ┃ ┠╴closure_used          int
-    /// ┃ ┠╴closed_transition     int
-    /// ┃ ┠╴fallback_transition   int
-    /// ┃ ┠╴demoted               bool
-    /// ┃ ┠╴breach_transition     int
-    /// ┃ ┠╴breach_witness        Dictionary
-    /// ┃ ┠╴resume_ack_age        int
-    /// ┃ ┠╴quarantine_target     int
-    /// ┃ ┠╴quarantine_clean_run  int
-    /// ┃ ┠╴reseed_transition     int
-    /// ┃ ┠╴aligned_transition    int
-    /// ┃ ┖╴evidence_dropped      int
-    /// ┖╴reopen_chain  Array[int]
-    /// </code>
-    /// <para>
-    /// <c>generator.row</c> is the journal row that was kept, and its
-    /// <c>witness_detail</c> carries the contact behind the witness
-    /// fingerprint. A run that began before the kept window starts reads
-    /// <see cref="NetwPredictionHandle.GeneratorUnknownBeyondRetention"/>.
-    /// Later diverging rows appear under <c>taint</c>, and failures that began
-    /// on their own appear under <c>secondary_generators</c>. An operator that
-    /// was rejected has <c>outcome = -1</c> and an empty <c>write</c>. Each
-    /// series is kept only to a bounded window, because an episode has no limit
-    /// on how long it may stay open. A trim keeps the newest entries and counts
-    /// what it dropped, so a truncated series can be told apart from a short
-    /// one. Reading this copies the whole record. A reader running every frame
-    /// calls <see cref="NetwPredictionHandle.EpisodeDigest"/> instead and comes
-    /// here only when the digest says something changed.
-    /// </para>
-    /// </summary>
-    public Godot.Collections.Dictionary Episode()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindEpisode, Checked, ref answered);
-        Godot.Collections.Dictionary result =
-            VariantUtils.ConvertToDictionary(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindEpisodeDigest =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "episode_digest",
-            3102165223UL);
-
-    /// <summary>
-    /// The episode's current numbers, without copying any of its evidence.
-    /// <see cref="NetwPredictionHandle.Episode"/> copies the whole record, and
-    /// an open episode keeps one entry per settled comparison, so a per-frame
-    /// reader wanting only the disposition would pay for every comparison the
-    /// episode has ever seen. This costs the same whatever the episode's age,
-    /// which is what makes it safe to read every frame.
-    /// <code>
-    /// var digest := entity.prediction.episode_digest()
-    /// if digest.is_empty():
-    ///     return
-    /// if digest[&amp;"revision"] != _last_seen:
-    ///     _last_seen = digest[&amp;"revision"]
-    ///     _export(entity.prediction.episode())
-    /// </code>
-    /// <code>
-    /// Dictionary
-    /// ┠╴id                          int   the open or last retired episode
-    /// ┠╴revision                    int   rises on every change to evidence
-    /// ┠╴last_comparison_transition  int   newest settled comparison
-    /// ┠╴last_meter                  int   that comparison's error
-    /// ┠╴generator             Dictionary  {transition, boundary}, where and
-    /// ┃                                   how the two runs first parted
-    /// ┠╴last_operator         Dictionary  {operator, basis, outcome}, empty
-    /// ┃                                   until one has been attempted
-    /// ┠╴disposition           Dictionary  the same section episode() gives
-    /// ┖╴evidence              Dictionary  {comparisons, writes, decisions,
-    ///                                     taint, secondary_generators,
-    ///                                     dropped}
-    /// </code>
-    /// <para>
-    /// <c>evidence.dropped</c> counts the entries a trim removed once the
-    /// episode outlived the kept window, so a short series can be told from a
-    /// truncated one. <c>last_operator.outcome</c> is <c>-1</c> for an attempt
-    /// rejected before it wrote.
-    /// </para>
-    /// </summary>
-    public Godot.Collections.Dictionary EpisodeDigest()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindEpisodeDigest, Checked, ref answered);
-        Godot.Collections.Dictionary result =
-            VariantUtils.ConvertToDictionary(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindTapeTransitions =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "tape_transitions",
-            3995934104UL);
-
-    /// <summary>
-    /// Every recorded transition, oldest first. The client that owns the entity
-    /// returns the transitions it wrote, and the consuming server returns the
-    /// ones it decoded. For an entity at
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> the index, the
-    /// label and the tick are all the same number and every entry is fresh.
-    /// <code>
-    /// Array[Dictionary]
-    /// ┖╴entry
-    ///   ┠╴index  int   position in the tape, oldest first
-    ///   ┠╴label  int   the tick this transition is filed under
-    ///   ┖╴fresh  bool  true when a newer input drove it
-    /// </code>
-    /// </summary>
-    public Godot.Collections.Array TapeTransitions()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindTapeTransitions, Checked, ref answered);
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindTransitionStateAt =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "transition_state_at",
-            3485342025UL);
-
-    /// <summary>
-    /// The predicted state <paramref name="transition"/> produced, or an empty
-    /// <see cref="Godot.Collections.Dictionary"/> before that state has been
-    /// captured.
-    /// </summary>
-    public Godot.Collections.Dictionary TransitionStateAt(long transition)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)transition);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindTransitionStateAt,
-            Checked,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        Godot.Collections.Dictionary result =
-            VariantUtils.ConvertToDictionary(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindRecordServerInput =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "record_server_input",
-            64545446UL);
-
-    /// <summary>
-    /// Records one input the server consumed at <paramref name="tick"/> into
-    /// the server's timeline, as an arriving input frame would. It does nothing
-    /// on a peer that is not consuming.
-    /// </summary>
-    public void RecordServerInput(long tick, Godot.Collections.Dictionary input)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)tick);
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(input);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindRecordServerInput,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindHasConsumedStateTick =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "has_consumed_state_tick",
-            1116898809UL);
-
-    /// <summary>
-    /// Whether the engine has consumed everything up to
-    /// <paramref name="stateTick"/>. A handle with no engine, or one that is
-    /// not consuming, returns ready.
-    /// </summary>
-    public bool HasConsumedStateTick(long stateTick)
-    {
-        long slot0 = stateTick;
-        byte answered = default;
-        NetwThunks.Ptrcall1_Long_Byte(
-            _bindHasConsumedStateTick,
-            Checked,
-            in slot0,
-            ref answered);
-        return answered != 0;
-    }
-
     private static readonly IntPtr _bindNotifyContact =
         NetwApi.MethodBind(
             "NetwPredictionHandle",
@@ -1913,303 +1325,5 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     {
         long discarded = default;
         NetwThunks.Ptrcall0_Long(_bindNotifyContact, Checked, ref discarded);
-    }
-
-    private static readonly IntPtr _bindHistoryRecordTick =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "history_record_tick",
-            923996154UL);
-
-    /// <summary>
-    /// The <see cref="NetwTimeline"/> key to record the newest authoritative
-    /// snapshot under. It returns <paramref name="fallback"/>, or the tick an
-    /// input backed on a consuming engine, or <c>-1</c> when this tick consumed
-    /// no input and so wrote no state worth keying. A caller recording history
-    /// skips a negative key and leaves the slot as the last real consume wrote
-    /// it.
-    /// </summary>
-    public long HistoryRecordTick(long fallback)
-    {
-        long slot0 = fallback;
-        long answered = default;
-        NetwThunks.Ptrcall1_Long_Long(
-            _bindHistoryRecordTick,
-            Checked,
-            in slot0,
-            ref answered);
-        return answered;
-    }
-
-    private static readonly IntPtr _bindStampEpisode =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "stamp_episode",
-            3218959716UL);
-
-    /// <summary>
-    /// Bumps the revision an episode reader watches for change. The record
-    /// itself is the pool's, so nothing is stored here.
-    /// </summary>
-    public void StampEpisode()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindStampEpisode, Checked, ref discarded);
-    }
-
-    private static readonly IntPtr _bindResolveCorrectionModeFor =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "resolve_correction_mode_for",
-            2899824536UL);
-
-    /// <summary>
-    /// Resolves <paramref name="mode"/> against what <paramref name="body"/>
-    /// is. <see cref="NetwPredict.CorrectionMode.Auto"/> picks
-    /// <see cref="NetwPredict.CorrectionMode.Snap"/> for a
-    /// <see cref="RigidBody2D"/> or <see cref="RigidBody3D"/>, whose solver
-    /// cannot be stepped once per input, and
-    /// <see cref="NetwPredict.CorrectionMode.Replay"/> for anything else. A
-    /// mode named outright passes through. It is static so a tool can resolve
-    /// one with no entity in hand.
-    /// </summary>
-    public static NetwPredict.CorrectionMode ResolveCorrectionModeFor(
-        GodotObject body,
-        NetwPredict.CorrectionMode mode,
-        bool solves = false)
-    {
-        IntPtr slot0 = body?.NativeInstance ?? IntPtr.Zero;
-        long slot1 = (long)mode;
-        byte slot2 = solves ? (byte)1 : (byte)0;
-        long answered = default;
-        NetwThunks.Ptrcall3_IntPtr_Long_Byte_Long(
-            _bindResolveCorrectionModeFor,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        return (NetwPredict.CorrectionMode)answered;
-    }
-
-    private static readonly IntPtr _bindDivergence =
-        NetwApi.MethodBind("NetwPredictionHandle", "divergence", 1917813493UL);
-
-    /// <summary>
-    /// The largest error any one property shows between a predicted and an
-    /// authoritative snapshot, or <c>INF</c> when a key is missing. This is
-    /// what the divergence signals report, and
-    /// <see cref="NetwPredictionHandle.Diverged"/> is what decides whether to
-    /// correct. A key in <paramref name="angles"/> is compared as a wrapped
-    /// angle, so a heading crossing the half turn reads as its true arc.
-    /// </summary>
-    public static double Divergence(
-        Godot.Collections.Dictionary predicted,
-        Godot.Collections.Dictionary authoritative,
-        Godot.Collections.Dictionary angles = null)
-    {
-        angles ??= new Godot.Collections.Dictionary();
-        godot_variant slot0 = VariantUtils.CreateFromDictionary(predicted);
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(authoritative);
-        godot_variant slot2 = VariantUtils.CreateFromDictionary(angles);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindDivergence,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        double result = VariantUtils.ConvertToFloat64(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindDivergenceByField =
-        NetwApi.MethodBind(
-            "NetwPredictionHandle",
-            "divergence_by_field",
-            176366682UL);
-
-    /// <summary>
-    /// Fills <paramref name="out"/> with each field's own divergence and
-    /// returns the worst of them, which is the same value
-    /// <see cref="NetwPredictionHandle.Divergence"/> reports. That one number
-    /// cannot say which field drifted, and a set of fields mixing meters,
-    /// radians and meters per second drifts differently in each, so a caller
-    /// working out why corrections do or do not fire reads the breakdown.
-    /// <paramref name="out"/> is cleared and refilled, so one dictionary can be
-    /// reused across arrivals instead of allocating a new one per comparison. A
-    /// key in <paramref name="angles"/> wraps, so its error is the shorter way
-    /// around.
-    /// </summary>
-    public static double DivergenceByField(
-        Godot.Collections.Dictionary predicted,
-        Godot.Collections.Dictionary authoritative,
-        Godot.Collections.Dictionary @out,
-        Godot.Collections.Dictionary angles = null)
-    {
-        angles ??= new Godot.Collections.Dictionary();
-        godot_variant slot0 = VariantUtils.CreateFromDictionary(predicted);
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(authoritative);
-        godot_variant slot2 = VariantUtils.CreateFromDictionary(@out);
-        godot_variant slot3 = VariantUtils.CreateFromDictionary(angles);
-        godot_variant answered = default;
-        NetwThunks.Call4(
-            _bindDivergenceByField,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            in slot3,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        slot3.Dispose();
-        double result = VariantUtils.ConvertToFloat64(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindTriggers =
-        NetwApi.MethodBind("NetwPredictionHandle", "triggers", 2418264330UL);
-
-    /// <summary>
-    /// Whether an error on one field needs a recovery at a given tolerance.
-    /// Everything asking that question calls this, so the ranking that decides
-    /// which divergence a recovery returns cannot read a tolerance differently
-    /// from the test that raised the correction. The comparison is strictly
-    /// greater, so a tolerance is the largest error a field may hold rather
-    /// than the smallest it is corrected for. A tolerance of <c>0.0</c>
-    /// therefore means any error at all, which is what lets a field ask to be
-    /// exact.
-    /// </summary>
-    public static bool Triggers(double error, double tolerance)
-    {
-        double slot0 = error;
-        double slot1 = tolerance;
-        byte answered = default;
-        NetwThunks.Ptrcall2_Double_Double_Byte(
-            _bindTriggers,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return answered != 0;
-    }
-
-    private static readonly IntPtr _bindDiverged =
-        NetwApi.MethodBind("NetwPredictionHandle", "diverged", 1658533983UL);
-
-    /// <summary>
-    /// Whether any property has drifted past its own threshold, reading
-    /// <paramref name="epsilon"/> as refined per property by
-    /// <paramref name="overrides"/>. It is per property because a 3D body mixes
-    /// meters, radians and meters per second, and no single number serves all
-    /// three. An <paramref name="overrides"/> entry of <c>0.0</c> means any
-    /// error at all triggers, as <see cref="NetwPropertyConfig.Epsilon"/> says.
-    /// A key in <paramref name="excludes"/> never triggers on its own. It is
-    /// skipped here so a field declared
-    /// <see cref="NetwPropertyConfig.ReconcileOnly"/>, or one that is not
-    /// <see cref="NetwPropertySet.PropertyClass.Causal"/>, does not force a
-    /// correction, though a correction some other field triggers still restores
-    /// it. A key in <paramref name="angles"/> is compared as a wrapped angle
-    /// through <c>@GlobalScope.angle_difference</c>, so a heading crossing the
-    /// half turn does not read as an almost complete rotation.
-    /// </summary>
-    public static bool Diverged(
-        Godot.Collections.Dictionary predicted,
-        Godot.Collections.Dictionary authoritative,
-        double epsilon,
-        Godot.Collections.Dictionary overrides,
-        Godot.Collections.Dictionary excludes = null,
-        Godot.Collections.Dictionary angles = null)
-    {
-        excludes ??= new Godot.Collections.Dictionary();
-        angles ??= new Godot.Collections.Dictionary();
-        IntPtr pack = NetwThunks.ArgsNew(6);
-        godot_variant slot0 = VariantUtils.CreateFromDictionary(predicted);
-        NetwThunks.ArgsSet(pack, 0, in slot0);
-        slot0.Dispose();
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(authoritative);
-        NetwThunks.ArgsSet(pack, 1, in slot1);
-        slot1.Dispose();
-        godot_variant slot2 = VariantUtils.CreateFromFloat(epsilon);
-        NetwThunks.ArgsSet(pack, 2, in slot2);
-        slot2.Dispose();
-        godot_variant slot3 = VariantUtils.CreateFromDictionary(overrides);
-        NetwThunks.ArgsSet(pack, 3, in slot3);
-        slot3.Dispose();
-        godot_variant slot4 = VariantUtils.CreateFromDictionary(excludes);
-        NetwThunks.ArgsSet(pack, 4, in slot4);
-        slot4.Dispose();
-        godot_variant slot5 = VariantUtils.CreateFromDictionary(angles);
-        NetwThunks.ArgsSet(pack, 5, in slot5);
-        slot5.Dispose();
-        godot_variant answered = default;
-        NetwThunks.CallPack(_bindDiverged, IntPtr.Zero, pack, 6, ref answered);
-        NetwThunks.ArgsFree(pack);
-        bool result = VariantUtils.ConvertToBool(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindValueError =
-        NetwApi.MethodBind("NetwPredictionHandle", "value_error", 992979763UL);
-
-    /// <summary>
-    /// The error between two values of one property. A rotation returns
-    /// radians, whether it is a <see cref="Quaternion"/> or a
-    /// <see cref="Basis"/>, so a rotation wants a threshold of its own.
-    /// </summary>
-    public static double ValueError(Variant a, Variant b)
-    {
-        godot_variant slot0 = a.CopyNativeVariant();
-        godot_variant slot1 = b.CopyNativeVariant();
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindValueError,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        double result = VariantUtils.ConvertToFloat64(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindFieldError =
-        NetwApi.MethodBind("NetwPredictionHandle", "field_error", 573168435UL);
-
-    /// <summary>
-    /// One field's error, wrapped as an angle when the declaration says the
-    /// field wraps. Everything else falls through to
-    /// <see cref="NetwPredictionHandle.ValueError"/>.
-    /// </summary>
-    public static double FieldError(Variant a, Variant b, bool isAngle)
-    {
-        godot_variant slot0 = a.CopyNativeVariant();
-        godot_variant slot1 = b.CopyNativeVariant();
-        godot_variant slot2 = VariantUtils.CreateFromBool(isAngle);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindFieldError,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        double result = VariantUtils.ConvertToFloat64(answered);
-        answered.Dispose();
-        return result;
     }
 }

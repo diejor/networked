@@ -64,7 +64,7 @@ TEST_CASE(
     SUBCASE("the evaluate seam judges the way the core judges") {
         const Ref<netw::NetwPredictJudgement> seamed
             = session->predict_evaluate(
-                netw::NetwPredictJournal::IN_DOMAIN,
+                netw::NetwPredict::DOMAIN_IN,
                 netw::NetwPredict::EXACT_VERDICT_UNJUDGED,
                 Dictionary(),
                 Dictionary(),
@@ -73,7 +73,7 @@ TEST_CASE(
             );
         const Ref<netw::NetwPredictJudgement> stock
             = netw::prediction_core::evaluate(
-                netw::NetwPredictJournal::IN_DOMAIN,
+                netw::NetwPredict::DOMAIN_IN,
                 netw::NetwPredict::EXACT_VERDICT_UNJUDGED,
                 Dictionary(),
                 Dictionary(),
@@ -92,7 +92,6 @@ TEST_CASE(
         const Ref<netw::NetwPredictRecovery> seamed = session->predict_recover(
             Dictionary(),
             netw::NetwPredict::RECOVERY_POLICY_REBASE_REPLAY,
-            netw::NetwPredict::CORRECTION_MODE_AUTO,
             netw::NetwSimulationHandle::RESTORE_EXACT,
             Dictionary(),
             Dictionary(),
@@ -105,7 +104,6 @@ TEST_CASE(
             = netw::prediction_core::recover(
                 Dictionary(),
                 netw::NetwPredict::RECOVERY_POLICY_REBASE_REPLAY,
-                netw::NetwPredict::CORRECTION_MODE_AUTO,
                 netw::NetwSimulationHandle::RESTORE_EXACT,
                 Dictionary(),
                 Dictionary(),

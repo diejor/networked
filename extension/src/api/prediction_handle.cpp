@@ -2,13 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "godot/class_db.hpp"
 #include "godot/math.hpp"
 #include "godot/physics_body.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict_field_recovery.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/log.hpp"
 #include "netw/predict/axes.hpp"
@@ -19,12 +17,6 @@
 using namespace godot;
 
 namespace netw {
-
-namespace {
-
-constexpr double UNBOUNDED = std::numeric_limits<double>::infinity();
-
-} // namespace
 
 const char *NetwPredictionHandle::GENERATOR_UNKNOWN_BEYOND_RETENTION
     = "UNKNOWN_BEYOND_RETENTION";
@@ -186,7 +178,6 @@ void NetwPredictionHandle::seat_command_frame() {
 Ref<NetwPredictRecovery> NetwPredictionHandle::seat_recover_seam(
     const Dictionary &p_carried,
     NetwPredict::RecoveryPolicy p_policy,
-    NetwPredict::CorrectionMode p_correction,
     NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_before,
@@ -198,7 +189,6 @@ Ref<NetwPredictRecovery> NetwPredictionHandle::seat_recover_seam(
                                   : engine_seat->recover_through_seam(
                                         p_carried,
                                         p_policy,
-                                        p_correction,
                                         p_snap_restore,
                                         p_projection,
                                         p_before,
@@ -209,7 +199,7 @@ Ref<NetwPredictRecovery> NetwPredictionHandle::seat_recover_seam(
 }
 
 Ref<NetwPredictJudgement> NetwPredictionHandle::seat_evaluate_seam(
-    NetwPredictJournal::Domain p_domain,
+    NetwPredict::Domain p_domain,
     NetwPredict::ExactVerdict p_exact_verdict,
     const Dictionary &p_predicted,
     const Dictionary &p_payload,
@@ -272,13 +262,6 @@ int NetwPredictionHandle::get_max_restore_ticks() const {
     return held.is_valid() ? held->get_max_restore_ticks() : 6;
 }
 
-void NetwPredictionHandle::set_correction_mode(
-    NetwPredict::CorrectionMode p_value
-) {
-    correction_value = p_value;
-    reconfigure();
-}
-
 void NetwPredictionHandle::set_input_source(NetwPredict::InputSource p_value) {
     input_source_value = p_value;
 }
@@ -291,9 +274,7 @@ void NetwPredictionHandle::set_recovery_policy(
     NetwPredict::RecoveryPolicy p_value
 ) {
     recovery_policy_value = p_value;
-    set_correction_mode(static_cast<NetwPredict::CorrectionMode>(
-        NetwPredictionEngine::correction_for_recovery_policy(p_value)
-    ));
+    reconfigure();
     rewire();
 }
 
@@ -415,55 +396,6 @@ void NetwPredictionHandle::set_archetype(NetwPredict::Archetype p_value) {
     }
 }
 
-Dictionary NetwPredictionHandle::get_last_field_divergence() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? Dictionary() : held->divergence_report(slot());
-}
-
-Dictionary NetwPredictionHandle::get_field_recovery() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? Dictionary() : held->field_recovery(slot());
-}
-
-int NetwPredictionHandle::get_last_compare_staleness() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? -1 : held->compare_staleness_of(slot());
-}
-
-Dictionary NetwPredictionHandle::get_last_tier_errors() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? Dictionary() : held->tier_error_report(slot());
-}
-
-int NetwPredictionHandle::get_last_verdict_reason() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? NetwPredict::VERDICT_REASON_NONE
-                           : held->verdict_reason_of(slot());
-}
-
-bool NetwPredictionHandle::get_is_reconciling() const {
-    NetwPredictionEngine *held = pool();
-    return held != nullptr && held->reconciling(slot());
-}
-
-int64_t NetwPredictionHandle::get_acknowledged_tick() const {
-    return int64_t(counters->get(StringName("ack_confirmed")));
-}
-
-NetwPredictJournal::Attribution NetwPredictionHandle::get_last_attribution()
-    const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? NetwPredictJournal::UNKNOWN
-                           : static_cast<NetwPredictJournal::Attribution>(
-                               held->attribution_of(slot())
-                           );
-}
-
-int64_t NetwPredictionHandle::get_last_attributed_transition() const {
-    NetwPredictionEngine *held = pool();
-    return held == nullptr ? -1 : held->attributed_transition_of(slot());
-}
-
 Variant NetwPredictionHandle::sensor(
     const StringName &p_name,
     const Variant &p_default
@@ -477,45 +409,18 @@ Variant NetwPredictionHandle::sensor(
 
 NetwPredict::RecoveryPolicy NetwPredictionHandle::
     resolved_recovery_policy() const {
-    if (recovery_policy_value >= 0) {
-        return static_cast<NetwPredict::RecoveryPolicy>(
-            predict::integrable_recovery_policy(
-                recovery_policy_value,
-                get_schedule(),
-                body_solves()
-            )
-        );
-    }
-    return resolved_correction_mode() == NetwPredict::CORRECTION_MODE_REPLAY
-        ? NetwPredict::RECOVERY_POLICY_REBASE_REPLAY
-        : NetwPredict::RECOVERY_POLICY_REBASE_RECOVER;
-}
-
-NetwPredict::CorrectionMode NetwPredictionHandle::
-    resolved_correction_mode() const {
-    NetwPredictSlotEngine *held = engine();
-    if (held != nullptr) {
-        return static_cast<NetwPredict::CorrectionMode>(
-            held->resolved_correction_mode()
-        );
-    }
-    return integrable_correction_mode(
-        static_cast<NetwPredict::CorrectionMode>(correction_value)
-    );
-}
-
-NetwPredict::CorrectionMode NetwPredictionHandle::integrable_correction_mode(
-    NetwPredict::CorrectionMode p_declared
-) const {
-    const Ref<NetwEntity> bound = get_entity();
-    Object *body = bound.is_valid() ? bound->get_owner() : nullptr;
-    return static_cast<NetwPredict::CorrectionMode>(
-        predict::integrable_correction(
-            resolve_correction_mode_for(body, p_declared),
+    const bool solves = body_solves();
+    return static_cast<NetwPredict::RecoveryPolicy>(
+        predict::integrable_recovery_policy(
+            predict::resolve_recovery_policy(recovery_policy_value, solves),
             get_schedule(),
-            body_solves()
+            solves
         )
     );
+}
+
+int NetwPredictionHandle::resolved_correction() const {
+    return predict::correction_for_recovery_policy(resolved_recovery_policy());
 }
 
 bool NetwPredictionHandle::body_solves() const {
@@ -558,21 +463,6 @@ void NetwPredictionHandle::simulate_frame(double p_delta) {
     );
 }
 
-Ref<NetwPredictJournal> NetwPredictionHandle::journal() const {
-    NetwPredictionEngine *held = pool();
-    if (held == nullptr) {
-        Ref<NetwPredictJournal> empty;
-        empty.instantiate();
-        return empty;
-    }
-    return held->journal_snapshot(slot());
-}
-
-Dictionary NetwPredictionHandle::teleport_distances() const {
-    NetwPredictionEngine *held = pool();
-    return held != nullptr ? held->teleport_distances(slot()) : Dictionary();
-}
-
 Dictionary NetwPredictionHandle::reachability() const {
     NetwPredictionEngine *held = pool();
     const int64_t seated = held != nullptr ? slot() : -1;
@@ -582,68 +472,10 @@ Dictionary NetwPredictionHandle::reachability() const {
     return held->reachability_report_of(seated);
 }
 
-Dictionary NetwPredictionHandle::episode() const {
-    NetwPredictionEngine *held = pool();
-    return held != nullptr ? held->episode_record(slot()) : Dictionary();
-}
-
-Dictionary NetwPredictionHandle::episode_digest() const {
-    NetwPredictionEngine *held = pool();
-    const int64_t seated = held != nullptr ? slot() : -1;
-    return seated >= 0 ? held->episode_digest(seated) : Dictionary();
-}
-
-TypedArray<Dictionary> NetwPredictionHandle::tape_transitions() const {
-    NetwPredictionEngine *held = pool();
-    return held != nullptr ? held->tape_transitions(slot())
-                           : TypedArray<Dictionary>();
-}
-
-Dictionary NetwPredictionHandle::transition_state_at(
-    int64_t p_transition
-) const {
-    NetwPredictSlotEngine *held = engine();
-    if (held == nullptr) {
-        return Dictionary();
-    }
-    return held->transition_state_at(p_transition);
-}
-
-void NetwPredictionHandle::record_server_input(
-    int64_t p_tick,
-    const Dictionary &p_input
-) {
-    NetwPredictSlotEngine *held = engine();
-    if (held != nullptr) {
-        held->record_server_input(p_tick, p_input);
-    }
-}
-
-bool NetwPredictionHandle::has_consumed_state_tick(int64_t p_state_tick) const {
-    NetwPredictSlotEngine *held = engine();
-    return held == nullptr || held->has_consumed_state_tick(p_state_tick);
-}
-
 void NetwPredictionHandle::notify_contact() {
     NetwPredictSlotEngine *held = engine();
     if (held != nullptr) {
         held->notify_contact();
-    }
-}
-
-int64_t NetwPredictionHandle::history_record_tick(int64_t p_fallback) const {
-    NetwPredictSlotEngine *held = engine();
-    if (held == nullptr) {
-        return p_fallback;
-    }
-    return held->history_record_tick(p_fallback);
-}
-
-void NetwPredictionHandle::stamp_episode() {
-    NetwPredictionEngine *held = pool();
-    const int64_t seated = slot();
-    if (held != nullptr && seated >= 0) {
-        held->stamp_episode_revision(seated);
     }
 }
 
@@ -653,117 +485,6 @@ void NetwPredictionHandle::set_predict_commands(const Callable &p_predictor) {
 
 void NetwPredictionHandle::restate_declaration() {
     reconfigure();
-}
-
-NetwPredict::CorrectionMode NetwPredictionHandle::resolve_correction_mode_for(
-    Object *p_body,
-    NetwPredict::CorrectionMode p_mode,
-    bool p_solves
-) {
-    if (p_mode != NetwPredict::CORRECTION_MODE_AUTO) {
-        return p_mode;
-    }
-    const bool rigid = Object::cast_to<RigidBody2D>(p_body) != nullptr
-        || Object::cast_to<RigidBody3D>(p_body) != nullptr;
-    return p_solves || rigid ? NetwPredict::CORRECTION_MODE_SNAP
-                             : NetwPredict::CORRECTION_MODE_REPLAY;
-}
-
-double NetwPredictionHandle::value_error(
-    const Variant &p_a,
-    const Variant &p_b
-) {
-    return predict::value_error(p_a, p_b, false);
-}
-
-double NetwPredictionHandle::field_error(
-    const Variant &p_a,
-    const Variant &p_b,
-    bool p_is_angle
-) {
-    return predict::value_error(p_a, p_b, p_is_angle);
-}
-
-double NetwPredictionHandle::divergence(
-    const Dictionary &p_predicted,
-    const Dictionary &p_authoritative,
-    const Dictionary &p_angles
-) {
-    double worst = 0.0;
-    const Array keys = p_authoritative.keys();
-    for (int at = 0; at < keys.size(); ++at) {
-        const Variant key = keys[at];
-        if (!p_predicted.has(key)) {
-            return UNBOUNDED;
-        }
-        worst = std::max(
-            worst,
-            field_error(
-                p_predicted[key],
-                p_authoritative[key],
-                p_angles.has(key)
-            )
-        );
-    }
-    return worst;
-}
-
-double NetwPredictionHandle::divergence_by_field(
-    const Dictionary &p_predicted,
-    const Dictionary &p_authoritative,
-    Dictionary p_out,
-    const Dictionary &p_angles
-) {
-    p_out.clear();
-    double worst = 0.0;
-    const Array keys = p_authoritative.keys();
-    for (int at = 0; at < keys.size(); ++at) {
-        const Variant key = keys[at];
-        double error = UNBOUNDED;
-        if (p_predicted.has(key)) {
-            error = field_error(
-                p_predicted[key],
-                p_authoritative[key],
-                p_angles.has(key)
-            );
-        }
-        p_out[key] = error;
-        worst = std::max(worst, error);
-    }
-    return worst;
-}
-
-bool NetwPredictionHandle::triggers(double p_error, double p_tolerance) {
-    return p_error > p_tolerance;
-}
-
-bool NetwPredictionHandle::diverged(
-    const Dictionary &p_predicted,
-    const Dictionary &p_authoritative,
-    double p_epsilon,
-    const Dictionary &p_overrides,
-    const Dictionary &p_excludes,
-    const Dictionary &p_angles
-) {
-    const Array keys = p_authoritative.keys();
-    for (int at = 0; at < keys.size(); ++at) {
-        const Variant key = keys[at];
-        if (p_excludes.has(key)) {
-            continue;
-        }
-        if (!p_predicted.has(key)) {
-            return true;
-        }
-        const double error = field_error(
-            p_predicted[key],
-            p_authoritative[key],
-            p_angles.has(key)
-        );
-        if (triggers(error, double(p_overrides.get(key, p_epsilon)))) {
-            return true;
-        }
-    }
-    return false;
 }
 
 void NetwPredictionHandle::_bind_methods() {
@@ -786,10 +507,6 @@ void NetwPredictionHandle::_bind_methods() {
         &NetwPredictionHandle::resolved_recovery_policy
     );
     ClassDB::bind_method(
-        D_METHOD("resolved_correction_mode"),
-        &NetwPredictionHandle::resolved_correction_mode
-    );
-    ClassDB::bind_method(
         D_METHOD("simulate_tick", "delta", "tick"),
         &NetwPredictionHandle::simulate_tick
     );
@@ -797,101 +514,13 @@ void NetwPredictionHandle::_bind_methods() {
         D_METHOD("simulate_frame", "delta"),
         &NetwPredictionHandle::simulate_frame
     );
-    ClassDB::bind_method(D_METHOD("journal"), &NetwPredictionHandle::journal);
-    ClassDB::bind_method(
-        D_METHOD("teleport_distances"),
-        &NetwPredictionHandle::teleport_distances
-    );
     ClassDB::bind_method(
         D_METHOD("reachability"),
         &NetwPredictionHandle::reachability
     );
-    ClassDB::bind_method(D_METHOD("episode"), &NetwPredictionHandle::episode);
-    ClassDB::bind_method(
-        D_METHOD("episode_digest"),
-        &NetwPredictionHandle::episode_digest
-    );
-    ClassDB::bind_method(
-        D_METHOD("tape_transitions"),
-        &NetwPredictionHandle::tape_transitions
-    );
-    ClassDB::bind_method(
-        D_METHOD("transition_state_at", "transition"),
-        &NetwPredictionHandle::transition_state_at
-    );
-    ClassDB::bind_method(
-        D_METHOD("record_server_input", "tick", "input"),
-        &NetwPredictionHandle::record_server_input
-    );
-    ClassDB::bind_method(
-        D_METHOD("has_consumed_state_tick", "state_tick"),
-        &NetwPredictionHandle::has_consumed_state_tick
-    );
     ClassDB::bind_method(
         D_METHOD("notify_contact"),
         &NetwPredictionHandle::notify_contact
-    );
-    ClassDB::bind_method(
-        D_METHOD("history_record_tick", "fallback"),
-        &NetwPredictionHandle::history_record_tick
-    );
-    ClassDB::bind_method(
-        D_METHOD("stamp_episode"),
-        &NetwPredictionHandle::stamp_episode
-    );
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD("resolve_correction_mode_for", "body", "mode", "solves"),
-        &NetwPredictionHandle::resolve_correction_mode_for,
-        DEFVAL(false)
-    );
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD("divergence", "predicted", "authoritative", "angles"),
-        &NetwPredictionHandle::divergence,
-        DEFVAL(Dictionary())
-    );
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD(
-            "divergence_by_field",
-            "predicted",
-            "authoritative",
-            "out",
-            "angles"
-        ),
-        &NetwPredictionHandle::divergence_by_field,
-        DEFVAL(Dictionary())
-    );
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD("triggers", "error", "tolerance"),
-        &NetwPredictionHandle::triggers
-    );
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD(
-            "diverged",
-            "predicted",
-            "authoritative",
-            "epsilon",
-            "overrides",
-            "excludes",
-            "angles"
-        ),
-        &NetwPredictionHandle::diverged,
-        DEFVAL(Dictionary()),
-        DEFVAL(Dictionary())
-    );
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD("value_error", "a", "b"),
-        &NetwPredictionHandle::value_error
-    );
-    ClassDB::bind_static_method(
-        "NetwPredictionHandle",
-        D_METHOD("field_error", "a", "b", "is_angle"),
-        &NetwPredictionHandle::field_error
     );
 
     ClassDB::bind_method(
@@ -908,26 +537,6 @@ void NetwPredictionHandle::_bind_methods() {
         "get_predict_commands"
     );
     ClassDB::bind_method(
-        D_METHOD("get_correction_mode"),
-        &NetwPredictionHandle::get_correction_mode
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_correction_mode", "value"),
-        &NetwPredictionHandle::set_correction_mode
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "correction_mode",
-            PROPERTY_HINT_ENUM,
-            "None,Continuous,Velocity,Transform,Physics,Custom",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredict.CorrectionMode"
-        ),
-        "set_correction_mode",
-        "get_correction_mode"
-    );
-    ClassDB::bind_method(
         D_METHOD("get_recovery_policy"),
         &NetwPredictionHandle::get_recovery_policy
     );
@@ -940,7 +549,7 @@ void NetwPredictionHandle::_bind_methods() {
             Variant::INT,
             "recovery_policy",
             PROPERTY_HINT_ENUM,
-            "None,Snap,Resimulate,Replay,Pacing",
+            "Rebase Replay,Rebase Recover,Delay Closed,Observe,Auto",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
             "NetwPredict.RecoveryPolicy"
         ),
@@ -1194,60 +803,6 @@ void NetwPredictionHandle::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_last_field_divergence"),
-        &NetwPredictionHandle::get_last_field_divergence
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::DICTIONARY, "last_field_divergence"),
-        godot::String(),
-        "get_last_field_divergence"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_field_recovery"),
-        &NetwPredictionHandle::get_field_recovery
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::DICTIONARY, "field_recovery"),
-        godot::String(),
-        "get_field_recovery"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_last_compare_staleness"),
-        &NetwPredictionHandle::get_last_compare_staleness
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "last_compare_staleness"),
-        godot::String(),
-        "get_last_compare_staleness"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_last_tier_errors"),
-        &NetwPredictionHandle::get_last_tier_errors
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::DICTIONARY, "last_tier_errors"),
-        godot::String(),
-        "get_last_tier_errors"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_last_verdict_reason"),
-        &NetwPredictionHandle::get_last_verdict_reason
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "last_verdict_reason"),
-        godot::String(),
-        "get_last_verdict_reason"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_is_reconciling"),
-        &NetwPredictionHandle::get_is_reconciling
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_reconciling"),
-        godot::String(),
-        "get_is_reconciling"
-    );
-    ClassDB::bind_method(
         D_METHOD("get_stats"),
         &NetwPredictionHandle::get_stats
     );
@@ -1261,40 +816,6 @@ void NetwPredictionHandle::_bind_methods() {
         ),
         godot::String(),
         "get_stats"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_acknowledged_tick"),
-        &NetwPredictionHandle::get_acknowledged_tick
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "acknowledged_tick"),
-        godot::String(),
-        "get_acknowledged_tick"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_last_attribution"),
-        &NetwPredictionHandle::get_last_attribution
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "last_attribution",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredictJournal.Attribution"
-        ),
-        godot::String(),
-        "get_last_attribution"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_last_attributed_transition"),
-        &NetwPredictionHandle::get_last_attributed_transition
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "last_attributed_transition"),
-        godot::String(),
-        "get_last_attributed_transition"
     );
 
     ClassDB::bind_integer_constant(
@@ -1312,7 +833,7 @@ void NetwPredictionHandle::_bind_methods() {
             PROPERTY_HINT_NONE,
             "",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredictJournal.Attribution"
+            "NetwPredict.Attribution"
         )
     ));
     ADD_SIGNAL(MethodInfo(
@@ -1338,7 +859,7 @@ void NetwPredictionHandle::_bind_methods() {
             PROPERTY_HINT_NONE,
             "",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredictJournal.Attribution"
+            "NetwPredict.Attribution"
         )
     ));
     ADD_SIGNAL(MethodInfo(

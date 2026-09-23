@@ -9,13 +9,13 @@
 #include "godot/utility.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/api/predict_runner.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/scene_handle.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/predict/axes.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
 #include "netw/subsystems.hpp"
@@ -274,7 +274,7 @@ void NetwPredictSlotEngine::set_role_column(int p_role) {
 
 int NetwPredictSlotEngine::correction() const {
     return pool != nullptr ? pool->correction_of(native_slot())
-                           : int(NetwPredict::CORRECTION_MODE_REPLAY);
+                           : int(CorrectionMode::REPLAY);
 }
 
 void NetwPredictSlotEngine::set_correction_column(int p_correction) {
@@ -748,7 +748,7 @@ void NetwPredictSlotEngine::begin_reseed(const predict::WritePlan &p_plan) {
     const RecoveryPlan staged = plan_of(p_plan);
     restore(
         staged.write,
-        NetwPredictJournal::Operator::RESEED,
+        int(predict::Operator::RESEED),
         basis,
         nullptr,
         true,
@@ -956,10 +956,6 @@ bool NetwPredictSlotEngine::has_consumed_state_tick(
     return predict::has_consumed_state_tick(cursors(), p_state_tick);
 }
 
-int NetwPredictSlotEngine::resolved_correction_mode() const {
-    return correction();
-}
-
 void NetwPredictSlotEngine::record_server_input(
     int64_t p_tick,
     const Dictionary &p_input
@@ -980,22 +976,21 @@ void NetwPredictSlotEngine::record_server_input(
     }
 }
 
-int NetwPredictSlotEngine::resolve_correction(int p_declared) const {
-    if (core_seated() == nullptr) {
-        const NetwPredict::CorrectionMode declared
-            = static_cast<NetwPredict::CorrectionMode>(p_declared);
-        return handle.is_valid()
-            ? handle->integrable_correction_mode(declared)
-            : NetwPredictionHandle::resolve_correction_mode_for(
-                  entity.is_valid() ? entity->get_owner() : nullptr,
-                  declared
-              );
+int NetwPredictSlotEngine::declared_correction() const {
+    return handle.is_valid()
+        ? predict::correction_for_recovery_policy(handle->get_recovery_policy())
+        : int(CorrectionMode::AUTO);
+}
+
+int NetwPredictSlotEngine::resolve_correction() const {
+    if (handle.is_null()) {
+        return int(CorrectionMode::REPLAY);
     }
     const int64_t slot = native_slot();
-    if (slot < 0) {
-        return p_declared;
+    if (core_seated() == nullptr || slot < 0) {
+        return handle->resolved_correction();
     }
-    return pool->settle_correction(slot, p_declared);
+    return pool->settle_correction(slot, declared_correction());
 }
 
 void NetwPredictSlotEngine::record_input_to_pool(
@@ -1084,7 +1079,7 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
     } else if (resolved_role != NetwPredict::ROLE_PREDICT) {
         pool->clear_joint_roster(slot);
     }
-    set_correction_column(resolve_correction(handle->get_correction_mode()));
+    set_correction_column(resolve_correction());
     pool->seed_recovery_ledger(slot);
     pool->validate_declaration(
         slot,
@@ -1101,7 +1096,7 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
             input_binding(),
             handle->get_schedule(),
             resolved_role,
-            handle->get_correction_mode(),
+            declared_correction(),
             handle->get_snap_restore(),
             handle->get_max_restore_ticks(),
             pool_island(),
@@ -1564,7 +1559,7 @@ void NetwPredictSlotEngine::on_state(
         && defer_operator_for_witness(p_recv_tick, p_ack, p_payload)) {
         pool->note_verdict_reason(
             slot,
-            NetwPredict::VERDICT_REASON_WITNESS_DEFERRED
+            predict::VERDICT_REASON_WITNESS_DEFERRED
         );
         handle->emit_signal(
             signal_state_evaluated(),
@@ -1627,7 +1622,6 @@ void NetwPredictSlotEngine::on_state(
 Ref<NetwPredictRecovery> NetwPredictSlotEngine::recover_through_seam(
     const Dictionary &p_carried,
     NetwPredict::RecoveryPolicy p_policy,
-    NetwPredict::CorrectionMode p_correction,
     NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_before,
@@ -1642,7 +1636,6 @@ Ref<NetwPredictRecovery> NetwPredictSlotEngine::recover_through_seam(
     return seated->predict_recover(
         p_carried,
         p_policy,
-        p_correction,
         p_snap_restore,
         p_projection,
         p_before,
@@ -1654,7 +1647,7 @@ Ref<NetwPredictRecovery> NetwPredictSlotEngine::recover_through_seam(
 }
 
 Ref<NetwPredictJudgement> NetwPredictSlotEngine::evaluate_through_seam(
-    NetwPredictJournal::Domain p_domain,
+    NetwPredict::Domain p_domain,
     NetwPredict::ExactVerdict p_exact_verdict,
     const Dictionary &p_predicted,
     const Dictionary &p_payload,
@@ -1847,7 +1840,7 @@ void NetwPredictSlotEngine::run_joint_pass(
         live.push_back(member->capture_input_raw());
         member->restore(
             member->restore_payload(p_plan, at),
-            NetwPredictJournal::Operator::JOINT_REBASE,
+            int(predict::Operator::JOINT_REBASE),
             p_floor_transition,
             this
         );
@@ -1931,7 +1924,7 @@ void NetwPredictSlotEngine::joint_heal() {
         );
         return;
     }
-    restore(newest, NetwPredictJournal::Operator::JOINT_REBASE, -1);
+    restore(newest, int(predict::Operator::JOINT_REBASE), -1);
 }
 
 void NetwPredictSlotEngine::note_joint_writes(const Dictionary &p_before) {
@@ -2450,7 +2443,7 @@ void NetwPredictSlotEngine::restore(
         NETW_ERROR(sys::PREDICTION, "prediction restore effect is invalid");
         return;
     }
-    if (p_operator != NetwPredictJournal::Operator::NONE && !p_pool_planned) {
+    if (p_operator != int(predict::Operator::NONE) && !p_pool_planned) {
         episode_owner->sync_episode();
     }
 }

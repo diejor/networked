@@ -302,7 +302,12 @@ TEST_CASE(
         0
     );
 
-    handle->record_server_input(first_input_tick, rightward());
+    history->record_input(first_input_tick, rightward());
+    netw::NetwPredictionEngine *const pool = fixture.rig.prediction_pool();
+    const int64_t slot = fixture.rig.prediction_slot(StringName("P"));
+    if (pool->next_input_tick_of(slot) < 0) {
+        pool->set_next_input_tick(slot, first_input_tick);
+    }
     history->record_input(view_tick, rightward());
     fixture.rig.server()->action_send_request(
         fixture.rig.branch(-1)->get_path_to(fixture.authority),
@@ -317,9 +322,10 @@ TEST_CASE(
     NETW_CHECK_EQ(fixture.authority->requests(), 1);
     NETW_CHECK_EQ(fixture.authority->viewed_tick(), view_tick);
     CHECK_FALSE(history->state_at(view_tick).is_empty());
-    Object *stats = handle->get(StringName("stats"));
-    REQUIRE(stats != nullptr);
-    NETW_CHECK_GT(int64_t(stats->get(StringName("missing"))), int64_t(0));
+    NETW_CHECK_GT(
+        handle->get_stats()->get_int_fact(netw::NetwPredictStats::FACT_MISSING),
+        int64_t(0)
+    );
     NETW_CHECK_EQ(fixture.gate_fallbacks(), int64_t(0));
 }
 

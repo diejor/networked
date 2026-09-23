@@ -923,13 +923,13 @@ TEST_CASE(
             0,
             0,
             0,
-            int(netw::NetwPredictJournal::EVIDENCE_WITNESS)
+            int(netw::predict::EVIDENCE_WITNESS)
         );
         REQUIRE(drive.ran);
         PackedStringArray touched;
         touched.append("path:/root/Ground");
         PackedInt32Array classes;
-        classes.append(int(netw::NetwPredict::WITNESS_CLASS_STATIC));
+        classes.append(int(netw::predict::SENSOR_WITNESS_STATIC));
         PackedInt32Array realized;
         realized.append(int(netw::NetwPredict::CONTACT_CLASS_OTHER_STATIC));
         PackedByteArray outside;
@@ -1393,13 +1393,13 @@ TEST_CASE(
     const StringName target("P");
 
     REQUIRE(
-        pool->open_episode(slot, 4, int(netw::NetwPredictJournal::CONTACT))
+        pool->open_episode(slot, 4, int(netw::predict::Attribution::CONTACT))
     );
 
     CHECK_FALSE(pool->apply_restore(
         slot,
         marked(1),
-        int(netw::NetwPredictJournal::JOINT_REBASE) + 1,
+        int(netw::predict::Operator::JOINT_REBASE) + 1,
         4,
         -1,
         target,
@@ -1413,7 +1413,7 @@ TEST_CASE(
     CHECK_FALSE(pool->apply_restore(
         slot,
         marked(1),
-        int(netw::NetwPredictJournal::REBASE_EXACT),
+        int(netw::predict::Operator::REBASE_EXACT),
         -2,
         -1,
         target,
@@ -1427,7 +1427,7 @@ TEST_CASE(
     CHECK_FALSE(pool->apply_restore(
         slot + 9000,
         marked(1),
-        int(netw::NetwPredictJournal::REBASE_EXACT),
+        int(netw::predict::Operator::REBASE_EXACT),
         4,
         -1,
         target,
@@ -1440,7 +1440,7 @@ TEST_CASE(
     CHECK(pool->apply_restore(
         slot,
         marked(2),
-        int(netw::NetwPredictJournal::REBASE_EXACT),
+        int(netw::predict::Operator::REBASE_EXACT),
         4,
         -1,
         target,
@@ -1467,7 +1467,7 @@ TEST_CASE(
     pool->record_restore(
         slot,
         marked(1),
-        int(netw::NetwPredictJournal::NONE),
+        int(netw::predict::Operator::NONE),
         4,
         -1,
         target,
@@ -1479,12 +1479,12 @@ TEST_CASE(
     CHECK(pool->pending_provenance(slot).is_empty());
 
     REQUIRE(
-        pool->open_episode(slot, 4, int(netw::NetwPredictJournal::CONTACT))
+        pool->open_episode(slot, 4, int(netw::predict::Attribution::CONTACT))
     );
     pool->record_restore(
         slot,
         marked(2),
-        int(netw::NetwPredictJournal::REBASE_EXACT),
+        int(netw::predict::Operator::REBASE_EXACT),
         4,
         -1,
         target,
@@ -1498,7 +1498,7 @@ TEST_CASE(
     REQUIRE_FALSE(staged.is_empty());
     NETW_CHECK_EQ(
         int(staged[StringName("operator")]),
-        int(netw::NetwPredictJournal::REBASE_EXACT)
+        int(netw::predict::Operator::REBASE_EXACT)
     );
     NETW_CHECK_EQ(int64_t(staged[StringName("basis")]), 4);
     NETW_CHECK_EQ(
@@ -1518,7 +1518,7 @@ TEST_CASE(
     pool->record_restore(
         slot,
         marked(3),
-        int(netw::NetwPredictJournal::REBASE_EXACT),
+        int(netw::predict::Operator::REBASE_EXACT),
         5,
         -1,
         target,
@@ -1537,7 +1537,7 @@ TEST_CASE(
     pool->record_restore(
         slot + 9000,
         marked(4),
-        int(netw::NetwPredictJournal::REBASE_EXACT),
+        int(netw::predict::Operator::REBASE_EXACT),
         6,
         -1,
         target,
@@ -1593,7 +1593,7 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
-    const int unknown = int(netw::NetwPredictJournal::UNKNOWN);
+    const int unknown = int(netw::predict::Attribution::UNKNOWN);
 
     NETW_CHECK_EQ(pool->attribution_for(slot + 9000, 1), unknown);
     NETW_CHECK_EQ(pool->attribution_for(slot, 1), unknown);
@@ -1619,23 +1619,23 @@ TEST_CASE(
 
     pool->note_attribution(
         slot,
-        int(netw::NetwPredictJournal::ENVIRONMENT),
+        int(netw::predict::Attribution::ENVIRONMENT),
         opened
     );
     NETW_CHECK_EQ(
         pool->attribution_for(slot, opened),
-        int(netw::NetwPredictJournal::ENVIRONMENT)
+        int(netw::predict::Attribution::ENVIRONMENT)
     );
     NETW_CHECK_EQ(pool->attribution_for(slot, opened + 1), unknown);
 
     pool->mark_attribution(
         slot,
         opened,
-        int(netw::NetwPredictJournal::CONTACT)
+        int(netw::predict::Attribution::CONTACT)
     );
     NETW_CHECK_EQ(
         pool->attribution_for(slot, opened),
-        int(netw::NetwPredictJournal::CONTACT)
+        int(netw::predict::Attribution::CONTACT)
     );
 }
 
@@ -1646,18 +1646,18 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
-    const int none = int(netw::NetwPredict::VERDICT_REASON_NONE);
+    const int none = int(netw::predict::VERDICT_REASON_NONE);
 
     NETW_CHECK_EQ(pool->refuse_recovery(slot, false), none);
     NETW_CHECK_EQ(pool->refuse_recovery(slot, true), none);
     NETW_CHECK_EQ(pool->refuse_recovery(slot + 9000, true), none);
 
     REQUIRE(
-        pool->open_episode(slot, 3, int(netw::NetwPredictJournal::CONTACT))
+        pool->open_episode(slot, 3, int(netw::predict::Attribution::CONTACT))
     );
     pool->record_episode_write(
         slot,
-        int(netw::NetwPredictJournal::TRANSPORT_DELTA),
+        int(netw::predict::Operator::TRANSPORT_DELTA),
         3,
         0,
         godot::StringName("body"),
@@ -1668,11 +1668,11 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->refuse_recovery(slot, true),
-        int(netw::NetwPredict::VERDICT_REASON_TRANSPORT_PENDING)
+        int(netw::predict::VERDICT_REASON_TRANSPORT_PENDING)
     );
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_TRANSPORT_PENDING)
+        int(netw::predict::VERDICT_REASON_TRANSPORT_PENDING)
     );
 
     pool->note_verdict_reason(slot, none);
@@ -1733,7 +1733,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         absent[NetwPredictionEngine::COMPARE_DOMAIN],
-        int(netw::NetwPredictJournal::OUT_OF_DOMAIN)
+        int(netw::predict::Domain::OUT_OF_DOMAIN)
     );
     NETW_CHECK_EQ(absent[NetwPredictionEngine::COMPARE_EPISODE_STATE], -1);
 
@@ -1742,12 +1742,12 @@ TEST_CASE(
     NETW_CHECK_EQ(unarmed[NetwPredictionEngine::COMPARE_RECONSTRUCTED], 0);
     NETW_CHECK_EQ(
         unarmed[NetwPredictionEngine::COMPARE_DOMAIN],
-        int(netw::NetwPredictJournal::OUT_OF_DOMAIN)
+        int(netw::predict::Domain::OUT_OF_DOMAIN)
     );
     NETW_CHECK_EQ(unarmed[NetwPredictionEngine::COMPARE_ROW_FLAGS], 0);
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_AWAITING_RECONSTRUCTION)
+        int(netw::predict::VERDICT_REASON_AWAITING_RECONSTRUCTION)
     );
 
     pool->set_stream_reconstructed(slot, true);
@@ -1771,14 +1771,14 @@ TEST_CASE(
     pool->mark_domain(
         slot,
         opened_row,
-        int(netw::NetwPredictJournal::IN_DOMAIN)
+        int(netw::predict::Domain::IN_DOMAIN)
     );
 
     const PackedInt64Array armed = pool->open_comparison(slot, opened_row);
     NETW_CHECK_EQ(armed[NetwPredictionEngine::COMPARE_RECONSTRUCTED], 1);
     NETW_CHECK_EQ(
         armed[NetwPredictionEngine::COMPARE_DOMAIN],
-        int(netw::NetwPredictJournal::IN_DOMAIN)
+        int(netw::predict::Domain::IN_DOMAIN)
     );
     NETW_CHECK_EQ(
         armed[NetwPredictionEngine::COMPARE_ROW_FLAGS],
@@ -1794,7 +1794,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_AWAITING_RECONSTRUCTION)
+        int(netw::predict::VERDICT_REASON_AWAITING_RECONSTRUCTION)
     );
 }
 
@@ -1918,7 +1918,7 @@ TEST_CASE(
 
     pool->note_verdict_reason(
         slot,
-        int(netw::NetwPredict::VERDICT_REASON_DECLINED)
+        int(netw::predict::VERDICT_REASON_DECLINED)
     );
     NETW_CHECK_EQ(
         pool->admit_state(slot, 1),
@@ -1926,7 +1926,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_NONE)
+        int(netw::predict::VERDICT_REASON_NONE)
     );
 
     pool->adopt_alignment(slot, 9, 12);
@@ -1936,7 +1936,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_RESEED_IGNORED)
+        int(netw::predict::VERDICT_REASON_RESEED_IGNORED)
     );
     NETW_CHECK_EQ(
         pool->admit_state(slot, 13),
@@ -1944,7 +1944,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_NONE)
+        int(netw::predict::VERDICT_REASON_NONE)
     );
 }
 
@@ -1973,7 +1973,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_REALIGN_PENDING)
+        int(netw::predict::VERDICT_REASON_REALIGN_PENDING)
     );
 
     pool->confirm_reseed_epoch(slot);
@@ -1983,7 +1983,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
-        int(netw::NetwPredict::VERDICT_REASON_NONE)
+        int(netw::predict::VERDICT_REASON_NONE)
     );
 }
 
@@ -2073,7 +2073,7 @@ TEST_CASE(
     CHECK(pool->journal_has(slot, opened));
     NETW_CHECK_EQ(
         pool->journal_row(slot, opened).c_hash,
-        netw::NetwPredictJournal::fnv1a(
+        netw::predict::fnv1a(
             pool->canonical_input_bytes(slot, marked(5))
         )
     );

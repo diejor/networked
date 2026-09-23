@@ -40,7 +40,7 @@ const char *KEY_TRACE_INTERVAL = "netw_trace_interval";
 
 const char *KEY_ARCHETYPE = "netw_archetype";
 const char *KEY_SCHEDULE = "netw_schedule";
-const char *KEY_CORRECTION_MODE = "netw_correction_mode";
+const char *KEY_RECOVERY_POLICY = "netw_recovery_policy";
 const char *KEY_SNAP_RESTORE = "netw_snap_restore";
 const char *KEY_MISSING_POLICY = "netw_missing_policy";
 const char *KEY_MAX_RESTORE_TICKS = "netw_max_restore_ticks";
@@ -147,7 +147,7 @@ void apply_timeline(
 const char *PREDICTION_KEYS[] = {
     KEY_ARCHETYPE,
     KEY_SCHEDULE,
-    KEY_CORRECTION_MODE,
+    KEY_RECOVERY_POLICY,
     KEY_SNAP_RESTORE,
     KEY_MISSING_POLICY,
     KEY_MAX_RESTORE_TICKS,
@@ -207,13 +207,10 @@ void apply_prediction(Object *p_sync, const Ref<NetwEntity> &p_entity) {
             NetwSimulationHandle::Schedule(whole(p_sync, KEY_SCHEDULE))
         );
     }
-    if (declared(p_sync, KEY_CORRECTION_MODE)) {
+    if (declared(p_sync, KEY_RECOVERY_POLICY)) {
         predict->set_recovery_policy(
-            static_cast<NetwPredict::RecoveryPolicy>(-1)
-        );
-        predict->set_correction_mode(
-            static_cast<NetwPredict::CorrectionMode>(
-                int(whole(p_sync, KEY_CORRECTION_MODE))
+            static_cast<NetwPredict::RecoveryPolicy>(
+                int(whole(p_sync, KEY_RECOVERY_POLICY))
             )
         );
     }

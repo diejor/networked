@@ -1235,11 +1235,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         RecoveryPolicy = 3,
         /// <summary>
-        /// <see cref="NetwPredict.CorrectionMode"/>. The mechanism a recovery
-        /// policy is carried out by.
-        /// </summary>
-        CorrectionMode = 5,
-        /// <summary>
         /// [float] in the property's own units. The fallback distance past
         /// which a body is judged to hold nothing worth keeping, used for any
         /// property that declares no threshold of its own.
@@ -1413,7 +1408,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Closed = 0,
         /// <summary>
-        /// <c>database_open</c> has not settled yet.
+        /// <see cref="NetwMultiplayer.DatabaseOpen"/> has not settled yet.
         /// </summary>
         Opening = 1,
         /// <summary>
@@ -1421,11 +1416,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Open = 2,
         /// <summary>
-        /// <c>database_close</c> is waiting for admitted work to settle.
+        /// <see cref="NetwMultiplayer.DatabaseClose"/> is waiting for admitted
+        /// work to settle.
         /// </summary>
         Closing = 3,
         /// <summary>
-        /// The storage is unavailable, and <c>database_open</c> fails with
+        /// The storage is unavailable, and
+        /// <see cref="NetwMultiplayer.DatabaseOpen"/> fails with
         /// <c>@GlobalScope.ERR_CANT_ACQUIRE_RESOURCE</c>.
         /// </summary>
         Faulted = 4,
@@ -2062,19 +2059,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Announced on server authority when an owner's claimed post-state for a
     /// transition disagrees with the state authority itself reached, so a
-    /// diagnostic sink hears the disagreement the tick it is judged rather than
-    /// reading a counter later. <c>peer</c> is the controller of the entity
-    /// seated in the slot, <c>entry</c> is the transition judged, and
-    /// <c>attribution</c> is the <see cref="NetwPredictJournal.Attribution"/>
-    /// the comparison charged the divergence to. A claim that matched is
-    /// counted and not announced, and so is one the comparison could charge to
-    /// nothing, which leaves
-    /// <see cref="NetwPredictJournal.Attribution.Unknown"/> out of this
-    /// signal's vocabulary. Both are counted either way, through
-    /// <see cref="NetwPredictStats.ClientFpVerified"/> and
-    /// <see cref="NetwPredictStats.ClientMismatches"/>.
+    /// diagnostic sink hears the disagreement the tick it is judged.
+    /// <c>peer</c> is the controller of the entity seated in the slot,
+    /// <c>entry</c> is the transition judged, and <c>attribution</c> is the
+    /// <see cref="NetwPredict.Attribution"/> the comparison charged the
+    /// divergence to. A claim that matched is not announced, and neither is one
+    /// the comparison could charge to nothing, which leaves
+    /// <see cref="NetwPredict.Attribution.Unknown"/> out of this signal's
+    /// vocabulary.
     /// </summary>
-    public event Action<long, long, long> PredictOwnerDivergence
+    public event Action<
+        long,
+        long,
+        NetwPredict.Attribution> PredictOwnerDivergence
     {
         add => Connect("predict_owner_divergence", Callable.From(value));
         remove => Disconnect("predict_owner_divergence", Callable.From(value));
@@ -2407,6 +2404,40 @@ public sealed class NetwMultiplayer : NetwRefCounted
     {
         add => Connect("table_received", Callable.From(value));
         remove => Disconnect("table_received", Callable.From(value));
+    }
+
+    /// <summary>
+    /// Emitted when an entity row in <c>database</c> fails to load or save.
+    /// <c>detail</c> names the record and follows it with the storage's own
+    /// explanation. <see cref="NetwDatabase.Failed"/> is this signal for one
+    /// database.
+    /// </summary>
+    public event Action<Rid, long, string> DatabaseFailed
+    {
+        add => Connect("database_failed", Callable.From(value));
+        remove => Disconnect("database_failed", Callable.From(value));
+    }
+
+    /// <summary>
+    /// Emitted once a load has applied <c>entity</c>'s stored row. <c>found</c>
+    /// is <c>false</c> when the database held no row for it. A failed load
+    /// emits <see cref="NetwMultiplayer.DatabaseFailed"/> instead.
+    /// </summary>
+    public event Action<Rid, bool> PersistLoaded
+    {
+        add => Connect("persist_loaded", Callable.From(value));
+        remove => Disconnect("persist_loaded", Callable.From(value));
+    }
+
+    /// <summary>
+    /// Emitted once a write of <c>entity</c>'s row has been acknowledged. A
+    /// refused write emits <see cref="NetwMultiplayer.DatabaseFailed"/>
+    /// instead.
+    /// </summary>
+    public event Action<Rid> PersistSaved
+    {
+        add => Connect("persist_saved", Callable.From(value));
+        remove => Disconnect("persist_saved", Callable.From(value));
     }
 
     /// <summary>
@@ -4129,10 +4160,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// ┠╴effects_armed     int         optimistic effects awaiting confirm or deny
     /// ┖╴gate_fallbacks    int         state-ready actions resolved best-effort
     /// </code>
-    /// <para>
-    /// The summed facts in <c>joint</c> are documented on
-    /// <see cref="NetwPredictStats"/>.
-    /// </para>
     /// </summary>
     public Godot.Collections.Dictionary LagcompMetrics()
     {
@@ -5488,6 +5515,639 @@ public sealed class NetwMultiplayer : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
+    }
+
+    private static readonly IntPtr _bindDatabaseCreate =
+        NetwApi.MethodBind("NetwMultiplayer", "database_create", 2049621074UL);
+
+    /// <summary>
+    /// Declares a database named <paramref name="name"/> from
+    /// <paramref name="config"/> and returns its <see cref="Rid"/>. A name
+    /// already declared returns the <see cref="Rid"/> it has, or an invalid one
+    /// when <paramref name="config"/> names a different backend.
+    /// </summary>
+    public Rid DatabaseCreate(StringName name, NetwDatabaseConfig config)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromStringName(name);
+        godot_variant slot1 =
+            VariantUtils.CreateFromGodotObjectPtr(
+                config?.Native ?? IntPtr.Zero);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindDatabaseCreate,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        Rid result = VariantUtils.ConvertToRid(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseFind =
+        NetwApi.MethodBind("NetwMultiplayer", "database_find", 1480417841UL);
+
+    /// <summary>
+    /// The database declared as <paramref name="name"/>, or an invalid
+    /// <see cref="Rid"/> when none is.
+    /// </summary>
+    public Rid DatabaseFind(StringName name)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromStringName(name);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindDatabaseFind, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        Rid result = VariantUtils.ConvertToRid(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseOpen =
+        NetwApi.MethodBind("NetwMultiplayer", "database_open", 953185257UL);
+
+    /// <summary>
+    /// Opens <paramref name="slot"/> and settles with an
+    /// <c>@GlobalScope.Error</c>. <paramref name="database"/> admits no work
+    /// before it settles. Opening a different slot while one is open answers
+    /// <c>@GlobalScope.ERR_BUSY</c>. <see cref="NetwDatabase.Open"/> lists the
+    /// codes.
+    /// </summary>
+    public NetwPromise DatabaseOpen(Rid database, StringName slot)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant slot1 = VariantUtils.CreateFromStringName(slot);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindDatabaseOpen,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseClose =
+        NetwApi.MethodBind("NetwMultiplayer", "database_close", 999707434UL);
+
+    /// <summary>
+    /// Stops <paramref name="database"/> admitting work, waits for what it
+    /// already admitted, releases its slot and settles with an
+    /// <c>@GlobalScope.Error</c>. <see cref="NetwDatabase.Close"/> lists the
+    /// codes.
+    /// </summary>
+    public NetwPromise DatabaseClose(Rid database)
+    {
+        Rid slot0 = database;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Rid_IntPtr(
+            _bindDatabaseClose,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindDatabaseFlush =
+        NetwApi.MethodBind("NetwMultiplayer", "database_flush", 999707434UL);
+
+    /// <summary>
+    /// Settles with an <c>@GlobalScope.Error</c> once every operation
+    /// <paramref name="database"/> admitted before this call has settled.
+    /// <see cref="NetwDatabase.Flush"/> lists the codes.
+    /// </summary>
+    public NetwPromise DatabaseFlush(Rid database)
+    {
+        Rid slot0 = database;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Rid_IntPtr(
+            _bindDatabaseFlush,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindDatabaseRead =
+        NetwApi.MethodBind("NetwMultiplayer", "database_read", 2669361998UL);
+
+    /// <summary>
+    /// Reads the record at <paramref name="id"/> and settles with the read
+    /// reply drawn in <see cref="NetwDatabase.Read"/>.
+    /// <paramref name="schema"/> is a sealed schema, as
+    /// <see cref="NetwMultiplayer.SchemaFind"/> answers it. A
+    /// <paramref name="database"/> that is not open fails the promise with
+    /// <c>@GlobalScope.ERR_UNCONFIGURED</c>, an unsealed
+    /// <paramref name="schema"/> with <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>,
+    /// and an empty <paramref name="id"/> with
+    /// <c>@GlobalScope.ERR_INVALID_PARAMETER</c>.
+    /// </summary>
+    public NetwPromise DatabaseRead(Rid database, Rid schema, StringName id)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant slot1 = VariantUtils.CreateFromRid(schema);
+        godot_variant slot2 = VariantUtils.CreateFromStringName(id);
+        godot_variant answered = default;
+        NetwThunks.Call3(
+            _bindDatabaseRead,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseWrite =
+        NetwApi.MethodBind("NetwMultiplayer", "database_write", 45203095UL);
+
+    /// <summary>
+    /// Replaces the whole record at <paramref name="id"/> and settles with an
+    /// <c>@GlobalScope.Error</c>. <paramref name="values"/> carries every
+    /// column <paramref name="schema"/> declares and nothing else, and a row
+    /// that does not is refused before storage sees it.
+    /// <see cref="NetwDatabase.Write"/> lists the codes.
+    /// </summary>
+    public NetwPromise DatabaseWrite(
+        Rid database,
+        Rid schema,
+        StringName id,
+        Godot.Collections.Dictionary values)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant slot1 = VariantUtils.CreateFromRid(schema);
+        godot_variant slot2 = VariantUtils.CreateFromStringName(id);
+        godot_variant slot3 = VariantUtils.CreateFromDictionary(values);
+        godot_variant answered = default;
+        NetwThunks.Call4(
+            _bindDatabaseWrite,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            in slot3,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        slot3.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabasePatch =
+        NetwApi.MethodBind("NetwMultiplayer", "database_patch", 45203095UL);
+
+    /// <summary>
+    /// Replaces the fields <paramref name="values"/> names in the record at
+    /// <paramref name="id"/>, keeps the rest, and settles with an
+    /// <c>@GlobalScope.Error</c>. A record that is not there answers
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>. <see cref="NetwDatabase.Patch"/>
+    /// lists the codes.
+    /// </summary>
+    public NetwPromise DatabasePatch(
+        Rid database,
+        Rid schema,
+        StringName id,
+        Godot.Collections.Dictionary values)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant slot1 = VariantUtils.CreateFromRid(schema);
+        godot_variant slot2 = VariantUtils.CreateFromStringName(id);
+        godot_variant slot3 = VariantUtils.CreateFromDictionary(values);
+        godot_variant answered = default;
+        NetwThunks.Call4(
+            _bindDatabasePatch,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            in slot3,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        slot3.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseErase =
+        NetwApi.MethodBind("NetwMultiplayer", "database_erase", 2669361998UL);
+
+    /// <summary>
+    /// Removes the record at <paramref name="id"/> and settles with an
+    /// <c>@GlobalScope.Error</c>. Erasing a record that is not there succeeds.
+    /// <see cref="NetwDatabase.Erase"/> lists the codes.
+    /// </summary>
+    public NetwPromise DatabaseErase(Rid database, Rid schema, StringName id)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant slot1 = VariantUtils.CreateFromRid(schema);
+        godot_variant slot2 = VariantUtils.CreateFromStringName(id);
+        godot_variant answered = default;
+        NetwThunks.Call3(
+            _bindDatabaseErase,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseScan =
+        NetwApi.MethodBind("NetwMultiplayer", "database_scan", 3218657808UL);
+
+    /// <summary>
+    /// Reads up to <paramref name="limit"/> records matching
+    /// <paramref name="filter"/> and settles with the page reply drawn in
+    /// <see cref="NetwDatabase.Scan"/>, which also lists the codes that fail
+    /// the promise. Pass the page's cursor back as <paramref name="cursor"/> to
+    /// continue, and an empty <paramref name="cursor"/> to start.
+    /// </summary>
+    public NetwPromise DatabaseScan(
+        Rid database,
+        Rid schema,
+        Godot.Collections.Dictionary filter,
+        string cursor,
+        int limit)
+    {
+        IntPtr pack = NetwThunks.ArgsNew(5);
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        NetwThunks.ArgsSet(pack, 0, in slot0);
+        slot0.Dispose();
+        godot_variant slot1 = VariantUtils.CreateFromRid(schema);
+        NetwThunks.ArgsSet(pack, 1, in slot1);
+        slot1.Dispose();
+        godot_variant slot2 = VariantUtils.CreateFromDictionary(filter);
+        NetwThunks.ArgsSet(pack, 2, in slot2);
+        slot2.Dispose();
+        godot_variant slot3 = VariantUtils.CreateFromString(cursor);
+        NetwThunks.ArgsSet(pack, 3, in slot3);
+        slot3.Dispose();
+        godot_variant slot4 = VariantUtils.CreateFromInt((long)limit);
+        NetwThunks.ArgsSet(pack, 4, in slot4);
+        slot4.Dispose();
+        godot_variant answered = default;
+        NetwThunks.CallPack(_bindDatabaseScan, Checked, pack, 5, ref answered);
+        NetwThunks.ArgsFree(pack);
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseSubmit =
+        NetwApi.MethodBind("NetwMultiplayer", "database_submit", 2156562950UL);
+
+    /// <summary>
+    /// Applies <paramref name="operations"/> in order and settles with the
+    /// batch reply drawn in <see cref="NetwWriteBatch.Submit"/>. The operations
+    /// are the ones drawn in <c>NetwDatabaseConnection._write_batch</c>, and
+    /// <see cref="NetwWriteBatch"/> is what builds them from a
+    /// <see cref="NetwSchema"/>.
+    /// </summary>
+    public NetwPromise DatabaseSubmit(
+        Rid database,
+        Godot.Collections.Array operations)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant slot1 = VariantUtils.CreateFromArray(operations);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindDatabaseSubmit,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseListSlots =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "database_list_slots",
+            999707434UL);
+
+    /// <summary>
+    /// Settles with the slots reply drawn in
+    /// <see cref="NetwDatabase.ListSlots"/>, naming every slot the backend of
+    /// <paramref name="database"/> holds. It works before
+    /// <see cref="NetwMultiplayer.DatabaseOpen"/>.
+    /// </summary>
+    public NetwPromise DatabaseListSlots(Rid database)
+    {
+        Rid slot0 = database;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Rid_IntPtr(
+            _bindDatabaseListSlots,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindDatabaseDeleteSlot =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "database_delete_slot",
+            953185257UL);
+
+    /// <summary>
+    /// Removes <paramref name="slot"/> and everything stored in it, then
+    /// settles with an <c>@GlobalScope.Error</c>. It works before
+    /// <see cref="NetwMultiplayer.DatabaseOpen"/>, and the slot
+    /// <paramref name="database"/> holds open answers
+    /// <c>@GlobalScope.ERR_BUSY</c>. <see cref="NetwDatabase.DeleteSlot"/>
+    /// lists the codes.
+    /// </summary>
+    public NetwPromise DatabaseDeleteSlot(Rid database, StringName slot)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant slot1 = VariantUtils.CreateFromStringName(slot);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindDatabaseDeleteSlot,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseGetSlot =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "database_get_slot",
+            3765571616UL);
+
+    /// <summary>
+    /// The slot <paramref name="database"/> holds open, or empty when it is not
+    /// open.
+    /// </summary>
+    public StringName DatabaseGetSlot(Rid database)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(database);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindDatabaseGetSlot, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        StringName result = VariantUtils.ConvertToStringName(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDatabaseGetState =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "database_get_state",
+            4206958988UL);
+
+    /// <summary>
+    /// Whether <paramref name="database"/> is closed, opening, open, closing or
+    /// faulted, as a <see cref="NetwMultiplayer.DatabaseState"/>.
+    /// </summary>
+    public NetwMultiplayer.DatabaseState DatabaseGetState(Rid database)
+    {
+        Rid slot0 = database;
+        long answered = default;
+        NetwThunks.Ptrcall1_Rid_Long(
+            _bindDatabaseGetState,
+            Checked,
+            in slot0,
+            ref answered);
+        return (NetwMultiplayer.DatabaseState)answered;
+    }
+
+    private static readonly IntPtr _bindPersistLoad =
+        NetwApi.MethodBind("NetwMultiplayer", "persist_load", 999707434UL);
+
+    /// <summary>
+    /// Reads <paramref name="entity"/>'s stored row and applies it to the
+    /// properties it binds. The promise answers <c>true</c> when a row was
+    /// found and <c>false</c> when none was stored.
+    /// <see cref="NetwPersistenceHandle.Load"/> lists the errors it fails with.
+    /// <b>Server Only.</b>
+    /// </summary>
+    public NetwPromise PersistLoad(Rid entity)
+    {
+        Rid slot0 = entity;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Rid_IntPtr(
+            _bindPersistLoad,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindPersistSave =
+        NetwApi.MethodBind("NetwMultiplayer", "persist_save", 999707434UL);
+
+    /// <summary>
+    /// Writes the properties <paramref name="entity"/> binds as its row. The
+    /// promise answers <c>true</c> once the write is stored and <c>false</c>
+    /// when nothing had changed. <see cref="NetwPersistenceHandle.Save"/> lists
+    /// the errors it fails with. <b>Server Only.</b>
+    /// </summary>
+    public NetwPromise PersistSave(Rid entity)
+    {
+        Rid slot0 = entity;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Rid_IntPtr(
+            _bindPersistSave,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindPersistIsDirty =
+        NetwApi.MethodBind("NetwMultiplayer", "persist_is_dirty", 3521089500UL);
+
+    /// <summary>
+    /// Whether any property <paramref name="entity"/> binds differs from what
+    /// was last saved. An entity that binds no persistence answers
+    /// <c>false</c>.
+    /// </summary>
+    public bool PersistIsDirty(Rid entity)
+    {
+        Rid slot0 = entity;
+        byte answered = default;
+        NetwThunks.Ptrcall1_Rid_Byte(
+            _bindPersistIsDirty,
+            Checked,
+            in slot0,
+            ref answered);
+        return answered != 0;
+    }
+
+    private static readonly IntPtr _bindPersistGetRecordId =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "persist_get_record_id",
+            3765571616UL);
+
+    /// <summary>
+    /// The key <paramref name="entity"/>'s row is stored under, or empty when
+    /// <paramref name="entity"/> binds no persistence.
+    /// </summary>
+    public StringName PersistGetRecordId(Rid entity)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(entity);
+        godot_variant answered = default;
+        NetwThunks.Call1(
+            _bindPersistGetRecordId,
+            Checked,
+            in slot0,
+            ref answered);
+        slot0.Dispose();
+        StringName result = VariantUtils.ConvertToStringName(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindPersistFlushAll =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "persist_flush_all",
+            1931563502UL);
+
+    /// <summary>
+    /// Writes every entity row that changed since its last save and settles
+    /// with an <c>@GlobalScope.Error</c> once each database has settled them.
+    /// It is <c>@GlobalScope.OK</c> when every row is stored, and the error of
+    /// the first row still unsaved otherwise.
+    /// <see cref="NetwSessionHandle.SaveEntities"/> lists the codes. <b>Server
+    /// Only.</b>
+    /// </summary>
+    public NetwPromise PersistFlushAll()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindPersistFlushAll, Checked, ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindTableSave =
+        NetwApi.MethodBind("NetwMultiplayer", "table_save", 2398225392UL);
+
+    /// <summary>
+    /// Stores <paramref name="table"/>'s committed rows as one snapshot under
+    /// <paramref name="key"/> in <paramref name="database"/>, and settles with
+    /// an <c>@GlobalScope.Error</c>. <paramref name="ids"/> names each row in
+    /// the order of <see cref="NetwMultiplayer.TableReadRoutes"/>.
+    /// <see cref="NetwTableHandle.Save"/> lists the codes. <b>Server Only.</b>
+    /// </summary>
+    public NetwPromise TableSave(
+        Rid table,
+        Rid database,
+        StringName key,
+        string[] ids)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(table);
+        godot_variant slot1 = VariantUtils.CreateFromRid(database);
+        godot_variant slot2 = VariantUtils.CreateFromStringName(key);
+        godot_variant slot3 = VariantUtils.CreateFromPackedStringArray(ids);
+        godot_variant answered = default;
+        NetwThunks.Call4(
+            _bindTableSave,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            in slot3,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        slot3.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindTableLoad =
+        NetwApi.MethodBind("NetwMultiplayer", "table_load", 2669361998UL);
+
+    /// <summary>
+    /// Replaces every row of <paramref name="table"/> with the snapshot stored
+    /// under <paramref name="key"/> in <paramref name="database"/>, and settles
+    /// with the load reply drawn in <see cref="NetwTableHandle.Load"/>. Each
+    /// loaded row gets a new route. <b>Server Only.</b>
+    /// </summary>
+    public NetwPromise TableLoad(Rid table, Rid database, StringName key)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(table);
+        godot_variant slot1 = VariantUtils.CreateFromRid(database);
+        godot_variant slot2 = VariantUtils.CreateFromStringName(key);
+        godot_variant answered = default;
+        NetwThunks.Call3(
+            _bindTableLoad,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
     }
 
     private static readonly IntPtr _bindSyncExplain =
@@ -8461,8 +9121,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// nothing else. The queue sits that much deeper and every arrival waits
     /// that much longer. Declining a transition is not free. A frame that holds
     /// still solves, so the world advances by a step belonging to no transition
-    /// and the next drive spans two, which is the quantum fault
-    /// <see cref="NetwPredictStats.QuantumFaults"/> counts.
+    /// and the next drive spans two, which is a quantum fault.
     /// </summary>
     public NetwPredict.ConsumeAction PredictConsume(int depth, int buffer)
     {
@@ -8545,7 +9204,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_evaluate_default",
-            3814884245UL);
+            2603247046UL);
 
     /// <summary>
     /// The judgement the session reaches when nothing overrides
@@ -8556,7 +9215,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// returns this rather than reimplementing it.
     /// </summary>
     public NetwPredictJudgement PredictEvaluateDefault(
-        NetwPredictJournal.Domain domain,
+        NetwPredict.Domain domain,
         NetwPredict.ExactVerdict verdict,
         Godot.Collections.Dictionary predicted,
         Godot.Collections.Dictionary payload,
@@ -8602,7 +9261,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_recover_default",
-            2270332653UL);
+            1616435610UL);
 
     /// <summary>
     /// The recovery plan the session makes when nothing overrides
@@ -8615,7 +9274,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public NetwPredictRecovery PredictRecoverDefault(
         Godot.Collections.Dictionary payload,
         NetwPredict.RecoveryPolicy policy,
-        NetwPredict.CorrectionMode correction,
         NetwSimulationHandle.RestoreEnum restore,
         Godot.Collections.Dictionary projection,
         Godot.Collections.Dictionary current,
@@ -8624,43 +9282,40 @@ public sealed class NetwMultiplayer : NetwRefCounted
         Godot.Collections.Dictionary verdict,
         double tickDelta)
     {
-        IntPtr pack = NetwThunks.ArgsNew(10);
+        IntPtr pack = NetwThunks.ArgsNew(9);
         godot_variant slot0 = VariantUtils.CreateFromDictionary(payload);
         NetwThunks.ArgsSet(pack, 0, in slot0);
         slot0.Dispose();
         godot_variant slot1 = VariantUtils.CreateFromInt((long)policy);
         NetwThunks.ArgsSet(pack, 1, in slot1);
         slot1.Dispose();
-        godot_variant slot2 = VariantUtils.CreateFromInt((long)correction);
+        godot_variant slot2 = VariantUtils.CreateFromInt((long)restore);
         NetwThunks.ArgsSet(pack, 2, in slot2);
         slot2.Dispose();
-        godot_variant slot3 = VariantUtils.CreateFromInt((long)restore);
+        godot_variant slot3 = VariantUtils.CreateFromDictionary(projection);
         NetwThunks.ArgsSet(pack, 3, in slot3);
         slot3.Dispose();
-        godot_variant slot4 = VariantUtils.CreateFromDictionary(projection);
+        godot_variant slot4 = VariantUtils.CreateFromDictionary(current);
         NetwThunks.ArgsSet(pack, 4, in slot4);
         slot4.Dispose();
-        godot_variant slot5 = VariantUtils.CreateFromDictionary(current);
+        godot_variant slot5 = VariantUtils.CreateFromDictionary(poseErrors);
         NetwThunks.ArgsSet(pack, 5, in slot5);
         slot5.Dispose();
-        godot_variant slot6 = VariantUtils.CreateFromDictionary(poseErrors);
+        godot_variant slot6 = VariantUtils.CreateFromDictionary(wiring);
         NetwThunks.ArgsSet(pack, 6, in slot6);
         slot6.Dispose();
-        godot_variant slot7 = VariantUtils.CreateFromDictionary(wiring);
+        godot_variant slot7 = VariantUtils.CreateFromDictionary(verdict);
         NetwThunks.ArgsSet(pack, 7, in slot7);
         slot7.Dispose();
-        godot_variant slot8 = VariantUtils.CreateFromDictionary(verdict);
+        godot_variant slot8 = VariantUtils.CreateFromFloat(tickDelta);
         NetwThunks.ArgsSet(pack, 8, in slot8);
         slot8.Dispose();
-        godot_variant slot9 = VariantUtils.CreateFromFloat(tickDelta);
-        NetwThunks.ArgsSet(pack, 9, in slot9);
-        slot9.Dispose();
         godot_variant answered = default;
         NetwThunks.CallPack(
             _bindPredictRecoverDefault,
             Checked,
             pack,
-            10,
+            9,
             ref answered);
         NetwThunks.ArgsFree(pack);
         NetwPredictRecovery result =

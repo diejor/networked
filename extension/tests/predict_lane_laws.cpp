@@ -1,14 +1,3 @@
-// Laws for the prediction kernels COMPOSED: what a lane does over a whole run,
-// rather than what one calculation answers for one transition.
-//
-// The corpus is the cross-product of the scenario table and the law table. One
-// scenario is driven once and every law reads that run, so a new scenario or a
-// new law costs one row and the cells it adds are free.
-//
-// Each law carries the plant that must break it. A law nothing can break is
-// green for the same reason CHECK(true) is, and a matrix multiplies that: one
-// wrong law silently weakens every cell it appears in.
-
 #include "support/netw_test.h"
 
 #include "support/netw_cells.h"
@@ -40,9 +29,6 @@ Scenario perturbed_lane() {
     return scenario.until(60);
 }
 
-// Three disturbances on consecutive ticks, which outrun a convergence that
-// closes half the gap per correction. This is the only lane here whose
-// divergence does not shrink, and it is what an escalation is for.
 Scenario drifting_lane() {
     Scenario scenario = clean_lane();
     scenario.label = "drifting-lane";
@@ -126,9 +112,6 @@ LawVerdict law_reconverges_after_its_last_stimulus(const ScenarioRun &p_run) {
     return law_held();
 }
 
-// Both directions, because a mechanism only proven green is a mechanism whose
-// refusal nobody has seen. A converging recovery escalating is the defect a
-// port of `escalation_after` is most likely to introduce.
 LawVerdict law_only_a_non_shrinking_run_escalates(const ScenarioRun &p_run) {
     const Lane lane = p_run.lane("P");
     int disturbances = 0;
@@ -176,8 +159,6 @@ const LawRow LAWS[] = {
 TEST_CASE(
     "[Networked][Predict][Hosted][Law] the lane laws hold across the corpus"
 ) {
-    // Built here rather than at namespace scope: a `godot::String` cannot be
-    // constructed before the library's entry point has run.
     const Scenario CORPUS[] = {
         clean_lane(),
         perturbed_lane(),
@@ -195,10 +176,6 @@ TEST_CASE(
     }
 }
 
-// Each pair names the one scenario that carries the evidence the law reads. A
-// plant against a scenario with nothing to see is a red proof of nothing:
-// L-QUIET cannot be broken on a lane that was already perturbed, and L-CONV
-// cannot be broken on a lane that never diverged.
 struct RedProof {
     const LawRow &law;
     Scenario (*scenario)();

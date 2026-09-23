@@ -15,6 +15,7 @@
 #include "netw/colors.hpp"
 #include "netw/entity/stage.hpp"
 #include "netw/log.hpp"
+#include "netw/object_port.hpp"
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/spawn/planner.hpp"
@@ -1202,7 +1203,7 @@ PackedByteArray Pipeline::encode_spawn_frame(int64_t p_route, Node *p_node) {
             netw::script::model::get_node_property_type(source, prop)
         );
         Array values;
-        values.push_back(source->get(prop));
+        values.push_back(port_get(source, prop));
         wire::WriteStream value_stream;
         if (!call_args::values_write(value_stream, values, quantizers, types)
             || !value_stream.align_verify()) {
@@ -1794,7 +1795,7 @@ void Pipeline::try_apply_spawn(
             continue;
         }
         if (!values.is_empty()) {
-            target->set(prop, values[0]);
+            port_set(target, prop, values[0]);
         }
     }
 

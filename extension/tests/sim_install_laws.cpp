@@ -452,7 +452,7 @@ TEST_CASE(
     NETW_CHECK_GT(double(said[2]), 0.0);
     NETW_CHECK_EQ(
         int64_t(pool->verdict_reason_of(slot)),
-        int64_t(netw::NetwPredict::VERDICT_REASON_NONE)
+        int64_t(netw::predict::VERDICT_REASON_NONE)
     );
 }
 

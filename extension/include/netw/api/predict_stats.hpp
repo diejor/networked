@@ -20,6 +20,7 @@ public:
 
     enum FactAt {
         FACT_QUANTUM_STEPS = 2,
+        FACT_CORRECTIONS = 5,
         FACT_CONSUMED = 7,
         FACT_MISSING = 8,
         FACT_STARVED = 9,
@@ -46,6 +47,8 @@ public:
         FACT_CONSUME_SHAPE = 34,
         FACT_CLIENT_FP_VERIFIED = 39,
         FACT_CLIENT_MISMATCHES = 40,
+        FACT_ISLAND_MEMBERS = 41,
+        FACT_SIMULATED_MEMBERS = 42,
         FACT_JOINT_DEPTH = 44,
         FACT_LINGER_HELD = 52,
     };
@@ -107,6 +110,7 @@ public:
         const godot::Ref<NetwEntity> &p_entity
     );
 
+    int64_t get_corrections() const;
     godot::Dictionary to_dictionary() const;
 
     static const Fact *facts();

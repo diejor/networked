@@ -11,6 +11,7 @@
 #include "netw/colors.hpp"
 #include "netw/entity/control.hpp"
 #include "netw/log.hpp"
+#include "netw/object_port.hpp"
 #include "netw/profile.hpp"
 #include "netw/property_set_builder.hpp"
 #include "netw/repl/snapshot_frame.hpp"
@@ -1089,7 +1090,7 @@ Dictionary SyncPipeline::gather_payload(
         const Ref<NetwPropertySetColumn> column = columns[at];
         const StringName key = column->get_key();
         if (gd::has_property(p_node, key)) {
-            out[key] = p_node->get(key);
+            out[key] = port_get(p_node, key);
         }
     }
     return out;
@@ -1108,7 +1109,7 @@ void SyncPipeline::apply_payload(
         const Ref<NetwPropertySetColumn> column = columns[at];
         const StringName key = column->get_key();
         if (p_payload.has(key) && gd::has_property(p_node, key)) {
-            p_node->set(key, p_payload[key]);
+            port_set(p_node, key, p_payload[key]);
         }
     }
 }
@@ -1331,7 +1332,7 @@ void SyncPipeline::feed_derived_interpolation(
                 plane->display_record(
                     node,
                     key,
-                    node->get(key),
+                    port_get(node, key),
                     tick,
                     spec,
                     false

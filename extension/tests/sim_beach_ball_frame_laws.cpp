@@ -12,6 +12,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/display/timing.hpp"
+#include "netw/object_port.hpp"
 #include "netw/sim/row.hpp"
 
 using namespace godot;
@@ -285,7 +286,11 @@ class BeachBallScenario final : public netw_test::FrameScenario {
 
     void drift() {
         RigidBody3D *ball = ball_at(DRIFTED);
-        ball->set_global_position(ball->get_global_position() + DRIFT);
+        netw::port_set(
+            ball,
+            StringName("position"),
+            ball->get_position() + DRIFT
+        );
         ball->set_sleeping(true);
     }
 

@@ -48,13 +48,11 @@ Scenario command_lane() {
     return scenario.until(int(ticks.size()));
 }
 
-HashMap<int64_t, Dictionary> tape_of(netw::NetwPredictionHandle *p_handle) {
+HashMap<int64_t, Dictionary> tape_of(LoopbackRig &p_rig, int p_client) {
     HashMap<int64_t, Dictionary> out;
-    REQUIRE_MESSAGE(p_handle != nullptr, "a tape needs a prediction handle");
-    if (p_handle == nullptr) {
-        return out;
-    }
-    const Array rows = p_handle->tape_transitions();
+    const Array rows = p_rig.prediction_pool(p_client)->tape_transitions(
+        p_rig.prediction_slot(StringName("P"), p_client)
+    );
     for (int at = 0; at < rows.size(); ++at) {
         const Dictionary entry = rows[at];
         out[int64_t(entry[StringName("index")])] = entry;
@@ -74,10 +72,8 @@ TEST_CASE(
     const ScenarioRun run = ScenarioRun::session(rig, scenario);
     REQUIRE(run.regime_reached());
 
-    const HashMap<int64_t, Dictionary> authored
-        = tape_of(rig.prediction_handle(StringName("P"), 0));
-    const HashMap<int64_t, Dictionary> decoded
-        = tape_of(rig.prediction_handle(StringName("P")));
+    const HashMap<int64_t, Dictionary> authored = tape_of(rig, 0);
+    const HashMap<int64_t, Dictionary> decoded = tape_of(rig, -1);
 
     REQUIRE_MESSAGE(
         decoded.size() > 0,

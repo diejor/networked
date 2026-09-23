@@ -475,7 +475,7 @@ NetwPredict::ConsumeAction NetwMultiplayer::predict_consume_default(
 }
 
 Ref<NetwPredictJudgement> NetwMultiplayer::predict_evaluate(
-    NetwPredictJournal::Domain p_domain,
+    NetwPredict::Domain p_domain,
     NetwPredict::ExactVerdict p_verdict,
     const Dictionary &p_predicted,
     const Dictionary &p_payload,
@@ -506,7 +506,7 @@ Ref<NetwPredictJudgement> NetwMultiplayer::predict_evaluate(
 }
 
 Ref<NetwPredictJudgement> NetwMultiplayer::predict_evaluate_default(
-    NetwPredictJournal::Domain p_domain,
+    NetwPredict::Domain p_domain,
     NetwPredict::ExactVerdict p_verdict,
     const Dictionary &p_predicted,
     const Dictionary &p_payload,
@@ -526,7 +526,6 @@ Ref<NetwPredictJudgement> NetwMultiplayer::predict_evaluate_default(
 Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
     const Dictionary &p_payload,
     NetwPredict::RecoveryPolicy p_policy,
-    NetwPredict::CorrectionMode p_correction,
     NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_current,
@@ -540,7 +539,6 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
             _predict_recover,
             p_payload,
             p_policy,
-            p_correction,
             p_snap_restore,
             p_projection,
             p_current,
@@ -555,7 +553,6 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
     return predict_recover_default(
         p_payload,
         p_policy,
-        p_correction,
         p_snap_restore,
         p_projection,
         p_current,
@@ -569,7 +566,6 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
 Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover_default(
     const Dictionary &p_payload,
     NetwPredict::RecoveryPolicy p_policy,
-    NetwPredict::CorrectionMode p_correction,
     NetwSimulationHandle::Restore p_snap_restore,
     const Dictionary &p_projection,
     const Dictionary &p_current,
@@ -581,7 +577,6 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover_default(
     return prediction_core::recover(
         p_payload,
         p_policy,
-        p_correction,
         p_snap_restore,
         p_projection,
         p_current,
@@ -649,6 +644,37 @@ void NetwMultiplayer::predict_held_spaces(LocalVector<RID> &r_spaces) const {
         if (row.value.inactive) {
             r_spaces.push_back(row.value.space);
         }
+    }
+}
+
+bool NetwMultiplayer::predict_space_has_stepped_member(
+    const RID &p_space
+) const {
+    for (const KeyValue<int64_t, NetwPredictSlotEngine *> &row :
+         predict_engines) {
+        const Ref<NetwEntity> member = wrapper_for_id(row.key);
+        if (member.is_null()) {
+            continue;
+        }
+        const Ref<NetwSimulationHandle> simulation = member->get_simulation();
+        if (simulation.is_valid()
+            && simulation->get_schedule()
+                == NetwSimulationHandle::SCHEDULE_STEPPED
+            && entity_space_of(member).space == p_space) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void NetwMultiplayer::predict_release_empty_holds() {
+    for (KeyValue<int64_t, SteppedSpace> &row : space_steppers) {
+        SteppedSpace &held = row.value;
+        if (!held.inactive || predict_space_has_stepped_member(held.space)) {
+            continue;
+        }
+        held.inactive = false;
+        space_set_active({held.space, held.dimension}, true);
     }
 }
 
@@ -1492,10 +1518,6 @@ void NetwMultiplayer::predict_set_param(
             return handle->set_recovery_policy(
                 static_cast<NetwPredict::RecoveryPolicy>(int(p_value))
             );
-        case PREDICT_PARAM_CORRECTION_MODE:
-            return handle->set_correction_mode(
-                static_cast<NetwPredict::CorrectionMode>(int(p_value))
-            );
         case PREDICT_PARAM_TELEPORT_THRESHOLD:
             return handle->set_teleport_threshold(double(p_value));
         case PREDICT_PARAM_DIVERGENCE_EPSILON:
@@ -1538,8 +1560,6 @@ Variant NetwMultiplayer::predict_get_param(
             return handle->get_missing_policy();
         case PREDICT_PARAM_RECOVERY_POLICY:
             return handle->get_recovery_policy();
-        case PREDICT_PARAM_CORRECTION_MODE:
-            return handle->get_correction_mode();
         case PREDICT_PARAM_TELEPORT_THRESHOLD:
             return handle->get_teleport_threshold();
         case PREDICT_PARAM_DIVERGENCE_EPSILON:

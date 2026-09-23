@@ -4,9 +4,9 @@
 #include "godot/os.hpp"
 #include "godot/time.hpp"
 #include "godot/utility.hpp"
-#include "netw/api/predict_journal_snapshot.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/journal.hpp"
+#include "netw/predict/journal_snapshot.hpp"
 
 using namespace godot;
 
@@ -121,10 +121,9 @@ void Tap::drain(
     if (dir.is_empty() || p_slot < 0) {
         return;
     }
-    const Ref<NetwPredictJournal> journal = p_pool.journal_snapshot(p_slot);
-    if (journal.is_null()) {
-        return;
-    }
+    predict::JournalSnapshot snapshot;
+    p_pool.journal_snapshot(p_slot, snapshot);
+    const predict::JournalSnapshot *journal = &snapshot;
     const int64_t began = Time::get_singleton()->get_ticks_usec();
     drains += 1;
 

@@ -50,15 +50,17 @@ Scenario carrying_lane(double p_gain) {
     return scenario.until(int(ticks.size()));
 }
 
-Ref<godot::RefCounted> position_ledger(LoopbackRig &p_rig) {
-    netw::NetwPredictionHandle *handle
-        = p_rig.prediction_handle(StringName("P"), 0);
-    REQUIRE_MESSAGE(handle != nullptr, "a ledger needs a prediction handle");
-    if (handle == nullptr) {
-        return Ref<godot::RefCounted>();
-    }
-    const Dictionary rows = handle->get_field_recovery();
-    return rows.get(StringName("position"), godot::Variant());
+constexpr int LEDGER_CARRIED = 3;
+constexpr int LEDGER_INFIDELITY = 5;
+
+godot::PackedInt64Array position_ledger(LoopbackRig &p_rig) {
+    netw::NetwPredictionEngine *const pool = p_rig.prediction_pool(0);
+    const int64_t slot = p_rig.prediction_slot(StringName("P"), 0);
+    REQUIRE_MESSAGE(
+        pool->ledger_fields(slot).has(StringName("position")),
+        "the position field has no ledger row"
+    );
+    return pool->ledger_counts(slot, StringName("position"));
 }
 
 TEST_CASE(
@@ -72,11 +74,11 @@ TEST_CASE(
     const ScenarioRun run = ScenarioRun::session(rig, scenario);
     REQUIRE(run.regime_reached());
 
-    const Ref<godot::RefCounted> ledger = position_ledger(rig);
-    REQUIRE(ledger.is_valid());
+    const godot::PackedInt64Array ledger = position_ledger(rig);
+    REQUIRE(ledger.size() > LEDGER_INFIDELITY);
 
-    NETW_CHECK_GT(int(ledger->get(StringName("carried"))), 0);
-    NETW_CHECK_EQ(int(ledger->get(StringName("infidelity"))), 0);
+    NETW_CHECK_GT(ledger[LEDGER_CARRIED], int64_t(0));
+    NETW_CHECK_EQ(ledger[LEDGER_INFIDELITY], int64_t(0));
 }
 
 TEST_CASE(
@@ -89,11 +91,11 @@ TEST_CASE(
     const ScenarioRun run = ScenarioRun::session(rig, scenario);
     REQUIRE(run.regime_reached());
 
-    const Ref<godot::RefCounted> ledger = position_ledger(rig);
-    REQUIRE(ledger.is_valid());
+    const godot::PackedInt64Array ledger = position_ledger(rig);
+    REQUIRE(ledger.size() > LEDGER_INFIDELITY);
 
-    NETW_CHECK_GT(int(ledger->get(StringName("infidelity"))), 0);
-    NETW_CHECK_EQ(int(ledger->get(StringName("carried"))), 0);
+    NETW_CHECK_GT(ledger[LEDGER_INFIDELITY], int64_t(0));
+    NETW_CHECK_EQ(ledger[LEDGER_CARRIED], int64_t(0));
 }
 
 } // namespace TestNetwLagCompCarryLaws

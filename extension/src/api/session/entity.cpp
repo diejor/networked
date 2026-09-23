@@ -27,6 +27,7 @@
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/log.hpp"
+#include "netw/object_port.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
@@ -2765,7 +2766,7 @@ Variant NetwMultiplayer::entity_get_property(
         return Variant();
     }
     const Ref<NetwPropertySetColumn> column = columns[p_column];
-    return node->get(column->shape.key);
+    return port_get(node, column->shape.key);
 }
 
 void NetwMultiplayer::observe_node_added(Node *p_node) {

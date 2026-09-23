@@ -350,7 +350,6 @@ public:
         PREDICT_PARAM_ARCHETYPE = 0,
         PREDICT_PARAM_MISSING_POLICY = 2,
         PREDICT_PARAM_RECOVERY_POLICY = 3,
-        PREDICT_PARAM_CORRECTION_MODE = 5,
         PREDICT_PARAM_TELEPORT_THRESHOLD = 6,
         PREDICT_PARAM_DIVERGENCE_EPSILON = 7,
         PREDICT_PARAM_BREACH_RESPONSE = 8,
@@ -1223,7 +1222,7 @@ public:
         int p_buffer
     );
     godot::Ref<NetwPredictJudgement> predict_evaluate(
-        NetwPredictJournal::Domain p_domain,
+        NetwPredict::Domain p_domain,
         NetwPredict::ExactVerdict p_verdict,
         const godot::Dictionary &p_predicted,
         const godot::Dictionary &p_payload,
@@ -1233,7 +1232,6 @@ public:
     godot::Ref<NetwPredictRecovery> predict_recover(
         const godot::Dictionary &p_payload,
         NetwPredict::RecoveryPolicy p_policy,
-        NetwPredict::CorrectionMode p_correction,
         NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_current,
@@ -1243,7 +1241,7 @@ public:
         double p_tick_delta
     );
     godot::Ref<NetwPredictJudgement> predict_evaluate_default(
-        NetwPredictJournal::Domain p_domain,
+        NetwPredict::Domain p_domain,
         NetwPredict::ExactVerdict p_verdict,
         const godot::Dictionary &p_predicted,
         const godot::Dictionary &p_payload,
@@ -1253,7 +1251,6 @@ public:
     godot::Ref<NetwPredictRecovery> predict_recover_default(
         const godot::Dictionary &p_payload,
         NetwPredict::RecoveryPolicy p_policy,
-        NetwPredict::CorrectionMode p_correction,
         NetwSimulationHandle::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_current,
@@ -1274,19 +1271,18 @@ public:
     GDVIRTUAL6R(
         godot::Ref<NetwPredictJudgement>,
         _predict_evaluate,
-        NetwPredictJournal::Domain,
+        NetwPredict::Domain,
         NetwPredict::ExactVerdict,
         godot::Dictionary,
         godot::Dictionary,
         godot::Dictionary,
         godot::Dictionary
     )
-    GDVIRTUAL10R(
+    GDVIRTUAL9R(
         godot::Ref<NetwPredictRecovery>,
         _predict_recover,
         godot::Dictionary,
         NetwPredict::RecoveryPolicy,
-        NetwPredict::CorrectionMode,
         NetwSimulationHandle::Restore,
         godot::Dictionary,
         godot::Dictionary,
@@ -1949,6 +1945,8 @@ public:
     ) const;
     void predict_stepper_hold(const godot::RID &p_space, int p_dimension);
     void predict_held_spaces(godot::LocalVector<godot::RID> &r_spaces) const;
+    bool predict_space_has_stepped_member(const godot::RID &p_space) const;
+    void predict_release_empty_holds();
     bool predict_space_is_stepped(const godot::RID &p_space) const;
     void predict_engine_install(
         const godot::RID &p_entity,

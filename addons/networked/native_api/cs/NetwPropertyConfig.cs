@@ -43,7 +43,24 @@ namespace Networked;
 /// <see cref="NetwPropertyConfig.Audience"/>, and
 /// <see cref="NetwPropertyConfig.Masked"/> write through to the script's whole
 /// <see cref="NetwPropertySet"/> from any member, so the last member to name a
-/// knob owns it. <b>The chain downgrades to the base type.</b>
+/// knob owns it. <b>Rigid bodies</b> When the entity root is a
+/// <see cref="RigidBody3D"/> or a <see cref="RigidBody2D"/>, the columns
+/// <c>position</c>, <c>quaternion</c> (<c>rotation</c> in 2D),
+/// <c>linear_velocity</c>, <c>angular_velocity</c> and <c>sleeping</c> read and
+/// write the body's physics state. A read right after a physics step sees the
+/// stepped value before the node catches up. <c>position</c> stays relative to
+/// the parent, as it is on the node. While <c>RigidBody3D.freeze</c> is on, the
+/// position and rotation columns read and write the node transform instead. A
+/// rigid body below the root reads and writes its node properties.
+/// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_property(self, &amp;"position").state()
+///     Netw.configure_property(self, &amp;"quaternion").state()
+///     Netw.configure_property(self, &amp;"linear_velocity").state()
+/// </code>
+/// </para>
+/// <para>
+/// <b>The chain downgrades to the base type.</b>
 /// <see cref="NetwMemberConfig.CallLocal"/> and
 /// <see cref="NetwMemberConfig.CallRemote"/> are not re-declared here, and
 /// neither is any other base verb: a bound method records one return type, so a
@@ -1175,13 +1192,11 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// holds it to that rather than trusting it: a step is replayed against
     /// transitions the owner already recorded and retired once it stops
     /// reproducing them, and a rejected carry writes the acknowledged value
-    /// exactly as an undeclared field does.
-    /// <see cref="NetwPredictionHandle.FieldRecovery"/> counts both. The rule
-    /// is stored per node rather than per script, because a
-    /// <see cref="Callable"/> is bound to one body while a property declaration
-    /// is shared by every instance of the script that declares it.
-    /// <paramref name="step"/> therefore has to be a method or lambda of a
-    /// <see cref="Node"/>, which is the body it will advance. A
+    /// exactly as an undeclared field does. The rule is stored per node rather
+    /// than per script, because a <see cref="Callable"/> is bound to one body
+    /// while a property declaration is shared by every instance of the script
+    /// that declares it. <paramref name="step"/> therefore has to be a method
+    /// or lambda of a <see cref="Node"/>, which is the body it will advance. A
     /// <paramref name="step"/> that is invalid, or valid but bound to something
     /// that is not a <see cref="Node"/>, is reported through the error channel
     /// and binds nothing, leaving this config exactly as it was. The rule lands

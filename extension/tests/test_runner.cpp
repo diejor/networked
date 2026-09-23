@@ -15,6 +15,7 @@
 #include "netw/api/interest_handle.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/prediction_handle.hpp"
 #include "netw/api/tests.hpp"
 #include "netw/colors.hpp"
 #include "netw/connect/tracker_client.hpp"
@@ -390,6 +391,11 @@ void NetwNativeTests::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
+        D_METHOD("prediction_stats", "handle"),
+        &NetwNativeTests::prediction_stats
+    );
+    ClassDB::bind_static_method(
+        "NetwNativeTests",
         D_METHOD("property_set_keys_of_script", "script", "record"),
         &NetwNativeTests::property_set_keys_of_script
     );
@@ -573,6 +579,15 @@ void NetwNativeTests::schema_model_clear() {
 
 void NetwNativeTests::tracker_book_clear() {
     netw::connect::TrackerBook::shared().clear();
+}
+
+Dictionary NetwNativeTests::prediction_stats(Object *p_handle) {
+    const NetwPredictionHandle *handle
+        = Object::cast_to<NetwPredictionHandle>(p_handle);
+    if (handle == nullptr || handle->get_stats().is_null()) {
+        return Dictionary();
+    }
+    return handle->get_stats()->to_dictionary();
 }
 
 TypedArray<StringName> NetwNativeTests::property_set_keys_of_script(

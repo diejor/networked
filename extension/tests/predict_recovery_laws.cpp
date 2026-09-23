@@ -214,6 +214,53 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Predict][Hosted][Law] a divergence that flips sign on the "
+    "same field escalates the next recovery"
+) {
+    Slot slot;
+    slot.open = true;
+    slot.rewire(recovery_wiring());
+    slot.config = snap_config();
+    RecoveryRequest ahead = recovery_request();
+    RecoveryRequest behind = recovery_request();
+    behind.authority = scalar_state(-4.0, 2.0, false);
+
+    slot.recover(ahead);
+    CHECK_FALSE(slot.recovery.escalate_next);
+    slot.recover(behind);
+    CHECK(slot.recovery.escalate_next);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Law] the escalation tracker follows the "
+    "recovery a seam answered, not the one the pool planned"
+) {
+    Slot slot;
+    slot.open = true;
+    slot.rewire(recovery_wiring());
+    slot.config = snap_config();
+    RecoveryRequest declined = recovery_request();
+    declined.answered = true;
+    declined.answered_skip = true;
+
+    for (int at = 0; at < 4; ++at) {
+        CHECK_FALSE(slot.recover(declined).skip);
+    }
+    CHECK_FALSE(slot.recovery.escalate_next);
+    NETW_CHECK_EQ(slot.recovery.nonshrink_streak, 0);
+
+    RecoveryRequest teleported = recovery_request();
+    slot.recover(teleported);
+    NETW_CHECK_EQ(slot.recovery.nonshrink_streak, 1);
+    teleported.answered = true;
+    teleported.answered_skip = false;
+    teleported.answered_teleport = true;
+    CHECK_FALSE(slot.recover(teleported).teleport);
+    NETW_CHECK_EQ(slot.recovery.nonshrink_streak, 0);
+    NETW_CHECK_EQ(slot.recovery.last_field, -1);
+}
+
+TEST_CASE(
     "[Networked][Predict][Hosted][Recovery] the engine publishes its effect"
 ) {
     Slot slot;
@@ -387,20 +434,11 @@ TEST_CASE(
     const Wiring wiring = recovery_wiring();
     RecoveryRequest request = recovery_request();
 
-    // position declares epsilon 1.0 and velocity takes the fallback of 1.0,
-    // so 4.0 against 2.0 is four tolerances against two.
     NETW_CHECK_EQ(escalation_field(wiring, request), 0);
 
-    // Ranked in TOLERANCES rather than in magnitude: the fields do not share a
-    // unit, and a raw maximum hands the answer to whichever carries the larger
-    // numbers rather than to whichever is most out of tolerance.
     request.fallback_epsilon = 0.1;
     NETW_CHECK_EQ(escalation_field(wiring, request), 1);
 
-    // A field whose declared tolerance is zero triggers on any error and has
-    // no scale to be ranked on, so it answers only when no field with a
-    // positive tolerance did. Ranking it by ratio would put an exact field
-    // 1e-9 out ahead of a position four tolerances out.
     LocalVector<FieldDecl> exact_fields;
     FieldDecl loose;
     loose.key = StringName("loose");
@@ -421,13 +459,9 @@ TEST_CASE(
     ranked.field_errors = errors(0.5, 1e-9);
     NETW_CHECK_EQ(escalation_field(mixed, ranked), 1);
 
-    // Nothing past its own tolerance still has a delta with a sign, and the
-    // overshoot test is entitled to see it, so the ranking falls back to raw
-    // magnitude rather than answering that no field diverged.
     ranked.field_errors = errors(0.5, 0.0);
     NETW_CHECK_EQ(escalation_field(mixed, ranked), 0);
 
-    // A field neither state carries is not a field this recovery answers.
     RecoveryRequest absent = ranked;
     absent.predicted = StateRow();
     absent.predicted.resize(2);
@@ -438,8 +472,6 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] the trigger shape says whether any "
     "field asking for a recovery is one the recovery may write"
 ) {
-    // position is causal and writable at epsilon 1.0, velocity is causal and
-    // WITHHELD at the fallback epsilon, latch is neither past anything.
     const Wiring wiring = recovery_wiring();
 
     NETW_CHECK_EQ(
@@ -450,9 +482,6 @@ TEST_CASE(
         int(trigger_shape(wiring, errors(4.0, 0.5), 1.0)),
         int(TriggerShape::MIXED)
     );
-    // Every field asking is one no sub-teleport restore may write, so the
-    // write it stages repairs nothing. "Every", not "any": the row below adds
-    // one writable field back and the shape returns to MIXED.
     NETW_CHECK_EQ(
         int(trigger_shape(wiring, errors(0.5, 2.0), 1.0)),
         int(TriggerShape::ALL_WITHHELD)
@@ -462,15 +491,11 @@ TEST_CASE(
         int(TriggerShape::MIXED)
     );
 
-    // A field's own declared epsilon outranks the fallback, so the same error
-    // asks under one and not under the other.
     NETW_CHECK_EQ(
         int(trigger_shape(wiring, errors(0.9, -1.0), 0.1)),
         int(TriggerShape::NONE)
     );
 
-    // An error array shorter than the declaration answers for the fields it
-    // holds rather than reading past its end.
     LocalVector<double> partial;
     partial.resize(1);
     partial[0] = 4.0;

@@ -254,10 +254,14 @@ void track_recovery(
             + std::max(0, p_request.collision_cooldown_ticks);
         return;
     }
-    if (p_plan.skip || p_config.correction == int(CorrectionMode::REPLAY)) {
+    const bool skip
+        = p_request.answered ? p_request.answered_skip : p_plan.skip;
+    const bool teleport
+        = p_request.answered ? p_request.answered_teleport : p_plan.teleport;
+    if (skip || p_config.correction == int(CorrectionMode::REPLAY)) {
         return;
     }
-    if (p_plan.teleport) {
+    if (teleport) {
         r_state.reset_trackers();
         return;
     }

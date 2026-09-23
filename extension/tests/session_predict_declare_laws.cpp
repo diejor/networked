@@ -396,7 +396,7 @@ ReplayScenario a_tick_solver_body() {
 class ReplayRun {
     ReplayScenario declared;
     NetwPredict::RecoveryPolicy policy = NetwPredict::RECOVERY_POLICY_OBSERVE;
-    NetwPredict::CorrectionMode correction = NetwPredict::CORRECTION_MODE_AUTO;
+    int correction = int(netw::CorrectionMode::AUTO);
 
 public:
     explicit ReplayRun(const ReplayScenario &p_scenario)
@@ -434,10 +434,12 @@ public:
         REQUIRE(pool != nullptr);
         const int64_t slot = pool->slot_register(wrapper);
         REQUIRE(slot >= 0);
-        pool->settle_correction(slot, handle->get_correction_mode());
-        correction = static_cast<NetwPredict::CorrectionMode>(
-            pool->settle_correction(slot, handle->get_correction_mode())
-        );
+        const int declared
+            = netw::NetwPredictionEngine::correction_for_recovery_policy(
+                handle->get_recovery_policy()
+            );
+        pool->settle_correction(slot, declared);
+        correction = pool->settle_correction(slot, declared);
 
         session->predict_undeclare(entity);
         session->clear_session_state();
@@ -452,7 +454,7 @@ public:
         return policy;
     }
 
-    NetwPredict::CorrectionMode mode() const {
+    int mode() const {
         return correction;
     }
 };
@@ -463,7 +465,7 @@ LawVerdict law_integrated(const ReplayRun &p_run) {
     const bool replays
         = p_run.recovery() == NetwPredict::RECOVERY_POLICY_REBASE_REPLAY;
     const bool corrects_by_replay
-        = p_run.mode() == NetwPredict::CORRECTION_MODE_REPLAY;
+        = p_run.mode() == int(netw::CorrectionMode::REPLAY);
     if (replays != corrects_by_replay) {
         return law_broken(
             "the policy resolves %d and the correction resolves %d",
@@ -509,6 +511,60 @@ TEST_CASE(
         NETW_CELL(L_INTEGRATED, scenario);
         NETW_LAW_HOLDS(L_INTEGRATED, run);
     }
+}
+
+void check_auto_resolution(bool p_rigid) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    REQUIRE(session->lagcomp_initialize(8, 12) == OK);
+
+    Node3D *body = p_rigid ? memnew(RigidBody3D) : memnew(Node3D);
+    netw::gd::scene_root()->add_child(body);
+    const Ref<NetwEntity> wrapper = NetwEntity::ensure(body);
+    const RID entity = session->entity_of(body);
+    REQUIRE(session->predict_declare(entity) == OK);
+    const Ref<NetwPredictionHandle> handle = session->prediction_handle(entity);
+    REQUIRE(handle.is_valid());
+
+    const int expected = p_rigid ? NetwPredict::RECOVERY_POLICY_REBASE_RECOVER
+                                 : NetwPredict::RECOVERY_POLICY_REBASE_REPLAY;
+    const int expected_correction
+        = netw::NetwPredictionEngine::correction_for_recovery_policy(expected);
+    NETW_CHECK_EQ(
+        int(handle->get_recovery_policy()),
+        int(NetwPredict::RECOVERY_POLICY_AUTO)
+    );
+    NETW_CHECK_EQ(int(handle->resolved_recovery_policy()), expected);
+
+    netw::NetwPredictionEngine *pool = session->get_prediction_engine();
+    REQUIRE(pool != nullptr);
+    const int64_t slot = pool->slot_register(wrapper);
+    REQUIRE(slot >= 0);
+    const int automatic = int(netw::CorrectionMode::AUTO);
+    NETW_CHECK_EQ(int(handle->resolved_recovery_policy()), expected);
+    NETW_CHECK_EQ(
+        pool->resolve_correction(slot, automatic),
+        expected_correction
+    );
+
+    pool->unbind_owner(slot);
+    NETW_CHECK_EQ(int(handle->resolved_recovery_policy()), expected);
+    NETW_CHECK_EQ(
+        pool->resolve_correction(slot, automatic),
+        expected_correction
+    );
+
+    session->predict_undeclare(entity);
+    session->clear_session_state();
+    body->queue_free();
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] an automatic recovery policy resolves "
+    "from the body, and the handle and the engine resolve it alike"
+) {
+    check_auto_resolution(true);
+    check_auto_resolution(false);
 }
 
 } // namespace TestNetwSessionPredictDeclareLaws

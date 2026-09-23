@@ -18,7 +18,7 @@ class EntityDecl {
     double decl_prediction_epsilon = 0.0;
     netw::Schedule decl_schedule = netw::Schedule::TICK;
     netw::MissingInput decl_missing_input = netw::MissingInput::STALL;
-    netw::CorrectionMode decl_correction = netw::CorrectionMode::AUTO;
+    netw::RecoveryPolicy decl_recovery = netw::RecoveryPolicy::AUTO;
     int decl_replay_buffer_depth = 0;
     int decl_consume_lag = 0;
     bool decl_mounted = false;
@@ -113,13 +113,13 @@ public:
         return *this;
     }
 
-    EntityDecl &corrected_by(netw::CorrectionMode p_correction) {
-        decl_correction = p_correction;
+    EntityDecl &recovered_by(netw::RecoveryPolicy p_recovery) {
+        decl_recovery = p_recovery;
         return *this;
     }
 
-    netw::CorrectionMode correction() const {
-        return decl_correction;
+    netw::RecoveryPolicy recovery() const {
+        return decl_recovery;
     }
 
     EntityDecl &wrapperless() {

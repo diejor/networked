@@ -20,3 +20,19 @@ using ::Node3D;
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
+
+namespace netw::gd {
+
+inline void set_ignore_transform_notification(
+    godot::Node3D *p_node,
+    bool p_ignore
+) {
+    struct Node3DAccess : public godot::Node3D {
+        using godot::Node3D::set_ignore_transform_notification;
+    };
+    static_cast<Node3DAccess *>(p_node)->set_ignore_transform_notification(
+        p_ignore
+    );
+}
+
+} // namespace netw::gd

@@ -142,6 +142,31 @@ bool StateRow::any() const {
     return false;
 }
 
+double divergence_by_field(
+    const Dictionary &p_predicted,
+    const Dictionary &p_authoritative,
+    Dictionary p_out,
+    const Dictionary &p_angles
+) {
+    p_out.clear();
+    double worst = 0.0;
+    const Array keys = p_authoritative.keys();
+    for (int at = 0; at < keys.size(); ++at) {
+        const Variant key = keys[at];
+        double error = std::numeric_limits<double>::infinity();
+        if (p_predicted.has(key)) {
+            error = value_error(
+                p_predicted[key],
+                p_authoritative[key],
+                p_angles.has(key)
+            );
+        }
+        p_out[key] = error;
+        worst = std::max(worst, error);
+    }
+    return worst;
+}
+
 double value_error(
     const Variant &p_left,
     const Variant &p_right,

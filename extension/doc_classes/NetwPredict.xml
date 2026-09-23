@@ -12,7 +12,6 @@
 		The schedule, the restore and the mode an entity runs in are [NetwSimulationHandle] values.
 		[b]What a game declares[/b]
 		- [enum Archetype] what kind of body this is, which presets the rest
-		- [enum CorrectionMode] how a correction is applied
 		- [enum RecoveryPolicy] what a recovery is allowed to do
 		- [enum MissingInput] what the server does about an input that never came
 		- [enum BreachResponse] what happens on a contact outside the prediction
@@ -21,81 +20,17 @@
 		- [enum DriveKind] how the last drive chose its input
 		- [enum ConsumeAction] what a consume pass did this frame
 		- [enum ContactClass] what the local solve reported touching
-		- [enum WitnessClass] what both peers agree was touched
 		- [enum CommandOrigin] where one replayed input came from
-		- [enum CellProvenance] the same, ranked, when a group replays together
 		- [enum ExactVerdict] whether fingerprints have been compared yet
+		- [enum Domain] whether a transition is judged by fingerprint or by tolerance
 		- [enum TriggerShape] what asked for a recovery
+		- [enum Attribution] what a divergence is blamed on
+		- [enum Operator] what wrote the body during a recovery
 		- [enum OperatorOutcome] what a recovery attempt achieved
 		- [enum EpisodeState] how far a divergence episode has got
-		- [enum VerdictReason] why a comparison did not reach the body
 	</description>
 	<tutorials>
 	</tutorials>
-	<methods>
-		<method name="drive_kind_name" qualifiers="static">
-			<return type="String" />
-			<param index="0" name="kind" type="int" enum="NetwPredict.DriveKind" />
-			<description>
-				The [enum DriveKind] member [param kind] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
-			</description>
-		</method>
-		<method name="episode_state_name" qualifiers="static">
-			<return type="String" />
-			<param index="0" name="state" type="int" enum="NetwPredict.EpisodeState" />
-			<description>
-				The [enum EpisodeState] member [param state] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
-			</description>
-		</method>
-		<method name="joint_cell" qualifiers="static">
-			<return type="int" />
-			<param index="0" name="authored" type="bool" />
-			<param index="1" name="relayed" type="bool" />
-			<param index="2" name="predictor_valid" type="bool" />
-			<description>
-				The [enum CellProvenance] one replayed input receives, ranked. What the owner actually did outranks a relay, a relay outranks a substituted guess, and one with none of the three coasts on what it already held.
-				Ranked rather than exclusive because more than one can be true at once, and a replay that charged the weaker of two would report a guess where authorship was reproduced.
-			</description>
-		</method>
-		<method name="joint_floor" qualifiers="static">
-			<return type="Dictionary" />
-			<param index="0" name="bases" type="Dictionary" />
-			<param index="1" name="relay_floors" type="Dictionary" />
-			<param index="2" name="epoch_floor" type="int" />
-			<param index="3" name="history_floor" type="int" />
-			<param index="4" name="present" type="int" />
-			<description>
-				The one transition a joint group replays from, as [code]floor[/code], and whether reaching it needed a heal, as [code]heal[/code].
-				The floor is the oldest point any member still needs, because a group replaying from a newer one would leave a member re-running transitions its own history no longer covers. A negative value is a member with nothing outstanding and does not lower the floor.
-				A floor older than [param history_floor] is one no member can still replay across, so the group heals to [param present] instead and says so. A caller reading [code]floor[/code] without [code]heal[/code] cannot tell a group that rewound from one that gave up on rewinding.
-				[codeblock lang=text]
-				Dictionary
-				┠╴floor  int   the transition the group replays from
-				┖╴heal   bool  true when no member's floor could be honored
-				[/codeblock]
-			</description>
-		</method>
-		<method name="operator_outcome_name" qualifiers="static">
-			<return type="String" />
-			<param index="0" name="outcome" type="int" />
-			<description>
-			</description>
-		</method>
-		<method name="schedule_name" qualifiers="static">
-			<return type="String" />
-			<param index="0" name="schedule" type="int" enum="NetwSimulationHandle.Schedule" />
-			<description>
-				The [enum NetwSimulationHandle.Schedule] member [param schedule] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
-			</description>
-		</method>
-		<method name="verdict_reason_name" qualifiers="static">
-			<return type="String" />
-			<param index="0" name="reason" type="int" enum="NetwPredict.VerdictReason" />
-			<description>
-				The [enum VerdictReason] member [param reason] names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
-			</description>
-		</method>
-	</methods>
 	<constants>
 		<constant name="ACK_AGE_MAX" value="64">
 			The unacknowledged span, in transitions, past which the prediction governor stops speculating and holds.
@@ -118,18 +53,6 @@
 		</constant>
 		<constant name="CONTACT_CLASS_KINEMATIC_PROXY" value="5" enum="ContactClass">
 			A kinematic or animated collision proxy.
-		</constant>
-		<constant name="WITNESS_CLASS_NONE" value="0" enum="WitnessClass">
-			Nothing was touched. A [enum WitnessClass] reads the same on every peer, which is what lets it travel in a fingerprint and be compared.
-		</constant>
-		<constant name="WITNESS_CLASS_SUPPORT" value="1" enum="WitnessClass">
-			The declared support was contacted.
-		</constant>
-		<constant name="WITNESS_CLASS_STATIC" value="2" enum="WitnessClass">
-			Static geometry other than the declared support was contacted.
-		</constant>
-		<constant name="WITNESS_CLASS_DYNAMIC_ENTITY" value="4" enum="WitnessClass">
-			A replicated dynamic entity was contacted.
 		</constant>
 		<constant name="COMMAND_ORIGIN_PREDICTED" value="0" enum="CommandOrigin">
 			This peer's own guess for an entity it does not own. A group replaying its members together replays them from these, so the origin is what says whether a replay reproduced what a player actually did or repeated a guess.
@@ -195,15 +118,6 @@
 		<constant name="MISSING_INPUT_REPEAT_LAST" value="1" enum="MissingInput">
 			Carry the last input forward over the gap.
 		</constant>
-		<constant name="CORRECTION_MODE_AUTO" value="0" enum="CorrectionMode">
-			Decide from what the body is. A kinematic body gets [constant CORRECTION_MODE_REPLAY] and a dynamic one gets [constant CORRECTION_MODE_SNAP].
-		</constant>
-		<constant name="CORRECTION_MODE_REPLAY" value="1" enum="CorrectionMode">
-			Restore authoritative state, then replay every unacked input over it.
-		</constant>
-		<constant name="CORRECTION_MODE_SNAP" value="2" enum="CorrectionMode">
-			Restore authoritative state and stop, with no replay.
-		</constant>
 		<constant name="ARCHETYPE_NONE" value="0" enum="Archetype">
 			No preset, so every setting keeps its own default until something declares it.
 			An archetype is a starting point rather than a limit. Writing one applies its settings, and anything declared afterwards overrides what it applied. No archetype sets a [enum BreachResponse], because that decides whether a body stops predicting at all, and a preset choosing it would change the most visible behaviour an entity has with no game file saying so.
@@ -227,24 +141,15 @@
 		<constant name="RECOVERY_POLICY_OBSERVE" value="3" enum="RecoveryPolicy">
 			Report the divergence and write nothing. An entity under this policy can hold an episode open for as long as it keeps diverging, and it can never oscillate between corrections, because it makes none.
 		</constant>
+		<constant name="RECOVERY_POLICY_AUTO" value="4" enum="RecoveryPolicy">
+			Pick from the body. A [RigidBody3D] or [RigidBody2D] recovers under [constant RECOVERY_POLICY_REBASE_RECOVER] and any other body under [constant RECOVERY_POLICY_REBASE_REPLAY]. This is the default, and [method NetwPredictionHandle.resolved_recovery_policy] returns the pick.
+		</constant>
 		<constant name="RECONCILE_INDEPENDENT" value="0" enum="Reconcile">
 			Correct each predicted entity on its own.
 		</constant>
 		<constant name="RECONCILE_JOINT" value="1" enum="Reconcile">
 			Restore and replay this entity together with the entities its [member NetwEntity.simulation] selects. The engine admits the group when the selection commits, where every member's schedule is known.
 			An authoritative row a member receives here is where a replay starts from rather than somewhere to jump to. The group replays from one floor, so a member that snapped to wherever its own extrapolated row landed would enter that replay from a state no other member's history knows about. The unextrapolated payload is the basis, and the pass re-runs the transitions the extrapolation was standing in for.
-		</constant>
-		<constant name="CELL_PROVENANCE_COAST" value="0" enum="CellProvenance">
-			Nothing named this one, so it coasts on the value it already held.
-		</constant>
-		<constant name="CELL_PROVENANCE_SUBSTITUTED" value="1" enum="CellProvenance">
-			A registered command predictor guessed the cell for an entity this peer does not own.
-		</constant>
-		<constant name="CELL_PROVENANCE_RELAYED" value="2" enum="CellProvenance">
-			The authoring peer's own command reached here through the server.
-		</constant>
-		<constant name="CELL_PROVENANCE_AUTHORED" value="3" enum="CellProvenance">
-			The owner authored this cell itself, which is the only provenance a replay reproduces rather than repeats.
 		</constant>
 		<constant name="BREACH_RESPONSE_PREDICT_THROUGH" value="0" enum="BreachResponse">
 			Keep predicting and let an ordinary recovery absorb whatever divergence follows.
@@ -278,39 +183,65 @@
 			Every field that asked for this recovery was one the recovery was declared never to write, so the error it holds belongs to the declaration rather than to the operator.
 			It is recorded beside [constant OPERATOR_OUTCOME_FAILED_TO_CONTRACT] rather than as a kind of it, because the two look identical from outside and mean opposite things. One is an operator that tried and did not shrink the error, and the other is an operator that was forbidden to touch it. Spending an episode's evidence on the second turns a gap in the declaration into a breach, and a breach into a demotion, which leaves the game worse off than declaring nothing at all.
 		</constant>
-		<constant name="VERDICT_REASON_NONE" value="0" enum="VerdictReason">
-			Nothing stood between the comparison and the body. Either it found agreement, or a recovery ran and decided what to write.
-			[signal NetwPredictionHandle.state_evaluated] reports a comparison, not a write. This value identifies paths that detect divergence without applying a correction.
+		<constant name="ATTRIBUTION_UNKNOWN" value="0" enum="Attribution">
+			The evidence needed to blame a boundary was absent. Every other [enum Attribution] names the first thing the two runs disagreed about, and [signal NetwPredictionHandle.divergence_detected] carries it.
 		</constant>
-		<constant name="VERDICT_REASON_AWAITING_RECONSTRUCTION" value="1" enum="VerdictReason">
-			No comparison ran. A masked set is reconciled only once the stream has seen its gain-edge full row, and before that edge a receive is recorded having judged nothing.
+		<constant name="ATTRIBUTION_PRE_STATE" value="1" enum="Attribution">
+			The peers entered the transition with different declared state.
 		</constant>
-		<constant name="VERDICT_REASON_REALIGN_PENDING" value="2" enum="VerdictReason">
-			The reseed's evidence-free horizon alignment is still waiting for its command epoch, so this receive is neither compared nor written.
+		<constant name="ATTRIBUTION_COMMAND" value="2" enum="Attribution">
+			Authority ran input the owner did not author.
 		</constant>
-		<constant name="VERDICT_REASON_RESEED_IGNORED" value="3" enum="VerdictReason">
-			The acknowledgement is at or before the reseed horizon, so the row returns for transitions the seed has already replaced.
+		<constant name="ATTRIBUTION_ENVIRONMENT" value="3" enum="Attribution">
+			The transition ran against unequal world facts.
 		</constant>
-		<constant name="VERDICT_REASON_PROBATION_REQUARANTINE" value="4" enum="VerdictReason">
-			The first comparison after resuming disagreed, so the entity went straight back to following authority. It writes nothing, spends no evidence, and does not count against the next attempt, because a resume that was never proven says nothing a longer wait would not settle.
+		<constant name="ATTRIBUTION_TOPOLOGY" value="4" enum="Attribution">
+			The execution topology or body mode differed.
 		</constant>
-		<constant name="VERDICT_REASON_EVIDENCE_EXHAUSTED" value="5" enum="VerdictReason">
-			The episode's bounded recovery evidence ran out on this comparison, so speculation closed instead of correcting.
+		<constant name="ATTRIBUTION_EXECUTION" value="5" enum="Attribution">
+			The declared state agreed but the optional raw execution bits differed.
 		</constant>
-		<constant name="VERDICT_REASON_TRANSPORT_PENDING" value="6" enum="VerdictReason">
-			A transport is already staged against this divergence and owns the write that returns it.
+		<constant name="ATTRIBUTION_CONTACT" value="6" enum="Attribution">
+			Equal inputs produced a different contact.
 		</constant>
-		<constant name="VERDICT_REASON_DISSIPATE_PENDING" value="7" enum="VerdictReason">
-			A dissipation is already staged against this divergence.
+		<constant name="ATTRIBUTION_CLOSURE" value="7" enum="Attribution">
+			Everything observed going in agreed and the produced state still differed.
 		</constant>
-		<constant name="VERDICT_REASON_DISSIPATED" value="8" enum="VerdictReason">
-			The comparison chose to let the divergence fade without writing a correction.
+		<constant name="OPERATOR_NONE" value="0" enum="Operator">
+			Nothing wrote the body since the preceding transition. An [enum Operator] is what an episode records for each recovery attempt.
 		</constant>
-		<constant name="VERDICT_REASON_WITNESS_DEFERRED" value="9" enum="VerdictReason">
-			The operator is deferred until an authority witness covers the boundary it would rebase across.
+		<constant name="OPERATOR_REBASE_PROJECTED" value="1" enum="Operator">
+			A projected authoritative state was restored.
 		</constant>
-		<constant name="VERDICT_REASON_DECLINED" value="10" enum="VerdictReason">
-			The ladder ran and the recovery it selected declined to write.
+		<constant name="OPERATOR_REBASE_EXACT" value="2" enum="Operator">
+			An exact authoritative state was restored.
+		</constant>
+		<constant name="OPERATOR_FULL_CLOSURE" value="3" enum="Operator">
+			A teleport restored every declared field.
+		</constant>
+		<constant name="OPERATOR_TRANSPORT_DELTA" value="4" enum="Operator">
+			The body was moved to where it should be now, across a path [member NetwPredictionHandle.transport_corridor] cleared.
+		</constant>
+		<constant name="OPERATOR_RESEED" value="5" enum="Operator">
+			The body was seeded from authority after a fallback.
+		</constant>
+		<constant name="OPERATOR_RESEED_ALIGN" value="6" enum="Operator">
+			The first comparison after a reseed aligned the acknowledgement.
+		</constant>
+		<constant name="OPERATOR_DEMOTE" value="7" enum="Operator">
+			A witnessed breach stopped prediction while input keeps flowing.
+		</constant>
+		<constant name="OPERATOR_DISSIPATE" value="8" enum="Operator">
+			A divergence in velocity alone was left to fade with no write.
+		</constant>
+		<constant name="OPERATOR_JOINT_REBASE" value="9" enum="Operator">
+			A joint pass restored the whole group to its shared starting transition.
+		</constant>
+		<constant name="DOMAIN_IN" value="0" enum="Domain">
+			Everything the transition read is declared equal on both peers, so its fingerprints must match exactly.
+		</constant>
+		<constant name="DOMAIN_OUT" value="1" enum="Domain">
+			Something the transition read is declared unequal or unknown, so it is compared by tolerance.
 		</constant>
 	</constants>
 </class>

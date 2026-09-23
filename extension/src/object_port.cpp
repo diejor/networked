@@ -2,6 +2,10 @@
 
 #include "godot/callable.hpp"
 #include "godot/node.hpp"
+#include "godot/physics_body.hpp"
+#include "godot/physics_server.hpp"
+#include "godot/spatial_node.hpp"
+#include "netw/api/entity_record.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -43,6 +47,295 @@ Object *ObjectPort::resolve(SubsystemName p_module) {
     return nullptr;
 }
 
+namespace {
+
+enum class BodyKey { NONE, POSITION, TURN, LINEAR, ANGULAR, SLEEPING };
+
+const StringName &position_name() {
+    static const StringName name("position");
+    return name;
+}
+
+const StringName &quaternion_name() {
+    static const StringName name("quaternion");
+    return name;
+}
+
+const StringName &rotation_name() {
+    static const StringName name("rotation");
+    return name;
+}
+
+const StringName &linear_velocity_name() {
+    static const StringName name("linear_velocity");
+    return name;
+}
+
+const StringName &angular_velocity_name() {
+    static const StringName name("angular_velocity");
+    return name;
+}
+
+const StringName &sleeping_name() {
+    static const StringName name("sleeping");
+    return name;
+}
+
+const StringName &entity_mark() {
+    static const StringName name = NetwEntityRecord::entity_meta();
+    return name;
+}
+
+BodyKey body_key_of(const StringName &p_key, const StringName &p_turn) {
+    if (p_key == position_name()) {
+        return BodyKey::POSITION;
+    }
+    if (p_key == p_turn) {
+        return BodyKey::TURN;
+    }
+    if (p_key == linear_velocity_name()) {
+        return BodyKey::LINEAR;
+    }
+    if (p_key == angular_velocity_name()) {
+        return BodyKey::ANGULAR;
+    }
+    if (p_key == sleeping_name()) {
+        return BodyKey::SLEEPING;
+    }
+    return BodyKey::NONE;
+}
+
+bool names_body_state(const StringName &p_key) {
+    return p_key == position_name() || p_key == quaternion_name()
+        || p_key == rotation_name() || p_key == linear_velocity_name()
+        || p_key == angular_velocity_name() || p_key == sleeping_name();
+}
+
+template <typename T>
+T *root_body(Object *p_owner) {
+    T *body = Object::cast_to<T>(p_owner);
+    if (body == nullptr || !body->is_inside_tree()
+        || !body->has_meta(entity_mark())) {
+        return nullptr;
+    }
+    return body;
+}
+
+Transform3D frame_of(RigidBody3D *p_body) {
+    Node3D *parent = p_body->get_parent_node_3d();
+    if (parent == nullptr || p_body->is_set_as_top_level()) {
+        return Transform3D();
+    }
+    return parent->get_global_transform();
+}
+
+Transform2D frame_of(RigidBody2D *p_body) {
+    CanvasItem *parent = Object::cast_to<CanvasItem>(p_body->get_parent());
+    if (parent == nullptr || p_body->is_set_as_top_level()) {
+        return Transform2D();
+    }
+    return parent->get_global_transform();
+}
+
+bool read_3d(RigidBody3D *p_body, BodyKey p_key, Variant &r_value) {
+    PhysicsServer3D *server = PhysicsServer3D::get_singleton();
+    const RID body = p_body->get_rid();
+    switch (p_key) {
+        case BodyKey::POSITION:
+        case BodyKey::TURN: {
+            if (p_body->is_freeze_enabled()) {
+                return false;
+            }
+            const Transform3D global = server->body_get_state(
+                body,
+                PhysicsServer3D::BODY_STATE_TRANSFORM
+            );
+            const Transform3D local = frame_of(p_body).affine_inverse()
+                * global;
+            r_value = p_key == BodyKey::POSITION
+                ? Variant(local.origin)
+                : Variant(local.basis.get_rotation_quaternion());
+            return true;
+        }
+        case BodyKey::LINEAR:
+            r_value = server->body_get_state(
+                body,
+                PhysicsServer3D::BODY_STATE_LINEAR_VELOCITY
+            );
+            return true;
+        case BodyKey::ANGULAR:
+            r_value = server->body_get_state(
+                body,
+                PhysicsServer3D::BODY_STATE_ANGULAR_VELOCITY
+            );
+            return true;
+        case BodyKey::SLEEPING:
+            r_value = server->body_get_state(
+                body,
+                PhysicsServer3D::BODY_STATE_SLEEPING
+            );
+            return true;
+        case BodyKey::NONE:
+            return false;
+    }
+    return false;
+}
+
+bool read_2d(RigidBody2D *p_body, BodyKey p_key, Variant &r_value) {
+    PhysicsServer2D *server = PhysicsServer2D::get_singleton();
+    const RID body = p_body->get_rid();
+    switch (p_key) {
+        case BodyKey::POSITION:
+        case BodyKey::TURN: {
+            if (p_body->is_freeze_enabled()) {
+                return false;
+            }
+            const Transform2D global = server->body_get_state(
+                body,
+                PhysicsServer2D::BODY_STATE_TRANSFORM
+            );
+            const Transform2D local = frame_of(p_body).affine_inverse()
+                * global;
+            r_value = p_key == BodyKey::POSITION
+                ? Variant(local.get_origin())
+                : Variant(double(local.get_rotation()));
+            return true;
+        }
+        case BodyKey::LINEAR:
+            r_value = server->body_get_state(
+                body,
+                PhysicsServer2D::BODY_STATE_LINEAR_VELOCITY
+            );
+            return true;
+        case BodyKey::ANGULAR:
+            r_value = server->body_get_state(
+                body,
+                PhysicsServer2D::BODY_STATE_ANGULAR_VELOCITY
+            );
+            return true;
+        case BodyKey::SLEEPING:
+            r_value = server->body_get_state(
+                body,
+                PhysicsServer2D::BODY_STATE_SLEEPING
+            );
+            return true;
+        case BodyKey::NONE:
+            return false;
+    }
+    return false;
+}
+
+bool write_3d(RigidBody3D *p_body, BodyKey p_key, const Variant &p_value) {
+    const bool placed = p_key == BodyKey::POSITION
+        && p_value.get_type() == Variant::VECTOR3;
+    const bool turned = p_key == BodyKey::TURN
+        && p_value.get_type() == Variant::QUATERNION;
+    if ((!placed && !turned) || p_body->is_freeze_enabled()) {
+        return false;
+    }
+    PhysicsServer3D *server = PhysicsServer3D::get_singleton();
+    const RID body = p_body->get_rid();
+    const Transform3D frame = frame_of(p_body);
+    const Transform3D global
+        = server->body_get_state(body, PhysicsServer3D::BODY_STATE_TRANSFORM);
+    Transform3D local = frame.affine_inverse() * global;
+    if (placed) {
+        local.origin = p_value;
+    } else {
+        local.basis = Basis(Quaternion(p_value).normalized());
+    }
+    const Transform3D placed_global = frame * local;
+    server->body_set_state(
+        body,
+        PhysicsServer3D::BODY_STATE_TRANSFORM,
+        placed_global
+    );
+    netw::gd::set_ignore_transform_notification(p_body, true);
+    p_body->set_global_transform(placed_global);
+    netw::gd::set_ignore_transform_notification(p_body, false);
+    return true;
+}
+
+bool write_2d(RigidBody2D *p_body, BodyKey p_key, const Variant &p_value) {
+    const bool placed = p_key == BodyKey::POSITION
+        && p_value.get_type() == Variant::VECTOR2;
+    const bool turned = p_key == BodyKey::TURN
+        && (p_value.get_type() == Variant::FLOAT
+            || p_value.get_type() == Variant::INT);
+    if ((!placed && !turned) || p_body->is_freeze_enabled()) {
+        return false;
+    }
+    PhysicsServer2D *server = PhysicsServer2D::get_singleton();
+    const RID body = p_body->get_rid();
+    const Transform2D frame = frame_of(p_body);
+    const Transform2D global
+        = server->body_get_state(body, PhysicsServer2D::BODY_STATE_TRANSFORM);
+    Transform2D local = frame.affine_inverse() * global;
+    if (placed) {
+        local.set_origin(p_value);
+    } else {
+        local = Transform2D(real_t(double(p_value)), local.get_origin());
+    }
+    const Transform2D placed_global = frame * local;
+    server->body_set_state(
+        body,
+        PhysicsServer2D::BODY_STATE_TRANSFORM,
+        placed_global
+    );
+    const bool notifies = p_body->is_transform_notification_enabled();
+    p_body->set_notify_transform(false);
+    p_body->set_global_transform(placed_global);
+    p_body->set_notify_transform(notifies);
+    return true;
+}
+
+} // namespace
+
+Variant port_get(Object *p_owner, const StringName &p_key) {
+    if (p_owner == nullptr) {
+        return Variant();
+    }
+    if (names_body_state(p_key)) {
+        Variant value;
+        if (RigidBody3D *solid = root_body<RigidBody3D>(p_owner)) {
+            if (read_3d(solid, body_key_of(p_key, quaternion_name()), value)) {
+                return value;
+            }
+        } else if (RigidBody2D *flat = root_body<RigidBody2D>(p_owner)) {
+            if (read_2d(flat, body_key_of(p_key, rotation_name()), value)) {
+                return value;
+            }
+        }
+    }
+    return p_owner->get(p_key);
+}
+
+void port_set(
+    Object *p_owner,
+    const StringName &p_key,
+    const Variant &p_value
+) {
+    if (p_owner == nullptr) {
+        return;
+    }
+    if (names_body_state(p_key)) {
+        if (RigidBody3D *solid = root_body<RigidBody3D>(p_owner)) {
+            if (write_3d(
+                    solid,
+                    body_key_of(p_key, quaternion_name()),
+                    p_value
+                )) {
+                return;
+            }
+        } else if (RigidBody2D *flat = root_body<RigidBody2D>(p_owner)) {
+            if (write_2d(flat, body_key_of(p_key, rotation_name()), p_value)) {
+                return;
+            }
+        }
+    }
+    p_owner->set(p_key, p_value);
+}
+
 Dictionary port_capture(
     ObjectPort &r_port,
     SubsystemName p_module,
@@ -55,7 +348,7 @@ Dictionary port_capture(
     }
     for (int at = 0; at < p_keys.size(); ++at) {
         const StringName key = p_keys[at];
-        out[key] = owner->get(key);
+        out[key] = port_get(owner, key);
     }
     return out;
 }
@@ -72,7 +365,7 @@ bool port_apply(
     const Array keys = p_payload.keys();
     for (int at = 0; at < keys.size(); ++at) {
         const StringName key = keys[at];
-        owner->set(key, p_payload[key]);
+        port_set(owner, key, p_payload[key]);
     }
     return true;
 }

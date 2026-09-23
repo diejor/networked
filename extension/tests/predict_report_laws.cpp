@@ -396,7 +396,7 @@ TEST_CASE(
     NETW_CHECK_EQ(fallback_ack, 4);
     NETW_CHECK_EQ(
         int64_t(pool->verdict_reason_of(slot)),
-        int64_t(netw::NetwPredict::VERDICT_REASON_PROBATION_REQUARANTINE)
+        int64_t(netw::predict::VERDICT_REASON_PROBATION_REQUARANTINE)
     );
     const Array said = judged.args(StringName("state_evaluated"));
     REQUIRE(said.size() == 4);
@@ -589,13 +589,8 @@ TEST_CASE(
     REQUIRE(slot >= 0);
     REQUIRE(pool->open_episode(slot, 3, 1));
 
-    NETW_CHECK_EQ(handle->episode().is_empty(), 1);
-    NETW_CHECK_EQ(handle->episode_digest().is_empty(), 1);
     NETW_CHECK_EQ(handle->reachability().is_empty(), 1);
-    NETW_CHECK_EQ(handle->teleport_distances().is_empty(), 1);
-    NETW_CHECK_EQ(handle->tape_transitions().is_empty(), 1);
-    REQUIRE(handle->journal().is_valid());
-    NETW_CHECK_EQ(handle->journal()->size(), 0);
+    NETW_CHECK_EQ(handle->get_stats()->get_corrections(), 0);
 }
 
 Variant carry_never(const Variant &, const Variant &, double) {
@@ -778,7 +773,7 @@ TEST_CASE(
     pool->apply_recovery_plan(slot, declined, 4, true);
     NETW_CHECK_EQ(
         int64_t(pool->verdict_reason_of(slot)),
-        int64_t(NetwPredict::VERDICT_REASON_DECLINED)
+        int64_t(netw::predict::VERDICT_REASON_DECLINED)
     );
     NETW_CHECK_EQ(pool->recovery_write_of(slot).is_empty(), 1);
     NETW_CHECK_EQ(pool->last_correction_teleported_of(slot), 0);
@@ -1443,12 +1438,13 @@ TEST_CASE(
     const Dictionary predicted = at_position(0.0);
     const Dictionary payload = at_position(5.0);
     pool->judge_state(slot, 4, 0, 0, predicted, payload, Callable());
-    pool->recover_through(slot, Dictionary(), predicted, Callable());
+    pool->plan_recovery(slot, 4, 4, predicted, payload, false, 0, 1);
 
     const int64_t before = netw::prediction_core::records_minted();
     for (int at = 0; at < 8; ++at) {
         pool->judge_state(slot, 5 + at, 0, 0, predicted, payload, Callable());
-        pool->recover_through(slot, Dictionary(), predicted, Callable());
+        const int64_t ack = 5 + at;
+        pool->plan_recovery(slot, ack, ack, predicted, payload, false, 0, 1);
     }
     NETW_CHECK_EQ(netw::prediction_core::records_minted(), before);
 }
@@ -1617,6 +1613,163 @@ TEST_CASE(
 
     const PackedStringArray unrepairable = fields_found(report, "unrepairable");
     NETW_CHECK_EQ(unrepairable.has(String("position")) ? 1 : 0, 0);
+}
+
+Ref<NetwPropertySet> recovering_state() {
+    Ref<NetwPropertySet> set;
+    set.instantiate();
+    set->record = NetwPropertySet::RECORD_STATE;
+    const char *const names[] = {"position", "scale", "rotation"};
+    for (const char *name : names) {
+        set->bind_column(
+            NetwPropertySetColumn::create(
+                StringName(name),
+                Ref<netw::NetwQuantize>(),
+                false,
+                int64_t(netw::SchemaCore::VARIANT)
+            )
+        );
+    }
+    const Ref<NetwPropertySetColumn> pose = set->get_columns()[0];
+    pose->carry_channel = StringName("scale");
+    pose->converge_stiffness = 0.5;
+    const Ref<NetwPropertySetColumn> held = set->get_columns()[2];
+    held->explicit_teleport_only = true;
+    return set;
+}
+
+netw::RecoveryPlan check_parity(
+    NetwMultiplayer *p_core,
+    const Ref<NetwEntity> &p_seated,
+    NetwPredictionEngine *p_pool,
+    int64_t p_slot,
+    int64_t p_ack,
+    int p_domain
+) {
+    const int closure = int(predict::Attribution::CLOSURE);
+    Dictionary authority;
+    authority[StringName("position")] = Vector2(1.0, 0.0);
+    authority[StringName("scale")] = Vector2(2.0, 1.0);
+    authority[StringName("rotation")] = 1.0;
+
+    const Ref<NetwPredictionHandle> handle = p_seated->get_prediction();
+    REQUIRE(handle.is_valid());
+    p_pool->open_recovery(p_slot, p_ack, Dictionary(), authority, 1, 0);
+    const bool escalated = p_pool->escalation_pending(p_slot);
+    const Dictionary context = p_pool->recovery_context(
+        p_slot,
+        p_ack,
+        p_ack,
+        p_domain,
+        closure,
+        escalated
+    );
+    const netw::PlannedRecovery planned = p_pool->plan_recovery(
+        p_slot,
+        p_ack,
+        p_ack,
+        Dictionary(),
+        authority,
+        escalated,
+        p_domain,
+        closure
+    );
+    const netw::RecoveryPlan pooled = p_pool->recovery_of(p_slot, planned.pool);
+    const Ref<netw::NetwPredictRecovery> seamed
+        = p_core->predict_recover_default(
+            p_pool->recovery_carried_of(p_slot),
+            handle->resolved_recovery_policy(),
+            handle->get_snap_restore(),
+            p_pool->recovery_projection_of(p_slot),
+            p_pool->recovery_before_of(p_slot),
+            p_pool->recovery_tier_errors_of(p_slot),
+            p_pool->wiring_snapshot(p_slot),
+            context,
+            p_pool->tick_delta_of(p_slot)
+        );
+    REQUIRE(seamed.is_valid());
+    const bool restores_agree = seamed->restore() == pooled.restore;
+    const bool writes_agree = seamed->write() == pooled.write;
+    NETW_CHECK_EQ(restores_agree ? 1 : 0, 1);
+    NETW_CHECK_EQ(writes_agree ? 1 : 0, 1);
+    NETW_CHECK_EQ(seamed->teleport() ? 1 : 0, pooled.teleport ? 1 : 0);
+    NETW_CHECK_EQ(seamed->skip() ? 1 : 0, pooled.skip ? 1 : 0);
+    return pooled;
+}
+
+TEST_CASE(
+    "[Networked][Predict][Report] PR28 the recover seam's default plans "
+    "exactly what the pool plans from the same recovery rows"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    Node *arena = rig.mirror_child("Arena");
+    const Ref<NetwEntity> seated = seat_player(rig, arena);
+    REQUIRE(seated.is_valid());
+    Node *owner = seated->get_owner();
+
+    NetwMultiplayer *core = rig.server();
+    NetwPredictionEngine *const pool = core->get_prediction_engine();
+    const int64_t slot = pool->slot_register(seated);
+    REQUIRE(slot >= 0);
+    pool->adopt_declaration(
+        seated,
+        NetwPropertySetBinding::create(recovering_state(), owner),
+        Ref<NetwPropertySetBinding>(),
+        int(netw::Schedule::TICK),
+        int(netw::Role::PREDICT),
+        int(netw::CorrectionMode::SNAP),
+        int(netw::RestoreMode::EXACT),
+        6,
+        0,
+        false
+    );
+    REQUIRE(pool->has_pose_fields(slot));
+    seated->get_prediction()->set_recovery_policy(
+        NetwPredict::RECOVERY_POLICY_REBASE_RECOVER
+    );
+
+    const int domains[] = {0, 1, 0, 0, 0};
+    int withheld = 0;
+    int escalations = 0;
+    int suppressed = 0;
+    int64_t ack = 4;
+    for (const int domain : domains) {
+        escalations += pool->escalation_pending(slot) ? 1 : 0;
+        const netw::RecoveryPlan pooled
+            = check_parity(core, seated, pool, slot, ack, domain);
+        withheld += !pooled.skip && !pooled.restore.has(StringName("rotation"))
+            ? 1
+            : 0;
+        suppressed += pooled.skip ? 1 : 0;
+        ack += 1;
+    }
+    NETW_CHECK_EQ(withheld, 2);
+    NETW_CHECK_EQ(escalations, 1);
+    NETW_CHECK_EQ(suppressed, 1);
+
+    const Ref<netw::NetwSimulationHandle> simulation
+        = seated->get_prediction()->simulation();
+    REQUIRE(simulation.is_valid());
+    simulation->set_restore(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED);
+    seated->get_prediction()->set_ack_age_ticks(2);
+    pool->adopt_declaration(
+        seated,
+        NetwPropertySetBinding::create(recovering_state(), owner),
+        Ref<NetwPropertySetBinding>(),
+        int(netw::Schedule::TICK),
+        int(netw::Role::PREDICT),
+        int(netw::CorrectionMode::SNAP),
+        int(netw::RestoreMode::EXTRAPOLATED),
+        6,
+        0,
+        false
+    );
+    ack += 8;
+    const netw::RecoveryPlan projected
+        = check_parity(core, seated, pool, slot, ack, 0);
+    const Vector2 pose = projected.restore[StringName("position")];
+    NETW_CHECK_CLOSE(double(pose.y), 1.0 / 60.0, 1.0e-4);
 }
 
 } // namespace TestNetwPredictReportLaws

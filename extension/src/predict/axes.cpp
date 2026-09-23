@@ -51,9 +51,22 @@ int role_for_axes(int p_input_source, int p_sim_mode) {
 }
 
 int correction_for_recovery_policy(int p_policy) {
-    return p_policy == int(RecoveryPolicy::REBASE_REPLAY)
-        ? int(CorrectionMode::REPLAY)
-        : int(CorrectionMode::SNAP);
+    switch (RecoveryPolicy(p_policy)) {
+        case RecoveryPolicy::AUTO:
+            return int(CorrectionMode::AUTO);
+        case RecoveryPolicy::REBASE_REPLAY:
+            return int(CorrectionMode::REPLAY);
+        default:
+            return int(CorrectionMode::SNAP);
+    }
+}
+
+int resolve_recovery_policy(int p_policy, bool p_solves) {
+    if (p_policy != int(RecoveryPolicy::AUTO)) {
+        return p_policy;
+    }
+    return p_solves ? int(RecoveryPolicy::REBASE_RECOVER)
+                    : int(RecoveryPolicy::REBASE_REPLAY);
 }
 
 bool replays_without_integration(int p_schedule, bool p_solves) {

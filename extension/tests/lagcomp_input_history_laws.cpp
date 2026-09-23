@@ -67,7 +67,9 @@ TEST_CASE(
     netw::NetwPredictionHandle *owner_handle
         = rig.prediction_handle(StringName("P"), 0);
     REQUIRE(owner_handle != nullptr);
-    const int64_t ack = owner_handle->get_acknowledged_tick();
+    const int64_t ack = owner_handle->get_stats()->get_int_fact(
+        netw::NetwPredictStats::FACT_ACK_CONFIRMED
+    );
     NETW_CHECK_GT(ack, int64_t(0));
 
     const int64_t state_tick = ack + 1;

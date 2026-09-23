@@ -113,7 +113,7 @@
 		</method>
 		<method name="_predict_evaluate" qualifiers="virtual">
 			<return type="NetwPredictJudgement" />
-			<param index="0" name="domain" type="int" enum="NetwPredictJournal.Domain" />
+			<param index="0" name="domain" type="int" enum="NetwPredict.Domain" />
 			<param index="1" name="verdict" type="int" enum="NetwPredict.ExactVerdict" />
 			<param index="2" name="predicted" type="Dictionary" />
 			<param index="3" name="payload" type="Dictionary" />
@@ -128,17 +128,16 @@
 			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
 			<param index="1" name="policy" type="int" enum="NetwPredict.RecoveryPolicy" />
-			<param index="2" name="correction" type="int" enum="NetwPredict.CorrectionMode" />
-			<param index="3" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
-			<param index="4" name="projection" type="Dictionary" />
-			<param index="5" name="current" type="Dictionary" />
-			<param index="6" name="pose_errors" type="Dictionary" />
-			<param index="7" name="wiring" type="Dictionary" />
-			<param index="8" name="verdict" type="Dictionary" />
-			<param index="9" name="tick_delta" type="float" />
+			<param index="2" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
+			<param index="3" name="projection" type="Dictionary" />
+			<param index="4" name="current" type="Dictionary" />
+			<param index="5" name="pose_errors" type="Dictionary" />
+			<param index="6" name="wiring" type="Dictionary" />
+			<param index="7" name="verdict" type="Dictionary" />
+			<param index="8" name="tick_delta" type="float" />
 			<description>
 				The override point for the plan that says how a diverged entity is brought back onto authority's state. With no override this returns [method predict_recover_default].
-				[param policy] and [param correction] are what the declaration asked for, [param projection] and [param current] are the two states being reconciled, and [param tick_delta] is the step the plan is measured against. Returning [code]null[/code] is not a way to abstain. The result is rejected, a [constant EVENT_SEAM_MISUSE] is emitted, and the default's plan stands, so an override that handles one policy returns the default's return a result for the others.
+				[param policy] is the [method NetwPredictionHandle.resolved_recovery_policy] of the entity, [param payload] and [param current] are the two states being reconciled, and [param tick_delta] is the step the plan is measured against. Returning [code]null[/code] is not a way to abstain. The result is rejected, a [constant EVENT_SEAM_MISUSE] is emitted, and the default's plan stands. An override that handles one policy returns [method predict_recover_default] for the others.
 				Withholding fields is an in-domain refinement, and the default plan does not attempt it otherwise. A divergence outside the declared domain, or one nobody could charge while a contact was still disturbing the bodies, gives no ground for deciding which fields are safe to leave predicted, so the default re-bases the whole closure instead.
 			</description>
 		</method>
@@ -1663,7 +1662,6 @@
 				┠╴effects_armed     int         optimistic effects awaiting confirm or deny
 				┖╴gate_fallbacks    int         state-ready actions resolved best-effort
 				[/codeblock]
-				The summed facts in [code]joint[/code] are documented on [NetwPredictStats].
 			</description>
 		</method>
 		<method name="lagcomp_rewind">
@@ -2038,7 +2036,7 @@
 			<description>
 				Whether authority replays a queued transition, waits, or has no transition. Uses [method _predict_consume] when overridden; otherwise uses [method predict_consume_default].
 				Authority replays whenever it holds a transition past [param buffer], which is zero by default, so the default result is simply whether the queue has anything in it. Raising [param buffer] moves that line and nothing else. The queue sits that much deeper and every arrival waits that much longer.
-				Declining a transition is not free. A frame that holds still solves, so the world advances by a step belonging to no transition and the next drive spans two, which is the quantum fault [member NetwPredictStats.quantum_faults] counts.
+				Declining a transition is not free. A frame that holds still solves, so the world advances by a step belonging to no transition and the next drive spans two, which is a quantum fault.
 			</description>
 		</method>
 		<method name="predict_consume_default">
@@ -2087,7 +2085,7 @@
 		</method>
 		<method name="predict_evaluate_default">
 			<return type="NetwPredictJudgement" />
-			<param index="0" name="domain" type="int" enum="NetwPredictJournal.Domain" />
+			<param index="0" name="domain" type="int" enum="NetwPredict.Domain" />
 			<param index="1" name="verdict" type="int" enum="NetwPredict.ExactVerdict" />
 			<param index="2" name="predicted" type="Dictionary" />
 			<param index="3" name="payload" type="Dictionary" />
@@ -2139,14 +2137,13 @@
 			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
 			<param index="1" name="policy" type="int" enum="NetwPredict.RecoveryPolicy" />
-			<param index="2" name="correction" type="int" enum="NetwPredict.CorrectionMode" />
-			<param index="3" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
-			<param index="4" name="projection" type="Dictionary" />
-			<param index="5" name="current" type="Dictionary" />
-			<param index="6" name="pose_errors" type="Dictionary" />
-			<param index="7" name="wiring" type="Dictionary" />
-			<param index="8" name="verdict" type="Dictionary" />
-			<param index="9" name="tick_delta" type="float" />
+			<param index="2" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
+			<param index="3" name="projection" type="Dictionary" />
+			<param index="4" name="current" type="Dictionary" />
+			<param index="5" name="pose_errors" type="Dictionary" />
+			<param index="6" name="wiring" type="Dictionary" />
+			<param index="7" name="verdict" type="Dictionary" />
+			<param index="8" name="tick_delta" type="float" />
 			<description>
 				The recovery plan the session makes when nothing overrides [method _predict_recover]. It is published so an override can defer to it.
 				A GDScript subclass cannot [code]super[/code] into a [code]GDVIRTUAL[/code], so this is an override's only route back to stock behaviour. An override that plans one policy itself and wants the default result for the rest returns this rather than reimplementing it.
@@ -3848,10 +3845,10 @@
 		<signal name="predict_owner_divergence">
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="entry" type="int" />
-			<param index="2" name="attribution" type="int" enum="NetwPredictJournal.Attribution" />
+			<param index="2" name="attribution" type="int" enum="NetwPredict.Attribution" />
 			<description>
-				Announced on server authority when an owner's claimed post-state for a transition disagrees with the state authority itself reached, so a diagnostic sink hears the disagreement the tick it is judged rather than reading a counter later. [param peer] is the controller of the entity seated in the slot, [param entry] is the transition judged, and [param attribution] is the [enum NetwPredictJournal.Attribution] the comparison charged the divergence to.
-				A claim that matched is counted and not announced, and so is one the comparison could charge to nothing, which leaves [constant NetwPredictJournal.UNKNOWN] out of this signal's vocabulary. Both are counted either way, through [member NetwPredictStats.client_fp_verified] and [member NetwPredictStats.client_mismatches].
+				Announced on server authority when an owner's claimed post-state for a transition disagrees with the state authority itself reached, so a diagnostic sink hears the disagreement the tick it is judged. [param peer] is the controller of the entity seated in the slot, [param entry] is the transition judged, and [param attribution] is the [enum NetwPredict.Attribution] the comparison charged the divergence to.
+				A claim that matched is not announced, and neither is one the comparison could charge to nothing, which leaves [constant NetwPredict.ATTRIBUTION_UNKNOWN] out of this signal's vocabulary.
 			</description>
 		</signal>
 		<signal name="scene_activated">
@@ -4530,9 +4527,6 @@
 		</constant>
 		<constant name="PREDICT_PARAM_RECOVERY_POLICY" value="3" enum="PredictParam">
 			[enum NetwPredict.RecoveryPolicy]. What the owner does about a divergence, from replaying it to merely reporting it.
-		</constant>
-		<constant name="PREDICT_PARAM_CORRECTION_MODE" value="5" enum="PredictParam">
-			[enum NetwPredict.CorrectionMode]. The mechanism a recovery policy is carried out by.
 		</constant>
 		<constant name="PREDICT_PARAM_TELEPORT_THRESHOLD" value="6" enum="PredictParam">
 			[float] in the property's own units. The fallback distance past which a body is judged to hold nothing worth keeping, used for any property that declares no threshold of its own.

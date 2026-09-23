@@ -528,6 +528,72 @@ TEST_CASE(
     owner.release();
 }
 
+TEST_CASE(
+    "[Networked][Predict][Stepper] ST9 a stepped space is released the "
+    "moment its last declared stepped member leaves it, so loose bodies go "
+    "back to the engine with the stepper still installed"
+) {
+    const Scenario scenario = independent_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *const predictor = rig.server();
+    REQUIRE(predictor != nullptr);
+    SteppedSpace one = step_one_space(predictor, 1);
+    const bool one_stands_in_it = one.members.size() == 1;
+    REQUIRE(one_stands_in_it);
+
+    rig.step_ticks(2);
+    REQUIRE_FALSE(space_is_active(one.held));
+
+    one.release();
+    rig.step_ticks(1);
+    one.stepper->forget();
+    rig.step_ticks(3);
+
+    CHECK(space_is_active(one.held));
+    NETW_CHECK_EQ(one.stepper->count_of(RecordingStepper::STEP), 0);
+    CHECK(predictor->predict_get_stepper(one.held.space).is_valid());
+}
+
+TEST_CASE(
+    "[Networked][Predict][Stepper] ST10 a released stepped space is held "
+    "again by the next declared stepped member that stands in it"
+) {
+    const Scenario scenario = independent_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *const predictor = rig.server();
+    REQUIRE(predictor != nullptr);
+    SteppedSpace both = step_one_space(predictor, 2);
+    const bool two_stand_in_it = both.members.size() == 2;
+    REQUIRE(two_stand_in_it);
+    const Ref<NetwEntity> later = both.members[1];
+    later->get_simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_TICK
+    );
+
+    rig.step_ticks(2);
+    REQUIRE_FALSE(space_is_active(both.held));
+    netw::gd::scene_root()->remove_child(both.members[0]->get_owner());
+    rig.step_ticks(2);
+    REQUIRE(space_is_active(both.held));
+
+    later->get_simulation()->set_schedule(
+        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+    );
+    rig.step_ticks(1);
+    both.stepper->forget();
+    rig.step_ticks(3);
+
+    CHECK_FALSE(space_is_active(both.held));
+    NETW_CHECK_EQ(both.stepper->count_of(RecordingStepper::STEP), 3);
+    both.release();
+}
+
 } // namespace TestNetwPhysicsStepperLaws
 
 #endif

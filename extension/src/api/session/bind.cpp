@@ -827,7 +827,14 @@ void NetwMultiplayer::_bind_methods() {
         "predict_owner_divergence",
         PropertyInfo(Variant::INT, "peer"),
         PropertyInfo(Variant::INT, "entry"),
-        PropertyInfo(Variant::INT, "attribution")
+        PropertyInfo(
+            Variant::INT,
+            "attribution",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPredict.Attribution"
+        )
     ));
     ADD_SIGNAL(MethodInfo(
         "lagcomp_action_gate_fallback",
@@ -1261,7 +1268,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(PREDICT_PARAM_ARCHETYPE);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_MISSING_POLICY);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_RECOVERY_POLICY);
-    BIND_ENUM_CONSTANT(PREDICT_PARAM_CORRECTION_MODE);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_TELEPORT_THRESHOLD);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_DIVERGENCE_EPSILON);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_BREACH_RESPONSE);
@@ -1516,7 +1522,6 @@ void NetwMultiplayer::_bind_methods() {
             "predict_recover_default",
             "payload",
             "policy",
-            "correction",
             "restore",
             "projection",
             "current",
@@ -1547,7 +1552,6 @@ void NetwMultiplayer::_bind_methods() {
         _predict_recover,
         "payload",
         "policy",
-        "correction",
         "restore",
         "projection",
         "current",

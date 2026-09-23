@@ -364,7 +364,7 @@ void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
             continue;
         }
         const Ref<NetwInterpolate> spec = state->get_spec();
-        Variant value = source_obj->get(state->get_source_prop());
+        Variant value = port_get(source_obj, state->get_source_prop());
         value = state->render_offset().apply(
             value,
             decay,

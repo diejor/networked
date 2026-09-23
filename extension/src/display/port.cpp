@@ -170,10 +170,10 @@ int64_t Port::write(const Variant &p_value) {
         if (verdict != WRITE_REFUSED) {
             return verdict;
         }
-        node->set(target_prop, p_value);
+        port_set(node, target_prop, p_value);
         return WRITE_REFUSED;
     }
-    node->set(target_prop, p_value);
+    port_set(node, target_prop, p_value);
     return WRITE_LOCAL;
 }
 

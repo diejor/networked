@@ -23,6 +23,7 @@
 #include "netw/call_args.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/entity/control.hpp"
+#include "netw/object_port.hpp"
 #include "netw/property_set_builder.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session/frames.hpp"
@@ -611,7 +612,7 @@ TEST_CASE(
         0
     );
 
-    at_host->set_position(Vector2(12.0, 34.0));
+    netw::port_set(at_host, StringName("position"), Vector2(12.0, 34.0));
     cw.settle(8);
     cw.one->display_pump(0.0);
 

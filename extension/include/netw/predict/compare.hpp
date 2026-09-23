@@ -80,6 +80,13 @@ double value_error(
     bool p_angle
 );
 
+double divergence_by_field(
+    const godot::Dictionary &p_predicted,
+    const godot::Dictionary &p_authoritative,
+    godot::Dictionary p_out,
+    const godot::Dictionary &p_angles
+);
+
 Attribution attribute(
     bool p_pre_equal,
     bool p_command_equal,

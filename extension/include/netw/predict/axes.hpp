@@ -40,6 +40,8 @@ int role_for_axes(int p_input_source, int p_sim_mode);
 
 int correction_for_recovery_policy(int p_policy);
 
+int resolve_recovery_policy(int p_policy, bool p_solves);
+
 bool replays_without_integration(int p_schedule, bool p_solves);
 
 int integrable_recovery_policy(int p_policy, int p_schedule, bool p_solves);

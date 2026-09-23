@@ -314,7 +314,11 @@ void NetwMultiplayer::display_on_clock_tick(double p_delta, int64_t p_tick) {
                 continue;
             }
             state->display_history()
-                .record(p_tick, from->get(state->get_source_prop()), false);
+                .record(
+                    p_tick,
+                    port_get(from, state->get_source_prop()),
+                    false
+                );
         }
     }
 }

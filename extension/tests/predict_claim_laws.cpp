@@ -666,9 +666,9 @@ godot::Dictionary detail_of(int p_contacts) {
 }
 
 godot::Dictionary details_in(NetwPredictionEngine *p_pool, int64_t p_slot) {
-    const Ref<netw::NetwPredictJournal> snapshot
-        = p_pool->journal_snapshot(p_slot);
-    const godot::Dictionary row = snapshot->row_at(DRIVEN);
+    netw::predict::JournalSnapshot snapshot;
+    p_pool->journal_snapshot(p_slot, snapshot);
+    const godot::Dictionary row = snapshot.row_at(DRIVEN);
     return row.get(StringName("witness_detail"), godot::Dictionary());
 }
 
@@ -970,7 +970,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         pool->joint_provenance_at(slot, DRIVEN),
-        int(netw::NetwPredict::CELL_PROVENANCE_AUTHORED)
+        int(netw::predict::CellProvenance::AUTHORED)
     );
     const Dictionary filed = pool->joint_command_at(slot, DRIVEN);
     NETW_CHECK_EQ(int64_t(filed[StringName("button")]), 7);
@@ -988,7 +988,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         pool->joint_provenance_at(quiet, DRIVEN),
-        int(netw::NetwPredict::CELL_PROVENANCE_COAST)
+        int(netw::predict::CellProvenance::COAST)
     );
 
     CHECK(pool->seal_transition(
@@ -1032,7 +1032,7 @@ TEST_CASE(
     CHECK(named.evidence_complete);
     NETW_CHECK_EQ(
         int(named.attribution),
-        int(netw::NetwPredictJournal::PRE_STATE)
+        int(netw::predict::Attribution::PRE_STATE)
     );
 
     const int64_t other = driving_slot(pool);
@@ -1044,7 +1044,7 @@ TEST_CASE(
     CHECK_FALSE(unnamed.evidence_complete);
     NETW_CHECK_EQ(
         int(unnamed.attribution),
-        int(netw::NetwPredictJournal::UNKNOWN)
+        int(netw::predict::Attribution::UNKNOWN)
     );
 }
 
@@ -1073,7 +1073,7 @@ TEST_CASE(
     NETW_CHECK_EQ(first[NetwPredictionEngine::RELAY_DROPPED_LATE], 0);
     NETW_CHECK_EQ(
         pool->joint_provenance_at(slot, 6),
-        int(netw::NetwPredict::CELL_PROVENANCE_RELAYED)
+        int(netw::predict::CellProvenance::RELAYED)
     );
     NETW_CHECK_EQ(pool->newest_matrix_transition_of(slot), 6);
     NETW_CHECK_EQ(pool->relayed_epoch_of(slot), 1);

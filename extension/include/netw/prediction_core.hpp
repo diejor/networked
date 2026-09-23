@@ -80,6 +80,7 @@ enum class RecoveryPolicy : int {
     REBASE_RECOVER = 1,
     DELAY_CLOSED = 2,
     OBSERVE = 3,
+    AUTO = 4,
 };
 
 enum class Attribution : int {
@@ -272,30 +273,9 @@ godot::Dictionary project_payload(
     double age
 );
 
-godot::Dictionary converge_toward(
-    const godot::Dictionary &restore,
-    const godot::Dictionary &current,
-    const godot::Dictionary &rules,
-    const godot::Dictionary &angles
-);
-
-RecoveryPlan recover_plan(
-    const godot::Dictionary &payload,
-    int policy,
-    int correction,
-    int snap_restore,
-    const godot::Dictionary &projection,
-    const godot::Dictionary &current,
-    const godot::Dictionary &pose_errors,
-    const godot::Dictionary &wiring,
-    const godot::Dictionary &verdict,
-    double tick_delta
-);
-
 godot::Ref<NetwPredictRecovery> recover(
     const godot::Dictionary &payload,
     int policy,
-    int correction,
     int snap_restore,
     const godot::Dictionary &projection,
     const godot::Dictionary &current,
@@ -303,14 +283,6 @@ godot::Ref<NetwPredictRecovery> recover(
     const godot::Dictionary &wiring,
     const godot::Dictionary &verdict,
     double tick_delta
-);
-
-godot::Dictionary escalation_after(
-    int streak,
-    int last_sign,
-    double last_divergence,
-    double divergence,
-    int sign
 );
 
 int measure(
@@ -371,12 +343,6 @@ godot::Variant pose_delta(
 godot::Variant pose_advance(
     const godot::Variant &current,
     const godot::Variant &delta
-);
-
-bool teleport_reached(
-    const godot::Dictionary &pose_errors,
-    const godot::Dictionary &thresholds,
-    double default_threshold
 );
 
 PredictionVerdict evaluate_struct_verdict(

@@ -1,12 +1,5 @@
 #pragma once
 
-/* The recovery staged for one authoritative comparison.
- *
- * Recovery mutates the engine's dense state and publishes the same values as a
- * write plan. A shell drains the binding rows. A shell-less driver reads the
- * engine state and leaves the binding rows undrained.
- */
-
 #include <cstdint>
 
 #include "netw/predict/compare.hpp"
@@ -34,6 +27,9 @@ struct RecoveryRequest {
     bool contact_window = false;
     bool suppressed = false;
     bool pose_unmeasured = false;
+    bool answered = false;
+    bool answered_teleport = false;
+    bool answered_skip = true;
 };
 
 struct WritePlan {
@@ -54,12 +50,6 @@ struct TransportPlan {
     bool valid = false;
 };
 
-/* What a caller observed about a conditional operator's preconditions.
- *
- * Every field is a live tree fact a shell samples. The RULE over them lives
- * here, so two peers reading the same evidence decide alike whichever arm
- * gathered it.
- */
 struct TransportEvidence {
     bool candidate = false;
     bool basis_witness_clean = false;
@@ -82,19 +72,6 @@ struct DissipateEvidence {
     int meter = 0;
 };
 
-// Every fact short of the corridor. The corridor is game code, so it is asked
-// only after this answers true.
-/* Which declared field's divergence a recovery is answering, or -1.
- *
- * Ranked by error over the field's own tolerance, so fields in different units
- * are comparable. A field declaring a tolerance of zero triggers on any error
- * and so has no scale to be ranked ON: it cannot be normalized, because any
- * ratio against zero outranks every real field however small the error, so it
- * ranks LAST and answers only when no field with a positive tolerance
- * triggered. With nothing past its own tolerance the ranking falls back to raw
- * magnitude, because there is still a delta with a sign and the overshoot test
- * is entitled to see it.
- */
 int escalation_field(const Wiring &p_wiring, const RecoveryRequest &p_request);
 
 bool transport_admissible(const TransportEvidence &p_evidence);

@@ -13,72 +13,25 @@ var goal_team := -1
 @onready var game: RocketGame = level.get_node(^"game")
 @onready var goals := level.get_node(^"field").find_children("*", "Area3D", false)
 
-var pose: Transform3D:
-	get:
-		if state and not freeze:
-			return state.transform
-		return global_transform if is_inside_tree() else transform
-	set(value):
-		if state and not freeze:
-			state.transform = value
-		elif is_inside_tree():
-			global_transform = value
-		else:
-			transform = value
-
-var ball_position: Vector3:
-	get:
-		return pose.origin
-	set(value):
-		var next := pose
-		next.origin = value
-		pose = next
-
-var ball_rotation: Quaternion:
-	get:
-		return pose.basis.get_rotation_quaternion()
-	set(value):
-		var next := pose
-		next.basis = Basis(value.normalized())
-		pose = next
-
-var ball_linear_velocity: Vector3:
-	get:
-		return state.linear_velocity
-	set(value):
-		state.linear_velocity = value
-
-var ball_angular_velocity: Vector3:
-	get:
-		return state.angular_velocity
-	set(value):
-		state.angular_velocity = value
-
-var ball_sleeping: bool:
-	get:
-		return state.sleeping
-	set(value):
-		state.sleeping = value
-
 
 func _init() -> void:
-	Netw.configure_property(self, &"ball_position").state().masked().causal() \
+	Netw.configure_property(self, &"position").state().masked().causal() \
 			.on_spawn().teleport_at(1.5) \
 			.quantize(NetwQuantizeScalar.new().bits(19).limits(-128.0, 128.0)) \
 			.interpolate(
 				NetwInterpolate.new().lerp().snap_at(3.0) \
-						.project_by(&"ball_linear_velocity").to(&"position"),
+						.project_by(&"linear_velocity"),
 			)
-	Netw.configure_property(self, &"ball_rotation").state().masked().causal() \
+	Netw.configure_property(self, &"quaternion").state().masked().causal() \
 			.on_spawn() \
 			.quantize(NetwQuantizeQuaternion.new().bits(16))
-	Netw.configure_property(self, &"ball_linear_velocity").state().masked() \
+	Netw.configure_property(self, &"linear_velocity").state().masked() \
 			.causal().teleport_only() \
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-128.0, 128.0))
-	Netw.configure_property(self, &"ball_angular_velocity").state().masked() \
+	Netw.configure_property(self, &"angular_velocity").state().masked() \
 			.causal().teleport_only() \
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-64.0, 64.0))
-	Netw.configure_property(self, &"ball_sleeping").state().masked().causal()
+	Netw.configure_property(self, &"sleeping").state().masked().causal()
 	Netw.configure_property(self, &"goal_team").state().masked().causal() \
 			.quantize(NetwQuantizeScalar.new().bits(2).limits(-1.0, 1.0))
 
@@ -120,7 +73,7 @@ func _network_tick(_delta: float, tick: int, _is_fresh: bool) -> void:
 
 
 func reset() -> void:
-	pose = Transform3D(Basis.IDENTITY, STARTING_POSITION)
+	state.transform = Transform3D(Basis.IDENTITY, STARTING_POSITION)
 	state.linear_velocity = Vector3.ZERO
 	state.angular_velocity = Vector3.ZERO
 
@@ -141,7 +94,7 @@ func sample_goal() -> int:
 func sample_contacts() -> Dictionary:
 	return {
 		colliders = get_colliding_bodies(),
-		sleeping = ball_sleeping,
+		sleeping = state.sleeping,
 		collision_layer = collision_layer,
 		collision_mask = collision_mask,
 	}

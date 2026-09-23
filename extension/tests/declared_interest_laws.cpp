@@ -66,17 +66,6 @@ TEST_CASE("[Networked][Interest] L-WIRE mirrors one named state shape") {
     );
 }
 
-TEST_CASE("[Networked][Interest] L-ACK reads the handle frontier directly") {
-    Ref<netw::NetwPredictionHandle> handle;
-    handle.instantiate();
-    const Ref<netw::NetwPredictStats> stats = handle->get_stats();
-    REQUIRE(stats.is_valid());
-
-    stats->set(StringName("ack_confirmed"), 41);
-
-    NETW_CHECK_EQ(handle->get_acknowledged_tick(), 41);
-}
-
 } // namespace TestDeclaredInterestLaws
 
 #endif

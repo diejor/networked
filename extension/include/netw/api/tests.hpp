@@ -41,6 +41,7 @@ public:
     void instrumentation_probe(int64_t value) const;
     static void schema_model_clear();
     static void tracker_book_clear();
+    static godot::Dictionary prediction_stats(godot::Object *handle);
     static godot::TypedArray<godot::StringName> property_set_keys_of_script(
         const godot::Ref<godot::Script> &script,
         int64_t record

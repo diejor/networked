@@ -47,13 +47,6 @@ public:
         CONTACT_CLASS_KINEMATIC_PROXY = 5,
     };
 
-    enum WitnessClass {
-        WITNESS_CLASS_NONE = 0,
-        WITNESS_CLASS_SUPPORT = 1,
-        WITNESS_CLASS_STATIC = 2,
-        WITNESS_CLASS_DYNAMIC_ENTITY = 4,
-    };
-
     enum CommandOrigin {
         COMMAND_ORIGIN_PREDICTED = 0,
         COMMAND_ORIGIN_RELAYED = 1,
@@ -93,12 +86,6 @@ public:
         MISSING_INPUT_REPEAT_LAST = 1,
     };
 
-    enum CorrectionMode {
-        CORRECTION_MODE_AUTO = 0,
-        CORRECTION_MODE_REPLAY = 1,
-        CORRECTION_MODE_SNAP = 2,
-    };
-
     enum Archetype {
         ARCHETYPE_NONE = 0,
         ARCHETYPE_SCRIPTED = 1,
@@ -110,18 +97,12 @@ public:
         RECOVERY_POLICY_REBASE_RECOVER = 1,
         RECOVERY_POLICY_DELAY_CLOSED = 2,
         RECOVERY_POLICY_OBSERVE = 3,
+        RECOVERY_POLICY_AUTO = 4,
     };
 
     enum Reconcile {
         RECONCILE_INDEPENDENT = 0,
         RECONCILE_JOINT = 1,
-    };
-
-    enum CellProvenance {
-        CELL_PROVENANCE_COAST = 0,
-        CELL_PROVENANCE_SUBSTITUTED = 1,
-        CELL_PROVENANCE_RELAYED = 2,
-        CELL_PROVENANCE_AUTHORED = 3,
     };
 
     enum BreachResponse {
@@ -143,59 +124,51 @@ public:
         OPERATOR_OUTCOME_WITHHELD = 4,
     };
 
-    enum VerdictReason {
-        VERDICT_REASON_NONE = 0,
-        VERDICT_REASON_AWAITING_RECONSTRUCTION = 1,
-        VERDICT_REASON_REALIGN_PENDING = 2,
-        VERDICT_REASON_RESEED_IGNORED = 3,
-        VERDICT_REASON_PROBATION_REQUARANTINE = 4,
-        VERDICT_REASON_EVIDENCE_EXHAUSTED = 5,
-        VERDICT_REASON_TRANSPORT_PENDING = 6,
-        VERDICT_REASON_DISSIPATE_PENDING = 7,
-        VERDICT_REASON_DISSIPATED = 8,
-        VERDICT_REASON_WITNESS_DEFERRED = 9,
-        VERDICT_REASON_DECLINED = 10,
+    enum Attribution {
+        ATTRIBUTION_UNKNOWN = 0,
+        ATTRIBUTION_PRE_STATE = 1,
+        ATTRIBUTION_COMMAND = 2,
+        ATTRIBUTION_ENVIRONMENT = 3,
+        ATTRIBUTION_TOPOLOGY = 4,
+        ATTRIBUTION_EXECUTION = 5,
+        ATTRIBUTION_CONTACT = 6,
+        ATTRIBUTION_CLOSURE = 7,
     };
 
-    static godot::Dictionary joint_floor(
-        const godot::Dictionary &p_bases,
-        const godot::Dictionary &p_relay_floors,
-        int64_t p_epoch_floor,
-        int64_t p_history_floor,
-        int64_t p_present
-    );
+    enum Operator {
+        OPERATOR_NONE = 0,
+        OPERATOR_REBASE_PROJECTED = 1,
+        OPERATOR_REBASE_EXACT = 2,
+        OPERATOR_FULL_CLOSURE = 3,
+        OPERATOR_TRANSPORT_DELTA = 4,
+        OPERATOR_RESEED = 5,
+        OPERATOR_RESEED_ALIGN = 6,
+        OPERATOR_DEMOTE = 7,
+        OPERATOR_DISSIPATE = 8,
+        OPERATOR_JOINT_REBASE = 9,
+    };
 
-    static int joint_cell(
-        bool p_authored,
-        bool p_relayed,
-        bool p_predictor_valid
-    );
-
-    static godot::String schedule_name(
-        NetwSimulationHandle::Schedule p_schedule
-    );
-    static godot::String drive_kind_name(DriveKind p_kind);
-    static godot::String verdict_reason_name(VerdictReason p_reason);
-    static godot::String episode_state_name(EpisodeState p_state);
-    static godot::String operator_outcome_name(int p_outcome);
+    enum Domain {
+        DOMAIN_IN = 0,
+        DOMAIN_OUT = 1,
+    };
 };
 
 } // namespace netw
 
 VARIANT_ENUM_CAST(netw::NetwPredict::ContactClass);
-VARIANT_ENUM_CAST(netw::NetwPredict::WitnessClass);
 VARIANT_ENUM_CAST(netw::NetwPredict::CommandOrigin);
 VARIANT_ENUM_CAST(netw::NetwPredict::DriveKind);
 VARIANT_ENUM_CAST(netw::NetwPredict::TriggerShape);
 VARIANT_ENUM_CAST(netw::NetwPredict::ConsumeAction);
 VARIANT_ENUM_CAST(netw::NetwPredict::ExactVerdict);
 VARIANT_ENUM_CAST(netw::NetwPredict::MissingInput);
-VARIANT_ENUM_CAST(netw::NetwPredict::CorrectionMode);
 VARIANT_ENUM_CAST(netw::NetwPredict::Archetype);
 VARIANT_ENUM_CAST(netw::NetwPredict::RecoveryPolicy);
 VARIANT_ENUM_CAST(netw::NetwPredict::Reconcile);
-VARIANT_ENUM_CAST(netw::NetwPredict::CellProvenance);
 VARIANT_ENUM_CAST(netw::NetwPredict::BreachResponse);
 VARIANT_ENUM_CAST(netw::NetwPredict::EpisodeState);
 VARIANT_ENUM_CAST(netw::NetwPredict::OperatorOutcome);
-VARIANT_ENUM_CAST(netw::NetwPredict::VerdictReason);
+VARIANT_ENUM_CAST(netw::NetwPredict::Attribution);
+VARIANT_ENUM_CAST(netw::NetwPredict::Operator);
+VARIANT_ENUM_CAST(netw::NetwPredict::Domain);

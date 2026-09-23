@@ -6,6 +6,7 @@
 #include "netw/call_args.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/object_port.hpp"
 #include "netw/profile.hpp"
 #include "netw/repl/set_model.hpp"
 #include "netw/replication_send.hpp"
@@ -187,7 +188,7 @@ Array NetwPropertySetBinding::gather_row(
         if (!readable && !p_allow_missing) {
             return Array();
         }
-        values.push_back(readable ? held->get(key) : Variant());
+        values.push_back(readable ? port_get(held, key) : Variant());
     }
     return values;
 }
@@ -234,7 +235,7 @@ Error NetwPropertySetBinding::write_row(
         return ERR_INVALID_DATA;
     }
     for (int at = 0; at < p_keys.size(); at++) {
-        held->set(StringName(p_keys[at]), p_values[at]);
+        port_set(held, StringName(p_keys[at]), p_values[at]);
     }
     return OK;
 }
@@ -384,7 +385,7 @@ void NetwPropertySetBinding::retain_current() {
         }
         const StringName key = column->get_key();
         if (!accepted.has(key) && gd::has_property(held, key)) {
-            accept(key, held->get(key));
+            accept(key, port_get(held, key));
         }
     }
 }

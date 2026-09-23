@@ -51,53 +51,6 @@ var pressed := {
 	"Markers/%s%d" % ["r" if team == 0 else "b", slot + 1],
 )
 
-var pose: Transform3D:
-	get:
-		if state and not freeze:
-			return state.transform
-		return global_transform if is_inside_tree() else transform
-	set(value):
-		if state and not freeze:
-			state.transform = value
-		elif is_inside_tree():
-			global_transform = value
-		else:
-			transform = value
-
-var car_position: Vector3:
-	get:
-		return pose.origin
-	set(value):
-		var next := pose
-		next.origin = value
-		pose = next
-
-var car_rotation: Quaternion:
-	get:
-		return pose.basis.get_rotation_quaternion()
-	set(value):
-		var next := pose
-		next.basis = Basis(value.normalized())
-		pose = next
-
-var car_linear_velocity: Vector3:
-	get:
-		return state.linear_velocity
-	set(value):
-		state.linear_velocity = value
-
-var car_angular_velocity: Vector3:
-	get:
-		return state.angular_velocity
-	set(value):
-		state.angular_velocity = value
-
-var car_sleeping: bool:
-	get:
-		return state.sleeping
-	set(value):
-		state.sleeping = value
-
 var spring_fl: float:
 	get:
 		return spring_lengths[0]
@@ -139,23 +92,23 @@ func _init() -> void:
 	)
 	Netw.configure_property(self, &"jumping").input()
 
-	Netw.configure_property(self, &"car_position").state().masked().causal() \
+	Netw.configure_property(self, &"position").state().masked().causal() \
 			.on_spawn().teleport_at(1.5) \
 			.quantize(NetwQuantizeScalar.new().bits(19).limits(-128.0, 128.0)) \
 			.interpolate(
 				NetwInterpolate.new().lerp().snap_at(3.0) \
-						.project_by(&"car_linear_velocity").to(&"position"),
+						.project_by(&"linear_velocity"),
 			)
-	Netw.configure_property(self, &"car_rotation").state().masked().causal() \
+	Netw.configure_property(self, &"quaternion").state().masked().causal() \
 			.on_spawn() \
 			.quantize(NetwQuantizeQuaternion.new().bits(16))
-	Netw.configure_property(self, &"car_linear_velocity").state().masked() \
+	Netw.configure_property(self, &"linear_velocity").state().masked() \
 			.causal().teleport_only() \
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-128.0, 128.0))
-	Netw.configure_property(self, &"car_angular_velocity").state().masked() \
+	Netw.configure_property(self, &"angular_velocity").state().masked() \
 			.causal().teleport_only() \
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-64.0, 64.0))
-	Netw.configure_property(self, &"car_sleeping").state().masked().causal()
+	Netw.configure_property(self, &"sleeping").state().masked().causal()
 
 	for spring: StringName in [
 		&"spring_fl",
@@ -276,7 +229,7 @@ func set_color(color: Color) -> void:
 func sample_contacts() -> Dictionary:
 	return {
 		colliders = get_colliding_bodies(),
-		sleeping = car_sleeping,
+		sleeping = state.sleeping,
 		collision_layer = collision_layer,
 		collision_mask = collision_mask,
 	}
