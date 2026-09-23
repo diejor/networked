@@ -91,11 +91,16 @@ OpenVerdict StreamReaderBook::open(
     uint64_t p_request,
     uint64_t p_epoch,
     uint32_t p_schema,
-    uint64_t &r_token
+    uint64_t &r_token,
+    const StreamTenure &p_tenure
 ) {
     NETW_ZONE_NC("Stream open", colors::WIRE);
     Connection &live = connection(p_peer);
     const uint64_t address = p_lane.address();
+    const ParkedOpen *parked = live.parks.getptr(address);
+    if (parked != nullptr && parked->request <= p_request) {
+        live.parks.erase(address);
+    }
     Lane *held = live.lanes.getptr(address);
     if (held != nullptr && p_request < held->request) {
         r_token = 0;
@@ -120,10 +125,110 @@ OpenVerdict StreamReaderBook::open(
     fresh.token = token;
     fresh.epoch = p_epoch;
     fresh.schema = p_schema;
+    fresh.tenure = p_tenure;
     live.lanes.insert(address, fresh);
     live.addresses[token] = address;
     r_token = token;
     return OpenVerdict::MINTED;
+}
+
+void StreamReaderBook::park(const ParkedOpen &p_open) {
+    Connection &live = connection(p_open.peer);
+    const uint64_t address = p_open.lane.address();
+    ParkedOpen *held = live.parks.getptr(address);
+    if (held != nullptr && held->request > p_open.request) {
+        return;
+    }
+    if (held != nullptr && held->request == p_open.request) {
+        held->tenure = p_open.tenure;
+        return;
+    }
+    live.parks[address] = p_open;
+}
+
+LocalVector<ParkedOpen> StreamReaderBook::take_parks(int64_t p_route) {
+    LocalVector<ParkedOpen> out;
+    for (KeyValue<int, Connection> &each : connections) {
+        LocalVector<uint64_t> taken;
+        for (const KeyValue<uint64_t, ParkedOpen> &parked : each.value.parks) {
+            if (StreamLane::route_of(parked.key) == p_route) {
+                out.push_back(parked.value);
+                taken.push_back(parked.key);
+            }
+        }
+        for (uint32_t at = 0; at < taken.size(); ++at) {
+            each.value.parks.erase(taken[at]);
+        }
+    }
+    return out;
+}
+
+LocalVector<ParkedOpen> StreamReaderBook::expire_parks(
+    int p_peer,
+    int64_t p_now_ms,
+    int64_t p_interval_ms
+) {
+    LocalVector<ParkedOpen> out;
+    Connection *live = connections.getptr(p_peer);
+    if (live == nullptr) {
+        return out;
+    }
+    LocalVector<uint64_t> expired;
+    for (const KeyValue<uint64_t, ParkedOpen> &parked : live->parks) {
+        if (p_now_ms - parked.value.parked_at_ms >= p_interval_ms) {
+            out.push_back(parked.value);
+            expired.push_back(parked.key);
+        }
+    }
+    for (uint32_t at = 0; at < expired.size(); ++at) {
+        live->parks.erase(expired[at]);
+    }
+    expired_parks += out.size();
+    return out;
+}
+
+LocalVector<int> StreamReaderBook::parked_peers() const {
+    LocalVector<int> out;
+    for (const KeyValue<int, Connection> &each : connections) {
+        if (!each.value.parks.is_empty()) {
+            out.push_back(each.key);
+        }
+    }
+    return out;
+}
+
+uint32_t StreamReaderBook::close_tenures_before(
+    int64_t p_route,
+    uint64_t p_tenure
+) {
+    uint32_t closed = 0;
+    for (KeyValue<int, Connection> &each : connections) {
+        LocalVector<uint64_t> doomed;
+        for (const KeyValue<uint64_t, Lane> &lane : each.value.lanes) {
+            if (StreamLane::route_of(lane.key) == p_route
+                && lane.value.tenure.bound
+                && lane.value.tenure.tenure < p_tenure) {
+                doomed.push_back(lane.key);
+            }
+        }
+        for (uint32_t at = 0; at < doomed.size(); ++at) {
+            Lane *held = each.value.lanes.getptr(doomed[at]);
+            if (held != nullptr) {
+                each.value.addresses.erase(held->token);
+            }
+            each.value.lanes.erase(doomed[at]);
+        }
+        closed += doomed.size();
+    }
+    return closed;
+}
+
+uint32_t StreamReaderBook::parked_count() const {
+    uint32_t total = 0;
+    for (const KeyValue<int, Connection> &each : connections) {
+        total += uint32_t(each.value.parks.size());
+    }
+    return total;
 }
 
 SnapshotReceiver *StreamReaderBook::receiver(int p_peer, uint64_t p_token) {
@@ -152,6 +257,18 @@ bool StreamReaderBook::names(
     r_lane.ordinal = uint8_t((*address >> 8) & 0xFF);
     r_lane.family = StreamFamily(uint8_t(*address & 0xFF));
     return true;
+}
+
+uint64_t StreamReaderBook::token_at(
+    int p_peer,
+    const StreamLane &p_lane
+) const {
+    const Connection *held = connections.getptr(p_peer);
+    if (held == nullptr) {
+        return 0;
+    }
+    const Lane *lane = held->lanes.getptr(p_lane.address());
+    return lane == nullptr || lane->invalidated ? 0 : lane->token;
 }
 
 bool StreamReaderBook::invalidate(
@@ -196,6 +313,7 @@ void StreamReaderBook::forget_peer(int p_peer) {
 }
 
 void StreamReaderBook::close_route(int64_t p_route) {
+    take_parks(p_route);
     for (KeyValue<int, Connection> &each : connections) {
         LocalVector<uint64_t> doomed;
         for (const KeyValue<uint64_t, Lane> &lane : each.value.lanes) {
@@ -256,14 +374,17 @@ uint64_t StreamWriterBook::open(
     int p_peer,
     const StreamLane &p_lane,
     uint64_t p_epoch,
-    uint32_t p_schema
+    uint32_t p_schema,
+    const StreamTenure &p_tenure
 ) {
     NETW_ZONE_NC("Stream request", colors::WIRE);
     Connection &live = connections[p_peer];
     const uint64_t address = p_lane.address();
     Lane *held = live.lanes.getptr(address);
     if (held != nullptr && !held->token_was_reset && held->epoch == p_epoch
-        && held->schema == p_schema) {
+        && held->schema == p_schema
+        && held->tenure.tenure == p_tenure.tenure
+        && held->tenure.bound == p_tenure.bound) {
         return held->request;
     }
     const uint64_t request = next_open_request();
@@ -279,9 +400,54 @@ uint64_t StreamWriterBook::open(
     fresh.request = request;
     fresh.epoch = p_epoch;
     fresh.schema = p_schema;
+    fresh.tenure = p_tenure;
     live.lanes.insert(address, fresh);
     live.requests[request] = address;
     return request;
+}
+
+bool StreamWriterBook::holds_tenure(
+    int p_peer,
+    const StreamLane &p_lane,
+    const StreamTenure &p_tenure
+) {
+    const Lane *held = lane_at(p_peer, p_lane);
+    return held == nullptr
+        || (held->tenure.tenure == p_tenure.tenure
+            && held->tenure.bound == p_tenure.bound);
+}
+
+LocalVector<ClosedLane> StreamWriterBook::close_tenures_other_than(
+    int64_t p_route,
+    uint64_t p_tenure
+) {
+    LocalVector<ClosedLane> out;
+    for (KeyValue<int, Connection> &each : connections) {
+        LocalVector<uint64_t> doomed;
+        for (const KeyValue<uint64_t, Lane> &lane : each.value.lanes) {
+            if (StreamLane::route_of(lane.key) == p_route
+                && lane.value.tenure.bound
+                && lane.value.tenure.tenure != p_tenure) {
+                doomed.push_back(lane.key);
+            }
+        }
+        for (uint32_t at = 0; at < doomed.size(); ++at) {
+            Lane *held = each.value.lanes.getptr(doomed[at]);
+            if (held == nullptr) {
+                continue;
+            }
+            if (held->token != 0) {
+                ClosedLane closed;
+                closed.peer = each.key;
+                closed.token = held->token;
+                out.push_back(closed);
+            }
+            each.value.requests.erase(held->request);
+            each.value.tokens.erase(held->token);
+            each.value.lanes.erase(doomed[at]);
+        }
+    }
+    return out;
 }
 
 ReadyVerdict StreamWriterBook::ready(

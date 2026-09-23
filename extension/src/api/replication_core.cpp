@@ -7,6 +7,7 @@
 #include "netw/call_args.hpp"
 #include "netw/entity/control.hpp"
 #include "netw/liveness_core.hpp"
+#include "netw/log.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/spawn/record.hpp"
 #include "netw/sync_kernel.hpp"
@@ -45,6 +46,10 @@ void ReplicationCore::resolve_channel_ids() {
     ids.reply = id_of(registry, "REPLY");
     ids.control_request = id_of(registry, "CONTROL_REQUEST");
     ids.control_apply = id_of(registry, "CONTROL_APPLY");
+    const wire::ChannelDecl *requests
+        = registry.find_channel(uint8_t(ids.control_request));
+    ids.control_requests_ordered = requests != nullptr
+        && requests->reliability == wire::Reliability::RELIABLE;
     ids.property_sync = id_of(registry, "PROPERTY_SYNC");
     ids.signal = id_of(registry, "SIGNAL");
     ids.sync = id_of(registry, "SYNC");
@@ -287,18 +292,24 @@ void ReplicationCore::send_to(
 
 void ReplicationCore::broadcast_control(
     const Ref<NetwEntity> &p_entity,
-    int64_t p_peer
+    const session::ControlApply &p_decision,
+    int64_t p_issuer
 ) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr || plane->session_get_inner().is_null()
         || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
         return;
     }
-    session::ControlApply applied;
-    applied.controller = uint64_t(MAX(p_peer, int64_t(0)));
-    const PackedByteArray payload = session::frame_write(applied);
+    session::ControlApply shared = p_decision;
+    shared.op = 0;
+    shared.outcome = 0;
+    const PackedByteArray payload = session::frame_write(shared);
     const PackedInt32Array recipients = plane->rpc_get_recipients(p_entity);
     for (int at = 0; at < recipients.size(); ++at) {
+        if (p_decision.op != 0 && recipients[at] == p_issuer) {
+            reply_control(p_entity, p_decision, p_issuer);
+            continue;
+        }
         send_to(
             recipients[at],
             p_entity->get_route(),
@@ -309,6 +320,56 @@ void ReplicationCore::broadcast_control(
             String(),
             false
         );
+    }
+}
+
+void ReplicationCore::reply_control(
+    const Ref<NetwEntity> &p_entity,
+    const session::ControlApply &p_decision,
+    int64_t p_issuer
+) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || plane->session_get_inner().is_null()
+        || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
+        return;
+    }
+    send_to(
+        p_issuer,
+        p_entity->get_route(),
+        ids.control_apply,
+        session::frame_write(p_decision),
+        true,
+        0,
+        String(),
+        false
+    );
+}
+
+void ReplicationCore::watch_control(const Ref<NetwEntity> &p_entity) {
+    const ObjectID held = gd::instance_id(p_entity.ptr());
+    if (control_waiting.find(held) < 0) {
+        control_waiting.push_back(held);
+    }
+}
+
+void ReplicationCore::expire_control(int64_t p_tick) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || control_waiting.is_empty()) {
+        return;
+    }
+    const int64_t deadline = plane->clock_engine().get_tickrate();
+    LocalVector<ObjectID> held;
+    held.reserve(control_waiting.size());
+    for (uint32_t at = 0; at < control_waiting.size(); ++at) {
+        held.push_back(control_waiting[at]);
+    }
+    control_waiting.clear();
+    for (uint32_t at = 0; at < held.size(); ++at) {
+        NetwEntity *entity
+            = Object::cast_to<NetwEntity>(gd::object_of(held[at]));
+        if (entity != nullptr && entity->expire_control(p_tick, deadline)) {
+            watch_control(Ref<NetwEntity>(entity));
+        }
     }
 }
 
@@ -344,7 +405,10 @@ PackedInt32Array ReplicationCore::live_peers(const Ref<NetwEntity> &p_entity) {
                             : PackedInt32Array();
 }
 
-void ReplicationCore::request_control(const Ref<NetwEntity> &p_entity) {
+void ReplicationCore::request_control(
+    const Ref<NetwEntity> &p_entity,
+    const session::ControlRequest &p_request
+) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
         return;
@@ -353,8 +417,8 @@ void ReplicationCore::request_control(const Ref<NetwEntity> &p_entity) {
         plane->session_authority_peer(),
         p_entity->get_route(),
         ids.control_request,
-        PackedByteArray(),
-        true,
+        session::frame_write(p_request),
+        ids.control_requests_ordered,
         0,
         String(),
         false
@@ -681,14 +745,15 @@ void ReplicationCore::dispatch_frame(
     if (p_channel == ids.call) {
         plane->rpc_handle_call(entity, comp_node, p_payload, p_sender);
     } else if (p_channel == ids.control_request) {
-        if (entity.is_valid() && p_payload.is_empty()) {
-            entity->_handle_control_request(p_sender);
+        session::ControlRequest request;
+        if (entity.is_valid() && session::frame_read(p_payload, request)) {
+            entity->_handle_control_request(p_sender, request);
         }
     } else if (p_channel == ids.control_apply) {
         session::ControlApply applied;
         if (entity.is_valid() && p_sender == plane->session_authority_peer()
             && session::frame_read(p_payload, applied)) {
-            entity->_handle_control_apply(int64_t(applied.controller));
+            entity->_handle_control_apply(applied);
         }
     } else if (p_channel == ids.property_sync) {
         sync_pipeline.handle_property_sync(
@@ -726,7 +791,7 @@ bool ReplicationCore::defers_unknown_route(
     int64_t p_channel,
     bool p_reliable
 ) const {
-    if (p_channel == ids.call) {
+    if (p_channel == ids.call || p_channel == ids.control_apply) {
         return p_reliable;
     }
     return channels != nullptr ? channels->defers(p_channel) : false;
@@ -880,6 +945,7 @@ Node *ReplicationCore::resolve_comp_node(
 }
 
 void ReplicationCore::on_clock_tick(int64_t p_tick) {
+    expire_control(p_tick);
     sync_pipeline.pump(p_tick);
     sync_compat.pump();
     spawn_pipeline.retry_adopt_parked();
@@ -1052,6 +1118,16 @@ void ReplicationCore::on_poll() {
     if (plane->clock_engine().get_configured()) {
         return;
     }
+    if (!warned_rows_without_clock && plane->is_online()
+        && sync_pipeline.owes_rows()) {
+        warned_rows_without_clock = true;
+        NETW_WARN(
+            sys::WIRE,
+            "This session declares replicated properties but has no clock, "
+            "so none of their rows is ever sent. Call Netw.configure_clock "
+            "on every peer."
+        );
+    }
     sync_compat.pump();
     spawn_pipeline.retry_adopt_parked();
     flush_all_buffers();
@@ -1064,6 +1140,7 @@ void ReplicationCore::clear_session() {
         plane->carrier_clear();
     }
     sync_model.clear();
+    warned_rows_without_clock = false;
     sync_pipeline.clear_session();
     spawn_pipeline.clear_session();
     sync_compat.clear_session();

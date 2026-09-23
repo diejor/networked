@@ -33,6 +33,10 @@ struct SetRow {
     int64_t audience = SET_AUDIENCE_PUBLIC;
 };
 
+constexpr bool record_follows_tenure(int64_t p_record) {
+    return p_record == SET_RECORD_INPUT || p_record == SET_RECORD_BROADCAST;
+}
+
 bool record_authors(
     int64_t p_record,
     int64_t p_policy,

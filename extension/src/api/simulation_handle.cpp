@@ -199,6 +199,24 @@ void NetwSimulationHandle::adopt_step(const Callable &p_value) {
     }
 }
 
+bool NetwSimulationHandle::get_claim_on_contact() const {
+    return declared.claim_on_contact;
+}
+
+void NetwSimulationHandle::set_claim_on_contact(bool p_value) {
+    declared.claim_on_contact = p_value;
+    declare();
+}
+
+double NetwSimulationHandle::get_release_on_rest() const {
+    return declared.release_on_rest;
+}
+
+void NetwSimulationHandle::set_release_on_rest(double p_value) {
+    declared.release_on_rest = MAX(p_value, 0.0);
+    declare();
+}
+
 NetwSimulationHandle::Mode NetwSimulationHandle::get_mode() const {
     NetwMultiplayer *session = core();
     const sim::Row *row
@@ -363,6 +381,32 @@ void NetwSimulationHandle::_bind_methods() {
         PropertyInfo(Variant::INT, "max_restore_ticks"),
         "set_max_restore_ticks",
         "get_max_restore_ticks"
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_claim_on_contact"),
+        &NetwSimulationHandle::get_claim_on_contact
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_claim_on_contact", "value"),
+        &NetwSimulationHandle::set_claim_on_contact
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "claim_on_contact"),
+        "set_claim_on_contact",
+        "get_claim_on_contact"
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_release_on_rest"),
+        &NetwSimulationHandle::get_release_on_rest
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_release_on_rest", "value"),
+        &NetwSimulationHandle::set_release_on_rest
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::FLOAT, "release_on_rest"),
+        "set_release_on_rest",
+        "get_release_on_rest"
     );
     ClassDB::bind_method(
         D_METHOD("get_step"),

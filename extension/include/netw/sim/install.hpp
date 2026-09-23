@@ -21,6 +21,7 @@ struct Sample {
     int64_t comp = 0;
     int64_t tick = -1;
     int64_t sender = 0;
+    uint64_t tenure = 0;
     godot::Array keys;
     godot::Array values;
 };
@@ -30,6 +31,7 @@ struct InstallStats {
     int64_t held = 0;
     int64_t skipped = 0;
     int64_t dropped = 0;
+    int64_t fenced = 0;
     int64_t unreconstructed = 0;
     int64_t newest_age = -1;
     int64_t youngest_age = -1;

@@ -106,18 +106,30 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][WireValue][Hosted] a self-describing column has no plan and "
-    "so no row"
+    "[Networked][WireValue][Hosted] a self-describing column carries the "
+    "value it is handed and refuses one no row can hold"
 ) {
     SchemaRecord schema = sealed(SchemaCore::VARIANT);
     const WirePlan plan = WirePlan::compile(schema);
+    REQUIRE(plan.valid());
 
-    CHECK_FALSE(plan.valid());
-
+    godot::PackedVector2Array ink;
+    ink.push_back(godot::Vector2(1, 2));
+    ink.push_back(godot::Vector2(3, 4));
     CodeRow row;
+    REQUIRE(encode_scalar_row(schema, one(ink), row));
+    Array decoded;
+    REQUIRE(netw::wire::decode_scalar_row(schema, row, decoded));
+    REQUIRE(decoded.size() == 1);
+    CHECK((decoded[0] == godot::Variant(ink)));
+
+    Ref<NetwQuantizeScalar> object;
+    object.instantiate();
     ERR_PRINT_OFF;
-    CHECK_FALSE(encode_scalar_row(schema, one(godot::Variant(7)), row));
+    CHECK_FALSE(encode_scalar_row(schema, one(object), row));
     ERR_PRINT_ON;
+
+    CHECK_FALSE(WirePlan::compile(sealed(SchemaCore::VARIANT, 2)).valid());
 }
 
 TEST_CASE(

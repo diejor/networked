@@ -23,15 +23,16 @@ void NetwPropertyConfig::set_carry_binder(const Callable &p_binder) {
 }
 
 void NetwPropertyConfig::warn_double_set(
-    bool p_already,
+    bool p_replaces,
     const char *p_axis
 ) const {
-    if (!p_already) {
+    if (!p_replaces) {
         return;
     }
     NETW_WARN(
         sys::SESSION,
-        "NetwPropertyConfig: the set-level %s of '%s' was already declared.",
+        "NetwPropertyConfig: the set-level %s of '%s' was already declared "
+        "with another value.",
         String(p_axis),
         String(get_context_name())
     );
@@ -142,26 +143,38 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::reconcile_only() {
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::every_tick(double p_interval) {
-    warn_double_set(set_trigger != UNSET, "trigger");
+    warn_double_set(
+        set_trigger != UNSET
+            && (set_trigger != NetwPropertySet::TRIGGER_TICK
+                || set_every_tick_interval != p_interval),
+        "trigger"
+    );
     set_trigger = NetwPropertySet::TRIGGER_TICK;
     set_every_tick_interval = p_interval;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::on_change() {
-    warn_double_set(set_trigger != UNSET, "trigger");
+    warn_double_set(
+        set_trigger != UNSET
+            && set_trigger != NetwPropertySet::TRIGGER_ON_CHANGE,
+        "trigger"
+    );
     set_trigger = NetwPropertySet::TRIGGER_ON_CHANGE;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::heartbeat(int64_t p_ticks) {
-    warn_double_set(set_heartbeat_ticks != UNSET, "heartbeat");
+    warn_double_set(
+        set_heartbeat_ticks != UNSET && set_heartbeat_ticks != p_ticks,
+        "heartbeat"
+    );
     set_heartbeat_ticks = p_ticks;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::windowed(int64_t p_samples) {
-    warn_double_set(set_window != UNSET, "window");
+    warn_double_set(set_window != UNSET && set_window != p_samples, "window");
     set_window = p_samples;
     return Ref<NetwPropertyConfig>(this);
 }

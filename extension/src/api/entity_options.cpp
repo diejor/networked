@@ -1,6 +1,7 @@
 #include "netw/api/entity_options.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/api/entity.hpp"
 
 namespace netw {
 
@@ -39,6 +40,19 @@ void NetwControlRequest::_bind_methods() {
     ClassDB::bind_method(D_METHOD("deny"), &NetwControlRequest::deny);
     NETW_OPTION(NetwControlRequest, Variant::INT, requester);
     NETW_OPTION(NetwControlRequest, Variant::BOOL, denied);
+    ClassDB::bind_method(D_METHOD("get_hold"), &NetwControlRequest::get_hold);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "hold",
+            PROPERTY_HINT_ENUM,
+            "None,Yieldable,Exclusive",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwEntity.Hold"
+        ),
+        String(),
+        "get_hold"
+    );
 }
 
 #undef NETW_OPTION

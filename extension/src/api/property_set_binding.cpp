@@ -7,6 +7,7 @@
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/repl/set_model.hpp"
 #include "netw/replication_send.hpp"
 #include "netw/sim/install.hpp"
 #include "netw/subsystems.hpp"
@@ -371,12 +372,146 @@ Error NetwPropertySetBinding::install_values(
     return apply_values(held, p_keys, p_values);
 }
 
+void NetwPropertySetBinding::retain_current() {
+    Node *held = node();
+    if (held == nullptr || set.is_null()) {
+        return;
+    }
+    for (int at = 0; at < set->columns.size(); ++at) {
+        const Ref<NetwPropertySetColumn> column = set->columns[at];
+        if (column.is_null()) {
+            continue;
+        }
+        const StringName key = column->get_key();
+        if (!accepted.has(key) && gd::has_property(held, key)) {
+            accept(key, held->get(key));
+        }
+    }
+}
+
+void NetwPropertySetBinding::accept(
+    const Variant &p_key,
+    const Variant &p_value
+) {
+    accepted[p_key] = p_value.duplicate(true);
+}
+
+bool NetwPropertySetBinding::retains_arrivals() const {
+    if (set.is_null() || !repl::record_follows_tenure(set->record)) {
+        return false;
+    }
+    const Ref<NetwEntity> entity = NetwEntity::of(node());
+    return entity.is_valid() && entity->is_claim_running_ahead();
+}
+
 Error NetwPropertySetBinding::reinstall_accepted() {
     Node *held = node();
     if (held == nullptr || accepted.is_empty() || !write_gate) {
         return ERR_UNAVAILABLE;
     }
     return apply_values(held, accepted.keys(), accepted.values());
+}
+
+Array NetwPropertySetBinding::quantizers_of() const {
+    Array out;
+    for (int at = 0; at < set->columns.size(); ++at) {
+        const Ref<NetwPropertySetColumn> column = set->columns[at];
+        out.push_back(
+            column.is_valid() ? Variant(column->get_quantizer()) : Variant()
+        );
+    }
+    return out;
+}
+
+Array NetwPropertySetBinding::types_of(Node *p_node) const {
+    Array out;
+    for (int at = 0; at < set->columns.size(); ++at) {
+        const Ref<NetwPropertySetColumn> column = set->columns[at];
+        out.push_back(
+            column.is_valid() ? property_type(p_node, column->get_key())
+                              : int64_t(Variant::NIL)
+        );
+    }
+    return out;
+}
+
+PackedByteArray NetwPropertySetBinding::take_image() {
+    Node *held = node();
+    if (held == nullptr || set.is_null() || set->columns.is_empty()) {
+        return PackedByteArray();
+    }
+    const Dictionary gathered = gather_fields(held, set->columns, false);
+    if (!bool(gathered[StringName("ok")])) {
+        return PackedByteArray();
+    }
+    const Array keys = keys_of(set->columns);
+    const Array values = gathered[StringName("values")];
+    wire::WriteStream stream;
+    if (!call_args::values_write(
+            stream,
+            values,
+            quantizers_of(),
+            types_of(held)
+        )
+        || !stream.align_verify()) {
+        return PackedByteArray();
+    }
+    if (!retains_arrivals()) {
+        for (int at = 0; at < keys.size(); ++at) {
+            accept(keys[at], values[at]);
+        }
+    }
+    return stream.to_bytes();
+}
+
+bool NetwPropertySetBinding::read_image(
+    const PackedByteArray &p_bytes,
+    Array &r_keys,
+    Array &r_values
+) {
+    Node *held = node();
+    if (held == nullptr || set.is_null() || p_bytes.is_empty()) {
+        return false;
+    }
+    wire::ReadStream reader(p_bytes);
+    Array values;
+    if (!call_args::values_read(reader, quantizers_of(), types_of(held), values)
+        || values.size() != set->columns.size()) {
+        return false;
+    }
+    r_keys = keys_of(set->columns);
+    r_values = values;
+    return true;
+}
+
+Error NetwPropertySetBinding::install_image(
+    const Array &p_keys,
+    const Array &p_values,
+    int64_t p_tick
+) {
+    Node *held = node();
+    if (held == nullptr || p_keys.size() != p_values.size()) {
+        return ERR_UNAVAILABLE;
+    }
+    for (int at = 0; at < p_keys.size(); ++at) {
+        accept(p_keys[at], p_values[at]);
+    }
+    if (!write_gate || retains_arrivals()) {
+        return OK;
+    }
+    NetwMultiplayer *session = core();
+    if (session != nullptr) {
+        sim::Sample image;
+        image.binding = gd::instance_id(this);
+        image.comp = comp;
+        image.tick = p_tick;
+        image.keys = p_keys;
+        image.values = p_values;
+        if (session->sim_install_image(entity_rid(), this, image)) {
+            return OK;
+        }
+    }
+    return apply_undrawn(held, p_keys, p_values);
 }
 
 Array NetwPropertySetBinding::volatile_row() {
@@ -628,6 +763,15 @@ Error NetwPropertySetBinding::commit_staged(
         candidate.ordinal,
         candidate.values
     );
+    if (writes_node && retains_arrivals()) {
+        for (int at = 0; at < candidate.keys.size(); at++) {
+            accept(candidate.keys[at], candidate.values[at]);
+        }
+        stream_reset = false;
+        r_header = header_of(candidate);
+        discard_staged();
+        return OK;
+    }
     const Error applied = !writes_node ? OK
         : lane == STAGED_RETAINED
         ? apply_values(held, candidate.keys, candidate.values)
@@ -644,7 +788,7 @@ Error NetwPropertySetBinding::commit_staged(
     }
     if (writes_node) {
         for (int at = 0; at < candidate.keys.size(); at++) {
-            accepted[candidate.keys[at]] = candidate.values[at];
+            accept(candidate.keys[at], candidate.values[at]);
         }
     }
     stream_reset = false;

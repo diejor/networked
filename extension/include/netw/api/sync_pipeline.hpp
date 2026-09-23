@@ -189,6 +189,9 @@ public:
     );
     void note_schema_seal(const godot::Ref<NetwPropertySet> &p_set);
     int64_t sealed_schema_identity() const;
+    bool owes_rows() const {
+        return !bindings.is_empty();
+    }
     void unregister_derived(godot::Node *p_node);
     godot::TypedArray<NetwPropertySetBinding> derived_group(int64_t p_route);
 #if defined(NETW_TESTS)

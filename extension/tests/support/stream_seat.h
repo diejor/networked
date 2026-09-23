@@ -33,7 +33,8 @@ inline void seat_stream(
         p_peer,
         lane,
         uint64_t(p_offer.life),
-        uint32_t(p_offer.declared().shape_hash)
+        uint32_t(p_offer.declared().shape_hash),
+        p_offer.tenure
     );
     p_writer.ready(p_peer, request, netw::wire::next_stream_token());
 }

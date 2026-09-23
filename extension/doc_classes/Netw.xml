@@ -149,10 +149,11 @@
 				The [NetwEntity] that represents [param node] in the [member Node.multiplayer] session, and returns it to configure.
 				[codeblock]
 				func _init() -&gt; void:
-					var entity := Netw.configure_entity(self)
-					# the node now behaves like `Node.set_multiplayer_authority(peer_id)`
-					entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+				    var entity := Netw.configure_entity(self)
+				    # the node now behaves like `Node.set_multiplayer_authority(peer_id)`
+				    entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 				[/codeblock]
+				[member NetwEntity.controller] is the peer that steers the entity, and [NetwEntity] shows how a peer takes control and hands it on.
 				The entity's body is declared on [member NetwEntity.simulation], its prediction on [member NetwEntity.prediction] and its drawing on [member NetwEntity.interpolation].
 			</description>
 		</method>

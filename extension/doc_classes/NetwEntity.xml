@@ -39,6 +39,73 @@
 		if entity and entity.is_player:
 		    eliminate(entity.peer_id)
 		[/codeblock]
+		[b]Control[/b]
+		[member controller] is the peer that steers the entity, and [code]0[/code] means the server. It moves only by a decision the server sends to every peer that holds the entity. [signal control_changed] fires once on each peer after the decision is in place.
+		[codeblock]
+		func _physics_process(_delta: float) -&gt; void:
+		    if entity.is_controlled_locally:
+		        steer()
+		[/codeblock]
+		[b]Node authority[/b]
+		The entity root and every node under it take [member controller] as their multiplayer authority, and the server while [member controller] is [code]0[/code]. [method follow_session] keeps one node and everything under it with the server. That is where a [MultiplayerSynchronizer] the server writes belongs.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_entity(self).follow_session(^"ServerSync")
+		[/codeblock]
+		[codeblock lang=text]
+		controller     root   ServerSync   InputSync
+		0              1      1            1
+		granted to A   A      1            A
+		revoked        1      1            1
+		[/codeblock]
+		A node added later follows the same rule when it enters the tree. A nested entity keeps its own [member controller]. A [method Node.set_multiplayer_authority] call on a node inside the entity is replaced at the next change of [member controller], and the first one warns with the node's path.
+		[b]Taking control[/b]
+		The server moves control with [method grant_control] and [method revoke_control]. A peer asks with [method request_control] and gives control back with [method release_control]. Both return a [NetwPromise] that resolves with this entity once the decision reaches this peer.
+		[codeblocks]
+		[gdscript]
+		func grab() -&gt; void:
+		    entity.request_control(NetwEntity.HOLD_EXCLUSIVE) \
+		            .then(func(_held: NetwEntity) -&gt; void: attach_to_hand()) \
+		            .catch_error(func(_code: Error, _detail: String) -&gt; void: drop())
+
+
+		func throw() -&gt; void:
+		    entity.release_control()
+		[/gdscript]
+		[csharp]
+		private void Grab()
+		{
+		    entity.RequestControl(NetwEntity.HoldEnum.Exclusive)
+		        .Then(Callable.From((NetwEntity held) =&gt; AttachToHand()))
+		        .CatchError(Callable.From((Error code, string detail) =&gt; Drop()));
+		}
+
+		private void Throw()
+		{
+		    entity.ReleaseControl();
+		}
+		[/csharp]
+		[/codeblocks]
+		[member transfer] decides whether a peer may ask. [constant TRANSFER_FIXED] refuses every request. [constant TRANSFER_REQUESTABLE] changes nothing until the decision arrives. [constant TRANSFER_IMMEDIATE] lets the asking peer run the entity before the decision.
+		[b]Running ahead of the decision[/b]
+		While a request under [constant TRANSFER_IMMEDIATE] waits, [member is_control_pending] and [member is_controlled_locally] are both [code]true[/code] and the peer writes the entity as if it held it. Nothing it writes is sent, and node authority waits for the grant. A refusal or a timeout writes back the newest values the [member controller] sent.
+		[codeblock lang=text]
+		request_control()     is_control_pending and is_controlled_locally true
+		  granted             controller is this peer, its values are sent
+		  refused, timed out  the controller's values written back
+		[/codeblock]
+		[b]Holds[/b]
+		A request names a [enum Hold], and the hold decides which later requests are refused. The server decides a request by the first line below that applies.
+		[codeblock lang=text]
+		the asker already controls it          granted, only the hold changes
+		another peer holds HOLD_EXCLUSIVE      refused
+		HOLD_YIELDABLE while another peer has  refused
+		control_requested calls deny()         refused
+		otherwise                              granted
+		[/codeblock]
+		[method grant_control] and [method revoke_control] move the entity whatever it holds, and leave it at [constant HOLD_NONE].
+		[b]Control by contact[/b]
+		A body can take control of the free bodies it touches and hand them back once they rest. [member NetwSimulationHandle.claim_on_contact] and [member NetwSimulationHandle.release_on_rest] declare it on [member simulation].
 		[b]Owning identity before the tree[/b]
 		A spawned [Node] must own its identity before it enters the tree. A replicated spawn carries it in the SPAWN frame and stamps it during reconstruction, and [method Netw.spawn_player] stamps a player's body from the [member NetwPlayer.username] it was spawned for. A node the game authors into a scene declares its own, and one that declares none is inert.
 		[codeblock]
@@ -128,11 +195,19 @@
 				The entity [param entity] names in [param api], or [code]null[/code].
 			</description>
 		</method>
+		<method name="follow_session">
+			<return type="void" />
+			<param index="0" name="path" type="NodePath" />
+			<description>
+				Keeps the node at [param path], and every node under it, with the server as its multiplayer authority whoever the [member controller] is. [param path] is relative to the entity root and names a node under it.
+				Declare it in [code]_init[/code] so every peer holds the same rule. A later call applies at once.
+			</description>
+		</method>
 		<method name="grant_control">
 			<return type="void" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Gives control of the entity to [param peer_id].
+				Gives control of the entity to [param peer_id] whatever its [member hold], and leaves it at [constant HOLD_NONE].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -185,17 +260,36 @@
 				[method comp_of] reads an id back, [method comp_node_of] reads the node, and [member comps_poisoned] says whether the ids are being honoured at all.
 			</description>
 		</method>
-		<method name="request_control">
-			<return type="void" />
+		<method name="release_control">
+			<return type="NetwPromise" />
+			<param index="0" name="successor" type="int" default="0" />
 			<description>
-				Asks the server for control of this entity. The server arbitrates through [signal control_requested] and returns a control frame.
+				Hands control of this entity to the peer [param successor], or to the server when it is [code]0[/code]. The returned [NetwPromise] resolves with this entity once the decision naming [param successor] has arrived here.
+				The request carries the entity's final state, one row of each [method NetwPropertyConfig.broadcast] record as this peer holds it now. The server writes it before [param successor] takes over, and every peer holding the entity writes it as the first sample under the new [member controller]. A simulated entity takes it by its [member NetwSimulationHandle.restore] policy. A peer whose own [method request_control] is still waiting keeps its own state.
+				A final state larger than 1024 bytes is not sent. The release still happens, [param successor] starts from its own copy, and a warning names the entity.
+				It fails with [constant @GlobalScope.ERR_UNAUTHORIZED] when this peer neither controls the entity nor has a [method request_control] waiting, and with [constant @GlobalScope.ERR_UNAVAILABLE] when [param successor] holds no copy of it. A release made while this peer's own [method request_control] is waiting is sent after it, and resolves with nothing to do when that request is refused.
+				[b]Player request.[/b]
+			</description>
+		</method>
+		<method name="request_control">
+			<return type="NetwPromise" />
+			<param index="0" name="hold" type="int" enum="NetwEntity.Hold" default="2" />
+			<description>
+				Asks the server to make this peer the [member controller] with [param hold]. The returned [NetwPromise] resolves with this entity once the decision has arrived here.
+				It fails with [constant @GlobalScope.ERR_UNAUTHORIZED] when another peer's [member hold] or the [signal control_requested] filter refuses, with [constant @GlobalScope.ERR_UNAVAILABLE] when the entity does not offer the transfer, and with [constant @GlobalScope.ERR_TIMEOUT] when no decision arrives within one second of session ticks. A request the current decision already refuses fails before anything is sent. A grant that arrives after the timeout is handed straight back to the server.
+				Under [constant TRANSFER_IMMEDIATE] the local peer uses the entity before this returns. [member is_controlled_locally] is [code]true[/code], a simulated entity is in [constant NetwSimulationHandle.MODE_AUTHORITY] with [signal NetwSimulationHandle.mode_changed] already emitted, and rows from the current [member controller] are kept aside and not written. Nothing is published and node authority does not move until the grant. A refusal or a timeout writes the newest kept rows back through their setters and returns the simulation to its earlier mode, with no [signal control_changed]. A second request made while one is waiting is sent after it and settles on its own.
+				[codeblock]
+				entity.request_control(NetwEntity.HOLD_YIELDABLE) \
+				    .then(func(_held: NetwEntity) -&gt; void: pick_up()) \
+				    .catch_error(func(_code: Error, _detail: String) -&gt; void: shrug())
+				[/codeblock]
 				[b]Player request.[/b]
 			</description>
 		</method>
 		<method name="revoke_control">
 			<return type="void" />
 			<description>
-				Takes control back to the server.
+				Takes control back to the server whatever the entity's [member hold], and leaves it at [constant HOLD_NONE].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -259,6 +353,7 @@
 		<member name="controller" type="int" setter="set_controller" getter="get_controller" default="0">
 			The peer that currently steers this entity, [code]0[/code] for the server.
 			Resolved once at [method arm] from an explicit pre-arm write or the [member initial_controller] rule. Writing this property only records the value: node authority follows the controller at [method arm] and through the server-authored transfer path ([method grant_control], [method revoke_control], or a received control frame), never from a bare write, so a field write and a broadcast can never disagree.
+			Rows of a [constant NetwPropertySet.RECORD_INPUT] or [constant NetwPropertySet.RECORD_BROADCAST] record belong to the controller that wrote them. Once a change of controller reaches a peer, that peer drops every row the previous controller still has in flight, even when control later returns to the same peer.
 			[codeblock]
 			var entity := NetwEntity.of(ball)
 			if entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED:
@@ -280,6 +375,9 @@
 		<member name="entity_id" type="StringName" setter="set_entity_id" getter="get_entity_id" default="&amp;&quot;&quot;">
 			The stable display, save and debug label for this entity, and what identifies it across peers.
 			An entity a game authors into a scene sets it in [method Object._init], before the node enters the tree, because an entity carrying none never activates. A spawn leaves it to [method Netw.spawn_player], which stamps the player's [member NetwPlayer.username] onto the body it was spawned for. A game handing one player several bodies stamps a distinct id on each.
+		</member>
+		<member name="hold" type="int" setter="" getter="get_hold" enum="NetwEntity.Hold">
+			How strongly the [member controller] holds this entity, as a [enum Hold]. Every decision the server makes by itself holds [constant HOLD_NONE].
 		</member>
 		<member name="initial_controller" type="int" setter="set_initial_controller" getter="get_initial_controller" enum="NetwEntity.InitialController" default="0">
 			The spawn-time control rule, as an [enum InitialController].
@@ -303,8 +401,11 @@
 			Whether this peer may author state for this entity and run its server-only verbs. True on the server, and true offline, since a session-less entity has no remote authority to defer to.
 			Three questions about one entity read differently. [member is_controlled_locally] asks whether the local peer steers it, [member NetwMultiplayer.is_host] asks whether the session opened in a hosting role, and this one asks who may write its state.
 		</member>
+		<member name="is_control_pending" type="bool" setter="" getter="get_is_control_pending">
+			[code]true[/code] while a [method request_control] from this peer is waiting for its decision.
+		</member>
 		<member name="is_controlled_locally" type="bool" setter="" getter="get_is_controlled_locally">
-			[code]true[/code] when the local peer controls this entity.
+			[code]true[/code] when the local peer controls this entity, or has a [method request_control] waiting on a [constant TRANSFER_IMMEDIATE] entity.
 		</member>
 		<member name="is_player" type="bool" setter="" getter="get_is_player">
 			[code]true[/code] when this entity represents a player rather than a server-owned object. The canonical player test across the addon, equivalent to a non-zero [member peer_id].
@@ -397,6 +498,7 @@
 			<param index="1" name="request" type="NetwControlRequest" />
 			<description>
 				Emitted on the server when a peer asks for control through [method request_control]. Gameplay code may inspect [param request] and call [method NetwControlRequest.deny] before the default grant path runs. The denial is a latch, so listener order does not matter.
+				It is not emitted when the current [member controller] changes its own [member hold], or when another peer's [member hold] already refuses the request.
 			</description>
 		</signal>
 		<signal name="despawned">
@@ -495,6 +597,18 @@
 		</constant>
 		<constant name="TRANSFER_REQUESTABLE" value="1" enum="Transfer">
 			Peers may ask the server for control. The server arbitrates.
+		</constant>
+		<constant name="TRANSFER_IMMEDIATE" value="2" enum="Transfer">
+			Peers may ask the server for control as with [constant TRANSFER_REQUESTABLE], and the asking peer runs the entity before the decision arrives. A refusal puts back the newest rows the controller sent, the spawn values included. A request is refused when the entity has a [method NetwPropertyConfig.state] row, declares prediction, or is replicated by a [MultiplayerSynchronizer].
+		</constant>
+		<constant name="HOLD_NONE" value="0" enum="Hold">
+			Keeps no other peer out. The hold of an entity the server controls and of every decision the server makes by itself.
+		</constant>
+		<constant name="HOLD_YIELDABLE" value="1" enum="Hold">
+			Another peer's [constant HOLD_EXCLUSIVE] request can take the entity. Another peer's [constant HOLD_YIELDABLE] request is refused.
+		</constant>
+		<constant name="HOLD_EXCLUSIVE" value="2" enum="Hold">
+			Every other peer's request is refused. Only [method grant_control] and [method revoke_control] move the entity.
 		</constant>
 		<constant name="DISCONNECT_REVERT_TO_SERVER" value="0" enum="DisconnectRule">
 			Control reverts to the server when the controller disconnects. A dropped vehicle stays in the world.

@@ -755,7 +755,7 @@ TEST_CASE(
         &self_describing,
         "anything",
         SchemaCore::VARIANT,
-        1
+        2
     );
     SchemaCore::fix(&self_describing);
     CHECK_FALSE(WirePlan::compile(self_describing).valid());

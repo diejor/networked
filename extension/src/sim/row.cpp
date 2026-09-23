@@ -149,6 +149,15 @@ LocalVector<RID> Rows::holding() const {
     return out;
 }
 
+void Rows::bodied(LocalVector<RID> &r_out) const {
+    r_out.clear();
+    for (const KeyValue<uint64_t, Row> &held : rows) {
+        if (!held.value.bodies.held.is_empty()) {
+            r_out.push_back(held.value.entity);
+        }
+    }
+}
+
 void Rows::unpredicted(LocalVector<RID> &r_out) const {
     r_out.clear();
     for (const KeyValue<uint64_t, Row> &held : rows) {

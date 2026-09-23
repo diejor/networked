@@ -100,6 +100,122 @@ bool Control::policy_admits(
     return false;
 }
 
+bool Control::decide(int64_t p_controller, int64_t p_hold) {
+    const bool moved = !configured || p_controller != controller;
+    revision += 1;
+    if (moved) {
+        tenure = revision;
+    }
+    hold = p_controller == 0 ? int64_t(HOLD_NONE) : p_hold;
+    return moved;
+}
+
+bool Control::install(
+    uint64_t p_revision,
+    bool p_tenure_changed,
+    int64_t p_hold
+) {
+    if (p_revision <= revision) {
+        return false;
+    }
+    revision = p_revision;
+    if (p_tenure_changed) {
+        tenure = p_revision;
+    }
+    hold = p_hold;
+    return true;
+}
+
+void Control::seed(uint64_t p_revision, uint64_t p_tenure, int64_t p_hold) {
+    revision = p_revision;
+    tenure = p_tenure;
+    hold = p_hold;
+}
+
+bool Control::excludes(
+    int64_t p_requester,
+    int64_t p_hold,
+    int64_t p_current,
+    int64_t p_current_hold
+) {
+    if (p_current == 0 || p_current == p_requester) {
+        return false;
+    }
+    return p_current_hold == HOLD_EXCLUSIVE || p_hold == HOLD_YIELDABLE;
+}
+
+Control::Ruling Control::rule(
+    int64_t p_requester,
+    int64_t p_hold,
+    int64_t p_current
+) const {
+    if (!admits_request()) {
+        return Ruling::UNAVAILABLE;
+    }
+    if (p_current != 0 && p_current == p_requester) {
+        return Ruling::HOLD_CHANGE;
+    }
+    if (excludes(p_requester, p_hold, p_current, hold)) {
+        return Ruling::EXCLUDED;
+    }
+    return Ruling::ASK_FILTER;
+}
+
+Control::Pending *Control::issue(
+    OpKind p_kind,
+    int64_t p_hold,
+    int64_t p_tick
+) {
+    if (pending.size() >= MAX_PENDING) {
+        return nullptr;
+    }
+    last_op += 1;
+    Pending made;
+    made.op = last_op;
+    made.kind = p_kind;
+    made.hold = p_hold;
+    made.issued_tick = p_tick;
+    pending.push_back(made);
+    return &pending[pending.size() - 1];
+}
+
+bool Control::take_pending(uint64_t p_op, Pending &r_taken) {
+    for (uint32_t at = 0; at < pending.size(); ++at) {
+        if (pending[at].op == p_op) {
+            r_taken = pending[at];
+            pending.remove_at(at);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Control::claims_pending() const {
+    for (const Pending &held : pending) {
+        if (held.kind == OpKind::REQUEST) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Control::abandon(uint64_t p_op) {
+    abandoned.push_back(p_op);
+    if (abandoned.size() > MAX_ABANDONED) {
+        abandoned.remove_at(0);
+    }
+}
+
+bool Control::take_abandoned(uint64_t p_op) {
+    for (uint32_t at = 0; at < abandoned.size(); ++at) {
+        if (abandoned[at] == p_op) {
+            abandoned.remove_at(at);
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Control::controlled_by(int64_t p_local_peer, int64_t p_peer_id) const {
     if (p_local_peer == 0) {
         return false;

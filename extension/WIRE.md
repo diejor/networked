@@ -173,7 +173,10 @@ admission, so a build disagreeing about any cell cannot pair.
 A channel also carries a `payload_revision`, folded into identity when
 non-zero. SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW declare 1 for the v11
 row contract, SESSION_ACCEPT and SESSION_ROSTER declare 1 for the membership
-row of section 16, and every other revision is 0.
+row of section 16, SPAWN declares 1 for the decision the header of section 11
+carries, CONTROL_REQUEST and CONTROL_APPLY declare 1 for the layouts of
+section 14, ROW_CONTROL declares 1 for the tenure its OPEN of section 10
+carries, and every other revision is 0.
 
 Ids 0, 1 and 7 were claimed by formats older than v8 and stay reserved, so an
 ancient frame is refused instead of decoding as a modern channel.
@@ -352,7 +355,7 @@ One complete record per frame, tagged by its first byte.
 ```text
 [tag bits 8]
 0 OPEN    [request varuint 10][route varuint 5][ordinal bits 8]
-          [family bits 8][epoch varuint 3][schema bits 32]
+          [family bits 8][epoch varuint 3][tenure varuint 5][schema bits 32]
 1 READY   [request varuint 10][token varuint 10]
 2 ACCEPT  [count int_range 1..32]
           then count entries of [token varuint 10][revision varuint 10]
@@ -369,6 +372,17 @@ OPEN travels from the writer and carries the request id it minted. READY and
 RESET travel back from the receiver naming that same request id, so a
 cancellation arriving before READY strands nobody. CLOSE travels from the
 writer and names only the token.
+
+`tenure` is the control revision at which the entity's current controller
+began, as section 14 carries it. It binds a lane for an input or broadcast
+record to that interval. The receiver seats such an OPEN only when its own
+tenure is equal and the sender authors the record under that decision. An OPEN
+for a newer tenure parks until the decision arrives, and a park older than the
+stream repair interval is answered with RESET and token 0 so the writer opens
+again. An OPEN for an older tenure is counted and dropped. Installing a
+decision that moves the tenure closes every lane of an older tenure for that
+route, and the writer that lost authorship closes its lanes and sends CLOSE.
+A state lane writes the tenure it has and the receiver ignores it.
 
 A tag above 4, a family above 2, a count outside 1..32, an entry that ends
 early and any residue refuse the record. A malformed record installs no stream
@@ -418,9 +432,12 @@ SPAWN
 [entity_id string]
 [peer_id varuint 5]
 [controller svarint 5]
+[control_revision varuint 5]
+[control_tenure varuint 5]
 [spawn_tick varuint 5]            tick + 1, so 0 is no tick
 [requester svarint 5]
 [comp_table_hash bits 32]
+[control_hold bits 2]             NONE YIELDABLE EXCLUSIVE
 [declares_scene bool1][scene_label string iff]
 [node_name string]
 [recipe int_range 0..4]           ADOPT SCENE SPAWNER FN_REGISTRY FN
@@ -447,6 +464,11 @@ recipe body
 
 `controller` and `requester` are signed, because a peer id of `-1` is a value
 they carry.
+
+`control_revision`, `control_tenure` and `control_hold` are the live decision
+at the moment the frame is encoded, so a peer that joins late starts on the
+decision every holder already has. A CONTROL_APPLY at or below that revision
+is discarded when it reaches the joiner.
 
 `parent_is_spawn_target` replaces the parent anchor with one bit when the
 parent is the spawner's own `spawn_path` target, which the receiver resolves
@@ -502,15 +524,50 @@ nothing.
 ## 14. Control request and control apply
 
 ```text
-CONTROL_REQUEST  (no payload)
-CONTROL_APPLY    [controller varuint 5]
+CONTROL_REQUEST
+[op varuint 5]                    minted by the issuer, per entity
+[observed_revision varuint 5]     the decision the issuer held
+[issued_tick varuint 5]
+[source_route varuint 5]          0, or the entity a contact claim came from
+[successor varuint 5]             a release's successor, 0 the session
+[kind bits 1]                     0 request, 1 release
+[hold bits 2]                     NONE YIELDABLE EXCLUSIVE
+[final_state bytes_capped 1024]   a release's last state, empty otherwise
+[align_verify]
+
+CONTROL_APPLY
+[controller varuint 5]            0 is the session
+[revision varuint 5]              +1 per decision the coordinator makes
+[op varuint 5]                    the issuer's op, 0 on every other copy
+[tenure_changed bool1]            the tenure starts at this revision
+[hold bits 2]
+[outcome bits 2]                  0 granted, 1 unauthorized, 2 unavailable
+[final_state bytes_capped 1024]   the new tenure's first sample, or empty
+[align_verify]
 ```
 
 The envelope already names the route and the datagram already names the peer
-asking, so a CONTROL_REQUEST arriving with any payload is refused.
+asking. A peer's requests travel one reliable ordered channel, so the
+coordinator decides them in the order they were issued, across entities too.
 
-`CONTROL_APPLY` names the peer that now drives the route, `0` meaning
-uncontrolled, and is broadcast to every peer the entity is live for.
+`CONTROL_APPLY` is admitted only from the session authority and is broadcast
+to every peer the entity is live for. The issuer's copy also carries its `op`
+and the `outcome`. A refusal reaches only the issuer and restates the current
+decision at its current revision. A receiver installs a decision only when its
+revision is newer than the one it holds, and settles the op either way. An
+apply for a route the receiver has not spawned waits for the spawn.
+
+A `final_state` is one absolute row of every `.broadcast()` record the entity
+carries, in the entity's record order. It is left empty when it would pass
+1024 bytes.
+
+```text
+[tick+1 varuint]                  the releaser's tick, 0 when it had none
+[records varuint]
+per record
+  [row bytes_capped 1024]         the call argument encoding of every column,
+                                  in column order, under its quantizer
+```
 
 ---
 
@@ -938,11 +995,11 @@ READY for request 300 and token 7.
 01 AC 02 07
 ```
 
-OPEN for request 1, route 300, ordinal 2, family 0, epoch 5 and schema hash
-`0xDEADBEEF`.
+OPEN for request 1, route 300, ordinal 2, family 0, epoch 5, tenure 3 and
+schema hash `0xDEADBEEF`.
 
 ```text
-00 01 AC 02 02 00 05 EF BE AD DE
+00 01 AC 02 02 00 05 03 EF BE AD DE
 ```
 
 An ACCEPT of two entries, the head then the pairs.

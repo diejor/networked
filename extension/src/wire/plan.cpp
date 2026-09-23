@@ -61,6 +61,11 @@ int WirePlan::element_count(int column_type) {
     return type_in_range(column_type) ? ELEMENT_COUNTS[column_type] : 0;
 }
 
+bool WirePlan::sized_by_value(int column_type) {
+    return column_type == SchemaCore::VARIANT
+        || column_type == SchemaCore::STRING;
+}
+
 WirePlan WirePlan::compile(const SchemaRecord &record) {
     NETW_ZONE_NC("WirePlan compile", colors::WIRE);
     WirePlan plan;
@@ -79,6 +84,14 @@ WirePlan WirePlan::compile(const SchemaRecord &record) {
             );
             slot.width = column->quantizer->bit_width(element);
             slot.stride = declared * column->quantizer->stride(element);
+        } else if (sized_by_value(column->type) && declared == 1) {
+            slot.variable = true;
+            slot.width = 0;
+            slot.stride = 0;
+            slot.offset = plan.total_bits;
+            plan.columns.push_back(slot);
+            plan.carries_variable = true;
+            continue;
         } else {
             slot.width = element_width(column->type);
             slot.stride = declared * element_count(column->type);

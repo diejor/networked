@@ -126,6 +126,7 @@ Dictionary frame_spec_records() {
     out["SceneViewerRow"] = SceneViewerRow::wire.spec_dump();
     out["AcceptFrame"] = AcceptFrame::wire.spec_dump();
     out["JoinFrame"] = JoinFrame::wire.spec_dump();
+    out["ControlRequest"] = ControlRequest::wire.spec_dump();
     out["ControlApply"] = ControlApply::wire.spec_dump();
     out["DenyKey"] = DenyKey::wire.spec_dump();
     return out;

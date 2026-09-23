@@ -33,13 +33,20 @@ wire::SnapshotSender *SessionSend::stream_ready(
     lane.ordinal = p_offer.comp;
     lane.family = p_family;
     r_lane = lane;
+    if (!writers.holds_tenure(p_peer, lane, p_offer.tenure)) {
+        uint64_t closed = 0;
+        if (writers.close(p_peer, lane, closed)) {
+            queue_close(p_peer, closed);
+        }
+    }
     r_token = writers.token_of(p_peer, lane);
     if (r_token != 0) {
         return writers.sender(p_peer, lane);
     }
     const uint64_t epoch = uint64_t(p_offer.life);
     const uint32_t schema = uint32_t(p_offer.declared().shape_hash);
-    const uint64_t request = writers.open(p_peer, lane, epoch, schema);
+    const uint64_t request
+        = writers.open(p_peer, lane, epoch, schema, p_offer.tenure);
     if (request == 0) {
         return nullptr;
     }
@@ -50,9 +57,41 @@ wire::SnapshotSender *SessionSend::stream_ready(
     asking.ordinal = lane.ordinal;
     asking.family = p_family;
     asking.epoch = epoch;
+    asking.tenure = p_offer.tenure.tenure;
     asking.schema = schema;
     control.queue(p_peer, asking);
     return nullptr;
+}
+
+void SessionSend::queue_close(int p_peer, uint64_t p_token) {
+    control.drop_token(p_peer, p_token);
+    wire::ControlRecord closing;
+    closing.tag = wire::ControlTag::CLOSE;
+    closing.token = p_token;
+    control.queue(p_peer, closing);
+}
+
+void SessionSend::close_tenures(int64_t p_route, uint64_t p_tenure) {
+    const LocalVector<wire::ClosedLane> closed
+        = writers.close_tenures_other_than(p_route, p_tenure);
+    for (uint32_t at = 0; at < closed.size(); ++at) {
+        queue_close(closed[at].peer, closed[at].token);
+    }
+}
+
+LocalVector<wire::ParkedOpen> SessionSend::expire_parks(int64_t p_now_ms) {
+    LocalVector<wire::ParkedOpen> out;
+    const LocalVector<int> parked = readers.parked_peers();
+    for (uint32_t at = 0; at < parked.size(); ++at) {
+        const int64_t interval
+            = wire::repair_interval_ms(int64_t(link.rtt_ms(parked[at])));
+        const LocalVector<wire::ParkedOpen> expired
+            = readers.expire_parks(parked[at], p_now_ms, interval);
+        for (uint32_t which = 0; which < expired.size(); ++which) {
+            out.push_back(expired[which]);
+        }
+    }
+    return out;
 }
 
 bool SessionSend::row_is_owed(

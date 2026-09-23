@@ -2,9 +2,12 @@
 
 namespace netw::sim {
 
+bool controller_authored(const Facts &p_facts) {
+    return !p_facts.predicted && !p_facts.state_rows;
+}
+
 bool session_authors(const Facts &p_facts) {
-    return p_facts.predicted || p_facts.state_rows
-        || p_facts.controller_is_nobody;
+    return !controller_authored(p_facts) || p_facts.controller_is_nobody;
 }
 
 bool authors_here(const Facts &p_facts) {
@@ -28,7 +31,7 @@ Mode resolve(const Facts &p_facts) {
     if (authors_here(p_facts)) {
         return Mode::AUTHORITY;
     }
-    if (p_facts.pending_claim_here && !session_authors(p_facts)) {
+    if (p_facts.pending_claim_here && controller_authored(p_facts)) {
         return Mode::AUTHORITY;
     }
     const bool closed = p_facts.fallback_latched || p_facts.delay_closed;

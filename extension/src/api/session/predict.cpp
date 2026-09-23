@@ -1083,6 +1083,7 @@ void NetwMultiplayer::predict_history_record_tick(int64_t p_tick) {
 
 void NetwMultiplayer::tick_step(double p_delta, int64_t p_tick) {
     NETW_ZONE_NC("session tick step", colors::PREDICTION);
+    sim_contact_pass(p_tick);
     sim_drain_installs();
     sim_run(sim::Schedule::TICK, p_delta, p_tick);
     if (!lagcomp_configured) {

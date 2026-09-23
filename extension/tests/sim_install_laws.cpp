@@ -323,6 +323,39 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Sim][SceneTree] a held row from its author's earlier tenure "
+    "is dropped at install even when that author controls the entity again"
+) {
+    Stand stand(2, BROADCAST_SOURCE);
+    netw_test::steer(stand.pair, stand.rig.peer_id(0));
+    stand.activate(1, Restore::BUFFERED);
+    stand.author_ticks(0, 10, 10.0);
+    REQUIRE(bool(stand.row(1) != nullptr));
+    if (stand.row(1) == nullptr) {
+        return;
+    }
+    const int held = int(stand.row(1)->installs.held.size());
+    NETW_CHECK_GT(held, 0);
+    const int64_t dropped = stand.stats(1).dropped;
+
+    const Ref<NetwEntity> host = NetwEntity::of(stand.copy(-1));
+    host->grant_control(stand.rig.peer_id(1));
+    host->grant_control(stand.rig.peer_id(0));
+    stand.rig.pump(4);
+    REQUIRE(
+        NetwEntity::of(stand.copy(1))->get_control_tenure()
+        == host->get_control_tenure()
+    );
+    NETW_CHECK_EQ(
+        NetwEntity::of(stand.copy(1))->get_controller(),
+        int64_t(stand.rig.peer_id(0))
+    );
+    stand.rig.step_ticks(DISPLAY_OFFSET + 2);
+
+    NETW_CHECK_GE(stand.stats(1).dropped - dropped, int64_t(held));
+}
+
+TEST_CASE(
     "[Networked][Sim][SceneTree] a heartbeat that agrees with a sleeping "
     "active copy writes nothing, and one that finds it perturbed heals it"
 ) {

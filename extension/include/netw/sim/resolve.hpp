@@ -32,6 +32,8 @@ struct Facts {
     uint32_t selection_count = 0;
 };
 
+bool controller_authored(const Facts &p_facts);
+
 bool session_authors(const Facts &p_facts);
 
 bool authors_here(const Facts &p_facts);

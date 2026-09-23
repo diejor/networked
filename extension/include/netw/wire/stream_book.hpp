@@ -40,12 +40,33 @@ enum class ReadyVerdict : uint8_t {
     UNKNOWN,
 };
 
+struct StreamTenure {
+    uint64_t tenure = 0;
+    bool bound = false;
+};
+
+struct ParkedOpen {
+    int peer = 0;
+    StreamLane lane;
+    uint64_t request = 0;
+    uint64_t epoch = 0;
+    uint32_t schema = 0;
+    uint64_t tenure = 0;
+    int64_t parked_at_ms = 0;
+};
+
+struct ClosedLane {
+    int peer = 0;
+    uint64_t token = 0;
+};
+
 class StreamReaderBook {
     struct Lane {
         uint64_t request = 0;
         uint64_t token = 0;
         uint64_t epoch = 0;
         uint32_t schema = 0;
+        StreamTenure tenure;
         bool invalidated = false;
         SnapshotReceiver receiver;
     };
@@ -54,11 +75,14 @@ class StreamReaderBook {
         uint64_t incarnation = 0;
         godot::HashMap<uint64_t, Lane> lanes;
         godot::HashMap<uint64_t, uint64_t> addresses;
+        godot::HashMap<uint64_t, ParkedOpen> parks;
     };
 
     godot::HashMap<int, Connection> connections;
     godot::HashMap<int, uint64_t> incarnations;
     uint64_t unknown_tokens = 0;
+    uint64_t expired_parks = 0;
+    uint64_t refused_opens = 0;
 
     Connection &connection(int p_peer);
     Lane *lane_at(int p_peer, uint64_t p_token);
@@ -72,12 +96,33 @@ public:
         uint64_t p_request,
         uint64_t p_epoch,
         uint32_t p_schema,
-        uint64_t &r_token
+        uint64_t &r_token,
+        const StreamTenure &p_tenure = StreamTenure()
     );
+
+    void park(const ParkedOpen &p_open);
+
+    void refuse_open() {
+        refused_opens += 1;
+    }
+
+    godot::LocalVector<ParkedOpen> take_parks(int64_t p_route);
+
+    godot::LocalVector<ParkedOpen> expire_parks(
+        int p_peer,
+        int64_t p_now_ms,
+        int64_t p_interval_ms
+    );
+
+    godot::LocalVector<int> parked_peers() const;
+
+    uint32_t close_tenures_before(int64_t p_route, uint64_t p_tenure);
 
     SnapshotReceiver *receiver(int p_peer, uint64_t p_token);
 
     bool names(int p_peer, uint64_t p_token, StreamLane &r_lane) const;
+
+    uint64_t token_at(int p_peer, const StreamLane &p_lane) const;
 
     bool invalidate(
         int p_peer,
@@ -98,6 +143,16 @@ public:
         return unknown_tokens;
     }
 
+    uint64_t expired_park_count() const {
+        return expired_parks;
+    }
+
+    uint64_t refused_open_count() const {
+        return refused_opens;
+    }
+
+    uint32_t parked_count() const;
+
     uint32_t stream_count() const;
 };
 
@@ -107,6 +162,7 @@ class StreamWriterBook {
         uint64_t token = 0;
         uint64_t epoch = 0;
         uint32_t schema = 0;
+        StreamTenure tenure;
         int64_t repaired_at_ms = 0;
         bool token_was_reset = false;
         SnapshotSender sender;
@@ -129,7 +185,19 @@ public:
         int p_peer,
         const StreamLane &p_lane,
         uint64_t p_epoch,
-        uint32_t p_schema
+        uint32_t p_schema,
+        const StreamTenure &p_tenure = StreamTenure()
+    );
+
+    bool holds_tenure(
+        int p_peer,
+        const StreamLane &p_lane,
+        const StreamTenure &p_tenure
+    );
+
+    godot::LocalVector<ClosedLane> close_tenures_other_than(
+        int64_t p_route,
+        uint64_t p_tenure
     );
 
     ReadyVerdict ready(int p_peer, uint64_t p_request, uint64_t p_token);

@@ -94,7 +94,7 @@ Callable &wrapper_mint() {
 } // namespace
 
 StringName NetwMultiplayer::wrapper_meta() {
-    return StringName("netw_entity");
+    return NetwEntityRecord::entity_meta();
 }
 
 void NetwMultiplayer::set_wrapper_factory(const Callable &p_factory) {
@@ -362,12 +362,10 @@ void NetwMultiplayer::entity_enter_tree(
     }
 
     if (is_reparent) {
-        p_record->apply_control(
-            p_wrapper,
-            owner,
-            p_is_authority,
-            p_session != nullptr ? p_session->session_authority_peer() : 1
-        );
+        NetwEntity *moved = Object::cast_to<NetwEntity>(p_wrapper);
+        if (moved != nullptr) {
+            moved->apply_control();
+        }
     }
 
     const Callable ready(p_wrapper, StringName("_on_owner_ready"));
@@ -398,41 +396,6 @@ void NetwMultiplayer::entity_enter_tree(
     }
 }
 
-void NetwMultiplayer::entity_wrapper_request_control(
-    const Ref<NetwEntity> &p_wrapper,
-    Node *p_owner,
-    ReplicationCore *p_plane
-) {
-    Node *owner = p_owner;
-    if (owner == nullptr || p_wrapper.is_null()) {
-        return;
-    }
-    const Ref<MultiplayerAPI> api = owner->get_multiplayer();
-    const bool connected
-        = api.is_valid() && api->get_multiplayer_peer().is_valid();
-    if (!connected) {
-        p_wrapper->_handle_control_request(
-            api.is_valid() ? int64_t(api->get_unique_id()) : int64_t(0)
-        );
-        return;
-    }
-    if (p_plane != nullptr) {
-        NETW_TRACE(sys::ENTITY, "asking the server for control");
-        p_plane->request_control(p_wrapper);
-    }
-}
-
-void NetwMultiplayer::entity_broadcast_control(
-    const Ref<NetwEntity> &p_wrapper,
-    ReplicationCore *p_plane,
-    int64_t p_peer
-) {
-    if (p_wrapper.is_null() || p_plane == nullptr) {
-        return;
-    }
-    p_plane->broadcast_control(p_wrapper, p_peer);
-}
-
 Node *NetwMultiplayer::entity_component_node(
     const RID &p_entity,
     int64_t p_comp
@@ -444,22 +407,6 @@ Node *NetwMultiplayer::entity_component_node(
     return wrapper->comp_node_of(p_comp);
 }
 
-void NetwMultiplayer::entity_request_control(const RID &p_entity) {
-    const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    if (wrapper.is_null()) {
-        return;
-    }
-    send_to(
-        session_authority_peer(),
-        wrapper->get_route(),
-        control_channels.control_request,
-        PackedByteArray(),
-        true,
-        0,
-        String(),
-        false
-    );
-}
 
 RID NetwMultiplayer::spawn_fn(
     const Callable &p_function,

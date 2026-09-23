@@ -115,11 +115,12 @@ bool row_admits_sender(
     int64_t p_controller,
     int64_t p_coordinator
 ) {
-    if (p_sender == p_coordinator) {
-        return true;
-    }
     if (p_row.record == SET_RECORD_STATE) {
-        return false;
+        return p_sender == p_coordinator;
+    }
+    if (p_sender == p_coordinator
+        && (p_controller == 0 || !record_follows_tenure(p_row.record))) {
+        return true;
     }
     return entity::Control::policy_admits(
         int(p_row.policy),

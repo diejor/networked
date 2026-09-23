@@ -285,6 +285,62 @@ func test_a_clients_ball_responds_in_the_frame_its_car_touches_it() -> void:
 	).is_between(0, 2)
 
 
+func test_a_clients_hit_on_a_bouncing_ball_takes_effect_at_once() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await begin_match(host)
+	await host.await_scene(&"Arena", 2.0)
+	await client.await_scene(&"Arena", 2.0)
+	var own := await client.await_player(&"luigi", 2.0)
+	var host_ball := arena_ball(host)
+	var client_ball := arena_ball(client)
+	await await_kickoff(own)
+	quiet_ai(host)
+	quiet_ai(client)
+	await game.sync_ticks(4)
+	assert_int(client_ball.entity.simulation.mode).override_failure_message(
+		"the client's car selects the ball, so the client runs it",
+	).is_equal(NetwSimulationHandle.MODE_ACTIVE)
+
+	var ahead: Vector3 = own.car_position + Basis(own.car_rotation).z * 5.0
+	ahead.y = RocketBall.STARTING_POSITION.y
+	host_ball.ball_position = ahead
+	host_ball.ball_linear_velocity = Vector3.ZERO
+	game.degrade(client).inbound().latency_ms(300.0)
+	for _tick in 20:
+		await game.sync_ticks(1)
+		bounce(host_ball)
+
+	client.simulate_action_press("forward")
+	var touched := -1
+	var moved := -1
+	var server_speed := 0.0
+	for tick in 240:
+		if touched < 0:
+			bounce(host_ball)
+			var speed := host_ball.ball_linear_velocity.length()
+			server_speed = maxf(server_speed, speed)
+		await game.sync_ticks(1)
+		if touched < 0 and own.get_colliding_bodies().has(client_ball):
+			touched = tick
+		var drift := client_ball.ball_linear_velocity * Vector3(1.0, 0.0, 1.0)
+		if touched >= 0 and drift.length() > 2.0:
+			moved = tick
+			break
+	client.simulate_action_release("forward")
+
+	assert_int(touched).override_failure_message(
+		"the client's car never reached the ball",
+	).is_greater_equal(0)
+	assert_float(server_speed).override_failure_message(
+		"the server's ball rested while the client's car drove at it",
+	).is_greater(0.5)
+	assert_int(moved - touched).override_failure_message(
+		"the client's ball moved %d ticks after its car touched it"
+		% (moved - touched),
+	).is_between(0, 2)
+
+
 func test_a_clients_ball_visibly_rotates_with_its_state() -> void:
 	var host := await game.add_host("mario", false)
 	var client := await game.add_client("luigi", false)
@@ -325,6 +381,11 @@ func test_a_late_join_gets_a_car_on_the_other_team() -> void:
 		"a late join takes the next grid slot, so it lands on the other team",
 	).is_equal(1)
 	assert_that(await host.await_player(&"luigi", 2.0)).is_not_null()
+
+
+func bounce(ball: RocketBall) -> void:
+	if ball.ball_position.y < 1.1 and ball.ball_linear_velocity.y <= 0.0:
+		ball.ball_linear_velocity = Vector3(0.0, 2.0, 0.0)
 
 
 func begin_match(host: NetwSceneRunner) -> void:

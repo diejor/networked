@@ -174,7 +174,6 @@ NetwMultiplayer::NetwMultiplayer() {
     control_channels.leave_request = declared_channel("SESSION_LEAVE_REQUEST");
     control_channels.pause = declared_channel("SESSION_PAUSE");
     control_channels.unpause = declared_channel("SESSION_UNPAUSE");
-    control_channels.control_request = declared_channel("CONTROL_REQUEST");
     clock_channels.handshake = declared_channel("CLOCK_HANDSHAKE");
     clock_channels.handshake_reply = declared_channel("CLOCK_HANDSHAKE_REPLY");
     clock_channels.ping = declared_channel("CLOCK_PING");

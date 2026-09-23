@@ -38,7 +38,7 @@ private:
     bool explicit_teleport_only = false;
     bool explicit_reconcile_only = false;
 
-    void warn_double_set(bool p_already, const char *p_axis) const;
+    void warn_double_set(bool p_replaces, const char *p_axis) const;
 
 protected:
     static void _bind_methods();

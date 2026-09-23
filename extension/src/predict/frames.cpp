@@ -5,6 +5,7 @@
 #include "netw/predict/journal.hpp"
 #include "netw/profile.hpp"
 #include "netw/wire/stream.hpp"
+#include "netw/wire/value_row.hpp"
 
 using namespace godot;
 
@@ -176,6 +177,15 @@ bool serialize_row(
 ) {
     for (uint32_t column = 0; column < p_plan.column_count(); ++column) {
         const wire::ColumnPlan &slot = p_plan.column(column);
+        if (slot.variable) {
+            Variant value
+                = Stream::is_reading ? Variant() : p_row.read_value(column);
+            if (!wire::carry_value(p_stream, value)
+                || (Stream::is_reading && !p_row.write_value(column, value))) {
+                return false;
+            }
+            continue;
+        }
         for (int element = 0; element < slot.stride; ++element) {
             const int64_t base = slot.offset + int64_t(element) * slot.width;
             for (int consumed = 0; consumed < slot.width;) {

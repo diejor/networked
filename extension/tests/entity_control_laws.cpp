@@ -26,7 +26,9 @@ struct ArmedNode {
         REQUIRE(entity.is_valid());
         entity->set_entity_id(p_id);
         entity->set_peer_id(p_peer);
-        entity->set_initial_controller(p_initial);
+        entity->set_initial_controller(
+            NetwEntity::InitialController(p_initial)
+        );
         entity->arm(godot::Ref<netw::NetwMultiplayer>());
     }
 
@@ -223,9 +225,7 @@ TEST_CASE(
     REQUIRE(entity.is_valid());
     entity->set_entity_id("valeria");
     entity->set_peer_id(0);
-    entity->set_initial_controller(
-        int(netw::entity::Control::InitialController::SERVER)
-    );
+    entity->set_initial_controller(NetwEntity::INITIAL_SERVER);
     entity->arm(session);
 
     CHECK(entity->get_is_authority());
@@ -247,9 +247,7 @@ TEST_CASE(
     REQUIRE(entity.is_valid());
     entity->set_entity_id("driftwood");
     entity->set_peer_id(42);
-    entity->set_initial_controller(
-        int(netw::entity::Control::InitialController::REPRESENTED_PEER)
-    );
+    entity->set_initial_controller(NetwEntity::INITIAL_REPRESENTED_PEER);
     entity->arm(session);
 
     NETW_CHECK_EQ(entity->get_controller(), 42);

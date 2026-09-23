@@ -44,6 +44,7 @@
 		PROXY      does not run       frozen kinematic, drawn from history
 		NONE       does not run       untouched
 		[/codeblock]
+		An [constant MODE_ACTIVE] copy that touches a body this peer runs as [constant MODE_AUTHORITY] or [constant MODE_PREDICT] keeps its own response to the touch. It skips every sample the author sent before the touch, and the author's later samples correct it as usual. One of the two bodies must report contacts through [member RigidBody3D.contact_monitor].
 		[b]Selection[/b]
 		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. [method simulate] names one, and [method simulate_nearest], [method simulate_within] and [method simulate_all] set one automatic policy, which the last call replaces. A change takes effect at the start of the next tick.
 		[codeblock]
@@ -106,11 +107,20 @@
 			The physics bodies this entity's simulation owns, as paths from the entity root. The core freezes them on a [constant MODE_PROXY] copy and restores the [member RigidBody3D.freeze] settings the scene authored when the copy runs again.
 			Empty means the root, when it is a [RigidBody2D] or [RigidBody3D]. A value written after the entity goes live warns, and the bodies it had stay in effect.
 		</member>
+		<member name="claim_on_contact" type="bool" setter="set_claim_on_contact" getter="get_claim_on_contact" default="false">
+			When a body of this entity runs here as [constant MODE_AUTHORITY] and touches a free entity that also sets it, this peer claims that entity with [constant NetwEntity.HOLD_YIELDABLE]. A claimed entity claims what it touches in the same tick.
+			A touch claims when it begins or while the touched body moves. A body that [member release_on_rest] gave back while it still touches stays free until it moves again.
+			The session grants the claim only while this peer controls the entity that touched it, so a refused grab takes nothing it touched. Setting it turns on [member RigidBody3D.contact_monitor] for the bodies. It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] row and no prediction, and does nothing otherwise.
+		</member>
 		<member name="max_restore_ticks" type="int" setter="set_max_restore_ticks" getter="get_max_restore_ticks" default="6">
 			The most ticks [constant RESTORE_EXTRAPOLATED] carries a sample forward.
 		</member>
 		<member name="mode" type="int" setter="" getter="get_mode" enum="NetwSimulationHandle.Mode" default="0">
 			The mode this entity runs in on this peer. [signal mode_changed] reports each change.
+		</member>
+		<member name="release_on_rest" type="float" setter="set_release_on_rest" getter="get_release_on_rest" default="0.0">
+			The seconds the bodies must sleep before this peer releases the entity with [method NetwEntity.release_control]. It acts only while this peer is the confirmed controller with [constant NetwEntity.HOLD_YIELDABLE] and no body is frozen, so [constant NetwEntity.HOLD_EXCLUSIVE] never releases itself. A body that wakes before the session decides claims the entity again. [code]0[/code] turns it off.
+			It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] row and no prediction, and does nothing otherwise.
 		</member>
 		<member name="replicas" type="int" setter="set_replicas" getter="get_replicas" enum="NetwSimulationHandle.Replicas" default="0">
 			How the copies this peer does not author run. [constant REPLICAS_ACTIVE] makes every such copy [constant MODE_ACTIVE]. It can change at any time.

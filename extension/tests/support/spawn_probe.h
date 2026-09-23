@@ -59,7 +59,7 @@ protected:
             return;
         }
         entity->set_initial_controller(
-            int64_t(netw::entity::Control::InitialController::REPRESENTED_PEER)
+            netw::NetwEntity::INITIAL_REPRESENTED_PEER
         );
         netw::script::model::configure_node_property(
             this,

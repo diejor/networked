@@ -35,6 +35,7 @@ struct ControlOpen {
     uint64_t ordinal = 0;
     uint64_t family = 0;
     uint64_t epoch = 0;
+    uint64_t tenure = 0;
     uint64_t schema = 0;
 
     static constexpr auto wire = describe(
@@ -44,6 +45,7 @@ struct ControlOpen {
         field<&ControlOpen::ordinal>("ordinal", bits(8)),
         field<&ControlOpen::family>("family", bits(8)),
         field<&ControlOpen::epoch>("epoch", varuint(3)),
+        field<&ControlOpen::tenure>("tenure", varuint(5)),
         field<&ControlOpen::schema>("schema", bits(32))
     );
 };
@@ -113,6 +115,7 @@ struct ControlRecord {
     uint8_t ordinal = 0;
     StreamFamily family = StreamFamily::VOLATILE;
     uint64_t epoch = 0;
+    uint64_t tenure = 0;
     uint32_t schema = 0;
     godot::LocalVector<ControlAcceptEntry> receipts;
 };

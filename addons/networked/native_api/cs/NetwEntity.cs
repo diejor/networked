@@ -91,12 +91,106 @@ namespace Networked;
 /// </code>
 /// </para>
 /// <para>
-/// <b>Owning identity before the tree</b> A spawned <see cref="Node"/> must own
-/// its identity before it enters the tree. A replicated spawn carries it in the
-/// SPAWN frame and stamps it during reconstruction, and
-/// <see cref="Netw.SpawnPlayer"/> stamps a player's body from the
-/// <see cref="NetwPlayer.UserName"/> it was spawned for. A node the game
-/// authors into a scene declares its own, and one that declares none is inert.
+/// <b>Control</b> <see cref="NetwEntity.Controller"/> is the peer that steers
+/// the entity, and <c>0</c> means the server. It moves only by a decision the
+/// server sends to every peer that holds the entity.
+/// <see cref="NetwEntity.ControlChanged"/> fires once on each peer after the
+/// decision is in place.
+/// <code>
+/// func _physics_process(_delta: float) -&gt; void:
+///     if entity.is_controlled_locally:
+///         steer()
+/// </code>
+/// </para>
+/// <para>
+/// <b>Node authority</b> The entity root and every node under it take
+/// <see cref="NetwEntity.Controller"/> as their multiplayer authority, and the
+/// server while <see cref="NetwEntity.Controller"/> is <c>0</c>.
+/// <see cref="NetwEntity.FollowSession"/> keeps one node and everything under
+/// it with the server. That is where a <see cref="MultiplayerSynchronizer"/>
+/// the server writes belongs.
+/// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_entity(self).follow_session(^"ServerSync")
+/// </code>
+/// <code>
+/// controller     root   ServerSync   InputSync
+/// 0              1      1            1
+/// granted to A   A      1            A
+/// revoked        1      1            1
+/// </code>
+/// </para>
+/// <para>
+/// A node added later follows the same rule when it enters the tree. A nested
+/// entity keeps its own <see cref="NetwEntity.Controller"/>. A
+/// <c>Node.set_multiplayer_authority</c> call on a node inside the entity is
+/// replaced at the next change of <see cref="NetwEntity.Controller"/>, and the
+/// first one warns with the node's path. <b>Taking control</b> The server moves
+/// control with <see cref="NetwEntity.GrantControl"/> and
+/// <see cref="NetwEntity.RevokeControl"/>. A peer asks with
+/// <see cref="NetwEntity.RequestControl"/> and gives control back with
+/// <see cref="NetwEntity.ReleaseControl"/>. Both return a
+/// <see cref="NetwPromise"/> that resolves with this entity once the decision
+/// reaches this peer.
+/// <code>
+/// private void Grab()
+/// {
+///     entity.RequestControl(NetwEntity.HoldEnum.Exclusive)
+///         .Then(Callable.From((NetwEntity held) =&gt; AttachToHand()))
+///         .CatchError(Callable.From((Error code, string detail) =&gt; Drop()));
+/// }
+///
+/// private void Throw()
+/// {
+///     entity.ReleaseControl();
+/// }
+/// </code>
+/// </para>
+/// <para>
+/// <see cref="NetwEntity.Transfer"/> decides whether a peer may ask.
+/// <see cref="NetwEntity.TransferEnum.Fixed"/> refuses every request.
+/// <see cref="NetwEntity.TransferEnum.Requestable"/> changes nothing until the
+/// decision arrives. <see cref="NetwEntity.TransferEnum.Immediate"/> lets the
+/// asking peer run the entity before the decision. <b>Running ahead of the
+/// decision</b> While a request under
+/// <see cref="NetwEntity.TransferEnum.Immediate"/> waits,
+/// <see cref="NetwEntity.IsControlPending"/> and
+/// <see cref="NetwEntity.IsControlledLocally"/> are both <c>true</c> and the
+/// peer writes the entity as if it held it. Nothing it writes is sent, and node
+/// authority waits for the grant. A refusal or a timeout writes back the newest
+/// values the <see cref="NetwEntity.Controller"/> sent.
+/// <code>
+/// request_control()     is_control_pending and is_controlled_locally true
+///   granted             controller is this peer, its values are sent
+///   refused, timed out  the controller's values written back
+/// </code>
+/// </para>
+/// <para>
+/// <b>Holds</b> A request names a <see cref="NetwEntity.HoldEnum"/>, and the
+/// hold decides which later requests are refused. The server decides a request
+/// by the first line below that applies.
+/// <code>
+/// the asker already controls it          granted, only the hold changes
+/// another peer holds HOLD_EXCLUSIVE      refused
+/// HOLD_YIELDABLE while another peer has  refused
+/// control_requested calls deny()         refused
+/// otherwise                              granted
+/// </code>
+/// </para>
+/// <para>
+/// <see cref="NetwEntity.GrantControl"/> and
+/// <see cref="NetwEntity.RevokeControl"/> move the entity whatever it holds,
+/// and leave it at <see cref="NetwEntity.HoldEnum.None"/>. <b>Control by
+/// contact</b> A body can take control of the free bodies it touches and hand
+/// them back once they rest. <see cref="NetwSimulationHandle.ClaimOnContact"/>
+/// and <see cref="NetwSimulationHandle.ReleaseOnRest"/> declare it on
+/// <see cref="NetwEntity.Simulation"/>. <b>Owning identity before the tree</b>
+/// A spawned <see cref="Node"/> must own its identity before it enters the
+/// tree. A replicated spawn carries it in the SPAWN frame and stamps it during
+/// reconstruction, and <see cref="Netw.SpawnPlayer"/> stamps a player's body
+/// from the <see cref="NetwPlayer.UserName"/> it was spawned for. A node the
+/// game authors into a scene declares its own, and one that declares none is
+/// inert.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_entity(self).entity_id = &amp;"ball"
@@ -192,6 +286,37 @@ public sealed class NetwEntity : NetwRefCounted
         /// Peers may ask the server for control. The server arbitrates.
         /// </summary>
         Requestable = 1,
+        /// <summary>
+        /// Peers may ask the server for control as with
+        /// <see cref="NetwEntity.TransferEnum.Requestable"/>, and the asking
+        /// peer runs the entity before the decision arrives. A refusal puts
+        /// back the newest rows the controller sent, the spawn values included.
+        /// A request is refused when the entity has a
+        /// <see cref="NetwPropertyConfig.State"/> row, declares prediction, or
+        /// is replicated by a <see cref="MultiplayerSynchronizer"/>.
+        /// </summary>
+        Immediate = 2,
+    }
+
+    public enum HoldEnum : long
+    {
+        /// <summary>
+        /// Keeps no other peer out. The hold of an entity the server controls
+        /// and of every decision the server makes by itself.
+        /// </summary>
+        None = 0,
+        /// <summary>
+        /// Another peer's <see cref="NetwEntity.HoldEnum.Exclusive"/> request
+        /// can take the entity. Another peer's
+        /// <see cref="NetwEntity.HoldEnum.Yieldable"/> request is refused.
+        /// </summary>
+        Yieldable = 1,
+        /// <summary>
+        /// Every other peer's request is refused. Only
+        /// <see cref="NetwEntity.GrantControl"/> and
+        /// <see cref="NetwEntity.RevokeControl"/> move the entity.
+        /// </summary>
+        Exclusive = 2,
     }
 
     public enum DisconnectRule : long
@@ -372,7 +497,10 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when <see cref="NetwEntity.Controller"/> changes.
+    /// Emitted once when <see cref="NetwEntity.Controller"/> changes. On a
+    /// transfer through <see cref="NetwEntity.GrantControl"/>,
+    /// <see cref="NetwEntity.RevokeControl"/> or a received control frame, it
+    /// fires after the node authority has moved.
     /// </summary>
     public event Action<long, long> ControlChanged
     {
@@ -385,7 +513,10 @@ public sealed class NetwEntity : NetwRefCounted
     /// <see cref="NetwEntity.RequestControl"/>. Gameplay code may inspect
     /// <c>request</c> and call <see cref="NetwControlRequest.Deny"/> before the
     /// default grant path runs. The denial is a latch, so listener order does
-    /// not matter.
+    /// not matter. It is not emitted when the current
+    /// <see cref="NetwEntity.Controller"/> changes its own
+    /// <see cref="NetwEntity.Hold"/>, or when another peer's
+    /// <see cref="NetwEntity.Hold"/> already refuses the request.
     /// </summary>
     public event Action<long, Variant> ControlRequested
     {
@@ -633,16 +764,13 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetInitialController =
-        NetwApi.MethodBind(
-            "NetwEntity",
-            "get_initial_controller",
-            3905245786UL);
+        NetwApi.MethodBind("NetwEntity", "get_initial_controller", 105274593UL);
 
     private static readonly IntPtr _bindSetInitialController =
         NetwApi.MethodBind(
             "NetwEntity",
             "set_initial_controller",
-            1286410249UL);
+            4242440256UL);
 
     /// <summary>
     /// The spawn-time control rule, as an
@@ -658,7 +786,7 @@ public sealed class NetwEntity : NetwRefCounted
     ///     entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
     /// </code>
     /// </summary>
-    public long InitialController
+    public NetwEntity.InitialControllerEnum InitialController
     {
         get
         {
@@ -667,11 +795,11 @@ public sealed class NetwEntity : NetwRefCounted
                 _bindGetInitialController,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwEntity.InitialControllerEnum)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetInitialController,
@@ -682,10 +810,10 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetTransfer =
-        NetwApi.MethodBind("NetwEntity", "get_transfer", 3905245786UL);
+        NetwApi.MethodBind("NetwEntity", "get_transfer", 4269211502UL);
 
     private static readonly IntPtr _bindSetTransfer =
-        NetwApi.MethodBind("NetwEntity", "set_transfer", 1286410249UL);
+        NetwApi.MethodBind("NetwEntity", "set_transfer", 1617541268UL);
 
     /// <summary>
     /// The player request policy for control transfer, as a
@@ -697,17 +825,17 @@ public sealed class NetwEntity : NetwRefCounted
     /// <see cref="NetwEntity.RequestControl"/>, and the server emits
     /// <see cref="NetwEntity.ControlRequested"/> before granting.
     /// </summary>
-    public long Transfer
+    public NetwEntity.TransferEnum Transfer
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetTransfer, Checked, ref answered);
-            return answered;
+            return (NetwEntity.TransferEnum)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetTransfer,
@@ -721,13 +849,13 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind(
             "NetwEntity",
             "get_on_controller_disconnect",
-            3905245786UL);
+            3930799440UL);
 
     private static readonly IntPtr _bindSetOnControllerDisconnect =
         NetwApi.MethodBind(
             "NetwEntity",
             "set_on_controller_disconnect",
-            1286410249UL);
+            3931776110UL);
 
     /// <summary>
     /// The lifetime rule for an entity whose controller disconnects, as a
@@ -736,7 +864,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// player representation still despawns through
     /// <see cref="NetwEntity.PeerId"/>.
     /// </summary>
-    public long OnControllerDisconnect
+    public NetwEntity.DisconnectRule OnControllerDisconnect
     {
         get
         {
@@ -745,11 +873,11 @@ public sealed class NetwEntity : NetwRefCounted
                 _bindGetOnControllerDisconnect,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwEntity.DisconnectRule)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetOnControllerDisconnect,
@@ -823,7 +951,7 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetSceneIsolation =
-        NetwApi.MethodBind("NetwEntity", "get_scene_isolation", 3905245786UL);
+        NetwApi.MethodBind("NetwEntity", "get_scene_isolation", 835196835UL);
 
     /// <summary>
     /// Whether this scene hosts its own world, as a
@@ -834,7 +962,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// write is rejected rather than producing two peers that disagree about
     /// the container.
     /// </summary>
-    public long SceneIsolation
+    public NetwMultiplayer.SceneIsolation SceneIsolation
     {
         get
         {
@@ -843,7 +971,7 @@ public sealed class NetwEntity : NetwRefCounted
                 _bindGetSceneIsolation,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwMultiplayer.SceneIsolation)answered;
         }
     }
 
@@ -862,7 +990,11 @@ public sealed class NetwEntity : NetwRefCounted
     /// server-authored transfer path (<see cref="NetwEntity.GrantControl"/>,
     /// <see cref="NetwEntity.RevokeControl"/>, or a received control frame),
     /// never from a bare write, so a field write and a broadcast can never
-    /// disagree.
+    /// disagree. Rows of a <see cref="NetwPropertySet.RecordEnum.Input"/> or
+    /// <see cref="NetwPropertySet.RecordEnum.Broadcast"/> record belong to the
+    /// controller that wrote them. Once a change of controller reaches a peer,
+    /// that peer drops every row the previous controller still has in flight,
+    /// even when control later returns to the same peer.
     /// <code>
     /// var entity := NetwEntity.of(ball)
     /// if entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED:
@@ -890,13 +1022,13 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetControlKind =
-        NetwApi.MethodBind("NetwEntity", "get_control_kind", 3905245786UL);
+        NetwApi.MethodBind("NetwEntity", "get_control_kind", 382292765UL);
 
     /// <summary>
     /// Derived from <see cref="NetwEntity.Controller"/>. See
     /// <see cref="NetwEntity.ControlKindEnum"/>.
     /// </summary>
-    public long ControlKind
+    public NetwEntity.ControlKindEnum ControlKind
     {
         get
         {
@@ -905,7 +1037,7 @@ public sealed class NetwEntity : NetwRefCounted
                 _bindGetControlKind,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwEntity.ControlKindEnum)answered;
         }
     }
 
@@ -916,7 +1048,9 @@ public sealed class NetwEntity : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// <c>true</c> when the local peer controls this entity.
+    /// <c>true</c> when the local peer controls this entity, or has a
+    /// <see cref="NetwEntity.RequestControl"/> waiting on a
+    /// <see cref="NetwEntity.TransferEnum.Immediate"/> entity.
     /// </summary>
     public bool IsControlledLocally
     {
@@ -993,6 +1127,44 @@ public sealed class NetwEntity : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetHold =
+        NetwApi.MethodBind("NetwEntity", "get_hold", 1976353525UL);
+
+    /// <summary>
+    /// How strongly the <see cref="NetwEntity.Controller"/> holds this entity,
+    /// as a <see cref="NetwEntity.HoldEnum"/>. Every decision the server makes
+    /// by itself holds <see cref="NetwEntity.HoldEnum.None"/>.
+    /// </summary>
+    public NetwEntity.HoldEnum Hold
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetHold, Checked, ref answered);
+            return (NetwEntity.HoldEnum)answered;
+        }
+    }
+
+    private static readonly IntPtr _bindGetIsControlPending =
+        NetwApi.MethodBind("NetwEntity", "get_is_control_pending", 36873697UL);
+
+    /// <summary>
+    /// <c>true</c> while a <see cref="NetwEntity.RequestControl"/> from this
+    /// peer is waiting for its decision.
+    /// </summary>
+    public bool IsControlPending
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(
+                _bindGetIsControlPending,
+                Checked,
+                ref answered);
+            return answered != 0;
+        }
+    }
+
     private static readonly IntPtr _bindGetIsAuthority =
         NetwApi.MethodBind("NetwEntity", "get_is_authority", 36873697UL);
 
@@ -1037,19 +1209,19 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetOwnership =
-        NetwApi.MethodBind("NetwEntity", "get_ownership", 3905245786UL);
+        NetwApi.MethodBind("NetwEntity", "get_ownership", 2060038782UL);
 
     /// <summary>
     /// Derived from <see cref="NetwEntity.PeerId"/>. See
     /// <see cref="NetwEntity.OwnershipEnum"/>.
     /// </summary>
-    public long Ownership
+    public NetwEntity.OwnershipEnum Ownership
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetOwnership, Checked, ref answered);
-            return answered;
+            return (NetwEntity.OwnershipEnum)answered;
         }
     }
 
@@ -1090,20 +1262,20 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetStage =
-        NetwApi.MethodBind("NetwEntity", "get_stage", 3905245786UL);
+        NetwApi.MethodBind("NetwEntity", "get_stage", 920056488UL);
 
     /// <summary>
     /// The entity's current lifecycle position, as a
     /// <see cref="NetwEntity.StageEnum"/>. Read-only, and moved only along an
     /// edge the stage table admits, so a rejected move leaves it where it was.
     /// </summary>
-    public long Stage
+    public NetwEntity.StageEnum Stage
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetStage, Checked, ref answered);
-            return answered;
+            return (NetwEntity.StageEnum)answered;
         }
     }
 
@@ -1577,25 +1749,99 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindRequestControl =
-        NetwApi.MethodBind("NetwEntity", "request_control", 3218959716UL);
+        NetwApi.MethodBind("NetwEntity", "request_control", 2273159157UL);
 
     /// <summary>
-    /// Asks the server for control of this entity. The server arbitrates
-    /// through <see cref="NetwEntity.ControlRequested"/> and returns a control
-    /// frame. <b>Player request.</b>
+    /// Asks the server to make this peer the
+    /// <see cref="NetwEntity.Controller"/> with <paramref name="hold"/>. The
+    /// returned <see cref="NetwPromise"/> resolves with this entity once the
+    /// decision has arrived here. It fails with
+    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> when another peer's
+    /// <see cref="NetwEntity.Hold"/> or the
+    /// <see cref="NetwEntity.ControlRequested"/> filter refuses, with
+    /// <c>@GlobalScope.ERR_UNAVAILABLE</c> when the entity does not offer the
+    /// transfer, and with <c>@GlobalScope.ERR_TIMEOUT</c> when no decision
+    /// arrives within one second of session ticks. A request the current
+    /// decision already refuses fails before anything is sent. A grant that
+    /// arrives after the timeout is handed straight back to the server. Under
+    /// <see cref="NetwEntity.TransferEnum.Immediate"/> the local peer uses the
+    /// entity before this returns. <see cref="NetwEntity.IsControlledLocally"/>
+    /// is <c>true</c>, a simulated entity is in
+    /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> with
+    /// <see cref="NetwSimulationHandle.ModeChanged"/> already emitted, and rows
+    /// from the current <see cref="NetwEntity.Controller"/> are kept aside and
+    /// not written. Nothing is published and node authority does not move until
+    /// the grant. A refusal or a timeout writes the newest kept rows back
+    /// through their setters and returns the simulation to its earlier mode,
+    /// with no <see cref="NetwEntity.ControlChanged"/>. A second request made
+    /// while one is waiting is sent after it and settles on its own.
+    /// <code>
+    /// entity.request_control(NetwEntity.HOLD_YIELDABLE) \
+    ///     .then(func(_held: NetwEntity) -&gt; void: pick_up()) \
+    ///     .catch_error(func(_code: Error, _detail: String) -&gt; void: shrug())
+    /// </code>
+    /// <para>
+    /// <b>Player request.</b>
+    /// </para>
     /// </summary>
-    public void RequestControl()
+    public NetwPromise RequestControl(NetwEntity.HoldEnum hold =
+        (NetwEntity.HoldEnum)2)
     {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindRequestControl, Checked, ref discarded);
+        long slot0 = (long)hold;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Long_IntPtr(
+            _bindRequestControl,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindReleaseControl =
+        NetwApi.MethodBind("NetwEntity", "release_control", 339970911UL);
+
+    /// <summary>
+    /// Hands control of this entity to the peer <paramref name="successor"/>,
+    /// or to the server when it is <c>0</c>. The returned
+    /// <see cref="NetwPromise"/> resolves with this entity once the decision
+    /// naming <paramref name="successor"/> has arrived here. The request
+    /// carries the entity's final state, one row of each
+    /// <see cref="NetwPropertyConfig.Broadcast"/> record as this peer holds it
+    /// now. The server writes it before <paramref name="successor"/> takes
+    /// over, and every peer holding the entity writes it as the first sample
+    /// under the new <see cref="NetwEntity.Controller"/>. A simulated entity
+    /// takes it by its <see cref="NetwSimulationHandle.Restore"/> policy. A
+    /// peer whose own <see cref="NetwEntity.RequestControl"/> is still waiting
+    /// keeps its own state. A final state larger than 1024 bytes is not sent.
+    /// The release still happens, <paramref name="successor"/> starts from its
+    /// own copy, and a warning names the entity. It fails with
+    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> when this peer neither controls the
+    /// entity nor has a <see cref="NetwEntity.RequestControl"/> waiting, and
+    /// with <c>@GlobalScope.ERR_UNAVAILABLE</c> when
+    /// <paramref name="successor"/> holds no copy of it. A release made while
+    /// this peer's own <see cref="NetwEntity.RequestControl"/> is waiting is
+    /// sent after it, and resolves with nothing to do when that request is
+    /// refused. <b>Player request.</b>
+    /// </summary>
+    public NetwPromise ReleaseControl(long successor = 0)
+    {
+        long slot0 = successor;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Long_IntPtr(
+            _bindReleaseControl,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPromise.Adopt(answered);
     }
 
     private static readonly IntPtr _bindGrantControl =
         NetwApi.MethodBind("NetwEntity", "grant_control", 1286410249UL);
 
     /// <summary>
-    /// Gives control of the entity to <paramref name="peerId"/>. <b>Server
-    /// Only.</b>
+    /// Gives control of the entity to <paramref name="peerId"/> whatever its
+    /// <see cref="NetwEntity.Hold"/>, and leaves it at
+    /// <see cref="NetwEntity.HoldEnum.None"/>. <b>Server Only.</b>
     /// </summary>
     public void GrantControl(long peerId)
     {
@@ -1612,12 +1858,34 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "revoke_control", 3218959716UL);
 
     /// <summary>
-    /// Takes control back to the server. <b>Server Only.</b>
+    /// Takes control back to the server whatever the entity's
+    /// <see cref="NetwEntity.Hold"/>, and leaves it at
+    /// <see cref="NetwEntity.HoldEnum.None"/>. <b>Server Only.</b>
     /// </summary>
     public void RevokeControl()
     {
         long discarded = default;
         NetwThunks.Ptrcall0_Long(_bindRevokeControl, Checked, ref discarded);
+    }
+
+    private static readonly IntPtr _bindFollowSession =
+        NetwApi.MethodBind("NetwEntity", "follow_session", 1348162250UL);
+
+    /// <summary>
+    /// Keeps the node at <paramref name="path"/>, and every node under it, with
+    /// the server as its multiplayer authority whoever the
+    /// <see cref="NetwEntity.Controller"/> is. <paramref name="path"/> is
+    /// relative to the entity root and names a node under it. Declare it in
+    /// <c>_init</c> so every peer holds the same rule. A later call applies at
+    /// once.
+    /// </summary>
+    public void FollowSession(NodePath path)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromNodePath(path);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindFollowSession, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        answered.Dispose();
     }
 
     private static readonly IntPtr _bindMarkTemplate =

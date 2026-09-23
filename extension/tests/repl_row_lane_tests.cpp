@@ -42,30 +42,40 @@ Array pair(int64_t x, int64_t y) {
     return out;
 }
 
+SchemaRecord loose(int p_stride) {
+    SchemaRecord record;
+    record.name = godot::StringName("Loose");
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("anything"),
+        SchemaCore::VARIANT,
+        p_stride
+    );
+    SchemaCore::fix(&record);
+    return record;
+}
+
 TEST_CASE(
     "[Networked][Repl][Hosted] a lane opens on its schema or not at all"
 ) {
     RowLane good = RowLane::open(body());
     CHECK(good.valid());
 
-    SchemaRecord variant;
-    variant.name = godot::StringName("Loose");
-    SchemaCore::append_column(
-        &variant,
-        godot::StringName("anything"),
-        SchemaCore::VARIANT,
-        1
-    );
-    SchemaCore::fix(&variant);
-
-    // A self-describing column has no fixed width, so the lane has no plan and
-    // says so at open rather than at the first send.
-    RowLane loose = RowLane::open(variant);
-    CHECK_FALSE(loose.valid());
-
+    RowLane ink = RowLane::open(loose(1));
+    REQUIRE(ink.valid());
+    PackedVector2Array stroke;
+    stroke.push_back(Vector2(1, 2));
+    stroke.push_back(Vector2(3, 4));
+    Array values;
+    values.push_back(stroke);
     CodeRow row;
+    REQUIRE(ink.gather(values, row));
+    CHECK((row.read_value(0) == Variant(stroke)));
+
+    RowLane strided = RowLane::open(loose(2));
+    CHECK_FALSE(strided.valid());
     ERR_PRINT_OFF;
-    CHECK_FALSE(loose.gather(pair(1, 2), row));
+    CHECK_FALSE(strided.gather(pair(1, 2), row));
     ERR_PRINT_ON;
 }
 
@@ -78,9 +88,6 @@ TEST_CASE(
     REQUIRE(lane.gather(pair(3, 4), row));
     const uint64_t kept = row.read(lane.plan().column(0), 0);
 
-    // The caller reuses one row across passes, so a refused gather that
-    // half-wrote it would send a mix of this pass and the last under a mask
-    // that claims both columns are current.
     Array wrong;
     wrong.push_back(1);
     ERR_PRINT_OFF;

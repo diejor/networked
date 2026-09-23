@@ -172,6 +172,9 @@ Array spec_schemas(const netw::SchemaCore &p_schemas) {
             cell[StringName("width")] = int64_t(slot.width);
             cell[StringName("stride")] = int64_t(slot.stride);
             cell[StringName("delta")] = String(delta_name(slot.delta));
+            if (slot.variable) {
+                cell[StringName("variable")] = true;
+            }
             columns.push_back(cell);
         }
         Dictionary row;

@@ -119,6 +119,100 @@ TEST_CASE(
     NETW_CHECK_EQ(Control().disconnect_verdict(0, 0), Control::NOTHING);
 }
 
+int ruling_of(
+    const Control &p_control,
+    int64_t p_requester,
+    int64_t p_hold,
+    int64_t p_current
+) {
+    return int(p_control.rule(p_requester, p_hold, p_current));
+}
+
+TEST_CASE(
+    "[Networked][Entity][Hosted] C7 the coordinator rules a request in one "
+    "order, the requester's own hold change first, then a held exclusive, "
+    "then a yieldable ask against a controlled entity, then the filter"
+) {
+    Control control;
+    NETW_CHECK_EQ(
+        ruling_of(control, OTHER, Control::HOLD_EXCLUSIVE, 0),
+        int(Control::Ruling::UNAVAILABLE)
+    );
+
+    control.transfer = int(Control::Transfer::IMMEDIATE);
+    NETW_CHECK_EQ(
+        ruling_of(control, OTHER, Control::HOLD_EXCLUSIVE, 0),
+        int(Control::Ruling::ASK_FILTER)
+    );
+
+    control.transfer = int(Control::Transfer::REQUESTABLE);
+    control.hold = Control::HOLD_EXCLUSIVE;
+    NETW_CHECK_EQ(
+        ruling_of(control, REPRESENTED, Control::HOLD_YIELDABLE, REPRESENTED),
+        int(Control::Ruling::HOLD_CHANGE)
+    );
+    NETW_CHECK_EQ(
+        ruling_of(control, OTHER, Control::HOLD_EXCLUSIVE, REPRESENTED),
+        int(Control::Ruling::EXCLUDED)
+    );
+
+    control.hold = Control::HOLD_YIELDABLE;
+    NETW_CHECK_EQ(
+        ruling_of(control, OTHER, Control::HOLD_EXCLUSIVE, REPRESENTED),
+        int(Control::Ruling::ASK_FILTER)
+    );
+    NETW_CHECK_EQ(
+        ruling_of(control, OTHER, Control::HOLD_YIELDABLE, REPRESENTED),
+        int(Control::Ruling::EXCLUDED)
+    );
+
+    control.hold = Control::HOLD_NONE;
+    NETW_CHECK_EQ(
+        ruling_of(control, OTHER, Control::HOLD_YIELDABLE, REPRESENTED),
+        int(Control::Ruling::EXCLUDED)
+    );
+    NETW_CHECK_EQ(
+        ruling_of(control, OTHER, Control::HOLD_YIELDABLE, 0),
+        int(Control::Ruling::ASK_FILTER)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Entity][Hosted] C8 every decision mints a revision, the "
+    "tenure moves only with the controller, the session's own decisions hold "
+    "nothing, and a receiver installs only a newer revision"
+) {
+    Control coordinator;
+    coordinator.set_controller(0);
+
+    CHECK(coordinator.decide(REPRESENTED, Control::HOLD_YIELDABLE));
+    coordinator.set_controller(REPRESENTED);
+    NETW_CHECK_EQ(int64_t(coordinator.revision), int64_t(1));
+    NETW_CHECK_EQ(int64_t(coordinator.tenure), int64_t(1));
+
+    CHECK_FALSE(coordinator.decide(REPRESENTED, Control::HOLD_EXCLUSIVE));
+    NETW_CHECK_EQ(int64_t(coordinator.revision), int64_t(2));
+    NETW_CHECK_EQ(int64_t(coordinator.tenure), int64_t(1));
+    NETW_CHECK_EQ(coordinator.hold, int64_t(Control::HOLD_EXCLUSIVE));
+
+    CHECK(coordinator.decide(0, Control::HOLD_EXCLUSIVE));
+    NETW_CHECK_EQ(int64_t(coordinator.tenure), int64_t(3));
+    NETW_CHECK_EQ(coordinator.hold, int64_t(Control::HOLD_NONE));
+
+    Control receiver;
+    receiver.seed(2, 1, Control::HOLD_EXCLUSIVE);
+    CHECK_FALSE(receiver.install(2, true, Control::HOLD_NONE));
+    CHECK_FALSE(receiver.install(1, true, Control::HOLD_NONE));
+    NETW_CHECK_EQ(int64_t(receiver.tenure), int64_t(1));
+    NETW_CHECK_EQ(receiver.hold, int64_t(Control::HOLD_EXCLUSIVE));
+
+    CHECK(receiver.install(3, false, Control::HOLD_YIELDABLE));
+    NETW_CHECK_EQ(int64_t(receiver.revision), int64_t(3));
+    NETW_CHECK_EQ(int64_t(receiver.tenure), int64_t(1));
+    CHECK(receiver.install(4, true, Control::HOLD_NONE));
+    NETW_CHECK_EQ(int64_t(receiver.tenure), int64_t(4));
+}
+
 TEST_CASE(
     "[Networked][Entity][Hosted] the write policy answers the same question "
     "for a receiver and for an author"

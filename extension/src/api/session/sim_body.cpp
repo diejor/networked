@@ -33,8 +33,17 @@ sim::Facts NetwMultiplayer::sim_body_facts(
     facts.session_authority_here = is_host();
     facts.controller_is_nobody = p_entity->get_controller() == 0;
     facts.controller_here
-        = !facts.controller_is_nobody && p_entity->get_is_controlled_locally();
+        = !facts.controller_is_nobody && p_entity->is_controller_here();
+    facts.pending_claim_here = p_entity->is_claim_running_ahead();
     return facts;
+}
+
+void NetwMultiplayer::sim_follow_claim(const Ref<NetwEntity> &p_entity) {
+    if (p_entity.is_null()) {
+        return;
+    }
+    sim_settle_body(p_entity);
+    display_mark_role_dirty(p_entity->get_rid_handle());
 }
 
 void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {

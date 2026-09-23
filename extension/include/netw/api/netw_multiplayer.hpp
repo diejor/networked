@@ -755,7 +755,6 @@ private:
         uint8_t shutdown = 0;
         uint8_t kick_request = 0;
         uint8_t leave_request = 0;
-        uint8_t control_request = 0;
         uint8_t pause = 0;
         uint8_t unpause = 0;
     } control_channels;
@@ -1558,6 +1557,7 @@ public:
         int64_t p_sender
     );
     void row_control_flush(ReplicationSend *p_send, int64_t p_channel);
+    void row_streams_follow_tenure(int64_t p_route, uint64_t p_tenure);
     void sync_note_columns(const repl::RowOffer &p_offer, uint64_t p_mask);
     godot::Dictionary sync_flush_stats() const;
     godot::Dictionary sync_explain(
@@ -1965,6 +1965,7 @@ public:
     sim::Facts sim_body_facts(const godot::Ref<NetwEntity> &p_entity) const;
     void sim_settle_body(const godot::Ref<NetwEntity> &p_entity);
     void sim_settle_body_of(const godot::RID &p_entity);
+    void sim_follow_claim(const godot::Ref<NetwEntity> &p_entity);
     void sim_on_body_control(
         int64_t p_previous,
         int64_t p_peer,
@@ -1991,8 +1992,25 @@ public:
         const sim::Sample &p_sample,
         bool p_whole
     );
+    bool sim_install_image(
+        const godot::RID &p_entity,
+        NetwPropertySetBinding *p_binding,
+        const sim::Sample &p_image
+    );
     void sim_drain_installs();
     void sim_install(const godot::RID &p_entity, const sim::Sample &p_sample);
+    void sim_contact_pass(int64_t p_tick);
+    void sim_contact_arm(
+        sim::Row &r_row,
+        const godot::Ref<NetwEntity> &p_entity
+    );
+    void sim_note_contacts(sim::Row &r_row);
+    void sim_rest_pass(
+        sim::Row &r_row,
+        const godot::Ref<NetwEntity> &p_entity,
+        int64_t p_tick
+    );
+    bool sim_fenced(const godot::RID &p_entity, int64_t p_tick);
     bool sim_reconstructs(
         const godot::RID &p_entity,
         int64_t p_comp,
@@ -2015,6 +2033,7 @@ public:
         int64_t p_age
     );
     int64_t sim_author_peer(const godot::RID &p_entity) const;
+    uint64_t sim_author_tenure(const godot::RID &p_entity) const;
     int64_t sim_display_tick() const;
     void sim_run(sim::Schedule p_phase, double p_delta, int64_t p_tick);
     void sim_step(
@@ -3907,8 +3926,6 @@ public:
         const godot::Array &p_args
     );
 
-    void entity_request_control(const godot::RID &p_entity);
-
     godot::RID entity_replicate(godot::Object *p_node, godot::Object *p_owner);
 
     godot::RID spawn_fn(
@@ -3944,17 +3961,6 @@ public:
         bool p_is_authority
     );
 
-    static void entity_wrapper_request_control(
-        const godot::Ref<NetwEntity> &p_wrapper,
-        godot::Node *p_owner,
-        ReplicationCore *p_plane
-    );
-
-    static void entity_broadcast_control(
-        const godot::Ref<NetwEntity> &p_wrapper,
-        ReplicationCore *p_plane,
-        int64_t p_peer
-    );
     ReplicationCore *get_replication_plane() const;
     void replication_flush_all_buffers();
     godot::Node *replication_resolve_comp_node(

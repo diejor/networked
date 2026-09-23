@@ -454,6 +454,12 @@ Facts claimed_on_a_session_authored_entity() {
     return facts;
 }
 
+Facts claimed_on_a_free_body() {
+    Facts facts = claimed_here();
+    facts.controller_is_nobody = true;
+    return facts;
+}
+
 Facts active_replicas() {
     Facts facts = declared();
     facts.replicas = Replicas::ACTIVE;
@@ -502,6 +508,9 @@ TEST_CASE(
         {"a pending claim never runs a session-authored entity",
          claimed_on_a_session_authored_entity(),
          Mode::PROXY},
+        {"a pending claim runs a free body the session was authoring",
+         claimed_on_a_free_body(),
+         Mode::AUTHORITY},
         {"active replicas run every copy",
          active_replicas(),
          Mode::ACTIVE},

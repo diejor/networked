@@ -26,6 +26,9 @@
 		<member name="denied" type="bool" setter="set_denied" getter="get_denied" default="false">
 			Whether the request should be rejected. Writing [code]false[/code] over a [method deny] call has no effect.
 		</member>
+		<member name="hold" type="int" setter="" getter="get_hold" enum="NetwEntity.Hold" default="2">
+			The [enum NetwEntity.Hold] the peer asked to hold the entity with.
+		</member>
 		<member name="requester" type="int" setter="set_requester" getter="get_requester" default="0">
 			Peer id reported by [method MultiplayerAPI.get_remote_sender_id].
 		</member>

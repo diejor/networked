@@ -760,6 +760,8 @@ Error deliver_control_apply(
 ) {
     netw::session::ControlApply applied;
     applied.controller = uint64_t(p_controller);
+    applied.revision = 1;
+    applied.tenure_changed = true;
     return p_at->receive_carrier(
         NetwMultiplayer::frame_pack(
             p_route,
@@ -825,9 +827,7 @@ TEST_CASE(
     REQUIRE(at_host != nullptr);
     REQUIRE(at_one != nullptr);
     REQUIRE(at_nine != nullptr);
-    NetwEntity::of(at_host)->set_transfer(
-        int64_t(netw::entity::Control::Transfer::REQUESTABLE)
-    );
+    NetwEntity::of(at_host)->set_transfer(NetwEntity::TRANSFER_REQUESTABLE);
 
     NetwEntity::of(at_nine)->request_control();
     cw.settle(12);

@@ -125,16 +125,51 @@ Error NetwMultiplayer::sim_admit_install(
     if (row == nullptr || !sim_reconstructs(p_entity, p_sample.comp, p_whole)) {
         return OK;
     }
+    sim::Sample arrived = p_sample;
+    arrived.tenure = sim_author_tenure(p_entity);
     if (!sim::installs_on_arrival(
             row->declaration.restore,
-            p_sample.tick,
+            arrived.tick,
             sim_display_tick()
         )) {
-        sim::hold(row->installs, p_sample);
+        sim::hold(row->installs, arrived);
         return OK;
     }
-    sim_install(p_entity, p_sample);
+    sim_install(p_entity, arrived);
     return OK;
+}
+
+bool NetwMultiplayer::sim_install_image(
+    const RID &p_entity,
+    NetwPropertySetBinding *p_binding,
+    const sim::Sample &p_image
+) {
+    const sim::Row *row = sim_rows.row_of(p_entity);
+    if (row == nullptr || row->facts.predicted || row->facts.state_rows
+        || p_binding == nullptr || p_binding->get_set().is_null()
+        || p_binding->get_set()->get_record()
+            != NetwPropertySet::RECORD_BROADCAST) {
+        return false;
+    }
+    if (row->mode == sim::Mode::ACTIVE) {
+        sim::Sample image = p_image;
+        image.sender = sim_author_peer(p_entity);
+        sim_admit_install(p_entity, image, true);
+        return true;
+    }
+    if (row->mode != sim::Mode::AUTHORITY) {
+        return false;
+    }
+    int64_t age = -1;
+    const Array values = sim_install_target(
+        p_binding,
+        p_image,
+        row->declaration.restore,
+        int64_t(row->declaration.max_restore_ticks),
+        age
+    );
+    sim_write_install(p_entity, p_binding, p_image.keys, values, age);
+    return true;
 }
 
 void NetwMultiplayer::sim_drain_installs() {
@@ -169,8 +204,12 @@ void NetwMultiplayer::sim_install(
     );
     Node *node = binding != nullptr ? binding->node() : nullptr;
     if (node == nullptr || row->mode != sim::Mode::ACTIVE
-        || p_sample.sender != sim_author_peer(p_entity)) {
+        || p_sample.sender != sim_author_peer(p_entity)
+        || p_sample.tenure != sim_author_tenure(p_entity)) {
         row->installs.stats.dropped += 1;
+        return;
+    }
+    if (sim_fenced(p_entity, p_sample.tick)) {
         return;
     }
     int64_t age = -1;
@@ -282,6 +321,15 @@ int64_t NetwMultiplayer::sim_author_peer(const RID &p_entity) const {
     }
     const Ref<NetwEntity> entity = entity_get_view(p_entity);
     return entity.is_valid() ? entity->get_controller() : 0;
+}
+
+uint64_t NetwMultiplayer::sim_author_tenure(const RID &p_entity) const {
+    const sim::Row *row = sim_rows.row_of(p_entity);
+    if (row != nullptr && sim::session_authors(row->facts)) {
+        return 0;
+    }
+    const Ref<NetwEntity> entity = entity_get_view(p_entity);
+    return entity.is_valid() ? entity->get_control_tenure() : 0;
 }
 
 int64_t NetwMultiplayer::sim_display_tick() const {

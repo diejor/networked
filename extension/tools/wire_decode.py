@@ -318,9 +318,12 @@ CONTROL_OPEN = {
         {"name": "ordinal", "kind": "bits", "width": 8},
         {"name": "family", "kind": "bits", "width": 8},
         {"name": "epoch", "kind": "varuint", "max_bytes": 3},
+        {"name": "tenure", "kind": "varuint", "max_bytes": 5},
         {"name": "schema", "kind": "bits", "width": 32},
     ],
-    "bytes": bytes([0x00, 0x01, 0xAC, 0x02, 0x02, 0x00, 0x05, 0xEF, 0xBE, 0xAD, 0xDE]),
+    "bytes": bytes(
+        [0x00, 0x01, 0xAC, 0x02, 0x02, 0x00, 0x05, 0x03, 0xEF, 0xBE, 0xAD, 0xDE]
+    ),
     "values": {
         "tag": 0,
         "request": 1,
@@ -328,6 +331,7 @@ CONTROL_OPEN = {
         "ordinal": 2,
         "family": 0,
         "epoch": 5,
+        "tenure": 3,
         "schema": 0xDEADBEEF,
     },
 }
@@ -531,10 +535,33 @@ AGAINST_SPEC = [
         "why": "WIRE.md 15, peer 3 gains awareness of route 7 inside zone",
     },
     {
+        "record": "ControlRequest",
+        "bytes": bytes([0x01, 0x03, 0xAC, 0x02, 0x00, 0x00, 0x02, 0x00]),
+        "values": {
+            "op": 1,
+            "observed_revision": 3,
+            "issued_tick": 300,
+            "source_route": 0,
+            "successor": 0,
+            "kind": 0,
+            "hold": 1,
+            "final_state": b"",
+        },
+        "why": "WIRE.md 14, op 1 asking for a yieldable hold at tick 300",
+    },
+    {
         "record": "ControlApply",
-        "bytes": bytes([0x02]),
-        "values": {"controller": 2},
-        "why": "WIRE.md 14, the peer that now drives the route",
+        "bytes": bytes([0x02, 0x03, 0x00, 0x05, 0x00]),
+        "values": {
+            "controller": 2,
+            "revision": 3,
+            "op": 0,
+            "tenure_changed": True,
+            "hold": 2,
+            "outcome": 0,
+            "final_state": b"",
+        },
+        "why": "WIRE.md 14, revision 3 opens peer 2's tenure with an exclusive hold",
     },
     {
         "record": "DenyKey",
@@ -546,7 +573,7 @@ AGAINST_SPEC = [
         "record": "RowControlOpen",
         "bytes": CONTROL_OPEN["bytes"],
         "values": CONTROL_OPEN["values"],
-        "why": "WIRE.md 10, an OPEN for route 300 ordinal 2 at epoch 5",
+        "why": "WIRE.md 10, an OPEN at epoch 5 and tenure 3",
     },
     {
         "record": "RowControlReady",

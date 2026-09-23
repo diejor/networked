@@ -201,13 +201,76 @@ struct SceneViewerRow {
     );
 };
 
+constexpr int CONTROL_FINAL_STATE_CAP = 1024;
+
+struct ControlRequest {
+    uint64_t op = 0;
+    uint64_t observed_revision = 0;
+    uint64_t issued_tick = 0;
+    uint64_t source_route = 0;
+    uint64_t successor = 0;
+    uint8_t kind = 0;
+    uint8_t hold = 0;
+    godot::PackedByteArray final_state;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&ControlRequest::op>("op", netw::wire::varuint(5)),
+        netw::wire::field<&ControlRequest::observed_revision>(
+            "observed_revision",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ControlRequest::issued_tick>(
+            "issued_tick",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ControlRequest::source_route>(
+            "source_route",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ControlRequest::successor>(
+            "successor",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ControlRequest::kind>("kind", netw::wire::bits(1)),
+        netw::wire::field<&ControlRequest::hold>("hold", netw::wire::bits(2)),
+        netw::wire::field<&ControlRequest::final_state>(
+            "final_state",
+            netw::wire::bytes_capped(CONTROL_FINAL_STATE_CAP)
+        )
+    );
+};
+
 struct ControlApply {
     uint64_t controller = 0;
+    uint64_t revision = 0;
+    uint64_t op = 0;
+    bool tenure_changed = false;
+    uint8_t hold = 0;
+    uint8_t outcome = 0;
+    godot::PackedByteArray final_state;
 
     static constexpr auto wire = netw::wire::describe(
         netw::wire::field<&ControlApply::controller>(
             "controller",
             netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ControlApply::revision>(
+            "revision",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ControlApply::op>("op", netw::wire::varuint(5)),
+        netw::wire::field<&ControlApply::tenure_changed>(
+            "tenure_changed",
+            netw::wire::bool1()
+        ),
+        netw::wire::field<&ControlApply::hold>("hold", netw::wire::bits(2)),
+        netw::wire::field<&ControlApply::outcome>(
+            "outcome",
+            netw::wire::bits(2)
+        ),
+        netw::wire::field<&ControlApply::final_state>(
+            "final_state",
+            netw::wire::bytes_capped(CONTROL_FINAL_STATE_CAP)
         )
     );
 };

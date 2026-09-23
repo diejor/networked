@@ -114,6 +114,14 @@ public:
         return impl.control_scheduler();
     }
 
+    void close_tenures(int64_t p_route, uint64_t p_tenure) {
+        impl.close_tenures(p_route, p_tenure);
+    }
+
+    godot::LocalVector<wire::ParkedOpen> expire_parks(int64_t p_now_ms) {
+        return impl.expire_parks(p_now_ms);
+    }
+
     int64_t entity_resolve(const repl::EntitySlot &p_slot, int64_t p_wanted) {
         return entities.resolve(p_slot, p_wanted);
     }

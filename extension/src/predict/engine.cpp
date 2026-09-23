@@ -4986,6 +4986,10 @@ void NetwPredictionEngine::admit_simulated_state(
         return;
     }
     const int64_t recv_tick = p_header.get(StringName("tick"), -1);
+    if (reconcile_of(p_slot) != int(NetwPredict::RECONCILE_JOINT)
+        && host->sim_fenced(entity, recv_tick)) {
+        return;
+    }
     sim::Sample sample;
     sample.binding = gd::instance_id(binding.ptr());
     sample.comp = binding->comp;

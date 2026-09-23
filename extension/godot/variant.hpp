@@ -68,6 +68,7 @@ using ::PackedFloat64Array;
 using ::PackedInt32Array;
 using ::PackedInt64Array;
 using ::PackedStringArray;
+using ::PackedVector2Array;
 using ::PROPERTY_HINT_RESOURCE_TYPE;
 using ::real_t;
 using ::Rect2;

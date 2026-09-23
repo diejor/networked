@@ -1,5 +1,7 @@
 #include "netw/wire/code_row.hpp"
 
+#include "godot/utility.hpp"
+
 using namespace godot;
 
 namespace netw::wire {
@@ -10,8 +12,6 @@ uint64_t low_mask(int count) {
     return count >= 64 ? ~uint64_t(0) : ((uint64_t(1) << count) - 1);
 }
 
-// A run of bits can straddle a word boundary, so both halves are handled and
-// the second is a no-op whenever the run fits where it started.
 uint64_t read_run(
     const LocalVector<uint64_t> &words,
     int64_t offset,
@@ -74,6 +74,14 @@ bool runs_differ(
     return false;
 }
 
+int64_t fixed_byte_count(int64_t p_bits) {
+    return (p_bits + 7) / 8;
+}
+
+uint32_t value_slots(const WirePlan &plan) {
+    return plan.has_variable() ? plan.column_count() : 0;
+}
+
 } // namespace
 
 CodeRow CodeRow::for_plan(const WirePlan &plan) {
@@ -82,13 +90,12 @@ CodeRow CodeRow::for_plan(const WirePlan &plan) {
         return row;
     }
     row.used_bits = plan.row_bits();
-    // One spare word so a run ending in the final word never addresses past
-    // the buffer when it checks whether it straddles.
     const int64_t needed = (plan.row_bits() + 63) / 64 + 1;
     row.words.resize(uint32_t(needed));
     for (uint32_t index = 0; index < row.words.size(); ++index) {
         row.words[index] = 0;
     }
+    row.values.resize(value_slots(plan));
     return row;
 }
 
@@ -97,25 +104,37 @@ CodeRow CodeRow::from_bytes(
     const PackedByteArray &bytes
 ) {
     CodeRow row = for_plan(plan);
-    const int64_t expected = (plan.row_bits() + 7) / 8;
-    if (row.is_empty() || bytes.size() != expected) {
+    const int64_t expected = fixed_byte_count(plan.row_bits());
+    if (row.is_empty() || bytes.size() < expected
+        || (!plan.has_variable() && bytes.size() != expected)) {
         return CodeRow();
     }
     const int tail = int(plan.row_bits() & 7);
-    if (tail != 0 && bytes.size() > 0
-        && (bytes[bytes.size() - 1] & uint8_t(0xffU << tail)) != 0) {
+    if (tail != 0 && expected > 0
+        && (bytes[expected - 1] & uint8_t(0xffU << tail)) != 0) {
         return CodeRow();
     }
-    for (int64_t at = 0; at < bytes.size(); ++at) {
+    for (int64_t at = 0; at < expected; ++at) {
         row.words[uint32_t(at >> 3)] |= uint64_t(bytes[at])
             << int((at & 7) * 8);
+    }
+    if (!plan.has_variable()) {
+        return row;
+    }
+    const Array carried = gd::bytes_to_var(bytes.slice(expected));
+    if (carried.size() != int64_t(row.values.size())) {
+        return CodeRow();
+    }
+    for (uint32_t at = 0; at < row.values.size(); ++at) {
+        row.values[at] = carried[at];
     }
     return row;
 }
 
 bool CodeRow::valid_for(const WirePlan &plan) const {
     return plan.valid() && used_bits == plan.row_bits()
-        && words.size() == uint32_t((used_bits + 63) / 64 + 1);
+        && words.size() == uint32_t((used_bits + 63) / 64 + 1)
+        && values.size() == value_slots(plan);
 }
 
 PackedByteArray CodeRow::to_bytes() const {
@@ -123,7 +142,7 @@ PackedByteArray CodeRow::to_bytes() const {
     if (words.is_empty()) {
         return out;
     }
-    const int64_t count = (used_bits + 7) / 8;
+    const int64_t count = fixed_byte_count(used_bits);
     out.resize(count);
     for (int64_t at = 0; at < count; ++at) {
         out.set(
@@ -131,12 +150,23 @@ PackedByteArray CodeRow::to_bytes() const {
             uint8_t((words[uint32_t(at >> 3)] >> int((at & 7) * 8)) & 0xff)
         );
     }
+    if (values.is_empty()) {
+        return out;
+    }
+    Array carried;
+    for (uint32_t at = 0; at < values.size(); ++at) {
+        carried.push_back(values[at]);
+    }
+    out.append_array(gd::var_to_bytes(carried));
     return out;
 }
 
 void CodeRow::clear() {
     for (uint32_t index = 0; index < words.size(); ++index) {
         words[index] = 0;
+    }
+    for (uint32_t index = 0; index < values.size(); ++index) {
+        values[index] = Variant();
     }
 }
 
@@ -146,6 +176,12 @@ void CodeRow::copy_from(const CodeRow &other) {
     }
     for (uint32_t index = 0; index < words.size(); ++index) {
         words[index] = other.words[index];
+    }
+    if (values.size() != other.values.size()) {
+        values.resize(other.values.size());
+    }
+    for (uint32_t index = 0; index < values.size(); ++index) {
+        values[index] = other.values[index];
     }
     used_bits = other.used_bits;
 }
@@ -187,19 +223,35 @@ uint64_t CodeRow::read_bits(int64_t offset, int width) const {
     return read_run(words, offset, width);
 }
 
+bool CodeRow::write_value(uint32_t column, const Variant &value) {
+    if (column >= values.size()) {
+        return false;
+    }
+    values[column] = value.duplicate(true);
+    return true;
+}
+
+Variant CodeRow::read_value(uint32_t column) const {
+    return column < values.size() ? values[column] : Variant();
+}
+
 uint64_t CodeRow::changed_mask(
     const WirePlan &plan,
     const CodeRow &before,
     const CodeRow &after
 ) {
-    // Invalid rows require a full update. A zero mask means the peer is
-    // current.
     if (!before.valid_for(plan) || !after.valid_for(plan)) {
         return plan.full_mask();
     }
     uint64_t mask = 0;
     for (uint32_t index = 0; index < plan.column_count(); ++index) {
         const ColumnPlan &slot = plan.column(index);
+        if (slot.variable) {
+            if (before.values[index] != after.values[index]) {
+                mask |= uint64_t(1) << index;
+            }
+            continue;
+        }
         for (int element = 0; element < slot.stride; ++element) {
             const int64_t at = slot.offset + int64_t(element) * slot.width;
             if (runs_differ(before.words, after.words, at, slot.width)) {
@@ -212,11 +264,17 @@ uint64_t CodeRow::changed_mask(
 }
 
 bool CodeRow::equals(const CodeRow &other) const {
-    if (used_bits != other.used_bits || words.size() != other.words.size()) {
+    if (used_bits != other.used_bits || words.size() != other.words.size()
+        || values.size() != other.values.size()) {
         return false;
     }
     for (uint32_t index = 0; index < words.size(); ++index) {
         if (words[index] != other.words[index]) {
+            return false;
+        }
+    }
+    for (uint32_t index = 0; index < values.size(); ++index) {
+        if (values[index] != other.values[index]) {
             return false;
         }
     }

@@ -3,12 +3,14 @@
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
+#include "godot/variant.hpp"
 #include "netw/wire/plan.hpp"
 
 namespace netw::wire {
 
 class CodeRow {
     godot::LocalVector<uint64_t> words;
+    godot::LocalVector<godot::Variant> values;
     int64_t used_bits = 0;
 
 public:
@@ -38,6 +40,9 @@ public:
 
     bool write_bits(int64_t offset, int width, uint64_t code);
     uint64_t read_bits(int64_t offset, int width) const;
+
+    bool write_value(uint32_t column, const godot::Variant &value);
+    godot::Variant read_value(uint32_t column) const;
 
     static uint64_t changed_mask(
         const WirePlan &plan,

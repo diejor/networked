@@ -37,6 +37,7 @@ struct RowOffer {
     int64_t tick = -1;
     int64_t ack = -1;
     int64_t life = 0;
+    wire::StreamTenure tenure;
 
     const SchemaRecord &declared() const {
         static const SchemaRecord unplannable;
@@ -152,6 +153,8 @@ class SessionSend {
 
     void expose_send(const RowSend &p_send);
 
+    void queue_close(int p_peer, uint64_t p_token);
+
     godot::LocalVector<int> known_peers() const;
 
     float owed_by(const RowSend &p_send, float p_priority) const;
@@ -250,6 +253,10 @@ public:
     );
 
     void close_route(int64_t p_route);
+
+    void close_tenures(int64_t p_route, uint64_t p_tenure);
+
+    godot::LocalVector<wire::ParkedOpen> expire_parks(int64_t p_now_ms);
 
     uint32_t lane_count() const {
         return lanes.size();

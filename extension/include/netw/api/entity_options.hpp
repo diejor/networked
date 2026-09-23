@@ -4,6 +4,7 @@
 
 #include "godot/ref_counted.hpp"
 #include "godot/string_name.hpp"
+#include "netw/entity/control.hpp"
 
 namespace netw {
 
@@ -64,10 +65,15 @@ protected:
 
 public:
     int64_t requester = 0;
+    int64_t hold = entity::Control::HOLD_EXCLUSIVE;
     bool denied = false;
 
     void deny() {
         denied = true;
+    }
+
+    entity::Control::Hold get_hold() const {
+        return entity::Control::Hold(hold);
     }
 
     int64_t get_requester() const {

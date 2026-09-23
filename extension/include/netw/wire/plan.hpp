@@ -15,9 +15,12 @@ constexpr int LADDER_MIN_WIDTH = 5;
 constexpr int LADDER_SELECTOR_BITS = 2;
 constexpr int LADDER_BUCKET_BITS[3] = {4, 8, 16};
 
+constexpr int VARIABLE_BYTES_CAP = 65535;
+
 struct ColumnPlan {
     int width = 0;
     int stride = 1;
+    bool variable = false;
     DeltaMode delta = DeltaMode::FULL;
     int64_t offset = 0;
 
@@ -34,9 +37,16 @@ class WirePlan {
     godot::LocalVector<ColumnPlan> columns;
     int64_t total_bits = 0;
     bool plannable = false;
+    bool carries_variable = false;
 
 public:
     static WirePlan compile(const SchemaRecord &record);
+
+    static bool sized_by_value(int column_type);
+
+    bool has_variable() const {
+        return carries_variable;
+    }
 
     static int element_width(int column_type);
     static int element_count(int column_type);

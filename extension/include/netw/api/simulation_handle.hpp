@@ -91,6 +91,10 @@ public:
     void set_restore(Restore p_value);
     int get_max_restore_ticks() const;
     void set_max_restore_ticks(int p_value);
+    bool get_claim_on_contact() const;
+    void set_claim_on_contact(bool p_value);
+    double get_release_on_rest() const;
+    void set_release_on_rest(double p_value);
     godot::Callable get_step() const;
     void set_step(const godot::Callable &p_value);
     void adopt_step(const godot::Callable &p_value);

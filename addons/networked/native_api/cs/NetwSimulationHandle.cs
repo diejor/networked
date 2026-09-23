@@ -53,6 +53,12 @@ namespace Networked;
 /// </code>
 /// </para>
 /// <para>
+/// An <see cref="NetwSimulationHandle.ModeEnum.Active"/> copy that touches a
+/// body this peer runs as <see cref="NetwSimulationHandle.ModeEnum.Authority"/>
+/// or <see cref="NetwSimulationHandle.ModeEnum.Predict"/> keeps its own
+/// response to the touch. It skips every sample the author sent before the
+/// touch, and the author's later samples correct it as usual. One of the two
+/// bodies must report contacts through <c>RigidBody3D.contact_monitor</c>.
 /// <b>Selection</b> While this entity runs here as
 /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> or
 /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/>, it can pick other
@@ -369,6 +375,104 @@ public sealed class NetwSimulationHandle : NetwRefCounted
             long discarded = default;
             NetwThunks.Ptrcall1_Int_Long(
                 _bindSetMaxRestoreTicks,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetClaimOnContact =
+        NetwApi.MethodBind(
+            "NetwSimulationHandle",
+            "get_claim_on_contact",
+            36873697UL);
+
+    private static readonly IntPtr _bindSetClaimOnContact =
+        NetwApi.MethodBind(
+            "NetwSimulationHandle",
+            "set_claim_on_contact",
+            2586408642UL);
+
+    /// <summary>
+    /// When a body of this entity runs here as
+    /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> and touches a free
+    /// entity that also sets it, this peer claims that entity with
+    /// <see cref="NetwEntity.HoldEnum.Yieldable"/>. A claimed entity claims
+    /// what it touches in the same tick. A touch claims when it begins or while
+    /// the touched body moves. A body that
+    /// <see cref="NetwSimulationHandle.ReleaseOnRest"/> gave back while it
+    /// still touches stays free until it moves again. The session grants the
+    /// claim only while this peer controls the entity that touched it, so a
+    /// refused grab takes nothing it touched. Setting it turns on
+    /// <c>RigidBody3D.contact_monitor</c> for the bodies. It needs
+    /// <see cref="NetwEntity.TransferEnum.Immediate"/> on an entity with no
+    /// <see cref="NetwPropertyConfig.State"/> row and no prediction, and does
+    /// nothing otherwise.
+    /// </summary>
+    public bool ClaimOnContact
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(
+                _bindGetClaimOnContact,
+                Checked,
+                ref answered);
+            return answered != 0;
+        }
+        set
+        {
+            byte slot0 = value ? (byte)1 : (byte)0;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Byte_Long(
+                _bindSetClaimOnContact,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetReleaseOnRest =
+        NetwApi.MethodBind(
+            "NetwSimulationHandle",
+            "get_release_on_rest",
+            1740695150UL);
+
+    private static readonly IntPtr _bindSetReleaseOnRest =
+        NetwApi.MethodBind(
+            "NetwSimulationHandle",
+            "set_release_on_rest",
+            373806689UL);
+
+    /// <summary>
+    /// The seconds the bodies must sleep before this peer releases the entity
+    /// with <see cref="NetwEntity.ReleaseControl"/>. It acts only while this
+    /// peer is the confirmed controller with
+    /// <see cref="NetwEntity.HoldEnum.Yieldable"/> and no body is frozen, so
+    /// <see cref="NetwEntity.HoldEnum.Exclusive"/> never releases itself. A
+    /// body that wakes before the session decides claims the entity again.
+    /// <c>0</c> turns it off. It needs
+    /// <see cref="NetwEntity.TransferEnum.Immediate"/> on an entity with no
+    /// <see cref="NetwPropertyConfig.State"/> row and no prediction, and does
+    /// nothing otherwise.
+    /// </summary>
+    public double ReleaseOnRest
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetReleaseOnRest,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetReleaseOnRest,
                 Checked,
                 in slot0,
                 ref discarded);

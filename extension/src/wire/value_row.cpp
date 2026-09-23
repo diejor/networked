@@ -187,7 +187,7 @@ bool scalar_schema(const SchemaRecord &p_schema, const WirePlan &p_plan) {
     }
     for (int at = 0; at < p_schema.column_count(); ++at) {
         const SchemaColumn *column = p_schema.at(at);
-        if (column->stride != 1 || column->type == SchemaCore::VARIANT) {
+        if (column->stride != 1) {
             return false;
         }
     }
@@ -216,6 +216,22 @@ bool encode_scalar_row(
         const ColumnPlan &slot = plan.column(uint32_t(at));
         const Variant::Type expected
             = Variant::Type(SchemaCore::element_type(column->type));
+        if (slot.variable) {
+            const bool textual = column->type != SchemaCore::STRING
+                || Variant::can_convert_strict(
+                                     p_values[at].get_type(),
+                                     Variant::STRING
+                );
+            NETW_ERR_COND_V(
+                !textual || SchemaCore::validate_storable(p_values[at]) != OK,
+                false,
+                sys::WIRE,
+                "Column %d holds a value no row can carry.",
+                at
+            );
+            staged.write_value(uint32_t(at), p_values[at]);
+            continue;
+        }
         NETW_ERR_COND_V(
             !Variant::can_convert_strict(p_values[at].get_type(), expected),
             false,
@@ -299,6 +315,10 @@ bool decode_scalar_row(
     for (int at = 0; at < p_schema.column_count(); ++at) {
         const SchemaColumn *column = p_schema.at(at);
         const ColumnPlan &slot = plan.column(uint32_t(at));
+        if (slot.variable) {
+            staged.push_back(p_row.read_value(uint32_t(at)));
+            continue;
+        }
         codes.clear();
         for (int element = 0; element < slot.stride; ++element) {
             codes.push_back(p_row.read(slot, element));

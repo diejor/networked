@@ -170,19 +170,121 @@ bool NetwEntityRecord::mark_template(Node *p_owner) {
     return true;
 }
 
-bool NetwEntityRecord::control_recurses(
-    bool p_is_authority,
-    bool p_inside_tree,
-    bool p_node_ready
+StringName NetwEntityRecord::entity_meta() {
+    return StringName("netw_entity");
+}
+
+void NetwEntityRecord::follow_session(const NodePath &p_path) {
+    for (const NodePath &path : session_paths) {
+        if (path == p_path) {
+            return;
+        }
+    }
+    session_paths.push_back(p_path);
+}
+
+NetwEntityRecord::Projection NetwEntityRecord::projection_to(
+    int64_t p_follower,
+    int64_t p_session
+) const {
+    Projection made;
+    made.follower = p_follower;
+    made.session = p_session;
+    made.prior_follower = projected_follower != 0 ? projected_follower : 1;
+    made.prior_session = projected_session != 0 ? projected_session : 1;
+    return made;
+}
+
+bool NetwEntityRecord::pinned_to_session(Node *p_owner, Node *p_node) const {
+    for (const NodePath &path : session_paths) {
+        Node *pinned = p_owner->get_node_or_null(path);
+        if (pinned != nullptr && pinned != p_owner
+            && (pinned == p_node || pinned->is_ancestor_of(p_node))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void NetwEntityRecord::write_authority(
+    Node *p_node,
+    int64_t p_to,
+    int64_t p_prior
 ) {
-    return p_is_authority || !p_inside_tree || p_node_ready;
+    const int64_t now = p_node->get_multiplayer_authority();
+    if (now == p_to) {
+        return;
+    }
+    if (now != p_prior && !native_write_warned) {
+        native_write_warned = true;
+        const NodePath named = p_node->is_inside_tree()
+            ? p_node->get_path()
+            : NodePath(String(p_node->get_name()));
+        NETW_WARN(
+            sys::ENTITY,
+            "%s has multiplayer authority %d written outside its entity. "
+            "The entity's control sets it to %d. Declare a node that stays "
+            "with the session authority with NetwEntity.follow_session.",
+            String(named).utf8().get_data(),
+            int(now),
+            int(p_to)
+        );
+    }
+    p_node->set_multiplayer_authority(int(p_to), false);
+}
+
+void NetwEntityRecord::project_node(
+    Node *p_owner,
+    Node *p_node,
+    bool p_pinned,
+    const Projection &p_projection,
+    const Callable &p_watch
+) {
+    if (p_node != p_owner && p_node->has_meta(entity_meta())) {
+        return;
+    }
+    const bool pinned = p_pinned || pinned_to_session(p_owner, p_node);
+    write_authority(
+        p_node,
+        pinned ? p_projection.session : p_projection.follower,
+        pinned ? p_projection.prior_session : p_projection.prior_follower
+    );
+    const StringName entered("child_entered_tree");
+    if (p_watch.is_valid() && !p_node->is_connected(entered, p_watch)) {
+        p_node->connect(entered, p_watch);
+    }
+    const int children = p_node->get_child_count(true);
+    for (int at = 0; at < children; ++at) {
+        project_node(
+            p_owner,
+            p_node->get_child(at, true),
+            pinned,
+            p_projection,
+            p_watch
+        );
+    }
+}
+
+void NetwEntityRecord::project_entered(
+    Node *p_owner,
+    Node *p_node,
+    const Callable &p_watch
+) {
+    if (p_owner == nullptr || p_node == nullptr || projected_follower == 0
+        || !p_owner->is_ancestor_of(p_node)) {
+        return;
+    }
+    Projection entered;
+    entered.follower = projected_follower;
+    entered.session = projected_session;
+    project_node(p_owner, p_node, false, entered, p_watch);
 }
 
 void NetwEntityRecord::apply_control(
     Object *p_wrapper,
     Node *p_owner,
-    bool p_is_authority,
-    int64_t p_coordinator
+    int64_t p_coordinator,
+    const Callable &p_watch
 ) {
     Node *owner = p_owner;
     if (owner == nullptr) {
@@ -191,14 +293,15 @@ void NetwEntityRecord::apply_control(
     const int64_t previous = owner->get_multiplayer_authority();
     const int64_t peer = control.get_controller();
     const int64_t authority = peer != 0 ? peer : p_coordinator;
-    owner->set_multiplayer_authority(
-        int(authority),
-        control_recurses(
-            p_is_authority,
-            owner->is_inside_tree(),
-            netw::gd::node_ready(owner)
-        )
+    project_node(
+        owner,
+        owner,
+        false,
+        projection_to(authority, p_coordinator),
+        p_watch
     );
+    projected_follower = authority;
+    projected_session = p_coordinator;
     const int64_t was = previous == p_coordinator ? 0 : previous;
     if (was != peer && p_wrapper != nullptr) {
         NETW_TRACE(
@@ -270,7 +373,8 @@ bool NetwEntityRecord::set_controller(Object *p_wrapper, int64_t p_peer) {
 
 int64_t NetwEntityRecord::admit_control_request(
     Object *p_wrapper,
-    int64_t p_requester
+    int64_t p_requester,
+    int64_t p_hold
 ) {
     if (!control.admits_request()) {
         NETW_WARN(
@@ -283,6 +387,7 @@ int64_t NetwEntityRecord::admit_control_request(
     Ref<NetwControlRequest> request;
     request.instantiate();
     request->requester = p_requester;
+    request->hold = p_hold;
     if (p_wrapper != nullptr) {
         p_wrapper->emit_signal(
             StringName("control_requested"),

@@ -28,6 +28,12 @@ bool Record::encode_header(
     String id = String(entity_id);
     uint64_t peer = uint64_t(peer_id > 0 ? peer_id : 0);
     int64_t control = entity != nullptr ? entity->get_controller() : controller;
+    uint64_t revision
+        = entity != nullptr ? entity->get_control_revision() : uint64_t(0);
+    uint64_t tenure
+        = entity != nullptr ? entity->get_control_tenure() : uint64_t(0);
+    uint64_t hold
+        = uint64_t(entity != nullptr ? int64_t(entity->get_hold()) : 0);
     uint64_t spawn_tick = uint64_t(
         (entity != nullptr ? entity->get_action_spawn_tick() : int64_t(-1)) + 1
     );
@@ -42,9 +48,10 @@ bool Record::encode_header(
     String name = node_name;
 
     if (!wire::string_field(p_stream, id) || !p_stream.varuint(peer, 5)
-        || !p_stream.svarint(control, 5) || !p_stream.varuint(spawn_tick, 5)
+        || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
+        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(spawn_tick, 5)
         || !p_stream.svarint(requester, 5) || !p_stream.bits(comp_hash, 32)
-        || !p_stream.bool1(declares_scene)) {
+        || !p_stream.bits(hold, 2) || !p_stream.bool1(declares_scene)) {
         return false;
     }
     if (declares_scene && !wire::string_field(p_stream, scene_label)) {
@@ -72,6 +79,11 @@ Ref<NetwEntity> Record::stamp_header(
         );
     }
     entity->set_controller(int64_t(p_header.get(StringName("controller"), 0)));
+    entity->seed_control(
+        uint64_t(int64_t(p_header.get(StringName("control_revision"), 0))),
+        uint64_t(int64_t(p_header.get(StringName("control_tenure"), 0))),
+        int64_t(p_header.get(StringName("control_hold"), 0))
+    );
     entity->set_action_spawn_tick(
         int64_t(p_header.get(StringName("action_spawn_tick"), -1))
     );
@@ -179,6 +191,9 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     String id;
     uint64_t peer = 0;
     int64_t control = 0;
+    uint64_t revision = 0;
+    uint64_t tenure = 0;
+    uint64_t hold = 0;
     uint64_t spawn_tick = 0;
     int64_t requester = 0;
     uint64_t comp_hash = 0;
@@ -187,9 +202,10 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     String name;
 
     if (!wire::string_field(p_stream, id) || !p_stream.varuint(peer, 5)
-        || !p_stream.svarint(control, 5) || !p_stream.varuint(spawn_tick, 5)
+        || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
+        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(spawn_tick, 5)
         || !p_stream.svarint(requester, 5) || !p_stream.bits(comp_hash, 32)
-        || !p_stream.bool1(declares_scene)) {
+        || !p_stream.bits(hold, 2) || !p_stream.bool1(declares_scene)) {
         return false;
     }
     if (declares_scene && !wire::string_field(p_stream, scene_label)) {
@@ -202,6 +218,9 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     r_header[StringName("entity_id")] = StringName(id);
     r_header[StringName("peer_id")] = int64_t(peer);
     r_header[StringName("controller")] = control;
+    r_header[StringName("control_revision")] = int64_t(revision);
+    r_header[StringName("control_tenure")] = int64_t(tenure);
+    r_header[StringName("control_hold")] = int64_t(hold);
     r_header[StringName("action_spawn_tick")] = int64_t(spawn_tick) - 1;
     r_header[StringName("action_requester")] = requester;
     r_header[StringName("wire_hash")] = int64_t(comp_hash);

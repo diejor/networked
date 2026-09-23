@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://examples/whiteboard/room.gd" id="1_room"]
+[ext_resource type="Script" path="res://examples/whiteboard/whiteboard.gd" id="2_board"]
+
+[node name="Room" type="Node2D"]
+script = ExtResource("1_room")
+
+[node name="Paper" type="ColorRect" parent="."]
+offset_right = 1152.0
+offset_bottom = 648.0
+mouse_filter = 2
+
+[node name="Whiteboard" type="Node2D" parent="."]
+script = ExtResource("2_board")

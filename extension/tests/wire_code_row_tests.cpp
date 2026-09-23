@@ -226,13 +226,45 @@ TEST_CASE("[Networked][Wire][Hosted] an element past the stride is refused") {
 TEST_CASE("[Networked][Wire][Hosted] an invalid plan yields an empty row") {
     SchemaRecord record;
     record.name = "Loose";
-    SchemaCore::append_column(&record, "anything", SchemaCore::VARIANT, 1);
+    SchemaCore::append_column(&record, "anything", SchemaCore::VARIANT, 2);
     REQUIRE(SchemaCore::fix(&record) == godot::Error::OK);
 
     const WirePlan plan = WirePlan::compile(record);
     REQUIRE_FALSE(plan.valid());
     const CodeRow row = CodeRow::for_plan(plan);
     CHECK(row.is_empty());
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] a self-describing column is compared by value "
+    "and survives the row's byte image"
+) {
+    SchemaRecord record;
+    record.name = "Ink";
+    SchemaCore::append_column(&record, "strokes", SchemaCore::I16, 1);
+    SchemaCore::append_column(&record, "ink", SchemaCore::VARIANT, 1);
+    REQUIRE(SchemaCore::fix(&record) == godot::Error::OK);
+    const WirePlan plan = WirePlan::compile(record);
+    REQUIRE(plan.valid());
+
+    PackedVector2Array ink;
+    ink.push_back(Vector2(1, 2));
+    CodeRow before = CodeRow::for_plan(plan);
+    REQUIRE(before.write(plan.column(0), 0, 3));
+    REQUIRE(before.write_value(1, ink));
+    CodeRow after = CodeRow::for_plan(plan);
+    after.copy_from(before);
+    CHECK(after.equals(before));
+    NETW_CHECK_EQ(CodeRow::changed_mask(plan, before, after), 0);
+
+    ink.push_back(Vector2(3, 4));
+    REQUIRE(after.write_value(1, ink));
+    CHECK_FALSE(after.equals(before));
+    NETW_CHECK_EQ(CodeRow::changed_mask(plan, before, after), 2);
+
+    const CodeRow imaged = CodeRow::from_bytes(plan, after.to_bytes());
+    REQUIRE(imaged.valid_for(plan));
+    CHECK(imaged.equals(after));
 }
 
 TEST_CASE(

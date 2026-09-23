@@ -272,17 +272,19 @@ void apply_interpolators(Object *p_sync, Node *p_owner) {
 
 void apply_control(Object *p_spawner, const Ref<NetwEntity> &p_entity) {
     if (declared(p_spawner, KEY_INITIAL_CONTROLLER)) {
-        p_entity->set_initial_controller(
+        p_entity->set_initial_controller(NetwEntity::InitialController(
             whole(p_spawner, KEY_INITIAL_CONTROLLER)
-        );
+        ));
     }
     if (declared(p_spawner, KEY_TRANSFER)) {
-        p_entity->set_transfer(whole(p_spawner, KEY_TRANSFER));
+        p_entity->set_transfer(
+            NetwEntity::Transfer(whole(p_spawner, KEY_TRANSFER))
+        );
     }
     if (declared(p_spawner, KEY_ON_DISCONNECT)) {
-        p_entity->set_on_controller_disconnect(
+        p_entity->set_on_controller_disconnect(NetwEntity::DisconnectRule(
             whole(p_spawner, KEY_ON_DISCONNECT)
-        );
+        ));
     }
 }
 

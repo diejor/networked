@@ -99,6 +99,23 @@ public sealed class NetwControlRequest : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetHold =
+        NetwApi.MethodBind("NetwControlRequest", "get_hold", 1976353525UL);
+
+    /// <summary>
+    /// The <see cref="NetwEntity.HoldEnum"/> the peer asked to hold the entity
+    /// with.
+    /// </summary>
+    public NetwEntity.HoldEnum Hold
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetHold, Checked, ref answered);
+            return (NetwEntity.HoldEnum)answered;
+        }
+    }
+
     private static readonly IntPtr _bindDeny =
         NetwApi.MethodBind("NetwControlRequest", "deny", 3218959716UL);
 

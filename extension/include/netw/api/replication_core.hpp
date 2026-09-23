@@ -14,6 +14,7 @@
 #include "netw/api/sync_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/channel_book.hpp"
+#include "netw/session/frames.hpp"
 #include "netw/spawn/pipeline.hpp"
 #include "netw/spawn/spawner_compat.hpp"
 #include "netw/wire/registry.hpp"
@@ -36,6 +37,7 @@ private:
         int64_t reply = 0;
         int64_t control_request = 0;
         int64_t control_apply = 0;
+        bool control_requests_ordered = true;
         int64_t property_sync = 0;
         int64_t signal = 0;
         int64_t sync = 0;
@@ -61,11 +63,13 @@ private:
     godot::ObjectID api_id;
 
     NetwChannelBook *channels = nullptr;
+    godot::LocalVector<godot::ObjectID> control_waiting;
     NetwSyncModel sync_model;
     SyncPipeline sync_pipeline;
     spawn::Pipeline spawn_pipeline;
     spawn::SpawnerCompat spawner_compat;
     SyncCompat sync_compat;
+    bool warned_rows_without_clock = false;
 
     Channels ids;
 
@@ -139,6 +143,9 @@ public:
     SyncCompat *get_sync_compat() {
         return &sync_compat;
     }
+    bool has_warned_rows_without_clock() const {
+        return warned_rows_without_clock;
+    }
     bool get_is_applying_remote_frame() const;
 
     void register_channel(
@@ -160,6 +167,22 @@ public:
         uint32_t p_history
     );
 
+    void broadcast_control(
+        const godot::Ref<NetwEntity> &p_entity,
+        const session::ControlApply &p_decision,
+        int64_t p_issuer
+    );
+    void reply_control(
+        const godot::Ref<NetwEntity> &p_entity,
+        const session::ControlApply &p_decision,
+        int64_t p_issuer
+    );
+    void request_control(
+        const godot::Ref<NetwEntity> &p_entity,
+        const session::ControlRequest &p_request
+    );
+    void watch_control(const godot::Ref<NetwEntity> &p_entity);
+
     void send_to(
         int64_t p_peer_id,
         int64_t p_route,
@@ -170,10 +193,6 @@ public:
         const godot::String &p_path,
         bool p_batched
     );
-    void broadcast_control(
-        const godot::Ref<NetwEntity> &p_entity,
-        int64_t p_peer
-    );
     bool is_live_for(int64_t p_peer_id, const godot::Ref<NetwEntity> &p_entity);
     bool policy_admits(
         int64_t p_policy,
@@ -182,8 +201,8 @@ public:
         const godot::Ref<NetwEntity> &p_entity
     );
     godot::PackedInt32Array live_peers(const godot::Ref<NetwEntity> &p_entity);
-    void request_control(const godot::Ref<NetwEntity> &p_entity);
     void flush_all_buffers();
+    void expire_control(int64_t p_tick);
     void note_staged(int64_t p_peer_id, int64_t p_seq);
 
     godot::Error dispatch(

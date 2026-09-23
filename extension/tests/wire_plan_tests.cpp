@@ -112,15 +112,26 @@ TEST_CASE("[Networked][Wire][Hosted] the plan spends what it says it spends") {
     NETW_CHECK_EQ(spend(plan), 67);
 }
 
-TEST_CASE("[Networked][Wire][Hosted] a self-describing column has no plan") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] a self-describing column is sized by its value "
+    "and spends no fixed bits"
+) {
     SchemaRecord record = record_of("Loose");
     add(record, "solid", SchemaCore::I32);
     add(record, "anything", SchemaCore::VARIANT);
     REQUIRE(SchemaCore::fix(&record) == godot::Error::OK);
 
     const WirePlan plan = WirePlan::compile(record);
-    CHECK_FALSE(plan.valid());
-    NETW_CHECK_EQ(plan.row_bits(), 0);
+    REQUIRE(plan.valid());
+    CHECK(plan.has_variable());
+    CHECK_FALSE(plan.column(0).variable);
+    CHECK(plan.column(1).variable);
+    NETW_CHECK_EQ(plan.row_bits(), 32);
+
+    SchemaRecord strided = record_of("Strided");
+    add(strided, "anything", SchemaCore::VARIANT, 2);
+    REQUIRE(SchemaCore::fix(&strided) == godot::Error::OK);
+    CHECK_FALSE(WirePlan::compile(strided).valid());
 }
 
 TEST_CASE("[Networked][Wire][Hosted] an unsealed record has no plan") {

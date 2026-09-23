@@ -9,6 +9,7 @@
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
 #include "netw/sim/body.hpp"
+#include "netw/sim/contact.hpp"
 #include "netw/sim/install.hpp"
 #include "netw/sim/resolve.hpp"
 #include "netw/sim/select.hpp"
@@ -40,6 +41,7 @@ struct Row {
     Mode mode = Mode::NONE;
     Bodies bodies;
     Installs installs;
+    Contact contact;
     godot::Callable control_hook;
     int64_t last_frame_tick = -1;
     bool stepped_refused = false;
@@ -83,6 +85,7 @@ public:
 
     godot::LocalVector<godot::RID> follow_session_authority(bool p_here);
     godot::LocalVector<godot::RID> holding() const;
+    void bodied(godot::LocalVector<godot::RID> &r_out) const;
     void unpredicted(godot::LocalVector<godot::RID> &r_out) const;
 };
 

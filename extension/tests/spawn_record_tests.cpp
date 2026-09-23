@@ -221,6 +221,34 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Spawn][Hosted] the header carries the live decision's "
+    "revision, tenure and hold, so a late joiner starts on the decision the "
+    "session already made, and a record with no entity carries none"
+) {
+    Node *owner = memnew(Node);
+    const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(owner);
+    REQUIRE(entity.is_valid());
+    entity->seed_control(300, 7, netw::entity::Control::HOLD_YIELDABLE);
+
+    Record record;
+    record.set_route(1);
+    record.set_node_name(String("Crate"));
+
+    const Dictionary header = round_trip_header(record, entity.ptr());
+    NETW_CHECK_EQ(int64_t(header[StringName("control_revision")]), 300);
+    NETW_CHECK_EQ(int64_t(header[StringName("control_tenure")]), 7);
+    NETW_CHECK_EQ(
+        int64_t(header[StringName("control_hold")]),
+        int64_t(netw::entity::Control::HOLD_YIELDABLE)
+    );
+
+    const Dictionary bare = round_trip_header(record, nullptr);
+    NETW_CHECK_EQ(int64_t(bare[StringName("control_revision")]), 0);
+    NETW_CHECK_EQ(int64_t(bare[StringName("control_hold")]), 0);
+    memdelete(owner);
+}
+
+TEST_CASE(
     "[Networked][Spawn][Hosted] a declared scene carries its label and an "
     "undeclared one carries no bytes for it"
 ) {

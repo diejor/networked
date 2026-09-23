@@ -126,9 +126,23 @@ public:
         const godot::Array &p_keys
     );
     godot::Error reinstall_accepted();
+    void accept(const godot::Variant &p_key, const godot::Variant &p_value);
+    void retain_current();
+    bool retains_arrivals() const;
     godot::Error install_values(
         const godot::Array &p_keys,
         const godot::Array &p_values
+    );
+    godot::PackedByteArray take_image();
+    bool read_image(
+        const godot::PackedByteArray &p_bytes,
+        godot::Array &r_keys,
+        godot::Array &r_values
+    );
+    godot::Error install_image(
+        const godot::Array &p_keys,
+        const godot::Array &p_values,
+        int64_t p_tick
     );
 
     godot::Ref<NetwPropertySet> get_set() const {
@@ -266,6 +280,8 @@ private:
         const godot::Dictionary &p_plan
     );
     static godot::Array keys_of(const godot::Array &p_fields);
+    godot::Array quantizers_of() const;
+    godot::Array types_of(godot::Node *p_node) const;
 };
 
 } // namespace netw

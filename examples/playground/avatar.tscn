@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://examples/playground/avatar.gd" id="1_avatar"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_avatar"]
+radius = 0.3
+height = 1.6
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_avatar"]
+radius = 0.3
+height = 1.6
+
+[node name="Avatar" type="CharacterBody3D"]
+script = ExtResource("1_avatar")
+
+[node name="Shape" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_avatar")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("CapsuleMesh_avatar")
+
+[node name="Hand" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -0.6)
+
+[node name="Reach" type="RayCast3D" parent="Hand"]
+target_position = Vector3(0, 0, -1.5)
+
+[node name="Camera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 0, 1.4, 3)

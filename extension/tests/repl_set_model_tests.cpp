@@ -400,8 +400,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] a received non-state row trusts the "
-    "coordinator and then its own policy"
+    "[Networked][Repl][Hosted] a received controller-authored row trusts the "
+    "coordinator only while nobody controls the entity, and then its own "
+    "policy"
 ) {
     const SetRow by_authority = gated(
         netw::repl::SET_RECORD_BROADCAST,
@@ -419,6 +420,9 @@ TEST_CASE(
     CHECK_FALSE(netw::repl::row_admits_sender(by_authority, 7, 8, 7, 1));
     CHECK(netw::repl::row_admits_sender(by_controller, 7, 8, 7, 1));
     CHECK_FALSE(netw::repl::row_admits_sender(by_controller, 7, 7, 8, 1));
+    CHECK_FALSE(netw::repl::row_admits_sender(by_authority, 7, 8, 8, 7));
+    CHECK_FALSE(netw::repl::row_admits_sender(by_controller, 7, 8, 8, 7));
+    CHECK(netw::repl::row_admits_sender(by_controller, 7, 8, 0, 7));
 }
 
 TEST_CASE(

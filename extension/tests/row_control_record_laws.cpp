@@ -31,6 +31,7 @@ ControlRecord open_of(uint64_t p_request) {
     record.ordinal = 2;
     record.family = StreamFamily::VOLATILE;
     record.epoch = 5;
+    record.tenure = 3;
     record.schema = 0xDEADBEEF;
     return record;
 }
@@ -61,6 +62,7 @@ TEST_CASE(
                      0x02,
                      0x00,
                      0x05,
+                     0x03,
                      0xEF,
                      0xBE,
                      0xAD,
@@ -117,6 +119,7 @@ TEST_CASE(
     NETW_CHECK_EQ(read.ordinal, 2);
     NETW_CHECK_EQ(int(read.family), int(StreamFamily::VOLATILE));
     NETW_CHECK_EQ(read.epoch, 5);
+    NETW_CHECK_EQ(read.tenure, 3);
     NETW_CHECK_EQ(int64_t(read.schema), int64_t(0xDEADBEEF));
 
     ControlRecord reset;

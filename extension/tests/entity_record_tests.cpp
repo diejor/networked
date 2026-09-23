@@ -552,7 +552,7 @@ TEST_CASE(
     Node *owner = memnew(Node);
 
     record->get_control()->set_controller(7);
-    record->apply_control(wrapper.ptr(), owner, true, 1);
+    record->apply_control(wrapper.ptr(), owner, 1);
 
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
     NETW_CHECK_EQ(log.count("moved"), 1);
@@ -562,20 +562,20 @@ TEST_CASE(
 
     SUBCASE("the server takes the engine's own name for itself") {
         record->get_control()->set_controller(0);
-        record->apply_control(wrapper.ptr(), owner, true, 1);
+        record->apply_control(wrapper.ptr(), owner, 1);
         NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
         NETW_CHECK_EQ(log.count("moved"), 2);
     }
 
     SUBCASE("a re-apply that moves nothing announces nothing") {
-        record->apply_control(wrapper.ptr(), owner, true, 1);
+        record->apply_control(wrapper.ptr(), owner, 1);
         NETW_CHECK_EQ(log.count("moved"), 1);
     }
 
     SUBCASE("the controller-zero fallback names the session coordinator, "
             "not the literal peer 1") {
         record->get_control()->set_controller(0);
-        record->apply_control(wrapper.ptr(), owner, true, 7);
+        record->apply_control(wrapper.ptr(), owner, 7);
         NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
     }
 
@@ -583,18 +583,60 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] R14 an authority write recurses everywhere "
-    "but mid-tree-entry"
+    "[Networked][Entity][Hosted] R14 every descendant follows the controller, "
+    "a followed path stays with the session, and a nested entity is its own"
 ) {
-    CHECK_FALSE(NetwEntityRecord::control_recurses(false, true, false));
+    Record record;
+    Node *owner = memnew(Node);
+    Node *server_sync = memnew(Node);
+    server_sync->set_name("ServerSync");
+    Node *server_leaf = memnew(Node);
+    Node *input_sync = memnew(Node);
+    input_sync->set_name("InputSync");
+    Node *nested = memnew(Node);
+    Node *nested_leaf = memnew(Node);
+    owner->add_child(server_sync);
+    server_sync->add_child(server_leaf);
+    owner->add_child(input_sync);
+    owner->add_child(nested);
+    nested->add_child(nested_leaf);
+    nested->set_meta(NetwEntityRecord::entity_meta(), make_wrapper());
+    nested->set_multiplayer_authority(9);
 
-    CHECK(NetwEntityRecord::control_recurses(true, true, false));
-    CHECK(NetwEntityRecord::control_recurses(false, false, false));
-    CHECK(NetwEntityRecord::control_recurses(false, true, true));
-    CHECK(NetwEntityRecord::control_recurses(true, false, false));
-    CHECK(NetwEntityRecord::control_recurses(true, true, true));
-    CHECK(NetwEntityRecord::control_recurses(false, false, true));
-    CHECK(NetwEntityRecord::control_recurses(true, false, true));
+    record->follow_session(NodePath("ServerSync"));
+    record->apply_control(nullptr, owner, 1);
+    NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 1);
+
+    record->get_control()->set_controller(4);
+    record->apply_control(nullptr, owner, 1);
+    NETW_CHECK_EQ(owner->get_multiplayer_authority(), 4);
+    NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(server_leaf->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 4);
+    NETW_CHECK_EQ(nested->get_multiplayer_authority(), 9);
+    NETW_CHECK_EQ(nested_leaf->get_multiplayer_authority(), 9);
+    CHECK_FALSE(record->get_native_write_warned());
+
+    SUBCASE("a native write the next projection replaces warns once") {
+        input_sync->set_multiplayer_authority(6, false);
+        record->get_control()->set_controller(5);
+        record->apply_control(nullptr, owner, 1);
+        NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 5);
+        CHECK(record->get_native_write_warned());
+    }
+
+    SUBCASE("the session authority is the coordinator, not peer 1") {
+        record->get_control()->set_controller(0);
+        record->apply_control(nullptr, owner, 7);
+        NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
+        NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 7);
+        NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 7);
+        CHECK_FALSE(record->get_native_write_warned());
+    }
+
+    memdelete(owner);
 }
 
 TEST_CASE(
@@ -607,7 +649,7 @@ TEST_CASE(
     owner->add_child(child);
 
     record->get_control()->set_controller(4);
-    record->apply_control(nullptr, owner, true, 1);
+    record->apply_control(nullptr, owner, 1);
 
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 4);
     NETW_CHECK_EQ(child->get_multiplayer_authority(), 4);

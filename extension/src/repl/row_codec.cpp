@@ -1,5 +1,7 @@
 #include "netw/repl/row_codec.hpp"
 
+#include "netw/wire/value_row.hpp"
+
 namespace netw::repl {
 
 using wire::ReadStream;
@@ -184,6 +186,13 @@ bool write_row_columns(
             continue;
         }
         const wire::ColumnPlan &slot = p_plan.column(index);
+        if (slot.variable) {
+            godot::Variant value = p_row.read_value(index);
+            if (!wire::carry_value(p_stream, value)) {
+                return false;
+            }
+            continue;
+        }
         const bool stepping = p_baseline != nullptr && slot.laddered();
         for (int element = 0; element < slot.stride; ++element) {
             const int64_t at = slot.offset + int64_t(element) * slot.width;
@@ -216,6 +225,14 @@ bool read_row_columns(
             continue;
         }
         const wire::ColumnPlan &slot = p_plan.column(index);
+        if (slot.variable) {
+            godot::Variant value;
+            if (!wire::carry_value(p_stream, value)
+                || !r_row.write_value(index, value)) {
+                return false;
+            }
+            continue;
+        }
         const bool stepping = p_baseline != nullptr && slot.laddered();
         for (int element = 0; element < slot.stride; ++element) {
             const int64_t at = slot.offset + int64_t(element) * slot.width;

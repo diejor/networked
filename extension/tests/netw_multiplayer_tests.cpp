@@ -3145,18 +3145,13 @@ TEST_CASE(
     Ref<netw::NetwEntity> wrapper;
     wrapper.instantiate();
 
-    NetwMultiplayer::entity_broadcast_control(wrapper, nullptr, 4);
-    NetwMultiplayer::entity_broadcast_control(
-        Ref<netw::NetwEntity>(),
-        nullptr,
-        4
-    );
-    NetwMultiplayer::entity_wrapper_request_control(
-        Ref<netw::NetwEntity>(),
-        nullptr,
-        nullptr
-    );
-    CHECK(true);
+    wrapper->grant_control(4);
+    NETW_CHECK_EQ(wrapper->get_controller(), int64_t(4));
+
+    const Ref<netw::NetwPromise> asked = wrapper->request_control();
+    REQUIRE(asked.is_valid());
+    CHECK(asked->get_is_failed());
+    NETW_CHECK_EQ(int(asked->get_code()), int(ERR_UNAVAILABLE));
 }
 
 TEST_CASE(
